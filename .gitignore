@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-main
+kanso
 
 # Test binary, built with `go test -c`
 *.test

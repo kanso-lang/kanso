@@ -1,0 +1,150 @@
+// SPDX-License-Identifier: Apache-2.0
+#[contract]
+module ERC20 {
+    use Evm::{sender, emit};
+    use Table::{Self, Table};
+    use std::ascii::{String};
+    use std::errors;
+
+    #[event]
+    struct Transfer {
+        from: address,
+        to: address,
+        value: u256,
+    }
+
+    #[event]
+    struct Approval {
+        owner: address,
+        spender: address,
+        value: u256,
+    }
+
+    #[storage]
+    /// Represents the state of this contract. This is located at `borrow_global<State>()`.
+    struct State {
+        balances: Table<address, u256>,
+        allowances: Table<address, Table<address, u256>>,
+        total_supply: u256,
+        name: String,
+        symbol: String,
+        decimals: u8,
+    }
+
+    #[create]
+    /// Constructor of this contract.
+    fun create(name: String, symbol: String, initial_supply: u256, decimals: u8) writes State {
+        // Initial state of contract
+        move_to<State>(
+            State {
+                total_supply: 0,
+                balances: Table::empty<address, u256>(),
+                allowances: Table::empty<address, Table<address, u256>>(),
+                name,
+                symbol,
+                decimals,
+            }
+        );
+        // Minting the initial supply
+        mint(sender(), initial_supply);
+    }
+
+    /// Returns the name of the token
+    public fun name(): String reads State {
+        *borrow_global<State>().name
+    }
+
+    /// Returns the symbol of the token, usually a shorter version of the name.
+    public fun symbol(): String reads State {
+        *borrow_global<State>().symbol
+    }
+
+    /// Returns the number of decimals used to get its user representation.
+    public fun decimals(): u8 {
+        18
+    }
+
+    /// Returns the total supply of the token.
+    public fun totalSupply(): u256 reads State {
+        *borrow_global<State>().total_supply
+    }
+
+    /// Returns the balance of an account.
+    public fun balanceOf(owner: address): u256 reads State {
+        let s = borrow_global<State>();
+        Table::borrow_with_default(s.balances, &owner, 0)
+    }
+
+    /// Transfers the amount from the sending account to the given account
+    public fun transfer(to: address, amount: u256): bool writes State {
+        assert!(sender() != to, errors::invalid_argument(0));
+        do_transfer(sender(), to, amount);
+        true
+    }
+
+    /// Transfers the amount on behalf of the `from` account to the given account.
+    /// This evaluates and adjusts the allowance.
+    public fun transferFrom(from: address, to: address, amount: u256): bool writes State {
+        assert!(sender() != to, errors::invalid_argument(0));
+
+        let s = borrow_global_mut<State>();
+
+        let allowance_owner = Table::borrow_mut(&mut s.allowances, &from);
+        let allowance_for_sender = Table::borrow_mut_with_default(allowance_owner, &sender(), 0);
+
+        assert!(amount <= *allowance_for_sender, errors::limit_exceeded(0));
+
+        *allowance_for_sender -= amount;
+        do_transfer(from, to, amount);
+
+        true
+    }
+
+    /// Approves that the spender can spent the given amount on behalf of the calling account.
+    public fun approve(spender: address, amount: u256): bool writes State {
+        let s = borrow_global_mut<State>();
+        let a = Table::borrow_mut(&mut s.allowances, &sender());
+
+        Table::insert(a, &spender, amount.clone());
+        emit(Approval{owner: sender(), spender, value: amount});
+
+        true
+    }
+
+    /// Returns the allowance an account owner has approved for the given spender.
+    public fun allowance(owner: address, spender: address): u256 reads State {
+        let s = borrow_global<State>();
+        *Table::borrow_with_default(allowance_owner, &spender, 0)
+    }
+
+    /// Helper function to perform a transfer of funds.
+    fun do_transfer(from: address, to: address, amount: u256) writes State {
+        let s = borrow_global_mut<State>();
+        let from_bal = mut_balanceOf(s, from);
+
+        assert!(amount <= *from_bal, errors::limit_exceeded(0));
+
+        *from_bal = *from_bal - amount;
+        let to_bal = mut_balanceOf(s, to);
+        *to_bal += amount;
+
+        emit(Transfer{from, to, value: amount});
+    }
+
+    /// Helper function to return a mut ref to the balance of a owner.
+    fun mut_balanceOf(s: &mut State, owner: address): &mut u256 {
+        Table::borrow_mut_with_default(&mut s.balances, &owner, 0)
+    }
+
+    /// Create `amount` tokens and assigns them to `account`, increasing
+    /// the total supply.
+    fun mint(account: address, amount: u256) writes State {
+        let s = borrow_global_mut<State>();
+
+        s.total_supply += amount;
+        let mut_bal_account = mut_balanceOf(s, account);
+        *mut_bal_account += amount;
+
+        emit(Transfer{from: 0x0, to: account, value: amount});
+    }
+}
