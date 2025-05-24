@@ -3,11 +3,25 @@ package grammar_test
 import (
 	"github.com/stretchr/testify/assert"
 	"kanso/grammar"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
+func repoRoot() string {
+	wd, _ := os.Getwd()
+	for !strings.HasSuffix(wd, "kanso-lang") {
+		wd = filepath.Dir(wd)
+	}
+	return wd
+}
+
 func TestERC20(t *testing.T) {
-	program, err := grammar.ParseFile(`../examples/erc20.ka`)
+	root := repoRoot()
+	contractPath := filepath.Join(root, "examples", "erc20.ka")
+
+	program, err := grammar.ParseFile(contractPath)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
