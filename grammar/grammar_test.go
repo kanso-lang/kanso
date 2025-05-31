@@ -1,44 +1,44 @@
 package grammar_test
 
 import (
-	_ "embed"
 	"github.com/stretchr/testify/assert"
 	"kanso/grammar"
+	"kanso/internal/parser"
 	"testing"
 )
 
 func TestERC20(t *testing.T) {
-	program, err := grammar.ParseFile(`../examples/ERC20.ka`)
+	ast, err := parser.ParseFile(`../examples/erc20.ka`)
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	assert.NotNil(t, program)
-	assert.Equal(t, 2, len(program.SourceElements))
+	assert.NotNil(t, ast)
+	assert.Equal(t, 2, len(ast.SourceElements))
 
-	comment := program.SourceElements[0]
+	comment := ast.SourceElements[0]
 	assert.NotNil(t, comment)
 	assert.NotNil(t, comment.Comment)
 	assert.Equal(t, "// SPDX-License-Identifier: Apache-2.0", comment.Comment.Text)
 
-	module := program.SourceElements[1].Module
+	module := ast.SourceElements[1].Module
 	assert.NotNil(t, module)
-	assert.Equal(t, "ERC20", module.Name)
+	assert.Equal(t, "ERC20", module.Name.Value)
 	assert.Equal(t, "contract", module.Attribute.Name)
 
 	// Validate use statements
 	assert.Equal(t, 4, len(module.Uses))
-	assert.Equal(t, "Evm", module.Uses[0].Namespaces[0].Name)
-	assert.Equal(t, "sender", module.Uses[0].Imports[0].Name)
-	assert.Equal(t, "emit", module.Uses[0].Imports[1].Name)
-	assert.Equal(t, "Table", module.Uses[1].Namespaces[0].Name)
-	assert.Equal(t, "Self", module.Uses[1].Imports[0].Name)
-	assert.Equal(t, "Table", module.Uses[1].Imports[1].Name)
-	assert.Equal(t, "std", module.Uses[2].Namespaces[0].Name)
-	assert.Equal(t, "ascii", module.Uses[2].Namespaces[1].Name)
-	assert.Equal(t, "String", module.Uses[2].Imports[0].Name)
-	assert.Equal(t, "std", module.Uses[3].Namespaces[0].Name)
-	assert.Equal(t, "errors", module.Uses[3].Namespaces[1].Name)
+	assert.Equal(t, "Evm", module.Uses[0].Namespaces[0].Name.Value)
+	assert.Equal(t, "sender", module.Uses[0].Imports[0].Name.Value)
+	assert.Equal(t, "emit", module.Uses[0].Imports[1].Name.Value)
+	assert.Equal(t, "Table", module.Uses[1].Namespaces[0].Name.Value)
+	assert.Equal(t, "Self", module.Uses[1].Imports[0].Name.Value)
+	assert.Equal(t, "Table", module.Uses[1].Imports[1].Name.Value)
+	assert.Equal(t, "std", module.Uses[2].Namespaces[0].Name.Value)
+	assert.Equal(t, "ascii", module.Uses[2].Namespaces[1].Name.Value)
+	assert.Equal(t, "String", module.Uses[2].Imports[0].Name.Value)
+	assert.Equal(t, "std", module.Uses[3].Namespaces[0].Name.Value)
+	assert.Equal(t, "errors", module.Uses[3].Namespaces[1].Name.Value)
 
 	// Validate structs
 	assert.Equal(t, 3, len(module.Structs))
@@ -142,7 +142,7 @@ func TestERC20(t *testing.T) {
 }
 
 func checkStruct(t *testing.T, s *grammar.Struct, name string, attribute string, fields map[string]string) {
-	assert.Equal(t, name, s.Name)
+	assert.Equal(t, name, s.Name.Value)
 
 	if attribute != "" {
 		assert.Equal(t, attribute, s.Attribute.Name)
@@ -152,16 +152,16 @@ func checkStruct(t *testing.T, s *grammar.Struct, name string, attribute string,
 
 	i := 0
 	for _, f := range s.Fields {
-		value, exists := fields[f.Name]
+		value, exists := fields[f.Name.Value]
 		assert.True(t, exists)
 
-		assert.Equal(t, value, f.Type.Name)
+		assert.Equal(t, value, f.Type.Name.Value)
 		i++
 	}
 }
 
 func checkFunction(t *testing.T, f *grammar.Function, name string, returnType string, params map[string]string, public bool, reads []string, writes []string) {
-	assert.Equal(t, name, f.Name)
+	assert.Equal(t, name, f.Name.Value)
 	assert.Equal(t, public, f.Public)
 
 	if returnType != "" {
@@ -174,10 +174,10 @@ func checkFunction(t *testing.T, f *grammar.Function, name string, returnType st
 				refPrefix = "&mut"
 			}
 			actualType := f.Return.Ref.Target.Name
-			assert.Equal(t, returnType, refPrefix+" "+actualType)
+			assert.Equal(t, returnType, refPrefix+" "+actualType.Value)
 		} else {
 			// Simple type
-			assert.Equal(t, returnType, f.Return.Name)
+			assert.Equal(t, returnType, f.Return.Name.Value)
 		}
 	} else {
 		assert.Nil(t, f.Return)
@@ -185,7 +185,7 @@ func checkFunction(t *testing.T, f *grammar.Function, name string, returnType st
 
 	assert.Equal(t, len(params), len(f.Params))
 	for _, p := range f.Params {
-		expectedType, exists := params[p.Name]
+		expectedType, exists := params[p.Name.Value]
 		assert.True(t, exists, "expected param %q to exist", p.Name)
 
 		var actualType string
@@ -194,9 +194,9 @@ func checkFunction(t *testing.T, f *grammar.Function, name string, returnType st
 			if p.Type.Ref.Mut {
 				refPrefix = "&mut"
 			}
-			actualType = refPrefix + " " + p.Type.Ref.Target.Name
+			actualType = refPrefix + " " + p.Type.Ref.Target.Name.Value
 		} else {
-			actualType = p.Type.Name
+			actualType = p.Type.Name.Value
 		}
 
 		assert.Equal(t, expectedType, actualType, "param %q type mismatch", p.Name)
@@ -205,13 +205,13 @@ func checkFunction(t *testing.T, f *grammar.Function, name string, returnType st
 	if reads != nil {
 		assert.Equal(t, len(reads), len(f.Reads))
 		for i, r := range f.Reads {
-			assert.Equal(t, reads[i], r.Name)
+			assert.Equal(t, reads[i], r.Name.Value)
 		}
 	}
 	if writes != nil {
 		assert.Equal(t, len(writes), len(f.Writes))
 		for i, w := range f.Writes {
-			assert.Equal(t, writes[i], w.Name)
+			assert.Equal(t, writes[i], w.Name.Value)
 		}
 	}
 }

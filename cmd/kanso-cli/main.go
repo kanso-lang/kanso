@@ -1,34 +1,38 @@
-package grammar
+// SPDX-License-Identifier: Apache-2.0
+package main
 
 import (
 	"fmt"
 	"github.com/alecthomas/participle/v2"
 	"github.com/fatih/color"
+	"kanso/internal/parser"
 	"os"
 	"strings"
 )
 
-func ParseFile(path string) (*Program, error) {
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("Usage: kanso <file.ka>")
+		os.Exit(1)
+	}
+
+	path := os.Args[1]
+
 	source, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		fmt.Errorf("failed to read file: %w", err)
+		os.Exit(1)
 	}
 
-	parser, err := participle.Build[Program](
-		participle.Lexer(KansoLexer),
-		participle.Elide("Whitespace"),
-		participle.UseLookahead(3),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build parser: %w", err)
-	}
-
-	program, err := parser.ParseString(path, string(source))
+	ast, err := parser.ParseSource(path, string(source))
 	if err != nil {
 		reportParseError(string(source), err)
-		return nil, err
+		os.Exit(1)
 	}
-	return program, nil
+
+	fmt.Println(ast.String())
+
+	color.Green("✅ Successfully processed %s", path)
 }
 
 // reportParseError prints a friendly caret-style parse error message.

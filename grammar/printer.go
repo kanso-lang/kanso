@@ -9,7 +9,7 @@ func indent(level int) string {
 	return strings.Repeat("    ", level)
 }
 
-func (p *Program) String() string {
+func (p *AST) String() string {
 	var b strings.Builder
 	for _, s := range p.SourceElements {
 		b.WriteString(s.StringWithIndent(0))
@@ -42,7 +42,7 @@ func (m *Module) StringWithIndent(level int) string {
 	if m.DocAfterAttr != nil {
 		b.WriteString(indent(level) + m.DocAfterAttr.String() + "\n")
 	}
-	b.WriteString(fmt.Sprintf("%smodule %s {\n", indent(level), m.Name))
+	b.WriteString(fmt.Sprintf("%smodule %s {\n", indent(level), m.Name.Value))
 	for _, u := range m.Uses {
 		b.WriteString(indent(level+1) + u.String() + "\n")
 	}
@@ -63,11 +63,11 @@ func (m *ModuleAttribute) String() string {
 func (u *Use) String() string {
 	var ns []string
 	for _, n := range u.Namespaces {
-		ns = append(ns, n.Name)
+		ns = append(ns, n.Name.Value)
 	}
 	var imports []string
 	for _, i := range u.Imports {
-		imports = append(imports, i.Name)
+		imports = append(imports, i.Name.Value)
 	}
 	return fmt.Sprintf("use %s::%s;", strings.Join(ns, "::"), strings.Join(imports, ", "))
 }
@@ -83,7 +83,7 @@ func (s *Struct) StringWithIndent(level int) string {
 	if s.DocAfterAttr != nil {
 		b.WriteString(indent(level) + s.DocAfterAttr.String() + "\n")
 	}
-	b.WriteString(fmt.Sprintf("%sstruct %s {\n", indent(level), s.Name))
+	b.WriteString(fmt.Sprintf("%sstruct %s {\n", indent(level), s.Name.Value))
 	for _, f := range s.Fields {
 		b.WriteString(indent(level+1) + f.String() + "\n")
 	}
@@ -100,7 +100,7 @@ func (a *StructAttribute) String() string {
 }
 
 func (f *StructField) String() string {
-	return fmt.Sprintf("%s: %s,", f.Name, f.Type.String())
+	return fmt.Sprintf("%s: %s,", f.Name.Value, f.Type.String())
 }
 
 func (t *Type) String() string {
@@ -108,13 +108,13 @@ func (t *Type) String() string {
 		return t.Ref.String()
 	}
 	if len(t.Generics) == 0 {
-		return t.Name
+		return t.Name.Value
 	}
 	var gens []string
 	for _, g := range t.Generics {
 		gens = append(gens, g.String())
 	}
-	return fmt.Sprintf("%s<%s>", t.Name, strings.Join(gens, ", "))
+	return fmt.Sprintf("%s<%s>", t.Name.Value, strings.Join(gens, ", "))
 }
 
 func (r *RefType) String() string {
@@ -140,7 +140,7 @@ func (f *Function) StringWithIndent(level int) string {
 	} else {
 		b.WriteString(indent(level))
 	}
-	b.WriteString(fmt.Sprintf("fun %s(", f.Name))
+	b.WriteString(fmt.Sprintf("fun %s(", f.Name.Value))
 	for i, p := range f.Params {
 		if i > 0 {
 			b.WriteString(", ")
@@ -170,11 +170,11 @@ func (f *Function) StringWithIndent(level int) string {
 }
 
 func (fa *FunctionAttribute) String() string {
-	return fmt.Sprintf("#[%s]", fa.Name)
+	return fmt.Sprintf("#[%s]", fa.Name.Value)
 }
 
 func (fp *FunctionParam) String() string {
-	return fmt.Sprintf("%s: %s", fp.Name, fp.Type.String())
+	return fmt.Sprintf("%s: %s", fp.Name.Value, fp.Type.String())
 }
 
 func (fb *FunctionBlock) StringWithIndent(level int) string {
@@ -210,7 +210,7 @@ func (s *Statement) StringWithIndent(level int) string {
 }
 
 func (l *LetStmt) String() string {
-	return fmt.Sprintf("let %s = %s;", l.Name, l.Expr.String())
+	return fmt.Sprintf("let %s = %s;", l.Name.Value, l.Expr.String())
 }
 
 func (a *AssignStmt) String() string {
@@ -218,7 +218,7 @@ func (a *AssignStmt) String() string {
 	if a.Dereference {
 		b.WriteString("*")
 	}
-	b.WriteString(a.Target)
+	b.WriteString(a.Target.Value)
 	b.WriteString(" = ")
 	b.WriteString(a.Value.String())
 	b.WriteString(";")
@@ -265,8 +265,8 @@ func (b *BinOp) String() string {
 
 func (u *UnaryExpr) String() string {
 	var b strings.Builder
-	if u.Operator != nil {
-		b.WriteString(*u.Operator)
+	if u.Operator != "" {
+		b.WriteString(u.Operator)
 	}
 	if u.Mut {
 		b.WriteString("mut ")
@@ -285,9 +285,9 @@ func (p *PostfixExpr) String() string {
 
 func (p *PostfixOp) String() string {
 	if p.Call != nil {
-		return fmt.Sprintf(".%s%s", p.Name, p.Call.String())
+		return fmt.Sprintf(".%s%s", p.Name.Value, p.Call.String())
 	}
-	return "." + p.Name
+	return "." + p.Name.Value
 }
 
 func (c *CallSuffix) String() string {
@@ -305,7 +305,7 @@ func (c *CallSuffix) String() string {
 
 func (m *MethodCall) String() string {
 	var b strings.Builder
-	b.WriteString("." + m.Name + "(")
+	b.WriteString("." + m.Name.Value + "(")
 	for i, arg := range m.Args {
 		if i > 0 {
 			b.WriteString(", ")
@@ -325,7 +325,7 @@ func (p *PrimaryExpr) String() string {
 	case p.Number != nil:
 		return *p.Number
 	case p.Ident != nil:
-		return *p.Ident
+		return p.Ident.Value
 	case p.Parens != nil:
 		return "(" + p.Parens.String() + ")"
 	}
@@ -353,12 +353,16 @@ func (c *CallExpr) String() string {
 }
 
 func (c *CalleePath) String() string {
-	return strings.Join(c.Parts, "::")
+	var parts []string
+	for _, part := range c.Parts {
+		parts = append(parts, part.Value)
+	}
+	return strings.Join(parts, "::")
 }
 
 func (s *StructLiteralExpr) String() string {
 	var b strings.Builder
-	b.WriteString(s.Name + " { ")
+	b.WriteString(s.Name.Value + " { ")
 	for i, f := range s.Fields {
 		if i > 0 {
 			b.WriteString(", ")
@@ -371,11 +375,11 @@ func (s *StructLiteralExpr) String() string {
 
 func (f *StructLiteralField) String() string {
 	if f.Value != nil {
-		return fmt.Sprintf("%s: %s", f.Name, f.Value.String())
+		return fmt.Sprintf("%s: %s", f.Name.Value, f.Value.String())
 	}
-	return f.Name
+	return f.Name.Value
 }
 
 func (f *StructFieldFull) String() string {
-	return fmt.Sprintf("%s: %s", f.Name, f.Value.String())
+	return fmt.Sprintf("%s: %s", f.Name.Value, f.Value.String())
 }

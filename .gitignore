@@ -5,6 +5,7 @@
 *.so
 *.dylib
 kanso
+kanso-lsp
 
 # Test binary, built with `go test -c`
 *.test
