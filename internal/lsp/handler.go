@@ -1,8 +1,9 @@
 package lsp
 
 import (
+	"encoding/json"
 	"fmt"
-	"kanso/grammar"
+	"kanso/internal/ast"
 	"kanso/internal/parser"
 	"log"
 	"net/url"
@@ -45,25 +46,15 @@ var SemanticTokenModifiers = []string{
 type KansoHandler struct {
 	mu      sync.RWMutex
 	content map[string]string
-	asts    map[string]*grammar.AST
+	asts    map[string]*ast.Contract
 }
 
 // NewKansoHandler creates and returns a new KansoHandler instance
 func NewKansoHandler() *KansoHandler {
 	return &KansoHandler{
 		content: make(map[string]string),
-		asts:    make(map[string]*grammar.AST),
+		asts:    make(map[string]*ast.Contract),
 	}
-}
-
-// Utility: return a pointer to a bool value
-func ptrBool(b bool) *bool {
-	return &b
-}
-
-// Utility: return a pointer to a TextDocumentSyncKind value
-func ptrSyncKind(k protocol.TextDocumentSyncKind) *protocol.TextDocumentSyncKind {
-	return &k
 }
 
 // Initialize responds to the LSP client's initialize request and advertises the server's capabilities
@@ -73,8 +64,8 @@ func (h *KansoHandler) Initialize(ctx *glsp.Context, params *protocol.Initialize
 	return &protocol.InitializeResult{
 		Capabilities: protocol.ServerCapabilities{
 			TextDocumentSync: &protocol.TextDocumentSyncOptions{
-				OpenClose: ptrBool(true),                                         // notify on open/close events
-				Change:    ptrSyncKind(protocol.TextDocumentSyncKindIncremental), // track incremental changes
+				OpenClose: ptrBool(true), // notify on open/close events
+				Change:    ptrSyncKind(protocol.TextDocumentSyncKindFull),
 			},
 			CompletionProvider: &protocol.CompletionOptions{
 				ResolveProvider: ptrBool(false), // no additional detail resolution yet
@@ -92,18 +83,13 @@ func (h *KansoHandler) Initialize(ctx *glsp.Context, params *protocol.Initialize
 
 // Initialized is called after the client receives the server's capabilities and completes initialization
 func (h *KansoHandler) Initialized(ctx *glsp.Context, params *protocol.InitializedParams) error {
-	log.Println("LSP Initialized")
+	log.Println("Kanso LSP Initialized")
 	return nil
 }
 
 // Shutdown handles the LSP shutdown request
 func (h *KansoHandler) Shutdown(ctx *glsp.Context) error {
-	log.Println("LSP Shutdown")
-	return nil
-}
-
-// SetTrace handles trace setting (not used currently)
-func (h *KansoHandler) SetTrace(ctx *glsp.Context, params *protocol.SetTraceParams) error {
+	log.Println("Kanso LSP Shutdown")
 	return nil
 }
 
@@ -111,9 +97,13 @@ func (h *KansoHandler) SetTrace(ctx *glsp.Context, params *protocol.SetTracePara
 func (h *KansoHandler) TextDocumentDidOpen(ctx *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 	log.Printf("Opened file: %s\n", params.TextDocument.URI)
 
-	err := h.updateAST(params.TextDocument.URI)
+	diagnostics, err := h.updateAST(params.TextDocument.URI)
 	if err != nil {
 		return fmt.Errorf("Failed to update AST:  %w", err)
+	}
+
+	if diagnostics != nil {
+		sendDiagnosticNotification(ctx, params.TextDocument.URI, diagnostics)
 	}
 
 	return nil
@@ -142,9 +132,13 @@ func (h *KansoHandler) TextDocumentDidClose(context *glsp.Context, params *proto
 func (h *KansoHandler) TextDocumentDidChange(ctx *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 	log.Printf("Changed file: %s\n", params.TextDocument.URI)
 
-	err := h.updateAST(params.TextDocument.URI)
+	diagnostics, err := h.updateAST(params.TextDocument.URI)
 	if err != nil {
 		return fmt.Errorf("Failed to update AST:  %w", err)
+	}
+
+	if diagnostics != nil {
+		sendDiagnosticNotification(ctx, params.TextDocument.URI, diagnostics)
 	}
 
 	return nil
@@ -170,7 +164,7 @@ func (h *KansoHandler) TextDocumentSemanticTokensFull(ctx *glsp.Context, params 
 		return nil, fmt.Errorf("failed to convert URI %s: %w", rawURI, err)
 	}
 
-	ast, err := h.getOrUpdateAST(path, rawURI)
+	ast, err := h.getOrUpdateAST(ctx, path, rawURI)
 	if err != nil {
 		return nil, err
 	}
@@ -203,46 +197,53 @@ func (h *KansoHandler) TextDocumentSemanticTokensFull(ctx *glsp.Context, params 
 	}, nil
 }
 
-func (h *KansoHandler) getOrUpdateAST(path string, rawURI protocol.DocumentUri) (*grammar.AST, error) {
+func (h *KansoHandler) getOrUpdateAST(ctx *glsp.Context, path string, rawURI protocol.DocumentUri) (*ast.Contract, error) {
 	h.mu.RLock()
 	ast, ok := h.asts[path]
 	h.mu.RUnlock()
 
 	if !ok {
-		if err := h.updateAST(rawURI); err != nil {
+		diagnostic, err := h.updateAST(rawURI)
+		if err != nil {
 			return nil, err
 		}
 
 		h.mu.RLock()
 		ast = h.asts[path]
 		h.mu.RUnlock()
+
+		if diagnostic != nil {
+			sendDiagnosticNotification(ctx, rawURI, diagnostic)
+		}
 	}
 
 	return ast, nil
 }
 
-func (h *KansoHandler) updateAST(rawURI protocol.DocumentUri) error {
+func (h *KansoHandler) updateAST(rawURI protocol.DocumentUri) ([]protocol.Diagnostic, error) {
 	path, err := uriToPath(rawURI)
 	if err != nil {
-		return fmt.Errorf("failed to convert URI %s: %w", rawURI, err)
+		return nil, fmt.Errorf("failed to convert URI %s: %w", rawURI, err)
 	}
 
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read file %s: %w", path, err)
+		return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 
-	ast, err := parser.ParseSource(path, string(content))
-	if err != nil {
-		return fmt.Errorf("failed to parse file %s: %w", path, err)
+	contract, parserErr, scannerErr := parser.ParseSource(path, string(content))
+	if parserErr != nil || scannerErr != nil {
+		diagnostics := ConvertParseError(err)
+
+		return diagnostics, nil
 	}
 
 	h.mu.Lock()
 	h.content[path] = string(content)
-	h.asts[path] = ast
+	h.asts[path] = contract
 	h.mu.Unlock()
 
-	return nil
+	return nil, nil
 }
 
 // Convert URI to platform-local file path
@@ -261,4 +262,27 @@ func uriToPath(rawURI string) (string, error) {
 
 	// Normalize to platform-specific separators
 	return filepath.FromSlash(path), nil
+}
+
+func sendDiagnosticNotification(ctx *glsp.Context, uri protocol.URI, diagnostics []protocol.Diagnostic) {
+	diagnosticsJSON, err := json.MarshalIndent(diagnostics, "", "  ")
+	if err != nil {
+		fmt.Println("Failed to marshal diagnostics:", err)
+		return
+	}
+
+	log.Println("Sending diagnostics:", string(diagnosticsJSON))
+
+	ctx.Notify(protocol.ServerTextDocumentPublishDiagnostics, &protocol.PublishDiagnosticsParams{
+		URI:         uri,
+		Diagnostics: diagnostics,
+	})
+}
+
+func ptrBool(b bool) *bool {
+	return &b
+}
+
+func ptrSyncKind(k protocol.TextDocumentSyncKind) *protocol.TextDocumentSyncKind {
+	return &k
 }

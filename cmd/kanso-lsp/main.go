@@ -55,7 +55,6 @@ func main() {
 		Initialize:                     kansoHandler.Initialize,
 		Initialized:                    kansoHandler.Initialized,
 		Shutdown:                       kansoHandler.Shutdown,
-		SetTrace:                       kansoHandler.SetTrace,
 		TextDocumentDidOpen:            kansoHandler.TextDocumentDidOpen,
 		TextDocumentDidClose:           kansoHandler.TextDocumentDidClose,
 		TextDocumentDidChange:          kansoHandler.TextDocumentDidChange,

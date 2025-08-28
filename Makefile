@@ -4,8 +4,8 @@
 CLI_BIN = kanso
 LSP_BIN = kanso-lsp
 
-CLI_SRC = $(shell find cmd/kanso-cli internal grammar -type f -name '*.go')
-LSP_SRC = $(shell find cmd/kanso-lsp internal grammar -type f -name '*.go')
+CLI_SRC = $(shell find cmd/kanso-cli internal -type f -name '*.go')
+LSP_SRC = $(shell find cmd/kanso-lsp internal -type f -name '*.go')
 
 # Module entry points
 MODULE_CLI = ./cmd/kanso-cli
@@ -20,7 +20,7 @@ $(CLI_BIN): $(CLI_SRC)
 
 # Build the LSP binary (editor mode with error-tolerant grammar)
 $(LSP_BIN): $(LSP_SRC)
-	go build -tags editor -o $(LSP_BIN) $(MODULE_LSP)
+	go build -o $(LSP_BIN) $(MODULE_LSP)
 
 # Clean all binaries
 clean:

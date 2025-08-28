@@ -1,8 +1,7 @@
 package lsp
 
 import (
-	"github.com/alecthomas/participle/v2/lexer"
-	"kanso/grammar"
+	"kanso/internal/ast"
 )
 
 // SemanticToken represents a single LSP semantic token entry
@@ -17,199 +16,390 @@ type SemanticToken struct {
 	TokenModifiers int // bitmask
 }
 
-func collectSemanticTokens(program *grammar.AST) []SemanticToken {
+func collectSemanticTokens(contract *ast.Contract) []SemanticToken {
 	var tokens []SemanticToken
 
-	if program == nil {
+	if contract == nil {
 		return tokens
 	}
 
-	for _, se := range program.SourceElements {
-		if se != nil && se.Module != nil {
-			tokens = append(tokens, walkModule(se.Module)...)
+	// Walk through all contract items
+	for _, item := range contract.ContractItems {
+		tokens = append(tokens, walkContractItem(item)...)
+	}
+
+	return tokens
+}
+
+func walkContractItem(item ast.ContractItem) []SemanticToken {
+	var tokens []SemanticToken
+
+	if item == nil {
+		return tokens
+	}
+
+	switch v := item.(type) {
+	case *ast.DocComment:
+		// Doc comments are already handled by the tokenizer
+		return tokens
+	case *ast.Comment:
+		// Regular comments are already handled by the tokenizer
+		return tokens
+	case *ast.Module:
+		tokens = append(tokens, walkModule(v)...)
+	case *ast.BadContractItem:
+		// Skip bad items
+		return tokens
+	}
+
+	return tokens
+}
+
+func walkModule(m *ast.Module) []SemanticToken {
+	var tokens []SemanticToken
+
+	if m == nil {
+		return tokens
+	}
+
+	// Module attributes (like #[contract])
+	for _, attr := range m.Attributes {
+		tokens = append(tokens, makeToken(attr.Pos, attr.EndPos, attr.Name, "modifier", 0)...)
+	}
+
+	// Module name
+	if m.Name.Value != "" {
+		tokens = append(tokens, makeToken(m.Name.Pos, m.Name.EndPos, m.Name.Value, "namespace", 1)...)
+	}
+
+	// Walk module items
+	for _, item := range m.ModuleItems {
+		tokens = append(tokens, walkModuleItem(item)...)
+	}
+
+	return tokens
+}
+
+func walkModuleItem(item ast.ModuleItem) []SemanticToken {
+	var tokens []SemanticToken
+
+	if item == nil {
+		return tokens
+	}
+
+	switch v := item.(type) {
+	case *ast.DocComment:
+		// Doc comments are already handled
+		return tokens
+	case *ast.Comment:
+		// Regular comments are already handled
+		return tokens
+	case *ast.Use:
+		tokens = append(tokens, walkUse(v)...)
+	case *ast.Struct:
+		tokens = append(tokens, walkStruct(v)...)
+	case *ast.Function:
+		tokens = append(tokens, walkFunction(v)...)
+	case *ast.BadModuleItem:
+		// Skip bad items
+		return tokens
+	}
+
+	return tokens
+}
+
+func walkUse(u *ast.Use) []SemanticToken {
+	var tokens []SemanticToken
+
+	if u == nil {
+		return tokens
+	}
+
+	// Namespaces (like "Evm", "Table")
+	for _, ns := range u.Namespaces {
+		tokens = append(tokens, makeToken(ns.Name.Pos, ns.Name.EndPos, ns.Name.Value, "namespace", 0)...)
+	}
+
+	// Imported items (like "sender", "emit")
+	for _, imp := range u.Imports {
+		tokens = append(tokens, makeToken(imp.Name.Pos, imp.Name.EndPos, imp.Name.Value, "type", 0)...)
+	}
+
+	return tokens
+}
+
+func walkStruct(s *ast.Struct) []SemanticToken {
+	var tokens []SemanticToken
+
+	if s == nil {
+		return tokens
+	}
+
+	// Struct attribute (like #[storage], #[event])
+	if s.Attribute != nil {
+		tokens = append(tokens, makeToken(s.Attribute.Pos, s.Attribute.EndPos, s.Attribute.Name, "modifier", 0)...)
+	}
+
+	// Struct name
+	if s.Name.Value != "" {
+		tokens = append(tokens, makeToken(s.Name.Pos, s.Name.EndPos, s.Name.Value, "type", 1)...)
+	}
+
+	// Struct fields
+	for _, item := range s.Items {
+		if field, ok := item.(*ast.StructField); ok {
+			// Field name
+			tokens = append(tokens, makeToken(field.Name.Pos, field.Name.EndPos, field.Name.Value, "property", 1)...)
+			// Field type
+			tokens = append(tokens, walkVariableType(field.VariableType)...)
 		}
 	}
 
 	return tokens
 }
 
-func walkModule(m *grammar.Module) []SemanticToken {
+func walkFunction(f *ast.Function) []SemanticToken {
 	var tokens []SemanticToken
 
-	if m.Attribute != nil {
-		tokens = append(tokens, makeToken(m.Attribute.Pos, m.Attribute.EndPos, m.Attribute.Name, "modifier", 0))
+	if f == nil {
+		return tokens
 	}
 
-	// Module name
-	if m.Name.Value != "" {
-		tokens = append(tokens, makeToken(m.Name.Pos, m.Name.EndPos, m.Name.Value, "namespace", 1))
+	// Function attribute (like #[create])
+	if f.Attribute != nil {
+		tokens = append(tokens, makeToken(f.Attribute.Pos, f.Attribute.EndPos, f.Attribute.Name, "modifier", 0)...)
 	}
 
-	// Imports (namespaces + imported names)
-	for _, u := range m.Uses {
-		for _, ns := range u.Namespaces {
-			tokens = append(tokens, makeToken(ns.Name.Pos, ns.Name.EndPos, ns.Name.Value, "namespace", 0))
-		}
-		for _, imp := range u.Imports {
-			tokens = append(tokens, makeToken(imp.Name.Pos, imp.Name.EndPos, imp.Name.Value, "type", 0))
-		}
+	// Function name
+	if f.Name.Value != "" {
+		tokens = append(tokens, makeToken(f.Name.Pos, f.Name.EndPos, f.Name.Value, "function", 1)...)
 	}
 
-	// Structs
-	for _, s := range m.Structs {
-		if s.Attribute != nil {
-			tokens = append(tokens, makeToken(s.Attribute.Pos, s.Attribute.EndPos, s.Attribute.Name, "modifier", 0))
-		}
-		if s.Name.Value != "" {
-			tokens = append(tokens, makeToken(s.Name.Pos, s.Name.EndPos, s.Name.Value, "type", 1))
-		}
-		for _, field := range s.Fields {
-			tokens = append(tokens, makeToken(field.Name.Pos, field.Name.EndPos, field.Name.Value, "property", 1))
-			tokens = append(tokens, typeReferenceToken(field.Type)...)
+	// Parameters
+	for _, param := range f.Params {
+		if param != nil {
+			// Parameter name
+			tokens = append(tokens, makeToken(param.Name.Pos, param.Name.EndPos, param.Name.Value, "parameter", 0)...)
+			// Parameter type
+			tokens = append(tokens, walkVariableType(param.Type)...)
 		}
 	}
 
-	// Functions
-	for _, f := range m.Functions {
-		if f.Attribute != nil {
-			tokens = append(tokens, makeToken(f.Attribute.Pos, f.Attribute.EndPos, f.Attribute.Name.Value, "modifier", 0))
-		}
-		if f.Name.Value != "" {
-			tokens = append(tokens, makeToken(f.Name.Pos, f.Name.EndPos, f.Name.Value, "function", 1))
-		}
+	// Return type
+	if f.Return != nil {
+		tokens = append(tokens, walkVariableType(f.Return)...)
+	}
 
-		for _, p := range f.Params {
-			tokens = append(tokens, makeToken(p.Name.Pos, p.Name.EndPos, p.Name.Value, "parameter", 0))
-			tokens = append(tokens, typeReferenceToken(p.Type)...)
-		}
-		for _, r := range f.Reads {
-			tokens = append(tokens, typeReferenceToken(r)...)
-		}
-		for _, w := range f.Writes {
-			tokens = append(tokens, typeReferenceToken(w)...)
-		}
+	// Reads clause
+	for _, read := range f.Reads {
+		tokens = append(tokens, makeToken(read.Pos, read.EndPos, read.Value, "type", 0)...)
+	}
+
+	// Writes clause
+	for _, write := range f.Writes {
+		tokens = append(tokens, makeToken(write.Pos, write.EndPos, write.Value, "type", 0)...)
+	}
+
+	// Function body
+	if f.Body != nil {
 		tokens = append(tokens, walkFunctionBlock(f.Body)...)
 	}
 
 	return tokens
 }
 
-func walkFunctionBlock(fb *grammar.FunctionBlock) []SemanticToken {
+func walkFunctionBlock(fb *ast.FunctionBlock) []SemanticToken {
 	var tokens []SemanticToken
 
 	if fb == nil {
 		return tokens
 	}
 
-	for _, stmt := range fb.Statements {
-		if stmt.LetStmt != nil && stmt.LetStmt.Name.Value != "" {
-			tokens = append(tokens, makeToken(stmt.LetStmt.Name.Pos, stmt.LetStmt.Name.EndPos, stmt.LetStmt.Name.Value, "variable", 1))
-		}
-		if stmt.AssignStmt != nil && stmt.AssignStmt.Target.Value != "" {
-			tokens = append(tokens, makeToken(stmt.AssignStmt.Target.Pos, stmt.AssignStmt.Target.EndPos, stmt.AssignStmt.Target.Value, "variable", 0))
-		}
+	// Function body items
+	for _, item := range fb.Items {
+		tokens = append(tokens, walkFunctionBlockItem(item)...)
 	}
 
-	if fb.Tail != nil && fb.Tail.Expr != nil {
-		tokens = append(tokens, walkExpr(fb.Tail.Expr)...)
+	// Tail expression
+	if fb.TailExpr != nil {
+		tokens = append(tokens, walkExpression(fb.TailExpr.Expr)...)
 	}
 
 	return tokens
 }
 
-func walkExpr(expr *grammar.Expr) []SemanticToken {
+func walkFunctionBlockItem(item ast.FunctionBlockItem) []SemanticToken {
+	var tokens []SemanticToken
+
+	if item == nil {
+		return tokens
+	}
+
+	switch v := item.(type) {
+	case *ast.LetStmt:
+		// Variable name
+		tokens = append(tokens, makeToken(v.Name.Pos, v.Name.EndPos, v.Name.Value, "variable", 1)...)
+		// Variable value expression
+		tokens = append(tokens, walkExpression(v.Expr)...)
+	case *ast.AssignStmt:
+		// Assignment target
+		tokens = append(tokens, walkExpression(v.Target)...)
+		// Assignment value
+		tokens = append(tokens, walkExpression(v.Value)...)
+	case *ast.ReturnStmt:
+		// Return value
+		if v.Value != nil {
+			tokens = append(tokens, walkExpression(v.Value)...)
+		}
+	case *ast.ExprStmt:
+		// Expression statement
+		tokens = append(tokens, walkExpression(v.Expr)...)
+	case *ast.Comment:
+		// Comments are handled by tokenizer
+		return tokens
+	}
+
+	return tokens
+}
+
+func walkExpression(expr ast.Expr) []SemanticToken {
 	var tokens []SemanticToken
 
 	if expr == nil {
 		return tokens
 	}
 
-	if expr.Binary != nil {
-		tokens = append(tokens, walkUnary(expr.Binary.Left)...)
-		for _, op := range expr.Binary.Ops {
-			tokens = append(tokens, walkUnary(op.Right)...)
+	switch v := expr.(type) {
+	case *ast.IdentExpr:
+		// Variable references
+		tokens = append(tokens, makeToken(v.NodePos(), v.NodeEndPos(), v.Name, "variable", 0)...)
+	case *ast.CallExpr:
+		tokens = append(tokens, walkCallExpression(v)...)
+	case *ast.FieldAccessExpr:
+		// Object being accessed
+		tokens = append(tokens, walkExpression(v.Target)...)
+		// Field name - treat as property access
+		tokens = append(tokens, makeToken(v.NodePos(), v.NodeEndPos(), v.Field, "property", 0)...)
+	case *ast.StructLiteralExpr:
+		// Struct type - v.Type is a *CalleePath, not *VariableType
+		if v.Type != nil {
+			tokens = append(tokens, walkCalleePath(v.Type)...)
 		}
-	}
-
-	return tokens
-}
-
-func walkUnary(ue *grammar.UnaryExpr) []SemanticToken {
-	var tokens []SemanticToken
-
-	if ue == nil {
+		// Struct fields
+		for _, field := range v.Fields {
+			// Field name
+			tokens = append(tokens, makeToken(field.Name.Pos, field.Name.EndPos, field.Name.Value, "property", 0)...)
+			// Field value
+			tokens = append(tokens, walkExpression(field.Value)...)
+		}
+	case *ast.BinaryExpr:
+		// Left and right expressions
+		tokens = append(tokens, walkExpression(v.Left)...)
+		tokens = append(tokens, walkExpression(v.Right)...)
+	case *ast.UnaryExpr:
+		// Unary expression value
+		tokens = append(tokens, walkExpression(v.Value)...)
+	case *ast.ParenExpr:
+		// Parenthesized expression
+		tokens = append(tokens, walkExpression(v.Value)...)
+	case *ast.LiteralExpr:
+		// Literals don't need special semantic tokens
 		return tokens
 	}
 
-	if ue.Value != nil {
-		if ue.Value.Primary != nil && ue.Value.Primary.Ident != nil {
-			tokens = append(tokens, makeToken(ue.Value.Primary.Ident.Pos, ue.Value.Primary.Ident.EndPos, ue.Value.Primary.Ident.Value, "variable", 0))
-		}
-		if ue.Value.Primary != nil && ue.Value.Primary.Call != nil {
-			tokens = append(tokens, walkCallExpr(ue.Value.Primary.Call)...)
-		}
-	}
-
 	return tokens
 }
 
-func walkCallExpr(call *grammar.CallExpr) []SemanticToken {
+func walkCallExpression(call *ast.CallExpr) []SemanticToken {
 	var tokens []SemanticToken
 
 	if call == nil {
 		return tokens
 	}
 
-	// Function call like Table::empty
-	for _, part := range call.Callee.Parts {
-		tokens = append(tokens, makeToken(part.Pos, part.EndPos, part.Value, "function", 0))
+	// Function being called
+	tokens = append(tokens, walkExpression(call.Callee)...)
+
+	// Generic type arguments
+	for _, generic := range call.Generic {
+		tokens = append(tokens, walkVariableType(&generic)...)
 	}
 
-	// Generics
-	for _, g := range call.Generic {
-		tokens = append(tokens, typeReferenceToken(g)...)
-	}
-
-	// Args
+	// Function arguments
 	for _, arg := range call.Args {
-		tokens = append(tokens, walkExpr(arg)...)
+		tokens = append(tokens, walkExpression(arg)...)
 	}
 
 	return tokens
 }
 
-func makeToken(pos, endPos lexer.Position, value, tokenType string, decl int) SemanticToken {
+func walkVariableType(vt *ast.VariableType) []SemanticToken {
+	var tokens []SemanticToken
+
+	if vt == nil {
+		return tokens
+	}
+
+	// Reference type
+	if vt.Ref != nil {
+		tokens = append(tokens, walkVariableType(vt.Ref.Target)...)
+		return tokens
+	}
+
+	// Type name
+	if vt.Name.Value != "" {
+		tokens = append(tokens, makeToken(vt.Name.Pos, vt.Name.EndPos, vt.Name.Value, "type", 0)...)
+	}
+
+	// Generic parameters
+	for _, generic := range vt.Generics {
+		tokens = append(tokens, walkVariableType(generic)...)
+	}
+
+	return tokens
+}
+
+func walkCalleePath(cp *ast.CalleePath) []SemanticToken {
+	var tokens []SemanticToken
+
+	if cp == nil {
+		return tokens
+	}
+
+	// Walk through each part of the callee path (e.g., Table::empty)
+	for _, part := range cp.Parts {
+		tokens = append(tokens, makeToken(part.Pos, part.EndPos, part.Value, "function", 0)...)
+	}
+
+	return tokens
+}
+
+// makeToken creates a semantic token for a given position and text
+func makeToken(pos, endPos ast.Position, value, tokenType string, declModifier int) []SemanticToken {
+	if value == "" {
+		return nil
+	}
+
 	length := endPos.Column - pos.Column
 	if length <= 0 {
 		length = len(value)
 	}
 
-	return SemanticToken{
-		Line:           uint32(pos.Line - 1),
-		StartChar:      uint32(pos.Column - 1),
+	return []SemanticToken{{
+		Line:           uint32(pos.Line - 1),   // LSP uses 0-based line numbers
+		StartChar:      uint32(pos.Column - 1), // LSP uses 0-based column numbers
 		Length:         uint32(length),
 		TokenType:      indexOf(tokenType, SemanticTokenTypes),
-		TokenModifiers: decl << indexOf("declaration", SemanticTokenModifiers),
-	}
+		TokenModifiers: declModifier << indexOf("declaration", SemanticTokenModifiers),
+	}}
 }
 
-// typeReferenceToken collects tokens for type references
-// (e.g., parameter types, return types, generic types)
-func typeReferenceToken(t *grammar.Type) []SemanticToken {
-	if t == nil || t.Name.Value == "" {
-		return nil
-	}
-	return []SemanticToken{
-		makeToken(t.Name.Pos, t.Name.Pos, t.Name.Value, "type", 0),
-	}
-}
-
-// indexOf returns the index of a string in a list, or -1 if not found
+// indexOf returns the index of a string in a slice, or 0 if not found
 func indexOf(target string, list []string) int {
 	for i, v := range list {
 		if v == target {
 			return i
 		}
 	}
-	return -1
+	return 0 // Default to first token type if not found
 }

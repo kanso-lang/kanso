@@ -3,7 +3,6 @@ module kanso
 go 1.24
 
 require (
-	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/fatih/color v1.18.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tliron/commonlog v0.2.19
@@ -28,9 +27,9 @@ require (
 	github.com/segmentio/ksuid v1.0.4 // indirect
 	github.com/sourcegraph/jsonrpc2 v0.2.0 // indirect
 	github.com/tliron/kutil v0.3.26 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/net v0.26.0 // indirect
-	golang.org/x/sys v0.25.0 // indirect
-	golang.org/x/term v0.23.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/term v0.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
