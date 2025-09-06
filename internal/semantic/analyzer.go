@@ -82,6 +82,7 @@ func (a *Analyzer) analyzeModule(module *ast.Module) {
 		switch node := item.(type) {
 		case *ast.Function:
 			a.analyzeFunction(node)
+			a.validateFunctionReadsWrites(node, storageStructs)
 			if node.Attribute != nil && node.Attribute.Name == "create" {
 				if createFunction != nil {
 					a.addError("multiple functions with #[create] attribute found", node.NodePos())
@@ -136,6 +137,43 @@ func (a *Analyzer) validateFunctionAttributes(fn *ast.Function) {
 	if fn.Attribute != nil {
 		if !validFunctionAttributes[fn.Attribute.Name] {
 			a.addError("invalid function attribute: "+fn.Attribute.Name, fn.Attribute.NodePos())
+		}
+	}
+}
+
+func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs map[string]bool) {
+	// Validate reads clauses reference storage structs
+	readStructs := make(map[string]bool)
+	for _, read := range fn.Reads {
+		if !storageStructs[read.Value] {
+			a.addError("reads clause references non-storage struct: "+read.Value, read.NodePos())
+			continue
+		}
+
+		// Check for duplicate reads
+		if readStructs[read.Value] {
+			a.addError("duplicate reads clause for struct: "+read.Value, read.NodePos())
+		}
+		readStructs[read.Value] = true
+	}
+
+	// Validate writes clauses reference storage structs
+	writeStructs := make(map[string]bool)
+	for _, write := range fn.Writes {
+		if !storageStructs[write.Value] {
+			a.addError("writes clause references non-storage struct: "+write.Value, write.NodePos())
+			continue
+		}
+
+		// Check for duplicate writes
+		if writeStructs[write.Value] {
+			a.addError("duplicate writes clause for struct: "+write.Value, write.NodePos())
+		}
+		writeStructs[write.Value] = true
+
+		// Check for conflicting read + write to same struct
+		if readStructs[write.Value] {
+			a.addError("conflicting reads and writes clause for struct (write implies read): "+write.Value, write.NodePos())
 		}
 	}
 }
