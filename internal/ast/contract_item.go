@@ -14,3 +14,7 @@ func (*Comment) isContractItem() {}
 func (*Module) isContractItem() {}
 
 func (*Attribute) isContractItem() {}
+
+func (*Function) isContractItem() {}
+
+func (*Struct) isContractItem() {}
