@@ -107,3 +107,217 @@ module Test {
 	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
 	assert.Contains(t, semanticErrors[0].Message, "duplicate declaration: test")
 }
+
+func TestInvalidModuleAttribute(t *testing.T) {
+	source := `#[invalid]
+module Test {
+    fun test(): u32 {
+        return 42;
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "invalid module attribute: invalid")
+}
+
+func TestInvalidStructAttribute(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[invalid]
+    struct Test {
+        value: u32,
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "invalid struct attribute: invalid")
+}
+
+func TestInvalidFunctionAttribute(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[invalid]
+    fun test(): u32 {
+        return 42;
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "invalid function attribute: invalid")
+}
+
+func TestMultipleCreateFunctions(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    #[create]
+    fun create1() writes State {
+        // constructor logic
+    }
+    
+    #[create]
+    fun create2() writes State {
+        // constructor logic
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "multiple functions with #[create] attribute found")
+}
+
+func TestConstructorWithReturnType(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    #[create]
+    fun create(): u32 writes State {
+        return 42;
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "constructor functions cannot have a return type")
+}
+
+func TestConstructorWithoutWrites(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    #[create]
+    fun create() {
+        // no writes clause
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "constructor functions must have a writes clause")
+}
+
+func TestConstructorWithoutStorageWrite(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    #[create]
+    fun create() writes SomethingElse {
+        // writes to non-storage struct
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "constructor functions must write to a storage struct")
+}
+
+func TestConstructorWritesToEventStruct(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[event]
+    struct Transfer {
+        from: address,
+        to: address,
+    }
+    
+    #[create]
+    fun create() writes Transfer {
+        // writes to event struct, not storage
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "constructor functions must write to a storage struct")
+}
+
+func TestConstructorWritesToStructWithoutAttribute(t *testing.T) {
+	source := `#[contract]
+module Test {
+    struct RegularStruct {
+        value: u32,
+    }
+    
+    #[create]
+    fun create() writes RegularStruct {
+        // writes to struct without attribute
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
+	assert.Contains(t, semanticErrors[0].Message, "constructor functions must write to a storage struct")
+}
