@@ -345,3 +345,7 @@ func (f *StructLiteralField) String() string {
 func (p *ParenExpr) String() string {
 	return fmt.Sprintf("(%s)", p.Value.String())
 }
+
+func (i *Ident) String() string {
+	return i.Value
+}

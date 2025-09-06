@@ -9,5 +9,13 @@ func ParseSource(path string, source string) (*ast.Contract, []ParseError, []Sca
 	parser := NewParser(path, tokens)
 	contract := parser.ParseContract()
 
+	// Assign metadata to all AST nodes
+	if contract != nil {
+		mv := ast.NewMetadataVisitor(source)
+		for _, item := range contract.ContractItems {
+			mv.AssignMetadata(item, 0) // 0 = no parent
+		}
+	}
+
 	return contract, parser.errors, scanner.errors
 }

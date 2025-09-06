@@ -5,6 +5,10 @@ type Node interface {
 	NodeEndPos() Position
 	NodeType() NodeType
 	String() string
+
+	// Metadata support for debugging and compilation tracking
+	GetMetadata() *Metadata
+	SetMetadata(*Metadata)
 }
 
 func (bci *BadContractItem) NodePos() Position    { return bci.Bad.Pos }
@@ -138,3 +142,104 @@ func (*StructLiteralField) NodeType() NodeType     { return STRUCT_LITERAL_FIELD
 func (p *ParenExpr) NodePos() Position    { return p.Pos }
 func (p *ParenExpr) NodeEndPos() Position { return p.EndPos }
 func (p *ParenExpr) NodeType() NodeType   { return PAREN_EXPR }
+
+// GetMetadata and SetMetadata implementations for all AST nodes
+
+func (bci *BadContractItem) GetMetadata() *Metadata  { return bci.Bad.metadata }
+func (bci *BadContractItem) SetMetadata(m *Metadata) { bci.Bad.metadata = m }
+
+func (be *BadExpr) GetMetadata() *Metadata  { return be.Bad.metadata }
+func (be *BadExpr) SetMetadata(m *Metadata) { be.Bad.metadata = m }
+
+func (i *Ident) GetMetadata() *Metadata  { return i.metadata }
+func (i *Ident) SetMetadata(m *Metadata) { i.metadata = m }
+
+func (dc *DocComment) GetMetadata() *Metadata  { return dc.metadata }
+func (dc *DocComment) SetMetadata(m *Metadata) { dc.metadata = m }
+
+func (c *Comment) GetMetadata() *Metadata  { return c.metadata }
+func (c *Comment) SetMetadata(m *Metadata) { c.metadata = m }
+
+func (bmi *BadModuleItem) GetMetadata() *Metadata  { return bmi.Bad.metadata }
+func (bmi *BadModuleItem) SetMetadata(m *Metadata) { bmi.Bad.metadata = m }
+
+func (m *Module) GetMetadata() *Metadata     { return m.metadata }
+func (m *Module) SetMetadata(meta *Metadata) { m.metadata = meta }
+
+func (a *Attribute) GetMetadata() *Metadata  { return a.metadata }
+func (a *Attribute) SetMetadata(m *Metadata) { a.metadata = m }
+
+func (u *Use) GetMetadata() *Metadata  { return u.metadata }
+func (u *Use) SetMetadata(m *Metadata) { u.metadata = m }
+
+func (ns *Namespace) GetMetadata() *Metadata  { return ns.metadata }
+func (ns *Namespace) SetMetadata(m *Metadata) { ns.metadata = m }
+
+func (ii *ImportItem) GetMetadata() *Metadata  { return ii.metadata }
+func (ii *ImportItem) SetMetadata(m *Metadata) { ii.metadata = m }
+
+func (s *Struct) GetMetadata() *Metadata  { return s.metadata }
+func (s *Struct) SetMetadata(m *Metadata) { s.metadata = m }
+
+func (sf *StructField) GetMetadata() *Metadata  { return sf.metadata }
+func (sf *StructField) SetMetadata(m *Metadata) { sf.metadata = m }
+
+func (t *VariableType) GetMetadata() *Metadata  { return t.metadata }
+func (t *VariableType) SetMetadata(m *Metadata) { t.metadata = m }
+
+func (rt *RefVariableType) GetMetadata() *Metadata  { return rt.metadata }
+func (rt *RefVariableType) SetMetadata(m *Metadata) { rt.metadata = m }
+
+func (f *Function) GetMetadata() *Metadata  { return f.metadata }
+func (f *Function) SetMetadata(m *Metadata) { f.metadata = m }
+
+func (fp *FunctionParam) GetMetadata() *Metadata  { return fp.metadata }
+func (fp *FunctionParam) SetMetadata(m *Metadata) { fp.metadata = m }
+
+func (b *FunctionBlock) GetMetadata() *Metadata  { return b.metadata }
+func (b *FunctionBlock) SetMetadata(m *Metadata) { b.metadata = m }
+
+func (e *ExprStmt) GetMetadata() *Metadata  { return e.metadata }
+func (e *ExprStmt) SetMetadata(m *Metadata) { e.metadata = m }
+
+func (r *ReturnStmt) GetMetadata() *Metadata  { return r.metadata }
+func (r *ReturnStmt) SetMetadata(m *Metadata) { r.metadata = m }
+
+func (l *LetStmt) GetMetadata() *Metadata  { return l.metadata }
+func (l *LetStmt) SetMetadata(m *Metadata) { l.metadata = m }
+
+func (a *AssignStmt) GetMetadata() *Metadata  { return a.metadata }
+func (a *AssignStmt) SetMetadata(m *Metadata) { a.metadata = m }
+
+func (a *AssertStmt) GetMetadata() *Metadata  { return a.metadata }
+func (a *AssertStmt) SetMetadata(m *Metadata) { a.metadata = m }
+
+func (b *BinaryExpr) GetMetadata() *Metadata  { return b.metadata }
+func (b *BinaryExpr) SetMetadata(m *Metadata) { b.metadata = m }
+
+func (u *UnaryExpr) GetMetadata() *Metadata  { return u.metadata }
+func (u *UnaryExpr) SetMetadata(m *Metadata) { u.metadata = m }
+
+func (c *CallExpr) GetMetadata() *Metadata  { return c.metadata }
+func (c *CallExpr) SetMetadata(m *Metadata) { c.metadata = m }
+
+func (f *FieldAccessExpr) GetMetadata() *Metadata  { return f.metadata }
+func (f *FieldAccessExpr) SetMetadata(m *Metadata) { f.metadata = m }
+
+func (s *StructLiteralExpr) GetMetadata() *Metadata  { return s.metadata }
+func (s *StructLiteralExpr) SetMetadata(m *Metadata) { s.metadata = m }
+
+func (l *LiteralExpr) GetMetadata() *Metadata  { return l.metadata }
+func (l *LiteralExpr) SetMetadata(m *Metadata) { l.metadata = m }
+
+func (i *IdentExpr) GetMetadata() *Metadata  { return i.metadata }
+func (i *IdentExpr) SetMetadata(m *Metadata) { i.metadata = m }
+
+func (c *CalleePath) GetMetadata() *Metadata  { return c.metadata }
+func (c *CalleePath) SetMetadata(m *Metadata) { c.metadata = m }
+
+func (f *StructLiteralField) GetMetadata() *Metadata  { return f.metadata }
+func (f *StructLiteralField) SetMetadata(m *Metadata) { f.metadata = m }
+
+func (p *ParenExpr) GetMetadata() *Metadata  { return p.metadata }
+func (p *ParenExpr) SetMetadata(m *Metadata) { p.metadata = m }
