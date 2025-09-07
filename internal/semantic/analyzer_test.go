@@ -484,3 +484,99 @@ module Test {
 
 	assert.Empty(t, semanticErrors, "Should have no semantic errors")
 }
+
+func TestTypeRegistryIntegration(t *testing.T) {
+	source := `#[contract]
+module Test {
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    fun test(): bool {
+        return true;
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should pass with no errors
+	assert.Empty(t, semanticErrors, "Should have no semantic errors")
+
+	// Verify types are registered correctly (without imports for now)
+	assert.True(t, analyzer.context.IsBuiltinType("u32"), "u32 should be built-in")
+	assert.True(t, analyzer.context.IsBuiltinType("bool"), "bool should be built-in")
+	assert.True(t, analyzer.context.IsUserDefinedType("State"), "State should be user-defined")
+	assert.False(t, analyzer.context.IsImportedType("Table"), "Table should not be imported without use statement")
+}
+
+func TestERC20Imports(t *testing.T) {
+	source := `#[contract]
+module Test {
+    use Evm::{sender, emit};
+    use Table::{Self, Table};
+    use std::ascii::{String};
+    use std::errors;
+    
+    #[storage]
+    struct State {
+        value: u32,
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should pass with no errors
+	assert.Empty(t, semanticErrors, "Should have no semantic errors")
+
+	// Verify imported types are registered correctly
+	assert.False(t, analyzer.context.IsImportedType("sender"), "sender is a function, not a type")
+	assert.False(t, analyzer.context.IsImportedType("emit"), "emit is a function, not a type")
+	assert.True(t, analyzer.context.IsImportedType("Table"), "Table should be imported as a type")
+	assert.True(t, analyzer.context.IsImportedType("String"), "String should be imported as a type")
+
+	// Verify imported functions are registered correctly
+	assert.True(t, analyzer.context.IsImportedFunction("sender"), "sender should be imported as a function")
+	assert.True(t, analyzer.context.IsImportedFunction("emit"), "emit should be imported as a function")
+
+	// Verify imported modules are registered correctly
+	assert.True(t, analyzer.context.IsImportedModule("Table"), "Table module should be imported via Self")
+	assert.True(t, analyzer.context.IsImportedModule("errors"), "errors module should be imported")
+
+	// Verify Table is marked as generic
+	tableType := analyzer.context.GetImportedType("Table")
+	assert.NotNil(t, tableType, "Table type should exist")
+	assert.True(t, tableType.IsGeneric, "Table should be generic")
+
+	// Verify String is marked as non-generic
+	stringType := analyzer.context.GetImportedType("String")
+	assert.NotNil(t, stringType, "String type should exist")
+	assert.False(t, stringType.IsGeneric, "String should not be generic")
+
+	// Verify standard library integration
+	assert.True(t, analyzer.context.IsStandardModule("Evm"), "Evm should be a standard module")
+	assert.True(t, analyzer.context.IsStandardModule("Table"), "Table should be a standard module")
+	assert.True(t, analyzer.context.IsStandardModule("std::ascii"), "std::ascii should be a standard module")
+	assert.True(t, analyzer.context.IsStandardModule("std::errors"), "std::errors should be a standard module")
+
+	// Verify function definition access
+	senderFunc := analyzer.context.GetFunctionDefinition("sender")
+	assert.NotNil(t, senderFunc, "Should get sender function definition")
+	assert.Equal(t, "sender", senderFunc.Name)
+	assert.Equal(t, "address", senderFunc.ReturnType.Name)
+
+	emptyFunc := analyzer.context.GetModuleFunctionDefinition("Table", "empty")
+	assert.NotNil(t, emptyFunc, "Should get Table::empty function definition")
+	assert.Equal(t, "empty", emptyFunc.Name)
+	assert.True(t, emptyFunc.IsGeneric, "Table::empty should be generic")
+}

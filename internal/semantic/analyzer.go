@@ -21,6 +21,7 @@ type Analyzer struct {
 	contract *ast.Contract
 	errors   []SemanticError
 	symbols  *SymbolTable
+	context  *ContextRegistry
 }
 
 type SemanticError struct {
@@ -30,7 +31,8 @@ type SemanticError struct {
 
 func NewAnalyzer() *Analyzer {
 	return &Analyzer{
-		errors: make([]SemanticError, 0),
+		errors:  make([]SemanticError, 0),
+		context: NewContextRegistry(),
 	}
 }
 
@@ -66,12 +68,22 @@ func (a *Analyzer) analyzeModule(module *ast.Module) {
 
 	a.validateModuleAttributes(module)
 
-	// First pass: collect storage structs
+	// First pass: process use statements and collect types
 	storageStructs := make(map[string]bool)
+
 	for _, item := range module.ModuleItems {
-		if s, ok := item.(*ast.Struct); ok {
-			if s.Attribute != nil && s.Attribute.Name == "storage" {
-				storageStructs[s.Name.Value] = true
+		switch node := item.(type) {
+		case *ast.Use:
+			// Process import statements
+			importErrors := a.context.ProcessUseStatement(node)
+			for _, err := range importErrors {
+				a.addError(err, node.NodePos())
+			}
+		case *ast.Struct:
+			// Add user-defined structs to context
+			a.context.AddUserDefinedType(node.Name.Value, node)
+			if node.Attribute != nil && node.Attribute.Name == "storage" {
+				storageStructs[node.Name.Value] = true
 			}
 		}
 	}
@@ -93,6 +105,8 @@ func (a *Analyzer) analyzeModule(module *ast.Module) {
 			}
 		case *ast.Struct:
 			a.analyzeStruct(node)
+		case *ast.Use:
+			// Already processed in first pass
 		}
 	}
 }
