@@ -23,8 +23,13 @@ func collectSemanticTokens(contract *ast.Contract) []SemanticToken {
 		return tokens
 	}
 
+	// Walk through leading comments first
+	for _, item := range contract.LeadingComments {
+		tokens = append(tokens, walkContractItem(item)...)
+	}
+
 	// Walk through all contract items
-	for _, item := range contract.ContractItems {
+	for _, item := range contract.Items {
 		tokens = append(tokens, walkContractItem(item)...)
 	}
 
@@ -45,62 +50,13 @@ func walkContractItem(item ast.ContractItem) []SemanticToken {
 	case *ast.Comment:
 		// Regular comments are already handled by the tokenizer
 		return tokens
-	case *ast.Module:
-		tokens = append(tokens, walkModule(v)...)
-	case *ast.BadContractItem:
-		// Skip bad items
-		return tokens
-	}
-
-	return tokens
-}
-
-func walkModule(m *ast.Module) []SemanticToken {
-	var tokens []SemanticToken
-
-	if m == nil {
-		return tokens
-	}
-
-	// Module attributes (like #[contract])
-	for _, attr := range m.Attributes {
-		tokens = append(tokens, makeToken(attr.Pos, attr.EndPos, attr.Name, "modifier", 0)...)
-	}
-
-	// Module name
-	if m.Name.Value != "" {
-		tokens = append(tokens, makeToken(m.Name.Pos, m.Name.EndPos, m.Name.Value, "namespace", 1)...)
-	}
-
-	// Walk module items
-	for _, item := range m.ModuleItems {
-		tokens = append(tokens, walkModuleItem(item)...)
-	}
-
-	return tokens
-}
-
-func walkModuleItem(item ast.ModuleItem) []SemanticToken {
-	var tokens []SemanticToken
-
-	if item == nil {
-		return tokens
-	}
-
-	switch v := item.(type) {
-	case *ast.DocComment:
-		// Doc comments are already handled
-		return tokens
-	case *ast.Comment:
-		// Regular comments are already handled
-		return tokens
-	case *ast.Use:
-		tokens = append(tokens, walkUse(v)...)
 	case *ast.Struct:
 		tokens = append(tokens, walkStruct(v)...)
 	case *ast.Function:
 		tokens = append(tokens, walkFunction(v)...)
-	case *ast.BadModuleItem:
+	case *ast.Use:
+		tokens = append(tokens, walkUse(v)...)
+	case *ast.BadContractItem:
 		// Skip bad items
 		return tokens
 	}
@@ -337,12 +293,6 @@ func walkVariableType(vt *ast.VariableType) []SemanticToken {
 	var tokens []SemanticToken
 
 	if vt == nil {
-		return tokens
-	}
-
-	// Reference type
-	if vt.Ref != nil {
-		tokens = append(tokens, walkVariableType(vt.Ref.Target)...)
 		return tokens
 	}
 

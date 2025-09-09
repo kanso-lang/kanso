@@ -89,6 +89,16 @@ func (p *Parser) parsePostfixExpr(expr ast.Expr) ast.Expr {
 				Callee: expr,
 				Args:   args,
 			}
+		} else if p.check(LEFT_BRACKET) {
+			p.advance()
+			index := p.parseExpr()
+			end := p.consume(RIGHT_BRACKET, "expected ']' after index")
+			expr = &ast.IndexExpr{
+				Pos:    expr.NodePos(),
+				EndPos: p.makeEndPos(end),
+				Target: expr,
+				Index:  index,
+			}
 		} else {
 			break
 		}
@@ -115,7 +125,6 @@ func (p *Parser) parsePrimaryExpr() ast.Expr {
 			Value:  start.Lexeme,
 		}}
 
-		// Parse CalleePath (e.g. Foo::bar::baz)
 		for p.match(DOUBLE_COLON) {
 			next := p.consume(IDENTIFIER, "expected identifier after '::'")
 			parts = append(parts, ast.Ident{
@@ -131,13 +140,11 @@ func (p *Parser) parsePrimaryExpr() ast.Expr {
 			Parts:  parts,
 		}
 
-		// Optional generic type arguments
 		var genericArgs []ast.VariableType
 		if p.match(LESS) {
 			genericArgs = p.parseGenericTypeArgs()
 		}
 
-		// Function call: Foo::bar<T>(...)
 		if p.check(LEFT_PAREN) {
 			p.advance()
 			args := p.parseExprList()
@@ -151,13 +158,12 @@ func (p *Parser) parsePrimaryExpr() ast.Expr {
 			}
 		}
 
-		// Struct literal: Foo::Bar<T> { field: val, ... }
 		if p.check(LEFT_BRACE) {
 			p.advance()
 			return p.parseStructLiteralExpr(path)
 		}
 
-		// Single identifier
+		// Optimize for single identifiers to avoid unnecessary CalleePath wrapper
 		if len(path.Parts) == 1 {
 			return &ast.IdentExpr{
 				Pos:    path.Pos,
@@ -166,25 +172,55 @@ func (p *Parser) parsePrimaryExpr() ast.Expr {
 			}
 		}
 
-		// Fallback: only identifier chain with no call or literal
-		p.errorAtCurrent("unexpected identifier chain without call or struct literal")
-		return &ast.BadExpr{
-			Bad: ast.BadNode{
-				Pos:     path.Pos,
-				EndPos:  path.EndPos,
-				Message: "unexpected identifier chain without call or struct literal",
-			},
-		}
+		return path
 	}
 
 	if p.match(LEFT_PAREN) {
 		l := p.previous()
-		inner := p.parsePrattExpr(0)
+
+		if p.check(RIGHT_PAREN) {
+			r := p.advance()
+			return &ast.TupleExpr{
+				Pos:      p.makePos(l),
+				EndPos:   p.makeEndPos(r),
+				Elements: []ast.Expr{},
+			}
+		}
+
+		first := p.parsePrattExpr(0)
+
+		// Distinguish between tuple (a, b) and parenthesized expression (a)
+		if p.match(COMMA) {
+			elements := []ast.Expr{first}
+
+			// Continue parsing until we hit the closing paren or error
+			if !p.check(RIGHT_PAREN) {
+				for {
+					elem := p.parsePrattExpr(0)
+					elements = append(elements, elem)
+					if !p.match(COMMA) {
+						break
+					}
+					// Support trailing commas like Rust/Go
+					if p.check(RIGHT_PAREN) {
+						break
+					}
+				}
+			}
+
+			r := p.consume(RIGHT_PAREN, "expected ')' after tuple elements")
+			return &ast.TupleExpr{
+				Pos:      p.makePos(l),
+				EndPos:   p.makeEndPos(r),
+				Elements: elements,
+			}
+		}
+
 		r := p.consume(RIGHT_PAREN, "expected ')'")
 		return &ast.ParenExpr{
 			Pos:    p.makePos(l),
 			EndPos: p.makeEndPos(r),
-			Value:  inner,
+			Value:  first,
 		}
 	}
 

@@ -2,46 +2,41 @@ package parser
 
 import "kanso/internal/ast"
 
-func (p *Parser) parseFunction(attr *ast.Attribute, isPublic bool) *ast.Function {
-	startToken := p.consume(FUN, "expected 'fun' keyword")
+func (p *Parser) parseFunction(attr *ast.Attribute, isExternal bool) *ast.Function {
+	return p.parseFunctionWithDoc(attr, isExternal, nil)
+}
 
-	// Parse function name
+func (p *Parser) parseFunctionWithDoc(attr *ast.Attribute, isExternal bool, docComment *ast.DocComment) *ast.Function {
+	startToken := p.consume(FN, "expected 'fn' keyword")
+
 	name, ok := p.consumeIdent("expected function name")
 	if !ok {
 		p.synchronize()
 		return nil
 	}
 
-	// Parse parameters
 	params := p.parseFunctionParameters()
-
-	// Parse optional return type
 	returnType := p.parseFunctionReturnType()
-
-	// Parse optional reads clause
 	reads := p.parseFunctionReadsClause()
-
-	// Parse optional writes clause
 	writes := p.parseFunctionWritesClause()
-
-	// Parse function body
 	body := p.parseFunctionBlock()
-	if body.Pos == (ast.Position{}) { // recovery failed
+	if body.Pos == (ast.Position{}) { // parser recovery failed
 		p.synchronize()
 		return nil
 	}
 
 	return &ast.Function{
-		Pos:       p.makePos(startToken),
-		EndPos:    body.EndPos,
-		Attribute: attr,
-		Public:    isPublic,
-		Name:      name,
-		Params:    params,
-		Return:    returnType,
-		Reads:     reads,
-		Writes:    writes,
-		Body:      &body,
+		Pos:        p.makePos(startToken),
+		EndPos:     body.EndPos,
+		Attribute:  attr,
+		DocComment: docComment,
+		External:   isExternal,
+		Name:       name,
+		Params:     params,
+		Return:     returnType,
+		Reads:      reads,
+		Writes:     writes,
+		Body:       &body,
 	}
 }
 
@@ -73,9 +68,9 @@ func (p *Parser) parseFunctionParameters() []*ast.FunctionParam {
 	return params
 }
 
-// parseFunctionReturnType parses the optional return type after ':'
+// parseFunctionReturnType parses the optional return type after '->'
 func (p *Parser) parseFunctionReturnType() *ast.VariableType {
-	if p.match(COLON) {
+	if p.match(ARROW) {
 		return p.parseVariableType()
 	}
 	return nil
@@ -109,8 +104,8 @@ func (p *Parser) parseFunctionBlock() ast.FunctionBlock {
 		} else if p.check(LET) {
 			stmt := p.parseLetStmt()
 			items = append(items, stmt)
-		} else if p.check(ASSERT) {
-			stmt := p.parseAssertStmt()
+		} else if p.check(REQUIRE) {
+			stmt := p.parseRequireStmt()
 			items = append(items, stmt)
 		} else if p.check(COMMENT) {
 			token := p.advance()
@@ -180,6 +175,10 @@ func (p *Parser) parseFunctionBlock() ast.FunctionBlock {
 
 func (p *Parser) parseLetStmt() *ast.LetStmt {
 	start := p.consume(LET, "expected 'let'")
+
+	// Check for mut keyword
+	mut := p.match(MUT)
+
 	name, ok := p.consumeIdent("expected variable name after 'let'")
 	if !ok {
 		return nil
@@ -192,6 +191,7 @@ func (p *Parser) parseLetStmt() *ast.LetStmt {
 	return &ast.LetStmt{
 		Pos:    p.makePos(start),
 		EndPos: p.makeEndPos(semi),
+		Mut:    mut,
 		Name:   name,
 		Expr:   expr,
 	}
@@ -212,10 +212,10 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 	}
 }
 
-func (p *Parser) parseAssertStmt() *ast.AssertStmt {
-	start := p.consume(ASSERT, "expected 'assert'")
-	p.consume(BANG, "expected '!' after 'assert'")
-	p.consume(LEFT_PAREN, "expected '(' after 'assert!'")
+func (p *Parser) parseRequireStmt() *ast.RequireStmt {
+	start := p.consume(REQUIRE, "expected 'require'")
+	p.consume(BANG, "expected '!' after 'require'")
+	p.consume(LEFT_PAREN, "expected '(' after 'require!'")
 
 	var args []ast.Expr
 	for {
@@ -228,7 +228,7 @@ func (p *Parser) parseAssertStmt() *ast.AssertStmt {
 	end := p.consume(RIGHT_PAREN, "expected ')' to close assert arguments")
 	p.consume(SEMICOLON, "expected ';' after assert statement")
 
-	return &ast.AssertStmt{
+	return &ast.RequireStmt{
 		Pos:    p.makePos(start),
 		EndPos: p.makeEndPos(end),
 		Args:   args,
@@ -241,7 +241,7 @@ func (p *Parser) parseExpr() ast.Expr {
 
 func isAssignable(expr ast.Expr) bool {
 	switch expr.(type) {
-	case *ast.IdentExpr, *ast.FieldAccessExpr, *ast.UnaryExpr:
+	case *ast.IdentExpr, *ast.FieldAccessExpr, *ast.UnaryExpr, *ast.IndexExpr:
 		return true
 	default:
 		return false

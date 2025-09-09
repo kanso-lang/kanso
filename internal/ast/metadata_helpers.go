@@ -167,14 +167,6 @@ func collectNodesRecursive(node Node, nodes *[]Node) {
 
 	// Visit children based on node type
 	switch n := node.(type) {
-	case *Module:
-		for _, attr := range n.Attributes {
-			collectNodesRecursive(&attr, nodes)
-		}
-		collectNodesRecursive(&n.Name, nodes)
-		for _, item := range n.ModuleItems {
-			collectNodesRecursive(item, nodes)
-		}
 
 	case *Use:
 		for _, ns := range n.Namespaces {
@@ -206,17 +198,9 @@ func collectNodesRecursive(node Node, nodes *[]Node) {
 		}
 
 	case *VariableType:
-		if n.Ref != nil {
-			collectNodesRecursive(n.Ref, nodes)
-		}
 		collectNodesRecursive(&n.Name, nodes)
 		for _, generic := range n.Generics {
 			collectNodesRecursive(generic, nodes)
-		}
-
-	case *RefVariableType:
-		if n.Target != nil {
-			collectNodesRecursive(n.Target, nodes)
 		}
 
 	case *Function:
@@ -278,7 +262,7 @@ func collectNodesRecursive(node Node, nodes *[]Node) {
 			collectNodesRecursive(n.Value, nodes)
 		}
 
-	case *AssertStmt:
+	case *RequireStmt:
 		for _, arg := range n.Args {
 			collectNodesRecursive(arg, nodes)
 		}

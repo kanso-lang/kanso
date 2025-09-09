@@ -83,7 +83,7 @@ func (p *Parser) synchronize() {
 		}
 
 		switch p.peek().Type {
-		case FUN, LET, IF, RETURN, MODULE:
+		case FN, LET, IF, RETURN, CONTRACT:
 			return
 		}
 

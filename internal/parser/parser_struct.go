@@ -3,29 +3,31 @@ package parser
 import "kanso/internal/ast"
 
 func (p *Parser) parseStruct(attr *ast.Attribute) *ast.Struct {
+	return p.parseStructWithDoc(attr, nil)
+}
+
+func (p *Parser) parseStructWithDoc(attr *ast.Attribute, docComment *ast.DocComment) *ast.Struct {
 	startToken := p.consume(STRUCT, "expected 'struct' keyword")
 
-	// Parse struct name
 	name, ok := p.consumeIdent("expected struct name")
 	if !ok {
 		p.synchronize()
 		return nil
 	}
 
-	// Parse struct body
 	items := p.parseStructBody()
-	endToken := p.previous() // Set by parseStructBody
+	endToken := p.previous() // parseStructBody leaves p at closing brace
 
 	return &ast.Struct{
-		Pos:       p.makePos(startToken),
-		EndPos:    p.makeEndPos(endToken),
-		Attribute: attr,
-		Name:      name,
-		Items:     items,
+		Pos:        p.makePos(startToken),
+		EndPos:     p.makeEndPos(endToken),
+		Attribute:  attr,
+		DocComment: docComment,
+		Name:       name,
+		Items:      items,
 	}
 }
 
-// parseStructBody parses the struct body between { and }
 func (p *Parser) parseStructBody() []ast.StructItem {
 	p.consume(LEFT_BRACE, "expected '{' to start struct body")
 	var items []ast.StructItem
@@ -49,16 +51,13 @@ func (p *Parser) parseStructBody() []ast.StructItem {
 	return items
 }
 
-// parseStructField parses a single field: name: Type,
 func (p *Parser) parseStructField() *ast.StructField {
-	// Parse field name
 	name, ok := p.consumeIdent("expected field name")
 	if !ok {
 		p.synchronize()
 		return nil
 	}
 
-	// Parse field type
 	p.consume(COLON, "expected ':' after field name")
 	typ := p.parseVariableType()
 	if typ == nil {
@@ -66,11 +65,11 @@ func (p *Parser) parseStructField() *ast.StructField {
 		return nil
 	}
 
-	// Parse trailing comma (required in Kanso structs)
+	// Kanso requires trailing commas for consistency
 	end := p.consume(COMMA, "expected ',' after struct field")
 
 	return &ast.StructField{
-		Pos:          p.makePos(p.previous()), // Use name token position
+		Pos:          p.makePos(p.previous()), // position from name token not field type
 		EndPos:       p.makeEndPos(end),
 		Name:         name,
 		VariableType: typ,

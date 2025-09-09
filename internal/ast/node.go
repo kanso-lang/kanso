@@ -11,6 +11,10 @@ type Node interface {
 	SetMetadata(*Metadata)
 }
 
+func (c *Contract) NodePos() Position    { return c.Pos }
+func (c *Contract) NodeEndPos() Position { return c.EndPos }
+func (*Contract) NodeType() NodeType     { return CONTRACT }
+
 func (bci *BadContractItem) NodePos() Position    { return bci.Bad.Pos }
 func (bci *BadContractItem) NodeEndPos() Position { return bci.Bad.EndPos }
 func (*BadContractItem) NodeType() NodeType       { return BAD_CONTRACT_ITEM }
@@ -34,10 +38,6 @@ func (*Comment) NodeType() NodeType     { return COMMENT }
 func (bmi *BadModuleItem) NodePos() Position    { return bmi.Bad.Pos }
 func (bmi *BadModuleItem) NodeEndPos() Position { return bmi.Bad.EndPos }
 func (*BadModuleItem) NodeType() NodeType       { return BAD_MODULE_ITEM }
-
-func (m *Module) NodePos() Position    { return m.Pos }
-func (m *Module) NodeEndPos() Position { return m.EndPos }
-func (*Module) NodeType() NodeType     { return MODULE }
 
 func (a *Attribute) NodePos() Position    { return a.Pos }
 func (a *Attribute) NodeEndPos() Position { return a.EndPos }
@@ -67,10 +67,6 @@ func (t *VariableType) NodePos() Position    { return t.Pos }
 func (t *VariableType) NodeEndPos() Position { return t.EndPos }
 func (*VariableType) NodeType() NodeType     { return TYPE }
 
-func (rt *RefVariableType) NodePos() Position    { return rt.Pos }
-func (rt *RefVariableType) NodeEndPos() Position { return rt.EndPos }
-func (*RefVariableType) NodeType() NodeType      { return REF_TYPE }
-
 func (f *Function) NodePos() Position    { return f.Pos }
 func (f *Function) NodeEndPos() Position { return f.EndPos }
 func (*Function) NodeType() NodeType     { return FUNCTION }
@@ -99,9 +95,9 @@ func (a *AssignStmt) NodePos() Position    { return a.Pos }
 func (a *AssignStmt) NodeEndPos() Position { return a.EndPos }
 func (*AssignStmt) NodeType() NodeType     { return ASSIGN_STMT }
 
-func (a *AssertStmt) NodePos() Position    { return a.Pos }
-func (a *AssertStmt) NodeEndPos() Position { return a.EndPos }
-func (*AssertStmt) NodeType() NodeType     { return ASSERT_STMT }
+func (r *RequireStmt) NodePos() Position    { return r.Pos }
+func (r *RequireStmt) NodeEndPos() Position { return r.EndPos }
+func (*RequireStmt) NodeType() NodeType     { return REQUIRE_STMT }
 
 func (b *BinaryExpr) NodePos() Position    { return b.Pos }
 func (b *BinaryExpr) NodeEndPos() Position { return b.EndPos }
@@ -118,6 +114,10 @@ func (*CallExpr) NodeType() NodeType     { return CALL_EXPR }
 func (f *FieldAccessExpr) NodePos() Position    { return f.Pos }
 func (f *FieldAccessExpr) NodeEndPos() Position { return f.EndPos }
 func (*FieldAccessExpr) NodeType() NodeType     { return FIELD_ACCESS_EXPR }
+
+func (i *IndexExpr) NodePos() Position    { return i.Pos }
+func (i *IndexExpr) NodeEndPos() Position { return i.EndPos }
+func (*IndexExpr) NodeType() NodeType     { return INDEX_EXPR }
 
 func (s *StructLiteralExpr) NodePos() Position    { return s.Pos }
 func (s *StructLiteralExpr) NodeEndPos() Position { return s.EndPos }
@@ -143,7 +143,14 @@ func (p *ParenExpr) NodePos() Position    { return p.Pos }
 func (p *ParenExpr) NodeEndPos() Position { return p.EndPos }
 func (p *ParenExpr) NodeType() NodeType   { return PAREN_EXPR }
 
+func (t *TupleExpr) NodePos() Position    { return t.Pos }
+func (t *TupleExpr) NodeEndPos() Position { return t.EndPos }
+func (t *TupleExpr) NodeType() NodeType   { return TUPLE_EXPR }
+
 // GetMetadata and SetMetadata implementations for all AST nodes
+
+func (c *Contract) GetMetadata() *Metadata  { return c.metadata }
+func (c *Contract) SetMetadata(m *Metadata) { c.metadata = m }
 
 func (bci *BadContractItem) GetMetadata() *Metadata  { return bci.Bad.metadata }
 func (bci *BadContractItem) SetMetadata(m *Metadata) { bci.Bad.metadata = m }
@@ -162,9 +169,6 @@ func (c *Comment) SetMetadata(m *Metadata) { c.metadata = m }
 
 func (bmi *BadModuleItem) GetMetadata() *Metadata  { return bmi.Bad.metadata }
 func (bmi *BadModuleItem) SetMetadata(m *Metadata) { bmi.Bad.metadata = m }
-
-func (m *Module) GetMetadata() *Metadata     { return m.metadata }
-func (m *Module) SetMetadata(meta *Metadata) { m.metadata = meta }
 
 func (a *Attribute) GetMetadata() *Metadata  { return a.metadata }
 func (a *Attribute) SetMetadata(m *Metadata) { a.metadata = m }
@@ -187,9 +191,6 @@ func (sf *StructField) SetMetadata(m *Metadata) { sf.metadata = m }
 func (t *VariableType) GetMetadata() *Metadata  { return t.metadata }
 func (t *VariableType) SetMetadata(m *Metadata) { t.metadata = m }
 
-func (rt *RefVariableType) GetMetadata() *Metadata  { return rt.metadata }
-func (rt *RefVariableType) SetMetadata(m *Metadata) { rt.metadata = m }
-
 func (f *Function) GetMetadata() *Metadata  { return f.metadata }
 func (f *Function) SetMetadata(m *Metadata) { f.metadata = m }
 
@@ -211,8 +212,8 @@ func (l *LetStmt) SetMetadata(m *Metadata) { l.metadata = m }
 func (a *AssignStmt) GetMetadata() *Metadata  { return a.metadata }
 func (a *AssignStmt) SetMetadata(m *Metadata) { a.metadata = m }
 
-func (a *AssertStmt) GetMetadata() *Metadata  { return a.metadata }
-func (a *AssertStmt) SetMetadata(m *Metadata) { a.metadata = m }
+func (r *RequireStmt) GetMetadata() *Metadata  { return r.metadata }
+func (r *RequireStmt) SetMetadata(m *Metadata) { r.metadata = m }
 
 func (b *BinaryExpr) GetMetadata() *Metadata  { return b.metadata }
 func (b *BinaryExpr) SetMetadata(m *Metadata) { b.metadata = m }
@@ -225,6 +226,9 @@ func (c *CallExpr) SetMetadata(m *Metadata) { c.metadata = m }
 
 func (f *FieldAccessExpr) GetMetadata() *Metadata  { return f.metadata }
 func (f *FieldAccessExpr) SetMetadata(m *Metadata) { f.metadata = m }
+
+func (i *IndexExpr) GetMetadata() *Metadata  { return i.metadata }
+func (i *IndexExpr) SetMetadata(m *Metadata) { i.metadata = m }
 
 func (s *StructLiteralExpr) GetMetadata() *Metadata  { return s.metadata }
 func (s *StructLiteralExpr) SetMetadata(m *Metadata) { s.metadata = m }
@@ -243,3 +247,6 @@ func (f *StructLiteralField) SetMetadata(m *Metadata) { f.metadata = m }
 
 func (p *ParenExpr) GetMetadata() *Metadata  { return p.metadata }
 func (p *ParenExpr) SetMetadata(m *Metadata) { p.metadata = m }
+
+func (t *TupleExpr) GetMetadata() *Metadata  { return t.metadata }
+func (t *TupleExpr) SetMetadata(m *Metadata) { t.metadata = m }

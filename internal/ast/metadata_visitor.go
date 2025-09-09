@@ -66,14 +66,6 @@ func (mv *MetadataVisitor) extractSourceText(start, end Position) string {
 // visitChildren visits all children of a node
 func (mv *MetadataVisitor) visitChildren(node Node, parentID NodeID) {
 	switch n := node.(type) {
-	case *Module:
-		for _, attr := range n.Attributes {
-			mv.AssignMetadata(&attr, parentID)
-		}
-		mv.AssignMetadata(&n.Name, parentID)
-		for _, item := range n.ModuleItems {
-			mv.AssignMetadata(item, parentID)
-		}
 
 	case *Use:
 		for _, ns := range n.Namespaces {
@@ -105,17 +97,9 @@ func (mv *MetadataVisitor) visitChildren(node Node, parentID NodeID) {
 		}
 
 	case *VariableType:
-		if n.Ref != nil {
-			mv.AssignMetadata(n.Ref, parentID)
-		}
 		mv.AssignMetadata(&n.Name, parentID)
 		for _, generic := range n.Generics {
 			mv.AssignMetadata(generic, parentID)
-		}
-
-	case *RefVariableType:
-		if n.Target != nil {
-			mv.AssignMetadata(n.Target, parentID)
 		}
 
 	case *Function:
@@ -177,7 +161,7 @@ func (mv *MetadataVisitor) visitChildren(node Node, parentID NodeID) {
 			mv.AssignMetadata(n.Value, parentID)
 		}
 
-	case *AssertStmt:
+	case *RequireStmt:
 		for _, arg := range n.Args {
 			mv.AssignMetadata(arg, parentID)
 		}

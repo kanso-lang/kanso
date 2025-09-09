@@ -8,7 +8,6 @@ func (p *Parser) parseUse() *ast.Use {
 	namespaces := []*ast.Namespace{}
 	imports := []*ast.ImportItem{}
 
-	// Parse namespace path: A::B::C
 	for {
 		if !p.check(IDENTIFIER) {
 			p.errorAtCurrent("expected namespace identifier in use statement")
@@ -30,14 +29,14 @@ func (p *Parser) parseUse() *ast.Use {
 
 		if p.match(DOUBLE_COLON) {
 			if p.check(LEFT_BRACE) {
-				break // into import item list
+				break // transition to import list parsing
 			}
-			continue // continue parsing more namespace parts
+			continue // more namespace segments to parse
 		}
 		break
 	}
 
-	// Parse optional { X, Y, Z }
+	// Handle brace-enclosed import lists like {sender, emit}
 	if p.match(LEFT_BRACE) {
 		for {
 			if !p.check(IDENTIFIER) {

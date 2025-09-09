@@ -22,7 +22,12 @@ func ParseSourceWithMetadata(path string, source string) *ParseResult {
 	// Assign metadata to all AST nodes
 	if contract != nil {
 		mv = ast.NewMetadataVisitor(source)
-		for _, item := range contract.ContractItems {
+		// Assign metadata to leading comments
+		for _, item := range contract.LeadingComments {
+			mv.AssignMetadata(item, 0) // 0 = no parent
+		}
+		// Assign metadata to contract items
+		for _, item := range contract.Items {
 			mv.AssignMetadata(item, 0) // 0 = no parent
 		}
 	}
@@ -41,7 +46,7 @@ func (pr *ParseResult) GetSourceMapping() map[uint32]ast.Position {
 		return nil
 	}
 
-	nodes := ast.CollectAllNodes(pr.Contract.ContractItems[0])
+	nodes := ast.CollectAllNodes(pr.Contract.Items[0])
 	return ast.GetSourceMapping(nodes)
 }
 
@@ -51,7 +56,7 @@ func (pr *ParseResult) GetReverseMapping() map[ast.Position][]uint32 {
 		return nil
 	}
 
-	nodes := ast.CollectAllNodes(pr.Contract.ContractItems[0])
+	nodes := ast.CollectAllNodes(pr.Contract.Items[0])
 	return ast.GetReverseMapping(nodes)
 }
 

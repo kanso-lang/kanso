@@ -118,6 +118,8 @@ func (s *Scanner) scanMinusOperator() {
 		s.addToken(DECREMENT)
 	} else if s.matchNext('=') {
 		s.addToken(MINUS_EQUAL)
+	} else if s.matchNext('>') {
+		s.addToken(ARROW)
 	} else {
 		s.addToken(MINUS)
 	}
@@ -289,6 +291,9 @@ func (s *Scanner) scanIdentifier() {
 		s.advance()
 	}
 	text := s.source[s.start:s.current]
+
+	// Don't consume the '!' as part of identifiers - let it be a separate token
+
 	s.addToken(lookupIdentifier(text))
 }
 

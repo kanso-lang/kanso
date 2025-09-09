@@ -24,29 +24,65 @@ func NewParser(filename string, tokens []Token) *Parser {
 	}
 }
 
-// ParseContract is the main entry point for parsing a Kanso source file.
-// It parses the entire contract and returns the AST along with any errors.
 func (p *Parser) ParseContract() *ast.Contract {
-	contract := &ast.Contract{}
+	// Collect any leading comments before the contract
+	var leadingComments []ast.ContractItem
+	for p.check(COMMENT) || p.check(DOC_COMMENT) {
+		if p.check(DOC_COMMENT) {
+			leadingComments = append(leadingComments, p.parseDocComment())
+		} else {
+			leadingComments = append(leadingComments, p.parseComment())
+		}
+	}
 
-	// Parse all top-level items until end of file
-	for !p.isAtEnd() {
+	// Expect 'contract' keyword
+	startToken := p.consume(CONTRACT, "expected 'contract' keyword")
+
+	// Get contract name
+	nameToken := p.consume(IDENTIFIER, "expected contract name")
+	contractName := ast.Ident{
+		Pos:    p.makePos(nameToken),
+		EndPos: p.makeEndPos(nameToken),
+		Value:  nameToken.Lexeme,
+	}
+
+	// Expect opening brace
+	p.consume(LEFT_BRACE, "expected '{' to start contract body")
+
+	// Parse contract items until closing brace
+	var items []ast.ContractItem
+	for !p.check(RIGHT_BRACE) && !p.isAtEnd() {
 		item := p.parseContractItem()
 		if item != nil {
-			contract.ContractItems = append(contract.ContractItems, item)
+			items = append(items, item)
 		} else {
 			// If parsing failed, try to recover and continue
 			p.synchronize()
 		}
 	}
 
+	// Expect closing brace
+	endToken := p.consume(RIGHT_BRACE, "expected '}' to close contract body")
+
+	// Use the start of the first leading comment if we have any, otherwise use the contract token
+	startPos := p.makePos(startToken)
+	if len(leadingComments) > 0 {
+		startPos = leadingComments[0].NodePos()
+	}
+
+	contract := &ast.Contract{
+		Pos:             startPos,
+		EndPos:          p.makeEndPos(endToken),
+		LeadingComments: leadingComments,
+		Name:            contractName,
+		Items:           items,
+	}
+
 	return contract
 }
 
-// parseContractItem parses a single top-level item in a contract file.
-// This includes comments, modules with optional attributes.
 func (p *Parser) parseContractItem() ast.ContractItem {
-	// Handle doc comments and regular comments first
+	// Comments must be parsed before other items to avoid consuming their tokens
 	if p.peek().Type == DOC_COMMENT {
 		return p.parseDocComment()
 	}
@@ -55,13 +91,32 @@ func (p *Parser) parseContractItem() ast.ContractItem {
 		return p.parseComment()
 	}
 
-	// Parse optional attribute (like #[contract])
 	attr := p.parseOptionalAttribute()
 
-	// Parse the actual item
+	// Support doc comments after attributes since they can appear in either order
+	var docComment *ast.DocComment
+	if p.check(DOC_COMMENT) {
+		docComment = p.parseDocComment()
+	}
+
+	// Track external modifier separately from attributes for clarity
+	isExternal := false
+	if p.check(EXT) {
+		isExternal = true
+		p.advance()
+	}
 	switch p.peek().Type {
-	case MODULE:
-		return p.parseModule(attr)
+	case CONTRACT:
+		p.errorAtCurrent("unexpected nested contract declaration")
+		bad := p.makeBadContractItem("nested contracts are not supported")
+		p.advance()
+		return bad
+	case STRUCT:
+		return p.parseStructWithDoc(attr, docComment)
+	case FN:
+		return p.parseFunctionWithDoc(attr, isExternal, docComment)
+	case USE:
+		return p.parseUse()
 	default:
 		p.errorAtCurrent("unexpected top-level item")
 		bad := p.makeBadContractItem("unexpected token at contract level")
@@ -95,10 +150,7 @@ func (p *Parser) parseOptionalAttribute() *ast.Attribute {
 
 		if p.peek().Type == POUND {
 			p.errorAtCurrent("multiple attributes are not supported")
-			// You can decide whether to:
-			// - parse and discard the extra attribute(s)
-			// - skip forward
-			// For now, just parse one and leave the rest unparsed.
+			// Currently only single attributes are supported per item
 		}
 	}
 	return attr
@@ -128,100 +180,10 @@ func (p *Parser) parseAttribute() *ast.Attribute {
 	}
 }
 
-func (p *Parser) parseModule(attr *ast.Attribute) *ast.Module {
-	mod := &ast.Module{
-		Pos:        p.makePos(p.peek()),
-		Attributes: []ast.Attribute{},
-	}
-
-	p.consume(MODULE, "expected 'module' keyword")
-	nameToken := p.consume(IDENTIFIER, "expected module name")
-	mod.Name = ast.Ident{
-		Pos:    p.makePos(nameToken),
-		EndPos: p.makeEndPos(nameToken),
-		Value:  nameToken.Lexeme,
-	}
-
-	p.consume(LEFT_BRACE, "expected '{' to start module body")
-
-	for !p.check(RIGHT_BRACE) && !p.isAtEnd() {
-		item := p.parseModuleItem()
-		if item != nil {
-			mod.ModuleItems = append(mod.ModuleItems, item)
-		} else {
-			p.synchronize()
-		}
-	}
-
-	mod.EndPos = p.makeEndPos(p.consume(RIGHT_BRACE, "expected '}' to close module body"))
-
-	if attr != nil {
-		mod.Attributes = append(mod.Attributes, *attr)
-	}
-
-	return mod
-}
-
-func (p *Parser) parseModuleItem() ast.ModuleItem {
-	attr := p.parseOptionalAttribute()
-
-	if p.peek().Type == DOC_COMMENT {
-		return p.parseDocComment()
-	}
-
-	if p.peek().Type == COMMENT {
-		return p.parseComment()
-	}
-
-	isPublic := false
-	if p.check(PUBLIC) {
-		isPublic = true
-		p.advance()
-	}
-
-	switch p.peek().Type {
-	case STRUCT:
-		return p.parseStruct(attr)
-	case FUN:
-		return p.parseFunction(attr, isPublic)
-	case USE:
-		return p.parseUse()
-	default:
-		p.errorAtCurrent("unexpected item in module body")
-
-		bmi := &ast.BadModuleItem{
-			Bad: ast.BadNode{
-				Pos:     p.makePos(p.peek()),
-				EndPos:  p.makeEndPos(p.peek()),
-				Message: "unexpected token in module body",
-				Details: []string{p.peek().Lexeme},
-			},
-		}
-
-		p.advance()
-		return bmi
-	}
-}
-
 func (p *Parser) parseVariableType() *ast.VariableType {
-	start := p.peek()
-	var ref *ast.RefVariableType
-
-	if p.match(AMPERSAND) {
-		mut := p.match(MUT)
-		target := p.parseVariableType()
-		ref = &ast.RefVariableType{
-			Pos:    p.makePos(start),
-			EndPos: target.EndPos,
-			And:    true,
-			Mut:    mut,
-			Target: target,
-		}
-		return &ast.VariableType{
-			Pos:    p.makePos(start),
-			EndPos: target.EndPos,
-			Ref:    ref,
-		}
+	// Handle tuple types like (Address, U256)
+	if p.check(LEFT_PAREN) {
+		return p.parseTupleType()
 	}
 
 	nameTok := p.consume(IDENTIFIER, "expected type name")
@@ -248,6 +210,29 @@ func (p *Parser) parseVariableType() *ast.VariableType {
 	} else {
 		typ.EndPos = typ.Name.EndPos
 	}
+
+	return typ
+}
+
+func (p *Parser) parseTupleType() *ast.VariableType {
+	start := p.consume(LEFT_PAREN, "expected '(' for tuple type")
+
+	typ := &ast.VariableType{
+		Pos: p.makePos(start),
+	}
+
+	if !p.check(RIGHT_PAREN) {
+		for {
+			element := p.parseVariableType()
+			typ.TupleElements = append(typ.TupleElements, element)
+			if !p.match(COMMA) {
+				break
+			}
+		}
+	}
+
+	end := p.consume(RIGHT_PAREN, "expected ')' to close tuple type")
+	typ.EndPos = p.makeEndPos(end)
 
 	return typ
 }

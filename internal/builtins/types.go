@@ -5,16 +5,16 @@ type BuiltinType string
 
 const (
 	// Unsigned integers
-	U8   BuiltinType = "u8"
-	U16  BuiltinType = "u16"
-	U32  BuiltinType = "u32"
-	U64  BuiltinType = "u64"
-	U128 BuiltinType = "u128"
-	U256 BuiltinType = "u256"
+	U8   BuiltinType = "U8"
+	U16  BuiltinType = "U16"
+	U32  BuiltinType = "U32"
+	U64  BuiltinType = "U64"
+	U128 BuiltinType = "U128"
+	U256 BuiltinType = "U256"
 
 	// Other primitives
-	Bool    BuiltinType = "bool"
-	Address BuiltinType = "address"
+	Bool    BuiltinType = "Bool"
+	Address BuiltinType = "Address"
 )
 
 // BuiltinTypes contains all valid built-in types

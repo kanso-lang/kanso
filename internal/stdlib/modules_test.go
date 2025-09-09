@@ -30,7 +30,7 @@ func TestGetStandardModules(t *testing.T) {
 	// Verify function signatures
 	senderFunc := evm.Functions["sender"]
 	assert.Equal(t, "sender", senderFunc.Name)
-	assert.Equal(t, "address", senderFunc.ReturnType.Name)
+	assert.Equal(t, "Address", senderFunc.ReturnType.Name)
 	assert.Empty(t, senderFunc.Parameters)
 
 	emitFunc := evm.Functions["emit"]

@@ -5,10 +5,10 @@ import (
 )
 
 func TestKeywordsAndIdentifiers(t *testing.T) {
-	input := "fun let if else return module assert use struct writes reads public mut customIdent"
+	input := "fn let if else return contract require use struct writes reads ext mut customIdent"
 	expected := []TokenType{
-		FUN, LET, IF, ELSE, RETURN, MODULE, ASSERT,
-		USE, STRUCT, WRITES, READS, PUBLIC, MUT, IDENTIFIER,
+		FN, LET, IF, ELSE, RETURN, CONTRACT, REQUIRE,
+		USE, STRUCT, WRITES, READS, EXT, MUT, IDENTIFIER,
 	}
 
 	scanner := NewScanner(input)
@@ -156,7 +156,7 @@ func asserError(t *testing.T, got ScanError, wantMessage string, wantLine, wantC
 }
 
 func TestTokenPositions(t *testing.T) {
-	input := "fun\nlet 123\n0x1F \"str\""
+	input := "fn\nlet 123\n0x1F \"str\""
 	scanner := NewScanner(input)
 	tokens := scanner.ScanTokens()
 
@@ -166,7 +166,7 @@ func TestTokenPositions(t *testing.T) {
 		line   int
 		column int
 	}{
-		{FUN, "fun", 1, 1},
+		{FN, "fn", 1, 1},
 		{LET, "let", 2, 1},
 		{NUMBER, "123", 2, 5},
 		{HEX_NUMBER, "0x1F", 3, 1},

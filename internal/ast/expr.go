@@ -15,6 +15,8 @@ func (*CallExpr) isExpr() {}
 
 func (*FieldAccessExpr) isExpr() {}
 
+func (*IndexExpr) isExpr() {}
+
 func (*StructLiteralExpr) isExpr() {}
 
 func (*LiteralExpr) isExpr() {}
@@ -26,3 +28,5 @@ func (*CalleePath) isExpr() {}
 func (*StructLiteralField) isExpr() {}
 
 func (*ParenExpr) isExpr() {}
+
+func (*TupleExpr) isExpr() {}

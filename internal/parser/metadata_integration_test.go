@@ -70,12 +70,18 @@ func TestMetadataHelperFunctions(t *testing.T) {
 	}
 
 	// Test that we can collect all nodes
-	if len(result.Contract.ContractItems) == 0 {
+	totalItems := len(result.Contract.LeadingComments) + len(result.Contract.Items)
+	if totalItems == 0 {
 		t.Fatal("Should have contract items")
 	}
 
-	// Simulate updating bytecode mapping
-	firstItem := result.Contract.ContractItems[0]
+	// Get first available item (from leading comments or items)
+	var firstItem ast.ContractItem
+	if len(result.Contract.LeadingComments) > 0 {
+		firstItem = result.Contract.LeadingComments[0]
+	} else if len(result.Contract.Items) > 0 {
+		firstItem = result.Contract.Items[0]
+	}
 	if firstItem != nil {
 		// Test the helper functions work without errors
 		ast.UpdateBytecodeMapping(firstItem, 0x1000, 0x1010, []ast.InstructionMapping{
@@ -114,12 +120,18 @@ func TestSourceMappingGeneration(t *testing.T) {
 	source := `fun test() { return 42; }`
 	result := ParseSourceWithMetadata("test.ka", source)
 
-	if result.Contract == nil || len(result.Contract.ContractItems) == 0 {
+	totalItems := len(result.Contract.LeadingComments) + len(result.Contract.Items)
+	if result.Contract == nil || totalItems == 0 {
 		t.Fatal("Should have parsed contract items")
 	}
 
 	// Add some mock bytecode mappings
-	item := result.Contract.ContractItems[0]
+	var item ast.ContractItem
+	if len(result.Contract.LeadingComments) > 0 {
+		item = result.Contract.LeadingComments[0]
+	} else if len(result.Contract.Items) > 0 {
+		item = result.Contract.Items[0]
+	}
 	ast.UpdateBytecodeMapping(item, 0x100, 0x110, []ast.InstructionMapping{
 		ast.CreateInstructionMapping(
 			ast.Position{Filename: "test.ka", Line: 1, Column: 1, Offset: 0},

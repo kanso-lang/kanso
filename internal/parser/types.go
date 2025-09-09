@@ -17,18 +17,18 @@ const (
 	STRING
 
 	// Keywords
-	FUN
+	FN
 	LET
 	IF
 	ELSE
 	RETURN
-	MODULE
-	ASSERT
+	CONTRACT
+	REQUIRE
 	USE
 	STRUCT
 	WRITES
 	READS
-	PUBLIC
+	EXT
 	MUT
 
 	// Operators
@@ -65,6 +65,7 @@ const (
 	SEMICOLON
 	COLON
 	DOUBLE_COLON
+	ARROW
 
 	// Brackets
 	LEFT_PAREN

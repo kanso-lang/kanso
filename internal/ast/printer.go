@@ -7,10 +7,19 @@ import (
 
 func (c *Contract) String() string {
 	var b strings.Builder
-	for _, item := range c.ContractItems {
-		b.WriteString(item.String())
-		b.WriteByte('\n')
+
+	// Output leading comments first (before contract declaration)
+	for _, comment := range c.LeadingComments {
+		b.WriteString(comment.String())
+		b.WriteString("\n")
 	}
+
+	b.WriteString(fmt.Sprintf("contract %s {\n", c.Name.Value))
+	for _, item := range c.Items {
+		b.WriteString("  " + strings.ReplaceAll(item.String(), "\n", "\n  ") + "\n")
+	}
+	b.WriteString("}")
+
 	return b.String()
 }
 
@@ -28,21 +37,6 @@ func (bci *BadContractItem) String() string {
 
 func (be *BadExpr) String() string {
 	return fmt.Sprintf("BadExpr: %s", be.Bad.Message)
-}
-
-func (m *Module) String() string {
-	var b strings.Builder
-
-	for _, attr := range m.Attributes {
-		b.WriteString(attr.String() + "\n")
-	}
-	b.WriteString(fmt.Sprintf("module %s {\n", m.Name.Value))
-	for _, item := range m.ModuleItems {
-		b.WriteString("  " + strings.ReplaceAll(item.String(), "\n", "\n  ") + "\n")
-	}
-	b.WriteString("}")
-
-	return b.String()
 }
 
 func (a *Attribute) String() string {
@@ -94,6 +88,17 @@ func (ii *ImportItem) String() string {
 
 func (s *Struct) String() string {
 	var b strings.Builder
+
+	if s.Attribute != nil {
+		b.WriteString(s.Attribute.String())
+		b.WriteString("\n")
+	}
+
+	if s.DocComment != nil {
+		b.WriteString(s.DocComment.String())
+		b.WriteString("\n")
+	}
+
 	b.WriteString(fmt.Sprintf("struct %s {", s.Name.Value))
 	for i, field := range s.Items {
 		if i > 0 {
@@ -117,11 +122,16 @@ func (f *Function) String() string {
 		b.WriteString("\n")
 	}
 
-	if f.Public {
-		b.WriteString("public ")
+	if f.DocComment != nil {
+		b.WriteString(f.DocComment.String())
+		b.WriteString("\n")
 	}
 
-	b.WriteString("fun ")
+	if f.External {
+		b.WriteString("ext ")
+	}
+
+	b.WriteString("fn ")
 	b.WriteString(f.Name.Value)
 	b.WriteString("(")
 	for i, param := range f.Params {
@@ -133,7 +143,7 @@ func (f *Function) String() string {
 	b.WriteString(")")
 
 	if f.Return != nil {
-		b.WriteString(": ")
+		b.WriteString(" -> ")
 		b.WriteString(f.Return.String())
 	}
 
@@ -173,8 +183,16 @@ func (fp *FunctionParam) String() string {
 
 func (vt *VariableType) String() string {
 	var b strings.Builder
-	if vt.Ref != nil {
-		b.WriteString(vt.Ref.String())
+	if len(vt.TupleElements) > 0 {
+		// Handle tuple types like (Address, U256)
+		b.WriteString("(")
+		for i, element := range vt.TupleElements {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(element.String())
+		}
+		b.WriteString(")")
 	} else {
 		b.WriteString(vt.Name.Value)
 		if len(vt.Generics) > 0 {
@@ -188,16 +206,6 @@ func (vt *VariableType) String() string {
 			b.WriteString(">")
 		}
 	}
-	return b.String()
-}
-
-func (rvt *RefVariableType) String() string {
-	var b strings.Builder
-	b.WriteString("&")
-	if rvt.Mut {
-		b.WriteString("mut ")
-	}
-	b.WriteString(rvt.Target.String())
 	return b.String()
 }
 
@@ -236,6 +244,9 @@ func (r *ReturnStmt) String() string {
 }
 
 func (l *LetStmt) String() string {
+	if l.Mut {
+		return fmt.Sprintf("let mut %s = %s;", l.Name.Value, l.Expr.String())
+	}
 	return fmt.Sprintf("let %s = %s;", l.Name.Value, l.Expr.String())
 }
 
@@ -258,12 +269,12 @@ func (a *AssignStmt) String() string {
 	return fmt.Sprintf("%s %s %s;", a.Target.String(), op, a.Value.String())
 }
 
-func (a *AssertStmt) String() string {
-	args := make([]string, len(a.Args))
-	for i, arg := range a.Args {
+func (r *RequireStmt) String() string {
+	args := make([]string, len(r.Args))
+	for i, arg := range r.Args {
 		args[i] = arg.String()
 	}
-	return fmt.Sprintf("assert!(%s);", strings.Join(args, ", "))
+	return fmt.Sprintf("require!(%s);", strings.Join(args, ", "))
 }
 
 func (b *BinaryExpr) String() string {
@@ -308,6 +319,10 @@ func (f *FieldAccessExpr) String() string {
 	return fmt.Sprintf("%s.%s", f.Target.String(), f.Field)
 }
 
+func (i *IndexExpr) String() string {
+	return fmt.Sprintf("%s[%s]", i.Target.String(), i.Index.String())
+}
+
 func (s *StructLiteralExpr) String() string {
 	var b strings.Builder
 	b.WriteString(s.Type.String())
@@ -344,6 +359,19 @@ func (f *StructLiteralField) String() string {
 
 func (p *ParenExpr) String() string {
 	return fmt.Sprintf("(%s)", p.Value.String())
+}
+
+func (t *TupleExpr) String() string {
+	var b strings.Builder
+	b.WriteString("(")
+	for i, elem := range t.Elements {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString(elem.String())
+	}
+	b.WriteString(")")
+	return b.String()
 }
 
 func (i *Ident) String() string {

@@ -12,7 +12,12 @@ func ParseSource(path string, source string) (*ast.Contract, []ParseError, []Sca
 	// Assign metadata to all AST nodes
 	if contract != nil {
 		mv := ast.NewMetadataVisitor(source)
-		for _, item := range contract.ContractItems {
+		// Assign metadata to leading comments
+		for _, item := range contract.LeadingComments {
+			mv.AssignMetadata(item, 0) // 0 = no parent
+		}
+		// Assign metadata to contract items
+		for _, item := range contract.Items {
 			mv.AssignMetadata(item, 0) // 0 = no parent
 		}
 	}

@@ -8,14 +8,13 @@ import (
 )
 
 func TestBasicNameResolution(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
     struct Person {
-        name: string,
-        age: u32,
+        name: String,
+        age: U32,
     }
     
-    fun get_person(): Person {
+    fn get_person() -> Person {
         return Person { name: "test", age: 25 };
     }
 }`
@@ -31,14 +30,13 @@ module Test {
 }
 
 func TestDuplicateDeclarations(t *testing.T) {
-	source := `#[contract]
-module Test {
-    fun test(): u32 {
-        return 42;
+	source := `contract Test {
+    fn test() -> U32 {
+        42
     }
     
-    fun test(): string {
-        return "duplicate";
+    fn test() -> String {
+        "duplicate"
     }
 }`
 
@@ -53,10 +51,10 @@ module Test {
 	assert.Contains(t, semanticErrors[0].Message, "duplicate declaration")
 }
 
-func TestModuleRequiresAttribute(t *testing.T) {
-	source := `module Test {
-    fun test(): u32 {
-        return 42;
+func TestBasicContractValidation(t *testing.T) {
+	source := `contract Test {
+    fn test() -> U32 {
+        42
     }
 }`
 
@@ -67,33 +65,26 @@ func TestModuleRequiresAttribute(t *testing.T) {
 	analyzer := NewAnalyzer()
 	semanticErrors := analyzer.Analyze(contract)
 
-	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
-	assert.Contains(t, semanticErrors[0].Message, "module must have at least one attribute")
+	// Should have no semantic errors for a basic valid contract
+	assert.Empty(t, semanticErrors, "Should have no semantic errors")
 }
 
-func TestContractRequiresModule(t *testing.T) {
+func TestContractParsingValidation(t *testing.T) {
 	source := `// just a comment`
 
-	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
-	assert.Empty(t, parseErrors, "Should have no parse errors")
-	assert.NotNil(t, contract, "Contract should be parsed")
-
-	analyzer := NewAnalyzer()
-	semanticErrors := analyzer.Analyze(contract)
-
-	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
-	assert.Contains(t, semanticErrors[0].Message, "contract must have at least one module")
+	_, parseErrors, _ := parser.ParseSource("test.ka", source)
+	// This should have parse errors since it's not a valid contract
+	assert.NotEmpty(t, parseErrors, "Should have parse errors for invalid contract")
 }
 
 func TestStructFunctionNameCollision(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
     struct test {
-        value: u32,
+        value: U32,
     }
     
-    fun test(): u32 {
-        return 42;
+    fn test() -> U32 {
+        42
     }
 }`
 
@@ -108,31 +99,11 @@ module Test {
 	assert.Contains(t, semanticErrors[0].Message, "duplicate declaration: test")
 }
 
-func TestInvalidModuleAttribute(t *testing.T) {
-	source := `#[invalid]
-module Test {
-    fun test(): u32 {
-        return 42;
-    }
-}`
-
-	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
-	assert.Empty(t, parseErrors, "Should have no parse errors")
-	assert.NotNil(t, contract, "Contract should be parsed")
-
-	analyzer := NewAnalyzer()
-	semanticErrors := analyzer.Analyze(contract)
-
-	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
-	assert.Contains(t, semanticErrors[0].Message, "invalid module attribute: invalid")
-}
-
 func TestInvalidStructAttribute(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
     #[invalid]
-    struct Test {
-        value: u32,
+    struct TestStruct {
+        value: U32,
     }
 }`
 
@@ -148,11 +119,10 @@ module Test {
 }
 
 func TestInvalidFunctionAttribute(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
     #[invalid]
-    fun test(): u32 {
-        return 42;
+    fn test() -> U32 {
+        42
     }
 }`
 
@@ -168,20 +138,19 @@ module Test {
 }
 
 func TestMultipleCreateFunctions(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create1() writes State {
+    fn create1() writes State {
         // constructor logic
     }
     
     #[create]
-    fun create2() writes State {
+    fn create2() writes State {
         // constructor logic
     }
 }`
@@ -198,15 +167,15 @@ module Test {
 }
 
 func TestConstructorWithReturnType(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create(): u32 writes State {
+    fn create() -> U32 writes State {
         return 42;
     }
 }`
@@ -223,15 +192,15 @@ module Test {
 }
 
 func TestConstructorWithoutWrites(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create() {
+    fn create() {
         // no writes clause
     }
 }`
@@ -248,15 +217,15 @@ module Test {
 }
 
 func TestConstructorWithoutStorageWrite(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create() writes SomethingElse {
+    fn create() writes SomethingElse {
         // writes to non-storage struct
     }
 }`
@@ -285,16 +254,16 @@ module Test {
 }
 
 func TestConstructorWritesToEventStruct(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[event]
     struct Transfer {
-        from: address,
-        to: address,
+        from: Address,
+        to: Address,
     }
     
     #[create]
-    fun create() writes Transfer {
+    fn create() writes Transfer {
         // writes to event struct, not storage
     }
 }`
@@ -323,14 +292,14 @@ module Test {
 }
 
 func TestConstructorWritesToStructWithoutAttribute(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     struct RegularStruct {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create() writes RegularStruct {
+    fn create() writes RegularStruct {
         // writes to struct without attribute
     }
 }`
@@ -348,18 +317,18 @@ module Test {
 }
 
 func TestFunctionReadsNonStorageStruct(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     struct RegularStruct {
-        data: u32,
+        data: U32,
     }
     
-    fun test() reads RegularStruct {
+    fn test() reads RegularStruct {
         // reads from non-storage struct
     }
 }`
@@ -376,20 +345,20 @@ module Test {
 }
 
 func TestFunctionWritesNonStorageStruct(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[event]
     struct Transfer {
-        from: address,
-        to: address,
+        from: Address,
+        to: Address,
     }
     
-    fun test() writes Transfer {
+    fn test() writes Transfer {
         // writes to event struct, not storage
     }
 }`
@@ -406,19 +375,19 @@ module Test {
 }
 
 func TestValidFunctionReadsWrites(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[storage]
     struct Config {
-        setting: bool,
+        setting: Bool,
     }
     
-    fun test() reads State writes Config {
+    fn test() reads State writes Config {
         // valid reads and writes to storage structs
     }
 }`
@@ -434,14 +403,14 @@ module Test {
 }
 
 func TestConflictingReadsWritesClause(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
-    fun test() reads State writes State {
+    fn test() reads State writes State {
         // conflicting read and write to same struct
     }
 }`
@@ -458,19 +427,19 @@ module Test {
 }
 
 func TestValidMixedReadsWrites(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State1 {
-        value: u32,
+        value: U32,
     }
     
     #[storage]
     struct State2 {
-        config: bool,
+        config: Bool,
     }
     
-    fun test() reads State1 writes State2 {
+    fn test() reads State1 writes State2 {
         // valid: read from one struct, write to different struct
     }
 }`
@@ -486,14 +455,14 @@ module Test {
 }
 
 func TestTypeRegistryIntegration(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
-    fun test(): bool {
+    fn test() -> Bool {
         return true;
     }
 }`
@@ -509,15 +478,15 @@ module Test {
 	assert.Empty(t, semanticErrors, "Should have no semantic errors")
 
 	// Verify types are registered correctly (without imports for now)
-	assert.True(t, analyzer.context.IsBuiltinType("u32"), "u32 should be built-in")
-	assert.True(t, analyzer.context.IsBuiltinType("bool"), "bool should be built-in")
+	assert.True(t, analyzer.context.IsBuiltinType("U32"), "U32 should be built-in")
+	assert.True(t, analyzer.context.IsBuiltinType("Bool"), "Bool should be built-in")
 	assert.True(t, analyzer.context.IsUserDefinedType("State"), "State should be user-defined")
 	assert.False(t, analyzer.context.IsImportedType("Table"), "Table should not be imported without use statement")
 }
 
 func TestERC20Imports(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     use Evm::{sender, emit};
     use Table::{Self, Table};
     use std::ascii::{String};
@@ -525,7 +494,7 @@ module Test {
     
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
 }`
 
@@ -573,7 +542,7 @@ module Test {
 	senderFunc := analyzer.context.GetFunctionDefinition("sender")
 	assert.NotNil(t, senderFunc, "Should get sender function definition")
 	assert.Equal(t, "sender", senderFunc.Name)
-	assert.Equal(t, "address", senderFunc.ReturnType.Name)
+	assert.Equal(t, "Address", senderFunc.ReturnType.Name)
 
 	emptyFunc := analyzer.context.GetModuleFunctionDefinition("Table", "empty")
 	assert.NotNil(t, emptyFunc, "Should get Table::empty function definition")
@@ -582,29 +551,29 @@ module Test {
 }
 
 func TestFunctionCallValidation(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     use Evm::{sender, emit};
     use Table::{Self, Table};
     use std::errors;
     
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create() writes State {
+    fn create() writes State {
         let addr = sender();
         emit(Transfer{from: addr, to: addr});
-        Table::empty<address, u256>();
+        Table::empty<Address, U256>();
         errors::invalid_argument(42);
     }
     
     #[event]
     struct Transfer {
-        from: address,
-        to: address,
+        from: Address,
+        to: Address,
     }
 }`
 
@@ -620,17 +589,17 @@ module Test {
 }
 
 func TestInvalidFunctionCalls(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     use Evm::{sender};
     
     #[storage]  
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create]
-    fun create() writes State {
+    fn create() writes State {
         undefined_function();
         sender(42);  // sender takes no args
         emit();      // emit not imported
@@ -675,26 +644,26 @@ module Test {
 }
 
 func TestParameterTypeValidation(t *testing.T) {
-	source := `#[contract]
-module Test {
+	source := `contract Test {
+
     use Evm::{sender};
     use std::errors;
     
     #[storage]
     struct State {
-        value: u32,
+        value: U32,
     }
     
     #[create] 
-    fun create() writes State {
-        // This should be fine: invalid_argument expects u64
+    fn create() writes State {
+        // This should be fine: invalid_argument expects U64
         errors::invalid_argument(42);
         
         // This should cause a type error: passing wrong literal type
         errors::invalid_argument(true);
     }
     
-    public fun test() {
+    fn test() {
         // This should cause a type error: sender() takes no parameters
         sender(42);
     }
@@ -720,5 +689,5 @@ module Test {
 	assert.Contains(t, errorMessages, "function 'sender' expects 0 arguments, got 1")
 
 	// Should detect type mismatch
-	assert.Contains(t, errorMessages, "argument type bool does not match expected type u64")
+	assert.Contains(t, errorMessages, "argument type Bool does not match expected type U64")
 }

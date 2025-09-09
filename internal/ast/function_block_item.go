@@ -5,9 +5,9 @@ type FunctionBlockItem interface {
 	isBlockItem()
 }
 
-func (*LetStmt) isBlockItem()    {}
-func (*AssignStmt) isBlockItem() {}
-func (*AssertStmt) isBlockItem() {}
-func (*ReturnStmt) isBlockItem() {}
-func (*ExprStmt) isBlockItem()   {}
-func (*Comment) isBlockItem()    {}
+func (*LetStmt) isBlockItem()     {}
+func (*AssignStmt) isBlockItem()  {}
+func (*RequireStmt) isBlockItem() {}
+func (*ReturnStmt) isBlockItem()  {}
+func (*ExprStmt) isBlockItem()    {}
+func (*Comment) isBlockItem()     {}

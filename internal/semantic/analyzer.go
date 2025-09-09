@@ -49,31 +49,15 @@ func (a *Analyzer) Analyze(contract *ast.Contract) []SemanticError {
 }
 
 func (a *Analyzer) analyzeContract(contract *ast.Contract) {
-	moduleCount := 0
-	for _, item := range contract.ContractItems {
-		if module, ok := item.(*ast.Module); ok {
-			moduleCount++
-			a.analyzeModule(module)
-		}
-	}
-
-	if moduleCount == 0 {
-		a.addError("contract must have at least one module", ast.Position{})
-	}
-}
-
-func (a *Analyzer) analyzeModule(module *ast.Module) {
-	if len(module.Attributes) == 0 {
-		a.addError("module must have at least one attribute", module.NodePos())
-		return
-	}
-
-	a.validateModuleAttributes(module)
-
 	// First pass: process use statements and collect types
 	storageStructs := make(map[string]bool)
 
-	for _, item := range module.ModuleItems {
+	// Combine leading comments and items for analysis
+	allItems := make([]ast.ContractItem, 0, len(contract.LeadingComments)+len(contract.Items))
+	allItems = append(allItems, contract.LeadingComments...)
+	allItems = append(allItems, contract.Items...)
+
+	for _, item := range allItems {
 		switch node := item.(type) {
 		case *ast.Use:
 			// Process import statements
@@ -92,7 +76,7 @@ func (a *Analyzer) analyzeModule(module *ast.Module) {
 
 	// Second pass: analyze all items
 	var createFunction *ast.Function
-	for _, item := range module.ModuleItems {
+	for _, item := range allItems {
 		switch node := item.(type) {
 		case *ast.Function:
 			a.analyzeFunction(node)
@@ -132,14 +116,6 @@ func (a *Analyzer) analyzeStruct(s *ast.Struct) {
 
 	a.validateStructAttributes(s)
 	a.symbols.Define(s.Name.Value, SymbolStruct, s, s.NodePos())
-}
-
-func (a *Analyzer) validateModuleAttributes(module *ast.Module) {
-	for _, attr := range module.Attributes {
-		if !validModuleAttributes[attr.Name] {
-			a.addError("invalid module attribute: "+attr.Name, attr.NodePos())
-		}
-	}
 }
 
 func (a *Analyzer) validateStructAttributes(s *ast.Struct) {
@@ -247,8 +223,8 @@ func (a *Analyzer) analyzeFunctionBlockItem(item ast.FunctionBlockItem) {
 		if node.Value != nil {
 			a.analyzeExpression(node.Value)
 		}
-	case *ast.AssertStmt:
-		// Assert can have multiple arguments
+	case *ast.RequireStmt:
+		// Require can have multiple arguments
 		for _, arg := range node.Args {
 			a.analyzeExpression(arg)
 		}
