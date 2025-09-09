@@ -580,3 +580,145 @@ module Test {
 	assert.Equal(t, "empty", emptyFunc.Name)
 	assert.True(t, emptyFunc.IsGeneric, "Table::empty should be generic")
 }
+
+func TestFunctionCallValidation(t *testing.T) {
+	source := `#[contract]
+module Test {
+    use Evm::{sender, emit};
+    use Table::{Self, Table};
+    use std::errors;
+    
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    #[create]
+    fun create() writes State {
+        let addr = sender();
+        emit(Transfer{from: addr, to: addr});
+        Table::empty<address, u256>();
+        errors::invalid_argument(42);
+    }
+    
+    #[event]
+    struct Transfer {
+        from: address,
+        to: address,
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should pass with no errors for valid function calls
+	assert.Empty(t, semanticErrors, "Should have no semantic errors for valid function calls")
+}
+
+func TestInvalidFunctionCalls(t *testing.T) {
+	source := `#[contract]
+module Test {
+    use Evm::{sender};
+    
+    #[storage]  
+    struct State {
+        value: u32,
+    }
+    
+    #[create]
+    fun create() writes State {
+        undefined_function();
+        sender(42);  // sender takes no args
+        emit();      // emit not imported
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should have semantic errors for invalid function calls
+	assert.NotEmpty(t, semanticErrors, "Should have semantic errors for invalid function calls")
+
+	// Check for specific error messages
+	errorMessages := make([]string, len(semanticErrors))
+	for i, err := range semanticErrors {
+		errorMessages[i] = err.Message
+	}
+
+	// Should catch undefined function
+	found := false
+	for _, msg := range errorMessages {
+		if msg == "function 'undefined_function' is not imported or defined" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Should catch undefined function call")
+
+	// Should catch wrong argument count
+	found = false
+	for _, msg := range errorMessages {
+		if msg == "function 'sender' expects 0 arguments, got 1" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "Should catch wrong argument count")
+}
+
+func TestParameterTypeValidation(t *testing.T) {
+	source := `#[contract]
+module Test {
+    use Evm::{sender};
+    use std::errors;
+    
+    #[storage]
+    struct State {
+        value: u32,
+    }
+    
+    #[create] 
+    fun create() writes State {
+        // This should be fine: invalid_argument expects u64
+        errors::invalid_argument(42);
+        
+        // This should cause a type error: passing wrong literal type
+        errors::invalid_argument(true);
+    }
+    
+    public fun test() {
+        // This should cause a type error: sender() takes no parameters
+        sender(42);
+    }
+}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should have exactly 2 type errors
+	assert.Len(t, semanticErrors, 2, "Should have exactly 2 semantic errors")
+
+	// Check error messages
+	errorMessages := make([]string, len(semanticErrors))
+	for i, err := range semanticErrors {
+		errorMessages[i] = err.Message
+	}
+
+	// Should detect function arity mismatch
+	assert.Contains(t, errorMessages, "function 'sender' expects 0 arguments, got 1")
+
+	// Should detect type mismatch
+	assert.Contains(t, errorMessages, "argument type bool does not match expected type u64")
+}
