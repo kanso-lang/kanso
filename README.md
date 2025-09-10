@@ -23,7 +23,7 @@ Kanso is a Rust-inspired smart contract programming language with a focus on saf
 1. Clone the repository:
    ```bash
    git clone git@github.com:kanso-lang/kanso.git
-   cd kanso-lang
+   cd kanso
    ```
 
 2. Build the tools:
@@ -68,7 +68,7 @@ The VS Code extension is located in `ide/vscode-extension/`:
 
 2. Compile the extension:
    ```bash
-   npm run compile
+   npm run package
    ```
 
 3. Install the extension by copying to your VS Code extensions folder or using the VS Code extension development host.
@@ -207,7 +207,7 @@ fn validate(config: Config) reads Config writes AuditLog {
 ## Project Structure
 
 ```
-kanso-lang/
+kanso/
 ├── cmd/
 │   ├── kanso-cli/          # Main compiler CLI
 │   └── kanso-lsp/          # Language Server Protocol implementation

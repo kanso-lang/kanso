@@ -29,3 +29,6 @@ bin/
 
 # TypeScript build info
 tsconfig.tsbuildinfo
+
+# IDE files
+.vscode

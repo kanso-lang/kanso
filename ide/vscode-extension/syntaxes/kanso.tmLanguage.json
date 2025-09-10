@@ -10,6 +10,9 @@
       "include": "#strings"
     },
     {
+      "include": "#imports"
+    },
+    {
       "include": "#keywords"
     },
     {
@@ -56,12 +59,46 @@
         {
           "name": "string.quoted.double",
           "begin": "\"",
-          "end": "\""
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape",
+              "match": "\\\\."
+            }
+          ]
         },
         {
           "name": "string.quoted.single",
           "begin": "'",
-          "end": "'"
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "imports": {
+      "patterns": [
+        {
+          "name": "meta.import",
+          "begin": "\\buse\\b",
+          "beginCaptures": {
+            "0": { "name": "keyword.control.import" }
+          },
+          "end": ";",
+          "patterns": [
+            {
+              "name": "entity.name.namespace",
+              "match": "\\b(std)::"
+            },
+            {
+              "name": "entity.name.type.module",
+              "match": "\\b[a-zA-Z_][\\w]*\\b"
+            }
+          ]
         }
       ]
     },
@@ -69,7 +106,15 @@
       "patterns": [
         {
           "name": "keyword.control",
-          "match": "\\b(module|use|struct|fun|let|return|mut|assert|public|reads|writes|contract|storage|event)\\b"
+          "match": "\\b(use|struct|fn|let|return|mut|reads|writes|contract|ext|emit)\\b"
+        },
+        {
+          "name": "storage.modifier.attribute",
+          "match": "#\\[(storage|event|create)\\]"
+        },
+        {
+          "name": "keyword.operator.macro",
+          "match": "\\brequire!\\b"
         }
       ]
     },
@@ -77,14 +122,18 @@
       "patterns": [
         {
           "name": "keyword.operator",
-          "match": "\\+|\\-|\\*|/|%|\\+=|\\-=|\\*=|/=|%=|==|!=|<=|>=|<|>|&&|\\|\\|"
+          "match": "\\+|\\-|\\*|/|%|\\+=|\\-=|\\*=|/=|%=|==|!=|<=|>=|<|>|&&|\\|\\||->|!"
         }
       ]
     },
     "numbers": {
       "patterns": [
         {
-          "name": "constant.numeric",
+          "name": "constant.numeric.hex",
+          "match": "\\b0[xX][0-9a-fA-F]+\\b"
+        },
+        {
+          "name": "constant.numeric.decimal",
           "match": "\\b\\d+\\b"
         }
       ]
@@ -93,7 +142,7 @@
       "patterns": [
         {
           "name": "entity.name.function",
-          "match": "\\bfun\\s+([a-zA-Z_][\\w]*)"
+          "match": "\\b(fn|ext\\s+fn)\\s+([a-zA-Z_][\\w]*)"
         }
       ]
     },
@@ -108,12 +157,16 @@
     "types": {
       "patterns": [
         {
-          "name": "entity.name.type",
-          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+          "name": "entity.name.type.primitive",
+          "match": "\\b(U8|U16|U32|U64|U128|U256|Bool|Address|String)\\b"
         },
         {
-            "name": "entity.name.type.primitive",
-            "match": "\\b(u8|u16|u32|u64|u128|u256|address)\\b"
+          "name": "entity.name.type.generic",
+          "match": "\\b(Slots|Vector)\\b"
+        },
+        {
+          "name": "entity.name.type",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
         }
       ]
     },
@@ -127,6 +180,10 @@
     },
     "identifiers": {
       "patterns": [
+        {
+          "name": "variable.other.property",
+          "match": "\\.[a-zA-Z_][\\w]*"
+        },
         {
           "name": "variable.other",
           "match": "\\b[a-z_][\\w]*\\b"

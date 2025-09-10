@@ -3,6 +3,7 @@
   "displayName": "Kanso",
   "description": "Kanso Language Support",
   "version": "0.0.1",
+  "publisher": "kanso-lang",
   "icon": "images/logo.png",
   "engines": {
     "vscode": "^1.100.0"
@@ -127,7 +128,10 @@
     "build-lsp": "cd ../../ && make kanso-lsp && mkdir -p ide/vscode-extension/bin && cp kanso-lsp ide/vscode-extension/bin/",
     "compile": "npm run prebuild && npm run bundle",
     "bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "compile-tests": "tsc -p . --outDir out",
     "watch": "npm run bundle -- --watch",
+    "pretest": "npm run compile-tests && npm run compile",
+    "test": "node ./out/test/runTest.js",
     "package": "npm run compile && vsce package",
     "clean": "rm -rf out bin"
   },
@@ -138,7 +142,11 @@
   "devDependencies": {
     "@types/node": "^24.3.1",
     "@types/vscode": "^1.75.1",
+    "@types/mocha": "^10.0.1",
+    "@vscode/test-electron": "^2.3.4",
     "@vscode/vsce": "^3.6.0",
-    "esbuild": "^0.25.9"
+    "esbuild": "^0.25.9",
+    "mocha": "^10.2.0",
+    "typescript": "^5.1.6"
   }
 }

@@ -1,0 +1,67 @@
+name: VS Code Extension Tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ide/vscode-extension/**'
+      - 'internal/**'
+      - 'cmd/**'
+      - '.github/workflows/vscode-extension.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ide/vscode-extension/**'
+      - 'internal/**'
+      - 'cmd/**'
+      - '.github/workflows/vscode-extension.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.25'
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: ide/vscode-extension/package-lock.json
+
+    - name: Build Kanso LSP Server
+      run: |
+        make kanso-lsp
+        
+    - name: Install VS Code Extension Dependencies
+      run: |
+        cd ide/vscode-extension
+        npm ci
+
+    - name: Run Go Tests
+      run: go test ./...
+
+    - name: Run Extension Tests
+      uses: coactions/setup-xvfb@v1
+      with:
+        run: |
+          cd ide/vscode-extension
+          npm test
+
+    - name: Package Extension
+      run: |
+        cd ide/vscode-extension
+        npm run package
+
+    - name: Upload Extension Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: kanso-extension
+        path: ide/vscode-extension/*.vsix
