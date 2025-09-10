@@ -22,7 +22,7 @@ Kanso is a Rust-inspired smart contract programming language with a focus on saf
 
 1. Clone the repository:
    ```bash
-   git clone git@github.com:daniellehrner/kanso-lang.git
+   git clone git@github.com:kanso-lang/kanso.git
    cd kanso-lang
    ```
 
