@@ -58,6 +58,11 @@ func (cr *ContextRegistry) AddUserDefinedType(name string, structDef *ast.Struct
 	cr.typeRegistry.AddUserDefinedType(name, structDef)
 }
 
+// GetUserDefinedType returns a user-defined struct definition
+func (cr *ContextRegistry) GetUserDefinedType(typeName string) *ast.Struct {
+	return cr.typeRegistry.GetUserDefinedType(typeName)
+}
+
 // GetImportedType returns information about an imported type
 func (cr *ContextRegistry) GetImportedType(typeName string) *types.ImportedType {
 	return cr.typeRegistry.GetImportedType(typeName)

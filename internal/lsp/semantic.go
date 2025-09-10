@@ -4,16 +4,15 @@ import (
 	"kanso/internal/ast"
 )
 
-// SemanticToken represents a single LSP semantic token entry
-// Line and StartChar are 0-based positions
-// TokenType is an index into the semanticTokenTypes array
-// TokenModifiers is a bitmask based on semanticTokenModifiers
+// SemanticToken represents enriched syntax highlighting information for IDEs.
+// This goes beyond basic syntax highlighting by providing semantic context
+// (e.g., distinguishing between variable declaration vs usage).
 type SemanticToken struct {
 	Line           uint32
 	StartChar      uint32
 	Length         uint32
-	TokenType      int // index into semanticTokenTypes
-	TokenModifiers int // bitmask
+	TokenType      int // Maps to SemanticTokenTypes array for LSP protocol
+	TokenModifiers int // Bitfield for additional styling hints
 }
 
 func collectSemanticTokens(contract *ast.Contract) []SemanticToken {
@@ -23,12 +22,12 @@ func collectSemanticTokens(contract *ast.Contract) []SemanticToken {
 		return tokens
 	}
 
-	// Walk through leading comments first
+	// Process comments first to ensure proper ordering in the final token list
 	for _, item := range contract.LeadingComments {
 		tokens = append(tokens, walkContractItem(item)...)
 	}
 
-	// Walk through all contract items
+	// Extract semantic information from all contract constructs
 	for _, item := range contract.Items {
 		tokens = append(tokens, walkContractItem(item)...)
 	}
@@ -45,10 +44,10 @@ func walkContractItem(item ast.ContractItem) []SemanticToken {
 
 	switch v := item.(type) {
 	case *ast.DocComment:
-		// Doc comments are already handled by the tokenizer
+		// Documentation is handled at the tokenizer level for simplicity
 		return tokens
 	case *ast.Comment:
-		// Regular comments are already handled by the tokenizer
+		// Basic comments don't need semantic enhancement
 		return tokens
 	case *ast.Struct:
 		tokens = append(tokens, walkStruct(v)...)
@@ -57,7 +56,7 @@ func walkContractItem(item ast.ContractItem) []SemanticToken {
 	case *ast.Use:
 		tokens = append(tokens, walkUse(v)...)
 	case *ast.BadContractItem:
-		// Skip bad items
+		// Invalid syntax should be highlighted by the basic tokenizer
 		return tokens
 	}
 
@@ -71,12 +70,12 @@ func walkUse(u *ast.Use) []SemanticToken {
 		return tokens
 	}
 
-	// Namespaces (like "Evm", "Table")
+	// Highlight module namespaces to help developers understand import hierarchy
 	for _, ns := range u.Namespaces {
 		tokens = append(tokens, makeToken(ns.Name.Pos, ns.Name.EndPos, ns.Name.Value, "namespace", 0)...)
 	}
 
-	// Imported items (like "sender", "emit")
+	// Mark imported symbols distinctly to show external dependencies
 	for _, imp := range u.Imports {
 		tokens = append(tokens, makeToken(imp.Name.Pos, imp.Name.EndPos, imp.Name.Value, "type", 0)...)
 	}
@@ -91,22 +90,20 @@ func walkStruct(s *ast.Struct) []SemanticToken {
 		return tokens
 	}
 
-	// Struct attribute (like #[storage], #[event])
+	// Highlight contract-specific attributes to emphasize their semantic importance
 	if s.Attribute != nil {
 		tokens = append(tokens, makeToken(s.Attribute.Pos, s.Attribute.EndPos, s.Attribute.Name, "modifier", 0)...)
 	}
 
-	// Struct name
+	// Mark struct names as type declarations for consistent IDE navigation
 	if s.Name.Value != "" {
 		tokens = append(tokens, makeToken(s.Name.Pos, s.Name.EndPos, s.Name.Value, "type", 1)...)
 	}
 
-	// Struct fields
+	// Distinguish struct fields from other variables for better visual parsing
 	for _, item := range s.Items {
 		if field, ok := item.(*ast.StructField); ok {
-			// Field name
 			tokens = append(tokens, makeToken(field.Name.Pos, field.Name.EndPos, field.Name.Value, "property", 1)...)
-			// Field type
 			tokens = append(tokens, walkVariableType(field.VariableType)...)
 		}
 	}
@@ -193,25 +190,21 @@ func walkFunctionBlockItem(item ast.FunctionBlockItem) []SemanticToken {
 
 	switch v := item.(type) {
 	case *ast.LetStmt:
-		// Variable name
+		// Mark variable declarations to help developers distinguish from usage
 		tokens = append(tokens, makeToken(v.Name.Pos, v.Name.EndPos, v.Name.Value, "variable", 1)...)
-		// Variable value expression
 		tokens = append(tokens, walkExpression(v.Expr)...)
 	case *ast.AssignStmt:
-		// Assignment target
+		// Process both sides of assignment for complete semantic analysis
 		tokens = append(tokens, walkExpression(v.Target)...)
-		// Assignment value
 		tokens = append(tokens, walkExpression(v.Value)...)
 	case *ast.ReturnStmt:
-		// Return value
 		if v.Value != nil {
 			tokens = append(tokens, walkExpression(v.Value)...)
 		}
 	case *ast.ExprStmt:
-		// Expression statement
 		tokens = append(tokens, walkExpression(v.Expr)...)
 	case *ast.Comment:
-		// Comments are handled by tokenizer
+		// Delegate comment handling to basic tokenizer for consistency
 		return tokens
 	}
 
@@ -227,39 +220,33 @@ func walkExpression(expr ast.Expr) []SemanticToken {
 
 	switch v := expr.(type) {
 	case *ast.IdentExpr:
-		// Variable references
+		// Highlight variable references for IDE features like "find all references"
 		tokens = append(tokens, makeToken(v.NodePos(), v.NodeEndPos(), v.Name, "variable", 0)...)
 	case *ast.CallExpr:
 		tokens = append(tokens, walkCallExpression(v)...)
 	case *ast.FieldAccessExpr:
-		// Object being accessed
+		// Process object access patterns for intelligent completion
 		tokens = append(tokens, walkExpression(v.Target)...)
-		// Field name - treat as property access
 		tokens = append(tokens, makeToken(v.NodePos(), v.NodeEndPos(), v.Field, "property", 0)...)
 	case *ast.StructLiteralExpr:
-		// Struct type - v.Type is a *CalleePath, not *VariableType
+		// Handle struct construction syntax
 		if v.Type != nil {
 			tokens = append(tokens, walkCalleePath(v.Type)...)
 		}
-		// Struct fields
+		// Analyze field initialization patterns
 		for _, field := range v.Fields {
-			// Field name
 			tokens = append(tokens, makeToken(field.Name.Pos, field.Name.EndPos, field.Name.Value, "property", 0)...)
-			// Field value
 			tokens = append(tokens, walkExpression(field.Value)...)
 		}
 	case *ast.BinaryExpr:
-		// Left and right expressions
 		tokens = append(tokens, walkExpression(v.Left)...)
 		tokens = append(tokens, walkExpression(v.Right)...)
 	case *ast.UnaryExpr:
-		// Unary expression value
 		tokens = append(tokens, walkExpression(v.Value)...)
 	case *ast.ParenExpr:
-		// Parenthesized expression
 		tokens = append(tokens, walkExpression(v.Value)...)
 	case *ast.LiteralExpr:
-		// Literals don't need special semantic tokens
+		// Literal values get basic highlighting from the tokenizer
 		return tokens
 	}
 
@@ -324,32 +311,37 @@ func walkCalleePath(cp *ast.CalleePath) []SemanticToken {
 	return tokens
 }
 
-// makeToken creates a semantic token for a given position and text
+// makeToken converts AST position information into LSP semantic tokens.
+// This bridges the gap between our internal AST representation and the LSP protocol,
+// enabling rich IDE features like semantic highlighting and symbol navigation.
 func makeToken(pos, endPos ast.Position, value, tokenType string, declModifier int) []SemanticToken {
 	if value == "" {
 		return nil
 	}
 
+	// Calculate token length, falling back to string length if position data is incomplete
 	length := endPos.Column - pos.Column
 	if length <= 0 {
 		length = len(value)
 	}
 
 	return []SemanticToken{{
-		Line:           uint32(pos.Line - 1),   // LSP uses 0-based line numbers
-		StartChar:      uint32(pos.Column - 1), // LSP uses 0-based column numbers
+		Line:           uint32(pos.Line - 1), // Convert from 1-based to LSP's 0-based indexing
+		StartChar:      uint32(pos.Column - 1),
 		Length:         uint32(length),
 		TokenType:      indexOf(tokenType, SemanticTokenTypes),
 		TokenModifiers: declModifier << indexOf("declaration", SemanticTokenModifiers),
 	}}
 }
 
-// indexOf returns the index of a string in a slice, or 0 if not found
+// indexOf maps string tokens to their LSP protocol indices.
+// Returning 0 for unknown types ensures graceful degradation rather than crashes,
+// which is important for maintaining editor stability during language evolution.
 func indexOf(target string, list []string) int {
 	for i, v := range list {
 		if v == target {
 			return i
 		}
 	}
-	return 0 // Default to first token type if not found
+	return 0 // Fallback prevents protocol violations
 }

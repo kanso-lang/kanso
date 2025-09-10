@@ -1,0 +1,153 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "scopeName": "source.kanso",
+  "name": "Kanso",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#functions"
+    },
+    {
+      "include": "#structs"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#generics"
+    },
+    {
+      "include": "#identifiers"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash",
+          "match": "//.*$"
+        },
+        {
+          "name": "comment.block",
+          "begin": "/\\*",
+          "end": "\\*/"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double",
+          "begin": "\"",
+          "end": "\""
+        },
+        {
+          "name": "string.quoted.single",
+          "begin": "'",
+          "end": "'"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control",
+          "match": "\\b(module|use|struct|fun|let|return|mut|assert|public|reads|writes|contract|storage|event)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator",
+          "match": "\\+|\\-|\\*|/|%|\\+=|\\-=|\\*=|/=|%=|==|!=|<=|>=|<|>|&&|\\|\\|"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric",
+          "match": "\\b\\d+\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function",
+          "match": "\\bfun\\s+([a-zA-Z_][\\w]*)"
+        }
+      ]
+    },
+    "structs": {
+      "patterns": [
+        {
+          "name": "entity.name.type",
+          "match": "\\bstruct\\s+([a-zA-Z_][\\w]*)"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "entity.name.type",
+          "match": "\\b[A-Z][a-zA-Z0-9_]*\\b"
+        },
+        {
+            "name": "entity.name.type.primitive",
+            "match": "\\b(u8|u16|u32|u64|u128|u256|address)\\b"
+        }
+      ]
+    },
+    "generics": {
+      "patterns": [
+        {
+          "name": "storage.type.generic",
+          "match": "<\\s*[A-Z][a-zA-Z0-9_]*(\\s*,\\s*[A-Z][a-zA-Z0-9_]*)*\\s*>"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other",
+          "match": "\\b[a-z_][\\w]*\\b"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.section",
+          "match": "[\\(\\)\\{\\}\\[\\]]"
+        },
+        {
+          "name": "punctuation.separator",
+          "match": ",|;"
+        }
+      ]
+    }
+  },
+  "fileTypes": [
+    "ka"
+  ],
+  "uuid": "3b5c4be1-1d88-4c9f-92f0-2b2b7e7ffccd"
+}

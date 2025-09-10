@@ -109,18 +109,35 @@ func NewParam(name string, typeRef *TypeRef) ParameterDefinition {
 
 // GetStandardModules returns all built-in standard library modules
 func GetStandardModules() map[string]*ModuleDefinition {
-	return map[string]*ModuleDefinition{
-		"Evm": {
-			Name:  "Evm",
-			Path:  "Evm",
-			Types: map[string]TypeDefinition{
-				// Evm module doesn't export types, only functions
-			},
-			Functions: map[string]FunctionDefinition{
-				"sender": NewFunction("sender", AddressType()),
-				"emit":   NewFunction("emit", nil, NewParam("event", NewGenericParam("T"))),
-			},
+	// Create shared evm module definition for backward compatibility
+	evmModule := &ModuleDefinition{
+		Name:  "Evm",
+		Path:  "Evm",
+		Types: map[string]TypeDefinition{
+			// Evm module doesn't export types, only functions
 		},
+		Functions: map[string]FunctionDefinition{
+			"sender": NewFunction("sender", AddressType()),
+			"emit":   NewFunction("emit", nil, NewParam("event", NewGenericParam("T"))),
+		},
+	}
+
+	// Create std::evm module definition
+	stdEvmModule := &ModuleDefinition{
+		Name:  "evm",
+		Path:  "std::evm",
+		Types: map[string]TypeDefinition{
+			// Evm module doesn't export types, only functions
+		},
+		Functions: map[string]FunctionDefinition{
+			"sender": NewFunction("sender", AddressType()),
+			"emit":   NewFunction("emit", nil, NewParam("event", NewGenericParam("T"))),
+		},
+	}
+
+	return map[string]*ModuleDefinition{
+		"Evm":      evmModule,    // Backward compatibility
+		"std::evm": stdEvmModule, // New style
 		"Table": {
 			Name: "Table",
 			Path: "Table",
@@ -159,6 +176,16 @@ func GetStandardModules() map[string]*ModuleDefinition {
 					NewParam("key", NewGenericParam("K"))),
 			},
 		},
+		"std::address": {
+			Name:  "address",
+			Path:  "std::address",
+			Types: map[string]TypeDefinition{
+				// address module doesn't export types, only functions
+			},
+			Functions: map[string]FunctionDefinition{
+				"zero": NewFunction("zero", AddressType()),
+			},
+		},
 		"std::ascii": {
 			Name: "ascii",
 			Path: "std::ascii",
@@ -176,8 +203,11 @@ func GetStandardModules() map[string]*ModuleDefinition {
 				// errors module doesn't export types, only functions
 			},
 			Functions: map[string]FunctionDefinition{
-				"invalid_argument": NewFunction("invalid_argument", U64Type(), NewParam("code", U64Type())),
-				"limit_exceeded":   NewFunction("limit_exceeded", U64Type(), NewParam("code", U64Type())),
+				"invalid_argument":      NewFunction("invalid_argument", U64Type(), NewParam("code", U64Type())),
+				"limit_exceeded":        NewFunction("limit_exceeded", U64Type(), NewParam("code", U64Type())),
+				"SelfTransfer":          NewFunction("SelfTransfer", U64Type()),
+				"InsufficientAllowance": NewFunction("InsufficientAllowance", U64Type()),
+				"InsufficientBalance":   NewFunction("InsufficientBalance", U64Type()),
 			},
 		},
 		"std::vector": {

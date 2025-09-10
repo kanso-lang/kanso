@@ -2,47 +2,75 @@ package lsp
 
 import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
+	"kanso/internal/parser"
 )
 
-// ConvertParseError turns a participle parse error into an LSP diagnostic.
-func ConvertParseError(err error) []protocol.Diagnostic {
-	if err == nil {
-		return nil
-	}
-
+// ConvertParseErrors transforms parser errors into LSP diagnostics for IDE display.
+// These provide immediate feedback about syntax issues like missing brackets,
+// semicolons, commas in struct declarations, and other parsing problems.
+func ConvertParseErrors(parseErrors []parser.ParseError) []protocol.Diagnostic {
 	var diagnostics []protocol.Diagnostic
 
-	// Check if it's a participle.ParseError
-	//if perr, ok := err.(participle.Error); ok {
-	//	diagnostics = append(diagnostics, protocol.Diagnostic{
-	//		Range: protocol.Range{
-	//			Start: protocol.Position{
-	//				Line:      uint32(perr.Position().Line - 1),
-	//				Character: uint32(perr.Position().Column - 1),
-	//			},
-	//			End: protocol.Position{
-	//				Line:      uint32(perr.Position().Line - 1),
-	//				Character: uint32(perr.Position().Column),
-	//			},
-	//		},
-	//		Severity: ptrSeverity(protocol.DiagnosticSeverityError),
-	//		Source:   ptrString("kanso-parser"),
-	//		Message:  perr.Message(),
-	//	})
-	//} else {
-	//	// Generic fallback diagnostic
-	//	diagnostics = append(diagnostics, protocol.Diagnostic{
-	//		Range: protocol.Range{
-	//			Start: protocol.Position{Line: 0, Character: 0},
-	//			End:   protocol.Position{Line: 0, Character: 1},
-	//		},
-	//		Severity: ptrSeverity(protocol.DiagnosticSeverityError),
-	//		Source:   ptrString("kanso-parser"),
-	//		Message:  fmt.Sprintf("Parse error: %v", err),
-	//	})
-	//}
+	for _, parseErr := range parseErrors {
+		diagnostic := protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      uint32(parseErr.Position.Line - 1),   // Convert to 0-based indexing
+					Character: uint32(parseErr.Position.Column - 1), // Convert to 0-based indexing
+				},
+				End: protocol.Position{
+					Line:      uint32(parseErr.Position.Line - 1),
+					Character: uint32(parseErr.Position.Column + 5), // Rough span for visibility
+				},
+			},
+			Severity: ptrSeverity(protocol.DiagnosticSeverityError),
+			Source:   ptrString("kanso-parser"),
+			Message:  parseErr.Message,
+		}
+		diagnostics = append(diagnostics, diagnostic)
+	}
 
 	return diagnostics
+}
+
+// ConvertScanErrors transforms scanner errors into LSP diagnostics for IDE display.
+// These handle tokenization issues like invalid characters, unterminated strings, etc.
+func ConvertScanErrors(scanErrors []parser.ScanError) []protocol.Diagnostic {
+	var diagnostics []protocol.Diagnostic
+
+	for _, scanErr := range scanErrors {
+		// Use the Length field if available, otherwise default span
+		endChar := uint32(scanErr.Position.Column - 1 + scanErr.Length)
+		if scanErr.Length == 0 {
+			endChar = uint32(scanErr.Position.Column + 3) // Default small span
+		}
+
+		diagnostic := protocol.Diagnostic{
+			Range: protocol.Range{
+				Start: protocol.Position{
+					Line:      uint32(scanErr.Position.Line - 1),   // Convert to 0-based indexing
+					Character: uint32(scanErr.Position.Column - 1), // Convert to 0-based indexing
+				},
+				End: protocol.Position{
+					Line:      uint32(scanErr.Position.Line - 1),
+					Character: endChar,
+				},
+			},
+			Severity: ptrSeverity(protocol.DiagnosticSeverityError),
+			Source:   ptrString("kanso-scanner"),
+			Message:  scanErr.Message,
+		}
+		diagnostics = append(diagnostics, diagnostic)
+	}
+
+	return diagnostics
+}
+
+// Legacy function kept for compatibility - delegates to the new functions
+func ConvertParseError(err error) []protocol.Diagnostic {
+	// This function is kept for compatibility but should not be used
+	// All calls should use ConvertParseErrors and ConvertScanErrors instead
+	return []protocol.Diagnostic{}
 }
 
 //func CollectDiagnostics(contract *ast.Contract) []protocol.Diagnostic {

@@ -4,8 +4,6 @@
 *.dll
 *.so
 *.dylib
-kanso
-kanso-lsp
 
 # Test binary, built with `go test -c`
 *.test
@@ -27,4 +25,12 @@ go.work.sum
 .idea
 *.iml
 
+# MacOS metadata files
 .DS_Store
+
+# Node modules
+node_modules/
+
+# Binary files
+/kanso*
+/kanso-lsp*

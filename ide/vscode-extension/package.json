@@ -1,0 +1,144 @@
+{
+  "name": "kanso",
+  "displayName": "Kanso",
+  "description": "Kanso Language Support",
+  "version": "0.0.1",
+  "icon": "images/logo.png",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:kanso"
+  ],
+  "keywords": [
+    "kanso",
+    "smart contracts",
+    "blockchain",
+    "move",
+    "rust"
+  ],
+  "main": "./out/extension.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kanso-lang/kanso.git"
+  },
+  "license": "Apache-2.0",
+  "contributes": {
+    "languages": [
+      {
+        "id": "kanso",
+        "aliases": [
+          "Kanso",
+          "kanso"
+        ],
+        "extensions": [
+          ".ka"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kanso",
+        "scopeName": "source.kanso",
+        "path": "./syntaxes/kanso.tmLanguage.json"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "kanso",
+        "scopes": {
+          "namespace": [
+            "entity.name.namespace.kanso"
+          ],
+          "type": [
+            "entity.name.type.kanso"
+          ],
+          "function": [
+            "entity.name.function.kanso"
+          ],
+          "variable": [
+            "variable.other.kanso"
+          ],
+          "parameter": [
+            "variable.parameter.kanso"
+          ],
+          "property": [
+            "variable.other.property.kanso"
+          ],
+          "modifier": [
+            "storage.modifier.attribute.kanso"
+          ],
+          "keyword": [
+            "keyword.kanso"
+          ]
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "kanso.restart",
+        "title": "Restart Language Server",
+        "category": "Kanso"
+      },
+      {
+        "command": "kanso.showOutput",
+        "title": "Show Language Server Output",
+        "category": "Kanso"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Kanso Language Server",
+      "properties": {
+        "kanso.server.path": {
+          "type": "string",
+          "default": "kanso-lsp",
+          "description": "Path to the Kanso Language Server binary. Can be absolute path or relative to workspace root.",
+          "examples": [
+            "kanso-lsp",
+            "./bin/kanso-lsp",
+            "/usr/local/bin/kanso-lsp"
+          ]
+        },
+        "kanso.semanticHighlighting.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable enhanced semantic highlighting for Kanso code"
+        },
+        "kanso.completion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable intelligent auto-completion"
+        },
+        "kanso.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable real-time semantic error detection"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "prebuild": "npm run build-lsp",
+    "build-lsp": "cd ../../ && make kanso-lsp && mkdir -p ide/vscode-extension/bin && cp kanso-lsp ide/vscode-extension/bin/",
+    "compile": "npm run prebuild && npm run bundle",
+    "bundle": "esbuild src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "watch": "npm run bundle -- --watch",
+    "package": "npm run compile && vsce package",
+    "clean": "rm -rf out bin"
+  },
+  "dependencies": {
+    "glob": "^11.0.0",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.1",
+    "@types/vscode": "^1.75.1",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.9"
+  }
+}

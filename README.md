@@ -58,11 +58,11 @@ The Kanso Language Server provides IDE integration:
 
 #### VS Code Extension
 
-The VS Code extension is located in `ide/vscode-extension/kanso/`:
+The VS Code extension is located in `ide/vscode-extension/`:
 
 1. Install dependencies:
    ```bash
-   cd ide/vscode-extension/kanso
+   cd ide/vscode-extension
    npm install
    ```
 

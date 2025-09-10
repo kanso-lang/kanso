@@ -1,6 +1,9 @@
 package parser
 
-import "kanso/internal/ast"
+import (
+	"fmt"
+	"kanso/internal/ast"
+)
 
 func (p *Parser) parseFunction(attr *ast.Attribute, isExternal bool) *ast.Function {
 	return p.parseFunctionWithDoc(attr, isExternal, nil)
@@ -153,7 +156,13 @@ func (p *Parser) parseFunctionBlock() ast.FunctionBlock {
 				}
 				break
 			} else {
-				semi := p.consume(SEMICOLON, "expected ';' or '}' after expression")
+				// Create a better error message that points to the missing semicolon
+				// Report the error at the END of the expression where the semicolon should be
+				errorMsg := fmt.Sprintf("missing ';' after %s statement", getExpressionType(expr))
+				p.errorAtPosition(errorMsg, expr.NodeEndPos())
+
+				// Consume the token anyway to continue parsing
+				semi := p.advance() // Just advance without reporting another error
 				items = append(items, &ast.ExprStmt{
 					Pos:       expr.NodePos(),
 					EndPos:    p.makeEndPos(semi),
@@ -273,5 +282,34 @@ func assignOpFromToken(tok Token) ast.AssignType {
 		return ast.PERCENT_ASSIGN
 	default:
 		return ast.ASSIGN
+	}
+}
+
+// getExpressionType returns a human-readable description of the expression type
+// for better error messages
+func getExpressionType(expr ast.Expr) string {
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		if ident, ok := e.Callee.(*ast.IdentExpr); ok {
+			if ident.Name == "emit" {
+				return "'emit()' call"
+			}
+			return fmt.Sprintf("'%s()' call", ident.Name)
+		}
+		return "function call"
+	case *ast.IdentExpr:
+		return fmt.Sprintf("'%s'", e.Name)
+	case *ast.FieldAccessExpr:
+		return "field access"
+	case *ast.IndexExpr:
+		return "index access"
+	case *ast.LiteralExpr:
+		return "literal"
+	case *ast.UnaryExpr:
+		return "unary expression"
+	case *ast.BinaryExpr:
+		return "binary expression"
+	default:
+		return "expression"
 	}
 }

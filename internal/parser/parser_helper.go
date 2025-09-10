@@ -56,6 +56,20 @@ func (p *Parser) errorAtCurrent(message string) {
 	})
 }
 
+// errorAtPosition reports an error at a specific position instead of the current token
+func (p *Parser) errorAtPosition(message string, pos ast.Position) {
+	// Convert ast.Position to parser.Position
+	parserPos := Position{
+		Line:   pos.Line,
+		Column: pos.Column,
+		Offset: pos.Offset,
+	}
+	p.errors = append(p.errors, ParseError{
+		Message:  message,
+		Position: parserPos,
+	})
+}
+
 func (p *Parser) makePos(tok Token) ast.Position {
 	return ast.Position{
 		Filename: p.filename, // assuming Parser has a `filename` field

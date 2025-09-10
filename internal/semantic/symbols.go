@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"kanso/internal/ast"
+	"kanso/internal/stdlib"
 )
 
 type SymbolKind int
@@ -18,6 +19,8 @@ type Symbol struct {
 	Kind     SymbolKind
 	Node     ast.Node
 	Position ast.Position
+	Type     *stdlib.TypeRef // Enables type checking for variable usage
+	Mutable  bool            // Enforces Rust-like immutability-by-default semantics
 }
 
 type SymbolTable struct {
@@ -38,6 +41,31 @@ func (st *SymbolTable) Define(name string, kind SymbolKind, node ast.Node, pos a
 		Kind:     kind,
 		Node:     node,
 		Position: pos,
+	}
+	st.symbols[name] = symbol
+	return symbol
+}
+
+func (st *SymbolTable) DefineWithType(name string, kind SymbolKind, node ast.Node, pos ast.Position, symbolType *stdlib.TypeRef) *Symbol {
+	symbol := &Symbol{
+		Name:     name,
+		Kind:     kind,
+		Node:     node,
+		Position: pos,
+		Type:     symbolType,
+	}
+	st.symbols[name] = symbol
+	return symbol
+}
+
+func (st *SymbolTable) DefineVariable(name string, node ast.Node, pos ast.Position, symbolType *stdlib.TypeRef, mutable bool) *Symbol {
+	symbol := &Symbol{
+		Name:     name,
+		Kind:     SymbolVariable,
+		Node:     node,
+		Position: pos,
+		Type:     symbolType,
+		Mutable:  mutable,
 	}
 	st.symbols[name] = symbol
 	return symbol
