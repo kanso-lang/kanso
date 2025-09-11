@@ -128,11 +128,13 @@ func (p *Parser) parseFunctionBlock() ast.FunctionBlock {
 			if isAssignable(expr) && isAssignOperator(p.peek()) {
 				opTok := p.advance()
 				value := p.parseExpr()
-				semi := p.consume(SEMICOLON, "expected ';' after assignment")
+
+				// Use improved semicolon error recovery for assignments
+				endPos := p.consumeSemicolonWithBetterRecovery(value.NodeEndPos(), "assignment")
 
 				items = append(items, &ast.AssignStmt{
 					Pos:      expr.NodePos(),
-					EndPos:   p.makeEndPos(semi),
+					EndPos:   endPos,
 					Target:   expr,
 					Operator: assignOpFromToken(opTok),
 					Value:    value,
@@ -195,11 +197,13 @@ func (p *Parser) parseLetStmt() *ast.LetStmt {
 
 	p.consume(EQUAL, "expected '=' in let statement")
 	expr := p.parseExpr()
-	semi := p.consume(SEMICOLON, "expected ';' after let statement")
+
+	// Use improved semicolon error recovery
+	semiEndPos := p.consumeSemicolonWithBetterRecovery(expr.NodeEndPos(), "let")
 
 	return &ast.LetStmt{
 		Pos:    p.makePos(start),
-		EndPos: p.makeEndPos(semi),
+		EndPos: semiEndPos,
 		Mut:    mut,
 		Name:   name,
 		Expr:   expr,
@@ -209,14 +213,21 @@ func (p *Parser) parseLetStmt() *ast.LetStmt {
 func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 	start := p.consume(RETURN, "expected 'return'")
 	var value ast.Expr
+	var endPos ast.Position
+
 	if !p.check(SEMICOLON) {
 		value = p.parseExpr()
+		endPos = value.NodeEndPos()
+	} else {
+		endPos = p.makeEndPos(start)
 	}
-	end := p.consume(SEMICOLON, "expected ';' after return statement")
+
+	// Use improved semicolon error recovery
+	endPos = p.consumeSemicolonWithBetterRecovery(endPos, "return")
 
 	return &ast.ReturnStmt{
 		Pos:    p.makePos(start),
-		EndPos: p.makeEndPos(end),
+		EndPos: endPos,
 		Value:  value,
 	}
 }
@@ -234,12 +245,14 @@ func (p *Parser) parseRequireStmt() *ast.RequireStmt {
 		}
 	}
 
-	end := p.consume(RIGHT_PAREN, "expected ')' to close assert arguments")
-	p.consume(SEMICOLON, "expected ';' after assert statement")
+	end := p.consume(RIGHT_PAREN, "expected ')' to close require arguments")
+
+	// Use improved semicolon error recovery
+	semiEndPos := p.consumeSemicolonWithBetterRecovery(p.makeEndPos(end), "require")
 
 	return &ast.RequireStmt{
 		Pos:    p.makePos(start),
-		EndPos: p.makeEndPos(end),
+		EndPos: semiEndPos,
 		Args:   args,
 	}
 }

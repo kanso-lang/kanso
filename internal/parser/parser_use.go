@@ -69,14 +69,12 @@ func (p *Parser) parseUse() *ast.Use {
 		}
 	}
 
-	endTok := p.consume(SEMICOLON, "expected ';' after use statement")
-	if endTok.Type == ILLEGAL {
-		p.synchronize()
-	}
+	// Use improved semicolon error recovery
+	endPos := p.consumeSemicolonWithBetterRecovery(p.makeEndPos(p.previous()), "use")
 
 	return &ast.Use{
 		Pos:        p.makePos(startToken),
-		EndPos:     p.makeEndPos(endTok),
+		EndPos:     endPos,
 		Namespaces: namespaces,
 		Imports:    imports,
 	}

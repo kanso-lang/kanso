@@ -1,6 +1,9 @@
 package parser
 
-import "kanso/internal/ast"
+import (
+	"fmt"
+	"kanso/internal/ast"
+)
 
 func (p *Parser) advance() Token {
 	if !p.isAtEnd() {
@@ -161,4 +164,19 @@ func (p *Parser) parseOptionalParenIdentifierList() []ast.Ident {
 	}
 
 	return idents
+}
+
+// consumeSemicolonWithBetterRecovery handles semicolon consumption with improved error recovery
+// It reports the error at the correct position (end of the statement) rather than at the current token
+func (p *Parser) consumeSemicolonWithBetterRecovery(expectedPos ast.Position, statementType string) ast.Position {
+	if p.check(SEMICOLON) {
+		semiToken := p.advance()
+		return p.makeEndPos(semiToken)
+	} else {
+		// Report the error at the end of the statement where the semicolon should be
+		p.errorAtPosition(fmt.Sprintf("expected ';' after %s statement", statementType), expectedPos)
+
+		// Return the position where the semicolon should have been
+		return expectedPos
+	}
 }

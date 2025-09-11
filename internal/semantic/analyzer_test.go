@@ -115,7 +115,7 @@ func TestInvalidStructAttribute(t *testing.T) {
 	semanticErrors := analyzer.Analyze(contract)
 
 	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
-	assert.Contains(t, semanticErrors[0].Message, "invalid struct attribute: invalid")
+	assert.Contains(t, semanticErrors[0].Message, "invalid attribute: invalid")
 }
 
 func TestInvalidFunctionAttribute(t *testing.T) {
@@ -134,7 +134,7 @@ func TestInvalidFunctionAttribute(t *testing.T) {
 	semanticErrors := analyzer.Analyze(contract)
 
 	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
-	assert.Contains(t, semanticErrors[0].Message, "invalid function attribute: invalid")
+	assert.Contains(t, semanticErrors[0].Message, "invalid attribute: invalid")
 }
 
 func TestMultipleCreateFunctions(t *testing.T) {

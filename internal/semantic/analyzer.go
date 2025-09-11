@@ -3,6 +3,7 @@ package semantic
 import (
 	"fmt"
 	"kanso/internal/ast"
+	"kanso/internal/errors"
 	"kanso/internal/stdlib"
 )
 
@@ -25,47 +26,61 @@ var validFunctionAttributes = map[string]bool{
 
 type Analyzer struct {
 	contract       *ast.Contract
-	errors         []SemanticError
+	errors         []errors.CompilerError   // All errors with suggestions and proper formatting
 	symbols        *SymbolTable             // Tracks variable/function scoping within contract
 	context        *ContextRegistry         // Manages imports and standard library integration
 	localFunctions map[string]*ast.Function // Tracks functions defined in this contract
 }
 
-type SemanticError struct {
-	Message  string
-	Position ast.Position
-}
-
 func NewAnalyzer() *Analyzer {
 	return &Analyzer{
-		errors:         make([]SemanticError, 0),
+		errors:         make([]errors.CompilerError, 0),
 		context:        NewContextRegistry(),
 		localFunctions: make(map[string]*ast.Function),
 	}
 }
 
+// SemanticError provides backward compatibility with tests
+type SemanticError struct {
+	Message  string
+	Position ast.Position
+}
+
 func (a *Analyzer) Analyze(contract *ast.Contract) []SemanticError {
 	a.contract = contract
-	a.errors = make([]SemanticError, 0)
+	a.errors = make([]errors.CompilerError, 0)
 	a.localFunctions = make(map[string]*ast.Function) // Reset for each analysis
 	a.symbols = NewSymbolTable(nil)                   // Root scope for contract-level declarations
 
 	a.analyzeContract(contract)
 
+	// Convert errors to SemanticError format for test compatibility
+	compatibilityErrors := make([]SemanticError, len(a.errors))
+	for i, err := range a.errors {
+		compatibilityErrors[i] = SemanticError{
+			Message:  err.Message,
+			Position: err.Position,
+		}
+	}
+	return compatibilityErrors
+}
+
+// GetErrors returns all errors with suggestions and proper formatting
+func (a *Analyzer) GetErrors() []errors.CompilerError {
 	return a.errors
 }
 
 func (a *Analyzer) analyzeContract(contract *ast.Contract) {
-	// Two-pass analysis is required because struct types must be known before
-	// validating function reads/writes clauses that reference those types
+	// Two-pass analysis prevents forward reference errors: struct definitions must be processed
+	// before functions that reference them in reads/writes clauses can be validated
 	storageStructs := make(map[string]bool)
 
-	// Include leading comments to handle license/doc comments in analysis
+	// License comments and documentation are semantically significant for contract metadata
 	allItems := make([]ast.ContractItem, 0, len(contract.LeadingComments)+len(contract.Items))
 	allItems = append(allItems, contract.LeadingComments...)
 	allItems = append(allItems, contract.Items...)
 
-	// First pass: establish type context for imports, user-defined types, and local functions
+	// Pass 1: Build symbol tables and type context before cross-reference validation
 	for _, item := range allItems {
 		switch node := item.(type) {
 		case *ast.Use:
@@ -75,12 +90,12 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 			}
 		case *ast.Struct:
 			a.context.AddUserDefinedType(node.Name.Value, node)
-			// Storage structs are the only ones that can be referenced in reads/writes
+			// Only storage structs represent persistent state that functions can declare access to
 			if node.Attribute != nil && node.Attribute.Name == "storage" {
 				storageStructs[node.Name.Value] = true
 			}
 		case *ast.Function:
-			// Collect local functions for reference validation
+			// Local function registry enables validation of internal function calls
 			a.localFunctions[node.Name.Value] = node
 		}
 	}
@@ -101,7 +116,6 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 				} else {
 					createFunction = node
 				}
-				a.validateConstructor(node, storageStructs)
 			}
 		case *ast.Struct:
 			a.analyzeStruct(node)
@@ -111,17 +125,18 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 
 func (a *Analyzer) analyzeFunction(fn *ast.Function) {
 	if existing := a.symbols.LookupLocal(fn.Name.Value); existing != nil {
-		a.addError("duplicate declaration: "+fn.Name.Value, fn.NodePos())
+		a.addCompilerError(errors.DuplicateDeclaration(fn.Name.Value, fn.NodePos()))
 		return
 	}
 
 	a.validateFunctionAttributes(fn)
+	a.validateConstructorConstraints(fn)
 	a.symbols.Define(fn.Name.Value, SymbolFunction, fn, fn.NodePos())
 }
 
 func (a *Analyzer) analyzeStruct(s *ast.Struct) {
 	if existing := a.symbols.LookupLocal(s.Name.Value); existing != nil {
-		a.addError("duplicate declaration: "+s.Name.Value, s.NodePos())
+		a.addCompilerError(errors.DuplicateDeclaration(s.Name.Value, s.NodePos()))
 		return
 	}
 
@@ -132,7 +147,7 @@ func (a *Analyzer) analyzeStruct(s *ast.Struct) {
 func (a *Analyzer) validateStructAttributes(s *ast.Struct) {
 	if s.Attribute != nil {
 		if !validStructAttributes[s.Attribute.Name] {
-			a.addError("invalid struct attribute: "+s.Attribute.Name, s.Attribute.NodePos())
+			a.addCompilerError(errors.InvalidAttribute(s.Attribute.Name, s.Attribute.NodePos()))
 		}
 	}
 }
@@ -140,7 +155,77 @@ func (a *Analyzer) validateStructAttributes(s *ast.Struct) {
 func (a *Analyzer) validateFunctionAttributes(fn *ast.Function) {
 	if fn.Attribute != nil {
 		if !validFunctionAttributes[fn.Attribute.Name] {
-			a.addError("invalid function attribute: "+fn.Attribute.Name, fn.Attribute.NodePos())
+			a.addCompilerError(errors.InvalidAttribute(fn.Attribute.Name, fn.Attribute.NodePos()))
+		}
+	}
+}
+
+func (a *Analyzer) validateConstructorConstraints(fn *ast.Function) {
+	isConstructor := fn.Attribute != nil && fn.Attribute.Name == "create"
+
+	if isConstructor {
+		// Blockchain constructors run exactly once during deployment and cannot be called again,
+		// so returning values would be meaningless since there's no caller to receive them
+		if fn.Return != nil {
+			a.addCompilerError(errors.InvalidConstructor("constructor functions cannot have a return type", fn.Return.NodePos()))
+		}
+
+		// Smart contracts must initialize persistent state during deployment or they're essentially useless,
+		// so we require constructors to declare which storage they'll modify upfront for gas optimization
+		if len(fn.Writes) == 0 {
+			a.addCompilerError(errors.InvalidConstructor("constructor functions must have a writes clause", fn.NodePos()))
+		} else {
+			a.validateWritesReferences(fn.Writes, fn.NodePos())
+
+			// A constructor that doesn't write to any storage struct serves no purpose in blockchain context
+			// since contract deployment is expensive and should establish meaningful initial state
+			hasStorageWrite := false
+			for _, write := range fn.Writes {
+				structType := a.context.GetUserDefinedType(write.Value)
+				if structType != nil && structType.Attribute != nil && structType.Attribute.Name == "storage" {
+					hasStorageWrite = true
+					break
+				}
+			}
+			if !hasStorageWrite {
+				a.addCompilerError(errors.InvalidConstructor("constructor functions must write to a storage struct", fn.NodePos()))
+			}
+		}
+	} else {
+		// Regular functions still need storage access validation for gas estimation and security analysis
+		if len(fn.Writes) > 0 {
+			a.validateWritesReferences(fn.Writes, fn.NodePos())
+		}
+		if len(fn.Reads) > 0 {
+			a.validateReadsReferences(fn.Reads, fn.NodePos())
+		}
+	}
+}
+
+func (a *Analyzer) validateWritesReferences(writes []ast.Ident, pos ast.Position) {
+	for _, structRef := range writes {
+		structName := structRef.Value
+		structType := a.context.GetUserDefinedType(structName)
+
+		// Only storage structs represent persistent blockchain state that can be modified.
+		// Non-storage structs (events, regular structs) are immutable or ephemeral,
+		// so allowing writes to them would be semantically meaningless
+		if structType == nil || structType.Attribute == nil || structType.Attribute.Name != "storage" {
+			a.addCompilerError(errors.InvalidReadsWrites(fmt.Sprintf("writes clause references non-storage struct: %s", structName), structRef.NodePos()))
+		}
+	}
+}
+
+func (a *Analyzer) validateReadsReferences(reads []ast.Ident, pos ast.Position) {
+	for _, structRef := range reads {
+		structName := structRef.Value
+		structType := a.context.GetUserDefinedType(structName)
+
+		// Reads clauses enable gas optimization by declaring upfront which storage will be accessed.
+		// Only storage structs contain persistent state worth reading - events are write-only logs
+		// and regular structs don't persist across transactions
+		if structType == nil || structType.Attribute == nil || structType.Attribute.Name != "storage" {
+			a.addCompilerError(errors.InvalidReadsWrites(fmt.Sprintf("reads clause references non-storage struct: %s", structName), structRef.NodePos()))
 		}
 	}
 }
@@ -150,10 +235,7 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 	// state the function accesses, and prevents accidental state access patterns
 	readStructs := make(map[string]bool)
 	for _, read := range fn.Reads {
-		if !storageStructs[read.Value] {
-			a.addError("reads clause references non-storage struct: "+read.Value, read.NodePos())
-			continue
-		}
+		// Storage validation is now handled by validateReadsReferences
 
 		if readStructs[read.Value] {
 			a.addError("duplicate reads clause for struct: "+read.Value, read.NodePos())
@@ -163,10 +245,7 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 
 	writeStructs := make(map[string]bool)
 	for _, write := range fn.Writes {
-		if !storageStructs[write.Value] {
-			a.addError("writes clause references non-storage struct: "+write.Value, write.NodePos())
-			continue
-		}
+		// Storage validation is now handled by validateWritesReferences
 
 		if writeStructs[write.Value] {
 			a.addError("duplicate writes clause for struct: "+write.Value, write.NodePos())
@@ -176,30 +255,6 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 		// Write implies read, so explicit read+write is redundant and potentially confusing
 		if readStructs[write.Value] {
 			a.addError("conflicting reads and writes clause for struct (write implies read): "+write.Value, write.NodePos())
-		}
-	}
-}
-
-func (a *Analyzer) validateConstructor(fn *ast.Function, storageStructs map[string]bool) {
-	// Constructor constraints enforce blockchain deployment semantics where
-	// constructors initialize state exactly once and cannot be called again
-	if fn.Return != nil {
-		a.addError("constructor functions cannot have a return type", fn.NodePos())
-	}
-
-	if len(fn.Writes) == 0 {
-		a.addError("constructor functions must have a writes clause", fn.NodePos())
-	} else {
-		// Constructors must initialize at least one storage struct to be meaningful
-		hasStorageWrite := false
-		for _, write := range fn.Writes {
-			if storageStructs[write.Value] {
-				hasStorageWrite = true
-				break
-			}
-		}
-		if !hasStorageWrite {
-			a.addError("constructor functions must write to a storage struct", fn.NodePos())
 		}
 	}
 }
@@ -231,6 +286,10 @@ func (a *Analyzer) analyzeFunctionBody(fn *ast.Function) {
 	if fn.Body.TailExpr != nil {
 		a.analyzeExpression(fn.Body.TailExpr.Expr)
 	}
+
+	// Perform flow control analysis
+	flowAnalyzer := NewFlowAnalyzer(a)
+	flowAnalyzer.AnalyzeFunction(fn)
 
 	// Restore previous scope
 	a.symbols = previousScope
@@ -267,18 +326,23 @@ func (a *Analyzer) analyzeExpression(expr ast.Expr) {
 		a.analyzeCallExpression(node)
 	case *ast.FieldAccessExpr:
 		a.analyzeExpression(node.Target)
+	case *ast.IndexExpr:
+		a.analyzeIndexExpression(node)
 	case *ast.StructLiteralExpr:
-		for _, field := range node.Fields {
-			a.analyzeExpression(field.Value)
-		}
+		a.analyzeStructLiteralExpression(node)
 	case *ast.ParenExpr:
 		a.analyzeExpression(node.Value)
 	case *ast.BinaryExpr:
-		a.analyzeExpression(node.Left)
-		a.analyzeExpression(node.Right)
+		a.analyzeBinaryExpression(node)
 	case *ast.UnaryExpr:
-		a.analyzeExpression(node.Value)
-		// Add other expression types as needed
+		a.analyzeUnaryExpression(node)
+	case *ast.IdentExpr:
+		a.analyzeIdentExpression(node)
+	case *ast.LiteralExpr:
+		a.analyzeLiteralExpression(node)
+	case *ast.TupleExpr:
+		a.analyzeTupleExpression(node)
+		// Other expression types are already handled by type inference
 	}
 }
 
@@ -314,7 +378,7 @@ func (a *Analyzer) validateDirectFunctionCall(functionName string, call *ast.Cal
 	_, isLocalFunction := a.localFunctions[functionName]
 
 	if !isImported && !isLocalFunction {
-		a.addError(fmt.Sprintf("function '%s' is not imported or defined", functionName), call.NodePos())
+		a.addUndefinedFunctionError(functionName, call.NodePos())
 		return
 	}
 
@@ -334,8 +398,7 @@ func (a *Analyzer) validateDirectFunctionCall(functionName string, call *ast.Cal
 	// Validate parameter count (only for imported functions with known signatures)
 	if isImported && funcDef != nil {
 		if len(call.Args) != len(funcDef.Parameters) {
-			a.addError(fmt.Sprintf("function '%s' expects %d arguments, got %d",
-				functionName, len(funcDef.Parameters), len(call.Args)), call.NodePos())
+			a.addCompilerError(errors.InvalidArguments(functionName, len(funcDef.Parameters), len(call.Args), call.NodePos()))
 			return
 		}
 
@@ -379,8 +442,8 @@ func (a *Analyzer) validateModuleFunctionCall(callee *ast.CalleePath, call *ast.
 
 	// Validate parameter count
 	if len(call.Args) != len(funcDef.Parameters) {
-		a.addError(fmt.Sprintf("function '%s::%s' expects %d arguments, got %d",
-			moduleName, functionName, len(funcDef.Parameters), len(call.Args)), call.NodePos())
+		fullName := fmt.Sprintf("%s::%s", moduleName, functionName)
+		a.addCompilerError(errors.InvalidArguments(fullName, len(funcDef.Parameters), len(call.Args), call.NodePos()))
 		return
 	}
 
@@ -555,19 +618,53 @@ func (a *Analyzer) analyzeLetStatement(letStmt *ast.LetStmt) {
 
 func (a *Analyzer) analyzeAssignStatement(assignStmt *ast.AssignStmt) {
 	a.analyzeExpression(assignStmt.Value)
-	a.analyzeExpression(assignStmt.Target)
+	a.validateAssignmentTarget(assignStmt.Target, assignStmt.NodePos())
 
-	// Enforce immutability constraints to prevent accidental modification
+	// Handle variable assignments with special logic to avoid duplicate error reporting
+	// since analyzeExpression would also validate identifier existence
 	if identExpr, ok := assignStmt.Target.(*ast.IdentExpr); ok {
 		if symbol := a.symbols.Lookup(identExpr.Name); symbol != nil {
+			// Immutability prevents accidental state changes that could break contract invariants
 			if symbol.Kind == SymbolVariable && !symbol.Mutable {
-				a.addError(fmt.Sprintf("cannot assign to immutable variable '%s'", identExpr.Name), assignStmt.NodePos())
+				a.addCompilerError(errors.InvalidAssignment(fmt.Sprintf("cannot assign to immutable variable '%s'", identExpr.Name), assignStmt.NodePos()))
 			}
 		} else {
-			a.addError(fmt.Sprintf("undefined variable '%s'", identExpr.Name), assignStmt.NodePos())
+			a.addUndefinedVariableError(identExpr.Name, assignStmt.NodePos())
 		}
+	} else {
+		// Complex assignment targets (field access, indexing) need full expression validation
+		// to ensure the target expression itself is valid before assignment
+		a.analyzeExpression(assignStmt.Target)
 	}
-	// Complex assignment targets (State.field, array[index]) handled by expression analysis
+}
+
+func (a *Analyzer) validateAssignmentTarget(target ast.Expr, pos ast.Position) {
+	switch target.(type) {
+	case *ast.IdentExpr:
+		// Variable assignments are handled separately with mutability checking
+		return
+	case *ast.FieldAccessExpr:
+		// Struct field modification is essential for state management in smart contracts
+		return
+	case *ast.IndexExpr:
+		// Array/mapping element assignment enables dynamic data structure manipulation
+		return
+	case *ast.CallExpr:
+		// Function returns are temporary values that cannot be modified after creation
+		a.addCompilerError(errors.InvalidAssignment("cannot assign to function call result", pos))
+	case *ast.BinaryExpr:
+		// Computed expressions produce temporary values, not assignable storage locations
+		a.addCompilerError(errors.InvalidAssignment("cannot assign to binary expression", pos))
+	case *ast.UnaryExpr:
+		// Unary operations create temporary computed values, not memory locations
+		a.addCompilerError(errors.InvalidAssignment("cannot assign to unary expression", pos))
+	case *ast.LiteralExpr:
+		// Literals are immutable constant values by definition
+		a.addCompilerError(errors.InvalidAssignment("cannot assign to literal value", pos))
+	default:
+		// Assignment requires a memory location (lvalue), not computed value (rvalue)
+		a.addCompilerError(errors.InvalidAssignment("invalid assignment target", pos))
+	}
 }
 
 func (a *Analyzer) analyzeFieldAccess(fieldExpr *ast.FieldAccessExpr) *stdlib.TypeRef {
@@ -596,7 +693,7 @@ func (a *Analyzer) validateStructField(structNode *ast.Struct, fieldName string,
 		}
 	}
 
-	a.addError(fmt.Sprintf("struct '%s' has no field '%s'", structNode.Name.Value, fieldName), pos)
+	a.addFieldNotFoundError(structNode.Name.Value, fieldName, pos)
 	return nil
 }
 
@@ -625,6 +722,8 @@ func (a *Analyzer) resolveVariableType(varType *ast.VariableType) *stdlib.TypeRe
 		return stdlib.BoolType()
 	case "Address":
 		return stdlib.AddressType()
+	case "String":
+		return &stdlib.TypeRef{Name: "String", IsGeneric: false}
 	}
 
 	// Support user-defined struct types
@@ -740,9 +839,367 @@ func (a *Analyzer) promoteNumericType(left, right *stdlib.TypeRef) *stdlib.TypeR
 	return left
 }
 
+// analyzeIndexExpression validates array/mapping index operations
+func (a *Analyzer) analyzeIndexExpression(indexExpr *ast.IndexExpr) {
+	a.analyzeExpression(indexExpr.Target)
+	a.analyzeExpression(indexExpr.Index)
+
+	// Validate that target supports indexing
+	targetType := a.inferExpressionType(indexExpr.Target)
+	if targetType != nil {
+		if !a.isIndexableType(targetType) {
+			a.addError(fmt.Sprintf("type '%s' does not support indexing", a.typeToString(targetType)), indexExpr.NodePos())
+		}
+	}
+
+	// For now, we allow any index type - could be improved for specific container types
+}
+
+// analyzeStructLiteralExpression validates struct literal field assignments
+func (a *Analyzer) analyzeStructLiteralExpression(structExpr *ast.StructLiteralExpr) {
+	// Analyze all field values
+	for _, field := range structExpr.Fields {
+		a.analyzeExpression(field.Value)
+	}
+
+	// Validate that the struct type exists
+	if structExpr.Type != nil && len(structExpr.Type.Parts) > 0 {
+		structName := structExpr.Type.Parts[0].Value
+		if !a.context.IsUserDefinedType(structName) {
+			a.addError(fmt.Sprintf("unknown struct type '%s'", structName), structExpr.NodePos())
+			return
+		}
+
+		// Validate field assignments match struct definition
+		a.validateStructLiteralFields(structName, structExpr.Fields, structExpr.NodePos())
+	}
+}
+
+// analyzeBinaryExpression provides binary operation validation
+func (a *Analyzer) analyzeBinaryExpression(binExpr *ast.BinaryExpr) {
+	a.analyzeExpression(binExpr.Left)
+	a.analyzeExpression(binExpr.Right)
+
+	// The type inference already handles most validation, but we can add
+	// additional semantic checks here if needed
+	leftType := a.inferExpressionType(binExpr.Left)
+	rightType := a.inferExpressionType(binExpr.Right)
+
+	// Validation for assignment operations
+	if binExpr.Op == "=" || binExpr.Op == "+=" || binExpr.Op == "-=" ||
+		binExpr.Op == "*=" || binExpr.Op == "/=" || binExpr.Op == "%=" {
+		a.validateAssignmentCompatibility(leftType, rightType, binExpr.NodePos())
+	}
+}
+
+// analyzeUnaryExpression provides unary operation validation
+func (a *Analyzer) analyzeUnaryExpression(unExpr *ast.UnaryExpr) {
+	a.analyzeExpression(unExpr.Value)
+
+	// The type inference already handles validation
+	// Additional semantic checks could be added here
+}
+
+// analyzeIdentExpression validates identifier references
+func (a *Analyzer) analyzeIdentExpression(identExpr *ast.IdentExpr) {
+	// Check if identifier is defined (variable, function, type, etc.)
+	if identExpr.Name != "true" && identExpr.Name != "false" {
+		if symbol := a.symbols.Lookup(identExpr.Name); symbol == nil {
+			if !a.context.IsUserDefinedType(identExpr.Name) &&
+				!a.context.IsImportedFunction(identExpr.Name) &&
+				!a.isBuiltinFunction(identExpr.Name) {
+				a.addUndefinedVariableError(identExpr.Name, identExpr.NodePos())
+			}
+		}
+	}
+}
+
+// isBuiltinFunction checks if a function is a built-in function
+func (a *Analyzer) isBuiltinFunction(name string) bool {
+	// Built-in functions that don't need to be explicitly imported
+	builtins := map[string]bool{
+		"require": true, // Built-in require macro
+	}
+	return builtins[name]
+}
+
+// analyzeLiteralExpression validates literal values
+func (a *Analyzer) analyzeLiteralExpression(litExpr *ast.LiteralExpr) {
+	// Validate literal format and bounds
+	a.validateLiteralValue(litExpr.Value, litExpr.NodePos())
+}
+
+// analyzeTupleExpression validates tuple expressions
+func (a *Analyzer) analyzeTupleExpression(tupleExpr *ast.TupleExpr) {
+	for _, element := range tupleExpr.Elements {
+		a.analyzeExpression(element)
+	}
+}
+
+// isIndexableType checks if a type supports indexing operations
+func (a *Analyzer) isIndexableType(typeRef *stdlib.TypeRef) bool {
+	if typeRef == nil {
+		return false
+	}
+
+	// Built-in indexable types (could be extended)
+	switch typeRef.Name {
+	case "Slots", "Table", "Array", "Map":
+		return true
+	default:
+		return false
+	}
+}
+
+// validateAssignmentCompatibility checks if types are compatible for assignment
+func (a *Analyzer) validateAssignmentCompatibility(leftType, rightType *stdlib.TypeRef, pos ast.Position) {
+	if leftType == nil || rightType == nil {
+		return
+	}
+
+	if !a.typesMatch(leftType, rightType) {
+		if a.isNumericType(leftType) && a.isNumericType(rightType) {
+			// Prevent silent data truncation that could cause overflow vulnerabilities in smart contracts
+			if !a.canPromoteType(rightType, leftType) {
+				a.addError(fmt.Sprintf("cannot assign %s to %s: potential precision loss",
+					a.typeToString(rightType), a.typeToString(leftType)), pos)
+			}
+		} else {
+			// Type safety prevents runtime errors and unexpected behavior in blockchain execution
+			a.addError(fmt.Sprintf("cannot assign %s to %s: incompatible types",
+				a.typeToString(rightType), a.typeToString(leftType)), pos)
+		}
+	}
+}
+
+// canPromoteType checks if source type can be promoted to target type
+func (a *Analyzer) canPromoteType(source, target *stdlib.TypeRef) bool {
+	typeOrder := map[string]int{
+		"U8": 1, "U16": 2, "U32": 3, "U64": 4, "U128": 5, "U256": 6,
+	}
+
+	sourceOrder, sourceExists := typeOrder[source.Name]
+	targetOrder, targetExists := typeOrder[target.Name]
+
+	if !sourceExists || !targetExists {
+		return false
+	}
+
+	// Can promote to same or wider type
+	return sourceOrder <= targetOrder
+}
+
+// validateStructLiteralFields checks that struct literal fields match the struct definition
+func (a *Analyzer) validateStructLiteralFields(structName string, fields []ast.StructLiteralField, pos ast.Position) {
+	structDef := a.context.GetUserDefinedType(structName)
+	if structDef == nil {
+		return // Already reported as unknown type
+	}
+
+	// Build map of provided fields
+	providedFields := make(map[string]bool)
+	for _, field := range fields {
+		fieldName := field.Name.Value
+		if providedFields[fieldName] {
+			a.addError(fmt.Sprintf("duplicate field '%s' in struct literal", fieldName), field.NodePos())
+			continue
+		}
+		providedFields[fieldName] = true
+
+		// Validate field exists in struct definition
+		if !a.structHasField(structDef, fieldName) {
+			a.addError(fmt.Sprintf("struct '%s' has no field '%s'", structName, fieldName), field.NodePos())
+		}
+	}
+
+	// Check for missing required fields (basic check)
+	for _, item := range structDef.Items {
+		if field, ok := item.(*ast.StructField); ok {
+			fieldName := field.Name.Value
+			if !providedFields[fieldName] {
+				a.addError(fmt.Sprintf("missing field '%s' in struct literal for '%s'", fieldName, structName), pos)
+			}
+		}
+	}
+}
+
+// structHasField checks if a struct definition contains a specific field
+func (a *Analyzer) structHasField(structDef *ast.Struct, fieldName string) bool {
+	for _, item := range structDef.Items {
+		if field, ok := item.(*ast.StructField); ok {
+			if field.Name.Value == fieldName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// validateLiteralValue checks literal value format and bounds
+func (a *Analyzer) validateLiteralValue(value string, pos ast.Position) {
+	// Basic literal validation - could be improved with more specific checks
+	if len(value) == 0 {
+		a.addError("empty literal value", pos)
+		return
+	}
+
+	// TODO: Add specific validation for different literal types:
+	// - Numeric bounds checking
+	// - String escape sequence validation
+	// - Address format validation
+}
+
 func (a *Analyzer) addError(message string, pos ast.Position) {
-	a.errors = append(a.errors, SemanticError{
-		Message:  message,
-		Position: pos,
-	})
+	// Fallback for simple errors that don't need specialized handling with suggestions
+	err := errors.NewSemanticError(errors.ErrorGenericSemantic, message, pos).Build()
+	a.errors = append(a.errors, err)
+}
+
+func (a *Analyzer) addCompilerError(err errors.CompilerError) {
+	a.errors = append(a.errors, err)
+}
+
+func (a *Analyzer) addUndefinedVariableError(name string, pos ast.Position) {
+	// Provide typo suggestions to reduce developer frustration with common mistakes
+	similar := a.findSimilarVariables(name)
+	err := errors.UndefinedVariable(name, pos, similar)
+	a.addCompilerError(err)
+}
+
+func (a *Analyzer) addUndefinedFunctionError(name string, pos ast.Position) {
+	// Help developers discover available standard library functions and fix typos
+	similar := a.findSimilarFunctions(name)
+	imports := a.findPossibleImports(name)
+	err := errors.UndefinedFunction(name, pos, similar, imports)
+	a.addCompilerError(err)
+}
+
+func (a *Analyzer) addTypeMismatchError(expected, actual string, pos ast.Position) {
+	err := errors.TypeMismatch(expected, actual, pos)
+	a.addCompilerError(err)
+}
+
+func (a *Analyzer) addFieldNotFoundError(structName, fieldName string, pos ast.Position) {
+	// Show available fields to help with autocompletion and typo detection
+	availableFields := a.getStructFields(structName)
+	err := errors.FieldNotFound(structName, fieldName, pos, availableFields)
+	a.addCompilerError(err)
+}
+
+// Helper methods for finding similar names and suggestions
+
+func (a *Analyzer) findSimilarVariables(name string) []string {
+	var similar []string
+
+	// Check current scope and parent scopes
+	for scope := a.symbols; scope != nil; scope = scope.parent {
+		for varName := range scope.symbols {
+			if levenshteinDistance(name, varName) <= 2 && len(varName) > 1 {
+				similar = append(similar, varName)
+			}
+		}
+	}
+
+	return similar
+}
+
+func (a *Analyzer) findSimilarFunctions(name string) []string {
+	var similar []string
+
+	// Check local functions
+	for funcName := range a.localFunctions {
+		if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+			similar = append(similar, funcName)
+		}
+	}
+
+	// Check imported functions
+	// This would need to be implemented in the context registry
+
+	return similar
+}
+
+func (a *Analyzer) findPossibleImports(name string) []string {
+	// This would check the standard library for functions with similar names
+	// and suggest the appropriate import statements
+	var imports []string
+
+	// Example suggestions based on common function names
+	switch name {
+	case "send", "sender":
+		imports = append(imports, "std::evm::{sender}")
+	case "emit":
+		imports = append(imports, "std::evm::{emit}")
+	case "zero":
+		imports = append(imports, "std::address::{zero}")
+	}
+
+	return imports
+}
+
+func (a *Analyzer) getStructFields(structName string) []string {
+	var fields []string
+
+	structDef := a.context.GetUserDefinedType(structName)
+	if structDef != nil {
+		for _, item := range structDef.Items {
+			if field, ok := item.(*ast.StructField); ok {
+				fields = append(fields, field.Name.Value)
+			}
+		}
+	}
+
+	return fields
+}
+
+// Simple Levenshtein distance for finding similar names
+func levenshteinDistance(a, b string) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+
+	previous := make([]int, len(a)+1)
+	for i := range previous {
+		previous[i] = i
+	}
+
+	for i := 0; i < len(b); i++ {
+		current := make([]int, len(a)+1)
+		current[0] = i + 1
+
+		for j := 0; j < len(a); j++ {
+			cost := 0
+			if a[j] != b[i] {
+				cost = 1
+			}
+			current[j+1] = min3(
+				current[j]+1,     // insertion
+				previous[j+1]+1,  // deletion
+				previous[j]+cost, // substitution
+			)
+		}
+		previous = current
+	}
+
+	return previous[len(a)]
+}
+
+func min3(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
 }

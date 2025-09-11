@@ -4,7 +4,9 @@ package main
 import (
 	"fmt"
 	"github.com/fatih/color"
+	"kanso/internal/errors"
 	"kanso/internal/parser"
+	"kanso/internal/semantic"
 	"os"
 	"strings"
 )
@@ -25,16 +27,41 @@ func main() {
 
 	contract, parseErrors, scannerErrors := parser.ParseSource(path, string(source))
 
+	// Create error reporter
+	errorReporter := errors.NewErrorReporter(path, string(source))
+
+	// Report scanner errors
 	for _, err := range scannerErrors {
-		fmt.Println(FormatScanError(path, err, string(source)))
+		fmt.Print(FormatScanError(path, err, string(source)))
 	}
+
+	// Report parser errors
 	for _, err := range parseErrors {
-		fmt.Println(FormatParseError(path, err, string(source)))
+		fmt.Print(FormatParseError(path, err, string(source)))
 	}
 
-	fmt.Println(contract.String())
+	// Run semantic analysis if parsing succeeded
+	hasErrors := len(scannerErrors) > 0 || len(parseErrors) > 0
+	if contract != nil {
+		analyzer := semantic.NewAnalyzer()
+		analyzer.Analyze(contract)
 
-	color.Green("✅ Successfully processed %s", path)
+		// Report semantic errors
+		semanticErrors := analyzer.GetErrors()
+		for _, err := range semanticErrors {
+			fmt.Print(errorReporter.FormatError(err))
+			hasErrors = true
+		}
+	}
+
+	// Only print AST and success message if no errors
+	if !hasErrors {
+		fmt.Println(contract.String())
+		color.Green("✅ Successfully processed %s", path)
+	} else {
+		color.Red("❌ Compilation failed")
+		os.Exit(1)
+	}
 }
 
 func FormatScanError(path string, err parser.ScanError, source string) string {
