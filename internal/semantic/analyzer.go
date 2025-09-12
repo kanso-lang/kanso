@@ -40,7 +40,6 @@ func NewAnalyzer() *Analyzer {
 	}
 }
 
-// SemanticError provides backward compatibility with tests
 type SemanticError struct {
 	Message  string
 	Position ast.Position
@@ -253,7 +252,7 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 		}
 	}
 
-	// TODO the complete call path analysis to ensure all storage accesses are declared
+	// TODO: Complete call path analysis for storage access validation
 }
 
 func (a *Analyzer) analyzeFunctionBody(fn *ast.Function) {
@@ -323,8 +322,7 @@ func (a *Analyzer) validateDirectFunctionCall(functionName string, call *ast.Cal
 	if isImported {
 		funcDef = a.context.GetFunctionDefinition(functionName)
 	}
-	// Note: For local functions, we'd need to extract parameter info from AST
-	// TODO: Implement local function signature extraction if needed
+	// TODO: Implement local function signature extraction for parameter validation
 
 	if isImported && funcDef == nil {
 		a.addError(fmt.Sprintf("function '%s' definition not found", functionName), call.NodePos())
@@ -395,9 +393,8 @@ func (a *Analyzer) validateModuleFunctionCall(callee *ast.CalleePath, call *ast.
 
 // isBuiltinFunction checks if a function is a built-in function
 func (a *Analyzer) isBuiltinFunction(name string) bool {
-	// Built-in functions that don't need to be explicitly imported
 	builtins := map[string]bool{
-		"require": true, // Built-in require macro
+		"require": true,
 	}
 	return builtins[name]
 }
@@ -503,14 +500,206 @@ func (a *Analyzer) structHasField(structDef *ast.Struct, fieldName string) bool 
 
 // validateLiteralValue checks literal value format and bounds
 func (a *Analyzer) validateLiteralValue(value string, pos ast.Position) {
-	// Basic literal validation - could be improved with more specific checks
 	if len(value) == 0 {
 		a.addError("empty literal value", pos)
 		return
 	}
 
-	// TODO: Add specific validation for different literal types:
-	// - Numeric bounds checking
-	// - String escape sequence validation
-	// - Address format validation
+	// Determine literal type and validate accordingly
+	// Check address first since it can start with '0' like numbers
+	switch {
+	case value == "true" || value == "false":
+		// Boolean literals are always valid
+		return
+	case a.isAddressLiteral(value):
+		a.validateAddressLiteral(value, pos)
+	case a.isStringLiteral(value):
+		a.validateStringLiteral(value, pos)
+	case a.isNumericLiteral(value):
+		a.validateNumericLiteral(value, pos)
+	default:
+		// For other literals (like unquoted strings), perform basic validation
+		// This is more permissive to handle cases where the parser stores
+		// string content without quotes
+		a.validateGenericLiteral(value, pos)
+	}
+}
+
+// isStringLiteral checks if a value is a string literal (quoted)
+func (a *Analyzer) isStringLiteral(value string) bool {
+	return len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"'
+}
+
+// isAddressLiteral checks if a value looks like an Ethereum address
+func (a *Analyzer) isAddressLiteral(value string) bool {
+	// Ethereum address: special case 0x0 or exactly 42 characters (0x + 40 hex chars)
+	// We need to be precise here to distinguish from hex numeric literals like 0x1, 0xFF, etc.
+	return value == "0x0" || (len(value) == 42 && value[:2] == "0x")
+}
+
+// validateNumericLiteral validates numeric literal format and bounds
+func (a *Analyzer) validateNumericLiteral(value string, pos ast.Position) {
+	// Handle hexadecimal literals (0x prefix)
+	if len(value) >= 2 && value[:2] == "0x" {
+		a.validateHexNumericLiteral(value, pos)
+		return
+	}
+
+	// Handle decimal literals
+	// Check for invalid numeric formats (leading zeros not allowed in decimal)
+	if len(value) > 1 && value[0] == '0' && value[1] >= '0' && value[1] <= '9' {
+		a.addError(fmt.Sprintf("numeric literal '%s' has leading zeros (not allowed)", value), pos)
+		return
+	}
+
+	// Check for extremely large numbers that might cause parsing issues
+	if len(value) > 80 { // U256 max is ~78 digits
+		a.addError(fmt.Sprintf("numeric literal '%s' is too large (exceeds maximum length)", value), pos)
+		return
+	}
+
+	// Validate all characters are digits for decimal literals
+	for i, r := range value {
+		if r < '0' || r > '9' {
+			a.addError(fmt.Sprintf("numeric literal '%s' contains invalid character '%c' at position %d", value, r, i), pos)
+			return
+		}
+	}
+}
+
+// validateHexNumericLiteral validates hexadecimal numeric literals like 0x1, 0xFF, 0x2A
+func (a *Analyzer) validateHexNumericLiteral(value string, pos ast.Position) {
+	if len(value) < 3 { // Must be at least "0x" + one hex digit
+		a.addError(fmt.Sprintf("hex literal '%s' is too short (must have at least one hex digit after 0x)", value), pos)
+		return
+	}
+
+	// Check for extremely large hex numbers
+	if len(value) > 66 { // 0x + 64 hex digits = 256 bits max
+		a.addError(fmt.Sprintf("hex literal '%s' is too large (exceeds maximum length for U256)", value), pos)
+		return
+	}
+
+	// Validate hex digits after 0x
+	hexPart := value[2:]
+	for i, r := range hexPart {
+		if !a.isHexDigit(byte(r)) {
+			a.addError(fmt.Sprintf("hex literal '%s' contains invalid hex character '%c' at position %d", value, r, i+2), pos)
+			return
+		}
+	}
+}
+
+// validateStringLiteral validates string literal format and escape sequences
+func (a *Analyzer) validateStringLiteral(value string, pos ast.Position) {
+	if len(value) < 2 {
+		a.addError("string literal too short (missing quotes)", pos)
+		return
+	}
+
+	// Remove surrounding quotes for content validation
+	content := value[1 : len(value)-1]
+
+	// Validate escape sequences
+	for i := 0; i < len(content); i++ {
+		if content[i] == '\\' {
+			if i == len(content)-1 {
+				a.addError("string literal ends with incomplete escape sequence", pos)
+				return
+			}
+
+			// Check valid escape sequences
+			nextChar := content[i+1]
+			switch nextChar {
+			case 'n', 't', 'r', '\\', '"', '\'', '0':
+				// Valid escape sequences
+				i++ // Skip next character
+			case 'x':
+				// Hex escape sequence: \xHH
+				if i+3 >= len(content) {
+					a.addError("incomplete hex escape sequence in string literal", pos)
+					return
+				}
+				hex1, hex2 := content[i+2], content[i+3]
+				if !a.isHexDigit(hex1) || !a.isHexDigit(hex2) {
+					a.addError(fmt.Sprintf("invalid hex escape sequence '\\x%c%c' in string literal", hex1, hex2), pos)
+					return
+				}
+				i += 3 // Skip \xHH
+			case 'u':
+				// Unicode escape sequence: \uHHHH
+				if i+5 >= len(content) {
+					a.addError("incomplete unicode escape sequence in string literal", pos)
+					return
+				}
+				for j := i + 2; j < i+6; j++ {
+					if !a.isHexDigit(content[j]) {
+						a.addError(fmt.Sprintf("invalid unicode escape sequence in string literal"), pos)
+						return
+					}
+				}
+				i += 5 // Skip \uHHHH
+			default:
+				a.addError(fmt.Sprintf("invalid escape sequence '\\%c' in string literal", nextChar), pos)
+				return
+			}
+		}
+	}
+}
+
+// validateAddressLiteral validates Ethereum address format
+func (a *Analyzer) validateAddressLiteral(value string, pos ast.Position) {
+	if value == "0x0" {
+		return // Valid zero address
+	}
+
+	if len(value) != 42 {
+		a.addError(fmt.Sprintf("address literal '%s' must be exactly 42 characters (0x + 40 hex digits)", value), pos)
+		return
+	}
+
+	if value[:2] != "0x" {
+		a.addError(fmt.Sprintf("address literal '%s' must start with '0x'", value), pos)
+		return
+	}
+
+	// Validate hex characters
+	hexPart := value[2:]
+	for i, r := range hexPart {
+		if !a.isHexDigit(byte(r)) {
+			a.addError(fmt.Sprintf("address literal '%s' contains invalid hex character '%c' at position %d", value, r, i+2), pos)
+			return
+		}
+	}
+
+	// Note: We could add checksum validation here if needed, but it's not strictly required
+	// for basic syntax validation
+}
+
+// validateGenericLiteral provides basic validation for other literal types
+func (a *Analyzer) validateGenericLiteral(value string, pos ast.Position) {
+	// This is a permissive fallback for literals that don't fit other categories
+	// Perform basic safety checks without being overly restrictive
+
+	// Check for extremely long literals that might cause memory issues
+	if len(value) > 1000 { // Reasonable limit for most use cases
+		a.addError(fmt.Sprintf("literal '%s' is too long (exceeds maximum length)", value), pos)
+		return
+	}
+
+	// Check for control characters that might be problematic
+	for i, r := range value {
+		if r < 32 && r != '\t' && r != '\n' && r != '\r' { // Allow basic whitespace
+			a.addError(fmt.Sprintf("literal contains invalid control character at position %d", i), pos)
+			return
+		}
+	}
+
+	// If it passes basic checks, allow it
+	// This handles cases like unquoted strings, identifiers used as literals, etc.
+}
+
+// isHexDigit checks if a byte represents a valid hexadecimal digit
+func (a *Analyzer) isHexDigit(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
 }

@@ -1,6 +1,9 @@
 package semantic
 
-import "kanso/internal/ast"
+import (
+	"kanso/internal/ast"
+	"math/big"
+)
 
 func (a *Analyzer) findSimilarVariables(name string) []string {
 	var similar []string
@@ -115,6 +118,39 @@ func (a *Analyzer) isNumericLiteral(value string) bool {
 	if len(value) == 0 {
 		return false
 	}
-	// Simple check: starts with digit
-	return value[0] >= '0' && value[0] <= '9'
+	// Check for decimal literals: starts with digit
+	if value[0] >= '0' && value[0] <= '9' {
+		return true
+	}
+	// Check for hexadecimal literals: starts with 0x
+	if len(value) >= 2 && value[:2] == "0x" {
+		return true
+	}
+	return false
+}
+
+// getTypeMaxValue returns the maximum value for a given numeric type
+func (a *Analyzer) getTypeMaxValue(typeName string) *big.Int {
+	switch typeName {
+	case "U8":
+		return big.NewInt(255) // 2^8 - 1
+	case "U16":
+		return big.NewInt(65535) // 2^16 - 1
+	case "U32":
+		return big.NewInt(4294967295) // 2^32 - 1
+	case "U64":
+		max := new(big.Int)
+		max.SetString("18446744073709551615", 10) // 2^64 - 1
+		return max
+	case "U128":
+		max := new(big.Int)
+		max.SetString("340282366920938463463374607431768211455", 10) // 2^128 - 1
+		return max
+	case "U256":
+		max := new(big.Int)
+		max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1
+		return max
+	default:
+		return nil
+	}
 }

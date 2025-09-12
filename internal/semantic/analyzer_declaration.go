@@ -122,43 +122,28 @@ func (a *Analyzer) validateExplicitTypeAssignment(letStmt *ast.LetStmt, declared
 
 // validateNumericLiteralRange checks if a numeric literal value fits within the declared type's range
 func (a *Analyzer) validateNumericLiteralRange(value string, declaredType *stdlib.TypeRef, pos ast.Position) {
+	// Determine base and parse value for parsing
+	base := 10
+	parseValue := value
+	if len(value) >= 2 && value[:2] == "0x" {
+		base = 16
+		parseValue = value[2:] // Remove 0x prefix for parsing
+	}
+
 	// Parse the numeric value using big.Int for full range support
 	bigNum := new(big.Int)
-	if _, ok := bigNum.SetString(value, 10); !ok {
+	if _, ok := bigNum.SetString(parseValue, base); !ok {
 		a.addError(fmt.Sprintf("invalid numeric literal '%s'", value), pos)
 		return
 	}
 
 	// Check if the value fits within the declared type's range
-	var maxValue *big.Int
-	var typeName string
-
-	switch declaredType.Name {
-	case "U8":
-		maxValue = big.NewInt(255) // 2^8 - 1
-		typeName = "U8"
-	case "U16":
-		maxValue = big.NewInt(65535) // 2^16 - 1
-		typeName = "U16"
-	case "U32":
-		maxValue = big.NewInt(4294967295) // 2^32 - 1
-		typeName = "U32"
-	case "U64":
-		maxValue = new(big.Int)
-		maxValue.SetString("18446744073709551615", 10) // 2^64 - 1
-		typeName = "U64"
-	case "U128":
-		maxValue = new(big.Int)
-		maxValue.SetString("340282366920938463463374607431768211455", 10) // 2^128 - 1
-		typeName = "U128"
-	case "U256":
-		maxValue = new(big.Int)
-		maxValue.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1
-		typeName = "U256"
-	default:
+	maxValue := a.getTypeMaxValue(declaredType.Name)
+	if maxValue == nil {
 		// Non-numeric type or unknown type - no range validation needed
 		return
 	}
+	typeName := declaredType.Name
 
 	// Check if the value is negative (not allowed for unsigned types)
 	if bigNum.Sign() < 0 {
@@ -521,16 +506,5 @@ func (a *Analyzer) checkMutabilityShadowing(letStmt *ast.LetStmt) {
 		a.addError(fmt.Sprintf("variable '%s' shadows existing variable with different mutability", varName), letStmt.NodePos())
 	}
 
-	// Validate that mutable variables are used in contexts where mutability makes sense
-	if letStmt.Mut {
-		// Track mutable variable usage for analysis
-		a.trackMutableVariableDeclaration(varName, letStmt.NodePos())
-	}
-}
-
-// trackMutableVariableDeclaration tracks the declaration of mutable variables
-func (a *Analyzer) trackMutableVariableDeclaration(varName string, pos ast.Position) {
-	// This could be enhanced to track mutable variable usage patterns
-	// and warn about unused mutability or unnecessary mutations
-	// TODO: Implement tracking logic if needed
+	// Note: Mutable variable usage tracking could be added here for optimization warnings
 }

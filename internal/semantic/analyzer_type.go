@@ -101,8 +101,8 @@ func (a *Analyzer) inferLiteralType(value string) *stdlib.TypeRef {
 		return stdlib.AddressType()
 	}
 
-	// Numeric literal inference with size-aware defaults
-	if len(value) > 0 && (value[0] >= '0' && value[0] <= '9') {
+	// Numeric literal inference with size-aware defaults (decimal and hex)
+	if a.isNumericLiteral(value) {
 		// Choose the smallest type for immutable context, U256 for mutable context
 		return a.inferNumericLiteralType(value, ast.Position{})
 	}
@@ -219,10 +219,8 @@ func (a *Analyzer) inferExpressionTypeWithContext(expr ast.Expr, expectedType *s
 	return a.inferExpressionType(expr)
 }
 
-// attemptTypeInferenceRecovery tries to recover type information when initial inference fails
+// attemptTypeInferenceRecovery provides fallback type inference for complex expressions
 func (a *Analyzer) attemptTypeInferenceRecovery(expr ast.Expr) *stdlib.TypeRef {
-	// This method provides fallback type inference for complex cases
-	// where the primary inference might fail
 
 	switch node := expr.(type) {
 	case *ast.BinaryExpr:
@@ -260,8 +258,16 @@ func (a *Analyzer) attemptTypeInferenceRecovery(expr ast.Expr) *stdlib.TypeRef {
 
 // inferNumericLiteralType chooses the smallest unsigned integer type that can hold a numeric literal.
 func (a *Analyzer) inferNumericLiteralType(value string, pos ast.Position) *stdlib.TypeRef {
+	// Determine base: hexadecimal (0x prefix) or decimal
+	base := 10
+	parseValue := value
+	if len(value) >= 2 && value[:2] == "0x" {
+		base = 16
+		parseValue = value[2:] // Remove 0x prefix for parsing
+	}
+
 	// First attempt: parse as uint64 to handle common cases efficiently
-	if num, err := strconv.ParseUint(value, 10, 64); err == nil {
+	if num, err := strconv.ParseUint(parseValue, base, 64); err == nil {
 		// Select the minimal type based on standard bit boundaries
 		switch {
 		case num <= 255:
@@ -277,20 +283,14 @@ func (a *Analyzer) inferNumericLiteralType(value string, pos ast.Position) *stdl
 
 	// Second attempt: handle values larger than uint64 using big.Int
 	bigNum := new(big.Int)
-	if _, ok := bigNum.SetString(value, 10); ok {
-		// U128 max: 2^128 - 1
-		u128Max := new(big.Int)
-		u128Max.SetString("340282366920938463463374607431768211455", 10)
-
-		if bigNum.Cmp(u128Max) <= 0 {
+	if _, ok := bigNum.SetString(parseValue, base); ok {
+		// Check U128 range
+		if u128Max := a.getTypeMaxValue("U128"); u128Max != nil && bigNum.Cmp(u128Max) <= 0 {
 			return stdlib.U128Type()
 		}
 
-		// U256 max: 2^256 - 1
-		u256Max := new(big.Int)
-		u256Max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
-
-		if bigNum.Cmp(u256Max) <= 0 {
+		// Check U256 range
+		if u256Max := a.getTypeMaxValue("U256"); u256Max != nil && bigNum.Cmp(u256Max) <= 0 {
 			return stdlib.U256Type()
 		}
 

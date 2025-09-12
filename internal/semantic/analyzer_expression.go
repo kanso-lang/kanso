@@ -130,8 +130,7 @@ func (a *Analyzer) analyzeBinaryExpression(binExpr *ast.BinaryExpr) {
 	a.analyzeExpression(binExpr.Left)
 	a.analyzeExpression(binExpr.Right)
 
-	// The type inference already handles most validation, but we can add
-	// additional semantic checks here if needed
+	// Additional semantic checks can be added here if needed
 	leftType := a.inferExpressionType(binExpr.Left)
 	rightType := a.inferExpressionType(binExpr.Right)
 
@@ -145,8 +144,6 @@ func (a *Analyzer) analyzeBinaryExpression(binExpr *ast.BinaryExpr) {
 // analyzeUnaryExpression provides unary operation validation
 func (a *Analyzer) analyzeUnaryExpression(unExpr *ast.UnaryExpr) {
 	a.analyzeExpression(unExpr.Value)
-
-	// TODO check if this method is needed
 }
 
 // analyzeIdentExpression validates identifier references
