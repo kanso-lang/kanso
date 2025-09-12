@@ -1314,3 +1314,56 @@ func TestUninitializedVariables(t *testing.T) {
 		assert.Empty(t, errors, "Should have no semantic errors for immutable variables")
 	})
 }
+
+func TestVariableScopingWithComplexExpressions(t *testing.T) {
+	t.Run("VariableUsedAfterDeclarationWithComplexExpression", func(t *testing.T) {
+		// This test reproduces the bug from ERC20 example where a variable declared
+		// with a complex expression (storage access) is not found in subsequent statements
+		source := `contract Test {
+			use std::evm::{sender};
+			use std::errors;
+
+			#[storage]
+			struct State {
+				allowances: Slots<(Address, Address), U256>,
+			}
+
+			ext fn test(from: Address, amount: U256) -> Bool reads State {
+				let allowance = State.allowances[(from, sender())];
+				require!(amount <= allowance, errors::InsufficientAllowance);
+				true
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// This should pass but currently fails with "undefined variable 'allowance'"
+		assert.Empty(t, errors, "Variable declared with complex expression should be accessible in subsequent statements")
+	})
+
+	t.Run("VariableUsedAfterSimpleDeclaration", func(t *testing.T) {
+		// This test confirms simple variable declarations work fine
+		source := `contract Test {
+			use std::errors;
+
+			ext fn test(amount: U256) -> Bool {
+				let allowance = 100;
+				require!(amount <= allowance, errors::InsufficientAllowance);
+				true
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// This should work and currently does
+		assert.Empty(t, errors, "Simple variable declarations should work fine")
+	})
+}

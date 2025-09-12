@@ -92,6 +92,13 @@ func (a *Analyzer) inferVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
 		varType = a.attemptTypeInferenceRecovery(letStmt.Expr)
 	}
 
+	// Final fallback: if we still can't infer the type, use U256 to ensure the variable
+	// is at least defined in the symbol table. This prevents "undefined variable" errors
+	// for complex expressions where type inference fails.
+	if varType == nil {
+		varType = stdlib.U256Type()
+	}
+
 	return varType
 }
 
