@@ -9,6 +9,7 @@ import (
 	"kanso/internal/semantic"
 	"os"
 	"strings"
+	"time"
 )
 
 func main() {
@@ -17,6 +18,7 @@ func main() {
 		os.Exit(1)
 	}
 
+	startTime := time.Now()
 	path := os.Args[1]
 
 	source, err := os.ReadFile(path)
@@ -54,13 +56,32 @@ func main() {
 		}
 	}
 
+	// Calculate processing time
+	duration := time.Since(startTime)
+	formattedDuration := formatDuration(duration)
+
 	// Only print AST and success message if no errors
 	if !hasErrors {
 		fmt.Println(contract.String())
-		color.Green("✅ Successfully processed %s", path)
+		color.Green("Successfully processed %s in %s", path, formattedDuration)
 	} else {
-		color.Red("❌ Compilation failed")
+		color.Red("Compilation failed after %s", formattedDuration)
 		os.Exit(1)
+	}
+}
+
+func formatDuration(d time.Duration) string {
+	switch {
+	case d >= time.Minute:
+		return fmt.Sprintf("%.2fmin", d.Minutes())
+	case d >= time.Second:
+		return fmt.Sprintf("%.2fs", d.Seconds())
+	case d >= time.Millisecond:
+		return fmt.Sprintf("%.1fms", float64(d.Nanoseconds())/1000000.0)
+	case d >= time.Microsecond:
+		return fmt.Sprintf("%.1fμs", float64(d.Nanoseconds())/1000.0)
+	default:
+		return fmt.Sprintf("%dns", d.Nanoseconds())
 	}
 }
 
