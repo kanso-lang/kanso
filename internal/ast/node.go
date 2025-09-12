@@ -99,6 +99,10 @@ func (r *RequireStmt) NodePos() Position    { return r.Pos }
 func (r *RequireStmt) NodeEndPos() Position { return r.EndPos }
 func (*RequireStmt) NodeType() NodeType     { return REQUIRE_STMT }
 
+func (i *IfStmt) NodePos() Position    { return i.Pos }
+func (i *IfStmt) NodeEndPos() Position { return i.EndPos }
+func (*IfStmt) NodeType() NodeType     { return IF_STMT }
+
 func (b *BinaryExpr) NodePos() Position    { return b.Pos }
 func (b *BinaryExpr) NodeEndPos() Position { return b.EndPos }
 func (*BinaryExpr) NodeType() NodeType     { return BINARY_EXPR }
@@ -214,6 +218,9 @@ func (a *AssignStmt) SetMetadata(m *Metadata) { a.metadata = m }
 
 func (r *RequireStmt) GetMetadata() *Metadata  { return r.metadata }
 func (r *RequireStmt) SetMetadata(m *Metadata) { r.metadata = m }
+
+func (i *IfStmt) GetMetadata() *Metadata  { return i.metadata }
+func (i *IfStmt) SetMetadata(m *Metadata) { i.metadata = m }
 
 func (b *BinaryExpr) GetMetadata() *Metadata  { return b.metadata }
 func (b *BinaryExpr) SetMetadata(m *Metadata) { b.metadata = m }

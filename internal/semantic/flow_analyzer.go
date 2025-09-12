@@ -58,7 +58,9 @@ func (fa *FlowAnalyzer) AnalyzeFunction(fn *ast.Function) AnalysisResult {
 		if fn.Return != nil && !fa.hasReturn {
 			// Tail expressions serve as implicit returns in functional style, eliminating need for explicit return
 			if fn.Body.TailExpr == nil {
-				fa.analyzer.addCompilerError(errors.MissingReturn(fn.Body.EndPos))
+				functionName := fn.Name.Value
+				returnType := fn.Return.String()
+				fa.analyzer.addCompilerError(errors.MissingReturn(functionName, returnType, fn.Body.EndPos))
 			}
 		}
 	}
@@ -128,6 +130,11 @@ func (fa *FlowAnalyzer) analyzeStatement(stmt ast.FunctionBlockItem) {
 		for _, arg := range node.Args {
 			fa.analyzeExpression(arg)
 		}
+
+	case *ast.IfStmt:
+		// Control flow analysis for conditionals is essential for detecting
+		// missing return statements and unreachable code in smart contracts
+		fa.analyzeIfStatement(node)
 	}
 }
 
@@ -264,6 +271,57 @@ func stringContains(haystack, needle string) bool {
 		}
 	}
 	return false
+}
+
+// analyzeIfStatement performs control flow analysis on conditional statements.
+//
+// 1. Functions that declare return types MUST return on all execution paths
+// 2. Missing returns can lead to undefined behavior or compilation failures
+// 3. In blockchain contexts, undefined behavior can result in gas wastage or failed transactions
+//
+// The algorithm implements standard control flow analysis:
+// - A conditional with both then/else branches that return guarantees a return
+// - A conditional with missing else branch cannot guarantee a return (execution might skip the if)
+// - Nested conditionals are analyzed recursively with proper state tracking
+func (fa *FlowAnalyzer) analyzeIfStatement(ifStmt *ast.IfStmt) {
+	// Validate the condition expression for reachability and semantic correctness
+	fa.analyzeExpression(ifStmt.Condition)
+
+	// Preserve current flow state to restore later - this enables analysis of
+	// code that comes after the if statement
+	savedHasReturn := fa.hasReturn
+	savedAfterReturn := fa.afterReturn
+
+	// Analyze then branch in isolation to determine its return characteristics
+	fa.hasReturn = false
+	fa.afterReturn = false
+	fa.analyzeFunctionBlock(&ifStmt.ThenBlock)
+	thenHasReturn := fa.hasReturn
+	thenAfterReturn := fa.afterReturn
+
+	// Analyze else branch (if present) with the same isolation approach
+	var elseHasReturn, elseAfterReturn bool
+	if ifStmt.ElseBlock != nil {
+		fa.hasReturn = false
+		fa.afterReturn = false
+		fa.analyzeFunctionBlock(ifStmt.ElseBlock)
+		elseHasReturn = fa.hasReturn
+		elseAfterReturn = fa.afterReturn
+	}
+
+	// Apply control flow logic to determine the overall effect of this conditional:
+	// - Both branches must return for the conditional to guarantee a return
+	// - Missing else clause means execution can bypass the conditional entirely
+	if ifStmt.ElseBlock != nil && thenHasReturn && elseHasReturn {
+		// Complete if-else with both branches returning - this guarantees a return
+		fa.hasReturn = true
+		fa.afterReturn = thenAfterReturn && elseAfterReturn
+	} else {
+		// Incomplete branching or missing returns - execution can continue past this conditional
+		// Restore the previous state since this conditional doesn't guarantee termination
+		fa.hasReturn = savedHasReturn
+		fa.afterReturn = savedAfterReturn
+	}
 }
 
 // addError adds a flow analysis error

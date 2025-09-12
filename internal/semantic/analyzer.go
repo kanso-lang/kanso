@@ -5,6 +5,8 @@ import (
 	"kanso/internal/ast"
 	"kanso/internal/errors"
 	"kanso/internal/stdlib"
+	"math/big"
+	"strconv"
 )
 
 // Attribute validation maps ensure only semantically meaningful attributes are accepted.
@@ -141,7 +143,9 @@ func (a *Analyzer) analyzeStruct(s *ast.Struct) {
 	}
 
 	a.validateStructAttributes(s)
-	a.symbols.Define(s.Name.Value, SymbolStruct, s, s.NodePos())
+	// Structs should have type information so they can be used in field access expressions
+	structType := &stdlib.TypeRef{Name: s.Name.Value, IsGeneric: false}
+	a.symbols.DefineWithType(s.Name.Value, SymbolStruct, s, s.NodePos(), structType)
 }
 
 func (a *Analyzer) validateStructAttributes(s *ast.Struct) {
@@ -277,15 +281,7 @@ func (a *Analyzer) analyzeFunctionBody(fn *ast.Function) {
 		}
 	}
 
-	// Analyze all items in the function body
-	for _, item := range fn.Body.Items {
-		a.analyzeFunctionBlockItem(item)
-	}
-
-	// Analyze tail expression if present
-	if fn.Body.TailExpr != nil {
-		a.analyzeExpression(fn.Body.TailExpr.Expr)
-	}
+	a.analyzeFunctionBlock(fn.Body)
 
 	// Perform flow control analysis
 	flowAnalyzer := NewFlowAnalyzer(a)
@@ -312,7 +308,10 @@ func (a *Analyzer) analyzeFunctionBlockItem(item ast.FunctionBlockItem) {
 		}
 	case *ast.AssignStmt:
 		a.analyzeAssignStatement(node)
-		// Add other statement types as needed
+	case *ast.IfStmt:
+		// If statements require full semantic analysis of their conditional logic
+		// and all nested statements to ensure contract safety and correctness
+		a.analyzeIfStatement(node)
 	}
 }
 
@@ -326,6 +325,8 @@ func (a *Analyzer) analyzeExpression(expr ast.Expr) {
 		a.analyzeCallExpression(node)
 	case *ast.FieldAccessExpr:
 		a.analyzeExpression(node.Target)
+		// Validate field access for semantic correctness
+		a.analyzeFieldAccess(node)
 	case *ast.IndexExpr:
 		a.analyzeIndexExpression(node)
 	case *ast.StructLiteralExpr:
@@ -455,14 +456,12 @@ func (a *Analyzer) validateModuleFunctionCall(callee *ast.CalleePath, call *ast.
 			continue
 		}
 	}
-
-	// TODO: Handle generics (next step)
 }
 
 // validateArgumentType validates that an argument expression matches the expected parameter type
 func (a *Analyzer) validateArgumentType(arg ast.Expr, expectedType *stdlib.TypeRef, pos ast.Position) bool {
-	// Get the inferred type of the argument expression
-	argType := a.inferExpressionType(arg)
+	// Get the inferred type of the argument expression with contextual hint
+	argType := a.inferExpressionTypeWithContext(arg, expectedType)
 	if argType == nil {
 		// Cannot infer type - for now, allow it (could be improved later)
 		return true
@@ -470,6 +469,12 @@ func (a *Analyzer) validateArgumentType(arg ast.Expr, expectedType *stdlib.TypeR
 
 	// Check if types match
 	if !a.typesMatch(argType, expectedType) {
+		// Allow numeric type promotion for compatibility
+		if a.isNumericType(argType) && a.isNumericType(expectedType) {
+			if a.canPromoteType(argType, expectedType) {
+				return true // Allow promotion
+			}
+		}
 		a.addError(fmt.Sprintf("argument type %s does not match expected type %s",
 			a.typeToString(argType), a.typeToString(expectedType)), pos)
 		return false
@@ -478,52 +483,88 @@ func (a *Analyzer) validateArgumentType(arg ast.Expr, expectedType *stdlib.TypeR
 	return true
 }
 
+// inferExpressionType performs comprehensive type inference for complex expressions
+// It handles nested expressions, type coercion, and provides error recovery
 func (a *Analyzer) inferExpressionType(expr ast.Expr) *stdlib.TypeRef {
+	if expr == nil {
+		return nil
+	}
+
 	switch node := expr.(type) {
 	case *ast.LiteralExpr:
 		return a.inferLiteralType(node.Value)
 	case *ast.IdentExpr:
-		if node.Name == "true" || node.Name == "false" {
-			return stdlib.BoolType()
-		}
-		// Prioritize struct types to enable State.field syntax
-		if a.context.IsUserDefinedType(node.Name) {
-			return &stdlib.TypeRef{Name: node.Name, IsGeneric: false}
-		}
-		// Check variables (parameters, local variables)
-		if symbol := a.symbols.Lookup(node.Name); symbol != nil {
-			return symbol.Type
-		}
-		// Check imported functions
-		if funcDef := a.context.GetFunctionDefinition(node.Name); funcDef != nil {
-			return funcDef.ReturnType
-		}
-		return nil
+		return a.inferIdentifierType(node)
 	case *ast.CallExpr:
 		return a.inferCallExpressionType(node)
 	case *ast.FieldAccessExpr:
-		return a.analyzeFieldAccess(node)
+		return a.inferFieldAccessType(node)
+	case *ast.IndexExpr:
+		return a.inferIndexExpressionType(node)
 	case *ast.BinaryExpr:
 		return a.inferBinaryExpressionType(node)
 	case *ast.UnaryExpr:
 		return a.inferUnaryExpressionType(node)
 	case *ast.ParenExpr:
 		return a.inferExpressionType(node.Value)
+	case *ast.StructLiteralExpr:
+		return a.inferStructLiteralType(node)
+	case *ast.TupleExpr:
+		return a.inferTupleExpressionType(node)
 	default:
+		// Unknown expression type - return nil for graceful degradation
 		return nil
 	}
 }
 
+// inferIdentifierType handles type inference for identifier expressions
+func (a *Analyzer) inferIdentifierType(node *ast.IdentExpr) *stdlib.TypeRef {
+	if node.Name == "true" || node.Name == "false" {
+		return stdlib.BoolType()
+	}
+
+	// Check variables first (parameters, local variables) for most specific type info
+	if symbol := a.symbols.Lookup(node.Name); symbol != nil {
+		return symbol.Type
+	}
+
+	// Check user-defined types (structs) to enable State.field syntax
+	if a.context.IsUserDefinedType(node.Name) {
+		return &stdlib.TypeRef{Name: node.Name, IsGeneric: false}
+	}
+
+	// Check imported function return types
+	if funcDef := a.context.GetFunctionDefinition(node.Name); funcDef != nil {
+		return funcDef.ReturnType
+	}
+
+	return nil
+}
+
+// inferLiteralType provides enhanced literal type inference with better numeric type detection
 func (a *Analyzer) inferLiteralType(value string) *stdlib.TypeRef {
 	if value == "true" || value == "false" {
 		return stdlib.BoolType()
 	}
-	if value == "0x0" {
+	// Enhanced address detection for various formats
+	if value == "0x0" || (len(value) >= 2 && value[:2] == "0x" && len(value) == 42) {
 		return stdlib.AddressType()
 	}
-	// Default numeric literals to U64 as it matches most standard library
-	// function signatures and avoids excessive type annotation requirements
-	return stdlib.U64Type()
+
+	// Numeric literal inference with size-aware defaults
+	if len(value) > 0 && (value[0] >= '0' && value[0] <= '9') {
+		// Choose the smallest type for immutable context, U256 for mutable context
+		return a.inferNumericLiteralType(value, ast.Position{})
+	}
+
+	// String literals (quoted)
+	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+		return &stdlib.TypeRef{Name: "String", IsGeneric: false}
+	}
+
+	// Default fallback for unknown literals
+	// For EVM compatibility, default to U256 as it's the native word size
+	return stdlib.U256Type()
 }
 
 // inferCallExpressionType infers the return type of a function call
@@ -605,11 +646,40 @@ func (a *Analyzer) analyzeLetStatement(letStmt *ast.LetStmt) {
 		return
 	}
 
+	// Enhanced mutability analysis
+	a.mutabilityAnalysis(letStmt)
+
 	var varType *stdlib.TypeRef
 
-	if letStmt.Expr != nil {
+	// Kanso semantics for variable initialization:
+	// - Immutable variables (let) MUST be initialized at declaration
+	// - Mutable variables (let mut) can be uninitialized and default to zero value
+	//
+	// NOTE: Current parser requires initialization for all variables.
+	// When parser supports "let mut x: Type;" syntax, this code will handle zero values.
+	// For now, Expr is always non-nil due to parser requirements.
+
+	if letStmt.Expr == nil {
+		// This branch is currently unreachable due to parser limitations
+		// When supported: "let mut counter: U32;" would default to 0
+		if !letStmt.Mut {
+			// Immutable variables MUST be initialized at declaration
+			a.addError(fmt.Sprintf("immutable variable '%s' must be initialized at declaration", letStmt.Name.Value), letStmt.NodePos())
+			return
+		}
+		// TODO: When LetStmt has Type field, use it for zero value type
+		// varType = a.resolveVariableType(letStmt.Type)
+	} else {
 		a.analyzeExpression(letStmt.Expr)
-		varType = a.inferExpressionType(letStmt.Expr)
+
+		// Use mutability context for better type inference
+		varType = a.inferExpressionTypeForVariable(letStmt.Expr, letStmt.Mut)
+
+		// Enhanced type inference validation
+		if varType == nil {
+			// Try to infer a more specific type if possible
+			varType = a.attemptTypeInferenceRecovery(letStmt.Expr)
+		}
 	}
 
 	// Register variable with mutability flag for assignment validation
@@ -626,7 +696,7 @@ func (a *Analyzer) analyzeAssignStatement(assignStmt *ast.AssignStmt) {
 		if symbol := a.symbols.Lookup(identExpr.Name); symbol != nil {
 			// Immutability prevents accidental state changes that could break contract invariants
 			if symbol.Kind == SymbolVariable && !symbol.Mutable {
-				a.addCompilerError(errors.InvalidAssignment(fmt.Sprintf("cannot assign to immutable variable '%s'", identExpr.Name), assignStmt.NodePos()))
+				a.addImmutableVariableAssignmentError(identExpr.Name, assignStmt.NodePos())
 			}
 		} else {
 			a.addUndefinedVariableError(identExpr.Name, assignStmt.NodePos())
@@ -667,6 +737,47 @@ func (a *Analyzer) validateAssignmentTarget(target ast.Expr, pos ast.Position) {
 	}
 }
 
+// analyzeIfStatement performs semantic analysis on conditional statements.
+//
+// 1. Ensures all variable references in conditions are valid and in scope
+// 2. Validates that assignments within conditional blocks respect mutability rules
+// 3. Enables detection of unreachable code and missing return paths
+// 4. Maintains symbol table consistency across branching execution paths
+//
+// The recursive analysis of nested blocks ensures that even deeply nested
+// conditional logic (common in complex access control) is fully validated.
+func (a *Analyzer) analyzeIfStatement(ifStmt *ast.IfStmt) {
+	// Validate condition expression - must be semantically valid and type-checked
+	// Common condition errors: undefined variables, type mismatches, invalid operations
+	a.analyzeExpression(ifStmt.Condition)
+
+	// Process then block with full semantic analysis
+	// This catches mutability violations, undefined variables, and type errors
+	// that occur within the conditional branch
+	a.analyzeFunctionBlock(&ifStmt.ThenBlock)
+
+	// Process optional else block with same rigor
+	// Maintaining consistency between branches is crucial for predictable contract behavior
+	if ifStmt.ElseBlock != nil {
+		a.analyzeFunctionBlock(ifStmt.ElseBlock)
+	}
+}
+
+// analyzeFunctionBlock provides centralized block analysis to ensure consistent
+// semantic validation across all block types (functions, if statements, loops, etc.)
+func (a *Analyzer) analyzeFunctionBlock(block *ast.FunctionBlock) {
+	// Analyze all statements in the block for semantic correctness
+	for _, item := range block.Items {
+		a.analyzeFunctionBlockItem(item)
+	}
+
+	// Handle tail expressions (Rust-style implicit returns)
+	// These are semantically significant as they can affect return type checking
+	if block.TailExpr != nil {
+		a.analyzeExpression(block.TailExpr.Expr)
+	}
+}
+
 func (a *Analyzer) analyzeFieldAccess(fieldExpr *ast.FieldAccessExpr) *stdlib.TypeRef {
 	targetType := a.inferExpressionType(fieldExpr.Target)
 
@@ -682,6 +793,34 @@ func (a *Analyzer) analyzeFieldAccess(fieldExpr *ast.FieldAccessExpr) *stdlib.Ty
 	}
 
 	return a.validateStructField(structDef, fieldExpr.Field, fieldExpr.NodePos())
+}
+
+// inferFieldAccessType handles type inference for field access without validation
+// This is used by the type inference system to avoid duplicate error reporting
+func (a *Analyzer) inferFieldAccessType(fieldExpr *ast.FieldAccessExpr) *stdlib.TypeRef {
+	targetType := a.inferExpressionType(fieldExpr.Target)
+
+	if targetType == nil {
+		return nil // Cannot infer without knowing target type
+	}
+
+	// Get struct definition for type inference
+	structDef := a.context.GetUserDefinedType(targetType.Name)
+	if structDef == nil {
+		return nil // Not a struct type
+	}
+
+	// Find field type without generating errors
+	for _, item := range structDef.Items {
+		if field, ok := item.(*ast.StructField); ok {
+			if field.Name.Value == fieldExpr.Field {
+				return a.resolveVariableType(field.VariableType)
+			}
+		}
+	}
+
+	// Field not found, return nil
+	return nil
 }
 
 func (a *Analyzer) validateStructField(structNode *ast.Struct, fieldName string, pos ast.Position) *stdlib.TypeRef {
@@ -1086,6 +1225,17 @@ func (a *Analyzer) addFieldNotFoundError(structName, fieldName string, pos ast.P
 	a.addCompilerError(err)
 }
 
+func (a *Analyzer) addImmutableVariableAssignmentError(varName string, pos ast.Position) {
+	// Provide specific help for making variables mutable
+	err := errors.NewSemanticError(errors.ErrorInvalidAssignment,
+		fmt.Sprintf("cannot assign to immutable variable '%s'", varName), pos).
+		WithHelp(fmt.Sprintf("variable '%s' is declared as immutable", varName)).
+		WithSuggestion(fmt.Sprintf("change 'let %s' to 'let mut %s' to make it mutable", varName, varName)).
+		WithNote("only variables declared with 'let mut' can be reassigned").
+		Build()
+	a.addCompilerError(err)
+}
+
 // Helper methods for finding similar names and suggestions
 
 func (a *Analyzer) findSimilarVariables(name string) []string {
@@ -1202,4 +1352,251 @@ func min3(a, b, c int) int {
 		return b
 	}
 	return c
+}
+
+// inferNumericLiteralType chooses the smallest unsigned integer type that can hold a numeric literal.
+func (a *Analyzer) inferNumericLiteralType(value string, pos ast.Position) *stdlib.TypeRef {
+	// First attempt: parse as uint64 to handle common cases efficiently
+	if num, err := strconv.ParseUint(value, 10, 64); err == nil {
+		// Select the minimal type based on standard bit boundaries
+		switch {
+		case num <= 255:
+			return stdlib.U8Type()
+		case num <= 65535:
+			return stdlib.U16Type()
+		case num <= 4294967295:
+			return stdlib.U32Type()
+		default:
+			return stdlib.U64Type()
+		}
+	}
+
+	// Second attempt: handle values larger than uint64 using big.Int
+	bigNum := new(big.Int)
+	if _, ok := bigNum.SetString(value, 10); ok {
+		// U128 max: 2^128 - 1
+		u128Max := new(big.Int)
+		u128Max.SetString("340282366920938463463374607431768211455", 10)
+
+		if bigNum.Cmp(u128Max) <= 0 {
+			return stdlib.U128Type()
+		}
+
+		// U256 max: 2^256 - 1
+		u256Max := new(big.Int)
+		u256Max.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10)
+
+		if bigNum.Cmp(u256Max) <= 0 {
+			return stdlib.U256Type()
+		}
+
+		// Numeric literal exceeds U256 maximum - report error only if position is valid
+		if pos.Line > 0 && pos.Column > 0 {
+			a.addError(fmt.Sprintf("numeric literal '%s' exceeds maximum value for U256", value), pos)
+		}
+		return nil
+	}
+
+	// Invalid numeric literal format - report error only if position is valid
+	if pos.Line > 0 && pos.Column > 0 {
+		a.addError(fmt.Sprintf("invalid numeric literal '%s'", value), pos)
+	}
+	return nil
+}
+
+// inferIndexExpressionType handles type inference for array/mapping access
+func (a *Analyzer) inferIndexExpressionType(node *ast.IndexExpr) *stdlib.TypeRef {
+	targetType := a.inferExpressionType(node.Target)
+	if targetType == nil {
+		return nil
+	}
+
+	// Handle known indexable types
+	switch targetType.Name {
+	case "Slots":
+		// Slots<K, V> returns V
+		if len(targetType.GenericArgs) >= 2 {
+			return targetType.GenericArgs[1]
+		}
+	case "Table", "Map":
+		// Similar pattern for other container types
+		if len(targetType.GenericArgs) >= 2 {
+			return targetType.GenericArgs[1]
+		}
+	case "Array":
+		// Array<T> returns T
+		if len(targetType.GenericArgs) >= 1 {
+			return targetType.GenericArgs[0]
+		}
+	}
+
+	// For unknown indexable types, return nil
+	return nil
+}
+
+// inferStructLiteralType handles type inference for struct literals
+func (a *Analyzer) inferStructLiteralType(node *ast.StructLiteralExpr) *stdlib.TypeRef {
+	if node.Type == nil || len(node.Type.Parts) == 0 {
+		return nil
+	}
+
+	structName := node.Type.Parts[0].Value
+	if a.context.IsUserDefinedType(structName) {
+		return &stdlib.TypeRef{Name: structName, IsGeneric: false}
+	}
+
+	return nil
+}
+
+// inferTupleExpressionType handles type inference for tuple expressions
+func (a *Analyzer) inferTupleExpressionType(node *ast.TupleExpr) *stdlib.TypeRef {
+	// For now, we don't have a robust tuple type system
+	// This could be enhanced to return a tuple type with element types
+	return &stdlib.TypeRef{Name: "Tuple", IsGeneric: false}
+}
+
+// areComparableTypes checks if two types can be compared
+func (a *Analyzer) areComparableTypes(left, right *stdlib.TypeRef) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+
+	// Same types are always comparable
+	if a.typesMatch(left, right) {
+		return true
+	}
+
+	// Numeric types are comparable with each other
+	if a.isNumericType(left) && a.isNumericType(right) {
+		return true
+	}
+
+	// Bool types are comparable with each other
+	if a.isBoolType(left) && a.isBoolType(right) {
+		return true
+	}
+
+	return false
+}
+
+// isStringType checks if a type is a string type
+func (a *Analyzer) isStringType(typeRef *stdlib.TypeRef) bool {
+	return typeRef != nil && typeRef.Name == "String"
+}
+
+// mutabilityAnalysis provides comprehensive mutability checking for let mut variables
+func (a *Analyzer) mutabilityAnalysis(letStmt *ast.LetStmt) {
+	//  Mutability analysis that enforces Rust-like semantics:
+	// - Only variables declared with 'let mut' are mutable
+	// - Function parameters are always immutable
+	// - Reassignment is only allowed to mutable variables
+
+	varName := letStmt.Name.Value
+
+	// Check for variable shadowing with different mutability
+	if existing := a.symbols.Lookup(varName); existing != nil {
+		if existing.Kind == SymbolVariable && existing.Mutable != letStmt.Mut {
+			// Allow shadowing with consistent mutability warnings
+			a.addError(fmt.Sprintf("variable '%s' shadows existing variable with different mutability", varName), letStmt.NodePos())
+		}
+	}
+
+	// Validate that mutable variables are used in contexts where mutability makes sense
+	if letStmt.Mut {
+		// Track mutable variable usage for analysis
+		a.trackMutableVariableDeclaration(varName, letStmt.NodePos())
+	}
+}
+
+// trackMutableVariableDeclaration tracks the declaration of mutable variables
+func (a *Analyzer) trackMutableVariableDeclaration(varName string, pos ast.Position) {
+	// This could be enhanced to track mutable variable usage patterns
+	// and warn about unused mutability or unnecessary mutations
+}
+
+// attemptTypeInferenceRecovery tries to recover type information when initial inference fails
+func (a *Analyzer) attemptTypeInferenceRecovery(expr ast.Expr) *stdlib.TypeRef {
+	// This method provides fallback type inference for complex cases
+	// where the primary inference might fail
+
+	switch node := expr.(type) {
+	case *ast.BinaryExpr:
+		// Try to infer from context or operands
+		leftType := a.inferExpressionType(node.Left)
+		rightType := a.inferExpressionType(node.Right)
+
+		if leftType != nil {
+			return leftType
+		}
+		if rightType != nil {
+			return rightType
+		}
+
+		// Default fallback based on operation
+		switch node.Op {
+		case "==", "!=", "<", "<=", ">", ">=", "&&", "||":
+			return stdlib.BoolType()
+		case "+", "-", "*", "/", "%":
+			return stdlib.U256Type() // Safe default for EVM arithmetic
+		}
+
+	case *ast.CallExpr:
+		// For unknown function calls, try to infer from context
+		// This could be enhanced with more sophisticated heuristics
+		return nil
+
+	case *ast.LiteralExpr:
+		// Re-attempt literal inference with more permissive rules
+		return a.inferLiteralType(node.Value)
+	}
+
+	return nil
+}
+
+// inferExpressionTypeWithContext performs type inference with contextual hints for better accuracy
+func (a *Analyzer) inferExpressionTypeWithContext(expr ast.Expr, expectedType *stdlib.TypeRef) *stdlib.TypeRef {
+	if expr == nil {
+		return nil
+	}
+
+	// For numeric literals, use contextual type when available
+	if litExpr, ok := expr.(*ast.LiteralExpr); ok {
+		if a.isNumericLiteral(litExpr.Value) && expectedType != nil && a.isNumericType(expectedType) {
+			// Use the expected type for numeric literals in function calls
+			return expectedType
+		}
+	}
+
+	// For other expressions, fall back to regular type inference
+	return a.inferExpressionType(expr)
+}
+
+// isNumericLiteral checks if a string represents a numeric literal
+func (a *Analyzer) isNumericLiteral(value string) bool {
+	if len(value) == 0 {
+		return false
+	}
+	// Simple check: starts with digit
+	return value[0] >= '0' && value[0] <= '9'
+}
+
+// inferExpressionTypeForVariable performs type inference with mutability context
+// For immutable variables: choose smallest type that fits the literal value
+// For mutable variables: use U256 default since we don't know future assignments
+func (a *Analyzer) inferExpressionTypeForVariable(expr ast.Expr, isMutable bool) *stdlib.TypeRef {
+	// For numeric literals, consider mutability context
+	if litExpr, ok := expr.(*ast.LiteralExpr); ok {
+		if a.isNumericLiteral(litExpr.Value) {
+			if isMutable {
+				// Mutable variables default to U256 since we don't know future values
+				return stdlib.U256Type()
+			} else {
+				// Immutable variables can use the smallest type that fits
+				return a.inferNumericLiteralType(litExpr.Value, litExpr.NodePos())
+			}
+		}
+	}
+
+	// For other expressions, fall back to regular type inference
+	return a.inferExpressionType(expr)
 }

@@ -110,6 +110,9 @@ func (p *Parser) parseFunctionBlock() ast.FunctionBlock {
 		} else if p.check(REQUIRE) {
 			stmt := p.parseRequireStmt()
 			items = append(items, stmt)
+		} else if p.check(IF) {
+			stmt := p.parseIfStmt()
+			items = append(items, stmt)
 		} else if p.check(COMMENT) {
 			token := p.advance()
 			items = append(items, &ast.Comment{
@@ -324,5 +327,64 @@ func getExpressionType(expr ast.Expr) string {
 		return "binary expression"
 	default:
 		return "expression"
+	}
+}
+
+// parseIfStmt parses conditional branching statements with Rust-like syntax.
+//
+// Design decisions:
+//  1. Optional parentheses around conditions - improves readability for simple conditions
+//     while still supporting complex expressions that benefit from explicit grouping
+//  2. Mandatory braces around blocks - prevents dangling else ambiguity and enforces
+//     consistent code style, which is critical for smart contract clarity
+//  3. else-if chains are represented as nested IfStmt nodes - this simplifies the AST
+//     structure while maintaining semantic correctness for flow analysis
+func (p *Parser) parseIfStmt() *ast.IfStmt {
+	ifToken := p.consume(IF, "expected 'if'")
+	start := p.makePos(ifToken)
+
+	// Support both `if (condition)` and `if condition` for developer flexibility.
+	// Many developers coming from C-like languages expect parentheses, while
+	// Rust developers prefer the cleaner syntax without them.
+	var condition ast.Expr
+	if p.match(LEFT_PAREN) {
+		condition = p.parseExpr()
+		p.consume(RIGHT_PAREN, "expected ')' after if condition")
+	} else {
+		condition = p.parseExpr()
+	}
+
+	// Always require braced blocks to prevent ambiguous parsing and ensure
+	// that complex conditional logic is clearly delineated
+	thenBlock := p.parseFunctionBlock()
+	endPos := thenBlock.EndPos
+
+	// Handle optional else clause, including else-if chains
+	var elseBlock *ast.FunctionBlock
+	if p.match(ELSE) {
+		if p.check(IF) {
+			// Transform else-if into nested structure for simpler AST traversal.
+			// This design choice trades a slightly deeper tree for uniform handling
+			// of all conditional branches in semantic analysis.
+			nestedIf := p.parseIfStmt()
+			elseBlock = &ast.FunctionBlock{
+				Pos:    nestedIf.Pos,
+				EndPos: nestedIf.EndPos,
+				Items:  []ast.FunctionBlockItem{nestedIf},
+			}
+			endPos = nestedIf.EndPos
+		} else {
+			block := p.parseFunctionBlock()
+			elseBlock = &block
+			endPos = block.EndPos
+		}
+	}
+
+	return &ast.IfStmt{
+		Pos:       start,
+		EndPos:    endPos,
+		Condition: condition,
+		ThenBlock: thenBlock,
+		ElseBlock: elseBlock,
 	}
 }

@@ -277,6 +277,23 @@ func (r *RequireStmt) String() string {
 	return fmt.Sprintf("require!(%s);", strings.Join(args, ", "))
 }
 
+func (i *IfStmt) String() string {
+	var result strings.Builder
+
+	// Format: if condition {\n  statements\n}
+	result.WriteString(fmt.Sprintf("if %s {\n", i.Condition.String()))
+	result.WriteString(i.ThenBlock.StringIndented("  "))
+	result.WriteString("}")
+
+	if i.ElseBlock != nil {
+		result.WriteString(" else {\n")
+		result.WriteString(i.ElseBlock.StringIndented("  "))
+		result.WriteString("}")
+	}
+
+	return result.String()
+}
+
 func (b *BinaryExpr) String() string {
 	return fmt.Sprintf("(%s %s %s)", b.Left.String(), b.Op, b.Right.String())
 }

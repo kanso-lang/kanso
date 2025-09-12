@@ -263,3 +263,129 @@ func TestParseMissingContract(t *testing.T) {
 		assert.Len(t, contract.LeadingComments, 1, "Should capture the leading comment")
 	}
 }
+
+func TestParseIfStatement(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			if value > 0 {
+				return true;
+			}
+			return false;
+		}
+	}`
+
+	contract, parseErrors, _ := ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	fn := contract.Items[0].(*ast.Function)
+	ifStmt := fn.Body.Items[0].(*ast.IfStmt)
+
+	assert.NotNil(t, ifStmt, "Should parse if statement")
+	assert.NotNil(t, ifStmt.Condition, "Should have condition")
+	assert.NotNil(t, ifStmt.ThenBlock, "Should have then block")
+	assert.Nil(t, ifStmt.ElseBlock, "Should not have else block")
+	assert.Len(t, ifStmt.ThenBlock.Items, 1, "Then block should have one statement")
+}
+
+func TestParseIfElseStatement(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			if value > 0 {
+				return true;
+			} else {
+				return false;
+			}
+		}
+	}`
+
+	contract, parseErrors, _ := ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	fn := contract.Items[0].(*ast.Function)
+	ifStmt := fn.Body.Items[0].(*ast.IfStmt)
+
+	assert.NotNil(t, ifStmt, "Should parse if statement")
+	assert.NotNil(t, ifStmt.Condition, "Should have condition")
+	assert.NotNil(t, ifStmt.ThenBlock, "Should have then block")
+	assert.NotNil(t, ifStmt.ElseBlock, "Should have else block")
+	assert.Len(t, ifStmt.ThenBlock.Items, 1, "Then block should have one statement")
+	assert.Len(t, ifStmt.ElseBlock.Items, 1, "Else block should have one statement")
+}
+
+func TestParseIfElseIfStatement(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			if value > 100 {
+				return true;
+			} else if value > 50 {
+				return false;
+			} else {
+				return true;
+			}
+		}
+	}`
+
+	contract, parseErrors, _ := ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	fn := contract.Items[0].(*ast.Function)
+	ifStmt := fn.Body.Items[0].(*ast.IfStmt)
+
+	assert.NotNil(t, ifStmt, "Should parse if statement")
+	assert.NotNil(t, ifStmt.ElseBlock, "Should have else block for else if")
+
+	// The else if should be nested as another if statement in the else block
+	elseIfStmt := ifStmt.ElseBlock.Items[0].(*ast.IfStmt)
+	assert.NotNil(t, elseIfStmt, "Should have nested if statement for else if")
+	assert.NotNil(t, elseIfStmt.ElseBlock, "Nested if should have else block")
+}
+
+func TestParseIfWithoutParentheses(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			if value > 0 {
+				return true;
+			}
+			return false;
+		}
+	}`
+
+	contract, parseErrors, _ := ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should parse if without parentheses")
+
+	fn := contract.Items[0].(*ast.Function)
+	ifStmt := fn.Body.Items[0].(*ast.IfStmt)
+	assert.NotNil(t, ifStmt, "Should parse if statement without parentheses")
+}
+
+func TestParseNestedIfStatements(t *testing.T) {
+	source := `contract Test {
+		fn test(a: U256, b: U256) -> Bool {
+			if a > 0 {
+				if b > 0 {
+					return true;
+				} else {
+					return false;
+				}
+			}
+			return false;
+		}
+	}`
+
+	contract, parseErrors, _ := ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	fn := contract.Items[0].(*ast.Function)
+	outerIf := fn.Body.Items[0].(*ast.IfStmt)
+
+	assert.NotNil(t, outerIf, "Should parse outer if statement")
+	assert.Len(t, outerIf.ThenBlock.Items, 1, "Outer if should have one statement")
+
+	innerIf := outerIf.ThenBlock.Items[0].(*ast.IfStmt)
+	assert.NotNil(t, innerIf, "Should parse nested if statement")
+	assert.NotNil(t, innerIf.ElseBlock, "Inner if should have else block")
+}

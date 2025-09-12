@@ -310,3 +310,183 @@ func TestFlowAnalysisVoidFunction(t *testing.T) {
 			"Should not report missing return for void function")
 	}
 }
+
+func TestFlowAnalysisIfStatementCompleteReturns(t *testing.T) {
+	source := `contract Test {
+		ext fn complete_if(value: U256) -> Bool {
+			if value > 0 {
+				return true;
+			} else {
+				return false;
+			}
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should not report missing return since both branches return
+	foundMissingReturn := false
+	for _, err := range semanticErrors {
+		if contains(err.Message, "no return statement") {
+			foundMissingReturn = true
+		}
+	}
+	assert.False(t, foundMissingReturn, "Should not report missing return when all branches return")
+}
+
+func TestFlowAnalysisIfStatementIncompleteReturns(t *testing.T) {
+	source := `contract Test {
+		ext fn incomplete_if(value: U256) -> Bool {
+			if value > 0 {
+				return true;
+			}
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should report missing return since else clause is missing
+	foundMissingReturn := false
+	for _, err := range semanticErrors {
+		if contains(err.Message, "no return statement") {
+			foundMissingReturn = true
+		}
+	}
+	assert.True(t, foundMissingReturn, "Should report missing return when if has no else clause")
+}
+
+func TestFlowAnalysisNestedIfCompleteReturns(t *testing.T) {
+	source := `contract Test {
+		ext fn nested_complete(a: U256, b: U256) -> Bool {
+			if a > 0 {
+				if b > 0 {
+					return true;
+				} else {
+					return false;
+				}
+			} else {
+				if b > 0 {
+					return true;
+				} else {
+					return false;
+				}
+			}
+			// All nested branches return
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should not report missing return since all nested branches return
+	foundMissingReturn := false
+	for _, err := range semanticErrors {
+		if contains(err.Message, "no return statement") {
+			foundMissingReturn = true
+		}
+	}
+	assert.False(t, foundMissingReturn, "Should not report missing return when all nested branches return")
+}
+
+func TestFlowAnalysisNestedIfIncompleteReturns(t *testing.T) {
+	source := `contract Test {
+		ext fn nested_incomplete(a: U256, b: U256) -> Bool {
+			if a > 0 {
+				if b > 0 {
+					return true;
+				} else {
+					return false;
+				}
+			} else {
+				if b > 0 {
+					return true;
+				}
+				// Missing return for b <= 0 case in else branch
+			}
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should report missing return due to incomplete nested branch
+	foundMissingReturn := false
+	for _, err := range semanticErrors {
+		if contains(err.Message, "no return statement") {
+			foundMissingReturn = true
+		}
+	}
+	assert.True(t, foundMissingReturn, "Should report missing return when nested branch is incomplete")
+}
+
+func TestFlowAnalysisIfElseIfChain(t *testing.T) {
+	source := `contract Test {
+		ext fn if_else_if_complete(value: U256) -> Bool {
+			if value > 100 {
+				return true;
+			} else if value > 50 {
+				return false;
+			} else {
+				return true;
+			}
+			// Complete if-else if-else chain
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should not report missing return for complete if-else if-else chain
+	foundMissingReturn := false
+	for _, err := range semanticErrors {
+		if contains(err.Message, "no return statement") {
+			foundMissingReturn = true
+		}
+	}
+	assert.False(t, foundMissingReturn, "Should not report missing return for complete if-else if-else chain")
+}
+
+func TestFlowAnalysisIfElseIfIncomplete(t *testing.T) {
+	source := `contract Test {
+		ext fn if_else_if_incomplete(value: U256) -> Bool {
+			if value > 100 {
+				return true;
+			} else if value > 50 {
+				return false;
+			}
+			// Missing final else clause
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	semanticErrors := analyzer.Analyze(contract)
+
+	// Should report missing return for incomplete if-else if chain
+	foundMissingReturn := false
+	for _, err := range semanticErrors {
+		if contains(err.Message, "no return statement") {
+			foundMissingReturn = true
+		}
+	}
+	assert.True(t, foundMissingReturn, "Should report missing return for incomplete if-else if chain")
+}

@@ -315,10 +315,12 @@ func levenshteinDistance(a, b string) int {
 // Flow control error functions
 
 // MissingReturn creates an error for functions that declare a return type but have no return statement
-func MissingReturn(pos ast.Position) CompilerError {
-	return NewSemanticError(ErrorMissingReturn, "function declares return type but has no return statement", pos).
-		WithSuggestion("add a return statement").
+func MissingReturn(functionName, returnType string, pos ast.Position) CompilerError {
+	message := fmt.Sprintf("function '%s' declares return type '%s' but has no return statement", functionName, returnType)
+	return NewSemanticError(ErrorMissingReturn, message, pos).
+		WithSuggestion(fmt.Sprintf("add a return statement that returns a value of type '%s'", returnType)).
 		WithSuggestion("or add a tail expression (expression without semicolon at the end)").
+		WithHelp("functions with return types must return a value on all execution paths").
 		Build()
 }
 

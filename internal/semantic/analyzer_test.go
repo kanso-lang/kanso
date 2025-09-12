@@ -969,3 +969,164 @@ func TestNumericTypePromotion(t *testing.T) {
 	errors := analyzer.Analyze(contract)
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
+
+func TestNumericLiteralValidation(t *testing.T) {
+	t.Run("ValidNumericLiterals", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				// Valid numeric literals within range
+				let u8_max = 255;
+				let u16_max = 65535;
+				let u32_max = 4294967295;
+				let u64_max = 18446744073709551615;
+				let u128_max = 340282366920938463463374607431768211455;
+				let u256_max = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
+			}
+		}`
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for valid numeric literals")
+	})
+
+	t.Run("NumericLiteralExceedsU256", func(t *testing.T) {
+		// U256 max + 1 should trigger an error
+		source := `contract Test {
+			fn test() {
+				let overflow = 115792089237316195423570985008687907853269984665640564039457584007913129639936;
+			}
+		}`
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Len(t, errors, 1, "Should have one semantic error for numeric literal overflow")
+		assert.Contains(t, errors[0].Message, "exceeds maximum value for U256")
+	})
+}
+
+func TestIfStatementBasicAnalysis(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			if value > 0 {
+				return true;
+			} else {
+				return false;
+			}
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+	assert.Empty(t, errors, "Should have no semantic errors")
+}
+
+func TestIfStatementImmutabilityError(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			let immutable_var = 100;
+			if value > 0 {
+				immutable_var = 200;  // Should trigger immutability error
+			}
+			return true;
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+	assert.Len(t, errors, 1, "Should have one immutability error")
+
+	compilerErrors := analyzer.GetErrors()
+	assert.Contains(t, compilerErrors[0].Message, "cannot assign to immutable variable")
+	assert.Contains(t, compilerErrors[0].Message, "immutable_var")
+}
+
+func TestIfStatementNestedImmutabilityError(t *testing.T) {
+	source := `contract Test {
+		fn test(a: U256, b: U256) -> Bool {
+			let immutable_var = 100;
+			if a > 0 {
+				if b > 0 {
+					immutable_var = 200;  // Should trigger error in nested if
+				} else {
+					immutable_var = 150;  // Should also trigger error in nested else
+				}
+			}
+			return true;
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+	assert.Len(t, errors, 2, "Should have two immutability errors from nested if")
+}
+
+func TestIfStatementMutableVariableAssignment(t *testing.T) {
+	source := `contract Test {
+		fn test(value: U256) -> Bool {
+			let mut mutable_var = 100;
+			if value > 0 {
+				mutable_var = 200;  // Should be allowed
+			} else {
+				mutable_var = 150;  // Should also be allowed
+			}
+			return true;
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+	assert.Empty(t, errors, "Should have no semantic errors for mutable variables")
+}
+
+func TestIfStatementExpressionAnalysis(t *testing.T) {
+	source := `contract Test {
+		fn test() -> Bool {
+			let value = 100;
+			if value > 0 {
+				let result = value + 50;  // Should analyze expressions in if blocks
+				return true;
+			}
+			return false;
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+	assert.Empty(t, errors, "Should have no semantic errors")
+}
+
+func TestIfStatementUndefinedVariableError(t *testing.T) {
+	source := `contract Test {
+		fn test() -> Bool {
+			if undefined_var > 0 {  // Should trigger undefined variable error
+				return true;
+			}
+			return false;
+		}
+	}`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+	assert.Len(t, errors, 1, "Should have one undefined variable error")
+}

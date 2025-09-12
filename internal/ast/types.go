@@ -46,6 +46,7 @@ const (
 	LET_STMT
 	ASSIGN_STMT
 	REQUIRE_STMT
+	IF_STMT
 
 	// Expressions
 	BINARY_EXPR

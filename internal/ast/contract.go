@@ -230,6 +230,22 @@ type RequireStmt struct {
 	metadata *Metadata
 }
 
+// IfStmt represents conditional branching in smart contract execution flow.
+//
+// The optional else clause enables comprehensive branch coverage analysis,
+// which is essential for ensuring all execution paths are safe and return appropriate values.
+type IfStmt struct {
+	Pos       Position
+	EndPos    Position
+	Condition Expr
+	ThenBlock FunctionBlock
+	// ElseBlock is nil for simple if statements without else clause.
+	// This distinction is crucial for flow analysis - without an else clause,
+	// execution can continue past the if statement, potentially missing returns.
+	ElseBlock *FunctionBlock
+	metadata  *Metadata
+}
+
 // BinaryExpr represents binary operations
 // Example: "amount + fee", "balance >= amount", "sender() != to"
 type BinaryExpr struct {
