@@ -48,12 +48,15 @@ jobs:
     - name: Run Go Tests
       run: go test ./...
 
+    - name: Setup Virtual Display
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+
     - name: Run Extension Tests
-      uses: coactions/setup-xvfb@v1
-      with:
-        run: |
-          cd ide/vscode-extension
-          npm test
+      run: |
+        cd ide/vscode-extension
+        xvfb-run -a npm test
 
     - name: Package Extension
       run: |
