@@ -239,8 +239,6 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 	// state the function accesses, and prevents accidental state access patterns
 	readStructs := make(map[string]bool)
 	for _, read := range fn.Reads {
-		// Storage validation is now handled by validateReadsReferences
-
 		if readStructs[read.Value] {
 			a.addError("duplicate reads clause for struct: "+read.Value, read.NodePos())
 		}
@@ -249,14 +247,14 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 
 	writeStructs := make(map[string]bool)
 	for _, write := range fn.Writes {
-		// Storage validation is now handled by validateWritesReferences
-
 		if writeStructs[write.Value] {
 			a.addError("duplicate writes clause for struct: "+write.Value, write.NodePos())
 		}
 		writeStructs[write.Value] = true
 
-		// Write implies read, so explicit read+write is redundant and potentially confusing
+		// Writing to storage requires reading it first (e.g., to update a map entry),
+		// so declaring both reads() and writes() for the same struct is redundant
+		// and suggests developer confusion about the access model
 		if readStructs[write.Value] {
 			a.addError("conflicting reads and writes clause for struct (write implies read): "+write.Value, write.NodePos())
 		}
@@ -309,8 +307,8 @@ func (a *Analyzer) analyzeFunctionBlockItem(item ast.FunctionBlockItem) {
 	case *ast.AssignStmt:
 		a.analyzeAssignStatement(node)
 	case *ast.IfStmt:
-		// If statements require full semantic analysis of their conditional logic
-		// and all nested statements to ensure contract safety and correctness
+		// Analyze all branches to catch errors like immutable assignments or
+		// undefined variables that only occur in conditional paths
 		a.analyzeIfStatement(node)
 	}
 }
@@ -640,100 +638,253 @@ func (a *Analyzer) typeToString(typeRef *stdlib.TypeRef) string {
 }
 
 func (a *Analyzer) analyzeLetStatement(letStmt *ast.LetStmt) {
-	// Prevent variable shadowing within the same scope to avoid confusion
-	if existing := a.symbols.LookupLocal(letStmt.Name.Value); existing != nil {
-		a.addError(fmt.Sprintf("variable '%s' is already declared in this scope", letStmt.Name.Value), letStmt.NodePos())
+	if a.checkVariableShadowing(letStmt) {
 		return
 	}
 
-	// Enhanced mutability analysis
-	a.mutabilityAnalysis(letStmt)
+	a.checkMutabilityShadowing(letStmt)
 
-	var varType *stdlib.TypeRef
-
-	// Kanso semantics for variable initialization:
-	// - Immutable variables (let) MUST be initialized at declaration
-	// - Mutable variables (let mut) can be uninitialized and default to zero value
-	//
-	// NOTE: Current parser requires initialization for all variables.
-	// When parser supports "let mut x: Type;" syntax, this code will handle zero values.
-	// For now, Expr is always non-nil due to parser requirements.
-
-	if letStmt.Expr == nil {
-		// This branch is currently unreachable due to parser limitations
-		// When supported: "let mut counter: U32;" would default to 0
-		if !letStmt.Mut {
-			// Immutable variables MUST be initialized at declaration
-			a.addError(fmt.Sprintf("immutable variable '%s' must be initialized at declaration", letStmt.Name.Value), letStmt.NodePos())
-			return
-		}
-		// TODO: When LetStmt has Type field, use it for zero value type
-		// varType = a.resolveVariableType(letStmt.Type)
-	} else {
-		a.analyzeExpression(letStmt.Expr)
-
-		// Use mutability context for better type inference
-		varType = a.inferExpressionTypeForVariable(letStmt.Expr, letStmt.Mut)
-
-		// Enhanced type inference validation
-		if varType == nil {
-			// Try to infer a more specific type if possible
-			varType = a.attemptTypeInferenceRecovery(letStmt.Expr)
-		}
+	varType := a.determineVariableType(letStmt)
+	if varType == nil {
+		return // Error already reported
 	}
 
-	// Register variable with mutability flag for assignment validation
 	a.symbols.DefineVariable(letStmt.Name.Value, letStmt, letStmt.NodePos(), varType, letStmt.Mut)
+}
+
+func (a *Analyzer) checkVariableShadowing(letStmt *ast.LetStmt) bool {
+	// Variable shadowing is forbidden to prevent subtle bugs where developers
+	// accidentally reuse names and operate on the wrong variable
+	if existing := a.symbols.LookupLocal(letStmt.Name.Value); existing != nil {
+		a.addError(fmt.Sprintf("variable '%s' is already declared in this scope", letStmt.Name.Value), letStmt.NodePos())
+		return true
+	}
+	return false
+}
+
+func (a *Analyzer) determineVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
+	// Handle explicit type annotations
+	if letStmt.Type != nil {
+		varType := a.resolveVariableType(letStmt.Type)
+		if varType == nil {
+			a.addError(fmt.Sprintf("unknown type '%s'", letStmt.Type.String()), letStmt.NodePos())
+			return nil
+		}
+
+		if letStmt.Expr != nil {
+			a.analyzeExpression(letStmt.Expr)
+			a.validateExplicitTypeAssignment(letStmt, varType)
+			return varType
+		}
+
+		// Explicit type but no expression - check if uninitialized is allowed
+		if !letStmt.Mut {
+			a.addError(fmt.Sprintf("immutable variable '%s' must be initialized at declaration", letStmt.Name.Value), letStmt.NodePos())
+			return nil
+		}
+		return varType
+	}
+
+	// Handle uninitialized variables without explicit type
+	if letStmt.Expr == nil {
+		return a.handleUninitializedVariable(letStmt)
+	}
+
+	// Handle initialized variables with type inference
+	return a.inferVariableType(letStmt)
+}
+
+func (a *Analyzer) handleUninitializedVariable(letStmt *ast.LetStmt) *stdlib.TypeRef {
+	// Immutable variables must be initialized because their value can never change
+	if !letStmt.Mut {
+		a.addError(fmt.Sprintf("immutable variable '%s' must be initialized at declaration", letStmt.Name.Value), letStmt.NodePos())
+		return nil
+	}
+
+	// Default to U256 for untyped mutable variables because:
+	// 1. U256 is the EVM's native word size - no gas penalty for storage
+	// 2. We cannot predict future assignments, so we use the most permissive type
+	// 3. This matches Solidity's uint default and developer expectations
+	return stdlib.U256Type()
+}
+
+func (a *Analyzer) inferVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
+	a.analyzeExpression(letStmt.Expr)
+
+	// Type inference depends on mutability to optimize for different use cases:
+	// - Immutable: smallest type for gas efficiency (value never changes)
+	// - Mutable: U256 to accommodate any future assignment
+	varType := a.inferExpressionTypeForVariable(letStmt.Expr, letStmt.Mut)
+
+	if varType == nil {
+		// Fallback for complex expressions where primary inference fails
+		varType = a.attemptTypeInferenceRecovery(letStmt.Expr)
+	}
+
+	return varType
+}
+
+// validateExplicitTypeAssignment checks if the assigned value is compatible with the declared type
+func (a *Analyzer) validateExplicitTypeAssignment(letStmt *ast.LetStmt, declaredType *stdlib.TypeRef) {
+	if letStmt.Expr == nil || declaredType == nil {
+		return
+	}
+
+	// For numeric literals, validate the value is within the type's range
+	if litExpr, ok := letStmt.Expr.(*ast.LiteralExpr); ok && a.isNumericLiteral(litExpr.Value) {
+		a.validateNumericLiteralRange(litExpr.Value, declaredType, litExpr.NodePos())
+		return
+	}
+
+	// For non-literal expressions, infer the type and check compatibility
+	inferredType := a.inferExpressionType(letStmt.Expr)
+	if inferredType == nil {
+		return // Error already reported during type inference
+	}
+
+	// Check type compatibility
+	if !a.isTypeCompatible(inferredType, declaredType) {
+		a.addError(fmt.Sprintf("cannot assign value of type '%s' to variable of type '%s'",
+			inferredType.Name, declaredType.Name), letStmt.NodePos())
+	}
+}
+
+// validateNumericLiteralRange checks if a numeric literal value fits within the declared type's range
+func (a *Analyzer) validateNumericLiteralRange(value string, declaredType *stdlib.TypeRef, pos ast.Position) {
+	// Parse the numeric value using big.Int for full range support
+	bigNum := new(big.Int)
+	if _, ok := bigNum.SetString(value, 10); !ok {
+		a.addError(fmt.Sprintf("invalid numeric literal '%s'", value), pos)
+		return
+	}
+
+	// Check if the value fits within the declared type's range
+	var maxValue *big.Int
+	var typeName string
+
+	switch declaredType.Name {
+	case "U8":
+		maxValue = big.NewInt(255) // 2^8 - 1
+		typeName = "U8"
+	case "U16":
+		maxValue = big.NewInt(65535) // 2^16 - 1
+		typeName = "U16"
+	case "U32":
+		maxValue = big.NewInt(4294967295) // 2^32 - 1
+		typeName = "U32"
+	case "U64":
+		maxValue = new(big.Int)
+		maxValue.SetString("18446744073709551615", 10) // 2^64 - 1
+		typeName = "U64"
+	case "U128":
+		maxValue = new(big.Int)
+		maxValue.SetString("340282366920938463463374607431768211455", 10) // 2^128 - 1
+		typeName = "U128"
+	case "U256":
+		maxValue = new(big.Int)
+		maxValue.SetString("115792089237316195423570985008687907853269984665640564039457584007913129639935", 10) // 2^256 - 1
+		typeName = "U256"
+	default:
+		// Non-numeric type or unknown type - no range validation needed
+		return
+	}
+
+	// Check if the value is negative (not allowed for unsigned types)
+	if bigNum.Sign() < 0 {
+		a.addError(fmt.Sprintf("negative value '%s' cannot be assigned to unsigned type '%s'", value, typeName), pos)
+		return
+	}
+
+	// Check if the value exceeds the maximum for the declared type
+	if bigNum.Cmp(maxValue) > 0 {
+		// Find the smallest type that would fit this value
+		suggestedType := a.inferMinimalTypeForValue(value)
+		if suggestedType != nil {
+			a.addError(fmt.Sprintf("value '%s' exceeds maximum for type '%s' (max: %s), consider using '%s' instead",
+				value, typeName, maxValue.String(), suggestedType.Name), pos)
+		} else {
+			a.addError(fmt.Sprintf("value '%s' exceeds maximum for type '%s' (max: %s)",
+				value, typeName, maxValue.String()), pos)
+		}
+	}
+}
+
+// inferMinimalTypeForValue finds the smallest unsigned integer type that can hold the given value
+func (a *Analyzer) inferMinimalTypeForValue(value string) *stdlib.TypeRef {
+	return a.inferNumericLiteralType(value, ast.Position{})
+}
+
+// isTypeCompatible checks if two types are compatible for assignment
+func (a *Analyzer) isTypeCompatible(from, to *stdlib.TypeRef) bool {
+	if from == nil || to == nil {
+		return false
+	}
+
+	// Exact type match
+	if from.Name == to.Name {
+		return true
+	}
+
+	// For now, we require exact type matches for explicit declarations
+	// In the future, we could implement numeric type promotion here
+	return false
 }
 
 func (a *Analyzer) analyzeAssignStatement(assignStmt *ast.AssignStmt) {
 	a.analyzeExpression(assignStmt.Value)
 	a.validateAssignmentTarget(assignStmt.Target, assignStmt.NodePos())
 
-	// Handle variable assignments with special logic to avoid duplicate error reporting
-	// since analyzeExpression would also validate identifier existence
 	if identExpr, ok := assignStmt.Target.(*ast.IdentExpr); ok {
-		if symbol := a.symbols.Lookup(identExpr.Name); symbol != nil {
-			// Immutability prevents accidental state changes that could break contract invariants
-			if symbol.Kind == SymbolVariable && !symbol.Mutable {
-				a.addImmutableVariableAssignmentError(identExpr.Name, assignStmt.NodePos())
-			}
-		} else {
-			a.addUndefinedVariableError(identExpr.Name, assignStmt.NodePos())
-		}
+		a.validateVariableAssignment(identExpr, assignStmt.NodePos())
 	} else {
-		// Complex assignment targets (field access, indexing) need full expression validation
-		// to ensure the target expression itself is valid before assignment
+		// Complex targets (field access, indexing) need full validation
 		a.analyzeExpression(assignStmt.Target)
 	}
 }
 
+func (a *Analyzer) validateVariableAssignment(identExpr *ast.IdentExpr, pos ast.Position) {
+	symbol := a.symbols.Lookup(identExpr.Name)
+	if symbol == nil {
+		a.addUndefinedVariableError(identExpr.Name, pos)
+		return
+	}
+
+	// Immutability prevents accidental state changes that could break contract invariants
+	if symbol.Kind == SymbolVariable && !symbol.Mutable {
+		a.addImmutableVariableAssignmentError(identExpr.Name, pos)
+	}
+}
+
 func (a *Analyzer) validateAssignmentTarget(target ast.Expr, pos ast.Position) {
+	if a.isValidAssignmentTarget(target) {
+		return
+	}
+
+	errorMsg := a.getInvalidAssignmentMessage(target)
+	a.addCompilerError(errors.InvalidAssignment(errorMsg, pos))
+}
+
+func (a *Analyzer) isValidAssignmentTarget(target ast.Expr) bool {
 	switch target.(type) {
-	case *ast.IdentExpr:
-		// Variable assignments are handled separately with mutability checking
-		return
-	case *ast.FieldAccessExpr:
-		// Struct field modification is essential for state management in smart contracts
-		return
-	case *ast.IndexExpr:
-		// Array/mapping element assignment enables dynamic data structure manipulation
-		return
-	case *ast.CallExpr:
-		// Function returns are temporary values that cannot be modified after creation
-		a.addCompilerError(errors.InvalidAssignment("cannot assign to function call result", pos))
-	case *ast.BinaryExpr:
-		// Computed expressions produce temporary values, not assignable storage locations
-		a.addCompilerError(errors.InvalidAssignment("cannot assign to binary expression", pos))
-	case *ast.UnaryExpr:
-		// Unary operations create temporary computed values, not memory locations
-		a.addCompilerError(errors.InvalidAssignment("cannot assign to unary expression", pos))
-	case *ast.LiteralExpr:
-		// Literals are immutable constant values by definition
-		a.addCompilerError(errors.InvalidAssignment("cannot assign to literal value", pos))
+	case *ast.IdentExpr, *ast.FieldAccessExpr, *ast.IndexExpr:
+		return true
 	default:
-		// Assignment requires a memory location (lvalue), not computed value (rvalue)
-		a.addCompilerError(errors.InvalidAssignment("invalid assignment target", pos))
+		return false
+	}
+}
+
+func (a *Analyzer) getInvalidAssignmentMessage(target ast.Expr) string {
+	switch target.(type) {
+	case *ast.CallExpr:
+		return "cannot assign to function call result"
+	case *ast.BinaryExpr:
+		return "cannot assign to binary expression"
+	case *ast.UnaryExpr:
+		return "cannot assign to unary expression"
+	case *ast.LiteralExpr:
+		return "cannot assign to literal value"
+	default:
+		return "invalid assignment target"
 	}
 }
 
@@ -863,6 +1014,9 @@ func (a *Analyzer) resolveVariableType(varType *ast.VariableType) *stdlib.TypeRe
 		return stdlib.AddressType()
 	case "String":
 		return &stdlib.TypeRef{Name: "String", IsGeneric: false}
+	case "Slots":
+		// Handle Slots generic type - need to process generic arguments
+		return a.resolveGenericType(varType)
 	}
 
 	// Support user-defined struct types
@@ -871,6 +1025,26 @@ func (a *Analyzer) resolveVariableType(varType *ast.VariableType) *stdlib.TypeRe
 	}
 
 	return nil // Unknown type
+}
+
+// resolveGenericType handles resolution of generic types like Slots<Address, U256>
+func (a *Analyzer) resolveGenericType(varType *ast.VariableType) *stdlib.TypeRef {
+	typeName := varType.Name.Value
+
+	var genericArgs []*stdlib.TypeRef
+	for _, genericType := range varType.Generics {
+		resolved := a.resolveVariableType(genericType)
+		if resolved == nil {
+			return nil
+		}
+		genericArgs = append(genericArgs, resolved)
+	}
+
+	return &stdlib.TypeRef{
+		Name:        typeName,
+		IsGeneric:   len(genericArgs) > 0,
+		GenericArgs: genericArgs,
+	}
 }
 
 func (a *Analyzer) inferBinaryExpressionType(binExpr *ast.BinaryExpr) *stdlib.TypeRef {
@@ -1485,20 +1659,14 @@ func (a *Analyzer) isStringType(typeRef *stdlib.TypeRef) bool {
 }
 
 // mutabilityAnalysis provides comprehensive mutability checking for let mut variables
-func (a *Analyzer) mutabilityAnalysis(letStmt *ast.LetStmt) {
-	//  Mutability analysis that enforces Rust-like semantics:
-	// - Only variables declared with 'let mut' are mutable
-	// - Function parameters are always immutable
-	// - Reassignment is only allowed to mutable variables
-
+func (a *Analyzer) checkMutabilityShadowing(letStmt *ast.LetStmt) {
+	// Warn about shadowing with different mutability to prevent confusion
+	// when a variable changes from mutable to immutable or vice versa
 	varName := letStmt.Name.Value
 
-	// Check for variable shadowing with different mutability
-	if existing := a.symbols.Lookup(varName); existing != nil {
-		if existing.Kind == SymbolVariable && existing.Mutable != letStmt.Mut {
-			// Allow shadowing with consistent mutability warnings
-			a.addError(fmt.Sprintf("variable '%s' shadows existing variable with different mutability", varName), letStmt.NodePos())
-		}
+	existing := a.symbols.Lookup(varName)
+	if existing != nil && existing.Kind == SymbolVariable && existing.Mutable != letStmt.Mut {
+		a.addError(fmt.Sprintf("variable '%s' shadows existing variable with different mutability", varName), letStmt.NodePos())
 	}
 
 	// Validate that mutable variables are used in contexts where mutability makes sense
@@ -1580,23 +1748,26 @@ func (a *Analyzer) isNumericLiteral(value string) bool {
 	return value[0] >= '0' && value[0] <= '9'
 }
 
-// inferExpressionTypeForVariable performs type inference with mutability context
-// For immutable variables: choose smallest type that fits the literal value
-// For mutable variables: use U256 default since we don't know future assignments
+// inferExpressionTypeForVariable chooses types based on mutability to optimize gas costs
+// while preventing runtime overflow errors. This distinction is critical because:
+// - Immutable variables can be aggressively optimized (smallest possible storage)
+// - Mutable variables need defensive typing (accommodate any future value)
 func (a *Analyzer) inferExpressionTypeForVariable(expr ast.Expr, isMutable bool) *stdlib.TypeRef {
-	// For numeric literals, consider mutability context
 	if litExpr, ok := expr.(*ast.LiteralExpr); ok {
 		if a.isNumericLiteral(litExpr.Value) {
 			if isMutable {
-				// Mutable variables default to U256 since we don't know future values
+				// U256 for mutable prevents overflow bugs when the variable is later
+				// assigned larger values. This is a safety-first approach since we
+				// cannot statically analyze all possible future assignments.
 				return stdlib.U256Type()
 			} else {
-				// Immutable variables can use the smallest type that fits
+				// Smallest type for immutable saves gas on every storage operation.
+				// Safe because immutable values cannot change after initialization.
 				return a.inferNumericLiteralType(litExpr.Value, litExpr.NodePos())
 			}
 		}
 	}
 
-	// For other expressions, fall back to regular type inference
+	// Non-literal expressions use standard type inference (function returns, etc.)
 	return a.inferExpressionType(expr)
 }

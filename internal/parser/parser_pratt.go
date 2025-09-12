@@ -16,6 +16,16 @@ var binaryPrecedence = map[string]int{
 func (p *Parser) parsePrattExpr(minPrec int) ast.Expr {
 	expr := p.parsePrefixExpr()
 
+	// Parse postfix expressions (field access, method calls, indexing) before binary operators.
+	// This ensures that expressions like "State.total_supply + amount" are parsed correctly:
+	// 1. Parse "State" (prefix)
+	// 2. Parse ".total_supply" (postfix) → "State.total_supply"
+	// 3. Parse "+ amount" (binary) → "(State.total_supply + amount)"
+	//
+	// Without this first, the parser would try to parse binary operators first and fail
+	// when encountering the '.' token, causing "expected ';' after let statement" errors.
+	expr = p.parsePostfixExpr(expr)
+
 	for {
 		tok := p.peek()
 		prec, ok := binaryPrecedence[tok.Lexeme]
@@ -35,7 +45,7 @@ func (p *Parser) parsePrattExpr(minPrec int) ast.Expr {
 		}
 	}
 
-	return p.parsePostfixExpr(expr)
+	return expr
 }
 
 func (p *Parser) parsePrefixExpr() ast.Expr {

@@ -200,12 +200,13 @@ type ReturnStmt struct {
 }
 
 // LetStmt represents variable declarations
-// Example: "let balance = State.balances[owner];", "let mut counter = 0;"
+// Example: "let balance = State.balances[owner];", "let mut counter = 0;", "let amount: U256 = 1000;"
 type LetStmt struct {
 	Pos      Position
 	EndPos   Position
 	Mut      bool // true for "let mut"
 	Name     Ident
+	Type     *VariableType // optional explicit type annotation
 	Expr     Expr
 	metadata *Metadata
 }

@@ -61,6 +61,100 @@ func TestParseNestedGenerics(t *testing.T) {
 	}
 }
 
+func TestParseFieldAccessInBinaryExpression(t *testing.T) {
+	// This test covers the bug fix for parsing field access on the left side of binary operators
+	parser := prepareParser("State.total_supply + amount")
+
+	expr := parser.parsePrattExpr(0)
+	if expr == nil {
+		t.Fatalf("expected field access in binary expression to be parsed successfully")
+	}
+
+	// Should parse as: (State.total_supply + amount)
+	exprStr := expr.String()
+	if !contains(exprStr, "State.total_supply") {
+		t.Errorf("expected expression to contain field access 'State.total_supply', got: %s", exprStr)
+	}
+	if !contains(exprStr, "+") {
+		t.Errorf("expected expression to contain binary operator '+', got: %s", exprStr)
+	}
+	if !contains(exprStr, "amount") {
+		t.Errorf("expected expression to contain 'amount', got: %s", exprStr)
+	}
+}
+
+func TestParseFieldAccessInComplexBinaryExpression(t *testing.T) {
+	parser := prepareParser("State.balances[user] >= amount + fee")
+
+	expr := parser.parsePrattExpr(0)
+	if expr == nil {
+		t.Fatalf("expected complex field access binary expression to be parsed successfully")
+	}
+
+	// Should handle precedence correctly: (State.balances[user] >= (amount + fee))
+	exprStr := expr.String()
+	if !contains(exprStr, "State.balances[user]") {
+		t.Errorf("expected expression to contain indexed field access, got: %s", exprStr)
+	}
+	if !contains(exprStr, ">=") {
+		t.Errorf("expected expression to contain '>=' operator, got: %s", exprStr)
+	}
+}
+
+func TestParseMultipleFieldAccessInBinaryExpression(t *testing.T) {
+	parser := prepareParser("State.balance + Other.amount")
+
+	expr := parser.parsePrattExpr(0)
+	if expr == nil {
+		t.Fatalf("expected binary expression with field access on both sides to be parsed successfully")
+	}
+
+	exprStr := expr.String()
+	if !contains(exprStr, "State.balance") {
+		t.Errorf("expected expression to contain 'State.balance', got: %s", exprStr)
+	}
+	if !contains(exprStr, "Other.amount") {
+		t.Errorf("expected expression to contain 'Other.amount', got: %s", exprStr)
+	}
+	if !contains(exprStr, "+") {
+		t.Errorf("expected expression to contain '+', got: %s", exprStr)
+	}
+}
+
+func TestParseChainedFieldAccessInBinaryExpression(t *testing.T) {
+	parser := prepareParser("contract.state.balance - amount")
+
+	expr := parser.parsePrattExpr(0)
+	if expr == nil {
+		t.Fatalf("expected chained field access in binary expression to be parsed successfully")
+	}
+
+	exprStr := expr.String()
+	if !contains(exprStr, "contract.state.balance") {
+		t.Errorf("expected expression to contain chained field access, got: %s", exprStr)
+	}
+	if !contains(exprStr, "-") {
+		t.Errorf("expected expression to contain '-' operator, got: %s", exprStr)
+	}
+}
+
+func TestParseMethodCallAfterFieldAccessInBinaryExpression(t *testing.T) {
+	parser := prepareParser("State.get_balance() + fee")
+
+	expr := parser.parsePrattExpr(0)
+	if expr == nil {
+		t.Fatalf("expected method call after field access in binary expression to be parsed successfully")
+	}
+
+	exprStr := expr.String()
+	if !contains(exprStr, "State.get_balance()") {
+		t.Errorf("expected expression to contain method call after field access, got: %s", exprStr)
+	}
+	if !contains(exprStr, "+") {
+		t.Errorf("expected expression to contain '+' operator, got: %s", exprStr)
+	}
+}
+
 // Helper function for string containment checks
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) &&

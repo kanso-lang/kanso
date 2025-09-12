@@ -389,3 +389,46 @@ func TestParseNestedIfStatements(t *testing.T) {
 	assert.NotNil(t, innerIf, "Should parse nested if statement")
 	assert.NotNil(t, innerIf.ElseBlock, "Inner if should have else block")
 }
+
+func TestParseUninitializedVariables(t *testing.T) {
+	source := `contract Test {
+		fn test() {
+			let mut uninitialized: U256;
+			let mut another_uninitialized: Bool;
+			let initialized = 100;
+		}
+	}`
+
+	contract, parseErrors, _ := ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+	assert.NotNil(t, contract, "Contract should be parsed")
+
+	// Check that the function was parsed correctly
+	fn, ok := contract.Items[0].(*ast.Function)
+	assert.True(t, ok, "First item should be a function")
+	assert.Len(t, fn.Body.Items, 3, "Function should have 3 let statements")
+
+	// Check first uninitialized variable
+	let1, ok := fn.Body.Items[0].(*ast.LetStmt)
+	assert.True(t, ok, "First item should be a let statement")
+	assert.True(t, let1.Mut, "Should be mutable")
+	assert.Equal(t, "uninitialized", let1.Name.Value)
+	assert.NotNil(t, let1.Type, "Should have explicit type")
+	assert.Nil(t, let1.Expr, "Should have no initialization expression")
+
+	// Check second uninitialized variable
+	let2, ok := fn.Body.Items[1].(*ast.LetStmt)
+	assert.True(t, ok, "Second item should be a let statement")
+	assert.True(t, let2.Mut, "Should be mutable")
+	assert.Equal(t, "another_uninitialized", let2.Name.Value)
+	assert.NotNil(t, let2.Type, "Should have explicit type")
+	assert.Nil(t, let2.Expr, "Should have no initialization expression")
+
+	// Check initialized variable
+	let3, ok := fn.Body.Items[2].(*ast.LetStmt)
+	assert.True(t, ok, "Third item should be a let statement")
+	assert.False(t, let3.Mut, "Should be immutable")
+	assert.Equal(t, "initialized", let3.Name.Value)
+	assert.Nil(t, let3.Type, "Should have no explicit type")
+	assert.NotNil(t, let3.Expr, "Should have initialization expression")
+}

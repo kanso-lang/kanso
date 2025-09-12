@@ -1006,6 +1006,87 @@ func TestNumericLiteralValidation(t *testing.T) {
 	})
 }
 
+func TestExplicitTypeDeclarations(t *testing.T) {
+	t.Run("ValidExplicitTypes", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				// Valid explicit type declarations
+				let small: U8 = 255;
+				let medium: U16 = 65535;
+				let large: U32 = 4294967295;
+				let very_large: U64 = 18446744073709551615;
+				let huge: U128 = 340282366920938463463374607431768211455;
+				let massive: U256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
+				
+				// Mixed with mutability
+				let mut mutable_u32: U32 = 1000;
+				let mut mutable_u256: U256 = 999999999999999999999;
+			}
+		}`
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for valid explicit types")
+	})
+
+	t.Run("TypeOverflowErrors", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let overflow_u8: U8 = 1000;
+				let overflow_u16: U16 = 70000;
+				let overflow_u32: U32 = 5000000000;
+			}
+		}`
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Len(t, errors, 3, "Should have three type overflow errors")
+
+		// Check specific error messages
+		assert.Contains(t, errors[0].Message, "value '1000' exceeds maximum for type 'U8'")
+		assert.Contains(t, errors[1].Message, "value '70000' exceeds maximum for type 'U16'")
+		assert.Contains(t, errors[2].Message, "value '5000000000' exceeds maximum for type 'U32'")
+	})
+
+	t.Run("ExplicitTypeBoundaryTests", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				// Test exact boundaries
+				let max_u8: U8 = 255;        // Valid
+				let over_u8: U8 = 256;       // Invalid
+				let max_u16: U16 = 65535;    // Valid
+				let over_u16: U16 = 65536;   // Invalid
+			}
+		}`
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Len(t, errors, 2, "Should have two boundary overflow errors")
+		assert.Contains(t, errors[0].Message, "exceeds maximum for type 'U8'")
+		assert.Contains(t, errors[1].Message, "exceeds maximum for type 'U16'")
+	})
+
+	t.Run("MixedExplicitAndInferredTypes", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				// Mix explicit and inferred types
+				let explicit: U32 = 1000;
+				let inferred = 2000;
+				let mut explicit_mut: U16 = 500;
+				let mut inferred_mut = 3000;
+			}
+		}`
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for mixed types")
+	})
+}
+
 func TestIfStatementBasicAnalysis(t *testing.T) {
 	source := `contract Test {
 		fn test(value: U256) -> Bool {
@@ -1129,4 +1210,107 @@ func TestIfStatementUndefinedVariableError(t *testing.T) {
 	analyzer := NewAnalyzer()
 	errors := analyzer.Analyze(contract)
 	assert.Len(t, errors, 1, "Should have one undefined variable error")
+}
+
+func TestUninitializedVariables(t *testing.T) {
+	t.Run("UninitializedMutableWithType", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let mut counter: U256;  // Valid - uninitialized mutable with explicit type
+				counter = 100;          // Should work
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for uninitialized mutable with type")
+	})
+
+	t.Run("UninitializedMutableWithoutType", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let mut counter;  // Valid - defaults to U256
+				counter = 1000;   // Should work with U256 assignment
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for uninitialized mutable without type (defaults to U256)")
+	})
+
+	t.Run("UninitializedImmutableVariable", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let immutable_var: U256;  // Invalid - immutable must be initialized
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Len(t, errors, 1, "Should have error for uninitialized immutable variable")
+
+		compilerErrors := analyzer.GetErrors()
+		assert.Contains(t, compilerErrors[0].Message, "immutable variable 'immutable_var' must be initialized at declaration")
+	})
+
+	t.Run("MixedInitializedAndUninitializedVariables", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let initialized = 100;        // Valid
+				let mut uninitialized: U32;   // Valid
+				let another_init: U16 = 200;  // Valid
+				
+				uninitialized = 500;          // Valid assignment to uninitialized mutable
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for mixed variable declarations")
+	})
+
+	t.Run("MutableInitializedVariableGetsU256", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let mut mutable = 100;                // Should be U256, not U8
+				mutable = 115792089237316195423570985008687907853269984665640564039457584007913129639935; // Max U256
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors - mutable variable should be U256 to handle large values")
+	})
+
+	t.Run("ImmutableInitializedVariableGetsSmallestType", func(t *testing.T) {
+		source := `contract Test {
+			fn test() {
+				let immutable = 100;    // Should be U8 (smallest type that fits)
+				let bigger = immutable; // Should be fine - same type
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+		assert.Empty(t, errors, "Should have no semantic errors for immutable variables")
+	})
 }

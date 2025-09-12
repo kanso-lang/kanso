@@ -244,10 +244,20 @@ func (r *ReturnStmt) String() string {
 }
 
 func (l *LetStmt) String() string {
-	if l.Mut {
-		return fmt.Sprintf("let mut %s = %s;", l.Name.Value, l.Expr.String())
+	var typeAnnotation string
+	if l.Type != nil {
+		typeAnnotation = fmt.Sprintf(": %s", l.Type.String())
 	}
-	return fmt.Sprintf("let %s = %s;", l.Name.Value, l.Expr.String())
+
+	var initialization string
+	if l.Expr != nil {
+		initialization = " = " + l.Expr.String()
+	}
+
+	if l.Mut {
+		return fmt.Sprintf("let mut %s%s%s;", l.Name.Value, typeAnnotation, initialization)
+	}
+	return fmt.Sprintf("let %s%s%s;", l.Name.Value, typeAnnotation, initialization)
 }
 
 func (a *AssignStmt) String() string {

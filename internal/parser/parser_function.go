@@ -198,17 +198,38 @@ func (p *Parser) parseLetStmt() *ast.LetStmt {
 		return nil
 	}
 
-	p.consume(EQUAL, "expected '=' in let statement")
-	expr := p.parseExpr()
+	// Type annotations are optional because Kanso can infer types from values
+	var varType *ast.VariableType
+	if p.match(COLON) {
+		varType = p.parseVariableType()
+	}
 
-	// Use improved semicolon error recovery
-	semiEndPos := p.consumeSemicolonWithBetterRecovery(expr.NodeEndPos(), "let")
+	// Initialization is optional for mutable variables to support patterns like
+	// accumulators and conditional initialization, but required for immutables
+	// (enforced during semantic analysis, not parsing)
+	var expr ast.Expr
+	var endPos ast.Position
+	if p.match(EQUAL) {
+		expr = p.parseExpr()
+		endPos = expr.NodeEndPos()
+	} else {
+		// Calculate proper end position for error reporting
+		if varType != nil {
+			endPos = varType.EndPos
+		} else {
+			endPos = name.EndPos
+		}
+	}
+
+	// Improved error recovery helps developers fix syntax errors faster
+	semiEndPos := p.consumeSemicolonWithBetterRecovery(endPos, "let")
 
 	return &ast.LetStmt{
 		Pos:    p.makePos(start),
 		EndPos: semiEndPos,
 		Mut:    mut,
 		Name:   name,
+		Type:   varType,
 		Expr:   expr,
 	}
 }
