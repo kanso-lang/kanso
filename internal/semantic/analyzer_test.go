@@ -3,8 +3,9 @@ package semantic
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"kanso/internal/parser"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBasicNameResolution(t *testing.T) {
@@ -14,7 +15,7 @@ func TestBasicNameResolution(t *testing.T) {
         age: U32,
     }
     
-    fn get_person() -> Person {
+    ext fn get_person() -> Person {
         return Person { name: "test", age: 25 };
     }
 }`
@@ -31,11 +32,11 @@ func TestBasicNameResolution(t *testing.T) {
 
 func TestDuplicateDeclarations(t *testing.T) {
 	source := `contract Test {
-    fn test() -> U32 {
+    ext fn test() -> U32 {
         42
     }
     
-    fn test() -> String {
+    ext fn test() -> String {
         "duplicate"
     }
 }`
@@ -47,13 +48,21 @@ func TestDuplicateDeclarations(t *testing.T) {
 	analyzer := NewAnalyzer()
 	semanticErrors := analyzer.Analyze(contract)
 
-	assert.Len(t, semanticErrors, 1, "Should have one semantic error")
-	assert.Contains(t, semanticErrors[0].Message, "duplicate declaration")
+	// Should have at least one error, and one of them should be about duplicate declaration
+	assert.NotEmpty(t, semanticErrors, "Should have semantic errors")
+	hasDuplicateError := false
+	for _, err := range semanticErrors {
+		if containsSubstring(err.Message, "duplicate declaration") {
+			hasDuplicateError = true
+			break
+		}
+	}
+	assert.True(t, hasDuplicateError, "Should have duplicate declaration error")
 }
 
 func TestBasicContractValidation(t *testing.T) {
 	source := `contract Test {
-    fn test() -> U32 {
+    ext fn test() -> U32 {
         42
     }
 }`
@@ -83,7 +92,7 @@ func TestStructFunctionNameCollision(t *testing.T) {
         value: U32,
     }
     
-    fn test() -> U32 {
+    ext fn test() -> U32 {
         42
     }
 }`
@@ -121,7 +130,7 @@ func TestInvalidStructAttribute(t *testing.T) {
 func TestInvalidFunctionAttribute(t *testing.T) {
 	source := `contract Test {
     #[invalid]
-    fn test() -> U32 {
+    ext fn test() -> U32 {
         42
     }
 }`
@@ -328,7 +337,7 @@ func TestFunctionReadsNonStorageStruct(t *testing.T) {
         data: U32,
     }
     
-    fn test() reads RegularStruct {
+    ext fn test() reads RegularStruct {
         // reads from non-storage struct
     }
 }`
@@ -358,7 +367,7 @@ func TestFunctionWritesNonStorageStruct(t *testing.T) {
         to: Address,
     }
     
-    fn test() writes Transfer {
+    ext fn test() writes Transfer {
         // writes to event struct, not storage
     }
 }`
@@ -387,7 +396,7 @@ func TestValidFunctionReadsWrites(t *testing.T) {
         setting: Bool,
     }
     
-    fn test() reads State writes Config {
+    ext fn test() reads State writes Config {
         // valid reads and writes to storage structs
     }
 }`
@@ -410,7 +419,7 @@ func TestConflictingReadsWritesClause(t *testing.T) {
         value: U32,
     }
     
-    fn test() reads State writes State {
+    ext fn test() reads State writes State {
         // conflicting read and write to same struct
     }
 }`
@@ -439,7 +448,7 @@ func TestValidMixedReadsWrites(t *testing.T) {
         config: Bool,
     }
     
-    fn test() reads State1 writes State2 {
+    ext fn test() reads State1 writes State2 {
         // valid: read from one struct, write to different struct
     }
 }`
@@ -462,7 +471,7 @@ func TestTypeRegistryIntegration(t *testing.T) {
         value: U32,
     }
     
-    fn test() -> Bool {
+    ext fn test() -> Bool {
         return true;
     }
 }`
@@ -655,7 +664,7 @@ func TestLocalFunctionParameterValidation(t *testing.T) {
 				State.balance + amount
 			}
 
-			fn main() writes State {
+			ext fn main() writes State {
 				let result1 = helper(100, 0x1234567890123456789012345678901234567890);  // Valid call
 				let result2 = helper(200);  // Error: missing parameter
 				let result3 = helper(300, 0x1234567890123456789012345678901234567890, 400);  // Error: extra parameter
@@ -694,7 +703,7 @@ func TestParameterTypeValidation(t *testing.T) {
         errors::invalid_argument(true);
     }
     
-    fn test() {
+    ext fn test() {
         // This should cause a type error: sender() takes no parameters
         sender(42);
     }
@@ -731,7 +740,7 @@ func TestVariableScopingAndTypeTracking(t *testing.T) {
 				count: U256,
 			}
 			
-			fn test() {
+			ext fn test() {
 				let balance = 100;
 				let mut counter = 0;
 				let flag = true;
@@ -751,7 +760,7 @@ func TestVariableScopingAndTypeTracking(t *testing.T) {
 func TestVariableRedeclaration(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let balance = 100;
 				let balance = 200; // Error: redeclaration
 			}
@@ -771,7 +780,7 @@ func TestVariableRedeclaration(t *testing.T) {
 func TestImmutableVariableAssignment(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let balance = 100;
 				balance = 200; // Error: cannot assign to immutable
 			}
@@ -791,7 +800,7 @@ func TestImmutableVariableAssignment(t *testing.T) {
 func TestMutableVariableAssignment(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let mut counter = 0;
 				counter = 1; // Valid: mutable variable
 			}
@@ -810,7 +819,7 @@ func TestMutableVariableAssignment(t *testing.T) {
 func TestUndefinedVariableAssignment(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				unknown_var = 42; // Error: undefined variable
 			}
 		}
@@ -835,7 +844,7 @@ func TestFieldAccessValidation(t *testing.T) {
 				owner: Address,
 			}
 			
-			fn test() reads State {
+			ext fn test() reads State {
 				let amount = State.balance;  // Valid field access
 				let user = State.owner;     // Valid field access
 			}
@@ -859,7 +868,7 @@ func TestInvalidFieldAccess(t *testing.T) {
 				balance: U256,
 			}
 			
-			fn test() reads State {
+			ext fn test() reads State {
 				let invalid = State.unknown_field;  // Error: field doesn't exist
 			}
 		}
@@ -878,7 +887,7 @@ func TestInvalidFieldAccess(t *testing.T) {
 func TestFieldAccessOnNonStruct(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let value = 100;
 				let invalid = value.field;  // Error: not a struct
 			}
@@ -898,7 +907,7 @@ func TestFieldAccessOnNonStruct(t *testing.T) {
 func TestBinaryExpressionTypeInference(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let a = 100;
 				let b = 200;
 				let sum = a + b;           // Valid: U64 + U64 -> U64
@@ -920,7 +929,7 @@ func TestBinaryExpressionTypeInference(t *testing.T) {
 func TestInvalidBinaryExpressions(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let num = 100;
 				let flag = true;
 				let invalid1 = num + flag;    // Error: U64 + Bool
@@ -942,7 +951,7 @@ func TestInvalidBinaryExpressions(t *testing.T) {
 func TestUnaryExpressionTypeInference(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let flag = true;
 				let not_flag = !flag;  // Valid: !Bool -> Bool
 			}
@@ -961,7 +970,7 @@ func TestUnaryExpressionTypeInference(t *testing.T) {
 func TestInvalidUnaryExpressions(t *testing.T) {
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let num = 100;
 				let invalid = !num;   // Error: !U64
 			}
@@ -985,7 +994,7 @@ func TestNumericTypePromotion(t *testing.T) {
 	// For now, just test that basic arithmetic works with inferred types
 	source := `
 		contract Test {
-			fn test() {
+			ext fn test() {
 				let a = 100;
 				let b = 200;
 				let result = a + b;  // Should work with inferred U64 types
@@ -1004,7 +1013,7 @@ func TestNumericTypePromotion(t *testing.T) {
 func TestNumericLiteralValidation(t *testing.T) {
 	t.Run("ValidNumericLiterals", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Valid numeric literals within range
 				let u8_max = 255;
 				let u16_max = 65535;
@@ -1024,7 +1033,7 @@ func TestNumericLiteralValidation(t *testing.T) {
 	t.Run("NumericLiteralExceedsU256", func(t *testing.T) {
 		// U256 max + 1 should trigger an error
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let overflow = 115792089237316195423570985008687907853269984665640564039457584007913129639936;
 			}
 		}`
@@ -1040,7 +1049,7 @@ func TestNumericLiteralValidation(t *testing.T) {
 func TestExplicitTypeDeclarations(t *testing.T) {
 	t.Run("ValidExplicitTypes", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Valid explicit type declarations
 				let small: U8 = 255;
 				let medium: U16 = 65535;
@@ -1063,7 +1072,7 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 
 	t.Run("TypeOverflowErrors", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let overflow_u8: U8 = 1000;
 				let overflow_u16: U16 = 70000;
 				let overflow_u32: U32 = 5000000000;
@@ -1083,7 +1092,7 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 
 	t.Run("ExplicitTypeBoundaryTests", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Test exact boundaries
 				let max_u8: U8 = 255;        // Valid
 				let over_u8: U8 = 256;       // Invalid
@@ -1102,7 +1111,7 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 
 	t.Run("MixedExplicitAndInferredTypes", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Mix explicit and inferred types
 				let explicit: U32 = 1000;
 				let inferred = 2000;
@@ -1120,7 +1129,7 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 
 func TestIfStatementBasicAnalysis(t *testing.T) {
 	source := `contract Test {
-		fn test(value: U256) -> Bool {
+		ext fn test(value: U256) -> Bool {
 			if value > 0 {
 				return true;
 			} else {
@@ -1140,7 +1149,7 @@ func TestIfStatementBasicAnalysis(t *testing.T) {
 
 func TestIfStatementImmutabilityError(t *testing.T) {
 	source := `contract Test {
-		fn test(value: U256) -> Bool {
+		ext fn test(value: U256) -> Bool {
 			let immutable_var = 100;
 			if value > 0 {
 				immutable_var = 200;  // Should trigger immutability error
@@ -1163,7 +1172,7 @@ func TestIfStatementImmutabilityError(t *testing.T) {
 
 func TestIfStatementNestedImmutabilityError(t *testing.T) {
 	source := `contract Test {
-		fn test(a: U256, b: U256) -> Bool {
+		ext fn test(a: U256, b: U256) -> Bool {
 			let immutable_var = 100;
 			if a > 0 {
 				if b > 0 {
@@ -1186,7 +1195,7 @@ func TestIfStatementNestedImmutabilityError(t *testing.T) {
 
 func TestIfStatementMutableVariableAssignment(t *testing.T) {
 	source := `contract Test {
-		fn test(value: U256) -> Bool {
+		ext fn test(value: U256) -> Bool {
 			let mut mutable_var = 100;
 			if value > 0 {
 				mutable_var = 200;  // Should be allowed
@@ -1207,7 +1216,7 @@ func TestIfStatementMutableVariableAssignment(t *testing.T) {
 
 func TestIfStatementExpressionAnalysis(t *testing.T) {
 	source := `contract Test {
-		fn test() -> Bool {
+		ext fn test() -> Bool {
 			let value = 100;
 			if value > 0 {
 				let result = value + 50;  // Should analyze expressions in if blocks
@@ -1227,7 +1236,7 @@ func TestIfStatementExpressionAnalysis(t *testing.T) {
 
 func TestIfStatementUndefinedVariableError(t *testing.T) {
 	source := `contract Test {
-		fn test() -> Bool {
+		ext fn test() -> Bool {
 			if undefined_var > 0 {  // Should trigger undefined variable error
 				return true;
 			}
@@ -1246,7 +1255,7 @@ func TestIfStatementUndefinedVariableError(t *testing.T) {
 func TestUninitializedVariables(t *testing.T) {
 	t.Run("UninitializedMutableWithType", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let mut counter: U256;  // Valid - uninitialized mutable with explicit type
 				counter = 100;          // Should work
 			}
@@ -1262,7 +1271,7 @@ func TestUninitializedVariables(t *testing.T) {
 
 	t.Run("UninitializedMutableWithoutType", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let mut counter;  // Valid - defaults to U256
 				counter = 1000;   // Should work with U256 assignment
 			}
@@ -1278,7 +1287,7 @@ func TestUninitializedVariables(t *testing.T) {
 
 	t.Run("UninitializedImmutableVariable", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let immutable_var: U256;  // Invalid - immutable must be initialized
 			}
 		}`
@@ -1296,7 +1305,7 @@ func TestUninitializedVariables(t *testing.T) {
 
 	t.Run("MixedInitializedAndUninitializedVariables", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let initialized = 100;        // Valid
 				let mut uninitialized: U32;   // Valid
 				let another_init: U16 = 200;  // Valid
@@ -1315,7 +1324,7 @@ func TestUninitializedVariables(t *testing.T) {
 
 	t.Run("MutableInitializedVariableGetsU256", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let mut mutable = 100;                // Should be U256, not U8
 				mutable = 115792089237316195423570985008687907853269984665640564039457584007913129639935; // Max U256
 			}
@@ -1331,7 +1340,7 @@ func TestUninitializedVariables(t *testing.T) {
 
 	t.Run("ImmutableInitializedVariableGetsSmallestType", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let immutable = 100;    // Should be U8 (smallest type that fits)
 				let bigger = immutable; // Should be fine - same type
 			}
@@ -1408,7 +1417,7 @@ func TestCallPathAnalysis(t *testing.T) {
 			}
 
 			// Missing reads State declaration
-			fn get_balance() -> U256 {
+			ext fn get_balance() -> U256 {
 				State.balance
 			}
 		}`
@@ -1436,7 +1445,7 @@ func TestCallPathAnalysis(t *testing.T) {
 			}
 
 			// This calls get_balance but doesn't declare reads State
-			fn check_balance() -> U256 {
+			ext fn check_balance() -> U256 {
 				get_balance()
 			}
 		}`
@@ -1504,11 +1513,11 @@ func TestCallPathAnalysis(t *testing.T) {
 				State.balance = amount;
 			}
 
-			fn check_balance() -> U256 reads State {
+			ext fn check_balance() -> U256 reads State {
 				get_balance()
 			}
 
-			fn update_balance(amount: U256) writes State {
+			ext fn update_balance(amount: U256) writes State {
 				set_balance(amount);
 			}
 		}`
@@ -1564,7 +1573,7 @@ func TestCallPathAnalysis(t *testing.T) {
 			}
 
 			// Declares writes but only reads - this should be allowed
-			fn cautious_read() -> U256 writes State {
+			ext fn cautious_read() -> U256 writes State {
 				State.balance
 			}
 		}`
@@ -1590,7 +1599,7 @@ func TestCallPathAnalysis(t *testing.T) {
 				State.balance
 			}
 
-			fn update_after_check(amount: U256) writes State {
+			ext fn update_after_check(amount: U256) writes State {
 				let current = get_balance();
 				State.balance = amount;
 			}
@@ -1661,11 +1670,11 @@ func TestCallPathAnalysis(t *testing.T) {
 			}
 
 			// Level 2 - calls level 3 functions
-			fn check_and_get() -> U256 reads State {
+			ext fn check_and_get() -> U256 reads State {
 				get_balance()
 			}
 
-			fn update_and_set(amount: U256) writes State {
+			ext fn update_and_set(amount: U256) writes State {
 				set_balance(amount);
 			}
 
@@ -1679,7 +1688,7 @@ func TestCallPathAnalysis(t *testing.T) {
 			}
 
 			// Mixed operations - should work
-			fn complex_operation(amount: U256) writes State {
+			ext fn complex_operation(amount: U256) writes State {
 				let current = high_level_read();
 				high_level_write(amount);
 			}

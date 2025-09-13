@@ -68,13 +68,29 @@ func (a *Analyzer) analyzeCallExpression(call *ast.CallExpr) {
 func (a *Analyzer) inferCallExpressionType(call *ast.CallExpr) *stdlib.TypeRef {
 	switch callee := call.Callee.(type) {
 	case *ast.IdentExpr:
+		// Check local functions first
+		if localFunc, exists := a.localFunctions[callee.Name]; exists && localFunc != nil {
+			if localFunc.Return != nil {
+				return a.convertASTTypeToTypeRef(localFunc.Return)
+			}
+			return nil // void function
+		}
+		// Then check imported functions
 		if funcDef := a.context.GetFunctionDefinition(callee.Name); funcDef != nil {
 			return funcDef.ReturnType
 		}
 	case *ast.CalleePath:
 		if len(callee.Parts) == 1 {
-			// Direct function call
-			if funcDef := a.context.GetFunctionDefinition(callee.Parts[0].Value); funcDef != nil {
+			// Direct function call - check local first
+			funcName := callee.Parts[0].Value
+			if localFunc, exists := a.localFunctions[funcName]; exists && localFunc != nil {
+				if localFunc.Return != nil {
+					return a.convertASTTypeToTypeRef(localFunc.Return)
+				}
+				return nil // void function
+			}
+			// Then check imported
+			if funcDef := a.context.GetFunctionDefinition(funcName); funcDef != nil {
 				return funcDef.ReturnType
 			}
 		} else if len(callee.Parts) == 2 {

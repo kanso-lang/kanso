@@ -32,7 +32,7 @@ make clean
 ## Testing
 
 ```bash
-# Run all tests (61 tests across all packages)
+# Run all tests (80+ tests across all packages)
 go test ./...
 
 # Run specific package tests
@@ -42,6 +42,14 @@ go test ./internal/ast -v
 
 # Run integration tests
 go test ./internal/parser -run TestFullLanguageIntegration
+
+# Run tests with coverage
+go test ./... -cover
+
+# Run specific semantic test suites
+go test ./internal/semantic -run TestReturnValueValidation -v
+go test ./internal/semantic -run TestUnusedFunctionDetection -v
+go test ./internal/semantic -run TestTypePromotionInFunctionCalls -v
 ```
 
 ## Architecture
@@ -67,10 +75,16 @@ go test ./internal/parser -run TestFullLanguageIntegration
 
 **Semantic Package (`internal/semantic/`)**
 - `analyzer.go`: Comprehensive semantic analysis with type checking and validation
+- `analyzer_expression.go`: Expression type inference and function call validation
+- `analyzer_declaration.go`: Variable declaration and assignment validation
 - Validates reads/writes clauses, constructor requirements, and function calls
+- Return value validation ensures function calls return expected types
+- Type promotion system supports numeric type widening (U8 → U16 → U32 → U64 → U128 → U256)
+- Unused function detection warns about internal functions that are never called
+- Return statement validation checks function return values match signatures
 - Processes `use` statements and integrates with standard library definitions
 - Handles `LetStmt` with mutability tracking and `RequireStmt` validation
-- 21 semantic tests covering all validation scenarios
+- 50+ semantic tests covering all validation scenarios including edge cases
 - Full integration with modernized AST structure
 
 **LSP Package (`internal/lsp/`)**
@@ -106,7 +120,7 @@ go test ./internal/parser -run TestFullLanguageIntegration
 
 - `github.com/tliron/glsp`: LSP server implementation
 - `github.com/fatih/color`: Terminal color output  
-- `github.com/stretchr/testify`: Testing framework (used in 61 tests)
+- `github.com/stretchr/testify`: Testing framework (used in 80+ tests)
 
 ## Development Workflow
 
@@ -191,11 +205,11 @@ contract ERC20 {
 
 ## Test Coverage
 
-The project maintains comprehensive test coverage:
+The project maintains comprehensive test coverage with 80+ tests across all packages:
 
 - **Parser Tests**: 17 tests covering all parsing scenarios
-- **AST Tests**: 15 tests for node creation and string representation
-- **Semantic Tests**: 21 tests for type checking and validation
+- **AST Tests**: 15 tests for node creation and string representation  
+- **Semantic Tests**: 50+ tests for comprehensive type checking and validation
 - **LSP Tests**: Integration tests for Language Server Protocol
 - **Integration Tests**: End-to-end validation of complete language features
 
@@ -203,16 +217,105 @@ Key test files:
 - `internal/parser/parser_test.go`: Core parsing functionality
 - `internal/parser/integration_test.go`: Comprehensive language tests
 - `internal/ast/printer_test.go`: AST string representation tests
-- `internal/semantic/analyzer_test.go`: Semantic analysis tests
+- `internal/semantic/analyzer_test.go`: Core semantic analysis tests
+- `internal/semantic/return_value_test.go`: Function call return value validation (11 tests)
+- `internal/semantic/return_type_validation_test.go`: Return statement type validation (12 tests)
+- `internal/semantic/type_promotion_test.go`: Numeric type promotion validation (13 tests)
+- `internal/semantic/unused_function_test.go`: Unused function detection (7 tests)
+- `internal/semantic/literal_validation_test.go`: Literal value validation (5 tests)
+
+## Testing Guidelines
+
+### Writing Test Functions
+
+**IMPORTANT**: Test functions should always use the `ext fn` modifier to avoid unused function warnings:
+
+```kanso
+// CORRECT: Use ext fn for test functions
+contract Test {
+    ext fn test_something() {
+        let x = 42;
+    }
+}
+
+// INCORRECT: Regular fn will trigger unused function warning
+contract Test {
+    fn test_something() {  // Warning: function 'test_something' is defined but never used
+        let x = 42;
+    }
+}
+```
+
+### Why `ext fn` for Tests?
+
+Functions marked with `ext fn` are considered blockchain entry points and are never flagged as unused because they can be called by external transactions. Regular internal functions (`fn`) are only considered used if they're called by other functions within the contract.
+
+### Test Structure Best Practices
+
+1. **Use External Functions**: Always mark test functions as `ext fn`
+2. **Descriptive Names**: Use clear, descriptive function names for tests
+3. **Type Annotations**: Include explicit type annotations to test type validation
+4. **Error Cases**: Test both valid and invalid scenarios
+5. **Multiple Contracts**: Use separate contracts for different test scenarios
+
+```kanso
+contract ValidTypeTest {
+    ext fn test_valid_assignment() {
+        let x: U256 = 42;  // Valid: literal promotes to U256
+    }
+}
+
+contract InvalidTypeTest {
+    ext fn test_invalid_assignment() {
+        let x: U8 = 300;   // Invalid: exceeds U8 range
+    }
+}
+```
+
+### Semantic Analysis Test Coverage
+
+The semantic analyzer validates:
+
+- **Return Value Validation**: Ensures function calls return expected types with proper type promotion
+- **Type Promotion**: Validates numeric type promotions (U8 → U16 → U32 → U64 → U128 → U256)
+- **Return Statement Validation**: Checks return values match function signatures
+- **Unused Function Detection**: Warns about internal functions that are never called
+- **Type Compatibility**: Ensures assignments and expressions use compatible types
+- **Literal Validation**: Validates numeric, boolean, and string literals
+- **Call Path Analysis**: Tracks function calls for reads/writes validation
+- **Variable Scoping**: Validates variable declarations and usage within scopes
+
+### Running Tests
+
+```bash
+# Run all tests with verbose output
+go test ./... -v
+
+# Run specific semantic tests
+go test ./internal/semantic -v
+
+# Run tests with coverage
+go test ./... -cover
+
+# Run specific test function
+go test ./internal/semantic -run TestReturnValueValidation -v
+go test ./internal/semantic -run TestUnusedFunctionDetection -v
+go test ./internal/semantic -run TestTypePromotionInFunctionCalls -v
+
+# Run parser integration tests
+go test ./internal/parser -run TestFullLanguageIntegration -v
+```
 
 ## IDE Integration Status
 
-- ✅ **Syntax Highlighting**: Complete for all modern language constructs
-- ✅ **Semantic Tokens**: Advanced highlighting with proper categorization
-- ✅ **Error Diagnostics**: Real-time error detection and reporting
-- ✅ **Parse Error Recovery**: Graceful handling of syntax errors
-- ✅ **Type Validation**: Built-in and user-defined type checking
-- ✅ **Contract Analysis**: Reads/writes validation and constructor analysis
+- **Syntax Highlighting**: Complete for all modern language constructs
+- **Semantic Tokens**: Advanced highlighting with proper categorization
+- **Error Diagnostics**: Real-time error detection and reporting
+- **Parse Error Recovery**: Graceful handling of syntax errors
+- **Type Validation**: Built-in and user-defined type checking with promotion
+- **Return Value Validation**: Function call return type checking
+- **Unused Function Detection**: Warning for internal functions never called
+- **Contract Analysis**: Reads/writes validation and constructor analysis
 
 ## Development Guidelines
 

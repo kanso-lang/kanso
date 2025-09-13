@@ -159,6 +159,9 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 	// Third pass: analyze call paths and validate reads/writes declarations
 	// This must happen after all function bodies are analyzed so we have complete information
 	a.performCallPathAnalysis(storageStructs)
+
+	// Fourth pass: detect unused functions
+	a.detectUnusedFunctions()
 }
 
 func (a *Analyzer) analyzeFunction(fn *ast.Function) {
@@ -339,12 +342,12 @@ func (a *Analyzer) analyzeFunctionBlockItem(item ast.FunctionBlockItem) {
 	switch node := item.(type) {
 	case *ast.ExprStmt:
 		a.analyzeExpression(node.Expr)
+		// Check if we're ignoring a return value (could be a warning in the future)
+		a.validateReturnValueUsage(node.Expr, false, nil) // false = value not required
 	case *ast.LetStmt:
 		a.analyzeLetStatement(node)
 	case *ast.ReturnStmt:
-		if node.Value != nil {
-			a.analyzeExpression(node.Value)
-		}
+		a.validateReturnStatement(node)
 	case *ast.RequireStmt:
 		// Require can have multiple arguments
 		for _, arg := range node.Args {
@@ -352,6 +355,9 @@ func (a *Analyzer) analyzeFunctionBlockItem(item ast.FunctionBlockItem) {
 		}
 	case *ast.AssignStmt:
 		a.analyzeAssignStatement(node)
+		// Get the expected type from the assignment target
+		targetType := a.inferExpressionType(node.Target)
+		a.validateReturnValueUsage(node.Value, true, targetType) // value is required for assignment with expected type
 	case *ast.IfStmt:
 		// Analyze all branches to catch errors like immutable assignments or
 		// undefined variables that only occur in conditional paths
@@ -474,6 +480,160 @@ func (a *Analyzer) convertASTTypeToTypeRef(astType *ast.VariableType) *stdlib.Ty
 		IsGeneric:   false, // AST types are concrete, not generic parameters
 		GenericArgs: genericArgs,
 	}
+}
+
+// validateTailExpression validates that tail expressions match the function's declared return type
+func (a *Analyzer) validateTailExpression(tailExpr *ast.ExprStmt) {
+	// Get the current function's return type
+	var expectedReturnType *stdlib.TypeRef
+	if a.currentFunction != "" {
+		if fn, exists := a.localFunctions[a.currentFunction]; exists && fn != nil {
+			if fn.Return != nil {
+				expectedReturnType = a.convertASTTypeToTypeRef(fn.Return)
+			}
+		}
+	}
+
+	// Check if we're using a tail expression in a void function
+	if expectedReturnType == nil {
+		a.addError(fmt.Sprintf("void function '%s' cannot have a tail expression", a.currentFunction), tailExpr.NodePos())
+		return
+	}
+
+	// Validate the tail expression type
+	actualType := a.inferExpressionType(tailExpr.Expr)
+	if actualType != nil && expectedReturnType != nil {
+		if !a.areTypesCompatible(actualType, expectedReturnType) {
+			a.addError(fmt.Sprintf("tail expression has type '%s' but function '%s' expects return type '%s'",
+				a.typeToString(actualType), a.currentFunction, a.typeToString(expectedReturnType)), tailExpr.NodePos())
+		}
+	}
+
+	// Also validate if it's a function call
+	a.validateReturnValueUsage(tailExpr.Expr, true, expectedReturnType)
+}
+
+// validateReturnStatement validates that return statements match the function's declared return type
+func (a *Analyzer) validateReturnStatement(returnStmt *ast.ReturnStmt) {
+	// Get the current function's return type
+	var expectedReturnType *stdlib.TypeRef
+	if a.currentFunction != "" {
+		if fn, exists := a.localFunctions[a.currentFunction]; exists && fn != nil {
+			if fn.Return != nil {
+				expectedReturnType = a.convertASTTypeToTypeRef(fn.Return)
+			}
+		}
+	}
+
+	if returnStmt.Value != nil {
+		// Analyze the return expression
+		a.analyzeExpression(returnStmt.Value)
+
+		// Check if we're returning from a void function
+		if expectedReturnType == nil {
+			a.addError(fmt.Sprintf("void function '%s' cannot return a value", a.currentFunction), returnStmt.NodePos())
+			return
+		}
+
+		// Validate the return value type
+		actualType := a.inferExpressionType(returnStmt.Value)
+		if actualType != nil && expectedReturnType != nil {
+			if !a.areTypesCompatible(actualType, expectedReturnType) {
+				a.addError(fmt.Sprintf("cannot return value of type '%s' from function with return type '%s'",
+					a.typeToString(actualType), a.typeToString(expectedReturnType)), returnStmt.NodePos())
+			}
+		}
+
+		// Also validate if it's a function call
+		a.validateReturnValueUsage(returnStmt.Value, true, expectedReturnType)
+	} else {
+		// Empty return statement - check if function expects a return value
+		if expectedReturnType != nil {
+			a.addError(fmt.Sprintf("function '%s' must return a value of type '%s'",
+				a.currentFunction, a.typeToString(expectedReturnType)), returnStmt.NodePos())
+		}
+	}
+}
+
+// validateReturnValueUsage checks if function return values are properly handled
+func (a *Analyzer) validateReturnValueUsage(expr ast.Expr, valueRequired bool, expectedType *stdlib.TypeRef) {
+	// Only validate CallExpr nodes
+	call, isCall := expr.(*ast.CallExpr)
+	if !isCall {
+		return
+	}
+
+	// Get the return type of the function
+	returnType := a.inferCallExpressionType(call)
+
+	if valueRequired && returnType == nil {
+		// Error: Using void function where value is expected
+		funcName := a.extractFunctionName(call)
+		a.addError(fmt.Sprintf("function '%s' does not return a value but is used in a context that requires one", funcName), call.NodePos())
+		return
+	}
+
+	// If we have both a return type and an expected type, validate compatibility
+	if valueRequired && returnType != nil && expectedType != nil {
+		if !a.areTypesCompatible(returnType, expectedType) {
+			funcName := a.extractFunctionName(call)
+			returnTypeName := "void"
+			if returnType != nil {
+				returnTypeName = a.typeToString(returnType)
+			}
+			expectedTypeName := "void"
+			if expectedType != nil {
+				expectedTypeName = a.typeToString(expectedType)
+			}
+			a.addError(fmt.Sprintf("function '%s' returns '%s' but expected '%s'",
+				funcName, returnTypeName, expectedTypeName), call.NodePos())
+		}
+	}
+
+	// For now, we don't warn about ignored return values, but this could be added as a warning
+	// if !valueRequired && returnType != nil {
+	//     funcName := a.extractFunctionName(call)
+	//     a.addWarning(fmt.Sprintf("ignoring return value of function '%s'", funcName), call.NodePos())
+	// }
+}
+
+// extractFunctionName gets the function name from a CallExpr for error messages
+func (a *Analyzer) extractFunctionName(call *ast.CallExpr) string {
+	switch callee := call.Callee.(type) {
+	case *ast.IdentExpr:
+		return callee.Name
+	case *ast.CalleePath:
+		if len(callee.Parts) == 1 {
+			return callee.Parts[0].Value
+		} else if len(callee.Parts) == 2 {
+			return fmt.Sprintf("%s::%s", callee.Parts[0].Value, callee.Parts[1].Value)
+		}
+	}
+	return "unknown function"
+}
+
+// areTypesCompatible checks if two types are compatible for assignment
+func (a *Analyzer) areTypesCompatible(actual, expected *stdlib.TypeRef) bool {
+	if actual == nil || expected == nil {
+		return false
+	}
+
+	// Exact match
+	if actual.Name == expected.Name {
+		// For generic types, check generic arguments too
+		if len(actual.GenericArgs) != len(expected.GenericArgs) {
+			return false
+		}
+		for i, actualArg := range actual.GenericArgs {
+			if !a.areTypesCompatible(actualArg, expected.GenericArgs[i]) {
+				return false
+			}
+		}
+		return true
+	}
+
+	// Type promotion rules (e.g., smaller numeric types can be promoted to larger ones)
+	return a.canPromoteType(actual, expected)
 }
 
 func (a *Analyzer) validateModuleFunctionCall(callee *ast.CalleePath, call *ast.CallExpr) {
@@ -973,4 +1133,49 @@ func (a *Analyzer) addFunctionCall(calledFunc string) {
 // getCurrentFunctionName returns the name of the function currently being analyzed
 func (a *Analyzer) getCurrentFunctionName() string {
 	return a.currentFunction
+}
+
+// detectUnusedFunctions identifies functions that are defined but never called
+func (a *Analyzer) detectUnusedFunctions() {
+	// Create set of all called functions
+	calledFunctions := make(map[string]bool)
+
+	// Collect all function calls from the call graph
+	for _, calledFuncs := range a.callGraph.FunctionCalls {
+		for _, calledFunc := range calledFuncs {
+			calledFunctions[calledFunc] = true
+		}
+	}
+
+	// Check each local function
+	for funcName, fn := range a.localFunctions {
+		if fn == nil {
+			continue
+		}
+
+		// Skip entry points that can be called externally
+		if a.isFunctionEntryPoint(fn) {
+			continue
+		}
+
+		// Report unused function
+		if !calledFunctions[funcName] {
+			a.addError(fmt.Sprintf("function '%s' is defined but never used", funcName), fn.NodePos())
+		}
+	}
+}
+
+// isFunctionEntryPoint checks if a function is an entry point (external or constructor)
+func (a *Analyzer) isFunctionEntryPoint(fn *ast.Function) bool {
+	// External functions can be called from outside the contract
+	if fn.External {
+		return true
+	}
+
+	// Constructor functions are called during deployment
+	if fn.Attribute != nil && fn.Attribute.Name == "create" {
+		return true
+	}
+
+	return false
 }

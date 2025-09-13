@@ -10,7 +10,7 @@ import (
 func TestLiteralValidation(t *testing.T) {
 	t.Run("ValidLiterals", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Valid numeric literals
 				let small = 42;
 				let large = 12345678901234567890;
@@ -34,7 +34,7 @@ func TestLiteralValidation(t *testing.T) {
 
 	t.Run("InvalidNumericLiterals", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				let leading_zero = 0123;
 			}
 		}`
@@ -60,7 +60,7 @@ func TestLiteralValidation(t *testing.T) {
 
 	t.Run("HexadecimalLiterals", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Valid hex literals
 				let small_hex: U8 = 0x1;
 				let medium_hex: U16 = 0xFF;
@@ -81,7 +81,7 @@ func TestLiteralValidation(t *testing.T) {
 
 	t.Run("InvalidHexLiterals", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// Invalid: hex number that's too large (exceeds U256)
 				let huge_hex = 0x10000000000000000000000000000000000000000000000000000000000000000;
 			}
@@ -107,7 +107,7 @@ func TestLiteralValidation(t *testing.T) {
 
 	t.Run("AddressVsHexDistinction", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// These should be treated as hex numbers, not addresses
 				let hex1: U8 = 0x1;
 				let hex2: U16 = 0x123;
@@ -130,7 +130,7 @@ func TestLiteralValidation(t *testing.T) {
 
 	t.Run("BasicValidation", func(t *testing.T) {
 		source := `contract Test {
-			fn test() {
+			ext fn test() {
 				// This should be fine
 				let normal = 42;
 				let text = "hello";

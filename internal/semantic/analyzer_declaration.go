@@ -20,6 +20,13 @@ func (a *Analyzer) analyzeLetStatement(letStmt *ast.LetStmt) {
 		return // Error already reported
 	}
 
+	// Analyze the initialization expression if present
+	if letStmt.Expr != nil {
+		a.analyzeExpression(letStmt.Expr)
+		// Validate return value usage with expected type
+		a.validateReturnValueUsage(letStmt.Expr, true, varType) // value is required for assignment with expected type
+	}
+
 	a.symbols.DefineVariable(letStmt.Name.Value, letStmt, letStmt.NodePos(), varType, letStmt.Mut)
 }
 
@@ -43,7 +50,6 @@ func (a *Analyzer) determineVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
 		}
 
 		if letStmt.Expr != nil {
-			a.analyzeExpression(letStmt.Expr)
 			a.validateExplicitTypeAssignment(letStmt, varType)
 			return varType
 		}
@@ -80,7 +86,6 @@ func (a *Analyzer) handleUninitializedVariable(letStmt *ast.LetStmt) *stdlib.Typ
 }
 
 func (a *Analyzer) inferVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
-	a.analyzeExpression(letStmt.Expr)
 
 	// Type inference depends on mutability to optimize for different use cases:
 	// - Immutable: smallest type for gas efficiency (value never changes)
@@ -188,9 +193,8 @@ func (a *Analyzer) isTypeCompatible(from, to *stdlib.TypeRef) bool {
 		return true
 	}
 
-	// For now, we require exact type matches for explicit declarations
-	// In the future, we could implement numeric type promotion here
-	return false
+	// Type promotion for numeric types (e.g., U8 -> U256)
+	return a.canPromoteType(from, to)
 }
 
 func (a *Analyzer) analyzeAssignStatement(assignStmt *ast.AssignStmt) {
@@ -290,6 +294,8 @@ func (a *Analyzer) analyzeFunctionBlock(block *ast.FunctionBlock) {
 	// These are semantically significant as they can affect return type checking
 	if block.TailExpr != nil {
 		a.analyzeExpression(block.TailExpr.Expr)
+		// Validate tail expression type against function return type
+		a.validateTailExpression(block.TailExpr)
 	}
 }
 

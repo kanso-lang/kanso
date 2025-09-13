@@ -6,7 +6,7 @@ Kanso is a Rust-inspired smart contract programming language with a focus on saf
 
 - **Rust-inspired Syntax**: Modern, clean syntax familiar to Rust developers
 - **Contract Attributes**: Built-in attributes for contract structure (`#[storage]`, `#[event]`, `#[create]`)
-- **Semantic Analysis**: Advanced static analysis with reads/writes validation
+- **Semantic Analysis**: Advanced static analysis with reads/writes validation, return value validation, type promotion, and unused function detection
 - **Language Server Protocol**: Full IDE support with semantic highlighting, diagnostics, and real-time error detection
 - **Mutable Variables**: Support for both immutable (`let`) and mutable (`let mut`) variable declarations
 - **External Functions**: Clear distinction between internal and external contract functions
@@ -250,7 +250,7 @@ go build -o kanso-lsp ./cmd/kanso-lsp
 ### Testing
 
 ```bash
-# Run all tests (61 tests across all packages)
+# Run all tests (80+ tests across all packages)
 go test ./...
 
 # Run specific package tests with verbose output
@@ -258,16 +258,85 @@ go test ./internal/parser -v
 go test ./internal/semantic -v
 go test ./internal/ast -v
 
+# Run tests with coverage
+go test ./... -cover
+
 # Run specific test patterns
 go test ./internal/parser -run TestParse
 go test ./internal/semantic -run TestERC20
+
+# Run specific semantic validation tests
+go test ./internal/semantic -run TestReturnValueValidation -v
+go test ./internal/semantic -run TestUnusedFunctionDetection -v
+go test ./internal/semantic -run TestTypePromotionInFunctionCalls -v
 ```
+
+### Testing Guidelines
+
+#### Writing Test Functions
+
+**IMPORTANT**: Test functions should always use the `ext fn` modifier to avoid unused function warnings:
+
+```kanso
+// CORRECT: Use ext fn for test functions
+contract Test {
+    ext fn test_something() {
+        let x = 42;
+    }
+}
+
+// INCORRECT: Regular fn will trigger unused function warning
+contract Test {
+    fn test_something() {  // Warning: function 'test_something' is defined but never used
+        let x = 42;
+    }
+}
+```
+
+#### Why ext fn for Tests?
+
+Functions marked with `ext fn` are considered blockchain entry points and are never flagged as unused because they can be called by external transactions. Regular internal functions (`fn`) are only considered used if they're called by other functions within the contract.
+
+#### Test Structure Best Practices
+
+1. **Use External Functions**: Always mark test functions as `ext fn`
+2. **Descriptive Names**: Use clear, descriptive function names for tests
+3. **Type Annotations**: Include explicit type annotations to test type validation
+4. **Error Cases**: Test both valid and invalid scenarios
+5. **Multiple Contracts**: Use separate contracts for different test scenarios
+
+```kanso
+contract ValidTypeTest {
+    ext fn test_valid_assignment() {
+        let x: U256 = 42;  // Valid: literal promotes to U256
+    }
+}
+
+contract InvalidTypeTest {
+    ext fn test_invalid_assignment() {
+        let x: U8 = 300;   // Invalid: exceeds U8 range
+    }
+}
+```
+
+#### Semantic Analysis Features
+
+The semantic analyzer validates:
+
+- **Return Value Validation**: Ensures function calls return expected types with proper type promotion
+- **Type Promotion**: Validates numeric type promotions (U8 → U16 → U32 → U64 → U128 → U256)
+- **Return Statement Validation**: Checks return values match function signatures
+- **Unused Function Detection**: Warns about internal functions that are never called
+- **Type Compatibility**: Ensures assignments and expressions use compatible types
+- **Literal Validation**: Validates numeric, boolean, and string literals
+- **Call Path Analysis**: Tracks function calls for reads/writes validation
+- **Variable Scoping**: Validates variable declarations and usage within scopes
 
 ### Code Organization
 
 - **AST Package** (`internal/ast/`): AST node definitions, metadata system, and string formatting
 - **Parser Package** (`internal/parser/`): Lexical analysis, recursive descent parsing, and integration tests
-- **Semantic Package** (`internal/semantic/`): Type checking, symbol resolution, and contract validation
+- **Semantic Package** (`internal/semantic/`): Comprehensive type checking, symbol resolution, contract validation, return value validation, type promotion system, and unused function detection
 - **LSP Package** (`internal/lsp/`): Language Server Protocol with semantic tokens and diagnostics
 - **Builtins Package** (`internal/builtins/`): Built-in type definitions (U8, U16, U32, U64, U128, U256, Bool, Address)
 - **Stdlib Package** (`internal/stdlib/`): Standard library module definitions and function signatures
