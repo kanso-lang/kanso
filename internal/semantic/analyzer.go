@@ -24,12 +24,33 @@ var validFunctionAttributes = map[string]bool{
 	"create": true, // Constructor functions with initialization-only semantics
 }
 
+// StorageAccess represents a direct storage access found in the code
+type StorageAccess struct {
+	StructName string // e.g. "State"
+	FieldName  string // e.g. "balances"
+	AccessType string // "read" or "write"
+	Position   ast.Position
+}
+
+// FunctionCallGraph tracks function calls and storage accesses for call path analysis
+type FunctionCallGraph struct {
+	// DirectStorageAccesses maps function names to the storage they directly access
+	DirectStorageAccesses map[string][]StorageAccess
+	// FunctionCalls maps function names to the local functions they call
+	FunctionCalls map[string][]string
+	// RequiredReads/Writes maps function names to storage they need (including transitive)
+	RequiredReads  map[string]map[string]bool
+	RequiredWrites map[string]map[string]bool
+}
+
 type Analyzer struct {
-	contract       *ast.Contract
-	errors         []errors.CompilerError   // All errors with suggestions and proper formatting
-	symbols        *SymbolTable             // Tracks variable/function scoping within contract
-	context        *ContextRegistry         // Manages imports and standard library integration
-	localFunctions map[string]*ast.Function // Tracks functions defined in this contract
+	contract        *ast.Contract
+	errors          []errors.CompilerError   // All errors with suggestions and proper formatting
+	symbols         *SymbolTable             // Tracks variable/function scoping within contract
+	context         *ContextRegistry         // Manages imports and standard library integration
+	localFunctions  map[string]*ast.Function // Tracks functions defined in this contract
+	callGraph       *FunctionCallGraph       // Tracks function calls and storage access for validation
+	currentFunction string                   // Name of the function currently being analyzed
 }
 
 func NewAnalyzer() *Analyzer {
@@ -37,6 +58,12 @@ func NewAnalyzer() *Analyzer {
 		errors:         make([]errors.CompilerError, 0),
 		context:        NewContextRegistry(),
 		localFunctions: make(map[string]*ast.Function),
+		callGraph: &FunctionCallGraph{
+			DirectStorageAccesses: make(map[string][]StorageAccess),
+			FunctionCalls:         make(map[string][]string),
+			RequiredReads:         make(map[string]map[string]bool),
+			RequiredWrites:        make(map[string]map[string]bool),
+		},
 	}
 }
 
@@ -50,6 +77,14 @@ func (a *Analyzer) Analyze(contract *ast.Contract) []SemanticError {
 	a.errors = make([]errors.CompilerError, 0)
 	a.localFunctions = make(map[string]*ast.Function) // Reset for each analysis
 	a.symbols = NewSymbolTable(nil)                   // Root scope for contract-level declarations
+
+	// Reset call graph for each analysis
+	a.callGraph = &FunctionCallGraph{
+		DirectStorageAccesses: make(map[string][]StorageAccess),
+		FunctionCalls:         make(map[string][]string),
+		RequiredReads:         make(map[string]map[string]bool),
+		RequiredWrites:        make(map[string]map[string]bool),
+	}
 
 	a.analyzeContract(contract)
 
@@ -120,6 +155,10 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 			a.analyzeStruct(node)
 		}
 	}
+
+	// Third pass: analyze call paths and validate reads/writes declarations
+	// This must happen after all function bodies are analyzed so we have complete information
+	a.performCallPathAnalysis(storageStructs)
 }
 
 func (a *Analyzer) analyzeFunction(fn *ast.Function) {
@@ -252,7 +291,7 @@ func (a *Analyzer) validateFunctionReadsWrites(fn *ast.Function, storageStructs 
 		}
 	}
 
-	// TODO: Complete call path analysis for storage access validation
+	// Note: Call path analysis is now performed after all functions are processed
 }
 
 func (a *Analyzer) analyzeFunctionBody(fn *ast.Function) {
@@ -273,7 +312,20 @@ func (a *Analyzer) analyzeFunctionBody(fn *ast.Function) {
 		}
 	}
 
+	// Initialize collections for this function
+	functionName := fn.Name.Value
+	a.callGraph.DirectStorageAccesses[functionName] = make([]StorageAccess, 0)
+	a.callGraph.FunctionCalls[functionName] = make([]string, 0)
+
+	// Set current function context for storage access and call tracking
+	previousFunction := a.currentFunction
+	a.currentFunction = functionName
+
+	// Analyze function body and collect storage accesses and function calls
 	a.analyzeFunctionBlock(fn.Body)
+
+	// Restore previous function context
+	a.currentFunction = previousFunction
 
 	// Perform flow control analysis
 	flowAnalyzer := NewFlowAnalyzer(a)
@@ -317,20 +369,28 @@ func (a *Analyzer) validateDirectFunctionCall(functionName string, call *ast.Cal
 		return
 	}
 
+	// Track local function calls for call path analysis
+	if isLocalFunction {
+		a.addFunctionCall(functionName)
+	}
+
 	// Get function definition for parameter validation
 	var funcDef *stdlib.FunctionDefinition
 	if isImported {
 		funcDef = a.context.GetFunctionDefinition(functionName)
 	}
-	// TODO: Implement local function signature extraction for parameter validation
+	// Get local function signature if available
+	if isLocalFunction {
+		funcDef = a.extractLocalFunctionSignature(functionName)
+	}
 
 	if isImported && funcDef == nil {
 		a.addError(fmt.Sprintf("function '%s' definition not found", functionName), call.NodePos())
 		return
 	}
 
-	// Validate parameter count (only for imported functions with known signatures)
-	if isImported && funcDef != nil {
+	// Validate parameter count for functions with known signatures
+	if funcDef != nil {
 		if len(call.Args) != len(funcDef.Parameters) {
 			a.addCompilerError(errors.InvalidArguments(functionName, len(funcDef.Parameters), len(call.Args), call.NodePos()))
 			return
@@ -345,10 +405,74 @@ func (a *Analyzer) validateDirectFunctionCall(functionName string, call *ast.Cal
 			}
 		}
 	} else {
-		// For local functions, just analyze arguments without strict validation
+		// For functions without known signatures, just analyze arguments without strict validation
 		for _, arg := range call.Args {
 			a.analyzeExpression(arg)
 		}
+	}
+}
+
+// extractLocalFunctionSignature creates a FunctionDefinition from a local function's AST
+func (a *Analyzer) extractLocalFunctionSignature(functionName string) *stdlib.FunctionDefinition {
+	function, exists := a.localFunctions[functionName]
+	if !exists {
+		return nil
+	}
+
+	// Extract parameters
+	var parameters []stdlib.ParameterDefinition
+	for _, param := range function.Params {
+		paramType := a.convertASTTypeToTypeRef(param.Type)
+		if paramType != nil {
+			parameters = append(parameters, stdlib.ParameterDefinition{
+				Name: param.Name.Value,
+				Type: paramType,
+			})
+		}
+	}
+
+	// Extract return type
+	var returnType *stdlib.TypeRef
+	if function.Return != nil {
+		returnType = a.convertASTTypeToTypeRef(function.Return)
+	}
+
+	return &stdlib.FunctionDefinition{
+		Name:       functionName,
+		Parameters: parameters,
+		ReturnType: returnType,
+		IsGeneric:  false, // Local functions are not generic for now
+	}
+}
+
+// convertASTTypeToTypeRef converts an AST VariableType to a stdlib TypeRef
+func (a *Analyzer) convertASTTypeToTypeRef(astType *ast.VariableType) *stdlib.TypeRef {
+	if astType == nil {
+		return nil
+	}
+
+	// Handle tuple types
+	if len(astType.TupleElements) > 0 {
+		// For now, represent tuples as a special type reference
+		// This could be improved with proper tuple type system
+		return &stdlib.TypeRef{
+			Name:      "Tuple", // Placeholder for tuple types
+			IsGeneric: false,
+		}
+	}
+
+	// Convert generic arguments if any
+	var genericArgs []*stdlib.TypeRef
+	for _, generic := range astType.Generics {
+		if genericType := a.convertASTTypeToTypeRef(generic); genericType != nil {
+			genericArgs = append(genericArgs, genericType)
+		}
+	}
+
+	return &stdlib.TypeRef{
+		Name:        astType.Name.Value,
+		IsGeneric:   false, // AST types are concrete, not generic parameters
+		GenericArgs: genericArgs,
 	}
 }
 
@@ -702,4 +826,151 @@ func (a *Analyzer) validateGenericLiteral(value string, pos ast.Position) {
 // isHexDigit checks if a byte represents a valid hexadecimal digit
 func (a *Analyzer) isHexDigit(b byte) bool {
 	return (b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')
+}
+
+// performCallPathAnalysis analyzes the complete call graph and validates reads/writes declarations
+func (a *Analyzer) performCallPathAnalysis(storageStructs map[string]bool) {
+	// Step 1: Compute transitive closure of storage requirements
+	a.computeTransitiveStorageRequirements()
+
+	// Step 2: Validate that all functions declare their required reads/writes
+	a.validateStorageDeclarations()
+}
+
+// computeTransitiveStorageRequirements propagates storage access requirements through the call graph
+func (a *Analyzer) computeTransitiveStorageRequirements() {
+	// Initialize direct requirements
+	for funcName, accesses := range a.callGraph.DirectStorageAccesses {
+		a.callGraph.RequiredReads[funcName] = make(map[string]bool)
+		a.callGraph.RequiredWrites[funcName] = make(map[string]bool)
+
+		// Add direct storage accesses
+		for _, access := range accesses {
+			if access.AccessType == "read" {
+				a.callGraph.RequiredReads[funcName][access.StructName] = true
+			} else if access.AccessType == "write" {
+				a.callGraph.RequiredWrites[funcName][access.StructName] = true
+				// Writes imply reads in EVM context
+				a.callGraph.RequiredReads[funcName][access.StructName] = true
+			}
+		}
+	}
+
+	// Propagate requirements through call graph using fixed-point iteration
+	changed := true
+	for changed {
+		changed = false
+		for callerFunc, calledFuncs := range a.callGraph.FunctionCalls {
+			for _, calledFunc := range calledFuncs {
+				// Propagate reads from called function to caller
+				if calledReads, exists := a.callGraph.RequiredReads[calledFunc]; exists {
+					for structName := range calledReads {
+						if !a.callGraph.RequiredReads[callerFunc][structName] {
+							a.callGraph.RequiredReads[callerFunc][structName] = true
+							changed = true
+						}
+					}
+				}
+
+				// Propagate writes from called function to caller
+				if calledWrites, exists := a.callGraph.RequiredWrites[calledFunc]; exists {
+					for structName := range calledWrites {
+						if !a.callGraph.RequiredWrites[callerFunc][structName] {
+							a.callGraph.RequiredWrites[callerFunc][structName] = true
+							changed = true
+						}
+						// Writes also imply reads
+						if !a.callGraph.RequiredReads[callerFunc][structName] {
+							a.callGraph.RequiredReads[callerFunc][structName] = true
+							changed = true
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// validateStorageDeclarations ensures all functions declare the storage they access
+func (a *Analyzer) validateStorageDeclarations() {
+	for funcName, fn := range a.localFunctions {
+		// Get declared reads and writes
+		declaredReads := make(map[string]bool)
+		declaredWrites := make(map[string]bool)
+
+		for _, read := range fn.Reads {
+			declaredReads[read.Value] = true
+		}
+
+		for _, write := range fn.Writes {
+			declaredWrites[write.Value] = true
+			// Writes imply reads, so don't require separate read declaration
+			declaredReads[write.Value] = true
+		}
+
+		// Check required reads
+		if requiredReads, exists := a.callGraph.RequiredReads[funcName]; exists {
+			for structName := range requiredReads {
+				if !declaredReads[structName] {
+					a.addError(fmt.Sprintf("function '%s' accesses storage struct '%s' but does not declare it in reads clause",
+						funcName, structName), fn.NodePos())
+				}
+			}
+		}
+
+		// Check required writes
+		if requiredWrites, exists := a.callGraph.RequiredWrites[funcName]; exists {
+			for structName := range requiredWrites {
+				if !declaredWrites[structName] {
+					a.addError(fmt.Sprintf("function '%s' writes to storage struct '%s' but does not declare it in writes clause",
+						funcName, structName), fn.NodePos())
+				}
+			}
+		}
+	}
+}
+
+// addStorageAccess records a storage access for the current function being analyzed
+func (a *Analyzer) addStorageAccess(structName, fieldName, accessType string, pos ast.Position) {
+	// Find the current function being analyzed
+	currentFunc := a.getCurrentFunctionName()
+	if currentFunc == "" {
+		return // Not in a function context
+	}
+
+	access := StorageAccess{
+		StructName: structName,
+		FieldName:  fieldName,
+		AccessType: accessType,
+		Position:   pos,
+	}
+
+	a.callGraph.DirectStorageAccesses[currentFunc] = append(
+		a.callGraph.DirectStorageAccesses[currentFunc], access)
+}
+
+// addFunctionCall records a function call for the current function being analyzed
+func (a *Analyzer) addFunctionCall(calledFunc string) {
+	// Find the current function being analyzed
+	currentFunc := a.getCurrentFunctionName()
+	if currentFunc == "" {
+		return // Not in a function context
+	}
+
+	// Check if it's a local function call
+	if _, isLocal := a.localFunctions[calledFunc]; isLocal {
+		// Avoid duplicates
+		for _, existing := range a.callGraph.FunctionCalls[currentFunc] {
+			if existing == calledFunc {
+				return
+			}
+		}
+		a.callGraph.FunctionCalls[currentFunc] = append(
+			a.callGraph.FunctionCalls[currentFunc], calledFunc)
+	}
+}
+
+// getCurrentFunctionName returns the name of the function currently being analyzed
+func (a *Analyzer) getCurrentFunctionName() string {
+	return a.currentFunction
 }

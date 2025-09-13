@@ -201,7 +201,8 @@ func (a *Analyzer) analyzeAssignStatement(assignStmt *ast.AssignStmt) {
 		a.validateVariableAssignment(identExpr, assignStmt.NodePos())
 	} else {
 		// Complex targets (field access, indexing) need full validation
-		a.analyzeExpression(assignStmt.Target)
+		// Analyze in write context to track storage writes
+		a.analyzeExpressionInWriteContext(assignStmt.Target)
 	}
 }
 
@@ -305,6 +306,9 @@ func (a *Analyzer) analyzeFieldAccess(fieldExpr *ast.FieldAccessExpr) *stdlib.Ty
 		a.addError(fmt.Sprintf("type '%s' is not a struct", targetType.Name), fieldExpr.NodePos())
 		return nil
 	}
+
+	// Track storage access if this is a storage struct
+	a.trackStorageAccessIfNeeded(fieldExpr, structDef)
 
 	return a.validateStructField(structDef, fieldExpr.Field, fieldExpr.NodePos())
 }
@@ -514,4 +518,47 @@ func (a *Analyzer) checkMutabilityShadowing(letStmt *ast.LetStmt) {
 	}
 
 	// Note: Mutable variable usage tracking could be added here for optimization warnings
+}
+
+// trackStorageAccessIfNeeded records storage access if the field access is on a storage struct
+func (a *Analyzer) trackStorageAccessIfNeeded(fieldExpr *ast.FieldAccessExpr, structDef *ast.Struct) {
+	// Check if this is a storage struct
+	if structDef.Attribute == nil || structDef.Attribute.Name != "storage" {
+		return // Not a storage struct
+	}
+
+	// For now, assume all field accesses are reads by default
+	// We'll track writes separately in assignment context
+	a.addStorageAccess(structDef.Name.Value, fieldExpr.Field, "read", fieldExpr.NodePos())
+}
+
+// analyzeExpressionInWriteContext analyzes expressions that are being written to
+// This is specifically for tracking storage writes in assignment contexts
+func (a *Analyzer) analyzeExpressionInWriteContext(expr ast.Expr) {
+	switch node := expr.(type) {
+	case *ast.FieldAccessExpr:
+		// Analyze the target first
+		a.analyzeExpression(node.Target)
+
+		// Track this as a write if it's a storage field
+		targetType := a.inferExpressionType(node.Target)
+		if targetType != nil {
+			structDef := a.context.GetUserDefinedType(targetType.Name)
+			if structDef != nil && structDef.Attribute != nil && structDef.Attribute.Name == "storage" {
+				a.addStorageAccess(structDef.Name.Value, node.Field, "write", node.NodePos())
+			}
+		}
+
+		// Also do normal field access validation
+		a.analyzeFieldAccess(node)
+
+	case *ast.IndexExpr:
+		// For index expressions like State.field[key], we need to check the target
+		a.analyzeExpressionInWriteContext(node.Target)
+		a.analyzeExpression(node.Index)
+
+	default:
+		// For other expression types, fall back to normal analysis
+		a.analyzeExpression(expr)
+	}
 }

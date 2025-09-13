@@ -643,6 +643,37 @@ func TestInvalidFunctionCalls(t *testing.T) {
 	assert.True(t, found, "Should catch wrong argument count")
 }
 
+func TestLocalFunctionParameterValidation(t *testing.T) {
+	source := `
+		contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			fn helper(amount: U256, user: Address) -> U256 reads State {
+				State.balance + amount
+			}
+
+			fn main() writes State {
+				let result1 = helper(100, 0x1234567890123456789012345678901234567890);  // Valid call
+				let result2 = helper(200);  // Error: missing parameter
+				let result3 = helper(300, 0x1234567890123456789012345678901234567890, 400);  // Error: extra parameter
+			}
+		}
+	`
+
+	contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+	assert.Empty(t, parseErrors, "Should have no parse errors")
+
+	analyzer := NewAnalyzer()
+	errors := analyzer.Analyze(contract)
+
+	assert.Len(t, errors, 2, "Should have exactly two parameter validation errors")
+	assert.Contains(t, errors[0].Message, "helper", "First error should be about helper function")
+	assert.Contains(t, errors[1].Message, "helper", "Second error should be about helper function")
+}
+
 func TestParameterTypeValidation(t *testing.T) {
 	source := `contract Test {
 
@@ -804,7 +835,7 @@ func TestFieldAccessValidation(t *testing.T) {
 				owner: Address,
 			}
 			
-			fn test() {
+			fn test() reads State {
 				let amount = State.balance;  // Valid field access
 				let user = State.owner;     // Valid field access
 			}
@@ -828,7 +859,7 @@ func TestInvalidFieldAccess(t *testing.T) {
 				balance: U256,
 			}
 			
-			fn test() {
+			fn test() reads State {
 				let invalid = State.unknown_field;  // Error: field doesn't exist
 			}
 		}
@@ -1366,4 +1397,674 @@ func TestVariableScopingWithComplexExpressions(t *testing.T) {
 		// This should work and currently does
 		assert.Empty(t, errors, "Simple variable declarations should work fine")
 	})
+}
+
+func TestCallPathAnalysis(t *testing.T) {
+	t.Run("DirectStorageAccessRequiresDeclaration", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			// Missing reads State declaration
+			fn get_balance() -> U256 {
+				State.balance
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.Len(t, errors, 1, "Should have one error")
+		assert.Contains(t, errors[0].Message, "accesses storage struct 'State'")
+		assert.Contains(t, errors[0].Message, "does not declare it in reads clause")
+	})
+
+	t.Run("TransitiveStorageAccessRequiresDeclaration", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			fn get_balance() -> U256 reads State {
+				State.balance
+			}
+
+			// This calls get_balance but doesn't declare reads State
+			fn check_balance() -> U256 {
+				get_balance()
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.Len(t, errors, 1, "Should have one error for transitive access")
+		assert.Contains(t, errors[0].Message, "accesses storage struct 'State'")
+		assert.Contains(t, errors[0].Message, "does not declare it in reads clause")
+	})
+
+	t.Run("WriteAccessRequiresWritesDeclaration", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			// Missing writes State declaration
+			fn set_balance(amount: U256) {
+				State.balance = amount;
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// Should have errors for both missing reads and writes declarations
+		assert.True(t, len(errors) >= 2, "Should have at least two errors")
+
+		hasReadsError := false
+		hasWritesError := false
+		for _, err := range errors {
+			if containsSubstring(err.Message, "accesses storage struct") && containsSubstring(err.Message, "reads clause") {
+				hasReadsError = true
+			}
+			if containsSubstring(err.Message, "writes to storage struct") && containsSubstring(err.Message, "writes clause") {
+				hasWritesError = true
+			}
+		}
+
+		assert.True(t, hasReadsError, "Should have reads error")
+		assert.True(t, hasWritesError, "Should have writes error")
+	})
+
+	t.Run("CorrectDeclarationsPassValidation", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			fn get_balance() -> U256 reads State {
+				State.balance
+			}
+
+			fn set_balance(amount: U256) writes State {
+				State.balance = amount;
+			}
+
+			fn check_balance() -> U256 reads State {
+				get_balance()
+			}
+
+			fn update_balance(amount: U256) writes State {
+				set_balance(amount);
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.Empty(t, errors, "Should have no semantic errors when declarations are correct")
+	})
+
+	t.Run("ReadDeclarationButActuallyWriting", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			// Declares reads but actually writes - should fail
+			fn sneaky_write(amount: U256) reads State {
+				State.balance = amount;
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.True(t, len(errors) >= 1, "Should have at least one error")
+
+		hasWritesError := false
+		for _, err := range errors {
+			if containsSubstring(err.Message, "writes to storage struct") && containsSubstring(err.Message, "writes clause") {
+				hasWritesError = true
+				break
+			}
+		}
+
+		assert.True(t, hasWritesError, "Should detect that function writes but only declares reads")
+	})
+
+	t.Run("WriteDeclarationButOnlyReading", func(t *testing.T) {
+		// Note: This is actually OK - a function with writes declaration can read
+		// The writes declaration implies read permission, so this should pass
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			// Declares writes but only reads - this should be allowed
+			fn cautious_read() -> U256 writes State {
+				State.balance
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.Empty(t, errors, "Write permission should allow reading - this is valid")
+	})
+
+	t.Run("WriteFunctionCallsReadFunction", func(t *testing.T) {
+		// This should be OK - a write function can call a read function
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			fn get_balance() -> U256 reads State {
+				State.balance
+			}
+
+			fn update_after_check(amount: U256) writes State {
+				let current = get_balance();
+				State.balance = amount;
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.Empty(t, errors, "Write function calling read function should be valid")
+	})
+
+	t.Run("ReadFunctionCallsWriteFunction", func(t *testing.T) {
+		// This should fail - a read function cannot call a write function
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+			}
+
+			fn set_balance(amount: U256) writes State {
+				State.balance = amount;
+			}
+
+			// Declares reads but calls a write function - should fail
+			fn bad_reader() -> U256 reads State {
+				set_balance(100);
+				State.balance
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.True(t, len(errors) >= 1, "Should have at least one error")
+
+		hasWritesError := false
+		for _, err := range errors {
+			if containsSubstring(err.Message, "writes to storage struct") && containsSubstring(err.Message, "writes clause") {
+				hasWritesError = true
+				break
+			}
+		}
+
+		assert.True(t, hasWritesError, "Should detect that read function transitively writes via function call")
+	})
+
+	t.Run("ComplexCallChainValidation", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct State {
+				balance: U256,
+				owner: Address,
+			}
+
+			// Level 3 - direct storage access
+			fn get_balance() -> U256 reads State {
+				State.balance
+			}
+
+			fn set_balance(amount: U256) writes State {
+				State.balance = amount;
+			}
+
+			// Level 2 - calls level 3 functions
+			fn check_and_get() -> U256 reads State {
+				get_balance()
+			}
+
+			fn update_and_set(amount: U256) writes State {
+				set_balance(amount);
+			}
+
+			// Level 1 - calls level 2 functions
+			fn high_level_read() -> U256 reads State {
+				check_and_get()
+			}
+
+			fn high_level_write(amount: U256) writes State {
+				update_and_set(amount);
+			}
+
+			// Mixed operations - should work
+			fn complex_operation(amount: U256) writes State {
+				let current = high_level_read();
+				high_level_write(amount);
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.Empty(t, errors, "Complex valid call chains should pass validation")
+	})
+
+	t.Run("MultipleStorageStructsIndependentAccess", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct UserState {
+				balance: U256,
+			}
+
+			#[storage]
+			struct SystemState {
+				total_supply: U256,
+			}
+
+			fn get_supply() -> U256 reads SystemState {
+				SystemState.total_supply
+			}
+
+			// Missing SystemState declaration - should fail
+			fn bad_function() -> U256 reads UserState {
+				get_supply()
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		assert.True(t, len(errors) >= 1, "Should have error for missing SystemState declaration")
+
+		hasSystemStateError := false
+		for _, err := range errors {
+			if containsSubstring(err.Message, "accesses storage struct 'SystemState'") {
+				hasSystemStateError = true
+				break
+			}
+		}
+
+		assert.True(t, hasSystemStateError, "Should detect missing SystemState reads declaration")
+	})
+
+	t.Run("MultipleStorageStructsMixedReadWrite", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct UserState {
+				balance: U256,
+				last_login: U256,
+			}
+
+			#[storage]
+			struct SystemState {
+				total_supply: U256,
+				admin: Address,
+			}
+
+			#[storage]
+			struct ConfigState {
+				fee_rate: U256,
+				paused: Bool,
+			}
+
+			fn get_user_info() -> U256 reads(UserState, SystemState) {
+				let balance = UserState.balance;
+				let supply = SystemState.total_supply;
+				balance + supply
+			}
+
+			// Function that writes to multiple structs (writes implies reads)
+			fn update_user_balance(amount: U256) writes(UserState, SystemState, ConfigState) {
+				let fee = ConfigState.fee_rate;
+				let supply = SystemState.total_supply;
+				UserState.balance = amount - fee;
+				UserState.last_login = 12345;
+			}
+
+			// Function that writes to multiple structs
+			fn admin_update(new_supply: U256, new_fee: U256) writes(SystemState, ConfigState, UserState) {
+				let user_count = UserState.balance;  // Just reading for calculation
+				SystemState.total_supply = new_supply;
+				ConfigState.fee_rate = new_fee;
+			}
+
+			// Error case: missing declarations
+			fn bad_mixed_access() reads(UserState) {
+				let balance = UserState.balance;     // OK: declared
+				let supply = SystemState.total_supply; // Error: SystemState not declared
+				ConfigState.fee_rate = 100;          // Error: ConfigState not declared for write
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// Should have errors for the bad_mixed_access function
+		assert.True(t, len(errors) >= 2, "Should have at least two errors for missing declarations")
+
+		hasSystemStateReadError := false
+		hasConfigStateWriteError := false
+
+		for _, err := range errors {
+			if containsSubstring(err.Message, "bad_mixed_access") {
+				if containsSubstring(err.Message, "SystemState") && containsSubstring(err.Message, "reads clause") {
+					hasSystemStateReadError = true
+				}
+				if containsSubstring(err.Message, "ConfigState") && containsSubstring(err.Message, "writes clause") {
+					hasConfigStateWriteError = true
+				}
+			}
+		}
+
+		assert.True(t, hasSystemStateReadError, "Should detect missing SystemState reads declaration")
+		assert.True(t, hasConfigStateWriteError, "Should detect missing ConfigState writes declaration")
+	})
+
+	t.Run("MultipleStorageStructsTransitiveAccess", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct UserState {
+				balance: U256,
+			}
+
+			#[storage]
+			struct SystemState {
+				total_supply: U256,
+			}
+
+			#[storage]
+			struct LogState {
+				event_count: U256,
+			}
+
+			// Helper functions with specific access patterns
+			fn read_user() -> U256 reads(UserState) {
+				UserState.balance
+			}
+
+			fn write_system(amount: U256) writes(SystemState) {
+				SystemState.total_supply = amount;
+			}
+
+			fn update_log() writes(LogState) {
+				LogState.event_count += 1;
+			}
+
+			fn read_multiple() -> U256 reads(UserState, SystemState) {
+				let user_bal = UserState.balance;
+				let supply = SystemState.total_supply;
+				user_bal + supply
+			}
+
+			// Complex function that calls multiple helpers - needs all permissions
+			fn complex_operation() writes(UserState, SystemState, LogState) {
+				let current_balance = read_user();        // Needs UserState reads (transitive)
+				let total = read_multiple();              // Needs UserState, SystemState reads (transitive)
+				write_system(total + 1000);              // Needs SystemState writes (transitive)
+				update_log();                             // Needs LogState writes (transitive)
+				UserState.balance = current_balance + 100; // Direct UserState write
+			}
+
+			// Error case: insufficient permissions for transitive calls
+			fn insufficient_permissions() reads(UserState) {
+				let balance = read_user();                // OK: UserState declared
+				write_system(1000);                       // Error: needs SystemState writes
+				update_log();                             // Error: needs LogState writes
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// Should have errors for insufficient_permissions function
+		assert.True(t, len(errors) >= 2, "Should have at least two errors for missing transitive permissions")
+
+		hasSystemWriteError := false
+		hasLogWriteError := false
+
+		for _, err := range errors {
+			if containsSubstring(err.Message, "insufficient_permissions") {
+				if containsSubstring(err.Message, "SystemState") && containsSubstring(err.Message, "writes clause") {
+					hasSystemWriteError = true
+				}
+				if containsSubstring(err.Message, "LogState") && containsSubstring(err.Message, "writes clause") {
+					hasLogWriteError = true
+				}
+			}
+		}
+
+		assert.True(t, hasSystemWriteError, "Should detect missing SystemState writes permission for transitive call")
+		assert.True(t, hasLogWriteError, "Should detect missing LogState writes permission for transitive call")
+	})
+
+	t.Run("MultipleStorageStructsPartialPermissions", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct TokenState {
+				balance: U256,
+				allowances: U256,
+			}
+
+			#[storage]
+			struct MetadataState {
+				name: String,
+				symbol: String,
+			}
+
+			#[storage]
+			struct AdminState {
+				owner: Address,
+				paused: Bool,
+			}
+
+			// Function with partial permissions - some correct, some missing
+			fn partial_access() writes(TokenState, MetadataState) {
+				// These should work
+				let balance = TokenState.balance;         // OK: TokenState writes (implies reads)
+				MetadataState.name = "NewToken";          // OK: MetadataState writes declared
+
+				// These should fail
+				AdminState.paused = true;                 // Error: AdminState writes not declared
+				let owner = AdminState.owner;             // Error: AdminState reads not declared
+			}
+
+			// Function that over-declares permissions (should be OK)
+			fn over_declared() writes(TokenState, MetadataState, AdminState) {
+				// Only actually uses TokenState
+				let balance = TokenState.balance;
+				TokenState.balance = balance + 100;
+				// MetadataState and AdminState permissions declared but not used - should be fine
+			}
+
+			// Complex mixed access with some functions having correct declarations
+			fn helper_read_token() -> U256 reads(TokenState) {
+				TokenState.balance
+			}
+
+			fn helper_write_admin(paused: Bool) writes(AdminState) {
+				AdminState.paused = paused;
+			}
+
+			fn complex_mixed() writes(TokenState, MetadataState, AdminState) {
+				let balance = helper_read_token();        // OK: TokenState reads via transitive call
+				let name = MetadataState.name;            // OK: MetadataState reads (writes implies reads)
+				helper_write_admin(false);                // OK: AdminState writes via transitive call
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// Should have errors for partial_access function only
+		assert.True(t, len(errors) >= 2, "Should have at least two errors for partial_access")
+
+		hasAdminWriteError := false
+		hasAdminReadError := false
+
+		for _, err := range errors {
+			if containsSubstring(err.Message, "partial_access") {
+				if containsSubstring(err.Message, "AdminState") && containsSubstring(err.Message, "writes clause") {
+					hasAdminWriteError = true
+				}
+				if containsSubstring(err.Message, "AdminState") && containsSubstring(err.Message, "reads clause") {
+					hasAdminReadError = true
+				}
+			}
+		}
+
+		assert.True(t, hasAdminWriteError, "Should detect missing AdminState writes declaration")
+		assert.True(t, hasAdminReadError, "Should detect missing AdminState reads declaration")
+	})
+
+	t.Run("MultipleStorageStructsComplexInteraction", func(t *testing.T) {
+		source := `contract Test {
+			#[storage]
+			struct BalanceState {
+				user_balance: U256,
+				locked_balance: U256,
+			}
+
+			#[storage]
+			struct GovernanceState {
+				voting_power: U256,
+				proposals: U256,
+			}
+
+			#[storage]
+			struct RewardState {
+				pending_rewards: U256,
+				claimed_rewards: U256,
+			}
+
+			// Multi-level function calls with different storage requirements
+			fn check_balance() -> U256 reads(BalanceState) {
+				BalanceState.user_balance + BalanceState.locked_balance
+			}
+
+			fn calculate_voting_power() -> U256 reads(BalanceState, GovernanceState) {
+				let balance = check_balance();            // Transitive BalanceState access
+				let base_power = GovernanceState.voting_power;
+				balance + base_power
+			}
+
+			fn process_reward() writes(RewardState, BalanceState) {
+				let balance = BalanceState.user_balance;
+				RewardState.pending_rewards += balance / 100;
+			}
+
+			fn claim_rewards() writes(BalanceState, RewardState, GovernanceState) {
+				let power = GovernanceState.voting_power;
+				let rewards = RewardState.pending_rewards;
+				BalanceState.user_balance += rewards;
+				RewardState.claimed_rewards += rewards;
+				RewardState.pending_rewards = 0;
+			}
+
+			// Master function that orchestrates everything
+			fn master_operation() writes(BalanceState, GovernanceState, RewardState) {
+				let voting_power = calculate_voting_power(); // Needs BalanceState, GovernanceState reads
+				process_reward();                             // Needs RewardState writes, BalanceState reads  
+				claim_rewards();                              // Needs BalanceState, RewardState writes, GovernanceState reads
+				GovernanceState.proposals += 1;              // Direct GovernanceState write
+			}
+
+			// Error case: function tries to call master_operation without sufficient permissions
+			fn insufficient_master_call() reads(BalanceState) {
+				master_operation();  // Error: needs more permissions than declared
+			}
+		}`
+
+		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
+		assert.Empty(t, parseErrors, "Should have no parse errors")
+
+		analyzer := NewAnalyzer()
+		errors := analyzer.Analyze(contract)
+
+		// Should have errors for insufficient_master_call
+		assert.True(t, len(errors) >= 2, "Should have at least two errors for insufficient permissions")
+
+		hasBalanceWriteError := false
+		hasGovernanceWriteError := false
+
+		for _, err := range errors {
+			if containsSubstring(err.Message, "insufficient_master_call") {
+				if containsSubstring(err.Message, "BalanceState") && containsSubstring(err.Message, "writes clause") {
+					hasBalanceWriteError = true
+				}
+				if containsSubstring(err.Message, "GovernanceState") && containsSubstring(err.Message, "writes clause") {
+					hasGovernanceWriteError = true
+				}
+			}
+		}
+
+		assert.True(t, hasBalanceWriteError, "Should detect missing BalanceState writes permission")
+		assert.True(t, hasGovernanceWriteError, "Should detect missing GovernanceState writes permission")
+	})
+}
+
+// Helper function for substring checking
+func containsSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
