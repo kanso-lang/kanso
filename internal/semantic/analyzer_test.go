@@ -676,7 +676,10 @@ func TestLocalFunctionParameterValidation(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter out unused variable warnings - we're testing parameter validation
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Len(t, errors, 2, "Should have exactly two parameter validation errors")
 	assert.Contains(t, errors[0].Message, "helper", "First error should be about helper function")
@@ -752,7 +755,10 @@ func TestVariableScopingAndTypeTracking(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter out unused variable and mutable warnings - we're testing variable scoping and type tracking
+	errors := FilterAllUnusedErrors(allErrors)
 
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
@@ -771,7 +777,10 @@ func TestVariableRedeclaration(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter out unused variable warnings - we're testing variable redeclaration
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Len(t, errors, 1, "Should have exactly one error")
 	assert.Contains(t, errors[0].Message, "already declared", "Should detect variable redeclaration")
@@ -791,7 +800,10 @@ func TestImmutableVariableAssignment(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Len(t, errors, 1, "Should have exactly one error")
 	assert.Contains(t, errors[0].Message, "immutable", "Should detect assignment to immutable variable")
@@ -800,9 +812,10 @@ func TestImmutableVariableAssignment(t *testing.T) {
 func TestMutableVariableAssignment(t *testing.T) {
 	source := `
 		contract Test {
-			ext fn test() {
+			ext fn test() -> U256 {
 				let mut counter = 0;
 				counter = 1; // Valid: mutable variable
+				return counter; // Use the variable
 			}
 		}
 	`
@@ -811,9 +824,11 @@ func TestMutableVariableAssignment(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
 
-	assert.Empty(t, errors, "Should have no semantic errors")
+	// Filter out development warnings - we're testing assignment validation
+	errors := FilterDevelopmentWarnings(allErrors)
+	assert.Empty(t, errors, "Should have no assignment-related semantic errors")
 }
 
 func TestUndefinedVariableAssignment(t *testing.T) {
@@ -855,7 +870,10 @@ func TestFieldAccessValidation(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
@@ -878,7 +896,10 @@ func TestInvalidFieldAccess(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Len(t, errors, 1, "Should have exactly one error")
 	assert.Contains(t, errors[0].Message, "unknown_field", "Should detect invalid field access")
@@ -921,7 +942,10 @@ func TestBinaryExpressionTypeInference(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
@@ -943,7 +967,10 @@ func TestInvalidBinaryExpressions(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Len(t, errors, 3, "Should have exactly 3 type errors")
 }
@@ -962,7 +989,10 @@ func TestUnaryExpressionTypeInference(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
@@ -981,7 +1011,10 @@ func TestInvalidUnaryExpressions(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
 
 	assert.Len(t, errors, 1, "Should have exactly 1 type error")
 }
@@ -1006,7 +1039,11 @@ func TestNumericTypePromotion(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
+
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
 
@@ -1026,7 +1063,11 @@ func TestNumericLiteralValidation(t *testing.T) {
 		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for valid numeric literals")
 	})
 
@@ -1040,7 +1081,11 @@ func TestNumericLiteralValidation(t *testing.T) {
 		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
+
 		assert.Len(t, errors, 1, "Should have one semantic error for numeric literal overflow")
 		assert.Contains(t, errors[0].Message, "exceeds maximum value for U256")
 	})
@@ -1066,7 +1111,11 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for valid explicit types")
 	})
 
@@ -1081,7 +1130,11 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
+
 		assert.Len(t, errors, 3, "Should have three type overflow errors")
 
 		// Check specific error messages
@@ -1103,7 +1156,11 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
+
 		assert.Len(t, errors, 2, "Should have two boundary overflow errors")
 		assert.Contains(t, errors[0].Message, "exceeds maximum for type 'U8'")
 		assert.Contains(t, errors[1].Message, "exceeds maximum for type 'U16'")
@@ -1122,7 +1179,11 @@ func TestExplicitTypeDeclarations(t *testing.T) {
 		contract, parseErrors, _ := parser.ParseSource("test.ka", source)
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for mixed types")
 	})
 }
@@ -1162,7 +1223,11 @@ func TestIfStatementImmutabilityError(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
+
 	assert.Len(t, errors, 1, "Should have one immutability error")
 
 	compilerErrors := analyzer.GetErrors()
@@ -1189,7 +1254,11 @@ func TestIfStatementNestedImmutabilityError(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
+
 	assert.Len(t, errors, 2, "Should have two immutability errors from nested if")
 }
 
@@ -1210,7 +1279,11 @@ func TestIfStatementMutableVariableAssignment(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused and mutable variable errors
+	errors := FilterAllUnusedErrors(allErrors)
+
 	assert.Empty(t, errors, "Should have no semantic errors for mutable variables")
 }
 
@@ -1230,7 +1303,11 @@ func TestIfStatementExpressionAnalysis(t *testing.T) {
 	assert.Empty(t, parseErrors, "Should have no parse errors")
 
 	analyzer := NewAnalyzer()
-	errors := analyzer.Analyze(contract)
+	allErrors := analyzer.Analyze(contract)
+
+	// Filter unused variable errors
+	errors := FilterUnusedVariables(allErrors)
+
 	assert.Empty(t, errors, "Should have no semantic errors")
 }
 
@@ -1265,7 +1342,11 @@ func TestUninitializedVariables(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for uninitialized mutable with type")
 	})
 
@@ -1281,7 +1362,11 @@ func TestUninitializedVariables(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for uninitialized mutable without type (defaults to U256)")
 	})
 
@@ -1318,7 +1403,11 @@ func TestUninitializedVariables(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for mixed variable declarations")
 	})
 
@@ -1334,7 +1423,11 @@ func TestUninitializedVariables(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors - mutable variable should be U256 to handle large values")
 	})
 
@@ -1350,7 +1443,11 @@ func TestUninitializedVariables(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
+
 		assert.Empty(t, errors, "Should have no semantic errors for immutable variables")
 	})
 }
@@ -1609,7 +1706,10 @@ func TestCallPathAnalysis(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Write function calling read function should be valid")
 	})
@@ -1698,7 +1798,10 @@ func TestCallPathAnalysis(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Complex valid call chains should pass validation")
 	})
@@ -2066,14 +2169,4 @@ func TestCallPathAnalysis(t *testing.T) {
 		assert.True(t, hasBalanceWriteError, "Should detect missing BalanceState writes permission")
 		assert.True(t, hasGovernanceWriteError, "Should detect missing GovernanceState writes permission")
 	})
-}
-
-// Helper function for substring checking
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

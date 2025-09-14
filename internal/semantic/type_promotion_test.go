@@ -23,7 +23,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter out unused variable warnings - we're testing type promotion
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for valid U8 to U256 promotion")
 	})
@@ -43,7 +46,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for valid U32 to U128 promotion")
 	})
@@ -63,7 +69,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for valid U16 to U64 promotion")
 	})
@@ -199,7 +208,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for valid chained promotions")
 	})
@@ -244,7 +256,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for valid promotion in assignment")
 	})
@@ -290,7 +305,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for imported function with matching type")
 	})
@@ -314,7 +332,10 @@ func TestTypePromotionInFunctionCalls(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for all valid promotions from U8")
 	})

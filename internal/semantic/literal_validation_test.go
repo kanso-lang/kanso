@@ -28,7 +28,11 @@ func TestLiteralValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		semanticErrors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		semanticErrors := FilterUnusedVariables(allErrors)
+
 		assert.Empty(t, semanticErrors, "Should have no semantic errors for valid literals")
 	})
 
@@ -73,7 +77,10 @@ func TestLiteralValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		semanticErrors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		semanticErrors := FilterUnusedVariables(allErrors)
 
 		// Should have no errors for valid hex literals
 		assert.Empty(t, semanticErrors, "Should have no semantic errors for valid hex literals")
@@ -122,7 +129,10 @@ func TestLiteralValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		semanticErrors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		semanticErrors := FilterUnusedVariables(allErrors)
 
 		// Should have no errors - hex numbers should be distinguished from addresses
 		assert.Empty(t, semanticErrors, "Should properly distinguish hex numbers from addresses")
@@ -141,7 +151,10 @@ func TestLiteralValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		semanticErrors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		semanticErrors := FilterUnusedVariables(allErrors)
 
 		// Should have no errors for basic literals
 		assert.Empty(t, semanticErrors, "Should have no semantic errors for basic literals")

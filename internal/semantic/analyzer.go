@@ -162,6 +162,8 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 
 	// Fourth pass: detect unused functions
 	a.detectUnusedFunctions()
+
+	// Note: Unused variable detection is performed per-function during analysis
 }
 
 func (a *Analyzer) analyzeFunction(fn *ast.Function) {
@@ -333,6 +335,9 @@ func (a *Analyzer) analyzeFunctionBody(fn *ast.Function) {
 	// Perform flow control analysis
 	flowAnalyzer := NewFlowAnalyzer(a)
 	flowAnalyzer.AnalyzeFunction(fn)
+
+	// Detect unused variables in this function scope before restoring scope
+	a.detectUnusedVariablesInScope(functionScope)
 
 	// Restore previous scope
 	a.symbols = previousScope
@@ -1178,4 +1183,36 @@ func (a *Analyzer) isFunctionEntryPoint(fn *ast.Function) bool {
 	}
 
 	return false
+}
+
+func (a *Analyzer) detectUnusedVariablesInScope(scope *SymbolTable) {
+	if scope == nil {
+		return
+	}
+
+	// Check all variables in current scope (excluding parameters)
+	for _, symbol := range scope.symbols {
+		if symbol.Kind == SymbolVariable {
+			// Check for unused variables
+			if !symbol.Used {
+				a.addError(fmt.Sprintf("variable '%s' is declared but never used", symbol.Name), symbol.Position)
+			}
+
+			// Check for problematic mutable variables
+			if symbol.Mutable {
+				if !symbol.Modified {
+					// Mutable variable that's never modified
+					a.addError(fmt.Sprintf("variable '%s' is declared as mutable but never modified", symbol.Name), symbol.Position)
+				} else if symbol.Modified && !symbol.ReadAfterModify {
+					// Mutable variable that's modified but never read after modification
+					// Use the position of the last modification, not the declaration
+					errorPos := symbol.LastModifyPos
+					if errorPos.Line == 0 { // Fallback to declaration position if LastModifyPos not set
+						errorPos = symbol.Position
+					}
+					a.addError(fmt.Sprintf("variable '%s' is modified but the new value is never used", symbol.Name), errorPos)
+				}
+			}
+		}
+	}
 }

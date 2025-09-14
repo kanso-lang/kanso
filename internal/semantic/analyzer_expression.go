@@ -172,6 +172,11 @@ func (a *Analyzer) analyzeIdentExpression(identExpr *ast.IdentExpr) {
 				!a.isBuiltinFunction(identExpr.Name) {
 				a.addUndefinedVariableError(identExpr.Name, identExpr.NodePos())
 			}
+		} else {
+			// Mark variable as used when referenced
+			a.symbols.MarkVariableUsed(identExpr.Name)
+			// If the variable was previously modified, mark it as read after modify
+			a.symbols.MarkVariableReadAfterModify(identExpr.Name)
 		}
 	}
 }

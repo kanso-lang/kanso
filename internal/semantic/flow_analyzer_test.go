@@ -27,7 +27,7 @@ func TestFlowAnalysisUnreachableCode(t *testing.T) {
 	// Should detect unreachable code
 	foundUnreachable := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "unreachable") {
+		if containsSubstring(err.Message, "unreachable") {
 			foundUnreachable = true
 			break
 		}
@@ -73,15 +73,19 @@ func TestFlowAnalysisUnusedVariable(t *testing.T) {
 	assert.True(t, flowAnalyzer.usedVars["x"], "Variable 'x' should be marked as used")
 	assert.True(t, flowAnalyzer.usedVars["z"], "Variable 'z' should be marked as used")
 
-	// The main analyzer should not report unused variables (disabled by default)
+	// The main analyzer should report unused variables (enabled by default)
 	analyzer := NewAnalyzer()
 	semanticErrors := analyzer.Analyze(contract)
 
-	// Should not report unused variables when disabled
+	// Should report unused variable 'y'
+	foundUnusedY := false
 	for _, err := range semanticErrors {
-		assert.False(t, contains(err.Message, "never used"),
-			"Should not report unused variables when disabled")
+		if containsSubstring(err.Message, "variable 'y'") && containsSubstring(err.Message, "never used") {
+			foundUnusedY = true
+			break
+		}
 	}
+	assert.True(t, foundUnusedY, "Should detect unused variable 'y'")
 }
 
 func TestFlowAnalysisMissingReturn(t *testing.T) {

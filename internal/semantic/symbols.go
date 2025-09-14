@@ -15,12 +15,16 @@ const (
 )
 
 type Symbol struct {
-	Name     string
-	Kind     SymbolKind
-	Node     ast.Node
-	Position ast.Position
-	Type     *stdlib.TypeRef // Enables type checking for variable usage
-	Mutable  bool            // Enforces Rust-like immutability-by-default semantics
+	Name            string
+	Kind            SymbolKind
+	Node            ast.Node
+	Position        ast.Position
+	Type            *stdlib.TypeRef // Enables type checking for variable usage
+	Mutable         bool            // Enforces Rust-like immutability-by-default semantics
+	Used            bool            // Tracks if variable is ever read
+	Modified        bool            // Tracks if mutable variable is ever modified
+	ReadAfterModify bool            // Tracks if variable is read after modification
+	LastModifyPos   ast.Position    // Position of the last modification
 }
 
 type SymbolTable struct {
@@ -86,4 +90,34 @@ func (st *SymbolTable) LookupLocal(name string) *Symbol {
 		return symbol
 	}
 	return nil
+}
+
+func (st *SymbolTable) MarkVariableUsed(name string) {
+	if symbol := st.Lookup(name); symbol != nil && symbol.Kind == SymbolVariable {
+		symbol.Used = true
+	}
+}
+
+func (st *SymbolTable) MarkVariableModified(name string) {
+	if symbol := st.Lookup(name); symbol != nil && symbol.Kind == SymbolVariable {
+		symbol.Modified = true
+		// Reset ReadAfterModify - it will be set again if variable is read after this modification
+		symbol.ReadAfterModify = false
+		// Note: LastModifyPos will be set by MarkVariableModifiedAt
+	}
+}
+
+func (st *SymbolTable) MarkVariableModifiedAt(name string, pos ast.Position) {
+	if symbol := st.Lookup(name); symbol != nil && symbol.Kind == SymbolVariable {
+		symbol.Modified = true
+		// Reset ReadAfterModify - it will be set again if variable is read after this modification
+		symbol.ReadAfterModify = false
+		symbol.LastModifyPos = pos
+	}
+}
+
+func (st *SymbolTable) MarkVariableReadAfterModify(name string) {
+	if symbol := st.Lookup(name); symbol != nil && symbol.Kind == SymbolVariable && symbol.Modified {
+		symbol.ReadAfterModify = true
+	}
 }

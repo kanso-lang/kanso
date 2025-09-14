@@ -221,6 +221,11 @@ func (a *Analyzer) validateVariableAssignment(identExpr *ast.IdentExpr, pos ast.
 	if symbol.Kind == SymbolVariable && !symbol.Mutable {
 		a.addImmutableVariableAssignmentError(identExpr.Name, pos)
 	}
+
+	// Mark variable as modified when assigned to
+	if symbol.Kind == SymbolVariable {
+		a.symbols.MarkVariableModifiedAt(identExpr.Name, pos)
+	}
 }
 
 func (a *Analyzer) validateAssignmentTarget(target ast.Expr, pos ast.Position) {

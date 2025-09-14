@@ -78,7 +78,10 @@ func TestReturnValueValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Len(t, errors, 1, "Should have one error")
 		assert.Contains(t, errors[0].Message, "does not return a value")
@@ -159,7 +162,10 @@ func TestReturnValueValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused and mutable variable errors
+		errors := FilterAllUnusedErrors(allErrors)
 
 		assert.Empty(t, errors, "Should have no errors for valid return value usage")
 	})
@@ -218,7 +224,10 @@ func TestReturnValueValidation(t *testing.T) {
 		assert.Empty(t, parseErrors, "Should have no parse errors")
 
 		analyzer := NewAnalyzer()
-		errors := analyzer.Analyze(contract)
+		allErrors := analyzer.Analyze(contract)
+
+		// Filter unused variable errors
+		errors := FilterUnusedVariables(allErrors)
 
 		assert.Empty(t, errors, "Should handle imported function return values")
 	})
