@@ -56,7 +56,7 @@ func (a *Analyzer) determineVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
 
 		// Explicit type but no expression - check if uninitialized is allowed
 		if !letStmt.Mut {
-			a.addError(fmt.Sprintf("immutable variable '%s' must be initialized at declaration", letStmt.Name.Value), letStmt.NodePos())
+			a.addUninitializedImmutableError(letStmt.Name.Value, letStmt.NodePos())
 			return nil
 		}
 		return varType
@@ -74,7 +74,7 @@ func (a *Analyzer) determineVariableType(letStmt *ast.LetStmt) *stdlib.TypeRef {
 func (a *Analyzer) handleUninitializedVariable(letStmt *ast.LetStmt) *stdlib.TypeRef {
 	// Immutable variables must be initialized because their value can never change
 	if !letStmt.Mut {
-		a.addError(fmt.Sprintf("immutable variable '%s' must be initialized at declaration", letStmt.Name.Value), letStmt.NodePos())
+		a.addUninitializedImmutableError(letStmt.Name.Value, letStmt.NodePos())
 		return nil
 	}
 
@@ -127,8 +127,7 @@ func (a *Analyzer) validateExplicitTypeAssignment(letStmt *ast.LetStmt, declared
 
 	// Check type compatibility
 	if !a.isTypeCompatible(inferredType, declaredType) {
-		a.addError(fmt.Sprintf("cannot assign value of type '%s' to variable of type '%s'",
-			inferredType.Name, declaredType.Name), letStmt.NodePos())
+		a.addTypeMismatchError(declaredType.Name, inferredType.Name, letStmt.NodePos())
 	}
 }
 
@@ -167,13 +166,11 @@ func (a *Analyzer) validateNumericLiteralRange(value string, declaredType *stdli
 	if bigNum.Cmp(maxValue) > 0 {
 		// Find the smallest type that would fit this value
 		suggestedType := a.inferMinimalTypeForValue(value)
+		suggestedTypeName := ""
 		if suggestedType != nil {
-			a.addError(fmt.Sprintf("value '%s' exceeds maximum for type '%s' (max: %s), consider using '%s' instead",
-				value, typeName, maxValue.String(), suggestedType.Name), pos)
-		} else {
-			a.addError(fmt.Sprintf("value '%s' exceeds maximum for type '%s' (max: %s)",
-				value, typeName, maxValue.String()), pos)
+			suggestedTypeName = suggestedType.Name
 		}
+		a.addNumericOverflowError(value, typeName, maxValue.String(), suggestedTypeName, pos)
 	}
 }
 
@@ -438,8 +435,7 @@ func (a *Analyzer) inferBinaryExpressionType(binExpr *ast.BinaryExpr) *stdlib.Ty
 		if a.isNumericType(leftType) && a.isNumericType(rightType) {
 			return a.promoteNumericType(leftType, rightType)
 		}
-		a.addError(fmt.Sprintf("invalid operation: %s %s %s",
-			a.typeToString(leftType), binExpr.Op, a.typeToString(rightType)), binExpr.NodePos())
+		a.addInvalidOperationError(a.typeToString(leftType), binExpr.Op, a.typeToString(rightType), binExpr.NodePos())
 		return nil
 
 	case "==", "!=", "<", "<=", ">", ">=":
@@ -447,16 +443,14 @@ func (a *Analyzer) inferBinaryExpressionType(binExpr *ast.BinaryExpr) *stdlib.Ty
 		if a.typesMatch(leftType, rightType) || (a.isNumericType(leftType) && a.isNumericType(rightType)) {
 			return stdlib.BoolType()
 		}
-		a.addError(fmt.Sprintf("invalid comparison: %s %s %s",
-			a.typeToString(leftType), binExpr.Op, a.typeToString(rightType)), binExpr.NodePos())
+		a.addInvalidOperationError(a.typeToString(leftType), binExpr.Op, a.typeToString(rightType), binExpr.NodePos())
 		return stdlib.BoolType() // Return Bool for error recovery
 
 	case "&&", "||":
 		if a.isBoolType(leftType) && a.isBoolType(rightType) {
 			return stdlib.BoolType()
 		}
-		a.addError(fmt.Sprintf("invalid logical operation: %s %s %s",
-			a.typeToString(leftType), binExpr.Op, a.typeToString(rightType)), binExpr.NodePos())
+		a.addInvalidOperationError(a.typeToString(leftType), binExpr.Op, a.typeToString(rightType), binExpr.NodePos())
 		return stdlib.BoolType()
 
 	default:
@@ -476,16 +470,14 @@ func (a *Analyzer) inferUnaryExpressionType(unExpr *ast.UnaryExpr) *stdlib.TypeR
 		if a.isNumericType(operandType) {
 			return operandType // Preserve original numeric type
 		}
-		a.addError(fmt.Sprintf("invalid unary operation: %s%s",
-			unExpr.Op, a.typeToString(operandType)), unExpr.NodePos())
+		a.addInvalidOperationError("", unExpr.Op, a.typeToString(operandType), unExpr.NodePos())
 		return nil
 
 	case "!":
 		if a.isBoolType(operandType) {
 			return stdlib.BoolType()
 		}
-		a.addError(fmt.Sprintf("invalid logical negation: !%s",
-			a.typeToString(operandType)), unExpr.NodePos())
+		a.addInvalidOperationError("", "!", a.typeToString(operandType), unExpr.NodePos())
 		return stdlib.BoolType() // Return Bool for error recovery
 
 	default:

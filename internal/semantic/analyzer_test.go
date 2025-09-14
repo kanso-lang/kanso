@@ -1087,7 +1087,7 @@ func TestNumericLiteralValidation(t *testing.T) {
 		errors := FilterUnusedVariables(allErrors)
 
 		assert.Len(t, errors, 1, "Should have one semantic error for numeric literal overflow")
-		assert.Contains(t, errors[0].Message, "exceeds maximum value for U256")
+		assert.Contains(t, errors[0].Message, "exceeds maximum for type 'U256'")
 	})
 }
 
@@ -1586,7 +1586,7 @@ func TestCallPathAnalysis(t *testing.T) {
 			if containsSubstring(err.Message, "accesses storage struct") && containsSubstring(err.Message, "reads clause") {
 				hasReadsError = true
 			}
-			if containsSubstring(err.Message, "writes to storage struct") && containsSubstring(err.Message, "writes clause") {
+			if containsSubstring(err.Message, "accesses storage struct") && containsSubstring(err.Message, "writes clause") {
 				hasWritesError = true
 			}
 		}
@@ -1651,7 +1651,7 @@ func TestCallPathAnalysis(t *testing.T) {
 
 		hasWritesError := false
 		for _, err := range errors {
-			if containsSubstring(err.Message, "writes to storage struct") && containsSubstring(err.Message, "writes clause") {
+			if containsSubstring(err.Message, "accesses storage struct") && containsSubstring(err.Message, "writes clause") {
 				hasWritesError = true
 				break
 			}
@@ -1743,7 +1743,7 @@ func TestCallPathAnalysis(t *testing.T) {
 
 		hasWritesError := false
 		for _, err := range errors {
-			if containsSubstring(err.Message, "writes to storage struct") && containsSubstring(err.Message, "writes clause") {
+			if containsSubstring(err.Message, "accesses storage struct") && containsSubstring(err.Message, "writes clause") {
 				hasWritesError = true
 				break
 			}

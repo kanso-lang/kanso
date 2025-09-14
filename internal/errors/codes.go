@@ -67,6 +67,21 @@ const (
 	// E0016: Generic semantic error (for legacy compatibility)
 	ErrorGenericSemantic = "E0016"
 
+	// E0017: Uninitialized variable errors
+	ErrorUninitializedVariable = "E0017"
+
+	// E0018: Numeric overflow errors
+	ErrorNumericOverflow = "E0018"
+
+	// E0019: Storage access declaration errors
+	ErrorStorageAccess = "E0019"
+
+	// E0020: Void function in expression context
+	ErrorVoidInExpression = "E0020"
+
+	// E0021: Module not imported errors
+	ErrorUndefinedModule = "E0021"
+
 	// Parser errors (reserved range: E0100-E0199)
 	// E0100-E0105 available for immediate use when needed
 

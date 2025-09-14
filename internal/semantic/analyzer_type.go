@@ -296,7 +296,7 @@ func (a *Analyzer) inferNumericLiteralType(value string, pos ast.Position) *stdl
 
 		// Numeric literal exceeds U256 maximum - report error only if position is valid
 		if pos.Line > 0 && pos.Column > 0 {
-			a.addError(fmt.Sprintf("numeric literal '%s' exceeds maximum value for U256", value), pos)
+			a.addNumericOverflowError(value, "U256", "115792089237316195423570985008687907853269984665640564039457584007913129639935", "", pos)
 		}
 		return nil
 	}

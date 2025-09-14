@@ -554,8 +554,7 @@ func (a *Analyzer) validateReturnStatement(returnStmt *ast.ReturnStmt) {
 	} else {
 		// Empty return statement - check if function expects a return value
 		if expectedReturnType != nil {
-			a.addError(fmt.Sprintf("function '%s' must return a value of type '%s'",
-				a.currentFunction, a.typeToString(expectedReturnType)), returnStmt.NodePos())
+			a.addMissingReturnError(a.currentFunction, a.typeToString(expectedReturnType), returnStmt.NodePos())
 		}
 	}
 }
@@ -574,7 +573,7 @@ func (a *Analyzer) validateReturnValueUsage(expr ast.Expr, valueRequired bool, e
 	if valueRequired && returnType == nil {
 		// Error: Using void function where value is expected
 		funcName := a.extractFunctionName(call)
-		a.addError(fmt.Sprintf("function '%s' does not return a value but is used in a context that requires one", funcName), call.NodePos())
+		a.addVoidFunctionInExpressionError(funcName, call.NodePos())
 		return
 	}
 
@@ -652,7 +651,7 @@ func (a *Analyzer) validateModuleFunctionCall(callee *ast.CalleePath, call *ast.
 
 	// Check if module is imported
 	if !a.context.IsImportedModule(moduleName) {
-		a.addError(fmt.Sprintf("module '%s' is not imported", moduleName), call.NodePos())
+		a.addModuleNotImportedError(moduleName, call.NodePos())
 		return
 	}
 
@@ -713,13 +712,11 @@ func (a *Analyzer) validateAssignmentCompatibility(leftType, rightType *stdlib.T
 		if a.isNumericType(leftType) && a.isNumericType(rightType) {
 			// Prevent silent data truncation that could cause overflow vulnerabilities in smart contracts
 			if !a.canPromoteType(rightType, leftType) {
-				a.addError(fmt.Sprintf("cannot assign %s to %s: potential precision loss",
-					a.typeToString(rightType), a.typeToString(leftType)), pos)
+				a.addTypeMismatchError(a.typeToString(leftType), a.typeToString(rightType), pos)
 			}
 		} else {
 			// Type safety prevents runtime errors and unexpected behavior in blockchain execution
-			a.addError(fmt.Sprintf("cannot assign %s to %s: incompatible types",
-				a.typeToString(rightType), a.typeToString(leftType)), pos)
+			a.addTypeMismatchError(a.typeToString(leftType), a.typeToString(rightType), pos)
 		}
 	}
 }
@@ -753,7 +750,7 @@ func (a *Analyzer) validateStructLiteralFields(structName string, fields []ast.S
 	for _, field := range fields {
 		fieldName := field.Name.Value
 		if providedFields[fieldName] {
-			a.addError(fmt.Sprintf("duplicate field '%s' in struct literal", fieldName), field.NodePos())
+			a.addDuplicateFieldError(fieldName, structName, field.NodePos())
 			continue
 		}
 		providedFields[fieldName] = true
@@ -769,7 +766,7 @@ func (a *Analyzer) validateStructLiteralFields(structName string, fields []ast.S
 		if field, ok := item.(*ast.StructField); ok {
 			fieldName := field.Name.Value
 			if !providedFields[fieldName] {
-				a.addError(fmt.Sprintf("missing field '%s' in struct literal for '%s'", fieldName, structName), pos)
+				a.addMissingFieldError(fieldName, structName, pos)
 			}
 		}
 	}
@@ -1077,8 +1074,7 @@ func (a *Analyzer) validateStorageDeclarations() {
 		if requiredReads, exists := a.callGraph.RequiredReads[funcName]; exists {
 			for structName := range requiredReads {
 				if !declaredReads[structName] {
-					a.addError(fmt.Sprintf("function '%s' accesses storage struct '%s' but does not declare it in reads clause",
-						funcName, structName), fn.NodePos())
+					a.addStorageAccessError(funcName, structName, false, fn.NodePos())
 				}
 			}
 		}
@@ -1087,8 +1083,7 @@ func (a *Analyzer) validateStorageDeclarations() {
 		if requiredWrites, exists := a.callGraph.RequiredWrites[funcName]; exists {
 			for structName := range requiredWrites {
 				if !declaredWrites[structName] {
-					a.addError(fmt.Sprintf("function '%s' writes to storage struct '%s' but does not declare it in writes clause",
-						funcName, structName), fn.NodePos())
+					a.addStorageAccessError(funcName, structName, true, fn.NodePos())
 				}
 			}
 		}
