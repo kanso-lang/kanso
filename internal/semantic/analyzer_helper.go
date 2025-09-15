@@ -31,17 +31,27 @@ func (a *Analyzer) findSimilarFunctions(name string) []string {
 	}
 
 	// Check imported functions
-	// TODO: Implement imported function lookup
+	importedFunctions := a.context.GetAllImportedFunctions()
+	for _, funcName := range importedFunctions {
+		if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+			similar = append(similar, funcName)
+		}
+	}
 
 	return similar
 }
 
 func (a *Analyzer) findPossibleImports(name string) []string {
-	// This would check the standard library for functions with similar names
-	// and suggest the appropriate import statements
 	var imports []string
 
-	// TODO: Implement standard library function lookup
+	modules := a.context.GetStandardModules()
+	for modulePath, module := range modules {
+		for funcName, _ := range module.Functions {
+			if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+				imports = append(imports, modulePath+"::{"+funcName+"}")
+			}
+		}
+	}
 
 	return imports
 }

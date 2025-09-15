@@ -10,22 +10,20 @@ func TestGetStandardModules(t *testing.T) {
 	modules := GetStandardModules()
 
 	// Verify core modules exist
-	assert.NotNil(t, modules["Evm"], "Evm module should exist")
-	assert.NotNil(t, modules["Table"], "Table module should exist")
 	assert.NotNil(t, modules["std::ascii"], "std::ascii module should exist")
 	assert.NotNil(t, modules["std::errors"], "std::errors module should exist")
 
 	// Verify Evm module details
-	evm := modules["Evm"]
-	assert.Equal(t, "Evm", evm.Name)
-	assert.Equal(t, "Evm", evm.Path)
+	evm := modules["std::evm"]
+	assert.Equal(t, "evm", evm.Name)
+	assert.Equal(t, "std::evm", evm.Path)
 
 	_, hasSender := evm.Functions["sender"]
-	assert.True(t, hasSender, "Evm should have sender function")
+	assert.True(t, hasSender, "std::evm should have sender function")
 
 	_, hasEmit := evm.Functions["emit"]
-	assert.True(t, hasEmit, "Evm should have emit function")
-	assert.Empty(t, evm.Types, "Evm should not export types")
+	assert.True(t, hasEmit, "std::evm should have emit function")
+	assert.Empty(t, evm.Types, "std::evm should not export types")
 
 	// Verify function signatures
 	senderFunc := evm.Functions["sender"]
@@ -39,12 +37,6 @@ func TestGetStandardModules(t *testing.T) {
 	assert.Len(t, emitFunc.Parameters, 1)
 	assert.Equal(t, "event", emitFunc.Parameters[0].Name)
 
-	// Verify Table module details
-	table := modules["Table"]
-	assert.Equal(t, "Table", table.Name)
-	assert.Equal(t, "Table", table.Path)
-	assert.True(t, table.Types["Table"].IsGeneric, "Table type should be generic")
-
 	// Verify std::ascii module details
 	ascii := modules["std::ascii"]
 	assert.Equal(t, "ascii", ascii.Name)
@@ -53,8 +45,7 @@ func TestGetStandardModules(t *testing.T) {
 }
 
 func TestIsKnownModule(t *testing.T) {
-	assert.True(t, IsKnownModule("Evm"), "Evm should be known")
-	assert.True(t, IsKnownModule("Table"), "Table should be known")
+	assert.True(t, IsKnownModule("std::evm"), "std::evm should be known")
 	assert.True(t, IsKnownModule("std::ascii"), "std::ascii should be known")
 	assert.True(t, IsKnownModule("std::errors"), "std::errors should be known")
 	assert.False(t, IsKnownModule("UnknownModule"), "UnknownModule should not be known")
@@ -62,9 +53,9 @@ func TestIsKnownModule(t *testing.T) {
 
 func TestGetModuleDefinition(t *testing.T) {
 	// Test existing module
-	evm := GetModuleDefinition("Evm")
-	assert.NotNil(t, evm, "Should return Evm module definition")
-	assert.Equal(t, "Evm", evm.Name)
+	evm := GetModuleDefinition("std::evm")
+	assert.NotNil(t, evm, "Should return std::evm module definition")
+	assert.Equal(t, "evm", evm.Name)
 
 	// Test non-existing module
 	unknown := GetModuleDefinition("UnknownModule")

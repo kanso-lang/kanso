@@ -115,8 +115,14 @@ func UndefinedFunction(name string, pos ast.Position, similarNames []string, ava
 	}
 
 	if len(availableImports) > 0 {
-		for _, imp := range availableImports {
-			builder = builder.WithSuggestion(fmt.Sprintf("try importing: use %s;", imp))
+		if len(availableImports) == 1 {
+			builder = builder.WithSuggestion(fmt.Sprintf("try importing: use %s;", availableImports[0]))
+		} else {
+			var importSuggestions []string
+			for _, imp := range availableImports {
+				importSuggestions = append(importSuggestions, fmt.Sprintf("use %s;", imp))
+			}
+			builder = builder.WithSuggestion(fmt.Sprintf("try importing one of: %s", strings.Join(importSuggestions, " or ")))
 		}
 	}
 

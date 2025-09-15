@@ -56,6 +56,15 @@ func (fr *FunctionRegistry) GetImportedFunction(functionName string) *ImportedFu
 	return fr.functions[functionName]
 }
 
+// GetAllImportedFunctions returns all imported function names
+func (fr *FunctionRegistry) GetAllImportedFunctions() []string {
+	var functionNames []string
+	for name := range fr.functions {
+		functionNames = append(functionNames, name)
+	}
+	return functionNames
+}
+
 // ModuleRegistry methods
 
 // AddImportedModule adds an imported module to the registry

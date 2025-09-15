@@ -124,7 +124,7 @@ func TestMultipleSuggestions(t *testing.T) {
 		[]string{"std::module::{func1}", "std::other::{func2}"})
 
 	// Should have suggestions for similar names + import suggestions
-	assert.True(t, len(err.Suggestions) >= 3)
+	assert.Equal(t, 2, len(err.Suggestions))
 
 	// Check that all suggestions are present
 	suggestionTexts := make([]string, len(err.Suggestions))

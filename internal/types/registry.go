@@ -4,8 +4,8 @@ import "kanso/internal/ast"
 
 // ImportedType represents a type imported via use statement
 type ImportedType struct {
-	Name       string // The type name (e.g., "Table", "String")
-	ModulePath string // The module it's imported from (e.g., "Table", "std::ascii")
+	Name       string // The type name (e.g., "Slots", "String")
+	ModulePath string // The module it's imported from (e.g., "std::evm", "std::ascii")
 	IsGeneric  bool   // Whether the type accepts generic parameters
 }
 

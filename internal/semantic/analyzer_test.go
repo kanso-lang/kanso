@@ -496,8 +496,7 @@ func TestTypeRegistryIntegration(t *testing.T) {
 func TestERC20Imports(t *testing.T) {
 	source := `contract Test {
 
-    use Evm::{sender, emit};
-    use Table::{Self, Table};
+    use std::evm::{sender, emit};
     use std::ascii::{String};
     use std::errors;
     
@@ -520,7 +519,6 @@ func TestERC20Imports(t *testing.T) {
 	// Verify imported types are registered correctly
 	assert.False(t, analyzer.context.IsImportedType("sender"), "sender is a function, not a type")
 	assert.False(t, analyzer.context.IsImportedType("emit"), "emit is a function, not a type")
-	assert.True(t, analyzer.context.IsImportedType("Table"), "Table should be imported as a type")
 	assert.True(t, analyzer.context.IsImportedType("String"), "String should be imported as a type")
 
 	// Verify imported functions are registered correctly
@@ -528,13 +526,7 @@ func TestERC20Imports(t *testing.T) {
 	assert.True(t, analyzer.context.IsImportedFunction("emit"), "emit should be imported as a function")
 
 	// Verify imported modules are registered correctly
-	assert.True(t, analyzer.context.IsImportedModule("Table"), "Table module should be imported via Self")
 	assert.True(t, analyzer.context.IsImportedModule("errors"), "errors module should be imported")
-
-	// Verify Table is marked as generic
-	tableType := analyzer.context.GetImportedType("Table")
-	assert.NotNil(t, tableType, "Table type should exist")
-	assert.True(t, tableType.IsGeneric, "Table should be generic")
 
 	// Verify String is marked as non-generic
 	stringType := analyzer.context.GetImportedType("String")
@@ -542,8 +534,7 @@ func TestERC20Imports(t *testing.T) {
 	assert.False(t, stringType.IsGeneric, "String should not be generic")
 
 	// Verify standard library integration
-	assert.True(t, analyzer.context.IsStandardModule("Evm"), "Evm should be a standard module")
-	assert.True(t, analyzer.context.IsStandardModule("Table"), "Table should be a standard module")
+	assert.True(t, analyzer.context.IsStandardModule("std::evm"), "std::evm should be a standard module")
 	assert.True(t, analyzer.context.IsStandardModule("std::ascii"), "std::ascii should be a standard module")
 	assert.True(t, analyzer.context.IsStandardModule("std::errors"), "std::errors should be a standard module")
 
@@ -552,18 +543,12 @@ func TestERC20Imports(t *testing.T) {
 	assert.NotNil(t, senderFunc, "Should get sender function definition")
 	assert.Equal(t, "sender", senderFunc.Name)
 	assert.Equal(t, "Address", senderFunc.ReturnType.Name)
-
-	emptyFunc := analyzer.context.GetModuleFunctionDefinition("Table", "empty")
-	assert.NotNil(t, emptyFunc, "Should get Table::empty function definition")
-	assert.Equal(t, "empty", emptyFunc.Name)
-	assert.True(t, emptyFunc.IsGeneric, "Table::empty should be generic")
 }
 
 func TestFunctionCallValidation(t *testing.T) {
 	source := `contract Test {
 
-    use Evm::{sender, emit};
-    use Table::{Self, Table};
+    use std::evm::{sender, emit};
     use std::errors;
     
     #[storage]
@@ -575,7 +560,6 @@ func TestFunctionCallValidation(t *testing.T) {
     fn create() writes State {
         let addr = sender();
         emit(Transfer{from: addr, to: addr});
-        Table::empty<Address, U256>();
         errors::invalid_argument(42);
     }
     
@@ -600,7 +584,7 @@ func TestFunctionCallValidation(t *testing.T) {
 func TestInvalidFunctionCalls(t *testing.T) {
 	source := `contract Test {
 
-    use Evm::{sender};
+    use std::evm::{sender};
     
     #[storage]  
     struct State {
@@ -689,7 +673,7 @@ func TestLocalFunctionParameterValidation(t *testing.T) {
 func TestParameterTypeValidation(t *testing.T) {
 	source := `contract Test {
 
-    use Evm::{sender};
+    use std::evm::{sender};
     use std::errors;
     
     #[storage]

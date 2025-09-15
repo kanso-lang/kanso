@@ -24,7 +24,6 @@ func (a *Analyzer) addUndefinedVariableError(name string, pos ast.Position) {
 }
 
 func (a *Analyzer) addUndefinedFunctionError(name string, pos ast.Position) {
-	// Help developers discover available standard library functions and fix typos
 	similar := a.findSimilarFunctions(name)
 	imports := a.findPossibleImports(name)
 	err := errors.UndefinedFunction(name, pos, similar, imports)

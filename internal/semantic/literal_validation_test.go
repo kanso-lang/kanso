@@ -3,8 +3,9 @@ package semantic
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"kanso/internal/parser"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLiteralValidation(t *testing.T) {

@@ -80,6 +80,11 @@ func (cr *ContextRegistry) GetImportedFunction(functionName string) *ImportedFun
 	return cr.functionRegistry.GetImportedFunction(functionName)
 }
 
+// GetAllImportedFunctions returns all imported function names
+func (cr *ContextRegistry) GetAllImportedFunctions() []string {
+	return cr.functionRegistry.GetAllImportedFunctions()
+}
+
 // Modules - delegate to ModuleRegistry
 
 // IsImportedModule checks if a module is imported
@@ -112,6 +117,11 @@ func (cr *ContextRegistry) IsStandardModule(modulePath string) bool {
 // GetStandardModuleDefinition returns the definition for a standard library module
 func (cr *ContextRegistry) GetStandardModuleDefinition(modulePath string) *stdlib.ModuleDefinition {
 	return cr.stdlibModules[modulePath]
+}
+
+// GetStandardModules returns all standard library modules
+func (cr *ContextRegistry) GetStandardModules() map[string]*stdlib.ModuleDefinition {
+	return cr.stdlibModules
 }
 
 // GetFunctionDefinition returns the complete function definition for an imported function

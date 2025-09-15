@@ -109,19 +109,6 @@ func NewParam(name string, typeRef *TypeRef) ParameterDefinition {
 
 // GetStandardModules returns all built-in standard library modules
 func GetStandardModules() map[string]*ModuleDefinition {
-	// Create shared evm module definition for backward compatibility
-	evmModule := &ModuleDefinition{
-		Name:  "Evm",
-		Path:  "Evm",
-		Types: map[string]TypeDefinition{
-			// Evm module doesn't export types, only functions
-		},
-		Functions: map[string]FunctionDefinition{
-			"sender": NewFunction("sender", AddressType()),
-			"emit":   NewFunction("emit", nil, NewParam("event", NewGenericParam("T"))),
-		},
-	}
-
 	// Create std::evm module definition
 	stdEvmModule := &ModuleDefinition{
 		Name:  "evm",
@@ -136,46 +123,7 @@ func GetStandardModules() map[string]*ModuleDefinition {
 	}
 
 	return map[string]*ModuleDefinition{
-		"Evm":      evmModule,    // Backward compatibility
-		"std::evm": stdEvmModule, // New style
-		"Table": {
-			Name: "Table",
-			Path: "Table",
-			Types: map[string]TypeDefinition{
-				"Table": {Name: "Table", IsGeneric: true},
-			},
-			Functions: map[string]FunctionDefinition{
-				"empty": NewGenericFunction("empty",
-					NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-				"borrow": NewGenericFunction("borrow",
-					NewGenericParam("V"),
-					NewParam("table", NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-					NewParam("key", NewGenericParam("K"))),
-				"borrow_with_default": NewGenericFunction("borrow_with_default",
-					NewGenericParam("V"),
-					NewParam("table", NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-					NewParam("key", NewGenericParam("K")),
-					NewParam("default", NewGenericParam("V"))),
-				"borrow_mut": NewGenericFunction("borrow_mut",
-					NewGenericParam("V"),
-					NewParam("table", NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-					NewParam("key", NewGenericParam("K"))),
-				"borrow_mut_with_default": NewGenericFunction("borrow_mut_with_default",
-					NewGenericParam("V"),
-					NewParam("table", NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-					NewParam("key", NewGenericParam("K")),
-					NewParam("default", NewGenericParam("V"))),
-				"insert": NewGenericFunction("insert",
-					nil,
-					NewParam("table", NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-					NewParam("key", NewGenericParam("K")),
-					NewParam("value", NewGenericParam("V"))),
-				"delete": NewGenericFunction("delete",
-					NewGenericParam("V"),
-					NewParam("table", NewGenericTypeRef("Table", NewGenericParam("K"), NewGenericParam("V"))),
-					NewParam("key", NewGenericParam("K"))),
-			},
-		},
+		"std::evm": stdEvmModule,
 		"std::address": {
 			Name:  "address",
 			Path:  "std::address",
