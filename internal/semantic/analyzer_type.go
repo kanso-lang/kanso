@@ -244,9 +244,8 @@ func (a *Analyzer) attemptTypeInferenceRecovery(expr ast.Expr) *stdlib.TypeRef {
 		}
 
 	case *ast.CallExpr:
-		// For unknown function calls, try to infer from context
-		// TODO implement better function call inference
-		return nil
+		// Use the same inference logic as the main type inference
+		return a.inferCallExpressionType(node)
 
 	case *ast.LiteralExpr:
 		// Re-attempt literal inference with more permissive rules
