@@ -30,6 +30,99 @@ func (a *Analyzer) addUndefinedFunctionError(name string, pos ast.Position) {
 	a.addCompilerError(err)
 }
 
+func (a *Analyzer) addUndefinedFunctionErrorWithContext(name string, call *ast.CallExpr) {
+	// Get basic suggestions (similar names and imports)
+	similar := a.findSimilarFunctions(name)
+	imports := a.findPossibleImports(name)
+
+	// Add signature-based suggestions
+	argTypes := make([]string, len(call.Args))
+	for i, arg := range call.Args {
+		if argType := a.inferExpressionType(arg); argType != nil {
+			argTypes[i] = argType.Name
+		} else {
+			argTypes[i] = "unknown"
+		}
+	}
+
+	signatureMatches := a.findFunctionsBySignature(name, len(call.Args), argTypes)
+
+	// Combine all suggestions, prioritizing smart extended imports
+	allImports := make(map[string]bool)
+
+	// Add smart import suggestions first (these have priority)
+	for _, imp := range imports {
+		allImports[imp] = true
+	}
+
+	// Add signature-based suggestions only if they don't conflict
+	for _, match := range signatureMatches {
+		if !containsString(similar, match) && !allImports[match] {
+			if containsSubstring(match, "::") {
+				// Check if this would be a redundant standalone import
+				if !a.wouldBeRedundantImport(match, imports) {
+					allImports[match] = true
+				}
+			} else {
+				// Local function suggestion
+				similar = append(similar, match)
+			}
+		}
+	}
+
+	// Convert map back to slice
+	finalImports := make([]string, 0, len(allImports))
+	for imp := range allImports {
+		finalImports = append(finalImports, imp)
+	}
+
+	err := errors.UndefinedFunction(name, call.NodePos(), similar, finalImports)
+	a.addCompilerError(err)
+}
+
+func (a *Analyzer) wouldBeRedundantImport(standaloneImport string, smartImports []string) bool {
+	// Extract module path from standalone import (e.g., "std::evm::{sender}" -> "std::evm")
+	if !containsSubstring(standaloneImport, "::") {
+		return false
+	}
+
+	// Find the module path by looking for the last "::" before "{"
+	moduleEnd := -1
+	for i := 0; i < len(standaloneImport); i++ {
+		if i < len(standaloneImport)-1 && standaloneImport[i:i+2] == "::" {
+			if i+2 < len(standaloneImport) && standaloneImport[i+2] == '{' {
+				moduleEnd = i
+				break
+			}
+			moduleEnd = i + 2
+		}
+	}
+
+	if moduleEnd == -1 {
+		return false
+	}
+
+	standaloneModule := standaloneImport[:moduleEnd]
+
+	// Check if any smart import suggestion covers the same module
+	for _, smartImport := range smartImports {
+		if containsSubstring(smartImport, standaloneModule+"::") {
+			return true // This standalone import would be redundant
+		}
+	}
+
+	return false
+}
+
+func containsString(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *Analyzer) addTypeMismatchError(expected, actual string, pos ast.Position) {
 	err := errors.TypeMismatch(expected, actual, pos)
 	a.addCompilerError(err)

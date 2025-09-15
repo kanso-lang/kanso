@@ -107,7 +107,7 @@ func TestFlowAnalysisMissingReturn(t *testing.T) {
 	// Should detect missing return statement
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 			break
 		}
@@ -132,9 +132,9 @@ func TestFlowAnalysisValidFunction(t *testing.T) {
 
 	// Should have no flow analysis errors for valid function
 	for _, err := range semanticErrors {
-		assert.False(t, contains(err.Message, "unreachable"), "Should not report unreachable code")
-		assert.False(t, contains(err.Message, "never used"), "Should not report unused variables")
-		assert.False(t, contains(err.Message, "no return statement"), "Should not report missing return")
+		assert.False(t, containsSubstring(err.Message, "unreachable"), "Should not report unreachable code")
+		assert.False(t, containsSubstring(err.Message, "never used"), "Should not report unused variables")
+		assert.False(t, containsSubstring(err.Message, "no return statement"), "Should not report missing return")
 	}
 }
 
@@ -155,7 +155,7 @@ func TestFlowAnalysisTailExpression(t *testing.T) {
 
 	// Should not report missing return for function with tail expression
 	for _, err := range semanticErrors {
-		assert.False(t, contains(err.Message, "no return statement"),
+		assert.False(t, containsSubstring(err.Message, "no return statement"),
 			"Should not report missing return when tail expression is present")
 	}
 }
@@ -179,7 +179,7 @@ func TestFlowAnalysisUnreachableAfterTailExpr(t *testing.T) {
 	// Should detect unreachable tail expression
 	foundUnreachable := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "unreachable") {
+		if containsSubstring(err.Message, "unreachable") {
 			foundUnreachable = true
 			break
 		}
@@ -204,7 +204,7 @@ func TestFlowAnalysisParameterUsage(t *testing.T) {
 	// Parameters are considered part of the function interface, so they shouldn't
 	// be reported as unused even if not referenced in the body
 	for _, err := range semanticErrors {
-		assert.False(t, contains(err.Message, "never used") && contains(err.Message, "param"),
+		assert.False(t, containsSubstring(err.Message, "never used") && containsSubstring(err.Message, "param"),
 			"Should not report parameters as unused")
 	}
 }
@@ -251,9 +251,9 @@ func TestFlowAnalysisComplexExpressions(t *testing.T) {
 	// Should have no flow analysis errors for well-structured function
 	flowErrors := 0
 	for _, err := range semanticErrors {
-		if contains(err.Message, "unreachable") ||
-			contains(err.Message, "never used") ||
-			contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "unreachable") ||
+			containsSubstring(err.Message, "never used") ||
+			containsSubstring(err.Message, "no return statement") {
 			flowErrors++
 		}
 	}
@@ -283,9 +283,9 @@ func TestFlowAnalysisRequireStatements(t *testing.T) {
 	// Should handle require statements without flow issues
 	flowErrors := 0
 	for _, err := range semanticErrors {
-		if contains(err.Message, "unreachable") ||
-			contains(err.Message, "never used") ||
-			contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "unreachable") ||
+			containsSubstring(err.Message, "never used") ||
+			containsSubstring(err.Message, "no return statement") {
 			flowErrors++
 		}
 	}
@@ -310,7 +310,7 @@ func TestFlowAnalysisVoidFunction(t *testing.T) {
 
 	// Should not report missing return for void function
 	for _, err := range semanticErrors {
-		assert.False(t, contains(err.Message, "no return statement"),
+		assert.False(t, containsSubstring(err.Message, "no return statement"),
 			"Should not report missing return for void function")
 	}
 }
@@ -335,7 +335,7 @@ func TestFlowAnalysisIfStatementCompleteReturns(t *testing.T) {
 	// Should not report missing return since both branches return
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 		}
 	}
@@ -360,7 +360,7 @@ func TestFlowAnalysisIfStatementIncompleteReturns(t *testing.T) {
 	// Should report missing return since else clause is missing
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 		}
 	}
@@ -396,7 +396,7 @@ func TestFlowAnalysisNestedIfCompleteReturns(t *testing.T) {
 	// Should not report missing return since all nested branches return
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 		}
 	}
@@ -430,7 +430,7 @@ func TestFlowAnalysisNestedIfIncompleteReturns(t *testing.T) {
 	// Should report missing return due to incomplete nested branch
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 		}
 	}
@@ -460,7 +460,7 @@ func TestFlowAnalysisIfElseIfChain(t *testing.T) {
 	// Should not report missing return for complete if-else if-else chain
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 		}
 	}
@@ -488,7 +488,7 @@ func TestFlowAnalysisIfElseIfIncomplete(t *testing.T) {
 	// Should report missing return for incomplete if-else if chain
 	foundMissingReturn := false
 	for _, err := range semanticErrors {
-		if contains(err.Message, "no return statement") {
+		if containsSubstring(err.Message, "no return statement") {
 			foundMissingReturn = true
 		}
 	}

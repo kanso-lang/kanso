@@ -238,22 +238,14 @@ func (fa *FlowAnalyzer) filterErrorsByType(errorType string) []SemanticError {
 func containsType(message, errorType string) bool {
 	switch errorType {
 	case "unreachable":
-		return contains(message, "unreachable")
+		return containsSubstring(message, "unreachable")
 	case "unused":
-		return contains(message, "never used")
+		return containsSubstring(message, "never used")
 	case "missing return":
-		return contains(message, "no return statement")
+		return containsSubstring(message, "no return statement")
 	default:
 		return false
 	}
-}
-
-// contains is a simple string contains check
-func contains(str, substr string) bool {
-	return len(str) >= len(substr) &&
-		(str == substr ||
-			(len(str) > len(substr) &&
-				(stringContains(str, substr))))
 }
 
 // stringContains implements a basic string search

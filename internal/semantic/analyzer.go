@@ -44,13 +44,14 @@ type FunctionCallGraph struct {
 }
 
 type Analyzer struct {
-	contract        *ast.Contract
-	errors          []errors.CompilerError   // All errors with suggestions and proper formatting
-	symbols         *SymbolTable             // Tracks variable/function scoping within contract
-	context         *ContextRegistry         // Manages imports and standard library integration
-	localFunctions  map[string]*ast.Function // Tracks functions defined in this contract
-	callGraph       *FunctionCallGraph       // Tracks function calls and storage access for validation
-	currentFunction string                   // Name of the function currently being analyzed
+	contract         *ast.Contract
+	errors           []errors.CompilerError   // All errors with suggestions and proper formatting
+	symbols          *SymbolTable             // Tracks variable/function scoping within contract
+	context          *ContextRegistry         // Manages imports and standard library integration
+	localFunctions   map[string]*ast.Function // Tracks functions defined in this contract
+	callGraph        *FunctionCallGraph       // Tracks function calls and storage access for validation
+	currentFunction  string                   // Name of the function currently being analyzed
+	existingUseStmts []*ast.Use               // Tracks existing use statements for smart import suggestions
 }
 
 func NewAnalyzer() *Analyzer {
@@ -77,6 +78,7 @@ func (a *Analyzer) Analyze(contract *ast.Contract) []SemanticError {
 	a.errors = make([]errors.CompilerError, 0)
 	a.localFunctions = make(map[string]*ast.Function) // Reset for each analysis
 	a.symbols = NewSymbolTable(nil)                   // Root scope for contract-level declarations
+	a.existingUseStmts = make([]*ast.Use, 0)          // Reset existing use statements
 
 	// Reset call graph for each analysis
 	a.callGraph = &FunctionCallGraph{
@@ -118,6 +120,8 @@ func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 	for _, item := range allItems {
 		switch node := item.(type) {
 		case *ast.Use:
+			// Track existing use statements for smart import suggestions
+			a.existingUseStmts = append(a.existingUseStmts, node)
 			importErrors := a.context.ProcessUseStatement(node)
 			for _, err := range importErrors {
 				a.addError(err, node.NodePos())
@@ -376,7 +380,7 @@ func (a *Analyzer) validateDirectFunctionCall(functionName string, call *ast.Cal
 	_, isLocalFunction := a.localFunctions[functionName]
 
 	if !isImported && !isLocalFunction {
-		a.addUndefinedFunctionError(functionName, call.NodePos())
+		a.addUndefinedFunctionErrorWithContext(functionName, call)
 		return
 	}
 

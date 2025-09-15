@@ -62,9 +62,22 @@ func (ip *ImportParser) ParseUseStatement(useStmt *ast.Use) []string {
 				continue
 			}
 
-			// Regular type import - determine if it's generic
-			isGeneric := ip.isKnownGenericType(item.Name.Value, modulePathStr)
-			ip.typeRegistry.AddImportedType(item.Name.Value, modulePathStr, isGeneric)
+			// Check if this is a known type
+			if ip.isKnownType(item.Name.Value, modulePathStr) {
+				// Regular type import - determine if it's generic
+				isGeneric := ip.isKnownGenericType(item.Name.Value, modulePathStr)
+				ip.typeRegistry.AddImportedType(item.Name.Value, modulePathStr, isGeneric)
+				continue
+			}
+
+			// Neither a known function nor a known type - report as error
+			errors = append(errors, "unknown function or type '"+item.Name.Value+"' in module '"+modulePathStr+"'")
+
+			// Suggest similar functions or types
+			suggestions := ip.findSimilarFunctionsOrTypes(item.Name.Value, modulePathStr)
+			if len(suggestions) > 0 {
+				errors = append(errors, "did you mean: "+strings.Join(suggestions, ", "))
+			}
 		}
 	}
 
@@ -98,6 +111,92 @@ func (ip *ImportParser) isKnownFunction(functionName, modulePath string) bool {
 	}
 
 	return false
+}
+
+// isKnownType checks if an import is a known type (not a function)
+func (ip *ImportParser) isKnownType(typeName, modulePath string) bool {
+	// Use standard library definitions
+	if moduleDef := stdlib.GetModuleDefinition(modulePath); moduleDef != nil {
+		_, exists := moduleDef.Types[typeName]
+		return exists
+	}
+
+	return false
+}
+
+// findSimilarFunctionsOrTypes finds similar function or type names using Levenshtein distance
+func (ip *ImportParser) findSimilarFunctionsOrTypes(name, modulePath string) []string {
+	var suggestions []string
+
+	if moduleDef := stdlib.GetModuleDefinition(modulePath); moduleDef != nil {
+		// Check functions
+		for funcName := range moduleDef.Functions {
+			if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+				suggestions = append(suggestions, funcName)
+			}
+		}
+
+		// Check types
+		for typeName := range moduleDef.Types {
+			if levenshteinDistance(name, typeName) <= 2 && len(typeName) > 1 {
+				suggestions = append(suggestions, typeName)
+			}
+		}
+	}
+
+	return suggestions
+}
+
+// Simple Levenshtein distance implementation for finding similar names
+func levenshteinDistance(a, b string) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+
+	previous := make([]int, len(a)+1)
+	for i := range previous {
+		previous[i] = i
+	}
+
+	for i := 0; i < len(b); i++ {
+		current := make([]int, len(a)+1)
+		current[0] = i + 1
+
+		for j := 0; j < len(a); j++ {
+			cost := 0
+			if a[j] != b[i] {
+				cost = 1
+			}
+			current[j+1] = min3(
+				current[j]+1,     // insertion
+				previous[j+1]+1,  // deletion
+				previous[j]+cost, // substitution
+			)
+		}
+		previous = current
+	}
+
+	return previous[len(a)]
+}
+
+func min3(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
 }
 
 // getModuleName extracts the module name from a module path

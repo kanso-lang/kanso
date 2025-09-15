@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"kanso/internal/ast"
+	"kanso/internal/stdlib"
 	"math/big"
 )
 
@@ -42,18 +43,136 @@ func (a *Analyzer) findSimilarFunctions(name string) []string {
 }
 
 func (a *Analyzer) findPossibleImports(name string) []string {
-	var imports []string
+	return a.findSmartImportSuggestions(name)
+}
+
+func (a *Analyzer) findSmartImportSuggestions(name string) []string {
+	// Find all possible functions that could be imported
+	possibleImports := make(map[string][]string) // modulePath -> []functionNames
 
 	modules := a.context.GetStandardModules()
 	for modulePath, module := range modules {
 		for funcName, _ := range module.Functions {
 			if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
-				imports = append(imports, modulePath+"::{"+funcName+"}")
+				// Skip if this function is already imported
+				if !a.context.IsImportedFunction(funcName) {
+					possibleImports[modulePath] = append(possibleImports[modulePath], funcName)
+				}
 			}
 		}
 	}
 
-	return imports
+	// Group by module and check existing imports
+	result := make([]string, 0)
+
+	for modulePath, newFunctions := range possibleImports {
+		// Check if we already have an import for this module
+		existingImport := a.findExistingImportFor(modulePath)
+
+		if existingImport != nil {
+			// We already import from this module, suggest extending the import
+			combinedImport := a.buildCombinedImport(existingImport, newFunctions)
+			if combinedImport != "" {
+				// Only suggest the extended import, not standalone imports for this module
+				result = append(result, combinedImport)
+			}
+		} else {
+			// No existing import, suggest new import
+			for _, funcName := range newFunctions {
+				result = append(result, modulePath+"::{"+funcName+"}")
+			}
+		}
+	}
+
+	return result
+}
+
+func (a *Analyzer) findExistingImportFor(modulePath string) *ast.Use {
+	for _, useStmt := range a.existingUseStmts {
+		// Build the module path from namespaces
+		currentPath := a.buildModulePath(useStmt.Namespaces)
+		if currentPath == modulePath {
+			return useStmt
+		}
+	}
+	return nil
+}
+
+func (a *Analyzer) buildModulePath(namespaces []*ast.Namespace) string {
+	if len(namespaces) == 0 {
+		return ""
+	}
+
+	path := ""
+	for i, ns := range namespaces {
+		if i > 0 {
+			path += "::"
+		}
+		path += ns.Name.Value
+	}
+	return path
+}
+
+func (a *Analyzer) buildCombinedImport(existingImport *ast.Use, newFunctions []string) string {
+	// Extract existing imported items
+	existingItems := make([]string, 0)
+
+	if existingImport.Imports != nil {
+		for _, item := range existingImport.Imports {
+			existingItems = append(existingItems, item.Name.Value)
+		}
+	}
+
+	// Combine existing and new items, removing duplicates and invalid items
+	allItems := make(map[string]bool)
+
+	// Only include existing items that are valid functions
+	modulePath := a.buildModulePath(existingImport.Namespaces)
+	modules := a.context.GetStandardModules()
+	if moduleDef, exists := modules[modulePath]; exists {
+		for _, item := range existingItems {
+			// Only include existing items that are actually valid functions or types
+			_, isFunction := moduleDef.Functions[item]
+			_, isType := moduleDef.Types[item]
+			if isFunction || isType {
+				allItems[item] = true
+			}
+		}
+	}
+
+	for _, newFunc := range newFunctions {
+		allItems[newFunc] = true
+	}
+
+	// Convert to sorted slice for consistent output
+	combinedItems := make([]string, 0, len(allItems))
+	for item := range allItems {
+		combinedItems = append(combinedItems, item)
+	}
+
+	// Sort alphabetically
+	for i := 0; i < len(combinedItems); i++ {
+		for j := i + 1; j < len(combinedItems); j++ {
+			if combinedItems[i] > combinedItems[j] {
+				combinedItems[i], combinedItems[j] = combinedItems[j], combinedItems[i]
+			}
+		}
+	}
+
+	// Build the import suggestion
+	if len(combinedItems) == 0 {
+		return ""
+	}
+
+	itemsStr := ""
+	for i, item := range combinedItems {
+		if i > 0 {
+			itemsStr += ", "
+		}
+		itemsStr += item
+	}
+
+	return a.buildModulePath(existingImport.Namespaces) + "::{" + itemsStr + "}"
 }
 
 func (a *Analyzer) getStructFields(structName string) []string {
@@ -69,6 +188,95 @@ func (a *Analyzer) getStructFields(structName string) []string {
 	}
 
 	return fields
+}
+
+func (a *Analyzer) findFunctionsBySignature(name string, argCount int, argTypes []string) []string {
+	var matches []string
+
+	// Check all standard library modules for functions with matching signatures
+	modules := a.context.GetStandardModules()
+	for modulePath, module := range modules {
+		for funcName, funcDef := range module.Functions {
+			if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+				// Check if parameter count and types match
+				if a.isSignatureCompatible(funcDef.Parameters, argCount, argTypes) {
+					matches = append(matches, modulePath+"::{"+funcName+"}")
+				}
+			}
+		}
+	}
+
+	// Check local functions with matching signatures
+	for funcName, localFunc := range a.localFunctions {
+		if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+			if localFunc != nil && a.isLocalSignatureCompatible(localFunc.Params, argCount, argTypes) {
+				matches = append(matches, funcName)
+			}
+		}
+	}
+
+	// Check imported functions with matching signatures
+	importedFunctions := a.context.GetAllImportedFunctions()
+	for _, funcName := range importedFunctions {
+		if levenshteinDistance(name, funcName) <= 2 && len(funcName) > 1 {
+			if funcDef := a.context.GetFunctionDefinition(funcName); funcDef != nil {
+				if a.isSignatureCompatible(funcDef.Parameters, argCount, argTypes) {
+					matches = append(matches, funcName)
+				}
+			}
+		}
+	}
+
+	return matches
+}
+
+func (a *Analyzer) isSignatureCompatible(params []stdlib.ParameterDefinition, argCount int, argTypes []string) bool {
+	// Must match parameter count
+	if len(params) != argCount {
+		return false
+	}
+
+	// For now, use a simpler approach: just match argument count
+	// More sophisticated type matching can be added later
+	return true
+}
+
+func (a *Analyzer) isLocalSignatureCompatible(params []*ast.FunctionParam, argCount int, argTypes []string) bool {
+	// Must match parameter count
+	if len(params) != argCount {
+		return false
+	}
+
+	// For now, just match argument count for local functions too
+	return true
+}
+
+func (a *Analyzer) analyzeCallContext(call *ast.CallExpr) map[string]interface{} {
+	context := make(map[string]interface{})
+
+	// Analyze argument count and types
+	context["argCount"] = len(call.Args)
+
+	argTypes := make([]string, len(call.Args))
+	for i, arg := range call.Args {
+		if argType := a.inferExpressionType(arg); argType != nil {
+			argTypes[i] = argType.Name
+		} else {
+			argTypes[i] = "unknown"
+		}
+	}
+	context["argTypes"] = argTypes
+
+	// Check if it's used in a context that expects a return value
+	context["expectsReturn"] = a.isUsedInValueContext(call)
+
+	return context
+}
+
+func (a *Analyzer) isUsedInValueContext(expr ast.Expr) bool {
+	// This is a simplified check - in a real implementation, you'd walk up the AST
+	// to determine if the expression is used in a context that requires a value
+	return true // For now, assume most function calls are expected to return values
 }
 
 // Simple Levenshtein distance for finding similar names
