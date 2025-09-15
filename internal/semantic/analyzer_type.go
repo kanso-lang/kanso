@@ -130,12 +130,68 @@ func (a *Analyzer) typesMatch(actual, expected *stdlib.TypeRef) bool {
 
 	// Simple name matching for non-generic types
 	if actual.Name != expected.Name {
+		// Check numeric promotion before failing
+		return a.isNumericPromotion(actual, expected)
+	}
+
+	// For tuple types, compare element types recursively
+	if actual.Name == "Tuple" && expected.Name == "Tuple" {
+		return a.tupleTypesMatch(actual, expected)
+	}
+
+	// For other generic types, compare generic arguments
+	if len(actual.GenericArgs) != len(expected.GenericArgs) {
 		return false
 	}
 
-	// For generic types, would need to match type arguments
-	// For now, just check basic type name equality
+	for i := 0; i < len(actual.GenericArgs); i++ {
+		if !a.typesMatch(actual.GenericArgs[i], expected.GenericArgs[i]) {
+			return false
+		}
+	}
+
 	return true
+}
+
+// tupleTypesMatch checks if two tuple types are compatible
+func (a *Analyzer) tupleTypesMatch(actual, expected *stdlib.TypeRef) bool {
+	if len(actual.GenericArgs) != len(expected.GenericArgs) {
+		return false
+	}
+
+	for i := 0; i < len(actual.GenericArgs); i++ {
+		if !a.typesMatch(actual.GenericArgs[i], expected.GenericArgs[i]) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// isNumericPromotion checks if actual can be promoted to expected
+func (a *Analyzer) isNumericPromotion(actual, expected *stdlib.TypeRef) bool {
+	if actual == nil || expected == nil {
+		return false
+	}
+
+	// Define promotion hierarchy: U8 -> U16 -> U32 -> U64 -> U128 -> U256
+	promotions := map[string][]string{
+		"U8":   {"U16", "U32", "U64", "U128", "U256"},
+		"U16":  {"U32", "U64", "U128", "U256"},
+		"U32":  {"U64", "U128", "U256"},
+		"U64":  {"U128", "U256"},
+		"U128": {"U256"},
+	}
+
+	if validTargets, exists := promotions[actual.Name]; exists {
+		for _, target := range validTargets {
+			if target == expected.Name {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // typeToString converts a type reference to a string for error messages
@@ -150,6 +206,19 @@ func (a *Analyzer) typeToString(typeRef *stdlib.TypeRef) string {
 
 	if len(typeRef.GenericArgs) == 0 {
 		return typeRef.Name // Simple type like u256, address
+	}
+
+	// Special case for tuple types - use parentheses syntax
+	if typeRef.Name == "Tuple" {
+		result := "("
+		for i, arg := range typeRef.GenericArgs {
+			if i > 0 {
+				result += ", "
+			}
+			result += a.typeToString(arg)
+		}
+		result += ")"
+		return result
 	}
 
 	// Generic type with arguments like Table<K, V>
@@ -382,8 +451,30 @@ func (a *Analyzer) isStringType(typeRef *stdlib.TypeRef) bool {
 
 // inferTupleExpressionType handles type inference for tuple expressions
 func (a *Analyzer) inferTupleExpressionType(node *ast.TupleExpr) *stdlib.TypeRef {
-	// For now, we don't have a robust tuple type system
-	// This could be enhanced to return a tuple type with element types
-	// TODO implement proper tuple type representation
-	return &stdlib.TypeRef{Name: "Tuple", IsGeneric: false}
+	if len(node.Elements) == 0 {
+		// Empty tuple - rare but possible
+		return &stdlib.TypeRef{Name: "Tuple", IsGeneric: false, GenericArgs: []*stdlib.TypeRef{}}
+	}
+
+	// Infer the type of each element
+	elementTypes := make([]*stdlib.TypeRef, len(node.Elements))
+	for i, element := range node.Elements {
+		elementType := a.inferExpressionType(element)
+		if elementType == nil {
+			// If we can't infer an element type, try recovery inference
+			elementType = a.attemptTypeInferenceRecovery(element)
+		}
+		if elementType == nil {
+			// If we still can't infer the type, use a generic placeholder
+			elementType = &stdlib.TypeRef{Name: "Unknown", IsGeneric: false}
+		}
+		elementTypes[i] = elementType
+	}
+
+	// Create a tuple type with element types as generic arguments
+	return &stdlib.TypeRef{
+		Name:        "Tuple",
+		IsGeneric:   false,
+		GenericArgs: elementTypes,
+	}
 }

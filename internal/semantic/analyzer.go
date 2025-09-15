@@ -468,11 +468,16 @@ func (a *Analyzer) convertASTTypeToTypeRef(astType *ast.VariableType) *stdlib.Ty
 
 	// Handle tuple types
 	if len(astType.TupleElements) > 0 {
-		// For now, represent tuples as a special type reference
-		// This could be improved with proper tuple type system
+		// Convert each tuple element to a TypeRef
+		elementTypes := make([]*stdlib.TypeRef, len(astType.TupleElements))
+		for i, element := range astType.TupleElements {
+			elementTypes[i] = a.convertASTTypeToTypeRef(element)
+		}
+
 		return &stdlib.TypeRef{
-			Name:      "Tuple", // Placeholder for tuple types
-			IsGeneric: false,
+			Name:        "Tuple",
+			IsGeneric:   false,
+			GenericArgs: elementTypes,
 		}
 	}
 
