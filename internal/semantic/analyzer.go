@@ -106,6 +106,16 @@ func (a *Analyzer) GetErrors() []errors.CompilerError {
 	return a.errors
 }
 
+// GetContext returns the context registry for IR generation
+func (a *Analyzer) GetContext() *ContextRegistry {
+	return a.context
+}
+
+// GetImportedFunction returns information about an imported function
+func (a *Analyzer) GetImportedFunction(functionName string) *ImportedFunction {
+	return a.context.GetImportedFunction(functionName)
+}
+
 func (a *Analyzer) analyzeContract(contract *ast.Contract) {
 	// Two-pass analysis prevents forward reference errors: struct definitions must be processed
 	// before functions that reference them in reads/writes clauses can be validated

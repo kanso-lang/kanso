@@ -1,0 +1,201 @@
+// SPDX-License-Identifier: Apache-2.0
+contract BusyToken {
+  use std::evm::{sender, emit};
+  use std::address;
+  use std::ascii::{String};
+  use std::errors;
+
+  #[event]
+  struct Transfer { from: Address, to: Address, value: U256, }
+  #[event]
+  struct Approval { owner: Address, spender: Address, value: U256, }
+
+  #[storage]
+  struct State {
+    balances:   Slots<Address, U256>,
+    allowances: Slots<(Address, Address), U256>,
+    total_supply: U256,
+    name: String,
+    symbol: String,
+    decimals: U8,
+
+    // Extra maps to exercise addressing & aliasing:
+    reserved:   Slots<Address, U256>,                 // “locked” amount per account (no logic, just storage traffic)
+    points:     Slots<(Address, Address), U256>,       // generic pair-keyed counter (owner, tag)
+  }
+
+  #[create]
+  fn create(name: String, symbol: String, initial_supply: U256, decimals: U8) writes State {
+    State.total_supply = initial_supply;
+    State.name = name;
+    State.symbol = symbol;
+    State.decimals = decimals;
+    mint(sender(), initial_supply);
+  }
+
+  // --- Simple views (kept for completeness) ---
+  ext fn name() -> String reads State { State.name }
+  ext fn symbol() -> String reads State { State.symbol }
+  ext fn decimals() -> U8 reads State { State.decimals }
+  ext fn totalSupply() -> U256 reads State { State.total_supply }
+  ext fn balanceOf(owner: Address) -> U256 reads State { State.balances[owner] }
+  ext fn allowance(owner: Address, spender: Address) -> U256 reads State { State.allowances[(owner, spender)] }
+
+  // --- Baseline ERC-20 ops ---
+  ext fn approve(spender: Address, amount: U256) -> Bool writes State {
+    State.allowances[(sender(), spender)] = amount;
+    emit(Approval{owner: sender(), spender, value: amount});
+    true
+  }
+
+  ext fn transfer(to: Address, amount: U256) -> Bool writes State {
+    require!(sender() != to, errors::SelfTransfer);
+    do_transfer(sender(), to, amount);
+    true
+  }
+
+  ext fn transferFrom(from: Address, to: Address, amount: U256) -> Bool writes State {
+    require!(from != to, errors::SelfTransfer);
+    let allowance = State.allowances[(from, sender())];
+    require!(amount <= allowance, errors::InsufficientAllowance);
+    State.allowances[(from, sender())] -= amount;
+    do_transfer(from, to, amount);
+    true
+  }
+
+  // --- Heavier helpers (fixed-arity “batch” ops; no loops/ifs) ---
+
+  /// Debits sender for a1+a2 and credits two recipients. Invites:
+  /// - CSE of balances[sender], balances[toX]
+  /// - Range-prop: require(a1+a2 <= bal_from) ⇒ drop underflow checks on two subs
+  ext fn transfer2(to1: Address, to2: Address, a1: U256, a2: U256) -> Bool writes State {
+    require!(sender() != to1, errors::SelfTransfer);
+    require!(sender() != to2, errors::SelfTransfer);
+
+    let from = sender();
+    let bf = State.balances[from];
+
+    // NOTE: no loops/ifs; keep as two guards
+    let sum = a1 + a2;
+    require!(sum <= bf, errors::InsufficientBalance);
+
+    State.balances[from] -= a1;
+    State.balances[to1]  += a1;
+    State.balances[from] -= a2;
+    State.balances[to2]  += a2;
+
+    emit(Transfer{from, to: to1, value: a1});
+    emit(Transfer{from, to: to2, value: a2});
+    true
+  }
+
+  /// Triple transfer with independent amounts. Stresses address recomputation & warm scheduling.
+  ext fn transfer3(to1: Address, to2: Address, to3: Address, a1: U256, a2: U256, a3: U256) -> Bool writes State {
+    let from = sender();
+    require!(from != to1, errors::SelfTransfer);
+    require!(from != to2, errors::SelfTransfer);
+    require!(from != to3, errors::SelfTransfer);
+
+    let bf = State.balances[from];
+    let sum12 = a1 + a2;
+    let sum123 = sum12 + a3;
+    require!(sum123 <= bf, errors::InsufficientBalance);
+
+    State.balances[from] -= a1;
+    State.balances[to1]  += a1;
+    State.balances[from] -= a2;
+    State.balances[to2]  += a2;
+    State.balances[from] -= a3;
+    State.balances[to3]  += a3;
+
+    emit(Transfer{from, to: to1, value: a1});
+    emit(Transfer{from, to: to2, value: a2});
+    emit(Transfer{from, to: to3, value: a3});
+    true
+  }
+
+  /// Approve two spenders in one call (pair-keyed map twice)
+  ext fn approve2(sp1: Address, amt1: U256, sp2: Address, amt2: U256) -> Bool writes State {
+    let me = sender();
+    State.allowances[(me, sp1)] = amt1;
+    State.allowances[(me, sp2)] = amt2;
+    emit(Approval{owner: me, spender: sp1, value: amt1});
+    emit(Approval{owner: me, spender: sp2, value: amt2});
+    true
+  }
+
+  /// Spend from one spender, grant to another (moves allowance from A→B)
+  ext fn moveAllowance(owner: Address, fromSpender: Address, toSpender: Address, amount: U256) -> Bool writes State {
+    let a_from = State.allowances[(owner, fromSpender)];
+    require!(amount <= a_from, errors::InsufficientAllowance);
+    State.allowances[(owner, fromSpender)] -= amount;
+    State.allowances[(owner, toSpender)]   += amount;
+    // (no event by ERC-20 spec, we keep this silent)
+    true
+  }
+
+  /// Swap two users' balances. Exercises two loads + two stores to distinct slots.
+  ext fn swapBalances(a: Address, b: Address) -> Bool writes State {
+    let ba = State.balances[a];
+    let bb = State.balances[b];
+    State.balances[a] = bb;
+    State.balances[b] = ba;
+    true
+  }
+
+  /// Mint to two recipients in one call; touches total_supply once, two balance slots.
+  ext fn mint2(a: Address, va: U256, b: Address, vb: U256) -> Bool writes State {
+    State.total_supply += (va + vb);
+    State.balances[a]  += va;
+    State.balances[b]  += vb;
+    emit(Transfer{from: address::zero(), to: a, value: va});
+    emit(Transfer{from: address::zero(), to: b, value: vb});
+    true
+  }
+
+  /// “Reserve” part of caller’s balance into a separate slot. Pure storage traffic; good for warm/cold tests.
+  ext fn setReserved(amount: U256) -> Bool writes State {
+    let me = sender();
+    let bal = State.balances[me];
+    require!(amount <= bal, errors::InsufficientBalance);
+    State.balances[me] -= amount;
+    State.reserved[me] += amount;
+    true
+  }
+
+  /// Release from reserved back to spendable.
+  ext fn releaseReserved(amount: U256) -> Bool writes State {
+    let me = sender();
+    let r = State.reserved[me];
+    require!(amount <= r, errors::InsufficientBalance);
+    State.reserved[me] -= amount;
+    State.balances[me] += amount;
+    true
+  }
+
+  /// Bump a generic pair-keyed counter twice (owner,tagA) and (owner,tagB).
+  ext fn bumpPoints(tagA: Address, tagB: Address, incA: U256, incB: U256) -> Bool writes State {
+    let me = sender();
+    State.points[(me, tagA)] += incA;
+    State.points[(me, tagB)] += incB;
+    true
+  }
+
+  // --- Internal transfer primitive (same as before; kept simple on purpose) ---
+  fn do_transfer(from: Address, to: Address, amount: U256) writes State {
+    let bf = State.balances[from];
+    require!(amount <= bf, errors::InsufficientBalance);
+
+    State.balances[from] -= amount;
+    State.balances[to]   += amount;
+
+    emit(Transfer{from, to, value: amount});
+  }
+
+  // --- Plain mint (single) ---
+  fn mint(account: Address, amount: U256) writes State {
+    State.total_supply += amount;
+    State.balances[account] += amount;
+    emit(Transfer{from: address::zero(), to: account, value: amount});
+  }
+}

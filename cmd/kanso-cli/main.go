@@ -3,13 +3,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/fatih/color"
 	"kanso/internal/errors"
+	"kanso/internal/ir"
 	"kanso/internal/parser"
 	"kanso/internal/semantic"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/fatih/color"
 )
 
 func main() {
@@ -44,8 +46,11 @@ func main() {
 
 	// Run semantic analysis if parsing succeeded
 	hasErrors := len(scannerErrors) > 0 || len(parseErrors) > 0
+	var analyzer *semantic.Analyzer
+	var irProgram *ir.Program
+
 	if contract != nil {
-		analyzer := semantic.NewAnalyzer()
+		analyzer = semantic.NewAnalyzer()
 		analyzer.Analyze(contract)
 
 		// Report semantic errors
@@ -54,15 +59,38 @@ func main() {
 			fmt.Print(errorReporter.FormatError(err))
 			hasErrors = true
 		}
+
+		// Generate IR if semantic analysis succeeded
+		if len(semanticErrors) == 0 {
+			irProgram = ir.BuildProgram(contract, analyzer.GetContext())
+
+			// Apply optimization passes
+			if irProgram != nil {
+				// Temporarily disable optimizations to see full IR
+				// pipeline := ir.NewOptimizationPipeline()
+				// pipeline.Run(irProgram)
+			}
+		}
 	}
 
 	// Calculate processing time
 	duration := time.Since(startTime)
 	formattedDuration := formatDuration(duration)
 
-	// Only print AST and success message if no errors
+	// Only print AST and IR if no errors
 	if !hasErrors {
+		// Print AST
+		fmt.Println("=== AST ===")
 		fmt.Println(contract.String())
+		fmt.Println()
+
+		// Print IR if available
+		if irProgram != nil {
+			fmt.Println("=== IR ===")
+			fmt.Println(ir.PrintProgram(irProgram))
+			fmt.Println()
+		}
+
 		color.Green("Successfully processed %s in %s", path, formattedDuration)
 	} else {
 		color.Red("Compilation failed after %s", formattedDuration)

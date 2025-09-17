@@ -1,6 +1,9 @@
 package types
 
-import "kanso/internal/ast"
+import (
+	"kanso/internal/ast"
+	"kanso/internal/builtins"
+)
 
 // ImportedType represents a type imported via use statement
 type ImportedType struct {
@@ -27,7 +30,7 @@ func NewTypeRegistry() *TypeRegistry {
 
 // InitializeBuiltins adds all built-in types to the registry
 func (tr *TypeRegistry) InitializeBuiltins() {
-	for typeName := range BuiltinTypes {
+	for typeName := range builtins.BuiltinTypes {
 		tr.builtins[typeName] = true
 	}
 }
