@@ -1,0 +1,4 @@
+plan:
+  print "one"    // from line 2
+  print "two"    // from line 2
+  print "three"    // from line 2

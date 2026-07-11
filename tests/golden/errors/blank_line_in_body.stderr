@@ -1,0 +1,4 @@
+error[formatting]: blank lines may not appear inside a body
+  --> blank_line_in_body.kso:4:1
+   4 |   print "{x}"
+       ^

@@ -1,0 +1,11 @@
+fn describe none
+  "no ninth price"
+
+fn describe x
+  "ninth price: {x}"
+
+fn main
+  prices = [30, 10, 20]
+  doubled = map prices, (x -> x * 2)
+  ninth = at prices, 9
+  print "sorted: {sort prices}" >> print "doubled: {doubled}" >> print (describe ninth)

@@ -1,0 +1,4 @@
+error[name]: unknown name `mystery`
+  --> unknown_name.kso:2:11
+   2 |   print "{mystery}"
+                 ^

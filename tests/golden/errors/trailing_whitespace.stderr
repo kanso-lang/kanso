@@ -1,0 +1,4 @@
+error[formatting]: trailing whitespace is not part of the canonical grammar
+  --> trailing_whitespace.kso:2:13
+   2 |   print "hi" 
+                   ^

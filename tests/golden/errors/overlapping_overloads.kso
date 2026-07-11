@@ -1,0 +1,8 @@
+fn main
+  print "{same 1}"
+
+fn same x
+  x
+
+fn same y
+  y

@@ -1,0 +1,3 @@
+fn main
+  myName = 1
+  print "{myName}"

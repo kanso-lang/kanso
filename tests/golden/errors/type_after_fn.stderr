@@ -1,0 +1,4 @@
+error[formatting]: canonical order places type declarations before functions; move `user` up
+  --> type_after_fn.kso:4:6
+   4 | type user
+            ^

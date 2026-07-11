@@ -1,0 +1,14 @@
+[package]
+name = "kanso"
+version = "0.1.0"
+edition = "2021"
+description = "Reference interpreter for the kanso language"
+license = "MIT"
+
+[dependencies]
+num-bigint = "0.4"
+num-traits = "0.2"
+
+[[bin]]
+name = "kanso"
+path = "src/main.rs"

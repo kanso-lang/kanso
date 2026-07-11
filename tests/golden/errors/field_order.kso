@@ -1,0 +1,6 @@
+type user
+  name: string
+  admin: bool
+
+fn main
+  print "x"

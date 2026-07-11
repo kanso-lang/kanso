@@ -1,0 +1,3 @@
+fn main
+  answer=42
+  print "{answer}"

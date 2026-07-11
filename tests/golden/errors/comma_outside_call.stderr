@@ -1,0 +1,4 @@
+error[syntax]: a comma adds an argument to a call, and nothing here is a call
+  --> comma_outside_call.kso:2:10
+   2 |   x = 1, 2
+                ^

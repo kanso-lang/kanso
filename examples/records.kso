@@ -1,0 +1,10 @@
+type user
+  admin: bool
+  name: string
+
+fn main
+  clay = user true, "clay"
+  print (welcome clay)
+
+fn welcome (user _, name)
+  "irasshaimase, {name}"

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kanso — the language where the source contains only decisions</title>
+<meta name="description" content="kanso (簡素): a pure language where effects are values, failure is a value, dispatch is the only eliminator, and programs have exactly one canonical form.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="spec.html">spec</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<section class="hero">
+  <svg class="enso-bg" viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="82" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-dasharray="455 60" transform="rotate(-80 100 100)"/>
+  </svg>
+  <div class="container hero-inner">
+    <div>
+      <p class="hero-kanji" lang="ja">簡素</p>
+      <h1 class="hero-title">kanso</h1>
+      <p class="hero-thesis">the language where the source contains <em>only decisions.</em></p>
+      <div class="hero-actions">
+        <a class="button button-solid" href="spec.html">read the spec</a>
+        <a class="button button-ghost" href="https://github.com/ClayShentrup/kanso">github</a>
+      </div>
+    </div>
+    <div class="code-panel">
+      <div class="code-panel-title">examples/pipes.kso</div>
+      <pre><code><span class="k">fn</span> <span class="f">greet</span> name
+  <span class="s">"hello, <span class="i">{name}</span>"</span>
+
+<span class="k">fn</span> <span class="f">main</span>
+  <span class="s">"kanso"</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+      <div class="code-output">
+        <div class="code-panel-title">output</div>
+        <pre><code>hello, kanso</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="principle">
+  <div class="container principle-inner">
+    <span class="eyebrow">the founding principle</span>
+    <blockquote>anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error or unrepresentable.</blockquote>
+  </div>
+</section>
+
+<section class="section" id="doctrine">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">doctrine</span>
+      <h2 class="section-title">six deletions</h2>
+      <p class="lede">kanso is defined less by what it adds than by what it makes unnecessary. every derivable fact lives in tooling; the source keeps only what the compiler cannot know.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature">
+        <span class="feature-num">01</span>
+        <h3>effects are values</h3>
+        <p><code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives <code>main</code>'s description. effect sets are inferred and propagate up the call graph — no async/await, no function coloring, zero overhead for pure calls. tests assert on descriptions; no mocks.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">02</span>
+        <h3>failure is a value</h3>
+        <p>no exceptions, no panics — and no ok/some wrappers either. success is the bare value; <code>err reason</code> and <code>none</code> are ordinary types that propagate on their own. an <code>err</code> reaching <code>main</code> unhandled is a compile error, not a crash.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">03</span>
+        <h3>dispatch is the only eliminator</h3>
+        <p>values may inhabit typesets, and the only way out is dispatch. no <code>match</code>, no <code>instanceof</code>, no tag tests, no narrowing syntax. overloads dispatch on literals, concrete types, or typeset guards — resolved statically, and monomorphic code carries no tags.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">04</span>
+        <h3>no interfaces</h3>
+        <p>no interface, class, or instance construct exists. a generic function's requirements are inferred from its body — minimal by construction, transitive through call chains. the lsp renders the effective contract; publish tooling diffs it and enforces semver.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">05</span>
+        <h3>canonical form</h3>
+        <p>one rendering per program. non-canonical whitespace is a syntax error; fields, imports, and typeset members are alphabetical, enforced. no formatter tool exists — there is nothing left to format.</p>
+      </div>
+      <div class="feature">
+        <span class="feature-num">06</span>
+        <h3>memory without gc or borrow checker</h3>
+        <p>values are immutable, so the heap is a dag, so reference counting is complete. perceus-style: counts elided statically, frees inserted at last use, in-place update under unique ownership. no lifetimes, no memory syntax in source.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="programs">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">real programs</span>
+      <h2 class="section-title">see it run</h2>
+      <p class="lede">every sample below is verbatim from <code>examples/</code> in the repository.</p>
+    </div>
+
+    <div class="showcase-featured">
+      <div class="feature">
+        <span class="feature-num">errors.kso</span>
+        <h3>failure propagates; dispatch handles it</h3>
+        <p><code>safe_ratio 10, 0</code> returns an <code>err</code> — division by zero is a value, not a panic. it flows through untouched until <code>describe</code> dispatches on it: one overload for <code>err reason</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
+      </div>
+      <div class="code-panel">
+        <div class="code-panel-title">examples/errors.kso</div>
+        <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
+  <span class="s">"failed: <span class="i">{reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> n
+  <span class="s">"result: <span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">main</span>
+  good <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span>, <span class="n">2</span>
+  bad <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span>, <span class="n">0</span>
+  <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)
+
+<span class="k">fn</span> <span class="f">safe_ratio</span> a, b
+  a <span class="o">/</span> b</code></pre>
+        <div class="code-output">
+          <div class="code-panel-title">output</div>
+          <pre><code>result: 5
+failed: division by zero</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="showcase-grid">
+      <div class="showcase-cell">
+        <div class="code-panel">
+          <div class="code-panel-title">examples/dispatch.kso</div>
+          <pre><code><span class="k">fn</span> <span class="f">fact</span> <span class="n">0</span>
+  <span class="n">1</span>
+
+<span class="k">fn</span> <span class="f">fact</span> n
+  n <span class="o">*</span> <span class="f">fact</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">main</span>
+  answer <span class="o">=</span> <span class="f">fact</span> <span class="n">20</span>
+  <span class="f">print</span> <span class="s">"20! = <span class="i">{answer}</span>"</span></code></pre>
+          <div class="code-output">
+            <div class="code-panel-title">output</div>
+            <pre><code>20! = 2432902008176640000</code></pre>
+          </div>
+        </div>
+        <p>literal <code>0</code> outranks the generic overload — the base case is dispatch, not a conditional. and <code>int</code> is arbitrary-precision by default, so 20! just works.</p>
+      </div>
+
+      <div class="showcase-cell">
+        <div class="code-panel">
+          <div class="code-panel-title">examples/records.kso</div>
+          <pre><code><span class="k">type</span> <span class="t">user</span>
+  admin: <span class="t">bool</span>
+  name: <span class="t">string</span>
+
+<span class="k">fn</span> <span class="f">main</span>
+  clay <span class="o">=</span> <span class="t">user</span> <span class="t">true</span>, <span class="s">"clay"</span>
+  <span class="f">print</span> (<span class="f">welcome</span> clay)
+
+<span class="k">fn</span> <span class="f">welcome</span> (<span class="t">user</span> <span class="o">_</span>, name)
+  <span class="s">"irasshaimase, <span class="i">{name}</span>"</span></code></pre>
+          <div class="code-output">
+            <div class="code-panel-title">output</div>
+            <pre><code>irasshaimase, clay</code></pre>
+          </div>
+        </div>
+        <p>every type is a single-constructor record; fields are alphabetical, enforced. construction is positional and destructuring is how you take records apart.</p>
+      </div>
+
+      <div class="showcase-cell">
+        <div class="code-panel">
+          <div class="code-panel-title">examples/effects.kso</div>
+          <pre><code><span class="k">fn</span> <span class="f">main</span>
+  <span class="f">print</span> <span class="s">"one"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"two"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"three"</span></code></pre>
+          <div class="code-output">
+            <div class="code-panel-title">output</div>
+            <pre><code>one
+two
+three</code></pre>
+          </div>
+        </div>
+        <p><code>&gt;&gt;</code> sequences descriptions without passing data. together with <code>.</code>, it is the complete vocabulary of "before" — everywhere else, the runtime owns order.</p>
+      </div>
+
+      <div class="showcase-cell">
+        <div class="code-panel">
+          <div class="code-panel-title">examples/lists.kso</div>
+          <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+  <span class="s">"no ninth price"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> x
+  <span class="s">"ninth price: <span class="i">{x}</span>"</span>
+
+<span class="k">fn</span> <span class="f">main</span>
+  prices <span class="o">=</span> [<span class="n">30</span>, <span class="n">10</span>, <span class="n">20</span>]
+  doubled <span class="o">=</span> <span class="f">map</span> prices, (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+  ninth <span class="o">=</span> <span class="f">at</span> prices, <span class="n">9</span>
+  <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
+        </div>
+        <p>no panicking access anywhere: <code>at prices, 9</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it. <code>sort prices</code> needs no interface — <code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="status">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">status</span>
+      <h2 class="section-title">where things stand</h2>
+    </div>
+    <div class="status-grid">
+      <div class="status-card">
+        <span class="badge">v0.1 design freeze</span>
+        <h3>the spec is gaveled</h3>
+        <p>the <a href="spec.html">v0.1 specification</a> (july 2026) is the authoritative record of every design decision to date. anything marked <span class="open-flag">open</span> is not yet decided — and it says so.</p>
+      </div>
+      <div class="status-card">
+        <span class="badge">phase 1</span>
+        <h3>reference interpreter</h3>
+        <p>a tree-walking interpreter in rust, built query-based from day one so the lsp shares the engine. phase 0 comes first: a paper proof that inference and dispatch — the language's two founding features — are mutually consistent.</p>
+      </div>
+      <div class="status-card">
+        <span class="badge">honest gaps</span>
+        <h3>open questions (spec §14)</h3>
+        <ul>
+          <li>inference fixpoint formalization</li>
+          <li>destructuring syntax</li>
+          <li>module qualification syntax</li>
+          <li>build totality; map literals</li>
+          <li>pipe-vs-rebind canonicality</li>
+          <li>multi-way conditional; ffi; coercion</li>
+          <li>process mailbox &amp; restart details</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="quickstart">
+  <div class="container quickstart-inner">
+    <div>
+      <span class="eyebrow">quickstart</span>
+      <h2 class="section-title">run it</h2>
+      <p class="lede">clone, build, run. the interpreter is under construction — the examples are the golden-file corpus it is built against.</p>
+    </div>
+    <div class="code-panel">
+      <div class="code-panel-title">shell</div>
+      <pre><code><span class="prompt">$ </span>git clone https://github.com/ClayShentrup/kanso
+<span class="prompt">$ </span>cd kanso
+<span class="prompt">$ </span>cargo build --release
+<span class="prompt">$ </span>./target/release/kanso run examples/hello.kso
+<span class="s">hello, world</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="spec.html">spec</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

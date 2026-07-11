@@ -1,0 +1,13 @@
+fn describe (err reason)
+  "failed: {reason}"
+
+fn describe n
+  "result: {n}"
+
+fn main
+  good = safe_ratio 10, 2
+  bad = safe_ratio 10, 0
+  print (describe good) >> print (describe bad)
+
+fn safe_ratio a, b
+  a / b

@@ -1,0 +1,4 @@
+error[formatting]: function declarations appear in alphabetical order: `main` before `zeta`
+  --> fn_order.kso:4:4
+   4 | fn main
+          ^

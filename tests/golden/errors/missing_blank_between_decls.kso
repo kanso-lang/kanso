@@ -1,0 +1,4 @@
+fn greet name
+  "hi, {name}"
+fn main
+  print (greet "kanso")
