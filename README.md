@@ -62,7 +62,7 @@ Decisions the spec leaves open (or that phase 1 approximates), flagged for revis
 - **the endpoint rule is enforced at runtime**, not compile time — the real rule needs the §14.1 inference fixpoint, which is still owed on paper
 - **generic parameters never bind `err`/`none`**; handle failure explicitly (literal `none`, `(err reason)`) or it propagates — a conservative stand-in for inferred pass-throughs
 - **canonical declaration order**: types before functions, each alphabetical, overloads adjacent and most-specific first — an interpretation of the spec's "wherever order is semantically inert" rule
-- **pipe target must be a bare identifier or parenthesized lambda**; the piped value becomes the first argument
+- **the pipe target parses as a single atom** (an identifier or parenthesized expression) and the piped value becomes its first argument; a non-callable target fails at runtime, not parse time
 - `if cond, then, else` as a lazy call-shaped form is provisional (spec defers multi-way conditionals)
 - not yet: typesets, modules/imports, maps, record update, `build` regions, processes, effect polymorphism, the LSP
 

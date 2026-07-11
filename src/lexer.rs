@@ -35,6 +35,11 @@ pub struct Line {
     pub tokens: Vec<(Tok, Span)>,
 }
 
+struct LexedLine {
+    tokens: Vec<(Tok, Span)>,
+    end_cols: Vec<usize>,
+}
+
 pub struct Lexed {
     pub lines: Vec<Line>,
     pub blank_lines: Vec<usize>,
@@ -89,9 +94,9 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             continue;
         }
         match lex_line(content, number, indent + 1) {
-            Ok(tokens) => {
-                validate_spacing(&tokens, number, &mut diags);
-                lines.push(Line { number, indent, tokens });
+            Ok(lexed_line) => {
+                validate_spacing(&lexed_line, number, &mut diags);
+                lines.push(Line { number, indent, tokens: lexed_line.tokens });
             }
             Err(d) => diags.push(d),
         }
@@ -106,9 +111,10 @@ struct Scanner {
     col_offset: usize,
 }
 
-fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<Vec<(Tok, Span)>, Diagnostic> {
+fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, Diagnostic> {
     let mut s = Scanner { chars: content.chars().collect(), pos: 0, line, col_offset };
     let mut tokens = Vec::new();
+    let mut end_cols = Vec::new();
     while s.pos < s.chars.len() {
         let c = s.chars[s.pos];
         let span = s.span();
@@ -121,10 +127,12 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<Vec<(Tok, S
         }
         if c.is_ascii_digit() {
             tokens.push((s.lex_int()?, span));
+            end_cols.push(s.span().col);
             continue;
         }
         if c.is_ascii_lowercase() || c == '_' {
             tokens.push((s.lex_word()?, span));
+            end_cols.push(s.span().col);
             continue;
         }
         if c.is_ascii_uppercase() {
@@ -136,6 +144,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<Vec<(Tok, S
         }
         if c == '"' {
             tokens.push((s.lex_string()?, span));
+            end_cols.push(s.span().col);
             continue;
         }
         let tok = match c {
@@ -151,32 +160,37 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<Vec<(Tok, S
         if let Some(tok) = tok {
             s.pos += 1;
             tokens.push((tok, span));
+            end_cols.push(s.span().col);
             continue;
         }
         if c == '-' && s.peek(1) == Some('>') {
             s.pos += 2;
             tokens.push((Tok::Arrow, span));
+            end_cols.push(s.span().col);
             continue;
         }
         if c == '>' && s.peek(1) == Some('>') {
             s.pos += 2;
             tokens.push((Tok::SeqOp, span));
+            end_cols.push(s.span().col);
             continue;
         }
         if c == '=' && s.peek(1) != Some('=') {
             s.pos += 1;
             tokens.push((Tok::Bind, span));
+            end_cols.push(s.span().col);
             continue;
         }
         let two = [c, s.peek(1).unwrap_or(' ')].iter().collect::<String>();
         if let Some(op) = OPS.iter().find(|op| **op == two || (op.len() == 1 && op.starts_with(c))) {
             s.pos += op.len();
             tokens.push((Tok::Op(op), span));
+            end_cols.push(s.span().col);
             continue;
         }
         return Err(Diagnostic::new("syntax", format!("unexpected character `{c}`"), span));
     }
-    Ok(tokens)
+    Ok(LexedLine { tokens, end_cols })
 }
 
 impl Scanner {
@@ -278,8 +292,8 @@ impl Scanner {
                         return Err(Diagnostic::new("formatting", msg, interp_span));
                     }
                     let col = self.col_offset + start;
-                    let tokens = lex_line(&inner, self.line, col)?;
-                    parts.push(StrPart::Interp(tokens));
+                    let lexed = lex_line(&inner, self.line, col)?;
+                    parts.push(StrPart::Interp(lexed.tokens));
                 }
                 other => {
                     lit.push(other);
@@ -287,19 +301,6 @@ impl Scanner {
                 }
             }
         }
-    }
-}
-
-fn token_width(tok: &Tok) -> usize {
-    match tok {
-        Tok::Ident(name) => name.len(),
-        Tok::Int(n) => n.to_string().len(),
-        Tok::Op(op) => op.len(),
-        Tok::Arrow | Tok::SeqOp => 2,
-        Tok::KwFn => 2,
-        Tok::KwType => 4,
-        Tok::Str(_) => 0,
-        _ => 1,
     }
 }
 
@@ -313,15 +314,11 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
     }
 }
 
-fn validate_spacing(tokens: &[(Tok, Span)], line: usize, diags: &mut Vec<Diagnostic>) {
-    for pair in tokens.windows(2) {
-        let (prev, prev_span) = &pair[0];
+fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnostic>) {
+    for (pair, prev_end) in lexed_line.tokens.windows(2).zip(&lexed_line.end_cols) {
+        let (prev, _) = &pair[0];
         let (next, next_span) = &pair[1];
-        if matches!(prev, Tok::Str(_)) {
-            continue;
-        }
-        let width = token_width(prev);
-        let gap = next_span.col.saturating_sub(prev_span.col + width);
+        let gap = next_span.col.saturating_sub(*prev_end);
         let required = required_gap(prev, next);
         if gap != required {
             let wanted = match required {

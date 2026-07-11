@@ -133,9 +133,9 @@ impl<'a> Interp<'a> {
             }
             Expr::App { head, args, span } => {
                 let callee = self.eval(head, env)?;
+                let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
                 let mut values = Vec::new();
                 for arg in args {
-                    let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
                     match lazy_if {
                         true => values.push(Value::Closure(Rc::new(ClosureData {
                             params: Vec::new(),
@@ -150,11 +150,11 @@ impl<'a> Interp<'a> {
             Expr::Seq(lhs, rhs, span) => {
                 let left = self.eval(lhs, env)?;
                 let right = self.eval(rhs, env)?;
-                if let bad @ (Value::ErrV(_) | Value::NoneV) = &left {
-                    return Ok(bad.clone());
+                if is_failure(&left) {
+                    return Ok(left);
                 }
-                if let bad @ (Value::ErrV(_) | Value::NoneV) = &right {
-                    return Ok(bad.clone());
+                if is_failure(&right) {
+                    return Ok(right);
                 }
                 match (left, right) {
                     (Value::Desc(a), Value::Desc(b)) => {
@@ -205,8 +205,8 @@ impl<'a> Interp<'a> {
                 TemplatePart::Lit(s) => out.push_str(s),
                 TemplatePart::Interp(expr) => {
                     let value = self.eval(expr, env)?;
-                    if let bad @ (Value::ErrV(_) | Value::NoneV) = &value {
-                        return Ok(bad.clone());
+                    if is_failure(&value) {
+                        return Ok(value);
                     }
                     out.push_str(&render(&value, false));
                 }
@@ -219,7 +219,7 @@ impl<'a> Interp<'a> {
         match callee {
             Value::FnRef(name) => self.call_named(&name, args, span),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
-            bad @ (Value::ErrV(_) | Value::NoneV) => Ok(bad),
+            bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
                 message: format!("`{}` is not callable", render(&other, false)),
                 span,
@@ -238,7 +238,7 @@ impl<'a> Interp<'a> {
                 span,
             });
         }
-        if let Some(bad) = args.iter().find(|a| matches!(a, Value::ErrV(_) | Value::NoneV)) {
+        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
             return Ok(bad.clone());
         }
         let mut env = closure.env.clone();
@@ -250,7 +250,7 @@ impl<'a> Interp<'a> {
 
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span) -> EvalResult {
         if name == "err" {
-            let [reason] = arity(args, 1, name, span)?;
+            let [reason] = arity(args, name, span)?;
             return Ok(Value::ErrV(Rc::new(reason)));
         }
         if let Some(ty) = self.types.get(name) {
@@ -275,7 +275,7 @@ impl<'a> Interp<'a> {
                 span,
             });
         }
-        if let Some(bad) = args.iter().find(|a| matches!(a, Value::ErrV(_) | Value::NoneV)) {
+        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
             return Ok(bad.clone());
         }
         Ok(Value::Record { ty: Rc::from(ty.name.as_str()), fields: Rc::new(args) })
@@ -321,12 +321,12 @@ impl<'a> Interp<'a> {
         if name == "if" {
             return self.builtin_if(args, span);
         }
-        if let Some(bad) = args.iter().find(|a| matches!(a, Value::ErrV(_) | Value::NoneV)) {
+        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
             return Ok(bad.clone());
         }
         match name {
             "print" => {
-                let [text] = arity(args, 1, name, span)?;
+                let [text] = arity(args, name, span)?;
                 match text {
                     Value::Str(s) => Ok(Value::Desc(Rc::new(Desc::Print(s, span)))),
                     other => Err(RuntimeError {
@@ -339,7 +339,7 @@ impl<'a> Interp<'a> {
                 }
             }
             "at" => {
-                let [list, index] = arity(args, 2, name, span)?;
+                let [list, index] = arity(args, name, span)?;
                 let (Value::List(items), Value::Int(i)) = (&list, &index) else {
                     return Err(RuntimeError {
                         message: "at takes a list and a 1-based position".to_string(),
@@ -353,7 +353,7 @@ impl<'a> Interp<'a> {
                 }
             }
             "length" => {
-                let [list] = arity(args, 1, name, span)?;
+                let [list] = arity(args, name, span)?;
                 match list {
                     Value::List(items) => Ok(Value::Int(BigInt::from(items.len()))),
                     Value::Str(s) => Ok(Value::Int(BigInt::from(s.chars().count()))),
@@ -364,7 +364,7 @@ impl<'a> Interp<'a> {
                 }
             }
             "map" => {
-                let [list, f] = arity(args, 2, name, span)?;
+                let [list, f] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "map takes a list".to_string(), span });
                 };
@@ -375,7 +375,7 @@ impl<'a> Interp<'a> {
                 Ok(Value::List(Rc::new(mapped)))
             }
             "filter" => {
-                let [list, f] = arity(args, 2, name, span)?;
+                let [list, f] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "filter takes a list".to_string(), span });
                 };
@@ -398,7 +398,7 @@ impl<'a> Interp<'a> {
                 Ok(Value::List(Rc::new(kept)))
             }
             "sort" => {
-                let [list] = arity(args, 1, name, span)?;
+                let [list] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "sort takes a list".to_string(), span });
                 };
@@ -420,7 +420,7 @@ impl<'a> Interp<'a> {
                 }
             }
             "sum" => {
-                let [list] = arity(args, 1, name, span)?;
+                let [list] = arity(args, name, span)?;
                 let Value::List(items) = list else {
                     return Err(RuntimeError { message: "sum takes a list".to_string(), span });
                 };
@@ -428,7 +428,7 @@ impl<'a> Interp<'a> {
                 for item in items.iter() {
                     match item {
                         Value::Int(n) => total += n,
-                        bad @ (Value::ErrV(_) | Value::NoneV) => return Ok(bad.clone()),
+                        bad if is_failure(bad) => return Ok(bad.clone()),
                         _ => {
                             return Err(RuntimeError {
                                 message: "sum takes a list of int".to_string(),
@@ -444,12 +444,12 @@ impl<'a> Interp<'a> {
     }
 
     fn builtin_if(&self, args: Vec<Value>, span: Span) -> EvalResult {
-        let [cond, then_branch, else_branch] = arity(args, 3, "if", span)?;
-        let cond = self.force(cond, span)?;
+        let [cond, then_branch, else_branch] = arity(args, "if", span)?;
+        let cond = self.force(cond)?;
         match cond {
-            Value::True => self.force(then_branch, span),
-            Value::False => self.force(else_branch, span),
-            bad @ (Value::ErrV(_) | Value::NoneV) => Ok(bad),
+            Value::True => self.force(then_branch),
+            Value::False => self.force(else_branch),
+            bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
                 message: format!(
                     "an if condition is true or false, got {}",
@@ -460,12 +460,9 @@ impl<'a> Interp<'a> {
         }
     }
 
-    fn force(&self, value: Value, span: Span) -> EvalResult {
+    fn force(&self, value: Value) -> EvalResult {
         match value {
-            Value::Closure(c) if c.params.is_empty() => {
-                let _ = span;
-                self.eval(&c.body, &c.env)
-            }
+            Value::Closure(c) if c.params.is_empty() => self.eval(&c.body, &c.env),
             other => Ok(other),
         }
     }
@@ -473,14 +470,13 @@ impl<'a> Interp<'a> {
 
 fn arity<const N: usize>(
     args: Vec<Value>,
-    n: usize,
     name: &str,
     span: Span,
 ) -> Result<[Value; N], RuntimeError> {
     match <[Value; N]>::try_from(args) {
         Ok(array) => Ok(array),
         Err(actual) => Err(RuntimeError {
-            message: format!("`{name}` takes {n} argument(s), got {}", actual.len()),
+            message: format!("`{name}` takes {N} argument(s), got {}", actual.len()),
             span,
         }),
     }
@@ -490,7 +486,7 @@ fn propagate_or(
     args: Vec<Value>,
     err: impl FnOnce() -> RuntimeError,
 ) -> EvalResult {
-    match args.into_iter().find(|a| matches!(a, Value::ErrV(_) | Value::NoneV)) {
+    match args.into_iter().find(is_failure) {
         Some(bad) => Ok(bad),
         None => Err(err()),
     }
@@ -513,12 +509,17 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
         (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(()),
         (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(()),
         (Pattern::Nullary(name, _), Value::NoneV) if name == "none" => Some(()),
-        (Pattern::Wildcard, _) => guard_failure_types(arg),
-        (Pattern::Var(name, _), _) => {
-            guard_failure_types(arg)?;
-            binds.push((name.clone(), arg.clone()));
-            Some(())
-        }
+        (Pattern::Wildcard, _) => match is_failure(arg) {
+            true => None,
+            false => Some(()),
+        },
+        (Pattern::Var(name, _), _) => match is_failure(arg) {
+            true => None,
+            false => {
+                binds.push((name.clone(), arg.clone()));
+                Some(())
+            }
+        },
         (Pattern::Annotated { name, ty, .. }, _) => {
             match type_matches(ty, arg) {
                 true => {
@@ -546,11 +547,8 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
     }
 }
 
-fn guard_failure_types(arg: &Value) -> Option<()> {
-    match arg {
-        Value::ErrV(_) | Value::NoneV => None,
-        _ => Some(()),
-    }
+fn is_failure(value: &Value) -> bool {
+    matches!(value, Value::ErrV(_) | Value::NoneV)
 }
 
 fn type_matches(ty: &str, arg: &Value) -> bool {
@@ -576,11 +574,11 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
 }
 
 fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
-    if let bad @ (Value::ErrV(_) | Value::NoneV) = &left {
-        return Ok(bad.clone());
+    if is_failure(&left) {
+        return Ok(left);
     }
-    if let bad @ (Value::ErrV(_) | Value::NoneV) = &right {
-        return Ok(bad.clone());
+    if is_failure(&right) {
+        return Ok(right);
     }
     if op == "==" || op == "!=" {
         let equal = values_equal(&left, &right);
@@ -674,15 +672,14 @@ pub fn execute(desc: &Desc, executor: &mut dyn Executor) {
     }
 }
 
-pub fn render_plan(desc: &Desc, indent: usize, out: &mut String) {
-    let pad = "  ".repeat(indent);
+pub fn render_plan(desc: &Desc, out: &mut String) {
     match desc {
         Desc::Print(text, span) => {
-            out.push_str(&format!("{pad}print {text:?}    // from line {}\n", span.line));
+            out.push_str(&format!("  print {text:?}    // from line {}\n", span.line));
         }
         Desc::Seq(a, b) => {
-            render_plan(a, indent, out);
-            render_plan(b, indent, out);
+            render_plan(a, out);
+            render_plan(b, out);
         }
     }
 }

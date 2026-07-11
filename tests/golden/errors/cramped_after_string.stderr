@@ -1,0 +1,4 @@
+error[formatting]: canonical form requires exactly one space here
+  --> cramped_after_string.kso:2:12
+   2 |   print "a">> print "b"
+                  ^

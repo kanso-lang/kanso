@@ -59,7 +59,7 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
         eval::Value::Desc(desc) => match plan {
             true => {
                 let mut out = String::from("plan:\n");
-                eval::render_plan(&desc, 1, &mut out);
+                eval::render_plan(&desc, &mut out);
                 print!("{out}");
                 ExitCode::SUCCESS
             }
