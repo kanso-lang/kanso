@@ -674,6 +674,19 @@ pub fn execute(desc: &Desc, executor: &mut dyn Executor) {
     }
 }
 
+pub fn render_plan(desc: &Desc, indent: usize, out: &mut String) {
+    let pad = "  ".repeat(indent);
+    match desc {
+        Desc::Print(text, span) => {
+            out.push_str(&format!("{pad}print {text:?}    // from line {}\n", span.line));
+        }
+        Desc::Seq(a, b) => {
+            render_plan(a, indent, out);
+            render_plan(b, indent, out);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -710,18 +723,5 @@ mod tests {
         let source = "fn double x\n  x * 2\n\nfn main\n  double (1 / 0)\n";
 
         assert!(matches!(run_main(source), Value::ErrV(_)));
-    }
-}
-
-pub fn render_plan(desc: &Desc, indent: usize, out: &mut String) {
-    let pad = "  ".repeat(indent);
-    match desc {
-        Desc::Print(text, span) => {
-            out.push_str(&format!("{pad}print {text:?}    // from line {}\n", span.line));
-        }
-        Desc::Seq(a, b) => {
-            render_plan(a, indent, out);
-            render_plan(b, indent, out);
-        }
     }
 }
