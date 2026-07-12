@@ -11,7 +11,7 @@ fn _pretty true _
 fn _pretty false _
   "false"
 
-fn _pretty (json_null _) _
+fn _pretty json_null _
   "null"
 
 fn _pretty n:int _

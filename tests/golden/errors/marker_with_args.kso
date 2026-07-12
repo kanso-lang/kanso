@@ -1,0 +1,5 @@
+type null
+
+main =
+  bad = null true
+  print "{bad}"

@@ -107,7 +107,7 @@ fn _value_for 102 cs p
   _word cs p _bytes_false false
 
 fn _value_for 110 cs p
-  _word cs p _bytes_null (json_null true)
+  _word cs p _bytes_null json_null
 
 fn _value_for 116 cs p
   _word cs p _bytes_true true

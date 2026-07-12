@@ -119,8 +119,8 @@ fn execute(
 fn compile_units(units: &[Unit]) -> Result<Program, String> {
     let source = assemble(units);
     let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, "repl", &source))?;
-    let program = parser::parse(&lexed).map_err(|d| diag::render(&d, "repl", &source))?;
-    let diags: Vec<diag::Diagnostic> = check::check(&program, false)
+    let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, "repl", &source))?;
+    let diags: Vec<diag::Diagnostic> = check::check(&mut program, false)
         .into_iter()
         .filter(|d| d.kind != "unused")
         .collect();

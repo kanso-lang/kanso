@@ -6,7 +6,6 @@ type defect
   reason: string
 
 type json_null
-  marker: bool
 
 type parse_failure
   position: int
@@ -32,7 +31,7 @@ fn encode true
 fn encode false
   "false"
 
-fn encode (json_null _)
+fn encode json_null
   "null"
 
 fn encode n:int

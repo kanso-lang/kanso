@@ -848,6 +848,15 @@ impl<'a> Backend<'a> {
                 if let Some(temp) = f.lookup(name) {
                     return Ok(temp);
                 }
+                if self.program.types.iter().any(|t| t.name == *name && t.fields.is_empty()) {
+                    let id = self.type_ids[name.as_str()];
+                    let arr = f.tmp();
+                    f.line(&format!("{arr} = alloca [1 x %KValue]"));
+                    let t = f.tmp();
+                    f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 0, ptr {arr})"));
+                    f.record(&t, REC);
+                    return Ok(t);
+                }
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
                     let t = f.tmp();
                     f.line(&format!("{t} = call tailcc %KValue @d_{name}_0()"));

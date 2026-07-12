@@ -493,6 +493,13 @@ impl<'a> WasmBackend<'a> {
             ctx.body.local_get(*local);
             return Ok(());
         }
+        if self.program.types.iter().any(|t| t.name == name && t.fields.is_empty()) {
+            let tid = self.type_ids[name];
+            ctx.body.i32_const(tid);
+            ctx.body.i32_const(0);
+            ctx.body.call(RT_MKREC);
+            return Ok(());
+        }
         if let Some(idx) = self.dispatchers.get(&(name.to_string(), 0)).copied() {
             match tail && self.tailcalls {
                 true => ctx.body.return_call(idx),

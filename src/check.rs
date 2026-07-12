@@ -30,15 +30,124 @@ pub const BUILTINS: [&str; 25] = [
     "write_file",
 ];
 
-pub fn check(program: &Program, require_main: bool) -> Vec<Diagnostic> {
+pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
+    let markers = marker_names(program);
     let mut used = HashSet::new();
-    let mut diags = check_file(program, &HashSet::new(), &mut used);
+    let mut diags = resolve_markers(program, &markers);
+    diags.extend(check_file(program, &HashSet::new(), &mut used));
     if require_main {
         check_main(program, &mut diags);
     }
     check_unused_private(program, &used, &mut diags);
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
+}
+
+/// Zero-field type names: a bare mention is the marker value, and in
+/// parameter position the bare name matches that marker.
+pub fn marker_names(program: &Program) -> HashSet<String> {
+    program
+        .types
+        .iter()
+        .filter(|t| t.fields.is_empty())
+        .map(|t| t.name.clone())
+        .collect()
+}
+
+/// Rewrites bare marker names in parameter position into zero-field
+/// constructor patterns, and rejects constructor calls that pass a marker
+/// fields — a marker's bare mention is its value.
+pub fn resolve_markers(program: &mut Program, markers: &HashSet<String>) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
+    for decl in &mut program.fns {
+        for param in &mut decl.params {
+            resolve_marker_pattern(param, markers, &mut diags);
+        }
+        for stmt in &mut decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } => check_marker_calls(expr, markers, &mut diags),
+                Stmt::Expr(expr) => check_marker_calls(expr, markers, &mut diags),
+            }
+        }
+    }
+    diags
+}
+
+fn resolve_marker_pattern(
+    pattern: &mut Pattern,
+    markers: &HashSet<String>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match pattern {
+        Pattern::Var(name, _) if markers.contains(name.as_str()) => {
+            *pattern = Pattern::Ctor { ty: name.clone(), fields: Vec::new() };
+        }
+        Pattern::Ctor { ty, fields } => {
+            if markers.contains(ty.as_str()) && !fields.is_empty() {
+                diags.push(Diagnostic::new(
+                    "signature",
+                    format!("`{ty}` takes no fields; its bare mention is its value"),
+                    other_span(&fields[0]),
+                ));
+            }
+            for field in fields {
+                resolve_marker_pattern(field, markers, diags);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
+    match expr {
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::MapLit(pairs, _) => {
+            for (key, value) in pairs {
+                check_marker_calls(key, markers, diags);
+                check_marker_calls(value, markers, diags);
+            }
+        }
+        Expr::Str(parts, _) => {
+            for part in parts {
+                if let TemplatePart::Interp(inner) = part {
+                    check_marker_calls(inner, markers, diags);
+                }
+            }
+        }
+        Expr::List(items, _) => {
+            for item in items {
+                check_marker_calls(item, markers, diags);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            if let Expr::Ident(name, span) = &**head {
+                if markers.contains(name.as_str()) && !args.is_empty() {
+                    diags.push(Diagnostic::new(
+                        "signature",
+                        format!("`{name}` takes no fields; its bare mention is its value"),
+                        *span,
+                    ));
+                }
+            }
+            check_marker_calls(head, markers, diags);
+            for arg in args {
+                check_marker_calls(arg, markers, diags);
+            }
+        }
+        Expr::Index { base, index, .. } => {
+            check_marker_calls(base, markers, diags);
+            check_marker_calls(index, markers, diags);
+        }
+        Expr::Seq(lhs, rhs, _) => {
+            check_marker_calls(lhs, markers, diags);
+            check_marker_calls(rhs, markers, diags);
+        }
+        Expr::Lambda { body, .. } => check_marker_calls(body, markers, diags),
+        Expr::BinOp { lhs, rhs, .. } => {
+            check_marker_calls(lhs, markers, diags);
+            check_marker_calls(rhs, markers, diags);
+        }
+    }
 }
 
 /// Names a file declares, for the module-wide first pass.

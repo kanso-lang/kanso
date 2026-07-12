@@ -1,0 +1,11 @@
+type null
+
+fn describe null
+  "nothing"
+
+fn describe n:int
+  "the number {n}"
+
+main =
+  missing = null
+  print "{missing}" >> print (describe null) >> print (describe 7)

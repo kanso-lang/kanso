@@ -399,6 +399,11 @@ impl<'a> Interp<'a> {
             "stdin" => return Ok(Value::Desc(Rc::new(Desc::Stdin))),
             _ => {}
         }
+        if let Some(decl) = self.type_decl(name) {
+            if decl.fields.is_empty() {
+                return Ok(Value::Record { ty: Rc::from(name), fields: Rc::new(Vec::new()) });
+            }
+        }
         match name {
             "true" => Ok(Value::True),
             "false" => Ok(Value::False),
@@ -1223,10 +1228,13 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
             let inner: Vec<String> = items.iter().map(|i| render(i, true)).collect();
             format!("[{}]", inner.join(" "))
         }
-        Value::Record { ty, fields } => {
-            let inner: Vec<String> = fields.iter().map(|f| render(f, true)).collect();
-            format!("{} {}", ty, inner.join(" "))
-        }
+        Value::Record { ty, fields } => match fields.is_empty() {
+            true => ty.to_string(),
+            false => {
+                let inner: Vec<String> = fields.iter().map(|f| render(f, true)).collect();
+                format!("{} {}", ty, inner.join(" "))
+            }
+        },
         Value::FnRef(name) => format!("<fn {name}>"),
         Value::Closure(_) => "<fn>".to_string(),
         Value::Desc(_) => "<description>".to_string(),
@@ -1302,8 +1310,8 @@ mod tests {
 
     fn run_main(source: &str) -> Value {
         let lexed = crate::lexer::lex(source).expect("lexes");
-        let program = crate::parser::parse(&lexed).expect("parses");
-        let diags = crate::check::check(&program, true);
+        let mut program = crate::parser::parse(&lexed).expect("parses");
+        let diags = crate::check::check(&mut program, true);
         assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
         let interp = Interp::new(&program);
         interp.run_main().map_err(|e| e.message).expect("runs")

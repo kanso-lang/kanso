@@ -221,6 +221,12 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
         "none" => NONE,
         "args" | "stdin" => DESC,
         _ => {
+            // a zero-field type's bare mention is its marker value
+            if let Some(i) = ctx.type_names.get(name) {
+                if ctx.program.types[*i].fields.is_empty() {
+                    return REC;
+                }
+            }
             // constant mention evaluates; fn mention is a value (params go TOP)
             if let Some(decls) = ctx.groups.get(&(name, 0)) {
                 let i = decls[0];
