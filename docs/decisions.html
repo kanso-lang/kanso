@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the json gauntlet — kanso decisions</title>
+<meta name="description" content="every language decision forced by writing a real JSON library in kanso — ratified wins, executive calls awaiting review, and honest friction.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.essay {
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+.verdict {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="spec.html">spec</a>
+    <a href="philosophy.html">philosophy</a>
+    <a href="decisions.html">decisions</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">field report</span>
+<h1>the json gauntlet</h1>
+
+<p>the fastest way to find out whether a language is real is to make it earn a living. so we ported the job description of go's most-used package — <code>encoding/json</code> — into kanso: a complete decoder and encoder, escape handling including <code>\uXXXX</code>, failure positions, canonical output. it exists, it passes sixteen tests under <code>kanso test</code>, and every judgment call made along the way is recorded here in three honesty tiers: things the exercise <em>proved</em>, executive calls awaiting ratification, and friction we refuse to pretend we didn't feel.</p>
+
+<h2 id="proved"><span class="sec-num">tier 01</span>what the gauntlet proved</h2>
+
+<p><strong>dispatch is a parser's native language.</strong> a recursive-descent parser is one long "what character am i looking at?" — and kanso's literal-dispatch overloads <em>are</em> that question. the tokenizer's decision tables read like tables:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/json.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">value_for</span> <span class="s">"\""</span> cs p
+  <span class="f">parse_string</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">value_for</span> <span class="s">"["</span> cs p
+  <span class="f">parse_array</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">value_for</span> <span class="s">"t"</span> cs p
+  <span class="f">word</span> cs p <span class="s">"true"</span> <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">value_for</span> <span class="t">none</span> _ p
+  <span class="f">fail</span> p <span class="s">"unexpected end of input"</span></code></pre>
+</div>
+
+<p><strong>auto-propagation deleted the error plumbing. all of it.</strong> the parser contains not one line of "check if the last step failed." a failure born anywhere — bad escape, invalid number, truncated input — rides the return values past every continuation function (whose constructor-pattern arms simply don't match it) and surfaces from <code>decode</code> with its position intact. the happy path is the only path anyone wrote. this was the design's biggest bet, and it paid in full.</p>
+
+<p><strong>nothing-wasted caught real noise.</strong> the compiler rejected seventeen dispatch arms for naming parameters they never used, forcing <code>_</code> discards that now document, in the signature, exactly what each arm consumes. annoying for ninety seconds; correct forever.</p>
+
+<p><strong>end-of-input is not a special case.</strong> <code>at</code> past the end returns <code>none</code>, which propagates like any failure and gets caught by explicit <code>none</code> arms exactly where the grammar cares. eof handling cost zero new concepts.</p>
+
+<h2 id="calls"><span class="sec-num">tier 02</span>executive calls — ratify or reverse</h2>
+
+<p>each of these is implemented, tested, and reversible. defaults chosen by the house rule: the right thing, by default, with nothing to configure.</p>
+
+<p><strong>1. <code>kanso test</code>.</strong> a test is a zero-argument <code>fn test_*</code> returning <code>true</code>. no framework, no assertion dsl — <code>==</code> on values is the assertion, because structural equality is already total. <code>kanso run</code> requires <code>main</code>; <code>check</code> and <code>test</code> don't (a library is valid kanso without an entry point).</p>
+
+<p><strong>2. map literals.</strong> <code>["a": 1 "b": 2]</code>, empty map <code>[:]</code>. keys are literals only (dynamic maps are built with <code>put</code>), and literal keys must appear sorted, without duplicates — a formatting error otherwise, consistent with fields and declarations. iteration order is always sorted-key order, so encoding is canonical for free.</p>
+
+<p><strong>3. <code>entries m</code> yields <code>entry</code> records</strong> (fields <code>key</code>, <code>value</code>; the name is reserved). map traversal dogfoods records and constructor patterns instead of inventing tuples.</p>
+
+<p><strong>4. numeric strictness.</strong> <code>int + float64</code> is an error, not a coercion; convert with <code>to_float</code>. floats render as <code>1.0</code>, never <code>1</code>; float division by zero is <code>err</code>, same as int. JSON numbers decode as <code>int</code> when written integral, <code>float64</code> otherwise.</p>
+
+<p><strong>5. JSON null is <code>json_null</code>, not <code>none</code>.</strong> the honest reason: <code>none</code> is propagation-hostile as <em>data</em> — construct a record with it and the record never gets built, because propagation eats it. that's correct behavior for absence-as-failure and wrong for null-as-value, so null gets a marker type. this points at a real gavel: kanso may want zero-field types (<code>type null</code> with no body) — today a type requires at least one field, so the marker carries a dummy <code>bool</code>. it's the one visibly inelegant thing in the library.</p>
+
+<p><strong>6. the allowed-error / defect split is a word, not a sigil.</strong> ruby marks the raising variant with <code>!</code>; kanso would have to double every api to do that. instead, <code>must</code> converts any allowed failure into a <code>defect</code> — two lines of ordinary overloads, composing with every function ever written. parse errors from user input stay handleable; <code>must (decode config)</code> declares "this failing is a bug," and the defect rides the rails to the root reporter. still owed: the endpoint rule treating <code>defect</code> as auto-reported rather than must-be-handled.</p>
+
+<p><strong>7. small additions the work demanded:</strong> <code>push</code> (list accumulation), <code>chars</code>/<code>char_code</code>/<code>from_code</code> (the minimal unicode bridge), <code>join</code>, <code>slice</code>, string escapes <code>\t</code> and <code>\r</code>, and type-postfix brackets lexing tight (<code>json[]</code>) while list arguments stay spaced (<code>f [1 2]</code>). all prelude candidates for the import gavel.</p>
+
+<h2 id="friction"><span class="sec-num">tier 03</span>friction — where a developer would sigh</h2>
+
+<p><strong>no short-circuit and/or.</strong> we wrote <code>both</code> as a two-arm overload and it works, but eager evaluation means it can't guard (<code>both (p > 0) (expensive p)</code> runs both). candidate gavel: lazy <code>and</code>/<code>or</code> words with the same thunk mechanics <code>if</code> already uses.</p>
+
+<p><strong>no negative literals, no modulo.</strong> <code>-1</code> is unwritable (only <code>0 - 1</code>), and <code>hex4</code> computes remainders by subtract-multiply. both feel like missing table stakes; both interact with the operator gavel that's already queued.</p>
+
+<p><strong>alphabetical order scatters cohesion.</strong> the sixteen tests sort into the middle of the implementation, and helper families stay adjacent only because we <em>named</em> them into adjacency (<code>str_char</code>, <code>str_chars</code>, <code>str_escape</code>...). developers will name-game the ordering rule; that's a signal. modules will absorb most of it — tests want to be a sibling file — but the rule deserves a second look with this evidence in hand.</p>
+
+<p><strong>lambdas can't destructure.</strong> encoding map entries needed a named <code>encode_entry (entry k v)</code> where a pattern lambda would have been one line. queued with the destructuring family.</p>
+
+<p><strong>positions blur where <code>none</code> propagates far.</strong> most eof arms report exact positions, but a failure that rides many frames before conversion loses locality. the fine-grained-failure story (typeset-based propagation beyond <code>err</code>/<code>none</code>) is the real fix.</p>
+
+<p>the library lives at <a href="https://github.com/ClayShentrup/kanso-json">github.com/ClayShentrup/kanso-json</a>, and runs in kanso's ci on every push — the language now has a second heartbeat.</p>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="index.html">home</a>
+      <a href="spec.html">spec</a>
+      <a href="philosophy.html">philosophy</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

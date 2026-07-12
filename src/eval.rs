@@ -657,12 +657,7 @@ impl<'a> Interp<'a> {
                         )))),
                     }),
                     Value::Int(n) => {
-                        let mut approx = 0.0f64;
-                        let digits = n.to_string();
-                        match digits.parse::<f64>() {
-                            Ok(x) => approx = x,
-                            Err(_) => {}
-                        }
+                        let approx = n.to_string().parse::<f64>().unwrap_or(f64::INFINITY);
                         Ok(Value::Float(approx))
                     }
                     Value::Float(_) => Ok(value),

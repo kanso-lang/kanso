@@ -30,6 +30,7 @@
   <nav class="site-nav">
     <a href="spec.html">spec</a>
     <a href="philosophy.html">philosophy</a>
+    <a href="decisions.html">decisions</a>
     <a href="https://github.com/ClayShentrup/kanso">github</a>
   </nav>
 </header>
@@ -40,6 +41,12 @@
 <h1>the philosophy of the compiler</h1>
 
 <p>kanso's compiler makes some choices that look backwards at first: it started as a deliberately slow interpreter, its <code>print</code> doesn't print, its scariest theoretical problem was solved by deleting the solution, and its formatter doesn't exist. each of these is the same decision wearing a different outfit. this essay walks through all four — and ends with the audience the design accidentally optimized for.</p>
+
+<h2 id="p0"><span class="sec-num">prelude</span>on taste</h2>
+
+<p>paul graham wrote that taste is real — that "good design" is not a matter of opinion, and the people who insist it is are usually the ones without any. most languages are terrified of this idea. they ship eight ways to write a loop and call it freedom, they bolt on a formatter as an apology, and they let a thousand style guides bloom because taking a position might cost them a user. kanso takes the other bet: it has opinions the way DHH has opinions — loudly, in writing, and enforced by machinery. your formatting preferences are a compile error here. we're aware of how that sounds. we're comfortable.</p>
+
+<p>the opinions aren't ours alone; they're inherited from a lineage that spent forty years learning them the expensive way. from kent beck: the four rules of simple design, and the discipline of never trusting a test you haven't seen fail. from sandi metz: duplication is cheaper than the wrong abstraction. from avdi grimm: confident code — a raise is for the case you do <em>not</em> handle, and nil should never leak. from martin fowler: refactoring means behavior-preserving, and the words matter. from rob mee and abhi hiremagalur and the pivotal school of extreme programming: the codebase belongs to everyone, so it must read as if one careful person wrote it. from DHH: convention over configuration, omakase — the chef chooses, and that's a feature. kanso is what happens when that value system stops being a style guide you have to teach and becomes a compiler that already knows.</p>
 
 <h2 id="p1"><span class="sec-num">part 01</span>why build the slow one first</h2>
 
