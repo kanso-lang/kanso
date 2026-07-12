@@ -22,7 +22,7 @@ fn main() -> ExitCode {
         true => match kanso::compile_module(path, require_main) {
             Ok(program) => (program, String::new()),
             Err(rendered) => {
-                eprint!("{rendered}");
+                eprint!("{}", diag::paint(&rendered));
                 return ExitCode::from(2);
             }
         },
@@ -37,7 +37,7 @@ fn main() -> ExitCode {
             match compile(&file, &source, require_main) {
                 Ok(program) => (program, source),
                 Err(rendered) => {
-                    eprint!("{rendered}");
+                    eprint!("{}", diag::paint(&rendered));
                     return ExitCode::from(2);
                 }
             }
@@ -136,7 +136,7 @@ fn report(outcome: Result<kanso::repl::Outcome, String>) {
             true => {}
             false => println!("{rendered}"),
         },
-        Err(message) => eprint!("{message}"),
+        Err(message) => eprint!("{}", diag::paint(&message)),
     }
 }
 
@@ -273,7 +273,7 @@ fn run_tests(program: &ast::Program, file: &str, source: &str) -> ExitCode {
                 failed += 1;
                 let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
                 println!("{name} ... FAILED");
-                eprint!("{}", diag::render(&[d], file, source));
+                eprint!("{}", diag::paint(&diag::render(&[d], file, source)));
             }
         }
     }
@@ -347,7 +347,7 @@ fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
         Ok(value) => value,
         Err(runtime) => {
             let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
-            eprint!("{}", diag::render(&[d], file, source));
+            eprint!("{}", diag::paint(&diag::render(&[d], file, source)));
             return ExitCode::FAILURE;
         }
     };

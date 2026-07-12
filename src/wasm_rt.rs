@@ -6,7 +6,8 @@
 #![cfg(target_arch = "wasm32")]
 use crate::ast::Program;
 use crate::eval::{
-    self, eval_binop, index_value, is_failure, render, Desc, Executor, Interp, Value,
+    self, err_value, eval_binop, hop, index_value, is_failure, render, trace_lines, Desc,
+    Executor, ErrInfo, Interp, Value,
 };
 use crate::diag::Span;
 use crate::wasm_backend::Lit;
@@ -107,6 +108,13 @@ fn type_index(name: &str) -> Option<usize> {
 }
 
 fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
+    for &h in &arg_handles {
+        if let Slot::V(v) = slot(h) {
+            if is_failure(&v) {
+                return h;
+            }
+        }
+    }
     let Slot::C { tidx, env } = slot(c_h) else {
         let v = slot(c_h);
         if let Slot::V(value) = v {
@@ -197,10 +205,10 @@ pub extern "C" fn rt_field(h: u32, i: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_err_inner(h: u32) -> u32 {
-    let Slot::V(Value::ErrV(inner)) = slot(h) else {
+    let Slot::V(Value::ErrV(info)) = slot(h) else {
         die("not an err".to_string());
     };
-    push(Slot::V((*inner).clone()))
+    push(Slot::V(info.reason.clone()))
 }
 
 #[no_mangle]
@@ -247,12 +255,44 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn rt_mkerr(h: u32) -> u32 {
+pub extern "C" fn rt_mkerr(h: u32, origin_lit: u32) -> u32 {
     let v = val(h);
     if is_failure(&v) {
         return h;
     }
-    push(Slot::V(Value::ErrV(Rc::new(v))))
+    push(Slot::V(err_value(v, Some(lit_str(origin_lit)))))
+}
+
+fn lit_str(h: u32) -> Rc<str> {
+    match val(h) {
+        Value::Str(s) => Rc::from(s.as_str()),
+        _ => die("an origin or hop literal must be a string".to_string()),
+    }
+}
+
+/// A dispatcher passing a failure through appends its name to the trace.
+#[no_mangle]
+pub extern "C" fn rt_err_hop(h: u32, name_lit: u32) -> u32 {
+    match slot(h) {
+        Slot::V(v @ Value::ErrV(_)) => push(Slot::V(hop(v, &lit_str(name_lit)))),
+        _ => h,
+    }
+}
+
+/// Origin for errs born inside an rt call (division, indexing, fallible
+/// builtins): the compiled site stamps the fresh err it gets back.
+#[no_mangle]
+pub extern "C" fn rt_err_stamp(h: u32, origin_lit: u32) -> u32 {
+    match slot(h) {
+        Slot::V(Value::ErrV(info)) if info.origin.is_none() => {
+            push(Slot::V(Value::ErrV(Rc::new(ErrInfo {
+                reason: info.reason.clone(),
+                origin: Some(lit_str(origin_lit)),
+                hops: info.hops.clone(),
+            }))))
+        }
+        _ => h,
+    }
 }
 
 #[no_mangle]
@@ -340,7 +380,7 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
         14 => "<=",
         _ => ">=",
     };
-    match eval_binop(op, val(a), val(b), SPAN0) {
+    match eval_binop(op, val(a), val(b), SPAN0, &None) {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }
@@ -353,7 +393,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
     match index_value(val(base), idx.clone(), SPAN0) {
         Ok(Value::NoneV) => {
             let msg = format!("missing index {}", render(&idx, true));
-            push(Slot::V(Value::ErrV(Rc::new(Value::Str(msg)))))
+            push(Slot::V(err_value(Value::Str(msg), None)))
         }
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
@@ -385,7 +425,7 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
     for h in handles {
         args.push(val(h));
     }
-    let result = with_interp(|interp| interp.call_builtin(&name, args, SPAN0));
+    let result = with_interp(|interp| interp.call_builtin(&name, args, SPAN0, &None));
     match result {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
@@ -552,22 +592,24 @@ pub fn exec_main(h: u32) -> (i32, String) {
     let outcome = match slot(h) {
         Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => match exec_slot(h) {
             Ok(y) => match slot(y) {
-                Slot::V(Value::ErrV(inner)) => Some((
+                Slot::V(Value::ErrV(info)) => Some((
                     1,
                     format!(
-                        "error[endpoint]: unhandled err reached the executor: {}\n",
-                        render(&inner, true)
+                        "error[endpoint]: unhandled err reached the executor: {}\n{}",
+                        render(&info.reason, true),
+                        trace_lines(&info)
                     ),
                 )),
                 _ => Some((0, String::new())),
             },
             Err(msg) => Some((1, format!("error[runtime]: {msg}\n"))),
         },
-        Slot::V(Value::ErrV(inner)) => Some((
+        Slot::V(Value::ErrV(info)) => Some((
             1,
             format!(
-                "error[endpoint]: unhandled err reached main: {}\n",
-                render(&inner, true)
+                "error[endpoint]: unhandled err reached main: {}\n{}",
+                render(&info.reason, true),
+                trace_lines(&info)
             ),
         )),
         Slot::V(Value::NoneV) => {

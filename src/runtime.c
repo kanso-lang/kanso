@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <unistd.h>
 
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
@@ -19,6 +20,13 @@ typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind */
+
+/* An err's propagation trace rides on the err value alone: the origin
+   ("fn at file:line", interned at the construction site; NULL for
+   executor-born errs) plus one hop per dispatcher failure pass-through,
+   newest first. The happy path never allocates or touches any of this. */
+typedef struct KHop { const char* fn; struct KHop* prev; } KHop;
+typedef struct { KValue reason; const char* origin; KHop* hops; } KErrBox;
 
 static KValue k_mklist(long long n, KValue* items);
 static KValue k_call1(KValue f, KValue a);
@@ -40,8 +48,31 @@ static void* k_alloc(size_t n) {
     return p;
 }
 
+/* Diagnostics color from the site palette, only when stderr is a tty and
+   NO_COLOR is unset: vermillion (24-bit 0xf03a00; 256-color 202) for the
+   error kind, dim for trace lines. Piped output stays plain. */
+static int k_color_mode(void) {
+    static int mode = -1;
+    if (mode >= 0) return mode;
+    if (!isatty(2) || getenv("NO_COLOR")) return mode = 0;
+    const char* ct = getenv("COLORTERM");
+    if (ct && (strstr(ct, "truecolor") || strstr(ct, "24bit"))) return mode = 2;
+    return mode = 1;
+}
+
+static const char* k_c_err(void) {
+    switch (k_color_mode()) {
+        case 2: return "\x1b[38;2;240;58;0m";
+        case 1: return "\x1b[38;5;202m";
+        default: return "";
+    }
+}
+
+static const char* k_c_dim(void) { return k_color_mode() ? "\x1b[2m" : ""; }
+static const char* k_c_off(void) { return k_color_mode() ? "\x1b[0m" : ""; }
+
 void k_die(const char* msg) {
-    fprintf(stderr, "error[runtime]: %s\n", msg);
+    fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
     exit(1);
 }
 
@@ -52,7 +83,6 @@ static KList* k_as_list(KValue v) { return (KList*)(intptr_t)v.payload; }
 static KBytes* k_as_bytes(KValue v) { return (KBytes*)(intptr_t)v.payload; }
 static KMap* k_as_map(KValue v) { return (KMap*)(intptr_t)v.payload; }
 static KDesc* k_as_desc(KValue v) { return (KDesc*)(intptr_t)v.payload; }
-static KValue* k_as_boxed(KValue v) { return (KValue*)(intptr_t)v.payload; }
 
 static double k_as_f(KValue v) { double d; memcpy(&d, &v.payload, 8); return d; }
 
@@ -91,11 +121,29 @@ static KValue k_str(const char* data) { return k_str_n(data, (long long)strlen(d
 
 long long k_not_failure(KValue v) { return v.tag != K_ERR && v.tag != K_NONE; }
 
-KValue k_err(KValue reason) {
+static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
+
+KValue k_err(KValue reason, const char* origin) {
     if (!k_not_failure(reason)) return reason;
-    KValue* boxed = k_alloc(sizeof(KValue));
-    *boxed = reason;
-    KValue v; v.tag = K_ERR; v.payload = k_ptr(boxed); return v;
+    KErrBox* box = k_alloc(sizeof(KErrBox));
+    box->reason = reason;
+    box->origin = origin;
+    box->hops = NULL;
+    KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
+}
+
+/* A dispatcher passing a failure through appends its name; none stays bare. */
+KValue k_err_hop(KValue v, const char* fn) {
+    if (v.tag != K_ERR) return v;
+    KErrBox* old = k_err_box(v);
+    KErrBox* box = k_alloc(sizeof(KErrBox));
+    KHop* hop = k_alloc(sizeof(KHop));
+    hop->fn = fn;
+    hop->prev = old->hops;
+    box->reason = old->reason;
+    box->origin = old->origin;
+    box->hops = hop;
+    KValue out; out.tag = K_ERR; out.payload = k_ptr(box); return out;
 }
 
 KValue k_rec(long long type_id, long long n, KValue* args) {
@@ -109,7 +157,7 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
 }
 
 KValue k_field(KValue v, long long i) { return k_as_rec(v)->fields[i]; }
-KValue k_err_inner(KValue v) { return *k_as_boxed(v); }
+KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
@@ -144,8 +192,8 @@ KValue k_render(KValue v, long long quote);
 KValue k_keyed_check(KValue v, long long entries) {
     if (v.tag != K_REC) {
         KValue r = k_render(v, 1);
-        fprintf(stderr, "error[runtime]: cannot read fields of %s; keyed reads take a record\n",
-                k_as_str(r)->data);
+        fprintf(stderr, "%serror[runtime]:%s cannot read fields of %s; keyed reads take a record\n",
+                k_c_err(), k_c_off(), k_as_str(r)->data);
         exit(1);
     }
     if (entries >= k_as_rec(v)->nfields)
@@ -158,7 +206,8 @@ KValue k_keyed_field(KValue v, const char* name) {
     long long n = k_type_field_count(r->type_id);
     for (long long i = 0; i < n; i++)
         if (!strcmp(k_type_field_name(r->type_id, i), name)) return r->fields[i];
-    fprintf(stderr, "error[runtime]: `%s` has no field `%s`\n", k_type_name(r->type_id), name);
+    fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
+            k_type_name(r->type_id), name);
     exit(1);
 }
 
@@ -336,15 +385,15 @@ KValue k_mul(KValue a, KValue b) {
     return k_none();
 }
 
-KValue k_div(KValue a, KValue b) {
+KValue k_div(KValue a, KValue b, const char* origin) {
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
-        if (b.payload == 0) return k_err(k_str("division by zero"));
+        if (b.payload == 0) return k_err(k_str("division by zero"), origin);
         return k_int(a.payload / b.payload);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) {
-        if (k_as_f(b) == 0.0) return k_err(k_str("division by zero"));
+        if (k_as_f(b) == 0.0) return k_err(k_str("division by zero"), origin);
         return k_float(k_as_f(a) / k_as_f(b));
     }
     k_die("`/` is not defined for these values");
@@ -463,7 +512,7 @@ static KValue k_exec(KDesc* d) {
             FILE* fh = fopen(p->data, "rb");
             if (!fh) {
                 return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
-                                      k_str(": no such file or unreadable")));
+                                      k_str(": no such file or unreadable")), NULL);
             }
             fseek(fh, 0, SEEK_END);
             long size = ftell(fh);
@@ -480,7 +529,7 @@ static KValue k_exec(KDesc* d) {
             KStr* c = k_as_str(d->y);
             FILE* fh = fopen(p->data, "wb");
             if (!fh) {
-                return k_err(k_concat(k_str("cannot write "), d->x));
+                return k_err(k_concat(k_str("cannot write "), d->x), NULL);
             }
             fwrite(c->data, 1, c->len, fh);
             fclose(fh);
@@ -674,15 +723,15 @@ KValue k_b_concat(KValue av, KValue bv) {
     return k_mklist(n, items);
 }
 
-static KValue k_utf8_check(char* data, long long len);
+static KValue k_utf8_check(char* data, long long len, const char* origin);
 
-KValue k_b_utf8(KValue lv) {
+KValue k_b_utf8(KValue lv, const char* origin) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag == K_BYTES) {
         KBytes* b = k_as_bytes(lv);
         char* data = k_alloc(b->len + 1);
         memcpy(data, b->data, b->len);
-        return k_utf8_check(data, b->len);
+        return k_utf8_check(data, b->len, origin);
     }
     if (lv.tag != K_LIST) k_die("utf8 takes a list of byte values");
     KList* l = k_as_list(lv);
@@ -691,21 +740,21 @@ KValue k_b_utf8(KValue lv) {
         KValue item = l->items[i];
         if (!k_not_failure(item)) return item;
         if (item.tag != K_INT || item.payload < 0 || item.payload > 255) {
-            return k_err(k_str("utf8 takes byte values (0-255)"));
+            return k_err(k_str("utf8 takes byte values (0-255)"), origin);
         }
         data[i] = (char)item.payload;
     }
-    return k_utf8_check(data, l->len);
+    return k_utf8_check(data, l->len, origin);
 }
 
-static KValue k_utf8_check(char* data, long long len) {
+static KValue k_utf8_check(char* data, long long len, const char* origin) {
     long long i = 0;
     while (i < len) {
         unsigned char b0 = (unsigned char)data[i];
         long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
-        if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"));
+        if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"), origin);
         for (long j = 1; j < w; j++) {
-            if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"));
+            if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
         }
         i += w;
     }
@@ -767,10 +816,10 @@ KValue k_b_at(KValue container, KValue index) {
     return k_none();
 }
 
-KValue k_index(KValue container, KValue key) {
+KValue k_index(KValue container, KValue key, const char* origin) {
     KValue found = k_b_at(container, key);
     if (found.tag == K_NONE) {
-        return k_err(k_concat(k_str("missing index "), k_render(key, 1)));
+        return k_err(k_concat(k_str("missing index "), k_render(key, 1)), origin);
     }
     return found;
 }
@@ -945,12 +994,12 @@ KValue k_b_char_code(KValue cv) {
     return k_int(cp);
 }
 
-KValue k_b_from_code(KValue nv) {
+KValue k_b_from_code(KValue nv, const char* origin) {
     if (!k_not_failure(nv)) return nv;
     if (nv.tag != K_INT) k_die("from_code takes an int");
     long long cp = nv.payload;
     if (cp < 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
-        return k_err(k_str("not a unicode scalar value"));
+        return k_err(k_str("not a unicode scalar value"), origin);
     }
     char data[4];
     long w;
@@ -961,7 +1010,7 @@ KValue k_b_from_code(KValue nv) {
     return k_str_n(data, w);
 }
 
-KValue k_b_to_int(KValue sv) {
+KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag == K_INT) return sv;
     if (sv.tag != K_STR) k_die("to_int takes a string");
@@ -969,12 +1018,12 @@ KValue k_b_to_int(KValue sv) {
     char* end = NULL;
     long long n = strtoll(s->data, &end, 10);
     if (s->len == 0 || end != s->data + s->len) {
-        return k_err(k_concat(k_concat(k_str("\""), sv), k_str("\" is not an integer")));
+        return k_err(k_concat(k_concat(k_str("\""), sv), k_str("\" is not an integer")), origin);
     }
     return k_int(n);
 }
 
-KValue k_b_to_float(KValue v) {
+KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
     if (v.tag == K_INT) return k_float((double)v.payload);
@@ -983,12 +1032,29 @@ KValue k_b_to_float(KValue v) {
     char* end = NULL;
     double d = strtod(s->data, &end);
     if (s->len == 0 || end != s->data + s->len) {
-        return k_err(k_concat(k_concat(k_str("\""), v), k_str("\" is not a number")));
+        return k_err(k_concat(k_concat(k_str("\""), v), k_str("\" is not a number")), origin);
     }
     return k_float(d);
 }
 
 extern KValue k_user_main(void);
+
+static void k_report_err(KValue e, const char* reached) {
+    KValue r = k_render(k_err_inner(e), 1);
+    fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: %s\n",
+            k_c_err(), k_c_off(), reached, k_as_str(r)->data);
+    KErrBox* box = k_err_box(e);
+    if (box->origin) {
+        fprintf(stderr, "%s  born in %s%s\n", k_c_dim(), box->origin, k_c_off());
+    }
+    if (box->hops) {
+        fprintf(stderr, "%s  passed through ", k_c_dim());
+        for (KHop* hop = box->hops; hop; hop = hop->prev) {
+            fprintf(stderr, hop->prev ? "%s \xe2\x86\x90 " : "%s", hop->fn);
+        }
+        fprintf(stderr, "%s\n", k_c_off());
+    }
+}
 
 int main(int argc, char** argv) {
     k_argc_global = argc;
@@ -997,20 +1063,17 @@ int main(int argc, char** argv) {
     if (v.tag == K_DESC) {
         KValue y = k_exec(k_as_desc(v));
         if (y.tag == K_ERR) {
-            KValue r = k_render(k_err_inner(y), 1);
-            fprintf(stderr, "error[endpoint]: unhandled err reached the executor: %s\n",
-                    k_as_str(r)->data);
+            k_report_err(y, "the executor");
             return 1;
         }
         return 0;
     }
     if (v.tag == K_ERR) {
-        KValue r = k_render(k_err_inner(v), 1);
-        fprintf(stderr, "error[endpoint]: unhandled err reached main: %s\n", k_as_str(r)->data);
+        k_report_err(v, "main");
         return 1;
     }
     if (v.tag == K_NONE) {
-        fputs("error[endpoint]: unhandled none reached main\n", stderr);
+        fprintf(stderr, "%serror[endpoint]:%s unhandled none reached main\n", k_c_err(), k_c_off());
         return 1;
     }
     return 0;

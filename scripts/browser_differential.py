@@ -64,8 +64,10 @@ function rtImports() {
   return env;
 }
 
-async function runCase(src) {
-  const { ptr, len } = writeInput(src);
+async function runCase(c) {
+  const name = writeInput(c.name.split('/').pop());
+  wasm.kanso_set_file(name.ptr, name.len);
+  const { ptr, len } = writeInput(c.src);
   const status = wasm.kanso_compile_wasm(ptr, len, tailCalls ? 1 : 0);
   if (status === 2) return { kind: 'compile-error', code: 2, text: readOut() };
   if (status === 1) return { kind: 'fallback', reason: readOut() };
@@ -103,7 +105,7 @@ async function main() {
   for (const c of CASES) {
     let r;
     try {
-      r = await runCase(c.src);
+      r = await runCase(c);
     } catch (e) {
       r = { kind: 'crash', reason: String((e && e.stack) || e) };
     }

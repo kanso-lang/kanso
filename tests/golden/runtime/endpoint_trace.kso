@@ -1,0 +1,13 @@
+fn grade outcome
+  "grade {outcome}"
+
+main =
+  outcome = parse "oops"
+  verdict = grade outcome
+  report verdict
+
+fn parse text
+  to_int text
+
+fn report verdict
+  "report: {verdict}"

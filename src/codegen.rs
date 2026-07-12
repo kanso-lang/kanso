@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::diag::Span;
 use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, FLOAT, INT, LIST, MAP, NONE, REC, STR, TOP};
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -17,7 +18,8 @@ declare %KValue @k_bool(i64)
 declare %KValue @k_none()
 declare %KValue @k_str_n(ptr, i64)
 declare i64 @k_not_failure(%KValue)
-declare %KValue @k_err(%KValue)
+declare %KValue @k_err(%KValue, ptr)
+declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
@@ -33,7 +35,7 @@ declare %KValue @k_render(%KValue, i64)
 declare %KValue @k_add(%KValue, %KValue)
 declare %KValue @k_sub(%KValue, %KValue)
 declare %KValue @k_mul(%KValue, %KValue)
-declare %KValue @k_div(%KValue, %KValue)
+declare %KValue @k_div(%KValue, %KValue, ptr)
 declare %KValue @k_cmp(%KValue, %KValue, i64)
 declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
@@ -48,11 +50,11 @@ declare %KValue @k_closure(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
-declare %KValue @k_index(%KValue, %KValue)
+declare %KValue @k_index(%KValue, %KValue, ptr)
 declare %KValue @k_b_bytes(%KValue)
 declare %KValue @k_b_chars(%KValue)
 declare %KValue @k_b_concat(%KValue, %KValue)
-declare %KValue @k_b_utf8(%KValue)
+declare %KValue @k_b_utf8(%KValue, ptr)
 declare %KValue @k_desc_args()
 declare %KValue @k_desc_stdin()
 declare %KValue @k_b_read_file(%KValue)
@@ -61,7 +63,7 @@ declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
-declare %KValue @k_b_from_code(%KValue)
+declare %KValue @k_b_from_code(%KValue, ptr)
 declare %KValue @k_b_join(%KValue, %KValue)
 declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
@@ -70,8 +72,8 @@ declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
-declare %KValue @k_b_to_float(%KValue)
-declare %KValue @k_b_to_int(%KValue)
+declare %KValue @k_b_to_float(%KValue, ptr)
+declare %KValue @k_b_to_int(%KValue, ptr)
 
 "#;
 
@@ -137,6 +139,8 @@ struct FnEmit {
     cur_label: String,
     versions: HashMap<String, String>,
     sets: HashMap<String, Set>,
+    /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
+    origin_prefix: String,
 }
 
 impl FnEmit {
@@ -148,6 +152,7 @@ impl FnEmit {
             cur_label: "entry".to_string(),
             versions: HashMap::new(),
             sets: HashMap::new(),
+            origin_prefix: String::new(),
         }
     }
 
@@ -309,6 +314,12 @@ impl<'a> Backend<'a> {
         t
     }
 
+    /// The interned origin literal for an err construction site.
+    fn origin_arg(&mut self, f: &FnEmit, span: Span) -> String {
+        let (name, _) = self.intern(&format!("{}:{}\0", f.origin_prefix, span.line));
+        format!("ptr @{name}")
+    }
+
     fn emit_type_names(&mut self) {
         let mut body = String::new();
         body.push_str("define ptr @k_type_name(i64 %id) {\nentry:\n");
@@ -414,6 +425,7 @@ impl<'a> Backend<'a> {
         let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
         let mut f = FnEmit::new();
         let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
+        let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         // any non-discriminator failure means no arm can match: propagate leftmost
         let mut all_ok: Option<String> = None;
@@ -445,7 +457,11 @@ impl<'a> Backend<'a> {
                 let ret_it = f.label();
                 f.line(&format!("br i1 {good}, label %{next}, label %{ret_it}"));
                 f.start_block(&ret_it);
-                f.line(&format!("ret %KValue %x{i}"));
+                let hopped = f.tmp();
+                f.line(&format!(
+                    "{hopped} = call %KValue @k_err_hop(%KValue %x{i}, ptr @{hop_name})"
+                ));
+                f.line(&format!("ret %KValue {hopped}"));
                 f.start_block(&next);
             }
             f.line("unreachable");
@@ -524,7 +540,9 @@ impl<'a> Backend<'a> {
         let die = f.label();
         f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
         f.start_block(&ret_disc);
-        f.line(&format!("ret %KValue {dv}"));
+        let hopped = f.tmp();
+        f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
+        f.line(&format!("ret %KValue {hopped}"));
         f.start_block(&die);
         let msg = format!("no overload of `{name}` matches these arguments ");
         let (m, _len) = self.intern(&msg);
@@ -534,6 +552,7 @@ impl<'a> Backend<'a> {
         for (k, decl) in decls.iter().enumerate() {
             f.start_block(&arm_labels[k]);
             f.versions.clear();
+            f.origin_prefix = format!("{} at {}", decl.name, decl.file);
             for (i, pattern) in decl.params.iter().enumerate() {
                 if let Pattern::Var(pname, _) = pattern {
                     f.bind(pname, &format!("%x{i}"));
@@ -554,10 +573,12 @@ impl<'a> Backend<'a> {
         let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
         let mut f = FnEmit::new();
         let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
+        let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
             f.versions.clear();
+            f.origin_prefix = format!("{} at {}", decl.name, decl.file);
             for (i, pattern) in decl.params.iter().enumerate() {
                 let known = self.group_param_set(name, arity, i);
                 self.emit_pattern_known(&mut f, &format!("%x{i}"), pattern, &fail, known)?;
@@ -571,7 +592,11 @@ impl<'a> Backend<'a> {
             let next = f.label();
             f.line(&format!("br i1 {ok}, label %{next}, label %{ret_label}"));
             f.start_block(&ret_label);
-            f.line(&format!("ret %KValue %x{i}"));
+            let hopped = f.tmp();
+            f.line(&format!(
+                "{hopped} = call %KValue @k_err_hop(%KValue %x{i}, ptr @{hop_name})"
+            ));
+            f.line(&format!("ret %KValue {hopped}"));
             f.start_block(&next);
         }
         let msg = format!("no overload of `{name}` matches these arguments");
@@ -974,11 +999,13 @@ impl<'a> Backend<'a> {
                     )),
                 }
             }
-            Expr::App { head, args, piped, .. } => self.emit_call_full(f, head, args, *piped),
-            Expr::Index { base, index, .. } => {
+            Expr::App { head, args, piped, span } => {
+                self.emit_call_full(f, head, args, *piped, *span)
+            }
+            Expr::Index { base, index, span } => {
                 let container = self.emit_expr(f, base)?;
                 let key = self.emit_expr(f, index)?;
-                Ok(self.emit_at(f, &container, &key, true))
+                Ok(self.emit_at(f, &container, &key, true, *span))
             }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;
@@ -988,10 +1015,10 @@ impl<'a> Backend<'a> {
                 f.record(&t, DESC | (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL));
                 Ok(t)
             }
-            Expr::BinOp { op, lhs, rhs, .. } => {
+            Expr::BinOp { op, lhs, rhs, span } => {
                 let a = self.emit_expr(f, lhs)?;
                 let b = self.emit_expr(f, rhs)?;
-                self.emit_binop(f, op, &a, &b)
+                self.emit_binop(f, op, &a, &b, *span)
             }
             Expr::Lambda { params, body, .. } => {
                 if params.len() != 1 {
@@ -1142,12 +1169,16 @@ impl<'a> Backend<'a> {
         op: &str,
         a: &str,
         b: &str,
+        span: Span,
     ) -> Result<String, String> {
         let slow_call = match op {
             "+" => format!("call %KValue @k_add(%KValue {a}, %KValue {b})"),
             "-" => format!("call %KValue @k_sub(%KValue {a}, %KValue {b})"),
             "*" => format!("call %KValue @k_mul(%KValue {a}, %KValue {b})"),
-            "/" => format!("call %KValue @k_div(%KValue {a}, %KValue {b})"),
+            "/" => {
+                let origin = self.origin_arg(f, span);
+                format!("call %KValue @k_div(%KValue {a}, %KValue {b}, {origin})")
+            }
             "==" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 0)"),
             "!=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 1)"),
             "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
@@ -1287,8 +1318,19 @@ impl<'a> Backend<'a> {
 
     /// bytes-view indexing inlines to a bounds check and a byte load; every
     /// other container falls back to the runtime call.
-    fn emit_at(&mut self, f: &mut FnEmit, container: &str, key: &str, strict: bool) -> String {
+    fn emit_at(
+        &mut self,
+        f: &mut FnEmit,
+        container: &str,
+        key: &str,
+        strict: bool,
+        span: Span,
+    ) -> String {
         let slow_fn = if strict { "k_index" } else { "k_b_at" };
+        let slow_extra = match strict {
+            true => format!(", {}", self.origin_arg(f, span)),
+            false => String::new(),
+        };
         let proven = f.set_of(container) == BYTES && f.set_of(key) == INT;
         if proven {
             let bp = inline_payload(f, container);
@@ -1331,7 +1373,7 @@ impl<'a> Backend<'a> {
             let miss_value = if strict {
                 let mv = f.tmp();
                 f.line(&format!(
-                    "{mv} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key})"
+                    "{mv} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
                 ));
                 mv
             } else {
@@ -1397,7 +1439,7 @@ impl<'a> Backend<'a> {
         f.start_block(&slow);
         let slow_value = f.tmp();
         f.line(&format!(
-            "{slow_value} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key})"
+            "{slow_value} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key}{slow_extra})"
         ));
         let slow_from = f.cur_label.clone();
         f.line(&format!("br label %{merge}"));
@@ -1415,11 +1457,11 @@ impl<'a> Backend<'a> {
         head: &Expr,
         args: &[Expr],
         piped: bool,
+        span: Span,
     ) -> Result<String, String> {
         if piped && !args.is_empty() {
             let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
-                let span = head.span();
                 let mut body_args: Vec<Expr> =
                     vec![Expr::Ident("__piped".to_string(), span)];
                 body_args.extend(args[1..].iter().cloned());
@@ -1441,10 +1483,31 @@ impl<'a> Backend<'a> {
                 f.record(&t, TOP);
                 return Ok(t);
             }
-            // no description can flow here: an ordinary call, first arg already emitted
-            return self.emit_call_rest(f, head, args, Some(piped_value));
+            // a pipe hands its value on; a failure short-circuits before the
+            // call (no dispatch, no hop) on every engine
+            if f.set_of(&piped_value) & FAIL != 0 {
+                let ok = inline_not_failure(f, &piped_value);
+                let docall = f.label();
+                let merge = f.label();
+                let fail_from = f.cur_label.clone();
+                f.line(&format!("br i1 {ok}, label %{docall}, label %{merge}"));
+                f.start_block(&docall);
+                let called =
+                    self.emit_call_rest(f, head, args, Some(piped_value.clone()), span)?;
+                let call_from = f.cur_label.clone();
+                f.line(&format!("br label %{merge}"));
+                f.start_block(&merge);
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = phi %KValue [ {piped_value}, %{fail_from} ], [ {called}, %{call_from} ]"
+                ));
+                f.record(&t, f.set_of(&called) | (f.set_of(&piped_value) & FAIL));
+                return Ok(t);
+            }
+            // no description or failure can flow here: an ordinary call
+            return self.emit_call_rest(f, head, args, Some(piped_value), span);
         }
-        self.emit_call_rest(f, head, args, None)
+        self.emit_call_rest(f, head, args, None, span)
     }
 
     fn emit_call_rest(
@@ -1453,6 +1516,7 @@ impl<'a> Backend<'a> {
         head: &Expr,
         args: &[Expr],
         first: Option<String>,
+        span: Span,
     ) -> Result<String, String> {
         let Expr::Ident(name, _) = head else {
             return Err("native backend: computed call heads are slice 2".to_string());
@@ -1508,8 +1572,9 @@ impl<'a> Backend<'a> {
             emitted.push(self.emit_expr(f, arg)?);
         }
         if name == "err" {
+            let origin = self.origin_arg(f, span);
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_err(%KValue {})", emitted[0]));
+            f.line(&format!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
             f.record(&t, ERR);
             return Ok(t);
         }
@@ -1547,13 +1612,18 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         if name == "at" && emitted.len() == 2 {
-            return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false));
+            return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));
         }
         if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| b == name) {
             if emitted.len() != *arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
             }
-            let args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
+            let mut args_ir: Vec<String> =
+                emitted.iter().map(|e| format!("%KValue {e}")).collect();
+            // builtins that can give birth to an err take the site's origin
+            if matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code") {
+                args_ir.push(self.origin_arg(f, span));
+            }
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_b_{name}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
@@ -1573,8 +1643,8 @@ impl<'a> Backend<'a> {
         body: &Expr,
         outer: &FnEmit,
     ) -> Result<(), String> {
-        let _ = outer;
         let mut f = FnEmit::new();
+        f.origin_prefix = outer.origin_prefix.clone();
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
             let t = f.tmp();

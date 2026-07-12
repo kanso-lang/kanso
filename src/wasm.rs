@@ -8,6 +8,19 @@ use std::cell::RefCell;
 thread_local! {
     static SESSION: RefCell<Session> = RefCell::new(Session::new());
     static OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static FILE: RefCell<String> = RefCell::new("playground".to_string());
+}
+
+fn current_file() -> String {
+    FILE.with(|f| f.borrow().clone())
+}
+
+/// Names the source for err origins and diagnostics; the differential
+/// harness sets each case's file name so traces match the native engine.
+#[no_mangle]
+pub extern "C" fn kanso_set_file(ptr: *const u8, len: usize) {
+    let name = take_input(ptr, len);
+    FILE.with(|f| *f.borrow_mut() = name);
 }
 
 /// Playground executor: print goes to a captured stdout; there is no
@@ -84,7 +97,7 @@ thread_local! {
 #[no_mangle]
 pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
     let source = take_input(ptr, len);
-    let program = match crate::compile("playground", &source, true) {
+    let program = match crate::compile(&current_file(), &source, true) {
         Ok(program) => program,
         Err(rendered) => {
             set_out(&rendered);
@@ -168,7 +181,7 @@ pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
 #[no_mangle]
 pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
     let source = take_input(ptr, len);
-    let program = match crate::compile("playground", &source, true) {
+    let program = match crate::compile(&current_file(), &source, true) {
         Ok(program) => program,
         Err(rendered) => {
             set_out(&rendered);
@@ -184,17 +197,24 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
         }
     };
     let mut executor = BrowserExecutor { stdout: String::new() };
-    let outcome = match value {
-        Value::Desc(desc) => interp.execute(&desc, &mut executor),
-        other => Ok(other),
+    let (reached, outcome) = match value {
+        Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
+        other => ("main", Ok(other)),
     };
     match outcome {
-        Ok(Value::ErrV(reason)) => {
+        Ok(Value::ErrV(info)) => {
             let mut text = executor.stdout;
             text.push_str(&format!(
-                "error[endpoint]: unhandled err reached the executor: {}\n",
-                render(&reason, true)
+                "error[endpoint]: unhandled err reached {reached}: {}\n{}",
+                render(&info.reason, true),
+                crate::eval::trace_lines(&info)
             ));
+            set_out(&text);
+            1
+        }
+        Ok(Value::NoneV) if reached == "main" => {
+            let mut text = executor.stdout;
+            text.push_str("error[endpoint]: unhandled none reached main\n");
             set_out(&text);
             1
         }

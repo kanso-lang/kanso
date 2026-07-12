@@ -20,7 +20,7 @@ pub enum Value {
     True,
     False,
     NoneV,
-    ErrV(Rc<Value>),
+    ErrV(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
     Record { ty: Rc<str>, fields: Rc<Vec<Value>> },
     FnRef(Rc<str>),
@@ -28,11 +28,73 @@ pub enum Value {
     Desc(Rc<Desc>),
 }
 
+/// An err value carries its propagation trace: the origin baked at the
+/// construction site ("{fn} at {file}:{line}"; executor-born errs have none)
+/// and one hop per dispatcher failure pass-through. The happy path never
+/// touches any of this — trace data lives on the err value only.
+#[derive(Debug)]
+pub struct ErrInfo {
+    pub reason: Value,
+    pub origin: Option<Rc<str>>,
+    pub hops: Vec<Rc<str>>,
+}
+
+/// The evaluation frame an expression runs in, as an err-origin prefix
+/// "{fn} at {file}"; absent where no source frame exists (the wasm host).
+pub type Frame = Option<Rc<str>>;
+
+fn frame_of(decl: &FnDecl) -> Frame {
+    Some(Rc::from(format!("{} at {}", decl.name, decl.file)))
+}
+
+pub fn origin_at(frame: &Frame, span: Span) -> Option<Rc<str>> {
+    frame.as_ref().map(|prefix| Rc::from(format!("{prefix}:{}", span.line)))
+}
+
+pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
+    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new() }))
+}
+
+/// A dispatcher passing a failure through appends its name; none stays bare.
+pub fn hop(failure: Value, name: &str) -> Value {
+    match failure {
+        Value::ErrV(info) => {
+            let mut hops = info.hops.clone();
+            hops.push(Rc::from(name));
+            Value::ErrV(Rc::new(ErrInfo {
+                reason: info.reason.clone(),
+                origin: info.origin.clone(),
+                hops,
+            }))
+        }
+        other => other,
+    }
+}
+
+/// The endpoint report's trace lines, newest pass-through first, pointing
+/// back toward the birth site. Byte-identical across all three engines.
+pub fn trace_lines(info: &ErrInfo) -> String {
+    let mut out = String::new();
+    if let Some(origin) = &info.origin {
+        out.push_str("  born in ");
+        out.push_str(origin);
+        out.push('\n');
+    }
+    if !info.hops.is_empty() {
+        let path: Vec<&str> = info.hops.iter().rev().map(|h| &**h).collect();
+        out.push_str("  passed through ");
+        out.push_str(&path.join(" \u{2190} "));
+        out.push('\n');
+    }
+    out
+}
+
 #[derive(Debug)]
 pub struct ClosureData {
     pub params: Vec<String>,
     pub body: Expr,
     pub env: Option<Rc<Env>>,
+    pub frame: Frame,
 }
 
 #[derive(Debug)]
@@ -181,23 +243,23 @@ impl<'a> Interp<'a> {
 
     pub fn run_main(&self) -> EvalResult {
         let main = self.fns.get("main").expect("checked: main exists")[0];
-        self.eval_body(&main.body, None)
+        self.eval_body(&main.body, None, &frame_of(main))
     }
 
     pub fn run_named(&self, name: &str) -> Option<EvalResult> {
         let decl = self.fns.get(name)?.iter().find(|d| d.params.is_empty())?;
-        Some(self.eval_body(&decl.body, None))
+        Some(self.eval_body(&decl.body, None, &frame_of(decl)))
     }
 
-    fn eval_body(&self, body: &[Stmt], mut env: Option<Rc<Env>>) -> EvalResult {
+    fn eval_body(&self, body: &[Stmt], mut env: Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         let mut result = Value::NoneV;
         for stmt in body {
             match stmt {
                 Stmt::Bind { pattern, expr } => {
-                    let value = self.eval(expr, &env)?;
+                    let value = self.eval(expr, &env, frame)?;
                     env = self.destructure(pattern, value, env, expr.span())?;
                 }
-                Stmt::Expr(expr) => result = self.eval(expr, &env)?,
+                Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
             }
         }
         Ok(result)
@@ -274,15 +336,15 @@ impl<'a> Interp<'a> {
         }
     }
 
-    fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>) -> EvalResult {
+    fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::Int(n.clone())),
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::MapLit(pairs, span) => {
                 let mut entries = BTreeMap::new();
                 for (key_expr, value_expr) in pairs {
-                    let key = self.eval(key_expr, env)?;
-                    let value = self.eval(value_expr, env)?;
+                    let key = self.eval(key_expr, env, frame)?;
+                    let value = self.eval(value_expr, env, frame)?;
                     if is_failure(&key) {
                         return Ok(key);
                     }
@@ -294,27 +356,32 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Map(Rc::new(entries)))
             }
-            Expr::Str(parts, _) => self.eval_template(parts, env),
+            Expr::Str(parts, _) => self.eval_template(parts, env, frame),
             Expr::Ident(name, span) => self.eval_ident(name, *span, env),
             Expr::List(items, _) => {
-                let values =
-                    items.iter().map(|e| self.eval(e, env)).collect::<Result<Vec<_>, _>>()?;
+                let values = items
+                    .iter()
+                    .map(|e| self.eval(e, env, frame))
+                    .collect::<Result<Vec<_>, _>>()?;
                 Ok(Value::List(Rc::new(values)))
             }
             Expr::Index { base, index, span } => {
-                let container = self.eval(base, env)?;
-                let key = self.eval(index, env)?;
+                let container = self.eval(base, env, frame)?;
+                let key = self.eval(index, env, frame)?;
                 match index_value(container, key.clone(), *span)? {
-                    Value::NoneV => Ok(Value::ErrV(Rc::new(Value::Str(format!(
-                        "missing index {}",
-                        render(&key, true)
-                    ))))),
+                    Value::NoneV => Ok(err_value(
+                        Value::Str(format!("missing index {}", render(&key, true))),
+                        origin_at(frame, *span),
+                    )),
                     found => Ok(found),
                 }
             }
             Expr::App { head, args, span, piped } => {
                 if *piped && !args.is_empty() {
-                    let piped_value = self.eval(&args[0], env)?;
+                    let piped_value = self.eval(&args[0], env, frame)?;
+                    if is_failure(&piped_value) {
+                        return Ok(piped_value);
+                    }
                     if let Value::Desc(inner) = piped_value {
                         let mut body_args: Vec<Expr> =
                             vec![Expr::Ident("__piped".to_string(), *span)];
@@ -328,17 +395,18 @@ impl<'a> Interp<'a> {
                                 piped: false,
                             },
                             env: env.clone(),
+                            frame: frame.clone(),
                         }));
                         return Ok(Value::Desc(Rc::new(Desc::Bind(inner, closure))));
                     }
-                    let callee = self.eval(head, env)?;
+                    let callee = self.eval(head, env, frame)?;
                     let mut values = vec![piped_value];
                     for arg in &args[1..] {
-                        values.push(self.eval(arg, env)?);
+                        values.push(self.eval(arg, env, frame)?);
                     }
-                    return self.call(callee, values, *span);
+                    return self.call(callee, values, *span, frame);
                 }
-                let callee = self.eval(head, env)?;
+                let callee = self.eval(head, env, frame)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
                 let mut values = Vec::new();
                 for arg in args {
@@ -347,15 +415,16 @@ impl<'a> Interp<'a> {
                             params: Vec::new(),
                             body: arg.clone(),
                             env: env.clone(),
+                            frame: frame.clone(),
                         }))),
-                        false => values.push(self.eval(arg, env)?),
+                        false => values.push(self.eval(arg, env, frame)?),
                     }
                 }
-                self.call(callee, values, *span)
+                self.call(callee, values, *span, frame)
             }
             Expr::Seq(lhs, rhs, span) => {
-                let left = self.eval(lhs, env)?;
-                let right = self.eval(rhs, env)?;
+                let left = self.eval(lhs, env, frame)?;
+                let right = self.eval(rhs, env, frame)?;
                 if is_failure(&left) {
                     return Ok(left);
                 }
@@ -376,11 +445,12 @@ impl<'a> Interp<'a> {
                 params: params.iter().map(|(n, _)| n.clone()).collect(),
                 body: (**body).clone(),
                 env: env.clone(),
+                frame: frame.clone(),
             }))),
             Expr::BinOp { op, lhs, rhs, span } => {
-                let left = self.eval(lhs, env)?;
-                let right = self.eval(rhs, env)?;
-                eval_binop(op, left, right, *span)
+                let left = self.eval(lhs, env, frame)?;
+                let right = self.eval(rhs, env, frame)?;
+                eval_binop(op, left, right, *span, frame)
             }
         }
     }
@@ -391,7 +461,7 @@ impl<'a> Interp<'a> {
         }
         if let Some(decls) = self.fns.get(name) {
             if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
-                return self.eval_body(&constant.body, None);
+                return self.eval_body(&constant.body, None, &frame_of(constant));
             }
         }
         match name {
@@ -419,13 +489,18 @@ impl<'a> Interp<'a> {
         }
     }
 
-    fn eval_template(&self, parts: &[TemplatePart], env: &Option<Rc<Env>>) -> EvalResult {
+    fn eval_template(
+        &self,
+        parts: &[TemplatePart],
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> EvalResult {
         let mut out = String::new();
         for part in parts {
             match part {
                 TemplatePart::Lit(s) => out.push_str(s),
                 TemplatePart::Interp(expr) => {
-                    let value = self.eval(expr, env)?;
+                    let value = self.eval(expr, env, frame)?;
                     if is_failure(&value) {
                         return Ok(value);
                     }
@@ -436,9 +511,9 @@ impl<'a> Interp<'a> {
         Ok(Value::Str(out))
     }
 
-    fn call(&self, callee: Value, args: Vec<Value>, span: Span) -> EvalResult {
+    fn call(&self, callee: Value, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
         match callee {
-            Value::FnRef(name) => self.call_named(&name, args, span),
+            Value::FnRef(name) => self.call_named(&name, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
@@ -466,13 +541,16 @@ impl<'a> Interp<'a> {
         for (name, value) in closure.params.iter().zip(args) {
             env = bind(env, name, value);
         }
-        self.eval(&closure.body, &env)
+        self.eval(&closure.body, &env, &closure.frame)
     }
 
-    fn call_named(&self, name: &str, args: Vec<Value>, span: Span) -> EvalResult {
+    fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
         if name == "err" {
             let [reason] = arity(args, name, span)?;
-            return Ok(Value::ErrV(Rc::new(reason)));
+            if is_failure(&reason) {
+                return Ok(reason);
+            }
+            return Ok(err_value(reason, origin_at(frame, span)));
         }
         if let Some(ty) = self.type_decl(name) {
             return self.construct(ty, args, span);
@@ -480,7 +558,7 @@ impl<'a> Interp<'a> {
         if let Some(overloads) = self.fns.get(name) {
             return self.dispatch(name, overloads, args, span);
         }
-        self.call_builtin(name, args, span)
+        self.call_builtin(name, args, span, frame)
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
@@ -541,16 +619,25 @@ impl<'a> Interp<'a> {
                 for (bind_name, value) in binds {
                     env = bind(env, &bind_name, value);
                 }
-                self.eval_body(&decl.body, env)
+                self.eval_body(&decl.body, env, &frame_of(decl))
             }
-            None => propagate_or(args, || RuntimeError {
-                message: format!("no overload of `{name}` matches these arguments"),
-                span,
-            }),
+            None => match args.into_iter().find(is_failure) {
+                Some(bad) => Ok(hop(bad, name)),
+                None => Err(RuntimeError {
+                    message: format!("no overload of `{name}` matches these arguments"),
+                    span,
+                }),
+            },
         }
     }
 
-    pub fn call_builtin(&self, name: &str, args: Vec<Value>, span: Span) -> EvalResult {
+    pub fn call_builtin(
+        &self,
+        name: &str,
+        args: Vec<Value>,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
         if name == "if" {
             return self.builtin_if(args, span);
         }
@@ -680,9 +767,10 @@ impl<'a> Interp<'a> {
                         Value::Int(n) => match u8::try_from(n.clone()) {
                             Ok(b) => raw.push(b),
                             Err(_) => {
-                                return Ok(Value::ErrV(Rc::new(Value::Str(
-                                    "utf8 takes byte values (0-255)".to_string(),
-                                ))))
+                                return Ok(err_value(
+                                    Value::Str("utf8 takes byte values (0-255)".to_string()),
+                                    origin_at(frame, span),
+                                ))
                             }
                         },
                         bad if is_failure(bad) => return Ok(bad.clone()),
@@ -696,9 +784,10 @@ impl<'a> Interp<'a> {
                 }
                 match String::from_utf8(raw) {
                     Ok(text) => Ok(Value::Str(text)),
-                    Err(_) => Ok(Value::ErrV(Rc::new(Value::Str(
-                        "invalid utf-8".to_string(),
-                    )))),
+                    Err(_) => Ok(err_value(
+                        Value::Str("invalid utf-8".to_string()),
+                        origin_at(frame, span),
+                    )),
                 }
             }
             "chars" => {
@@ -738,9 +827,10 @@ impl<'a> Interp<'a> {
                 let scalar = u32::try_from(n.clone()).ok().and_then(char::from_u32);
                 match scalar {
                     Some(c) => Ok(Value::Str(c.to_string())),
-                    None => Ok(Value::ErrV(Rc::new(Value::Str(
-                        "not a unicode scalar value".to_string(),
-                    )))),
+                    None => Ok(err_value(
+                        Value::Str("not a unicode scalar value".to_string()),
+                        origin_at(frame, span),
+                    )),
                 }
             }
             "join" => {
@@ -801,9 +891,10 @@ impl<'a> Interp<'a> {
                 match &value {
                     Value::Str(s) => Ok(match s.parse::<BigInt>() {
                         Ok(n) => Value::Int(n),
-                        Err(_) => Value::ErrV(Rc::new(Value::Str(format!(
-                            "{s:?} is not an integer"
-                        )))),
+                        Err(_) => err_value(
+                            Value::Str(format!("\"{s}\" is not an integer")),
+                            origin_at(frame, span),
+                        ),
                     }),
                     Value::Int(_) => Ok(value),
                     _ => Err(RuntimeError {
@@ -817,9 +908,10 @@ impl<'a> Interp<'a> {
                 match &value {
                     Value::Str(s) => Ok(match s.parse::<f64>() {
                         Ok(x) => Value::Float(x),
-                        Err(_) => Value::ErrV(Rc::new(Value::Str(format!(
-                            "{s:?} is not a number"
-                        )))),
+                        Err(_) => err_value(
+                            Value::Str(format!("\"{s}\" is not a number")),
+                            origin_at(frame, span),
+                        ),
                     }),
                     Value::Int(n) => {
                         let approx = n.to_string().parse::<f64>().unwrap_or(f64::INFINITY);
@@ -851,7 +943,7 @@ impl<'a> Interp<'a> {
                 };
                 let mapped = items
                     .iter()
-                    .map(|item| self.call(f.clone(), vec![item.clone()], span))
+                    .map(|item| self.call(f.clone(), vec![item.clone()], span, frame))
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Value::List(Rc::new(mapped)))
             }
@@ -862,7 +954,7 @@ impl<'a> Interp<'a> {
                 };
                 let mut kept = Vec::new();
                 for item in items.iter() {
-                    match self.call(f.clone(), vec![item.clone()], span)? {
+                    match self.call(f.clone(), vec![item.clone()], span, frame)? {
                         Value::True => kept.push(item.clone()),
                         Value::False => {}
                         other => {
@@ -943,7 +1035,7 @@ impl<'a> Interp<'a> {
 
     fn force(&self, value: Value) -> EvalResult {
         match value {
-            Value::Closure(c) if c.params.is_empty() => self.eval(&c.body, &c.env),
+            Value::Closure(c) if c.params.is_empty() => self.eval(&c.body, &c.env, &c.frame),
             other => Ok(other),
         }
     }
@@ -960,16 +1052,6 @@ fn arity<const N: usize>(
             message: format!("`{name}` takes {N} argument(s), got {}", actual.len()),
             span,
         }),
-    }
-}
-
-fn propagate_or(
-    args: Vec<Value>,
-    err: impl FnOnce() -> RuntimeError,
-) -> EvalResult {
-    match args.into_iter().find(is_failure) {
-        Some(bad) => Ok(bad),
-        None => Err(err()),
     }
 }
 
@@ -1011,9 +1093,9 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
             }
         }
         (Pattern::Keyed { .. }, _) => None,
-        (Pattern::Ctor { ty, fields }, Value::ErrV(reason)) if ty == "err" => {
+        (Pattern::Ctor { ty, fields }, Value::ErrV(info)) if ty == "err" => {
             match fields.len() == 1 {
-                true => match_one(&fields[0], reason, binds),
+                true => match_one(&fields[0], &info.reason, binds),
                 false => None,
             }
         }
@@ -1117,7 +1199,13 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     }
 }
 
-pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
+pub fn eval_binop(
+    op: &str,
+    left: Value,
+    right: Value,
+    span: Span,
+    frame: &Frame,
+) -> EvalResult {
     if is_failure(&left) {
         return Ok(left);
     }
@@ -1136,14 +1224,20 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult
         ("-", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
         ("*", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
         ("/", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => Ok(Value::ErrV(Rc::new(Value::Str("division by zero".to_string())))),
+            true => Ok(err_value(
+                Value::Str("division by zero".to_string()),
+                origin_at(frame, span),
+            )),
             false => Ok(Value::Int(a / b)),
         },
         ("+", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
         ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
         ("/", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => Ok(Value::ErrV(Rc::new(Value::Str("division by zero".to_string())))),
+            true => Ok(err_value(
+                Value::Str("division by zero".to_string()),
+                origin_at(frame, span),
+            )),
             false => Ok(Value::Float(a / b)),
         },
         ("+" | "-" | "*" | "/", Value::Int(_), Value::Float(_))
@@ -1220,7 +1314,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
                     .map(|(key, value)| {
                         let key = match key {
                             MapKey::Int(n) => n.to_string(),
-                            MapKey::Str(s) => format!("{s:?}"),
+                            MapKey::Str(s) => format!("\"{s}\""),
                         };
                         format!("{key}: {}", render(value, true))
                     })
@@ -1229,13 +1323,13 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
             }
         },
         Value::Str(s) => match quote_strings {
-            true => format!("{s:?}"),
+            true => format!("\"{s}\""),
             false => s.clone(),
         },
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
         Value::NoneV => "none".to_string(),
-        Value::ErrV(reason) => format!("err {}", render(reason, true)),
+        Value::ErrV(info) => format!("err {}", render(&info.reason, true)),
         Value::List(items) => {
             let inner: Vec<String> = items.iter().map(|i| render(i, true)).collect();
             format!("[{}]", inner.join(" "))
@@ -1274,19 +1368,19 @@ impl<'a> Interp<'a> {
             }
             Desc::Stdin => Ok(match executor.stdin() {
                 Ok(text) => Value::Str(text),
-                Err(reason) => Value::ErrV(Rc::new(Value::Str(reason))),
+                Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::ReadFile(path) => Ok(match executor.read_file(path) {
                 Ok(text) => Value::Str(text),
-                Err(reason) => Value::ErrV(Rc::new(Value::Str(reason))),
+                Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::NoneV,
-                Err(reason) => Value::ErrV(Rc::new(Value::Str(reason))),
+                Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::Bind(inner, callee) => {
                 let yielded = self.execute(inner, executor)?;
-                let next = self.call(callee.clone(), vec![yielded], origin)?;
+                let next = self.call(callee.clone(), vec![yielded], origin, &None)?;
                 match next {
                     Value::Desc(d) => self.execute(&d, executor),
                     other => Ok(other),
@@ -1355,5 +1449,17 @@ mod tests {
         let source = "fn double x\n  x * 2\n\nmain = double (1 / 0)\n";
 
         assert!(matches!(run_main(source), Value::ErrV(_)));
+    }
+
+    #[test]
+    fn errs_carry_their_origin_and_dispatcher_hops() {
+        let source = "fn grade outcome\n  \"grade {outcome}\"\n\nmain = grade (1 / 0)\n";
+        let program = crate::compile("spec.kso", source, true).expect("compiles");
+        let interp = Interp::new(&program);
+        let value = interp.run_main().map_err(|e| e.message).expect("runs");
+
+        let Value::ErrV(info) = value else { panic!("expected an err") };
+        assert_eq!(info.origin.as_deref(), Some("main at spec.kso:4"));
+        assert_eq!(info.hops.iter().map(|h| &**h).collect::<Vec<_>>(), ["grade"]);
     }
 }

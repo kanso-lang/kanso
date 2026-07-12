@@ -15,10 +15,19 @@ pub mod wasm_rt;
 pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_main);
     match diags.is_empty() {
         true => Ok(program),
         false => Err(diag::render(&diags, file, source)),
+    }
+}
+
+/// Err origins name the function and the file it lives in; the file is
+/// per-declaration so it survives multi-file module merging.
+fn stamp_file(program: &mut ast::Program, file: &str) {
+    for decl in &mut program.fns {
+        decl.file = file.to_string();
     }
 }
 
@@ -41,7 +50,8 @@ pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::
         let source = std::fs::read_to_string(path)
             .map_err(|io| format!("error: cannot read {file}: {io}\n"))?;
         let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, &file, &source))?;
-        let program = parser::parse(&lexed).map_err(|d| diag::render(&d, &file, &source))?;
+        let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, &file, &source))?;
+        stamp_file(&mut program, &file);
         parsed.push((file, source, program));
     }
     let mut all_names = std::collections::HashSet::new();

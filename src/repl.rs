@@ -106,9 +106,10 @@ fn execute(
     executor: &mut dyn Executor,
 ) -> Result<Outcome, String> {
     match interp.execute(desc, executor) {
-        Ok(Value::ErrV(reason)) => Err(format!(
-            "error[endpoint]: unhandled err reached the executor: {}\n",
-            render(&reason, true)
+        Ok(Value::ErrV(info)) => Err(format!(
+            "error[endpoint]: unhandled err reached the executor: {}\n{}",
+            render(&info.reason, true),
+            crate::eval::trace_lines(&info)
         )),
         Ok(Value::NoneV) => Ok(Outcome::Executed(String::new())),
         Ok(other) => Ok(Outcome::Executed(render(&other, true))),
@@ -120,6 +121,9 @@ fn compile_units(units: &[Unit]) -> Result<Program, String> {
     let source = assemble(units);
     let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, "repl", &source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, "repl", &source))?;
+    for decl in &mut program.fns {
+        decl.file = "repl".to_string();
+    }
     let diags: Vec<diag::Diagnostic> = check::check(&mut program, false)
         .into_iter()
         .filter(|d| d.kind != "unused")

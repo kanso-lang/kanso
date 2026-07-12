@@ -81,6 +81,8 @@ pub struct FnDecl {
     pub span: Span,
     pub params: Vec<Pattern>,
     pub body: Vec<Stmt>,
+    /// Source file, stamped after parsing; err origins are "{name} at {file}:{line}".
+    pub file: String,
 }
 
 #[derive(Debug)]

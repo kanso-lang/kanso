@@ -59,6 +59,8 @@ const RT_CALL: u32 = 22;
 const RT_ENVGET: u32 = 23;
 const RT_DIE: u32 = 24;
 const RT_LIST_LEN: u32 = 25;
+const RT_ERR_HOP: u32 = 26;
+const RT_ERR_STAMP: u32 = 27;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -71,7 +73,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_err_inner", params: 1, returns: true },
         Import { name: "rt_keyed_check", params: 2, returns: true },
         Import { name: "rt_keyed_field", params: 2, returns: true },
-        Import { name: "rt_mkerr", params: 1, returns: true },
+        Import { name: "rt_mkerr", params: 2, returns: true },
         Import { name: "rt_arg", params: 1, returns: false },
         Import { name: "rt_mklist", params: 1, returns: true },
         Import { name: "rt_mkmap", params: 1, returns: true },
@@ -88,12 +90,16 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_envget", params: 2, returns: true },
         Import { name: "rt_die", params: 1, returns: false },
         Import { name: "rt_list_len", params: 1, returns: true },
+        Import { name: "rt_err_hop", params: 2, returns: true },
+        Import { name: "rt_err_stamp", params: 2, returns: true },
     ]
 }
 
 struct Ctx {
     body: Body,
     scope: HashMap<String, u32>,
+    /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
+    prefix: String,
 }
 
 pub struct WasmBackend<'a> {
@@ -172,15 +178,23 @@ impl<'a> WasmBackend<'a> {
         self.lit(LitKey::Str(text.to_string()), || Lit::Str(text.to_string()))
     }
 
+    /// The origin literal for an err construction site.
+    fn origin_lit(&mut self, prefix: &str, span: crate::diag::Span) -> u32 {
+        let origin = format!("{prefix}:{}", span.line);
+        self.str_lit(&origin)
+    }
+
     fn emit_dispatcher(
         &mut self,
         name: &str,
         arity: usize,
         decls: &[&'a FnDecl],
     ) -> Result<Body, String> {
-        let mut ctx = Ctx { body: Body::new(arity as u32), scope: HashMap::new() };
+        let mut ctx =
+            Ctx { body: Body::new(arity as u32), scope: HashMap::new(), prefix: String::new() };
         for decl in decls {
             ctx.scope.clear();
+            ctx.prefix = format!("{} at {}", decl.name, decl.file);
             ctx.body.block_void();
             for (i, pattern) in decl.params.iter().enumerate() {
                 self.emit_pattern(&mut ctx, i as u32, pattern)?;
@@ -189,11 +203,14 @@ impl<'a> WasmBackend<'a> {
             ctx.body.ret();
             ctx.body.end();
         }
+        let hop_name = self.str_lit(name);
         for i in 0..arity as u32 {
             ctx.body.local_get(i);
             ctx.body.call(RT_IS_FAILURE);
             ctx.body.if_void();
             ctx.body.local_get(i);
+            ctx.body.i32_const(hop_name as i64);
+            ctx.body.call(RT_ERR_HOP);
             ctx.body.ret();
             ctx.body.end();
         }
@@ -427,10 +444,13 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(pairs.len() as i64);
                 ctx.body.call(RT_MKMAP);
             }
-            Expr::Index { base, index, .. } => {
+            Expr::Index { base, index, span } => {
                 self.emit_expr(ctx, base, false)?;
                 self.emit_expr(ctx, index, false)?;
                 ctx.body.call(RT_INDEX);
+                let origin = self.origin_lit(&ctx.prefix, *span);
+                ctx.body.i32_const(origin as i64);
+                ctx.body.call(RT_ERR_STAMP);
             }
             Expr::Seq(l, r, _) => {
                 self.emit_expr(ctx, l, false)?;
@@ -438,7 +458,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_SEQ);
             }
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
-            Expr::BinOp { op, lhs, rhs, .. } => {
+            Expr::BinOp { op, lhs, rhs, span } => {
                 let code = match *op {
                     "+" => 0,
                     "-" => 1,
@@ -456,8 +476,15 @@ impl<'a> WasmBackend<'a> {
                 self.emit_expr(ctx, lhs, false)?;
                 self.emit_expr(ctx, rhs, false)?;
                 ctx.body.call(RT_BINOP);
+                if *op == "/" {
+                    let origin = self.origin_lit(&ctx.prefix, *span);
+                    ctx.body.i32_const(origin as i64);
+                    ctx.body.call(RT_ERR_STAMP);
+                }
             }
-            Expr::App { head, args, piped, .. } => self.emit_app(ctx, head, args, *piped, tail)?,
+            Expr::App { head, args, piped, span } => {
+                self.emit_app(ctx, head, args, *piped, tail, *span)?
+            }
         }
         Ok(())
     }
@@ -595,7 +622,8 @@ impl<'a> WasmBackend<'a> {
         let fn_idx = self.module.declare(2);
         self.module.table.push(fn_idx);
         let tidx = (self.module.table.len() - 1) as u32;
-        let mut inner = Ctx { body: Body::new(2), scope: HashMap::new() };
+        let mut inner =
+            Ctx { body: Body::new(2), scope: HashMap::new(), prefix: ctx.prefix.clone() };
         for (i, p) in param_names.iter().enumerate() {
             let local = inner.body.local();
             inner.body.local_get(1);
@@ -631,9 +659,10 @@ impl<'a> WasmBackend<'a> {
         args: &[Expr],
         piped: bool,
         tail: bool,
+        span: crate::diag::Span,
     ) -> Result<(), String> {
         if piped {
-            return self.emit_piped(ctx, head, args);
+            return self.emit_piped(ctx, head, args, span);
         }
         let Expr::Ident(name, _) = head else {
             return Err("unsupported call head".to_string());
@@ -668,6 +697,8 @@ impl<'a> WasmBackend<'a> {
         }
         if name == "err" {
             self.emit_expr(ctx, &args[0], false)?;
+            let origin = self.origin_lit(&ctx.prefix, span);
+            ctx.body.i32_const(origin as i64);
             ctx.body.call(RT_MKERR);
             return Ok(());
         }
@@ -715,6 +746,7 @@ impl<'a> WasmBackend<'a> {
             ctx.body.i32_const(lit as i64);
             ctx.body.i32_const(args.len() as i64);
             ctx.body.call(RT_BUILTIN);
+            self.stamp_fallible(ctx, name, span);
             return Ok(());
         }
         Err(format!("unsupported call to `{name}`"))
@@ -754,7 +786,23 @@ impl<'a> WasmBackend<'a> {
     /// A piped application binds when the piped value is a description:
     /// the rest of the call becomes a continuation closure over the already
     /// evaluated arguments, mirroring the native emitter.
-    fn emit_piped(&mut self, ctx: &mut Ctx, head: &Expr, args: &[Expr]) -> Result<(), String> {
+    /// Builtins that can give birth to an err get the site's origin stamped
+    /// onto the fresh (still unstamped) err they return.
+    fn stamp_fallible(&mut self, ctx: &mut Ctx, name: &str, span: crate::diag::Span) {
+        if matches!(name, "to_int" | "to_float" | "utf8" | "from_code") {
+            let origin = self.origin_lit(&ctx.prefix, span);
+            ctx.body.i32_const(origin as i64);
+            ctx.body.call(RT_ERR_STAMP);
+        }
+    }
+
+    fn emit_piped(
+        &mut self,
+        ctx: &mut Ctx,
+        head: &Expr,
+        args: &[Expr],
+        span: crate::diag::Span,
+    ) -> Result<(), String> {
         let piped_local = ctx.body.local();
         self.emit_expr(ctx, &args[0], false)?;
         ctx.body.local_set(piped_local);
@@ -790,6 +838,14 @@ impl<'a> WasmBackend<'a> {
             Expr::Ident(name, _) if crate::check::BUILTINS.contains(&name.as_str()) => {
                 let rest = args.len() - 1;
                 let name_lit = self.str_lit(name);
+                let fallible = matches!(
+                    name.as_str(),
+                    "to_int" | "to_float" | "utf8" | "from_code"
+                );
+                let origin = match fallible {
+                    true => Some(self.origin_lit(&ctx.prefix, span)),
+                    false => None,
+                };
                 let fn_idx = self.module.declare(2);
                 self.module.table.push(fn_idx);
                 let tidx = (self.module.table.len() - 1) as u32;
@@ -807,6 +863,10 @@ impl<'a> WasmBackend<'a> {
                 inner.i32_const(name_lit as i64);
                 inner.i32_const(args.len() as i64);
                 inner.call(RT_BUILTIN);
+                if let Some(origin) = origin {
+                    inner.i32_const(origin as i64);
+                    inner.call(RT_ERR_STAMP);
+                }
                 self.module.define(fn_idx, inner);
                 for arg in &args[1..] {
                     self.emit_expr(ctx, arg, false)?;

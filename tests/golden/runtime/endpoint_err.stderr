@@ -1,1 +1,2 @@
 error[endpoint]: unhandled err reached main: "division by zero"
+  born in main at endpoint_err.kso:1

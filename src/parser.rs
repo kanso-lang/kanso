@@ -124,7 +124,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         ));
     }
     let stmts = body.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
-    Ok(FnDecl { name, span, params, body: stmts })
+    Ok(FnDecl { name, span, params, body: stmts, file: String::new() })
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
@@ -149,7 +149,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             ));
         }
         let stmts = body.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
-        return Ok(FnDecl { name, span, params: Vec::new(), body: stmts });
+        return Ok(FnDecl { name, span, params: Vec::new(), body: stmts, file: String::new() });
     }
     if !body.is_empty() {
         return Err(Diagnostic::new(
@@ -161,7 +161,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let mut p = P::new(&header.tokens[2..], &header.end_cols[2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
-    Ok(FnDecl { name, span, params: Vec::new(), body: vec![Stmt::Expr(expr)] })
+    Ok(FnDecl { name, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() })
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
