@@ -78,6 +78,9 @@ impl Session {
         executor: &mut dyn Executor,
     ) -> Result<Outcome, String> {
         let name = self.next_it();
+        if mentions(input, &name) {
+            return Err(format!("error[name]: unknown name `{name}`\n"));
+        }
         let source = wrap_expression(&name, input);
         let mut candidate = self.units.clone();
         candidate.push(Unit { name: name.clone(), source });
@@ -183,6 +186,15 @@ fn parse_fragment(chunk: &str) -> Result<Program, String> {
     let source = format!("{chunk}\n");
     let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, "repl", &source))?;
     parser::parse(&lexed).map_err(|d| diag::render(&d, "repl", &source))
+}
+
+/// The synthetic constant must not appear in its own body: `it0` before
+/// anything is bound would otherwise define itself and recurse forever.
+/// Strings count too — interpolation makes them code.
+fn mentions(input: &str, name: &str) -> bool {
+    input
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .any(|word| word == name)
 }
 
 fn wrap_expression(name: &str, input: &str) -> String {

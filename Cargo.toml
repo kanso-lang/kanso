@@ -12,3 +12,6 @@ num-traits = "0.2"
 [[bin]]
 name = "kanso"
 path = "src/main.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]

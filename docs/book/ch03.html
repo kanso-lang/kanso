@@ -23,9 +23,10 @@
     kanso <span class="brand-kanji">簡素</span>
   </a>
   <nav class="site-nav">
+    <a href="../playground.html">playground</a>
+    <a href="index.html">book</a>
     <a href="../spec.html">spec</a>
     <a href="../about.html">about</a>
-    <a href="index.html">book</a>
     <a href="https://github.com/ClayShentrup/kanso">github</a>
   </nav>
 </header>
@@ -35,7 +36,7 @@
 <span class="eyebrow">chapter 03</span>
 <h1>types and dispatch</h1>
 
-<p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical — enforced, like everything else that used to be a review comment. construction is positional, using the type name as the constructor, and taking a record apart is a <em>binding pattern</em> — write the constructor shape on the left of <code>=</code> and every field gets a name:</p>
+<p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical — enforced, like everything else other languages leave to code review. construction is positional, using the type name as the constructor, and taking a record apart is a <em>binding pattern</em> — write the constructor shape on the left of <code>=</code> and every field gets a name:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">records.kso</div>
@@ -58,7 +59,12 @@
 
 <div class="code-panel">
   <div class="code-panel-title">keyed.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <pre><code><span class="k">type</span> <span class="t">track</span>
+  artist: <span class="t">string</span>
+  minutes: <span class="t">int</span>
+  title: <span class="t">string</span>
+
+<span class="f">main</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
   { artist: who title } <span class="o">=</span> song
   <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{who}</span>"</span></code></pre>
@@ -94,7 +100,12 @@
 
 <div class="code-panel">
   <div class="code-panel-title">credit.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">credit</span> (<span class="t">track</span> artist <span class="o">_</span> title)
+  <pre><code><span class="k">type</span> <span class="t">track</span>
+  artist: <span class="t">string</span>
+  minutes: <span class="t">int</span>
+  title: <span class="t">string</span>
+
+<span class="k">fn</span> <span class="f">credit</span> (<span class="t">track</span> artist <span class="o">_</span> title)
   <span class="s">"<span class="i">{title}</span> — <span class="i">{artist}</span>"</span>
 
 <span class="f">main</span> <span class="o">=</span>

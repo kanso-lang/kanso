@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kanso playground</title>
+<meta name="description" content="run kanso in your browser: the real reference interpreter compiled to webassembly, with a live syntax-highlighted editor and a repl.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.play-wrap {
+  margin: 0 auto;
+  max-width: 1160px;
+  padding: 3rem 1.5rem 5rem;
+}
+.play-head {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+}
+.play-head h1 {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 2.6rem);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.play-controls {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+.play-controls select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+}
+.play-run {
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.55rem 1.4rem;
+}
+.play-run:hover { background: var(--accent-hover); }
+.play-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+}
+@media (max-width: 860px) {
+  .play-grid { grid-template-columns: 1fr; }
+}
+.play-editor {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 12px;
+  min-height: 22rem;
+  overflow: hidden;
+  position: relative;
+}
+.play-editor textarea,
+.play-editor pre {
+  bottom: 0;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  left: 0;
+  line-height: 1.65;
+  margin: 0;
+  overflow: auto;
+  padding: 1.1rem 1.25rem;
+  position: absolute;
+  right: 0;
+  top: 0;
+  white-space: pre;
+}
+.play-editor pre { color: var(--code-ink); pointer-events: none; }
+.play-editor textarea {
+  background: transparent;
+  border: none;
+  caret-color: var(--accent);
+  color: transparent;
+  outline: none;
+  resize: none;
+}
+.play-editor textarea::selection { background: rgba(240, 58, 0, 0.25); }
+.play-side { display: flex; flex-direction: column; gap: 1rem; }
+.play-output {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 12px;
+  color: var(--tok-str);
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  margin: 0;
+  min-height: 9rem;
+  overflow: auto;
+  padding: 1.1rem 1.25rem;
+  white-space: pre-wrap;
+}
+.play-error { color: var(--tok-kw); }
+.play-repl {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 11rem;
+}
+.play-repl-log {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  max-height: 14rem;
+  overflow: auto;
+  padding: 1rem 1.25rem 0.5rem;
+}
+.repl-in { color: var(--code-muted); }
+.repl-out { color: var(--code-ink); white-space: pre-wrap; }
+.play-repl form {
+  border-top: 1px solid var(--code-border);
+  display: flex;
+}
+.play-repl-prompt {
+  color: var(--accent);
+  font-family: var(--font-mono);
+  padding: 0.7rem 0 0.7rem 1.25rem;
+}
+.play-repl input {
+  background: transparent;
+  border: none;
+  color: var(--code-ink);
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  outline: none;
+  padding: 0.7rem 1rem 0.7rem 0.5rem;
+}
+.play-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 1.25rem;
+}
+.play-note code { font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="playground.html">playground</a>
+    <a href="book/index.html">book</a>
+    <a href="spec.html">spec</a>
+    <a href="about.html">about</a>
+    <a href="decisions.html">decisions</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<div class="play-wrap">
+  <div class="play-head">
+    <h1>playground</h1>
+    <div class="play-controls">
+      <select id="examples" aria-label="example programs">
+        <option value="hello">hello, kanso</option>
+        <option value="dispatch">dispatch: factorial</option>
+        <option value="railway">failure is a value</option>
+        <option value="pipes">pipes</option>
+      </select>
+      <button class="play-run" id="run">run ⌘⏎</button>
+    </div>
+  </div>
+
+  <div class="play-grid">
+    <div class="play-editor">
+      <pre aria-hidden="true"><code id="mirror"></code></pre>
+      <textarea id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="kanso source editor">main = print "hello, kanso"
+</textarea>
+    </div>
+    <div class="play-side">
+      <pre class="play-output" id="output">loading the interpreter…</pre>
+      <div class="play-repl">
+        <div class="play-repl-log" id="repl-log">
+          <div class="repl-in"># a repl with history: try  1 + 2  then  it0 * 10</div>
+        </div>
+        <form id="repl-form">
+          <span class="play-repl-prompt">»</span>
+          <input id="repl-input" aria-label="repl input" placeholder="fn double n … or just an expression">
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <p class="play-note">this is not a toy evaluator: it is kanso's reference interpreter — the same rust
+  code that runs <code>kanso run</code> on your machine — compiled to webassembly (428&nbsp;KB), with a
+  hand-rolled editor on top. integers are arbitrary-precision here, so <code>fact 100</code> just works.
+  descriptions execute when they reach the edge; there is no filesystem in a browser tab, so
+  <code>read_file</code> answers with an err, exactly as the model says it should.</p>
+</div>
+
+<script src="play.js"></script>
+</body>
+</html>
