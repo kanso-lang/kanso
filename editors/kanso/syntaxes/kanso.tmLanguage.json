@@ -17,8 +17,8 @@
   ],
   "repository": {
     "comment": {
-      "match": "//.*$",
-      "name": "comment.line.double-slash.kanso"
+      "match": "#.*$",
+      "name": "comment.line.number-sign.kanso"
     },
     "fn-declaration": {
       "match": "^(fn)\\s+([a-z][a-z0-9_]*)",

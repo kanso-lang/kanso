@@ -8,6 +8,7 @@ const K_NONE: i64 = 4;
 const K_ERR: i64 = 5;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
+%KBytes = type { i64, ptr }
 
 declare %KValue @k_int(i64)
 declare %KValue @k_float(double)
@@ -275,7 +276,184 @@ impl<'a> Backend<'a> {
         self.body.push_str(&body);
     }
 
+    /// A group whose arms discriminate on one parameter with int/none literals
+    /// (other params generic) compiles to a switch instead of an arm cascade.
+    fn switch_shape(decls: &[&FnDecl]) -> Option<usize> {
+        let arity = decls[0].params.len();
+        if arity == 0 {
+            return None;
+        }
+        let mut disc: Option<usize> = None;
+        let mut int_arms = 0;
+        for decl in decls {
+            for (i, pattern) in decl.params.iter().enumerate() {
+                match pattern {
+                    Pattern::Var(..) | Pattern::Wildcard(..) => {}
+                    Pattern::IntLit(..) | Pattern::Nullary(..) => {
+                        if disc.is_some_and(|d| d != i) {
+                            return None;
+                        }
+                        disc = Some(i);
+                        if matches!(pattern, Pattern::IntLit(..)) {
+                            int_arms += 1;
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+        }
+        match (disc, int_arms >= 2) {
+            (Some(d), true) => Some(d),
+            _ => None,
+        }
+    }
+
+    fn emit_switch_dispatcher(
+        &mut self,
+        name: &str,
+        arity: usize,
+        decls: &[&FnDecl],
+        disc: usize,
+    ) -> Result<(), String> {
+        let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
+        let mut f = FnEmit::new();
+        let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
+        f.start_block("entry");
+        // any non-discriminator failure means no arm can match: propagate leftmost
+        let mut all_ok: Option<String> = None;
+        for i in 0..arity {
+            if i == disc {
+                continue;
+            }
+            let ok = inline_not_failure(&mut f, &format!("%x{i}"));
+            all_ok = Some(match all_ok {
+                None => ok,
+                Some(prev) => {
+                    let t = f.tmp();
+                    f.line(&format!("{t} = and i1 {prev}, {ok}"));
+                    t
+                }
+            });
+        }
+        let dispatch = f.label();
+        if let Some(ok) = all_ok {
+            let propagate = f.label();
+            f.line(&format!("br i1 {ok}, label %{dispatch}, label %{propagate}"));
+            f.start_block(&propagate);
+            for i in 0..arity {
+                let good = inline_not_failure(&mut f, &format!("%x{i}"));
+                let next = f.label();
+                let ret_it = f.label();
+                f.line(&format!("br i1 {good}, label %{next}, label %{ret_it}"));
+                f.start_block(&ret_it);
+                f.line(&format!("ret %KValue %x{i}"));
+                f.start_block(&next);
+            }
+            f.line("unreachable");
+        } else {
+            f.line(&format!("br label %{dispatch}"));
+        }
+        f.start_block(&dispatch);
+        let dv = format!("%x{disc}");
+        let tag = inline_tag(&mut f, &dv);
+        // classify arms
+        let mut int_cases: Vec<(String, String)> = Vec::new();
+        let mut nullary_cases: Vec<(i64, String)> = Vec::new();
+        let mut generic_arm: Option<usize> = None;
+        let mut arm_labels = Vec::new();
+        for (k, decl) in decls.iter().enumerate() {
+            let label = format!("arm{k}");
+            arm_labels.push(label.clone());
+            match &decl.params[disc] {
+                Pattern::IntLit(n, _) => int_cases.push((n.to_string(), label)),
+                Pattern::Nullary(nm, _) => {
+                    let t = match nm.as_str() {
+                        "true" => K_TRUE,
+                        "false" => K_FALSE,
+                        _ => K_NONE,
+                    };
+                    nullary_cases.push((t, label));
+                }
+                _ => generic_arm = Some(k),
+            }
+        }
+        let is_int = f.tmp();
+        f.line(&format!("{is_int} = icmp eq i64 {tag}, 0"));
+        let int_block = f.label();
+        let not_int = f.label();
+        f.line(&format!("br i1 {is_int}, label %{int_block}, label %{not_int}"));
+        f.start_block(&int_block);
+        let payload = inline_payload(&mut f, &dv);
+        let generic_label = match generic_arm {
+            Some(k) => format!("arm{k}"),
+            None => "nomatch".to_string(),
+        };
+        let cases: Vec<String> = int_cases
+            .iter()
+            .map(|(n, l)| format!("    i64 {n}, label %{l}"))
+            .collect();
+        f.line(&format!(
+            "switch i64 {payload}, label %{generic_label} [
+{}
+  ]",
+            cases.join("
+")
+        ));
+        f.start_block(&not_int);
+        // nullary tags, then generic (non-failure) or propagation
+        let mut cursor = not_int.clone();
+        let _ = cursor;
+        for (t, l) in &nullary_cases {
+            let hit = f.tmp();
+            f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
+            let next = f.label();
+            f.line(&format!("br i1 {hit}, label %{l}, label %{next}"));
+            f.start_block(&next);
+        }
+        let disc_ok = inline_not_failure(&mut f, &dv);
+        let nomatch = "nomatch".to_string();
+        f.line(&format!("br i1 {disc_ok}, label %{generic_label}, label %{nomatch}"));
+        f.start_block("nomatch");
+        // no arm matched: the discriminator is the only possible failure here
+        let disc_fail = f.tmp();
+        f.line(&format!("{disc_fail} = extractvalue %KValue {dv}, 0"));
+        let is_err = f.tmp();
+        f.line(&format!("{is_err} = icmp eq i64 {disc_fail}, 5"));
+        let is_none = f.tmp();
+        f.line(&format!("{is_none} = icmp eq i64 {disc_fail}, 4"));
+        let failing = f.tmp();
+        f.line(&format!("{failing} = or i1 {is_err}, {is_none}"));
+        let ret_disc = f.label();
+        let die = f.label();
+        f.line(&format!("br i1 {failing}, label %{ret_disc}, label %{die}"));
+        f.start_block(&ret_disc);
+        f.line(&format!("ret %KValue {dv}"));
+        f.start_block(&die);
+        let msg = format!("no overload of `{name}` matches these arguments ");
+        let (m, _len) = self.intern(&msg);
+        f.line(&format!("call void @k_die(ptr @{m})"));
+        f.line("unreachable");
+        // arm bodies: patterns are known matched, only bind generics
+        for (k, decl) in decls.iter().enumerate() {
+            f.start_block(&arm_labels[k]);
+            f.versions.clear();
+            for (i, pattern) in decl.params.iter().enumerate() {
+                if let Pattern::Var(pname, _) = pattern {
+                    f.bind(pname, &format!("%x{i}"));
+                }
+            }
+            self.emit_fn_body(&mut f, &decl.body)?;
+        }
+        let _ = writeln!(self.body, "{header}
+{}}}
+", f.out);
+        Ok(())
+    }
+
     fn emit_dispatcher(&mut self, name: &str, arity: usize, decls: &[&FnDecl]) -> Result<(), String> {
+        if let Some(disc) = Self::switch_shape(decls) {
+            return self.emit_switch_dispatcher(name, arity, decls, disc);
+        }
         let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
         let mut f = FnEmit::new();
         let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
@@ -575,11 +753,7 @@ impl<'a> Backend<'a> {
             Expr::Index { base, index, .. } => {
                 let container = self.emit_expr(f, base)?;
                 let key = self.emit_expr(f, index)?;
-                let t = f.tmp();
-                f.line(&format!(
-                    "{t} = call %KValue @k_index(%KValue {container}, %KValue {key})"
-                ));
-                Ok(t)
+                Ok(self.emit_at(f, &container, &key, true))
             }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;
@@ -822,6 +996,72 @@ impl<'a> Backend<'a> {
         Ok(t)
     }
 
+    /// bytes-view indexing inlines to a bounds check and a byte load; every
+    /// other container falls back to the runtime call.
+    fn emit_at(&mut self, f: &mut FnEmit, container: &str, key: &str, strict: bool) -> String {
+        let slow_fn = if strict { "k_index" } else { "k_b_at" };
+        let ct = inline_tag(f, container);
+        let is_bytes = f.tmp();
+        f.line(&format!("{is_bytes} = icmp eq i64 {ct}, 13"));
+        let kt = inline_tag(f, key);
+        let is_int = f.tmp();
+        f.line(&format!("{is_int} = icmp eq i64 {kt}, 0"));
+        let both = f.tmp();
+        f.line(&format!("{both} = and i1 {is_bytes}, {is_int}"));
+        let fast = f.label();
+        let slow = f.label();
+        let merge = f.label();
+        f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
+        f.start_block(&fast);
+        let bp = inline_payload(f, container);
+        let bptr = f.tmp();
+        f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+        let len_ptr = f.tmp();
+        f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+        let len = f.tmp();
+        f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+        let idx = inline_payload(f, key);
+        let ge1 = f.tmp();
+        f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+        let le_len = f.tmp();
+        f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
+        let in_range = f.tmp();
+        f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
+        let load = f.label();
+        f.line(&format!("br i1 {in_range}, label %{load}, label %{slow}"));
+        f.start_block(&load);
+        let data_ptr = f.tmp();
+        f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+        let data = f.tmp();
+        f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+        let off = f.tmp();
+        f.line(&format!("{off} = add i64 {idx}, -1"));
+        let byte_ptr = f.tmp();
+        f.line(&format!("{byte_ptr} = getelementptr i8, ptr {data}, i64 {off}"));
+        let byte = f.tmp();
+        f.line(&format!("{byte} = load i8, ptr {byte_ptr}"));
+        let wide = f.tmp();
+        f.line(&format!("{wide} = zext i8 {byte} to i64"));
+        let fast_value = f.tmp();
+        f.line(&format!(
+            "{fast_value} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"
+        ));
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&slow);
+        let slow_value = f.tmp();
+        f.line(&format!(
+            "{slow_value} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key})"
+        ));
+        let slow_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let t = f.tmp();
+        f.line(&format!(
+            "{t} = phi %KValue [ {fast_value}, %{load} ], [ {slow_value}, %{slow_from} ]"
+        ));
+        t
+    }
+
     fn emit_call(&mut self, f: &mut FnEmit, head: &Expr, args: &[Expr]) -> Result<String, String> {
         let Expr::Ident(name, _) = head else {
             return Err("native backend: computed call heads are slice 2".to_string());
@@ -898,6 +1138,9 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = call tailcc %KValue @d_{name}_{n}({})", args_ir.join(", ")));
             return Ok(t);
+        }
+        if name == "at" && emitted.len() == 2 {
+            return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false));
         }
         if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| b == name) {
             if emitted.len() != *arity {

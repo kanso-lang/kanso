@@ -1,4 +1,4 @@
-// number bytes: + - . E e, then the ascii digits
+# number bytes: + - . E e, then the ascii digits
 fn _is_number_char 43
   true
 
@@ -32,7 +32,7 @@ fn _is_number_start c
 fn _mark_from cs p q
   if (p > q) false (_mark_step cs (at cs p) p q)
 
-// float marks: . E e
+# float marks: . E e
 fn _mark_step _ 46 _ _
   true
 

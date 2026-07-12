@@ -93,7 +93,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             continue;
         }
         let content = &trimmed[indent..];
-        if content.starts_with("//") {
+        if content.starts_with('#') {
             continue;
         }
         match lex_line(content, number, indent + 1) {
@@ -130,8 +130,15 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             s.pos += 1;
             continue;
         }
-        if c == '/' && s.peek(1) == Some('/') {
+        if c == '#' {
             break;
+        }
+        if c == '/' && s.peek(1) == Some('/') {
+            return Err(Diagnostic::new(
+                "formatting",
+                "comments are `#`".to_string(),
+                span,
+            ));
         }
         if c.is_ascii_digit() {
             tokens.push((s.lex_int()?, span));

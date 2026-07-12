@@ -96,7 +96,7 @@ fn _parse_value cs p
   p2 = _skip_ws cs p
   _value_for (at cs p2) cs p2
 
-// value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace
+# value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace
 fn _value_for 34 cs p
   _parse_string cs (p + 1)
 

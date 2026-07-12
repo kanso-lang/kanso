@@ -129,7 +129,7 @@ type matrix[n: numeric]
 - unused expressions and unused bindings are compile errors.
 - pipe is canonical for linear chains where each intermediate is used once; rebind ladders are for what pipes can't express. (tentative: pipeable ladder = compile error; fallback: tooling auto-pipes. decide during implementation.)
 - **kanso has no commas (gaveled 2026-07-11).** application is flat juxtaposition: `f a b` is a two-argument call; every enumeration (arguments, list elements, patterns, lambda parameters) is space-separated, and non-atomic elements are parenthesized (`f (g x) y`, `[(a + b)]`). the pipe inserts the piped value as the first argument of its target application: `x . f y` is `f x y`; the stdlib is subject-first so chains stay pipeable. no semicolons.
-- string interpolation `"{x}"`. comments `//`. 2-space indent. snake_case, all lowercase, always.
+- string interpolation `"{x}"`. comments `#` (gaveled 2026-07-12: shebang lines are comments for free). 2-space indent. snake_case, all lowercase, always.
 - canonical formatting is grammar: non-canonical whitespace is a syntax error. no formatter tool exists.
 
 ## 10. memory model

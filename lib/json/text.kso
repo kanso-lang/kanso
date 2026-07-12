@@ -41,9 +41,9 @@ fn _hex_upper c
   if (_both (64 < c) (c < 71)) (c - 55) (err "invalid hex digit")
 
 fn _parse_string cs p
-  _str_chars cs p []
+  _string_scan cs p p
 
-// string bytes: 34 quote, 92 backslash; escapes name their targets
+# string bytes: 34 quote, 92 backslash; escapes name their targets
 fn _str_char _ 34 p acc
   _parsed (p + 1) (_string_ok p (utf8 acc))
 
@@ -100,11 +100,26 @@ fn _str_unicode cs p acc
   code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
   _str_chars cs (p + 6) (concat acc (bytes (from_code code)))
 
+fn _string_at cs 34 start p
+  _parsed (p + 1) (_string_ok p (utf8 (slice cs start (p - 1))))
+
+fn _string_at cs 92 start p
+  _str_chars cs p (concat [] (slice cs start (p - 1)))
+
+fn _string_at _ none _ p
+  _fail p "unterminated string"
+
+fn _string_at cs _ start p
+  _string_scan cs start (p + 1)
+
 fn _string_ok p (err _)
   err (parse_failure p "invalid utf-8 in string")
 
 fn _string_ok _ v
   v
+
+fn _string_scan cs start p
+  _string_at cs (at cs p) start p
 
 fn _u_escape c
   "\\u{_hex4 (char_code c)}"

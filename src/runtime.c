@@ -7,10 +7,11 @@
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
-enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF };
+enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES };
 
 typedef struct { long len; char* data; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
+typedef struct { long long len; const unsigned char* data; } KBytes;
 typedef struct { long long len; KValue* items; } KList;
 typedef struct { long long len; KValue* pairs; } KMap; /* [k0 v0 k1 v1...] sorted by key */
 typedef struct { KValue (*fn)(void*, KValue); void* env; } KClosure;
@@ -44,6 +45,7 @@ static long long k_ptr(void* p) { return (long long)(intptr_t)p; }
 static KStr* k_as_str(KValue v) { return (KStr*)(intptr_t)v.payload; }
 static KRec* k_as_rec(KValue v) { return (KRec*)(intptr_t)v.payload; }
 static KList* k_as_list(KValue v) { return (KList*)(intptr_t)v.payload; }
+static KBytes* k_as_bytes(KValue v) { return (KBytes*)(intptr_t)v.payload; }
 static KMap* k_as_map(KValue v) { return (KMap*)(intptr_t)v.payload; }
 static KDesc* k_as_desc(KValue v) { return (KDesc*)(intptr_t)v.payload; }
 static KValue* k_as_boxed(KValue v) { return (KValue*)(intptr_t)v.payload; }
@@ -186,12 +188,37 @@ KValue k_render(KValue v, long long quote) {
             }
             return k_concat(out, k_str("]"));
         }
+        case K_BYTES: {
+            KBytes* b = (KBytes*)(intptr_t)v.payload;
+            KValue out = k_str("[");
+            char nbuf[8];
+            for (long long i = 0; i < b->len; i++) {
+                if (i) out = k_concat(out, k_str(" "));
+                snprintf(nbuf, sizeof nbuf, "%d", (int)b->data[i]);
+                out = k_concat(out, k_str(nbuf));
+            }
+            return k_concat(out, k_str("]"));
+        }
         case K_CLOSURE: case K_FNREF: return k_str("<fn>");
     }
     return k_str("<value>");
 }
 
+static long long k_bytes_eq_list(KBytes* b, KList* l) {
+    if (b->len != l->len) return 0;
+    for (long long i = 0; i < b->len; i++) {
+        if (l->items[i].tag != K_INT || l->items[i].payload != (long long)b->data[i]) return 0;
+    }
+    return 1;
+}
+
 static long long k_eq(KValue a, KValue b) {
+    if (a.tag == K_BYTES && b.tag == K_LIST) return k_bytes_eq_list(k_as_bytes(a), k_as_list(b));
+    if (a.tag == K_LIST && b.tag == K_BYTES) return k_bytes_eq_list(k_as_bytes(b), k_as_list(a));
+    if (a.tag == K_BYTES && b.tag == K_BYTES) {
+        KBytes* x = k_as_bytes(a); KBytes* y = k_as_bytes(b);
+        return x->len == y->len && memcmp(x->data, y->data, x->len) == 0;
+    }
     if (a.tag != b.tag) return 0;
     switch (a.tag) {
         case K_INT: return a.payload == b.payload;
@@ -495,18 +522,33 @@ static long k_cp_len(unsigned char b) {
     return 4;
 }
 
+static KValue k_bytes_view(const unsigned char* data, long long len) {
+    KBytes* b = k_alloc(sizeof(KBytes));
+    b->len = len;
+    b->data = data;
+    KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
+}
+
 KValue k_b_bytes(KValue sv) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag != K_STR) k_die("bytes takes a string");
     KStr* s = k_as_str(sv);
-    KValue* items = k_alloc(sizeof(KValue) * (s->len ? s->len : 1));
-    for (long i = 0; i < s->len; i++) items[i] = k_int((unsigned char)s->data[i]);
-    return k_mklist(s->len, items);
+    return k_bytes_view((const unsigned char*)s->data, s->len);
+}
+
+static KValue k_view_to_list(KValue v) {
+    if (v.tag != K_BYTES) return v;
+    KBytes* b = k_as_bytes(v);
+    KValue* items = k_alloc(sizeof(KValue) * (b->len ? b->len : 1));
+    for (long long i = 0; i < b->len; i++) items[i] = k_int(b->data[i]);
+    return k_mklist(b->len, items);
 }
 
 KValue k_b_concat(KValue av, KValue bv) {
     if (!k_not_failure(av)) return av;
     if (!k_not_failure(bv)) return bv;
+    av = k_view_to_list(av);
+    bv = k_view_to_list(bv);
     if (av.tag != K_LIST || bv.tag != K_LIST) k_die("concat takes two lists");
     KList* a = k_as_list(av);
     KList* b = k_as_list(bv);
@@ -517,8 +559,16 @@ KValue k_b_concat(KValue av, KValue bv) {
     return k_mklist(n, items);
 }
 
+static KValue k_utf8_check(char* data, long long len);
+
 KValue k_b_utf8(KValue lv) {
     if (!k_not_failure(lv)) return lv;
+    if (lv.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(lv);
+        char* data = k_alloc(b->len + 1);
+        memcpy(data, b->data, b->len);
+        return k_utf8_check(data, b->len);
+    }
     if (lv.tag != K_LIST) k_die("utf8 takes a list of byte values");
     KList* l = k_as_list(lv);
     char* data = k_alloc(l->len + 1);
@@ -530,17 +580,21 @@ KValue k_b_utf8(KValue lv) {
         }
         data[i] = (char)item.payload;
     }
-    long i = 0;
-    while (i < l->len) {
+    return k_utf8_check(data, l->len);
+}
+
+static KValue k_utf8_check(char* data, long long len) {
+    long long i = 0;
+    while (i < len) {
         unsigned char b0 = (unsigned char)data[i];
         long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
-        if (w == 0 || i + w > l->len) return k_err(k_str("invalid utf-8"));
+        if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"));
         for (long j = 1; j < w; j++) {
             if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"));
         }
         i += w;
     }
-    return k_str_n(data, l->len);
+    return k_str_n(data, len);
 }
 
 KValue k_b_chars(KValue sv) {
@@ -581,6 +635,12 @@ KValue k_b_at(KValue container, KValue index) {
             at += w;
         }
         return k_none();
+    }
+    if (container.tag == K_BYTES && index.tag == K_INT) {
+        KBytes* b = k_as_bytes(container);
+        long long i = index.payload;
+        if (i < 1 || i > b->len) return k_none();
+        return k_int(b->data[i - 1]);
     }
     if (container.tag == K_MAP) {
         KMap* m = k_as_map(container);
@@ -628,6 +688,7 @@ KValue k_b_push(KValue lv, KValue item) {
 KValue k_b_length(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_LIST) return k_int(k_as_list(v)->len);
+    if (v.tag == K_BYTES) return k_int(k_as_bytes(v)->len);
     if (v.tag == K_MAP) return k_int(k_as_map(v)->len);
     if (v.tag == K_STR) {
         KStr* s = k_as_str(v);
@@ -645,6 +706,11 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (!k_not_failure(tov)) return tov;
     if (fromv.tag != K_INT || tov.tag != K_INT) k_die("slice takes 1-based inclusive positions");
     long long from = fromv.payload, to = tov.payload;
+    if (container.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(container);
+        if (from < 1 || from > to || to > b->len) return k_bytes_view(b->data, 0);
+        return k_bytes_view(b->data + (from - 1), to - from + 1);
+    }
     if (container.tag == K_LIST) {
         KList* l = k_as_list(container);
         if (from < 1 || from > to || to > l->len) return k_mklist(0, NULL);

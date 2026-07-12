@@ -13,7 +13,7 @@ fn _expect_check found p c
 fn _fail p reason
   err (parse_failure p reason)
 
-// json whitespace bytes: tab, newline, carriage return, space
+# json whitespace bytes: tab, newline, carriage return, space
 fn _is_ws 9
   true
 
