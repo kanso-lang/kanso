@@ -71,7 +71,8 @@ Decisions the spec leaves open (or that phase 1 approximates), flagged for revis
 - **canonical declaration order**: types before functions, each alphabetical, overloads adjacent and most-specific first — an interpretation of the spec's "wherever order is semantically inert" rule
 - **the pipe target parses as one application** and the piped value becomes its first argument; a non-callable target fails at runtime, not parse time
 - `if cond, then, else` as a lazy call-shaped form is provisional (spec defers multi-way conditionals)
-- not yet: typesets, modules/imports, maps, record update, `build` regions, processes, effect polymorphism, the LSP
+- **native `int` is int64**: overflow traps as a defect in compiled binaries (the interpreter's bigint never overflows; spec `int` is arbitrary precision — the trap marks the divergence loudly)
+- not yet: typesets, record update, `build` regions, processes, effect polymorphism, the LSP
 
 ## editor support
 

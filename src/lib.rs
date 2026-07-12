@@ -3,6 +3,7 @@ pub mod check;
 pub mod codegen;
 pub mod diag;
 pub mod eval;
+pub mod infer;
 pub mod lexer;
 pub mod parser;
 

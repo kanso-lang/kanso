@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, FLOAT, FN, INT, LIST, MAP, NONE, REC, STR, TOP};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
@@ -90,6 +91,7 @@ const BUILTIN_CALLS: [(&str, usize); 19] = [
 ];
 
 pub fn emit_ir(program: &Program) -> Result<String, String> {
+    let inference = infer::infer(program);
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {
@@ -97,6 +99,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     }
     let mut backend = Backend {
         program,
+        inference,
         type_ids,
         strings: Vec::new(),
         interned: HashMap::new(),
@@ -109,6 +112,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
 
 struct Backend<'a> {
     program: &'a Program,
+    inference: infer::Inference,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -123,6 +127,7 @@ struct FnEmit {
     label: usize,
     cur_label: String,
     versions: HashMap<String, String>,
+    sets: HashMap<String, Set>,
 }
 
 impl FnEmit {
@@ -133,6 +138,7 @@ impl FnEmit {
             label: 0,
             cur_label: "entry".to_string(),
             versions: HashMap::new(),
+            sets: HashMap::new(),
         }
     }
 
@@ -162,6 +168,23 @@ impl FnEmit {
     fn lookup(&self, name: &str) -> Option<String> {
         self.versions.get(name).cloned()
     }
+
+    fn record(&mut self, operand: &str, set: Set) {
+        self.sets.insert(operand.to_string(), set);
+    }
+
+    fn set_of(&self, operand: &str) -> Set {
+        if operand.starts_with("{ i64 0,") {
+            return INT;
+        }
+        if operand == "{ i64 2, i64 0 }" || operand == "{ i64 3, i64 0 }" {
+            return infer::BOOL;
+        }
+        if operand == "{ i64 4, i64 0 }" {
+            return NONE;
+        }
+        self.sets.get(operand).copied().unwrap_or(TOP)
+    }
 }
 
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
@@ -188,6 +211,28 @@ fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
 }
 
 impl<'a> Backend<'a> {
+    fn group_indices(&self, name: &str, arity: usize) -> Vec<usize> {
+        self.program
+            .fns
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| d.name == name && d.params.len() == arity)
+            .map(|(i, _)| i)
+            .collect()
+    }
+
+    fn group_param_set(&self, name: &str, arity: usize, param: usize) -> Set {
+        self.group_indices(name, arity)
+            .iter()
+            .fold(0, |acc, i| acc | self.inference.params[*i][param])
+    }
+
+    fn group_return_set(&self, name: &str, arity: usize) -> Set {
+        self.group_indices(name, arity)
+            .iter()
+            .fold(0, |acc, i| acc | self.inference.returns[*i])
+    }
+
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
         let mut groups: Vec<(&str, Vec<&FnDecl>)> = Vec::new();
@@ -325,6 +370,9 @@ impl<'a> Backend<'a> {
             if i == disc {
                 continue;
             }
+            if self.group_param_set(name, arity, i) & FAIL == 0 {
+                continue;
+            }
             let ok = inline_not_failure(&mut f, &format!("%x{i}"));
             all_ok = Some(match all_ok {
                 None => ok,
@@ -460,7 +508,8 @@ impl<'a> Backend<'a> {
             let fail = format!("fail{k}");
             f.versions.clear();
             for (i, pattern) in decl.params.iter().enumerate() {
-                self.emit_pattern(&mut f, &format!("%x{i}"), pattern, &fail)?;
+                let known = self.group_param_set(name, arity, i);
+                self.emit_pattern_known(&mut f, &format!("%x{i}"), pattern, &fail, known)?;
             }
             self.emit_fn_body(&mut f, &decl.body)?;
             f.start_block(&fail);
@@ -488,6 +537,17 @@ impl<'a> Backend<'a> {
         value: &str,
         pattern: &Pattern,
         fail: &str,
+    ) -> Result<(), String> {
+        self.emit_pattern_known(f, value, pattern, fail, TOP)
+    }
+
+    fn emit_pattern_known(
+        &mut self,
+        f: &mut FnEmit,
+        value: &str,
+        pattern: &Pattern,
+        fail: &str,
+        known: Set,
     ) -> Result<(), String> {
         let check = |backend: &mut Backend, f: &mut FnEmit, call: String| {
             let c = f.tmp();
@@ -538,13 +598,18 @@ impl<'a> Backend<'a> {
                 branch_i1(f, b);
             }
             Pattern::Wildcard(_) => {
-                let ok = inline_not_failure(f, value);
-                branch_i1(f, ok);
+                if known & FAIL != 0 {
+                    let ok = inline_not_failure(f, value);
+                    branch_i1(f, ok);
+                }
             }
             Pattern::Var(name, _) => {
-                let ok = inline_not_failure(f, value);
-                branch_i1(f, ok);
+                if known & FAIL != 0 {
+                    let ok = inline_not_failure(f, value);
+                    branch_i1(f, ok);
+                }
                 f.bind(name, value);
+                f.record(value, known & !FAIL);
             }
             Pattern::Annotated { name, ty, .. } => {
                 if ty.ends_with("[]") {
@@ -704,10 +769,12 @@ impl<'a> Backend<'a> {
                         }
                     });
                 }
-                Ok(match acc {
+                let out = match acc {
                     Some(t) => t,
                     None => self.str_const(f, ""),
-                })
+                };
+                f.record(&out, STR);
+                Ok(out)
             }
             Expr::Ident(name, _) => {
                 if let Some(temp) = f.lookup(name) {
@@ -716,6 +783,8 @@ impl<'a> Backend<'a> {
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
                     let t = f.tmp();
                     f.line(&format!("{t} = call tailcc %KValue @d_{name}_0()"));
+                    let ret = self.group_return_set(name, 0);
+                    f.record(&t, ret);
                     return Ok(t);
                 }
                 let arities: Vec<usize> = {
@@ -758,6 +827,7 @@ impl<'a> Backend<'a> {
                 let b = self.emit_expr(f, rhs)?;
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_seq(%KValue {a}, %KValue {b})"));
+                f.record(&t, DESC | (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL));
                 Ok(t)
             }
             Expr::BinOp { op, lhs, rhs, .. } => {
@@ -818,6 +888,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_list_lit(i64 {}, ptr {arr})",
                     emitted.len()
                 ));
+                f.record(&t, LIST);
                 Ok(t)
             }
             Expr::MapLit(pairs, _) => {
@@ -841,6 +912,7 @@ impl<'a> Backend<'a> {
                     "{t} = call %KValue @k_map_lit(i64 {}, ptr {arr})",
                     pairs.len()
                 ));
+                f.record(&t, MAP);
                 Ok(t)
             }
         }
@@ -923,6 +995,62 @@ impl<'a> Backend<'a> {
         if op == "/" {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
+            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR);
+            return Ok(t);
+        }
+        let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;
+        if pure_int {
+            let pa = inline_payload(f, a);
+            let pb = inline_payload(f, b);
+            let t = match op {
+                "+" | "-" | "*" => {
+                    let intrinsic = match op {
+                        "+" => "llvm.sadd.with.overflow.i64",
+                        "-" => "llvm.ssub.with.overflow.i64",
+                        _ => "llvm.smul.with.overflow.i64",
+                    };
+                    let pair = f.tmp();
+                    f.line(&format!(
+                        "{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {pa}, i64 {pb})"
+                    ));
+                    let sum = f.tmp();
+                    f.line(&format!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
+                    let overflow = f.tmp();
+                    f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
+                    let ok = f.label();
+                    let trap = f.label();
+                    f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
+                    f.start_block(&trap);
+                    let (m, _) = self.intern("integer overflow (int64 native build; spec int is arbitrary precision) ");
+                    f.line(&format!("call void @k_die(ptr @{m})"));
+                    f.line("unreachable");
+                    f.start_block(&ok);
+                    let v = f.tmp();
+                    f.line(&format!(
+                        "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
+                    ));
+                    f.record(&v, INT);
+                    v
+                }
+                _ => {
+                    let cmp = match op {
+                        "==" => "eq",
+                        "!=" => "ne",
+                        "<" => "slt",
+                        "<=" => "sle",
+                        ">" => "sgt",
+                        _ => "sge",
+                    };
+                    let c = f.tmp();
+                    f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+                    let v = f.tmp();
+                    f.line(&format!(
+                        "{v} = select i1 {c}, %KValue {{ i64 2, i64 0 }}, %KValue {{ i64 3, i64 0 }}"
+                    ));
+                    f.record(&v, infer::BOOL);
+                    v
+                }
+            };
             return Ok(t);
         }
         let ta = inline_tag(f, a);
@@ -998,6 +1126,64 @@ impl<'a> Backend<'a> {
     /// other container falls back to the runtime call.
     fn emit_at(&mut self, f: &mut FnEmit, container: &str, key: &str, strict: bool) -> String {
         let slow_fn = if strict { "k_index" } else { "k_b_at" };
+        let proven = f.set_of(container) == BYTES && f.set_of(key) == INT;
+        if proven {
+            let bp = inline_payload(f, container);
+            let bptr = f.tmp();
+            f.line(&format!("{bptr} = inttoptr i64 {bp} to ptr"));
+            let len_ptr = f.tmp();
+            f.line(&format!("{len_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 0"));
+            let len = f.tmp();
+            f.line(&format!("{len} = load i64, ptr {len_ptr}"));
+            let idx = inline_payload(f, key);
+            let ge1 = f.tmp();
+            f.line(&format!("{ge1} = icmp sge i64 {idx}, 1"));
+            let le_len = f.tmp();
+            f.line(&format!("{le_len} = icmp sle i64 {idx}, {len}"));
+            let in_range = f.tmp();
+            f.line(&format!("{in_range} = and i1 {ge1}, {le_len}"));
+            let load = f.label();
+            let miss = f.label();
+            let merge = f.label();
+            f.line(&format!("br i1 {in_range}, label %{load}, label %{miss}"));
+            f.start_block(&load);
+            let data_ptr = f.tmp();
+            f.line(&format!("{data_ptr} = getelementptr %KBytes, ptr {bptr}, i64 0, i32 1"));
+            let data = f.tmp();
+            f.line(&format!("{data} = load ptr, ptr {data_ptr}"));
+            let off = f.tmp();
+            f.line(&format!("{off} = add i64 {idx}, -1"));
+            let byte_ptr = f.tmp();
+            f.line(&format!("{byte_ptr} = getelementptr i8, ptr {data}, i64 {off}"));
+            let byte = f.tmp();
+            f.line(&format!("{byte} = load i8, ptr {byte_ptr}"));
+            let wide = f.tmp();
+            f.line(&format!("{wide} = zext i8 {byte} to i64"));
+            let hit = f.tmp();
+            f.line(&format!(
+                "{hit} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"
+            ));
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&miss);
+            let miss_value = if strict {
+                let mv = f.tmp();
+                f.line(&format!(
+                    "{mv} = call %KValue @{slow_fn}(%KValue {container}, %KValue {key})"
+                ));
+                mv
+            } else {
+                "{ i64 4, i64 0 }".to_string()
+            };
+            let miss_from = f.cur_label.clone();
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&merge);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = phi %KValue [ {hit}, %{load} ], [ {miss_value}, %{miss_from} ]"
+            ));
+            f.record(&t, if strict { INT | ERR } else { INT | NONE });
+            return t;
+        }
         let ct = inline_tag(f, container);
         let is_bytes = f.tmp();
         f.line(&format!("{is_bytes} = icmp eq i64 {ct}, 13"));
@@ -1099,6 +1285,10 @@ impl<'a> Backend<'a> {
                 "{t} = phi %KValue [ {cond}, %{fail_from} ], [ {then_value}, %{then_from} ], \
                  [ {else_value}, %{else_from} ]"
             ));
+            f.record(
+                &t,
+                f.set_of(&then_value) | f.set_of(&else_value) | (f.set_of(&cond) & FAIL),
+            );
             return Ok(t);
         }
         let mut emitted = Vec::new();
@@ -1108,11 +1298,13 @@ impl<'a> Backend<'a> {
         if name == "err" {
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_err(%KValue {})", emitted[0]));
+            f.record(&t, ERR);
             return Ok(t);
         }
         if name == "print" {
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_desc_print(%KValue {})", emitted[0]));
+            f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
             return Ok(t);
         }
         if let Some(id) = self.type_ids.get(name.as_str()).copied() {
@@ -1128,6 +1320,8 @@ impl<'a> Backend<'a> {
             }
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 {n}, ptr {arr})"));
+            let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
+            f.record(&t, REC | fails);
             return Ok(t);
         }
         if self.program.fns.iter().any(|d| d.name == *name) {
@@ -1135,6 +1329,8 @@ impl<'a> Backend<'a> {
             let args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             let t = f.tmp();
             f.line(&format!("{t} = call tailcc %KValue @d_{name}_{n}({})", args_ir.join(", ")));
+            let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
+            f.record(&t, self.group_return_set(name, n) | fails);
             return Ok(t);
         }
         if name == "at" && emitted.len() == 2 {
@@ -1147,6 +1343,8 @@ impl<'a> Backend<'a> {
             let args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_b_{name}({})", args_ir.join(", ")));
+            let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
+            f.record(&t, infer::builtin_set(name, &arg_sets));
             return Ok(t);
         }
         Err(format!("native backend: `{name}` is not yet supported"))

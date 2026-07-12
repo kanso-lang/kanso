@@ -271,7 +271,7 @@ KValue k_add(KValue a, KValue b) {
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
-        if (__builtin_add_overflow(a.payload, b.payload, &r)) return k_err(k_str("integer overflow"));
+        if (__builtin_add_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) + k_as_f(b));
@@ -284,7 +284,7 @@ KValue k_sub(KValue a, KValue b) {
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
-        if (__builtin_sub_overflow(a.payload, b.payload, &r)) return k_err(k_str("integer overflow"));
+        if (__builtin_sub_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) - k_as_f(b));
@@ -297,7 +297,7 @@ KValue k_mul(KValue a, KValue b) {
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
-        if (__builtin_mul_overflow(a.payload, b.payload, &r)) return k_err(k_str("integer overflow"));
+        if (__builtin_mul_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) * k_as_f(b));
@@ -809,7 +809,7 @@ KValue k_b_sum(KValue lv) {
         if (!k_not_failure(l->items[i])) return l->items[i];
         if (l->items[i].tag != K_INT) k_die("sum takes a list of int");
         long long r;
-        if (__builtin_add_overflow(total, l->items[i].payload, &r)) return k_err(k_str("integer overflow"));
+        if (__builtin_add_overflow(total, l->items[i].payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
         total = r;
     }
     return k_int(total);
