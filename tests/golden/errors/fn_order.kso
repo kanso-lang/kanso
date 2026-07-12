@@ -1,5 +1,4 @@
 fn zeta x
   x
 
-fn main
-  print "{zeta 1}"
+main = print "{zeta 1}"

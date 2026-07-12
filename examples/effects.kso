@@ -1,2 +1,1 @@
-fn main
-  print "one" >> print "two" >> print "three"
+main = print "one" >> print "two" >> print "three"

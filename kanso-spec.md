@@ -123,7 +123,7 @@ type matrix[n: numeric]
 
 ## 9. bindings, rebinding, flow
 
-- **constants (gaveled 2026-07-12):** a zero-arity `fn` is a constant — bare mention yields its value (purity makes evaluation timing unobservable; the runtime owns sharing, haskell-CAF style). a name declared at arity 0 admits no other arities. effectful nullaries (`now`, `random`) need no exception: they are descriptions, and mentioning a description is inert until the executor runs it.
+- **constants (gaveled 2026-07-12):** a value with no parameters is a constant, declared at top level: `tau = 6.28318`. bare mention yields the value (purity makes evaluation timing unobservable; the runtime owns sharing, haskell-CAF style). a single-expression constant is written inline; a multi-statement constant is `name =` over an indented body — one rendering each. `fn` therefore always takes parameters (a zero-arity `fn` is unrepresentable), a constant admits no overloads, and `main` is itself a constant: the program\u2019s description. effectful nullaries (`now`, `random`) need no exception: they are descriptions, inert until the executor runs them.
 - `=` binds immutably. **rebinding a name is legal** (SSA under the hood); each version must be used before the next rebind (nothing-wasted per version). closures capture values, not names.
 - no `var`, no `const` — one kind of binding, zero keywords.
 - unused expressions and unused bindings are compile errors.

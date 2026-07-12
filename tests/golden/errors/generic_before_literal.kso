@@ -4,5 +4,4 @@ fn fact n
 fn fact 0
   1
 
-fn main
-  print "{fact 3}"
+main = print "{fact 3}"

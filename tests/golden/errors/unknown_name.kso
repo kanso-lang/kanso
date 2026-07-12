@@ -1,2 +1,1 @@
-fn main
-  print "{mystery}"
+main = print "{mystery}"

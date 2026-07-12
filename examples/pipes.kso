@@ -1,5 +1,4 @@
 fn greet name
   "hello, {name}"
 
-fn main
-  "kanso" . greet . print
+main = "kanso" . greet . print

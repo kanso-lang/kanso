@@ -357,53 +357,39 @@ fn str_unicode cs p acc
   code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
   str_chars cs (p + 6) (push acc (from_code code))
 
-fn test_decode_array
-  (decode "[1, 2, 3]") == [1 2 3]
+test_decode_array = (decode "[1, 2, 3]") == [1 2 3]
 
-fn test_decode_bool
-  (decode "true") == true
+test_decode_bool = (decode "true") == true
 
-fn test_decode_escapes
-  (decode "\"a\\n\\\"b\\\"\"") == "a\n\"b\""
+test_decode_escapes = (decode "\"a\\n\\\"b\\\"\"") == "a\n\"b\""
 
-fn test_decode_float
-  (decode "3.25") == 3.25
+test_decode_float = (decode "3.25") == 3.25
 
-fn test_decode_int
-  (decode "42") == 42
+test_decode_int = (decode "42") == 42
 
-fn test_decode_nested
-  (decode "\{\"a\": [1, \{\"b\": null}]}") == ["a": [1 ["b": (json_null true)]]]
+test_decode_nested = (decode "\{\"a\": [1, \{\"b\": null}]}") == ["a": [1 ["b": (json_null true)]]]
 
-fn test_decode_object
-  (decode "\{\"a\": 1, \"b\": 2}") == ["a": 1 "b": 2]
+test_decode_object = (decode "\{\"a\": 1, \"b\": 2}") == ["a": 1 "b": 2]
 
-fn test_decode_string
-  (decode "\"hello\"") == "hello"
+test_decode_string = (decode "\"hello\"") == "hello"
 
-fn test_decode_unicode
-  (decode "\"\\u00e9\"") == "é"
+test_decode_unicode = (decode "\"\\u00e9\"") == "é"
 
-fn test_decode_whitespace
-  (decode "  [ 1 , 2 ]  ") == [1 2]
+test_decode_whitespace = (decode "  [ 1 , 2 ]  ") == [1 2]
 
-fn test_encode_escapes
-  (encode "a\"b\nc") == "\"a\\\"b\\nc\""
+test_encode_escapes = (encode "a\"b\nc") == "\"a\\\"b\\nc\""
 
-fn test_encode_nested
+test_encode_nested =
   value = ["a": true "b": [1 2]]
   (encode value) == "\{\"a\":true,\"b\":[1,2]}"
 
-fn test_error_position
-  (failure_position (decode "[1, nope]")) == 5
+test_error_position = (failure_position (decode "[1, nope]")) == 5
 
-fn test_error_trailing
-  (failure_position (decode "1 x")) == 3
+test_error_trailing = (failure_position (decode "1 x")) == 3
 
-fn test_must_wraps_defect
-  is_defect (must (decode "nope"))
+test_must_wraps_defect = is_defect (must (decode "nope"))
 
-fn test_roundtrip
+test_roundtrip =
   text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"
   (encode (decode text)) == text
 

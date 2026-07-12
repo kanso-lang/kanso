@@ -112,7 +112,7 @@ fn run_tests(program: &ast::Program, file: &str, source: &str) -> ExitCode {
         .collect();
     names.dedup();
     if names.is_empty() {
-        eprintln!("{file}: no tests found (a test is a zero-argument `fn test_*`)");
+        eprintln!("{file}: no tests found (a test is a constant named `test_*`)");
         return ExitCode::from(2);
     }
     let mut failed = 0;

@@ -1,4 +1,3 @@
-fn main
-  x = 1
+main = x = 1
 
   print "{x}"

@@ -1,5 +1,7 @@
 # kanso
 
+[![ci](https://github.com/ClayShentrup/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/ClayShentrup/kanso/actions/workflows/ci.yml)
+
 *kanso* (簡素): simplicity through the elimination of clutter.
 
 A language where the source file contains only decisions. Anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error or unrepresentable. Programs have a canonical form — one rendering per program — so no formatter tool exists: non-canonical whitespace is a syntax error.
@@ -13,7 +15,7 @@ fn describe (err reason)
 fn describe n
   "result: {n}"
 
-fn main
+main =
   good = safe_ratio 10 2
   bad = safe_ratio 10 0
   print (describe good) >> print (describe bad)
@@ -54,6 +56,7 @@ This is the **phase-1 reference interpreter** ([spec §15](kanso-spec.md)): a tr
 - canonical form as grammar: indentation, spacing, blank-line placement, snake_case, alphabetical declarations and fields — all compile errors (see [tests/golden/errors](tests/golden/errors))
 - nothing-wasted checks: unused bindings, unused expressions, and rebind-before-use are compile errors
 - one name, one meaning: a binding may not shadow a declared function, type, or builtin
+- constants: `tau = 6.28318` at top level; a value with no parameters is a constant, so `fn` always takes parameters and `main` is a constant description of the program
 
 The error corpus in `tests/golden` matters as much as the success corpus — half this language's value is its compile errors.
 

@@ -1,5 +1,4 @@
-fn main
-  print "{same 1}"
+main = print "{same 1}"
 
 fn same x
   x

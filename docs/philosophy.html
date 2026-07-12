@@ -64,8 +64,7 @@
 
 <div class="code-panel">
   <div class="code-panel-title">examples/effects.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">main</span>
-  <span class="f">print</span> <span class="s">"one"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"two"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"three"</span></code></pre>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"two"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"three"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso</div>
     <pre><code>one
@@ -75,9 +74,9 @@ three</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run examples/effects.kso --plan</div>
     <pre><code>plan:
-  print "one"    // from line 2
-  print "two"    // from line 2
-  print "three"    // from line 2</code></pre>
+  print "one"    // from line 1
+  print "two"    // from line 1
+  print "three"    // from line 1</code></pre>
   </div>
 </div>
 

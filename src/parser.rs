@@ -25,6 +25,10 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             body_end += 1;
         }
         let body = &lexed.lines[body_start..body_end];
+        let is_constant = matches!(
+            (line.tokens.first(), line.tokens.get(1)),
+            (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
+        );
         match line.tokens.first() {
             Some((Tok::KwFn, _)) => match parse_fn(line, body) {
                 Ok(decl) => fns.push(decl),
@@ -34,9 +38,14 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 Ok(decl) => types.push(decl),
                 Err(d) => diags.push(d),
             },
+            Some((Tok::Ident(_), _)) if is_constant => match parse_constant(line, body) {
+                Ok(decl) => fns.push(decl),
+                Err(d) => diags.push(d),
+            },
             _ => diags.push(Diagnostic::new(
                 "syntax",
-                "a top-level line must begin with `fn` or `type`".to_string(),
+                "a top-level line must begin with `fn`, `type`, or a constant binding"
+                    .to_string(),
                 head_span(line),
             )),
         }
@@ -100,6 +109,13 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     while !p.done() {
         params.push(p.parse_pattern()?);
     }
+    if params.is_empty() {
+        return Err(Diagnostic::new(
+            "formatting",
+            format!("a value with no parameters is a constant: `{name} = ...`"),
+            span,
+        ));
+    }
     if body.is_empty() {
         return Err(Diagnostic::new(
             "syntax",
@@ -109,6 +125,43 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     }
     let stmts = body.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
     Ok(FnDecl { name, span, params, body: stmts })
+}
+
+fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
+    let Some((Tok::Ident(name), span)) = header.tokens.first() else {
+        return Err(Diagnostic::new("syntax", "expected a constant name".to_string(), head_span(header)));
+    };
+    let name = name.clone();
+    let span = *span;
+    if header.tokens.len() == 2 {
+        if body.is_empty() {
+            return Err(Diagnostic::new(
+                "syntax",
+                format!("constant `{name}` has no value"),
+                span,
+            ));
+        }
+        if body.len() == 1 {
+            return Err(Diagnostic::new(
+                "formatting",
+                format!("a single-expression constant is written inline: `{name} = ...`"),
+                span,
+            ));
+        }
+        let stmts = body.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
+        return Ok(FnDecl { name, span, params: Vec::new(), body: stmts });
+    }
+    if !body.is_empty() {
+        return Err(Diagnostic::new(
+            "formatting",
+            "an inline constant has no indented block".to_string(),
+            head_span(&body[0]),
+        ));
+    }
+    let mut p = P::new(&header.tokens[2..], header.number);
+    let expr = p.parse_expr()?;
+    p.expect_done()?;
+    Ok(FnDecl { name, span, params: Vec::new(), body: vec![Stmt::Expr(expr)] })
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {

@@ -1,2 +1,1 @@
-fn main
-  at [1 2] 9
+main = at [1 2] 9

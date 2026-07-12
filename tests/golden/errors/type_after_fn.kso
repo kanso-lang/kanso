@@ -1,5 +1,4 @@
-fn main
-  print "x"
+main = print "x"
 
 type user
   admin: bool

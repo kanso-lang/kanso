@@ -1091,7 +1091,7 @@ mod tests {
 
     #[test]
     fn scripted_executor_records_the_transcript() {
-        let value = run_main("fn main\n  print \"a\" >> print \"b\"\n");
+        let value = run_main("main = print \"a\" >> print \"b\"\n");
 
         let Value::Desc(desc) = value else { panic!("main yields a description") };
         let mut executor = ScriptedExecutor { transcript: Vec::new() };
@@ -1102,14 +1102,14 @@ mod tests {
 
     #[test]
     fn a_pure_main_yields_a_plain_value() {
-        let value = run_main("fn main\n  1 + 2\n");
+        let value = run_main("main = 1 + 2\n");
 
         assert!(matches!(value, Value::Int(ref n) if *n == num_bigint::BigInt::from(3)));
     }
 
     #[test]
     fn err_propagates_through_a_generic_function_unhandled() {
-        let source = "fn double x\n  x * 2\n\nfn main\n  double (1 / 0)\n";
+        let source = "fn double x\n  x * 2\n\nmain = double (1 / 0)\n";
 
         assert!(matches!(run_main(source), Value::ErrV(_)));
     }

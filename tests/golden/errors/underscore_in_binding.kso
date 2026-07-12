@@ -2,6 +2,6 @@ type user
   admin: bool
   name: string
 
-fn main
+main =
   user _ name = user false "clay"
   print "{name}"
