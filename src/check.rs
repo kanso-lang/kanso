@@ -506,6 +506,10 @@ impl Resolver<'_> {
                     self.resolve_expr(arg);
                 }
             }
+            Expr::Index { base, index, .. } => {
+                self.resolve_expr(base);
+                self.resolve_expr(index);
+            }
             Expr::Seq(lhs, rhs, _) => {
                 self.resolve_expr(lhs);
                 self.resolve_expr(rhs);

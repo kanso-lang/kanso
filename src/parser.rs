@@ -102,7 +102,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
 }
 
 fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
-    let mut p = P::new(&header.tokens, header.number);
+    let mut p = P::new(&header.tokens, &header.end_cols, header.number);
     p.expect_kw_fn()?;
     let (name, span) = p.expect_ident("a function name")?;
     let mut params = Vec::new();
@@ -158,14 +158,14 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             head_span(&body[0]),
         ));
     }
-    let mut p = P::new(&header.tokens[2..], header.number);
+    let mut p = P::new(&header.tokens[2..], &header.end_cols[2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
     Ok(FnDecl { name, span, params: Vec::new(), body: vec![Stmt::Expr(expr)] })
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
-    let mut p = P::new(&header.tokens, header.number);
+    let mut p = P::new(&header.tokens, &header.end_cols, header.number);
     p.expect_kw_type()?;
     let (name, span) = p.expect_ident("a type name")?;
     p.expect_done()?;
@@ -177,7 +177,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
 }
 
 fn parse_field(line: &Line) -> Result<(String, String, Span), Diagnostic> {
-    let mut p = P::new(&line.tokens, line.number);
+    let mut p = P::new(&line.tokens, &line.end_cols, line.number);
     let (name, span) = p.expect_ident("a field name")?;
     let colon_span = p.span_here();
     p.expect_colon()?;
@@ -209,15 +209,15 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
         }
     }
     let Some(i) = bind_at else {
-        let mut p = P::new(&line.tokens, line.number);
+        let mut p = P::new(&line.tokens, &line.end_cols, line.number);
         let expr = p.parse_expr()?;
         p.expect_done()?;
         return Ok(Stmt::Expr(expr));
     };
-    let mut lhs = P::new(&line.tokens[..i], line.number);
+    let mut lhs = P::new(&line.tokens[..i], &line.end_cols[..i], line.number);
     let pattern = lhs.parse_bind_target()?;
     lhs.expect_done()?;
-    let mut rhs = P::new(&line.tokens[i + 1..], line.number);
+    let mut rhs = P::new(&line.tokens[i + 1..], &line.end_cols[i + 1..], line.number);
     let expr = rhs.parse_expr()?;
     rhs.expect_done()?;
     Ok(Stmt::Bind { pattern, expr })
@@ -225,13 +225,21 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
 
 pub struct P<'a> {
     toks: &'a [(Tok, Span)],
+    ends: &'a [usize],
     pub pos: usize,
     line: usize,
 }
 
 impl<'a> P<'a> {
-    pub fn new(toks: &'a [(Tok, Span)], line: usize) -> Self {
-        P { toks, pos: 0, line }
+    pub fn new(toks: &'a [(Tok, Span)], ends: &'a [usize], line: usize) -> Self {
+        P { toks, ends, pos: 0, line }
+    }
+
+    fn last_end(&self) -> usize {
+        match self.pos {
+            0 => 0,
+            n => self.ends.get(n - 1).copied().unwrap_or(0),
+        }
     }
 
     fn peek(&self) -> Option<&Tok> {
@@ -554,6 +562,27 @@ impl<'a> P<'a> {
     }
 
     fn parse_atom(&mut self) -> Result<Expr, Diagnostic> {
+        let mut expr = self.parse_atom_base()?;
+        loop {
+            let tight = matches!(self.peek(), Some(Tok::LBracket))
+                && self.span_here().col == self.last_end();
+            if !tight {
+                return Ok(expr);
+            }
+            let span = self.span_here();
+            self.pos += 1;
+            let index = self.parse_pipe()?;
+            match self.peek() {
+                Some(Tok::RBracket) => {
+                    self.pos += 1;
+                }
+                _ => return Err(self.err("expected `]`".to_string())),
+            }
+            expr = Expr::Index { base: Box::new(expr), index: Box::new(index), span };
+        }
+    }
+
+    fn parse_atom_base(&mut self) -> Result<Expr, Diagnostic> {
         let span = self.span_here();
         match self.toks.get(self.pos).map(|(t, _)| t.clone()) {
             Some(Tok::Int(n)) => {
@@ -711,7 +740,7 @@ fn literal_string(parts: &[StrPart]) -> Option<String> {
     for part in parts {
         match part {
             StrPart::Lit(s) => out.push_str(s),
-            StrPart::Interp(_) => return None,
+            StrPart::Interp(..) => return None,
         }
     }
     Some(out)
@@ -720,8 +749,8 @@ fn literal_string(parts: &[StrPart]) -> Option<String> {
 fn template_part(part: &StrPart, line: usize) -> Result<TemplatePart, Diagnostic> {
     match part {
         StrPart::Lit(s) => Ok(TemplatePart::Lit(s.clone())),
-        StrPart::Interp(tokens) => {
-            let mut p = P::new(tokens, line);
+        StrPart::Interp(tokens, ends) => {
+            let mut p = P::new(tokens, ends, line);
             let expr = p.parse_expr()?;
             p.expect_done()?;
             Ok(TemplatePart::Interp(expr))

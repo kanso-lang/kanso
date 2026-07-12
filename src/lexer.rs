@@ -27,7 +27,7 @@ pub enum Tok {
 #[derive(Clone, Debug, PartialEq)]
 pub enum StrPart {
     Lit(String),
-    Interp(Vec<(Tok, Span)>),
+    Interp(Vec<(Tok, Span)>, Vec<usize>),
 }
 
 #[derive(Debug)]
@@ -35,6 +35,7 @@ pub struct Line {
     pub number: usize,
     pub indent: usize,
     pub tokens: Vec<(Tok, Span)>,
+    pub end_cols: Vec<usize>,
 }
 
 struct LexedLine {
@@ -98,7 +99,12 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         match lex_line(content, number, indent + 1) {
             Ok(lexed_line) => {
                 validate_spacing(&lexed_line, number, &mut diags);
-                lines.push(Line { number, indent, tokens: lexed_line.tokens });
+                lines.push(Line {
+                    number,
+                    indent,
+                    tokens: lexed_line.tokens,
+                    end_cols: lexed_line.end_cols,
+                });
             }
             Err(d) => diags.push(d),
         }
@@ -316,7 +322,7 @@ impl Scanner {
                     }
                     let col = self.col_offset + start;
                     let lexed = lex_line(&inner, self.line, col)?;
-                    parts.push(StrPart::Interp(lexed.tokens));
+                    parts.push(StrPart::Interp(lexed.tokens, lexed.end_cols));
                 }
                 other => {
                     lit.push(other);

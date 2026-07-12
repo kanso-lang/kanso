@@ -249,6 +249,17 @@ impl<'a> Interp<'a> {
                     items.iter().map(|e| self.eval(e, env)).collect::<Result<Vec<_>, _>>()?;
                 Ok(Value::List(Rc::new(values)))
             }
+            Expr::Index { base, index, span } => {
+                let container = self.eval(base, env)?;
+                let key = self.eval(index, env)?;
+                match index_value(container, key.clone(), *span)? {
+                    Value::NoneV => Ok(Value::ErrV(Rc::new(Value::Str(format!(
+                        "missing index {}",
+                        render(&key, true)
+                    ))))),
+                    found => Ok(found),
+                }
+            }
             Expr::App { head, args, span } => {
                 let callee = self.eval(head, env)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
@@ -463,35 +474,7 @@ impl<'a> Interp<'a> {
             }
             "at" => {
                 let [container, index] = arity(args, name, span)?;
-                match (&container, &index) {
-                    (Value::List(items), Value::Int(i)) => {
-                        let idx = usize::try_from(i.clone()).ok();
-                        Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
-                            Some(i) => items[i - 1].clone(),
-                            None => Value::NoneV,
-                        })
-                    }
-                    (Value::Str(text), Value::Int(i)) => {
-                        let idx = usize::try_from(i.clone()).ok();
-                        Ok(match idx
-                            .and_then(|i| i.checked_sub(1))
-                            .and_then(|i| text.chars().nth(i))
-                        {
-                            Some(c) => Value::Str(c.to_string()),
-                            None => Value::NoneV,
-                        })
-                    }
-                    (Value::Map(entries), Value::Int(_) | Value::Str(_)) => {
-                        let key = map_key(index.clone(), span)?;
-                        Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
-                    }
-                    _ => Err(RuntimeError {
-                        message: "at takes a list or string with a 1-based position, or a \
-                                  map with a key"
-                            .to_string(),
-                        span,
-                    }),
-                }
+                index_value(container, index, span)
             }
             "push" => {
                 let [list, item] = arity(args, name, span)?;
@@ -924,6 +907,42 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
             Some(())
         }
         _ => None,
+    }
+}
+
+fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
+    if is_failure(&container) {
+        return Ok(container);
+    }
+    if is_failure(&index) {
+        return Ok(index);
+    }
+    match (&container, &index) {
+        (Value::List(items), Value::Int(i)) => {
+            let idx = usize::try_from(i.clone()).ok();
+            Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
+                Some(i) => items[i - 1].clone(),
+                None => Value::NoneV,
+            })
+        }
+        (Value::Str(text), Value::Int(i)) => {
+            let idx = usize::try_from(i.clone()).ok();
+            Ok(
+                match idx.and_then(|i| i.checked_sub(1)).and_then(|i| text.chars().nth(i)) {
+                    Some(c) => Value::Str(c.to_string()),
+                    None => Value::NoneV,
+                },
+            )
+        }
+        (Value::Map(entries), Value::Int(_) | Value::Str(_)) => {
+            let key = map_key(index, span)?;
+            Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
+        }
+        _ => Err(RuntimeError {
+            message: "indexing takes a list or string with a 1-based position, or a map                       with a key"
+                .to_string(),
+            span,
+        }),
     }
 }
 

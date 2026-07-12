@@ -592,6 +592,14 @@ KValue k_b_at(KValue container, KValue index) {
     return k_none();
 }
 
+KValue k_index(KValue container, KValue key) {
+    KValue found = k_b_at(container, key);
+    if (found.tag == K_NONE) {
+        return k_err(k_concat(k_str("missing index "), k_render(key, 1)));
+    }
+    return found;
+}
+
 KValue k_b_push(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) k_die("push takes a list and a value");

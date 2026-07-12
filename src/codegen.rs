@@ -44,6 +44,7 @@ declare %KValue @k_closure(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
+declare %KValue @k_index(%KValue, %KValue)
 declare %KValue @k_b_bytes(%KValue)
 declare %KValue @k_b_chars(%KValue)
 declare %KValue @k_b_concat(%KValue, %KValue)
@@ -554,6 +555,15 @@ impl<'a> Backend<'a> {
                 }
             }
             Expr::App { head, args, .. } => self.emit_call(f, head, args),
+            Expr::Index { base, index, .. } => {
+                let container = self.emit_expr(f, base)?;
+                let key = self.emit_expr(f, index)?;
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_index(%KValue {container}, %KValue {key})"
+                ));
+                Ok(t)
+            }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;
                 let b = self.emit_expr(f, rhs)?;
@@ -886,6 +896,10 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
             for arg in args {
                 collect_idents(arg, out);
             }
+        }
+        Expr::Index { base, index, .. } => {
+            collect_idents(base, out);
+            collect_idents(index, out);
         }
         Expr::Seq(lhs, rhs, _) => {
             collect_idents(lhs, out);

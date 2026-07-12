@@ -114,7 +114,7 @@ type matrix[n: numeric]
 
 - **lists:** `T[]` in type position (postfix). literals `[1 2 3]`. the word `list` does not appear in surface syntax.
 - **maps:** `T[K]` — element type first, key type in brackets. postfix composes left-to-right: `user[string][]` is a list of string-keyed user maps.
-- lookup `at m k` returns the value or `none` (propagates). no panicking access anywhere.
+- **indexing (gaveled 2026-07-12):** `xs[i]` / `m[k]` — tight postfix brackets, the strict form: a miss is `err` and rides to the endpoint report. safe by default; expecting presence is the default contract. `at xs i` is the deliberate opt-in for expected absence: it returns the value or `none` (propagates). two operations, two spellings, no overlap. no panicking access anywhere — the "panic" is a value on the same rails.
 - `put m k v` is functional; perceus makes it in-place when uniquely owned.
 - map keys require derivable `eq`/`hash` (inferred constraint).
 - `entries m` returns pairs in **sorted key order** — deterministic iteration, always.

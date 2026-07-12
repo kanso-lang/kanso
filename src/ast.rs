@@ -10,6 +10,7 @@ pub enum Expr {
     Ident(String, Span),
     List(Vec<Expr>, Span),
     App { head: Box<Expr>, args: Vec<Expr>, span: Span },
+    Index { base: Box<Expr>, index: Box<Expr>, span: Span },
     Seq(Box<Expr>, Box<Expr>, Span),
     Lambda { params: Vec<(String, Span)>, body: Box<Expr>, span: Span },
     BinOp { op: &'static str, lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
@@ -31,6 +32,7 @@ impl Expr {
             | Expr::Ident(_, s)
             | Expr::List(_, s)
             | Expr::App { span: s, .. }
+            | Expr::Index { span: s, .. }
             | Expr::Seq(_, _, s)
             | Expr::Lambda { span: s, .. }
             | Expr::BinOp { span: s, .. } => *s,

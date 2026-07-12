@@ -57,6 +57,7 @@ This is the **phase-1 reference interpreter** ([spec §15](kanso-spec.md)): a tr
 - nothing-wasted checks: unused bindings, unused expressions, and rebind-before-use are compile errors
 - one name, one meaning: a binding may not shadow a declared function, type, or builtin
 - constants: `tau = 6.28318` at top level; a value with no parameters is a constant, so `fn` always takes parameters and `main` is a constant description of the program
+- indexing: `xs[i]` and `m[k]` are strict (a miss is an `err` that reaches the endpoint report); `at xs i` opts into expected absence with `none`
 - modules: a directory is a module, split across any number of files sharing one namespace (`kanso test lib/json`); `_`-prefixed names are module-private, and an unused private declaration is a compile error
 
 The error corpus in `tests/golden` matters as much as the success corpus — half this language's value is its compile errors.
