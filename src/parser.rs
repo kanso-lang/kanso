@@ -435,7 +435,14 @@ impl<'a> P<'a> {
     fn starts_atom(&self) -> bool {
         matches!(
             self.peek(),
-            Some(Tok::Ident(_) | Tok::Int(_) | Tok::Str(_) | Tok::LParen | Tok::LBracket)
+            Some(
+                Tok::Ident(_)
+                    | Tok::Int(_)
+                    | Tok::Float(_)
+                    | Tok::Str(_)
+                    | Tok::LParen
+                    | Tok::LBracket
+            )
         )
     }
 
@@ -461,6 +468,10 @@ impl<'a> P<'a> {
                 self.pos += 1;
                 Ok(Expr::Int(n, span))
             }
+            Some(Tok::Float(x)) => {
+                self.pos += 1;
+                Ok(Expr::Float(x, span))
+            }
             Some(Tok::Ident(name)) => {
                 self.pos += 1;
                 Ok(Expr::Ident(name, span))
@@ -475,7 +486,42 @@ impl<'a> P<'a> {
             }
             Some(Tok::LBracket) => {
                 self.pos += 1;
-                let mut items = Vec::new();
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    self.pos += 1;
+                    match self.peek() {
+                        Some(Tok::RBracket) => {
+                            self.pos += 1;
+                            return Ok(Expr::MapLit(Vec::new(), span));
+                        }
+                        _ => return Err(self.err("`[:]` is the empty map".to_string())),
+                    }
+                }
+                if matches!(self.peek(), Some(Tok::RBracket)) {
+                    self.pos += 1;
+                    return Ok(Expr::List(Vec::new(), span));
+                }
+                let first = self.parse_atom()?;
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    let mut pairs = Vec::new();
+                    let mut key = first;
+                    loop {
+                        self.require_literal_key(&key)?;
+                        self.pos += 1;
+                        let value = self.parse_atom()?;
+                        pairs.push((key, value));
+                        if matches!(self.peek(), Some(Tok::RBracket)) {
+                            self.pos += 1;
+                            self.check_key_order(&pairs)?;
+                            return Ok(Expr::MapLit(pairs, span));
+                        }
+                        key = self.parse_atom()?;
+                        match self.peek() {
+                            Some(Tok::Colon) => {}
+                            _ => return Err(self.err("expected `:` after a map key".to_string())),
+                        }
+                    }
+                }
+                let mut items = vec![first];
                 while !matches!(self.peek(), Some(Tok::RBracket)) {
                     items.push(self.parse_atom()?);
                 }
@@ -501,6 +547,50 @@ impl<'a> P<'a> {
             }
             _ => Err(self.err("expected an expression".to_string())),
         }
+    }
+
+    fn require_literal_key(&self, key: &Expr) -> Result<(), Diagnostic> {
+        match key {
+            Expr::Int(..) => Ok(()),
+            Expr::Str(parts, _) if parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))) => {
+                Ok(())
+            }
+            _ => Err(Diagnostic::new(
+                "syntax",
+                "map literal keys are literals; build dynamic maps with `put`".to_string(),
+                key.span(),
+            )),
+        }
+    }
+
+    fn check_key_order(&self, pairs: &[(Expr, Expr)]) -> Result<(), Diagnostic> {
+        let mut rendered: Vec<(String, Span)> = Vec::new();
+        for (key, _) in pairs {
+            let text = match key {
+                Expr::Int(n, span) => (format!("#{n:0>40}"), *span),
+                Expr::Str(parts, span) => {
+                    let mut out = String::new();
+                    for part in parts {
+                        if let TemplatePart::Lit(lit) = part {
+                            out.push_str(lit);
+                        }
+                    }
+                    (out, *span)
+                }
+                _ => continue,
+            };
+            rendered.push(text);
+        }
+        for pair in rendered.windows(2) {
+            if pair[0].0 >= pair[1].0 {
+                return Err(Diagnostic::new(
+                    "formatting",
+                    "map literal keys appear in sorted order, without duplicates".to_string(),
+                    pair[1].1,
+                ));
+            }
+        }
+        Ok(())
     }
 
     fn lambda_lookahead(&self) -> Option<usize> {

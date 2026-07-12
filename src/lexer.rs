@@ -5,6 +5,7 @@ use num_bigint::BigInt;
 pub enum Tok {
     Ident(String),
     Int(BigInt),
+    Float(f64),
     Str(Vec<StrPart>),
     LParen,
     RParen,
@@ -216,6 +217,17 @@ impl Scanner {
         while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
             self.pos += 1;
         }
+        let is_float = self.peek(0) == Some('.')
+            && self.peek(1).is_some_and(|c| c.is_ascii_digit());
+        if is_float {
+            self.pos += 1;
+            while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
+                self.pos += 1;
+            }
+            let text: String = self.chars[start..self.pos].iter().collect();
+            let value = text.parse::<f64>().expect("digit-dot-digit parses as f64");
+            return Ok(Tok::Float(value));
+        }
         let text: String = self.chars[start..self.pos].iter().collect();
         let value = text.parse::<BigInt>().expect("digits parse as BigInt");
         Ok(Tok::Int(value))
@@ -265,6 +277,8 @@ impl Scanner {
                         '\\' => '\\',
                         '{' => '{',
                         'n' => '\n',
+                        'r' => '\r',
+                        't' => '\t',
                         other => {
                             let msg = format!("unknown escape `\\{other}`");
                             return Err(Diagnostic::new("syntax", msg, self.span()));
@@ -327,6 +341,16 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         let (prev, _) = &pair[0];
         let (next, next_span) = &pair[1];
         let gap = next_span.col.saturating_sub(*prev_end);
+        if matches!((prev, next), (Tok::Ident(_), Tok::LBracket)) {
+            if gap > 1 {
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    "canonical form requires at most one space here".to_string(),
+                    Span { line, col: next_span.col },
+                ));
+            }
+            continue;
+        }
         let required = required_gap(prev, next);
         if gap != required {
             let wanted = match required {

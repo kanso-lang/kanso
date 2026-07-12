@@ -6,7 +6,10 @@ fn main() -> ExitCode {
     let (command, file, plan) = match parse_args(&args) {
         Some(parsed) => parsed,
         None => {
-            eprintln!("usage: kanso run <file.kso> [--plan] | kanso check <file.kso>");
+            eprintln!(
+                "usage: kanso run <file.kso> [--plan] | kanso check <file.kso> | kanso \
+                 test <file.kso>"
+            );
             return ExitCode::from(2);
         }
     };
@@ -17,7 +20,8 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let program = match compile(&file, &source) {
+    let require_main = command == "run";
+    let program = match compile(&file, &source, require_main) {
         Ok(program) => program,
         Err(rendered) => {
             eprint!("{rendered}");
@@ -28,12 +32,15 @@ fn main() -> ExitCode {
         println!("{file}: ok");
         return ExitCode::SUCCESS;
     }
+    if command == "test" {
+        return run_tests(&program, &file, &source);
+    }
     run(&program, &file, &source, plan)
 }
 
 fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
     let command = args.first()?.clone();
-    if command != "run" && command != "check" {
+    if command != "run" && command != "check" && command != "test" {
         return None;
     }
     let file = args.get(1)?.clone();
@@ -42,6 +49,43 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
     match extra || (plan && command == "check") {
         true => None,
         false => Some((command, file, plan)),
+    }
+}
+
+fn run_tests(program: &ast::Program, file: &str, source: &str) -> ExitCode {
+    let interp = eval::Interp::new(program);
+    let mut names: Vec<&str> = program
+        .fns
+        .iter()
+        .filter(|d| d.name.starts_with("test_") && d.params.is_empty())
+        .map(|d| d.name.as_str())
+        .collect();
+    names.dedup();
+    if names.is_empty() {
+        eprintln!("{file}: no tests found (a test is a zero-argument `fn test_*`)");
+        return ExitCode::from(2);
+    }
+    let mut failed = 0;
+    for name in &names {
+        let outcome = interp.run_named(name).expect("filtered on zero-arg fns");
+        match outcome {
+            Ok(eval::Value::True) => println!("{name} ... ok"),
+            Ok(other) => {
+                failed += 1;
+                println!("{name} ... FAILED (returned {})", eval::render(&other, true));
+            }
+            Err(runtime) => {
+                failed += 1;
+                let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
+                println!("{name} ... FAILED");
+                eprint!("{}", diag::render(&[d], file, source));
+            }
+        }
+    }
+    println!("{} passed, {failed} failed", names.len() - failed);
+    match failed {
+        0 => ExitCode::SUCCESS,
+        _ => ExitCode::FAILURE,
     }
 }
 

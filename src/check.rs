@@ -2,13 +2,34 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::HashSet;
 
-pub const BUILTINS: [&str; 8] = ["at", "filter", "if", "length", "map", "print", "sort", "sum"];
+pub const BUILTINS: [&str; 18] = [
+    "at",
+    "char_code",
+    "chars",
+    "entries",
+    "filter",
+    "from_code",
+    "if",
+    "join",
+    "length",
+    "map",
+    "print",
+    "push",
+    "put",
+    "slice",
+    "sort",
+    "sum",
+    "to_float",
+    "to_int",
+];
 
-pub fn check(program: &Program) -> Vec<Diagnostic> {
+pub fn check(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
-    check_main(program, &mut diags);
+    if require_main {
+        check_main(program, &mut diags);
+    }
     let globals = collect_globals(program, &mut diags);
     for decl in &program.fns {
         check_fn_body(decl, &globals, &mut diags);
@@ -19,6 +40,7 @@ pub fn check(program: &Program) -> Vec<Diagnostic> {
 
 fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<String> {
     let mut globals: HashSet<String> = BUILTINS.iter().map(|b| b.to_string()).collect();
+    globals.insert("entry".to_string());
     globals.insert("err".to_string());
     for nullary in NULLARY {
         globals.insert(nullary.to_string());
@@ -358,7 +380,13 @@ impl Resolver<'_> {
 
     fn resolve_expr(&mut self, expr: &Expr) {
         match expr {
-            Expr::Int(..) => {}
+            Expr::Int(..) | Expr::Float(..) => {}
+            Expr::MapLit(pairs, _) => {
+                for (key, value) in pairs {
+                    self.resolve_expr(key);
+                    self.resolve_expr(value);
+                }
+            }
             Expr::Str(parts, _) => {
                 for part in parts {
                     if let TemplatePart::Interp(inner) = part {

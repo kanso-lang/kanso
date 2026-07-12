@@ -1,0 +1,440 @@
+type defect
+  reason: string
+
+type json_null
+  marker: bool
+
+type parse_failure
+  position: int
+  reason: string
+
+type parsed
+  pos: int
+  value: json
+
+fn array_delim cs "," p acc
+  array_items cs (p + 1) acc
+
+fn array_delim _ "]" p acc
+  parsed (p + 1) acc
+
+fn array_delim _ none p _
+  fail p "unexpected end of input"
+
+fn array_delim _ c p _
+  fail p "expected `,` or `]`, found `{c}`"
+
+fn array_items cs p acc
+  p2 = skip_ws cs p
+  array_step cs (parse_value cs p2) acc
+
+fn array_open _ "]" p
+  parsed (p + 1) []
+
+fn array_open _ none p
+  fail p "unexpected end of input"
+
+fn array_open cs _ p
+  array_items cs p []
+
+fn array_step cs (parsed p v) acc
+  acc2 = push acc v
+  p2 = skip_ws cs p
+  array_delim cs (at cs p2) p2 acc2
+
+fn both true true
+  true
+
+fn both _ _
+  false
+
+fn decode s
+  cs = chars s
+  finish cs (parse_value cs 1)
+
+fn encode true
+  "true"
+
+fn encode false
+  "false"
+
+fn encode (json_null _)
+  "null"
+
+fn encode (n: int)
+  "{n}"
+
+fn encode (x: float64)
+  "{x}"
+
+fn encode (s: string)
+  "\"{escape_str s}\""
+
+fn encode (xs: json[])
+  inner = join (map xs (v -> encode v)) ","
+  "[{inner}]"
+
+fn encode (m: json[string])
+  inner = join (map (entries m) (e -> encode_entry e)) ","
+  "\{{inner}}"
+
+fn encode_entry (entry k v)
+  "{encode k}:{encode v}"
+
+fn escape_char "\""
+  "\\\""
+
+fn escape_char "\\"
+  "\\\\"
+
+fn escape_char "\n"
+  "\\n"
+
+fn escape_char "\r"
+  "\\r"
+
+fn escape_char "\t"
+  "\\t"
+
+fn escape_char c
+  if ((char_code c) < 32) (u_escape c) c
+
+fn escape_str s
+  join (map (chars s) (c -> escape_char c)) ""
+
+fn expect_char cs p c
+  expect_check (at cs p) p c
+
+fn expect_check found p c
+  if (found == c) (p + 1) (fail p "expected `{c}`")
+
+fn fail p reason
+  err (parse_failure p reason)
+
+fn failure_position (err (parse_failure p _))
+  p
+
+fn failure_position _
+  0
+
+fn finish _ none
+  err (parse_failure 0 "unexpected end of input")
+
+fn finish cs (parsed p v)
+  p2 = skip_ws cs p
+  if (p2 > (length cs)) v (fail p2 "unexpected trailing characters")
+
+fn hex4 n
+  d1 = n / 4096
+  r1 = n - (d1 * 4096)
+  d2 = r1 / 256
+  r2 = r1 - (d2 * 256)
+  d3 = r2 / 16
+  d4 = r2 - (d3 * 16)
+  join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
+
+fn hex_alpha code
+  if (both (96 < code) (code < 103)) (code - 87) (hex_upper code)
+
+fn hex_char n
+  at "0123456789abcdef" (n + 1)
+
+fn hex_digit c
+  code = char_code c
+  if (both (47 < code) (code < 58)) (code - 48) (hex_alpha code)
+
+fn hex_upper code
+  if (both (64 < code) (code < 71)) (code - 55) (err "invalid hex digit")
+
+fn is_defect (err (defect _))
+  true
+
+fn is_defect _
+  false
+
+fn is_float_mark "."
+  true
+
+fn is_float_mark "e"
+  true
+
+fn is_float_mark "E"
+  true
+
+fn is_float_mark _
+  false
+
+fn is_number_char "-"
+  true
+
+fn is_number_char "+"
+  true
+
+fn is_number_char "."
+  true
+
+fn is_number_char "e"
+  true
+
+fn is_number_char "E"
+  true
+
+fn is_number_char none
+  false
+
+fn is_number_char c
+  both ("/" < c) (c < ":")
+
+fn is_number_start "-"
+  true
+
+fn is_number_start none
+  false
+
+fn is_number_start c
+  both ("/" < c) (c < ":")
+
+fn is_ws " "
+  true
+
+fn is_ws "\n"
+  true
+
+fn is_ws "\r"
+  true
+
+fn is_ws "\t"
+  true
+
+fn is_ws none
+  false
+
+fn is_ws _
+  false
+
+fn must (err reason)
+  err (defect "{reason}")
+
+fn must v
+  v
+
+fn number_end cs p
+  if (is_number_char (at cs p)) (number_end cs (p + 1)) p
+
+fn number_ok p (err _)
+  fail p "invalid number"
+
+fn number_ok _ n
+  n
+
+fn number_value p text
+  marks = filter (chars text) (c -> is_float_mark c)
+  raw = if ((length marks) > 0) (to_float text) (to_int text)
+  number_ok p raw
+
+fn obj_colon cs p k acc
+  obj_value cs (parse_value cs p) k acc
+
+fn obj_delim cs "," p acc
+  obj_items cs (p + 1) acc
+
+fn obj_delim _ "}" p acc
+  parsed (p + 1) acc
+
+fn obj_delim _ none p _
+  fail p "unexpected end of input"
+
+fn obj_delim _ c p _
+  fail p "expected `,` or `}`, found `{c}`"
+
+fn obj_items cs p acc
+  p2 = skip_ws cs p
+  obj_key_start cs (at cs p2) p2 acc
+
+fn obj_key cs (parsed p k) acc
+  p2 = skip_ws cs p
+  obj_colon cs (expect_char cs p2 ":") k acc
+
+fn obj_key_start cs "\"" p acc
+  obj_key cs (parse_string cs (p + 1)) acc
+
+fn obj_key_start _ none p _
+  fail p "unexpected end of input"
+
+fn obj_key_start _ _ p _
+  fail p "expected a string key"
+
+fn obj_open _ "}" p
+  parsed (p + 1) [:]
+
+fn obj_open _ none p
+  fail p "unexpected end of input"
+
+fn obj_open cs _ p
+  obj_items cs p [:]
+
+fn obj_value cs (parsed p v) k acc
+  acc2 = put acc k v
+  p2 = skip_ws cs p
+  obj_delim cs (at cs p2) p2 acc2
+
+fn parse_array cs p
+  p2 = skip_ws cs p
+  array_open cs (at cs p2) p2
+
+fn parse_number cs p
+  q = number_end cs p
+  text = join (slice cs p (q - 1)) ""
+  parsed q (number_value p text)
+
+fn parse_object cs p
+  p2 = skip_ws cs p
+  obj_open cs (at cs p2) p2
+
+fn parse_string cs p
+  str_chars cs p []
+
+fn parse_value cs p
+  p2 = skip_ws cs p
+  value_for (at cs p2) cs p2
+
+fn skip_ws cs p
+  if (is_ws (at cs p)) (skip_ws cs (p + 1)) p
+
+fn str_char _ "\"" p acc
+  parsed (p + 1) (join acc "")
+
+fn str_char cs "\\" p acc
+  str_escape cs (at cs (p + 1)) p acc
+
+fn str_char _ none p _
+  fail p "unterminated string"
+
+fn str_char cs c p acc
+  str_chars cs (p + 1) (push acc c)
+
+fn str_chars cs p acc
+  str_char cs (at cs p) p acc
+
+fn str_escape cs "\"" p acc
+  str_chars cs (p + 2) (push acc "\"")
+
+fn str_escape cs "\\" p acc
+  str_chars cs (p + 2) (push acc "\\")
+
+fn str_escape cs "/" p acc
+  str_chars cs (p + 2) (push acc "/")
+
+fn str_escape cs "b" p acc
+  str_chars cs (p + 2) (push acc (from_code 8))
+
+fn str_escape cs "f" p acc
+  str_chars cs (p + 2) (push acc (from_code 12))
+
+fn str_escape cs "n" p acc
+  str_chars cs (p + 2) (push acc "\n")
+
+fn str_escape cs "r" p acc
+  str_chars cs (p + 2) (push acc "\r")
+
+fn str_escape cs "t" p acc
+  str_chars cs (p + 2) (push acc "\t")
+
+fn str_escape cs "u" p acc
+  str_unicode cs p acc
+
+fn str_escape _ none p _
+  fail p "unterminated string"
+
+fn str_escape _ c p _
+  fail p "invalid escape `\\{c}`"
+
+fn str_unicode cs p acc
+  h1 = hex_digit (at cs (p + 2))
+  h2 = hex_digit (at cs (p + 3))
+  h3 = hex_digit (at cs (p + 4))
+  h4 = hex_digit (at cs (p + 5))
+  code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
+  str_chars cs (p + 6) (push acc (from_code code))
+
+fn test_decode_array
+  (decode "[1, 2, 3]") == [1 2 3]
+
+fn test_decode_bool
+  (decode "true") == true
+
+fn test_decode_escapes
+  (decode "\"a\\n\\\"b\\\"\"") == "a\n\"b\""
+
+fn test_decode_float
+  (decode "3.25") == 3.25
+
+fn test_decode_int
+  (decode "42") == 42
+
+fn test_decode_nested
+  (decode "\{\"a\": [1, \{\"b\": null}]}") == ["a": [1 ["b": (json_null true)]]]
+
+fn test_decode_object
+  (decode "\{\"a\": 1, \"b\": 2}") == ["a": 1 "b": 2]
+
+fn test_decode_string
+  (decode "\"hello\"") == "hello"
+
+fn test_decode_unicode
+  (decode "\"\\u00e9\"") == "é"
+
+fn test_decode_whitespace
+  (decode "  [ 1 , 2 ]  ") == [1 2]
+
+fn test_encode_escapes
+  (encode "a\"b\nc") == "\"a\\\"b\\nc\""
+
+fn test_encode_nested
+  value = ["a": true "b": [1 2]]
+  (encode value) == "\{\"a\":true,\"b\":[1,2]}"
+
+fn test_error_position
+  (failure_position (decode "[1, nope]")) == 5
+
+fn test_error_trailing
+  (failure_position (decode "1 x")) == 3
+
+fn test_must_wraps_defect
+  is_defect (must (decode "nope"))
+
+fn test_roundtrip
+  text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"
+  (encode (decode text)) == text
+
+fn u_escape c
+  "\\u{hex4 (char_code c)}"
+
+fn value_for "\"" cs p
+  parse_string cs (p + 1)
+
+fn value_for "[" cs p
+  parse_array cs (p + 1)
+
+fn value_for "\{" cs p
+  parse_object cs (p + 1)
+
+fn value_for "t" cs p
+  word cs p "true" true
+
+fn value_for "f" cs p
+  word cs p "false" false
+
+fn value_for "n" cs p
+  word cs p "null" (json_null true)
+
+fn value_for none _ p
+  fail p "unexpected end of input"
+
+fn value_for c cs p
+  if (is_number_start c) (parse_number cs p) (fail p "unexpected character `{c}`")
+
+fn word cs p txt v
+  n = length txt
+  seg = join (slice cs p (p + n - 1)) ""
+  if (seg == txt) (parsed (p + n) v) (fail p "invalid literal")

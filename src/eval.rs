@@ -2,12 +2,20 @@ use crate::ast::*;
 use crate::diag::Span;
 use num_bigint::BigInt;
 use num_traits::Zero;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MapKey {
+    Int(BigInt),
+    Str(String),
+}
 
 #[derive(Clone, Debug)]
 pub enum Value {
     Int(BigInt),
+    Float(f64),
+    Map(Rc<BTreeMap<MapKey, Value>>),
     Str(String),
     True,
     False,
@@ -90,6 +98,7 @@ impl Executor for ScriptedExecutor {
 pub struct Interp<'a> {
     fns: HashMap<&'a str, Vec<&'a FnDecl>>,
     types: HashMap<&'a str, &'a TypeDecl>,
+    entry_decl: TypeDecl,
 }
 
 impl<'a> Interp<'a> {
@@ -99,12 +108,33 @@ impl<'a> Interp<'a> {
             fns.entry(&decl.name).or_default().push(decl);
         }
         let types = program.types.iter().map(|t| (t.name.as_str(), t)).collect();
-        Interp { fns, types }
+        let origin = Span { line: 0, col: 0 };
+        let entry_decl = TypeDecl {
+            name: "entry".to_string(),
+            span: origin,
+            fields: vec![
+                ("key".to_string(), "any".to_string(), origin),
+                ("value".to_string(), "any".to_string(), origin),
+            ],
+        };
+        Interp { fns, types, entry_decl }
+    }
+
+    fn type_decl(&self, name: &str) -> Option<&TypeDecl> {
+        match name {
+            "entry" => Some(&self.entry_decl),
+            _ => self.types.get(name).copied(),
+        }
     }
 
     pub fn run_main(&self) -> EvalResult {
         let main = self.fns.get("main").expect("checked: main exists")[0];
         self.eval_body(&main.body, None)
+    }
+
+    pub fn run_named(&self, name: &str) -> Option<EvalResult> {
+        let decl = self.fns.get(name)?.iter().find(|d| d.params.is_empty())?;
+        Some(self.eval_body(&decl.body, None))
     }
 
     fn eval_body(&self, body: &[Stmt], mut env: Option<Rc<Env>>) -> EvalResult {
@@ -160,7 +190,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                let decl = self.types.get(&**ty).expect("constructed types are declared");
+                let decl = self.type_decl(ty).expect("constructed types are declared");
                 if entries.len() >= decl.fields.len() {
                     return Err(RuntimeError {
                         message: "a keyed read omits at least one field; reading every \
@@ -195,6 +225,23 @@ impl<'a> Interp<'a> {
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::Int(n.clone())),
+            Expr::Float(x, _) => Ok(Value::Float(*x)),
+            Expr::MapLit(pairs, span) => {
+                let mut entries = BTreeMap::new();
+                for (key_expr, value_expr) in pairs {
+                    let key = self.eval(key_expr, env)?;
+                    let value = self.eval(value_expr, env)?;
+                    if is_failure(&key) {
+                        return Ok(key);
+                    }
+                    if is_failure(&value) {
+                        return Ok(value);
+                    }
+                    let key = map_key(key, *span)?;
+                    entries.insert(key, value);
+                }
+                Ok(Value::Map(Rc::new(entries)))
+            }
             Expr::Str(parts, _) => self.eval_template(parts, env),
             Expr::Ident(name, span) => self.eval_ident(name, *span, env),
             Expr::List(items, _) => {
@@ -324,7 +371,7 @@ impl<'a> Interp<'a> {
             let [reason] = arity(args, name, span)?;
             return Ok(Value::ErrV(Rc::new(reason)));
         }
-        if let Some(ty) = self.types.get(name) {
+        if let Some(ty) = self.type_decl(name) {
             return self.construct(ty, args, span);
         }
         if let Some(overloads) = self.fns.get(name) {
@@ -410,17 +457,219 @@ impl<'a> Interp<'a> {
                 }
             }
             "at" => {
-                let [list, index] = arity(args, name, span)?;
-                let (Value::List(items), Value::Int(i)) = (&list, &index) else {
+                let [container, index] = arity(args, name, span)?;
+                match (&container, &index) {
+                    (Value::List(items), Value::Int(i)) => {
+                        let idx = usize::try_from(i.clone()).ok();
+                        Ok(match idx.filter(|i| *i >= 1 && *i <= items.len()) {
+                            Some(i) => items[i - 1].clone(),
+                            None => Value::NoneV,
+                        })
+                    }
+                    (Value::Str(text), Value::Int(i)) => {
+                        let idx = usize::try_from(i.clone()).ok();
+                        Ok(match idx
+                            .and_then(|i| i.checked_sub(1))
+                            .and_then(|i| text.chars().nth(i))
+                        {
+                            Some(c) => Value::Str(c.to_string()),
+                            None => Value::NoneV,
+                        })
+                    }
+                    (Value::Map(entries), Value::Int(_) | Value::Str(_)) => {
+                        let key = map_key(index.clone(), span)?;
+                        Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
+                    }
+                    _ => Err(RuntimeError {
+                        message: "at takes a list or string with a 1-based position, or a \
+                                  map with a key"
+                            .to_string(),
+                        span,
+                    }),
+                }
+            }
+            "push" => {
+                let [list, item] = arity(args, name, span)?;
+                let Value::List(items) = &list else {
                     return Err(RuntimeError {
-                        message: "at takes a list and a 1-based position".to_string(),
+                        message: "push takes a list and a value".to_string(),
                         span,
                     });
                 };
-                let idx = usize::try_from(i.clone()).ok();
-                match idx.filter(|i| *i >= 1 && *i <= items.len()) {
-                    Some(i) => Ok(items[i - 1].clone()),
-                    None => Ok(Value::NoneV),
+                let mut next = (**items).clone();
+                next.push(item);
+                Ok(Value::List(Rc::new(next)))
+            }
+            "put" => {
+                let [map, key, value] = arity(args, name, span)?;
+                let Value::Map(entries) = &map else {
+                    return Err(RuntimeError {
+                        message: "put takes a map, a key, and a value".to_string(),
+                        span,
+                    });
+                };
+                let key = map_key(key, span)?;
+                let mut next = (**entries).clone();
+                next.insert(key, value);
+                Ok(Value::Map(Rc::new(next)))
+            }
+            "entries" => {
+                let [map] = arity(args, name, span)?;
+                let Value::Map(map_entries) = &map else {
+                    return Err(RuntimeError {
+                        message: "entries takes a map".to_string(),
+                        span,
+                    });
+                };
+                let list = map_entries
+                    .iter()
+                    .map(|(key, value)| {
+                        let key = match key {
+                            MapKey::Int(n) => Value::Int(n.clone()),
+                            MapKey::Str(s) => Value::Str(s.clone()),
+                        };
+                        Value::Record {
+                            ty: Rc::from("entry"),
+                            fields: Rc::new(vec![key, value.clone()]),
+                        }
+                    })
+                    .collect();
+                Ok(Value::List(Rc::new(list)))
+            }
+            "chars" => {
+                let [text] = arity(args, name, span)?;
+                let Value::Str(text) = &text else {
+                    return Err(RuntimeError {
+                        message: "chars takes a string".to_string(),
+                        span,
+                    });
+                };
+                let list = text.chars().map(|c| Value::Str(c.to_string())).collect();
+                Ok(Value::List(Rc::new(list)))
+            }
+            "char_code" => {
+                let [c] = arity(args, name, span)?;
+                let code = match &c {
+                    Value::Str(s) if s.chars().count() == 1 => {
+                        s.chars().next().expect("length checked") as u32
+                    }
+                    _ => {
+                        return Err(RuntimeError {
+                            message: "char_code takes a one-character string".to_string(),
+                            span,
+                        })
+                    }
+                };
+                Ok(Value::Int(BigInt::from(code)))
+            }
+            "from_code" => {
+                let [code] = arity(args, name, span)?;
+                let Value::Int(n) = &code else {
+                    return Err(RuntimeError {
+                        message: "from_code takes an int".to_string(),
+                        span,
+                    });
+                };
+                let scalar = u32::try_from(n.clone()).ok().and_then(char::from_u32);
+                match scalar {
+                    Some(c) => Ok(Value::Str(c.to_string())),
+                    None => Ok(Value::ErrV(Rc::new(Value::Str(
+                        "not a unicode scalar value".to_string(),
+                    )))),
+                }
+            }
+            "join" => {
+                let [list, sep] = arity(args, name, span)?;
+                let (Value::List(items), Value::Str(sep)) = (&list, &sep) else {
+                    return Err(RuntimeError {
+                        message: "join takes a list of strings and a separator".to_string(),
+                        span,
+                    });
+                };
+                let mut parts = Vec::new();
+                for item in items.iter() {
+                    match item {
+                        Value::Str(s) => parts.push(s.clone()),
+                        bad if is_failure(bad) => return Ok(bad.clone()),
+                        _ => {
+                            return Err(RuntimeError {
+                                message: "join takes a list of strings".to_string(),
+                                span,
+                            })
+                        }
+                    }
+                }
+                Ok(Value::Str(parts.join(sep)))
+            }
+            "slice" => {
+                let [container, from, to] = arity(args, name, span)?;
+                let (Value::Int(from), Value::Int(to)) = (&from, &to) else {
+                    return Err(RuntimeError {
+                        message: "slice takes 1-based inclusive positions".to_string(),
+                        span,
+                    });
+                };
+                let from = usize::try_from(from.clone()).unwrap_or(0);
+                let to = usize::try_from(to.clone()).unwrap_or(0);
+                match &container {
+                    Value::List(items) => {
+                        let sliced = slice_range(items.len(), from, to)
+                            .map(|r| items[r].to_vec())
+                            .unwrap_or_default();
+                        Ok(Value::List(Rc::new(sliced)))
+                    }
+                    Value::Str(text) => {
+                        let all: Vec<char> = text.chars().collect();
+                        let sliced = slice_range(all.len(), from, to)
+                            .map(|r| all[r].iter().collect::<String>())
+                            .unwrap_or_default();
+                        Ok(Value::Str(sliced))
+                    }
+                    _ => Err(RuntimeError {
+                        message: "slice takes a list or string".to_string(),
+                        span,
+                    }),
+                }
+            }
+            "to_int" => {
+                let [value] = arity(args, name, span)?;
+                match &value {
+                    Value::Str(s) => Ok(match s.parse::<BigInt>() {
+                        Ok(n) => Value::Int(n),
+                        Err(_) => Value::ErrV(Rc::new(Value::Str(format!(
+                            "{s:?} is not an integer"
+                        )))),
+                    }),
+                    Value::Int(_) => Ok(value),
+                    _ => Err(RuntimeError {
+                        message: "to_int takes a string".to_string(),
+                        span,
+                    }),
+                }
+            }
+            "to_float" => {
+                let [value] = arity(args, name, span)?;
+                match &value {
+                    Value::Str(s) => Ok(match s.parse::<f64>() {
+                        Ok(x) => Value::Float(x),
+                        Err(_) => Value::ErrV(Rc::new(Value::Str(format!(
+                            "{s:?} is not a number"
+                        )))),
+                    }),
+                    Value::Int(n) => {
+                        let mut approx = 0.0f64;
+                        let digits = n.to_string();
+                        match digits.parse::<f64>() {
+                            Ok(x) => approx = x,
+                            Err(_) => {}
+                        }
+                        Ok(Value::Float(approx))
+                    }
+                    Value::Float(_) => Ok(value),
+                    _ => Err(RuntimeError {
+                        message: "to_float takes a string or int".to_string(),
+                        span,
+                    }),
                 }
             }
             "length" => {
@@ -428,6 +677,7 @@ impl<'a> Interp<'a> {
                 match list {
                     Value::List(items) => Ok(Value::Int(BigInt::from(items.len()))),
                     Value::Str(s) => Ok(Value::Int(BigInt::from(s.chars().count()))),
+                    Value::Map(entries) => Ok(Value::Int(BigInt::from(entries.len()))),
                     _ => Err(RuntimeError {
                         message: "length takes a list or string".to_string(),
                         span,
@@ -619,13 +869,38 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
     }
 }
 
+fn slice_range(len: usize, from: usize, to: usize) -> Option<std::ops::Range<usize>> {
+    match from >= 1 && from <= to && to <= len {
+        true => Some(from - 1..to),
+        false => None,
+    }
+}
+
+fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
+    match value {
+        Value::Int(n) => Ok(MapKey::Int(n)),
+        Value::Str(s) => Ok(MapKey::Str(s)),
+        other => Err(RuntimeError {
+            message: format!("{} is not usable as a map key", render(&other, true)),
+            span,
+        }),
+    }
+}
+
 fn is_failure(value: &Value) -> bool {
     matches!(value, Value::ErrV(_) | Value::NoneV)
 }
 
 fn type_matches(ty: &str, arg: &Value) -> bool {
+    if ty.ends_with("[]") {
+        return matches!(arg, Value::List(_));
+    }
+    if ty.contains('[') {
+        return matches!(arg, Value::Map(_));
+    }
     match (ty, arg) {
         ("int", Value::Int(_)) => true,
+        ("float64", Value::Float(_)) => true,
         ("string", Value::Str(_)) => true,
         ("bool", Value::True | Value::False) => true,
         ("true", Value::True) => true,
@@ -640,6 +915,7 @@ fn type_matches(ty: &str, arg: &Value) -> bool {
 fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => Some(x.cmp(y)),
+        (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),
         (Value::Str(x), Value::Str(y)) => Some(x.cmp(y)),
         _ => None,
     }
@@ -667,6 +943,19 @@ fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
             true => Ok(Value::ErrV(Rc::new(Value::Str("division by zero".to_string())))),
             false => Ok(Value::Int(a / b)),
         },
+        ("+", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
+        ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
+        ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
+        ("/", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
+            true => Ok(Value::ErrV(Rc::new(Value::Str("division by zero".to_string())))),
+            false => Ok(Value::Float(a / b)),
+        },
+        ("+" | "-" | "*" | "/", Value::Int(_), Value::Float(_))
+        | ("+" | "-" | "*" | "/", Value::Float(_), Value::Int(_)) => Err(RuntimeError {
+            message: "no implicit numeric coercion; convert explicitly with `to_float`"
+                .to_string(),
+            span,
+        }),
         ("<" | "<=" | ">" | ">=", _, _) => match compare(&left, &right) {
             Some(ord) => Ok(bool_value(match op {
                 "<" => ord.is_lt(),
@@ -696,6 +985,13 @@ fn bool_value(b: bool) -> Value {
 fn values_equal(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
+        (Value::Float(x), Value::Float(y)) => x.total_cmp(y).is_eq(),
+        (Value::Map(x), Value::Map(y)) => {
+            x.len() == y.len()
+                && x.iter().zip(y.iter()).all(|((ka, va), (kb, vb))| {
+                    ka == kb && values_equal(va, vb)
+                })
+        }
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::True, Value::True) | (Value::False, Value::False) => true,
         (Value::NoneV, Value::NoneV) => true,
@@ -709,9 +1005,33 @@ fn values_equal(a: &Value, b: &Value) -> bool {
     }
 }
 
+fn render_float(x: f64) -> String {
+    match x.is_finite() && x.fract() == 0.0 && x.abs() < 1e15 {
+        true => format!("{x:.1}"),
+        false => format!("{x}"),
+    }
+}
+
 pub fn render(value: &Value, quote_strings: bool) -> String {
     match value {
         Value::Int(n) => n.to_string(),
+        Value::Float(x) => render_float(*x),
+        Value::Map(entries) => match entries.is_empty() {
+            true => "[:]".to_string(),
+            false => {
+                let inner: Vec<String> = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        let key = match key {
+                            MapKey::Int(n) => n.to_string(),
+                            MapKey::Str(s) => format!("{s:?}"),
+                        };
+                        format!("{key}: {}", render(value, true))
+                    })
+                    .collect();
+                format!("[{}]", inner.join(" "))
+            }
+        },
         Value::Str(s) => match quote_strings {
             true => format!("{s:?}"),
             false => s.clone(),
@@ -763,7 +1083,7 @@ mod tests {
     fn run_main(source: &str) -> Value {
         let lexed = crate::lexer::lex(source).expect("lexes");
         let program = crate::parser::parse(&lexed).expect("parses");
-        let diags = crate::check::check(&program);
+        let diags = crate::check::check(&program, true);
         assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
         let interp = Interp::new(&program);
         interp.run_main().map_err(|e| e.message).expect("runs")

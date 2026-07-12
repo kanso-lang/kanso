@@ -4,6 +4,8 @@ use num_bigint::BigInt;
 #[derive(Clone, Debug)]
 pub enum Expr {
     Int(BigInt, Span),
+    Float(f64, Span),
+    MapLit(Vec<(Expr, Expr)>, Span),
     Str(Vec<TemplatePart>, Span),
     Ident(String, Span),
     List(Vec<Expr>, Span),
@@ -23,6 +25,8 @@ impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Expr::Int(_, s)
+            | Expr::Float(_, s)
+            | Expr::MapLit(_, s)
             | Expr::Str(_, s)
             | Expr::Ident(_, s)
             | Expr::List(_, s)
