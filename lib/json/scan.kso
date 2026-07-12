@@ -8,21 +8,22 @@ fn _expect_char cs p c
   _expect_check (at cs p) p c
 
 fn _expect_check found p c
-  if (found == c) (p + 1) (_fail p "expected `{c}`")
+  if (found == c) (p + 1) (_fail p "expected `{utf8 [c]}`")
 
 fn _fail p reason
   err (parse_failure p reason)
 
-fn _is_ws " "
+// json whitespace bytes: tab, newline, carriage return, space
+fn _is_ws 9
   true
 
-fn _is_ws "\n"
+fn _is_ws 10
   true
 
-fn _is_ws "\r"
+fn _is_ws 13
   true
 
-fn _is_ws "\t"
+fn _is_ws 32
   true
 
 fn _is_ws none

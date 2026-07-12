@@ -35,13 +35,19 @@ declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
 declare i64 @k_truthy(%KValue)
 declare void @k_die(ptr) noreturn
+declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
+declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
+declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
 declare %KValue @k_closure(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
+declare %KValue @k_b_bytes(%KValue)
 declare %KValue @k_b_chars(%KValue)
+declare %KValue @k_b_concat(%KValue, %KValue)
+declare %KValue @k_b_utf8(%KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
@@ -59,8 +65,11 @@ declare %KValue @k_b_to_int(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 16] = [
+const BUILTIN_CALLS: [(&str, usize); 19] = [
     ("at", 2),
+    ("bytes", 1),
+    ("concat", 2),
+    ("utf8", 1),
     ("char_code", 1),
     ("chars", 1),
     ("entries", 1),
@@ -149,6 +158,29 @@ impl FnEmit {
     fn lookup(&self, name: &str) -> Option<String> {
         self.versions.get(name).cloned()
     }
+}
+
+fn inline_tag(f: &mut FnEmit, value: &str) -> String {
+    let t = f.tmp();
+    f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
+    t
+}
+
+fn inline_payload(f: &mut FnEmit, value: &str) -> String {
+    let t = f.tmp();
+    f.line(&format!("{t} = extractvalue %KValue {value}, 1"));
+    t
+}
+
+fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
+    let tag = inline_tag(f, value);
+    let a = f.tmp();
+    f.line(&format!("{a} = icmp ne i64 {tag}, 5"));
+    let b = f.tmp();
+    f.line(&format!("{b} = icmp ne i64 {tag}, 4"));
+    let both = f.tmp();
+    f.line(&format!("{both} = and i1 {a}, {b}"));
+    both
 }
 
 impl<'a> Backend<'a> {
@@ -242,13 +274,10 @@ impl<'a> Backend<'a> {
             f.start_block(&fail);
         }
         for i in 0..arity {
-            let c = f.tmp();
-            f.line(&format!("{c} = call i64 @k_not_failure(%KValue %x{i})"));
-            let b = f.tmp();
-            f.line(&format!("{b} = icmp eq i64 {c}, 0"));
+            let ok = inline_not_failure(&mut f, &format!("%x{i}"));
             let ret_label = f.label();
             let next = f.label();
-            f.line(&format!("br i1 {b}, label %{ret_label}, label %{next}"));
+            f.line(&format!("br i1 {ok}, label %{next}, label %{ret_label}"));
             f.start_block(&ret_label);
             f.line(&format!("ret %KValue %x{i}"));
             f.start_block(&next);
@@ -278,9 +307,26 @@ impl<'a> Backend<'a> {
             f.start_block(&ok);
             let _ = backend;
         };
+        let branch_i1 = |f: &mut FnEmit, cond: String| {
+            let ok = f.label();
+            f.line(&format!("br i1 {cond}, label %{ok}, label %{fail}"));
+            f.start_block(&ok);
+        };
+        let tag_is = |f: &mut FnEmit, value: &str, tag: i64| {
+            let t = inline_tag(f, value);
+            let b = f.tmp();
+            f.line(&format!("{b} = icmp eq i64 {t}, {tag}"));
+            b
+        };
         match pattern {
             Pattern::IntLit(n, _) => {
-                check(self, f, format!("call i64 @k_check_int(%KValue {value}, i64 {n})"));
+                let is_int = tag_is(f, value, 0);
+                let payload = inline_payload(f, value);
+                let eq = f.tmp();
+                f.line(&format!("{eq} = icmp eq i64 {payload}, {n}"));
+                let both = f.tmp();
+                f.line(&format!("{both} = and i1 {is_int}, {eq}"));
+                branch_i1(f, both);
             }
             Pattern::StrLit(s, _) => {
                 let (name, len) = self.intern(s);
@@ -296,13 +342,16 @@ impl<'a> Backend<'a> {
                     "false" => K_FALSE,
                     _ => K_NONE,
                 };
-                check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {tag})"));
+                let b = tag_is(f, value, tag);
+                branch_i1(f, b);
             }
             Pattern::Wildcard(_) => {
-                check(self, f, format!("call i64 @k_not_failure(%KValue {value})"));
+                let ok = inline_not_failure(f, value);
+                branch_i1(f, ok);
             }
             Pattern::Var(name, _) => {
-                check(self, f, format!("call i64 @k_not_failure(%KValue {value})"));
+                let ok = inline_not_failure(f, value);
+                branch_i1(f, ok);
                 f.bind(name, value);
             }
             Pattern::Annotated { name, ty, .. } => {
@@ -433,11 +482,7 @@ impl<'a> Backend<'a> {
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
-            Expr::Int(n, _) => {
-                let t = f.tmp();
-                f.line(&format!("{t} = call %KValue @k_int(i64 {n})"));
-                Ok(t)
-            }
+            Expr::Int(n, _) => Ok(format!("{{ i64 0, i64 {n} }}")),
             Expr::Float(x, _) => {
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_float(double 0x{:016X})", x.to_bits()));
@@ -499,18 +544,14 @@ impl<'a> Backend<'a> {
                         "native backend: `{name}` as a function value needs arity 1"
                     ));
                 }
-                let t = f.tmp();
                 match name.as_str() {
-                    "true" => f.line(&format!("{t} = call %KValue @k_bool(i64 1)")),
-                    "false" => f.line(&format!("{t} = call %KValue @k_bool(i64 0)")),
-                    "none" => f.line(&format!("{t} = call %KValue @k_none()")),
-                    _ => {
-                        return Err(format!(
-                            "native backend: `{name}` as a bare value is not yet supported"
-                        ))
-                    }
+                    "true" => Ok("{ i64 2, i64 0 }".to_string()),
+                    "false" => Ok("{ i64 3, i64 0 }".to_string()),
+                    "none" => Ok("{ i64 4, i64 0 }".to_string()),
+                    _ => Err(format!(
+                        "native backend: `{name}` as a bare value is not yet supported"
+                    )),
                 }
-                Ok(t)
             }
             Expr::App { head, args, .. } => self.emit_call(f, head, args),
             Expr::Seq(lhs, rhs, _) => {
@@ -523,21 +564,7 @@ impl<'a> Backend<'a> {
             Expr::BinOp { op, lhs, rhs, .. } => {
                 let a = self.emit_expr(f, lhs)?;
                 let b = self.emit_expr(f, rhs)?;
-                let t = f.tmp();
-                let call = match *op {
-                    "+" => format!("call %KValue @k_add(%KValue {a}, %KValue {b})"),
-                    "-" => format!("call %KValue @k_sub(%KValue {a}, %KValue {b})"),
-                    "*" => format!("call %KValue @k_mul(%KValue {a}, %KValue {b})"),
-                    "/" => format!("call %KValue @k_div(%KValue {a}, %KValue {b})"),
-                    "==" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 0)"),
-                    "!=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 1)"),
-                    "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
-                    "<=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 3)"),
-                    ">" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 4)"),
-                    _ => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
-                };
-                f.line(&format!("{t} = {call}"));
-                Ok(t)
+                self.emit_binop(f, op, &a, &b)
             }
             Expr::Lambda { params, body, .. } => {
                 if params.len() != 1 {
@@ -618,6 +645,99 @@ impl<'a> Backend<'a> {
                 Ok(t)
             }
         }
+    }
+
+    fn emit_binop(
+        &mut self,
+        f: &mut FnEmit,
+        op: &str,
+        a: &str,
+        b: &str,
+    ) -> Result<String, String> {
+        let slow_call = match op {
+            "+" => format!("call %KValue @k_add(%KValue {a}, %KValue {b})"),
+            "-" => format!("call %KValue @k_sub(%KValue {a}, %KValue {b})"),
+            "*" => format!("call %KValue @k_mul(%KValue {a}, %KValue {b})"),
+            "/" => format!("call %KValue @k_div(%KValue {a}, %KValue {b})"),
+            "==" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 0)"),
+            "!=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 1)"),
+            "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
+            "<=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 3)"),
+            ">" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 4)"),
+            _ => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
+        };
+        if op == "/" {
+            let t = f.tmp();
+            f.line(&format!("{t} = {slow_call}"));
+            return Ok(t);
+        }
+        let ta = inline_tag(f, a);
+        let tb = inline_tag(f, b);
+        let ia = f.tmp();
+        f.line(&format!("{ia} = icmp eq i64 {ta}, 0"));
+        let ib = f.tmp();
+        f.line(&format!("{ib} = icmp eq i64 {tb}, 0"));
+        let both = f.tmp();
+        f.line(&format!("{both} = and i1 {ia}, {ib}"));
+        let fast = f.label();
+        let slow = f.label();
+        let merge = f.label();
+        f.line(&format!("br i1 {both}, label %{fast}, label %{slow}"));
+        f.start_block(&fast);
+        let pa = inline_payload(f, a);
+        let pb = inline_payload(f, b);
+        let (fast_value, fast_from) = match op {
+            "+" | "-" | "*" => {
+                let intrinsic = match op {
+                    "+" => "llvm.sadd.with.overflow.i64",
+                    "-" => "llvm.ssub.with.overflow.i64",
+                    _ => "llvm.smul.with.overflow.i64",
+                };
+                let pair = f.tmp();
+                f.line(&format!("{pair} = call {{ i64, i1 }} @{intrinsic}(i64 {pa}, i64 {pb})"));
+                let sum = f.tmp();
+                f.line(&format!("{sum} = extractvalue {{ i64, i1 }} {pair}, 0"));
+                let overflow = f.tmp();
+                f.line(&format!("{overflow} = extractvalue {{ i64, i1 }} {pair}, 1"));
+                let fast_ok = f.label();
+                f.line(&format!("br i1 {overflow}, label %{slow}, label %{fast_ok}"));
+                f.start_block(&fast_ok);
+                let v = f.tmp();
+                f.line(&format!(
+                    "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
+                ));
+                (v, fast_ok)
+            }
+            _ => {
+                let cmp = match op {
+                    "==" => "eq",
+                    "!=" => "ne",
+                    "<" => "slt",
+                    "<=" => "sle",
+                    ">" => "sgt",
+                    _ => "sge",
+                };
+                let c = f.tmp();
+                f.line(&format!("{c} = icmp {cmp} i64 {pa}, {pb}"));
+                let v = f.tmp();
+                f.line(&format!(
+                    "{v} = select i1 {c}, %KValue {{ i64 2, i64 0 }}, %KValue {{ i64 3, i64 0 }}"
+                ));
+                (v, fast.clone())
+            }
+        };
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&slow);
+        let sv = f.tmp();
+        f.line(&format!("{sv} = {slow_call}"));
+        let slow_from = f.cur_label.clone();
+        f.line(&format!("br label %{merge}"));
+        f.start_block(&merge);
+        let t = f.tmp();
+        f.line(&format!(
+            "{t} = phi %KValue [ {fast_value}, %{fast_from} ], [ {sv}, %{slow_from} ]"
+        ));
+        Ok(t)
     }
 
     fn emit_call(&mut self, f: &mut FnEmit, head: &Expr, args: &[Expr]) -> Result<String, String> {

@@ -10,6 +10,7 @@ typedef struct { long long tag; long long payload; } KValue;
 enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF };
 
 typedef struct { long len; char* data; } KStr;
+typedef struct { long long cap; long long used; } KBuf;
 typedef struct { long long len; KValue* items; } KList;
 typedef struct { long long len; KValue* pairs; } KMap; /* [k0 v0 k1 v1...] sorted by key */
 typedef struct { KValue (*fn)(void*, KValue); void* env; } KClosure;
@@ -361,11 +362,21 @@ long long k_truthy(KValue v) {
 
 /* ---- slice 2: lists, maps, closures, builtins ---- */
 
+static KValue* k_buf(long long cap) {
+    KBuf* b = k_alloc(sizeof(KBuf) + sizeof(KValue) * cap);
+    b->cap = cap;
+    b->used = 0;
+    return (KValue*)(b + 1);
+}
+
+static KBuf* k_buf_of(KValue* items) { return ((KBuf*)items) - 1; }
+
 static KValue k_mklist(long long n, KValue* items) {
     KList* l = k_alloc(sizeof(KList));
     l->len = n;
-    l->items = k_alloc(sizeof(KValue) * (n ? n : 1));
+    l->items = k_buf(n ? n : 1);
     memcpy(l->items, items, sizeof(KValue) * n);
+    k_buf_of(l->items)->used = n;
     KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
 }
 
@@ -484,6 +495,54 @@ static long k_cp_len(unsigned char b) {
     return 4;
 }
 
+KValue k_b_bytes(KValue sv) {
+    if (!k_not_failure(sv)) return sv;
+    if (sv.tag != K_STR) k_die("bytes takes a string");
+    KStr* s = k_as_str(sv);
+    KValue* items = k_alloc(sizeof(KValue) * (s->len ? s->len : 1));
+    for (long i = 0; i < s->len; i++) items[i] = k_int((unsigned char)s->data[i]);
+    return k_mklist(s->len, items);
+}
+
+KValue k_b_concat(KValue av, KValue bv) {
+    if (!k_not_failure(av)) return av;
+    if (!k_not_failure(bv)) return bv;
+    if (av.tag != K_LIST || bv.tag != K_LIST) k_die("concat takes two lists");
+    KList* a = k_as_list(av);
+    KList* b = k_as_list(bv);
+    long long n = a->len + b->len;
+    KValue* items = k_alloc(sizeof(KValue) * (n ? n : 1));
+    memcpy(items, a->items, sizeof(KValue) * a->len);
+    memcpy(items + a->len, b->items, sizeof(KValue) * b->len);
+    return k_mklist(n, items);
+}
+
+KValue k_b_utf8(KValue lv) {
+    if (!k_not_failure(lv)) return lv;
+    if (lv.tag != K_LIST) k_die("utf8 takes a list of byte values");
+    KList* l = k_as_list(lv);
+    char* data = k_alloc(l->len + 1);
+    for (long long i = 0; i < l->len; i++) {
+        KValue item = l->items[i];
+        if (!k_not_failure(item)) return item;
+        if (item.tag != K_INT || item.payload < 0 || item.payload > 255) {
+            return k_err(k_str("utf8 takes byte values (0-255)"));
+        }
+        data[i] = (char)item.payload;
+    }
+    long i = 0;
+    while (i < l->len) {
+        unsigned char b0 = (unsigned char)data[i];
+        long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
+        if (w == 0 || i + w > l->len) return k_err(k_str("invalid utf-8"));
+        for (long j = 1; j < w; j++) {
+            if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"));
+        }
+        i += w;
+    }
+    return k_str_n(data, l->len);
+}
+
 KValue k_b_chars(KValue sv) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag != K_STR) k_die("chars takes a string");
@@ -537,10 +596,25 @@ KValue k_b_push(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) k_die("push takes a list and a value");
     KList* l = k_as_list(lv);
-    KValue* items = k_alloc(sizeof(KValue) * (l->len + 1));
+    KBuf* buf = k_buf_of(l->items);
+    if (buf->used == l->len && l->len < buf->cap) {
+        /* this list is the frontier of its buffer: claim the next slot */
+        l->items[l->len] = item;
+        buf->used++;
+        KList* out = k_alloc(sizeof(KList));
+        out->len = l->len + 1;
+        out->items = l->items;
+        KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
+    }
+    long long cap = l->len < 2 ? 4 : l->len * 2;
+    KValue* items = k_buf(cap);
     memcpy(items, l->items, sizeof(KValue) * l->len);
     items[l->len] = item;
-    return k_mklist(l->len + 1, items);
+    k_buf_of(items)->used = l->len + 1;
+    KList* out = k_alloc(sizeof(KList));
+    out->len = l->len + 1;
+    out->items = items;
+    KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
 }
 
 KValue k_b_length(KValue v) {

@@ -29,7 +29,7 @@ fn _finish cs (_parsed p v)
   if (p2 > (length cs)) v (_fail p2 "unexpected trailing characters")
 
 fn decode s
-  cs = chars s
+  cs = bytes s
   _finish cs (_parse_value cs 1)
 
 fn encode true

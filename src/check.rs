@@ -2,10 +2,12 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::HashSet;
 
-pub const BUILTINS: [&str; 18] = [
+pub const BUILTINS: [&str; 21] = [
     "at",
+    "bytes",
     "char_code",
     "chars",
+    "concat",
     "entries",
     "filter",
     "from_code",
@@ -21,6 +23,7 @@ pub const BUILTINS: [&str; 18] = [
     "sum",
     "to_float",
     "to_int",
+    "utf8",
 ];
 
 pub fn check(program: &Program, require_main: bool) -> Vec<Diagnostic> {

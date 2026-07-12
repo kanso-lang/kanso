@@ -541,6 +541,64 @@ impl<'a> Interp<'a> {
                     .collect();
                 Ok(Value::List(Rc::new(list)))
             }
+            "bytes" => {
+                let [text] = arity(args, name, span)?;
+                let Value::Str(text) = &text else {
+                    return Err(RuntimeError {
+                        message: "bytes takes a string".to_string(),
+                        span,
+                    });
+                };
+                let list = text.bytes().map(|b| Value::Int(BigInt::from(b))).collect();
+                Ok(Value::List(Rc::new(list)))
+            }
+            "concat" => {
+                let [a, b] = arity(args, name, span)?;
+                let (Value::List(xs), Value::List(ys)) = (&a, &b) else {
+                    return Err(RuntimeError {
+                        message: "concat takes two lists".to_string(),
+                        span,
+                    });
+                };
+                let mut joined = (**xs).clone();
+                joined.extend(ys.iter().cloned());
+                Ok(Value::List(Rc::new(joined)))
+            }
+            "utf8" => {
+                let [list] = arity(args, name, span)?;
+                let Value::List(items) = &list else {
+                    return Err(RuntimeError {
+                        message: "utf8 takes a list of byte values".to_string(),
+                        span,
+                    });
+                };
+                let mut raw = Vec::with_capacity(items.len());
+                for item in items.iter() {
+                    match item {
+                        Value::Int(n) => match u8::try_from(n.clone()) {
+                            Ok(b) => raw.push(b),
+                            Err(_) => {
+                                return Ok(Value::ErrV(Rc::new(Value::Str(
+                                    "utf8 takes byte values (0-255)".to_string(),
+                                ))))
+                            }
+                        },
+                        bad if is_failure(bad) => return Ok(bad.clone()),
+                        _ => {
+                            return Err(RuntimeError {
+                                message: "utf8 takes a list of byte values".to_string(),
+                                span,
+                            })
+                        }
+                    }
+                }
+                match String::from_utf8(raw) {
+                    Ok(text) => Ok(Value::Str(text)),
+                    Err(_) => Ok(Value::ErrV(Rc::new(Value::Str(
+                        "invalid utf-8".to_string(),
+                    )))),
+                }
+            }
             "chars" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {

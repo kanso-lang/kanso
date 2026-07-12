@@ -1,44 +1,49 @@
-fn _is_float_mark "."
+// number bytes: + - . E e, then the ascii digits
+fn _is_number_char 43
   true
 
-fn _is_float_mark "e"
+fn _is_number_char 45
   true
 
-fn _is_float_mark "E"
+fn _is_number_char 46
   true
 
-fn _is_float_mark _
-  false
-
-fn _is_number_char "-"
+fn _is_number_char 69
   true
 
-fn _is_number_char "+"
-  true
-
-fn _is_number_char "."
-  true
-
-fn _is_number_char "e"
-  true
-
-fn _is_number_char "E"
+fn _is_number_char 101
   true
 
 fn _is_number_char none
   false
 
 fn _is_number_char c
-  _both ("/" < c) (c < ":")
+  _both (47 < c) (c < 58)
 
-fn _is_number_start "-"
+fn _is_number_start 45
   true
 
 fn _is_number_start none
   false
 
 fn _is_number_start c
-  _both ("/" < c) (c < ":")
+  _both (47 < c) (c < 58)
+
+fn _mark_from cs p q
+  if (p > q) false (_mark_step cs (at cs p) p q)
+
+// float marks: . E e
+fn _mark_step _ 46 _ _
+  true
+
+fn _mark_step _ 69 _ _
+  true
+
+fn _mark_step _ 101 _ _
+  true
+
+fn _mark_step cs _ p q
+  _mark_from cs (p + 1) q
 
 fn _number_end cs p
   if (_is_number_char (at cs p)) (_number_end cs (p + 1)) p
@@ -49,7 +54,7 @@ fn _number_ok p (err _)
 fn _number_ok _ n
   n
 
-fn _number_value p text
-  marks = filter (chars text) (c -> _is_float_mark c)
-  raw = if ((length marks) > 0) (to_float text) (to_int text)
+fn _number_value cs p q
+  text = utf8 (slice cs p q)
+  raw = if (_mark_from cs p q) (to_float text) (to_int text)
   _number_ok p raw
