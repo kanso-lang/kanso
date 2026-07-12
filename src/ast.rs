@@ -9,7 +9,7 @@ pub enum Expr {
     Str(Vec<TemplatePart>, Span),
     Ident(String, Span),
     List(Vec<Expr>, Span),
-    App { head: Box<Expr>, args: Vec<Expr>, span: Span },
+    App { head: Box<Expr>, args: Vec<Expr>, span: Span, piped: bool },
     Index { base: Box<Expr>, index: Box<Expr>, span: Span },
     Seq(Box<Expr>, Box<Expr>, Span),
     Lambda { params: Vec<(String, Span)>, body: Box<Expr>, span: Span },

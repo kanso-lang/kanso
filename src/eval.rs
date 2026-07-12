@@ -260,7 +260,8 @@ impl<'a> Interp<'a> {
                     found => Ok(found),
                 }
             }
-            Expr::App { head, args, span } => {
+            Expr::App { head, args, span, piped } => {
+                let _ = piped;
                 let callee = self.eval(head, env)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
                 let mut values = Vec::new();

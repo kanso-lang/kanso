@@ -477,9 +477,14 @@ impl<'a> P<'a> {
                     expr = match target {
                         Expr::App { head, mut args, .. } => {
                             args.insert(0, expr);
-                            Expr::App { head, args, span }
+                            Expr::App { head, args, span, piped: true }
                         }
-                        atom => Expr::App { head: Box::new(atom), args: vec![expr], span },
+                        atom => Expr::App {
+                            head: Box::new(atom),
+                            args: vec![expr],
+                            span,
+                            piped: true,
+                        },
                     };
                 }
                 Some(Tok::SeqOp) => {
@@ -556,7 +561,7 @@ impl<'a> P<'a> {
             true => Ok(head),
             false => {
                 let span = head.span();
-                Ok(Expr::App { head: Box::new(head), args, span })
+                Ok(Expr::App { head: Box::new(head), args, span, piped: false })
             }
         }
     }
