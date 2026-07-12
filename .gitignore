@@ -5,3 +5,5 @@ fib.ll
 /jsonbench
 jsonbench.ll
 bench/jsonbench/
+/kq
+/kq.ll

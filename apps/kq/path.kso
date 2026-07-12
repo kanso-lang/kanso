@@ -1,0 +1,68 @@
+# a query path is `.` for the whole document, or steps: .key, [index]
+fn _index_end cs p
+  if (_both (47 < (at cs p)) ((at cs p) < 58)) (_index_end cs (p + 1)) p
+
+fn _key_end cs p
+  _key_end_at cs (at cs p) p
+
+fn _key_end_at _ 46 p
+  p
+
+fn _key_end_at _ 91 p
+  p
+
+fn _key_end_at _ none p
+  p
+
+fn _key_end_at cs _ p
+  _key_end cs (p + 1)
+
+fn _parse_path query
+  _steps (bytes query) 1 []
+
+fn _step_at cs 46 p acc
+  q = _key_end cs (p + 1)
+  _steps_key cs (p + 1) q acc
+
+fn _step_at cs 91 p acc
+  q = _index_end cs (p + 1)
+  _steps_index cs (p + 1) q acc
+
+fn _step_at _ none _ acc
+  acc
+
+fn _step_at _ c p _
+  err (parse_failure p "bad path: unexpected `{utf8 [c]}`")
+
+fn _steps cs p acc
+  _step_at cs (at cs p) p acc
+
+fn _steps_index cs p q acc
+  _steps_index_close cs (at cs q) p q acc
+
+# jq paths are 0-indexed; kanso lists are 1-indexed
+fn _steps_index_close cs 93 p q acc
+  n = to_int (utf8 (slice cs p (q - 1)))
+  _steps cs (q + 1) (push acc (n + 1))
+
+fn _steps_index_close _ _ p _ _
+  err (parse_failure p "bad path: expected `]`")
+
+fn _steps_key cs p q acc
+  key = utf8 (slice cs p (q - 1))
+  _steps_key_checked cs q acc key
+
+fn _steps_key_checked cs q acc ""
+  _steps cs q acc
+
+fn _steps_key_checked cs q acc key
+  _steps cs q (push acc key)
+
+fn _walk doc steps
+  _walk_at doc steps 1
+
+fn _walk_at doc steps i
+  if (i > (length steps)) doc (_walk_step doc steps i)
+
+fn _walk_step doc steps i
+  _walk_at doc[steps[i]] steps (i + 1)

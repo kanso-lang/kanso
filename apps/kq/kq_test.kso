@@ -1,0 +1,9 @@
+test_path_steps = (encode (_parse_path ".users[3].name")) == "[\"users\",4,\"name\"]"
+
+test_pretty_list = (_pretty (must (decode "[1,2]")) 0) == "[\n  1,\n  2\n]"
+
+test_pretty_map = (_pretty (must (decode "\{\"b\":2,\"a\":1}")) 0) == "\{\n  \"a\": 1,\n  \"b\": 2\n}"
+
+test_pretty_scalar = (_pretty 42 0) == "42"
+
+test_walk = (_walk (must (decode "\{\"a\":[\{\"b\":7}]}")) (_parse_path ".a[0].b")) == 7

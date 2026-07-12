@@ -1270,10 +1270,6 @@ impl<'a> Backend<'a> {
         t
     }
 
-    fn emit_call(&mut self, f: &mut FnEmit, head: &Expr, args: &[Expr]) -> Result<String, String> {
-        self.emit_call_full(f, head, args, false)
-    }
-
     fn emit_call_full(
         &mut self,
         f: &mut FnEmit,
