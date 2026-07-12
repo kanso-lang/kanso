@@ -20,6 +20,8 @@ declare i64 @k_not_failure(%KValue)
 declare %KValue @k_err(%KValue)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_field(%KValue, i64)
+declare %KValue @k_keyed_check(%KValue, i64)
+declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_tag(%KValue, i64)
 declare i64 @k_check_int(%KValue, i64)
@@ -242,6 +244,7 @@ impl<'a> Backend<'a> {
 
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
+        self.emit_type_fields();
         let mut groups: Vec<(&str, Vec<&FnDecl>)> = Vec::new();
         for decl in &self.program.fns {
             match groups.last_mut() {
@@ -313,17 +316,58 @@ impl<'a> Backend<'a> {
         let mut cases = String::new();
         for ty in &self.program.types {
             let id = self.type_ids[ty.name.as_str()];
-            let (name, _len) = self.intern(&ty.name);
+            let (name, _len) = self.intern(&format!("{}\0", ty.name));
             let _ = writeln!(cases, "    i64 {id}, label %T{id}");
             let _ = writeln!(arms, "T{id}:\n  ret ptr @{name}");
         }
-        let (entry_name, _) = self.intern("entry");
+        let (entry_name, _) = self.intern("entry\0");
         let _ = writeln!(cases, "    i64 0, label %T0");
         let _ = writeln!(arms, "T0:\n  ret ptr @{entry_name}");
-        let (fallback, _) = self.intern("record");
+        let (fallback, _) = self.intern("record\0");
         let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
         body.push_str(&arms);
         let _ = writeln!(body, "TD:\n  ret ptr @{fallback}");
+        body.push_str("}\n\n");
+        self.body.push_str(&body);
+    }
+
+    /// Field metadata for keyed reads: name-indexed lookup resolves against
+    /// these per-type switch tables at runtime.
+    fn emit_type_fields(&mut self) {
+        let mut tables: Vec<(i64, Vec<String>)> = vec![(0, vec!["key".into(), "value".into()])];
+        for ty in &self.program.types {
+            let id = self.type_ids[ty.name.as_str()];
+            let fields = ty.fields.iter().map(|(name, _, _)| name.clone()).collect();
+            tables.push((id, fields));
+        }
+        let mut body = String::new();
+        body.push_str("define i64 @k_type_field_count(i64 %id) {\nentry:\n");
+        let mut cases = String::new();
+        let mut arms = String::new();
+        for (id, fields) in &tables {
+            let _ = writeln!(cases, "    i64 {id}, label %C{id}");
+            let _ = writeln!(arms, "C{id}:\n  ret i64 {}", fields.len());
+        }
+        let _ = writeln!(body, "  switch i64 %id, label %CD [\n{cases}  ]");
+        body.push_str(&arms);
+        body.push_str("CD:\n  ret i64 0\n}\n\n");
+        body.push_str("define ptr @k_type_field_name(i64 %id, i64 %i) {\nentry:\n");
+        let (empty, _) = self.intern("\0");
+        let mut cases = String::new();
+        let mut arms = String::new();
+        for (id, fields) in &tables {
+            let _ = writeln!(cases, "    i64 {id}, label %T{id}");
+            let mut inner = String::new();
+            for (i, field) in fields.iter().enumerate() {
+                let (name, _) = self.intern(&format!("{field}\0"));
+                let _ = writeln!(inner, "    i64 {i}, label %T{id}F{i}");
+                let _ = writeln!(arms, "T{id}F{i}:\n  ret ptr @{name}");
+            }
+            let _ = writeln!(arms, "T{id}:\n  switch i64 %i, label %TD [\n{inner}  ]");
+        }
+        let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
+        body.push_str(&arms);
+        let _ = writeln!(body, "TD:\n  ret ptr @{empty}");
         body.push_str("}\n\n");
         self.body.push_str(&body);
     }
@@ -726,9 +770,24 @@ impl<'a> Backend<'a> {
                                 }
                             }
                         }
+                        Pattern::Keyed { entries, .. } => {
+                            let checked = f.tmp();
+                            f.line(&format!(
+                                "{checked} = call %KValue @k_keyed_check(%KValue {value}, i64 {})",
+                                entries.len()
+                            ));
+                            for entry in entries {
+                                let (name, _) = self.intern(&format!("{}\0", entry.field));
+                                let fv = f.tmp();
+                                f.line(&format!(
+                                    "{fv} = call %KValue @k_keyed_field(%KValue {checked}, ptr @{name})"
+                                ));
+                                f.bind(&entry.bind_name, &fv);
+                            }
+                        }
                         _ => {
                             return Err(
-                                "native backend: keyed binding patterns are slice 2".to_string()
+                                "native backend: this binding pattern is not supported".to_string()
                             )
                         }
                     }
@@ -755,11 +814,13 @@ impl<'a> Backend<'a> {
             }
             Expr::Str(parts, _) => {
                 let mut acc: Option<String> = None;
+                let mut fails: Set = 0;
                 for part in parts {
                     let piece = match part {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
                             let value = self.emit_expr(f, inner)?;
+                            fails |= f.set_of(&value) & FAIL;
                             let t = f.tmp();
                             f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
                             t
@@ -780,7 +841,7 @@ impl<'a> Backend<'a> {
                     Some(t) => t,
                     None => self.str_const(f, ""),
                 };
-                f.record(&out, STR);
+                f.record(&out, STR | fails);
                 Ok(out)
             }
             Expr::Ident(name, _) => {

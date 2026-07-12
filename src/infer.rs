@@ -132,12 +132,13 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
         Expr::Int(..) => INT,
         Expr::Float(..) => FLOAT,
         Expr::Str(parts, _) => {
+            let mut fails: Set = 0;
             for part in parts {
                 if let TemplatePart::Interp(inner) = part {
-                    let _ = eval_expr(ctx, inner, env);
+                    fails |= eval_expr(ctx, inner, env) & FAIL;
                 }
             }
-            STR
+            STR | fails
         }
         Expr::Ident(name, _) => ident_set(ctx, name, env),
         Expr::List(items, _) => {

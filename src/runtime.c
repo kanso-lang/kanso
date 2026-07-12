@@ -135,8 +135,35 @@ KValue k_concat(KValue a, KValue b) {
 }
 
 extern const char* k_type_name(long long type_id);
+extern long long k_type_field_count(long long type_id);
+extern const char* k_type_field_name(long long type_id, long long i);
+KValue k_render(KValue v, long long quote);
+
+/* keyed reads: `{ author: writer title } = post` — fields resolve by name
+   against the record's declared type */
+KValue k_keyed_check(KValue v, long long entries) {
+    if (v.tag != K_REC) {
+        KValue r = k_render(v, 1);
+        fprintf(stderr, "error[runtime]: cannot read fields of %s; keyed reads take a record\n",
+                k_as_str(r)->data);
+        exit(1);
+    }
+    if (entries >= k_as_rec(v)->nfields)
+        k_die("a keyed read omits at least one field; reading every field is the positional form");
+    return v;
+}
+
+KValue k_keyed_field(KValue v, const char* name) {
+    KRec* r = k_as_rec(v);
+    long long n = k_type_field_count(r->type_id);
+    for (long long i = 0; i < n; i++)
+        if (!strcmp(k_type_field_name(r->type_id, i), name)) return r->fields[i];
+    fprintf(stderr, "error[runtime]: `%s` has no field `%s`\n", k_type_name(r->type_id), name);
+    exit(1);
+}
 
 KValue k_render(KValue v, long long quote) {
+    if (!k_not_failure(v)) return v;
     char buf[64];
     switch (v.tag) {
         case K_INT:

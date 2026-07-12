@@ -284,7 +284,64 @@ fn run_tests(program: &ast::Program, file: &str, source: &str) -> ExitCode {
     }
 }
 
+/// `run` builds and executes: a dev-mode native binary, cached by IR hash so
+/// an unchanged program re-runs with no clang at all. `--plan` stays on the
+/// interpreter — it renders the effect DAG instead of executing it.
 fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode {
+    if plan {
+        return run_plan(program, file, source);
+    }
+    let ir = match kanso::codegen::emit_ir(program) {
+        Ok(ir) => ir,
+        Err(unsupported) => {
+            eprintln!("error: {unsupported}");
+            return ExitCode::from(2);
+        }
+    };
+    let binary = match cached_program_binary(&ir) {
+        Ok(binary) => binary,
+        Err(io) => {
+            eprintln!("error: cannot build: {io}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let status = std::process::Command::new(&binary).args(program_args()).status();
+    match status {
+        Ok(code) => match code.code() {
+            Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
+            None => ExitCode::FAILURE,
+        },
+        Err(io) => {
+            eprintln!("error: cannot execute {}: {io}", binary.display());
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    ir.hash(&mut hasher);
+    include_str!("runtime.c").hash(&mut hasher);
+    let key = hasher.finish();
+    let binary = std::env::temp_dir().join(format!("kanso_run_{key:016x}"));
+    if binary.exists() {
+        return Ok(binary);
+    }
+    let ll_path = std::env::temp_dir().join(format!("kanso_run_{key:016x}.ll"));
+    std::fs::write(&ll_path, ir)?;
+    let staging = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}", std::process::id()));
+    let ll = ll_path.to_string_lossy().into_owned();
+    let out = staging.to_string_lossy().into_owned();
+    let status = dev_clang(&out, &ll)?;
+    if !status.success() {
+        return Err(std::io::Error::other("clang failed"));
+    }
+    std::fs::rename(&staging, &binary)?;
+    Ok(binary)
+}
+
+fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
     let interp = eval::Interp::new(program);
     let result = match interp.run_main() {
         Ok(value) => value,
@@ -295,43 +352,15 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
         }
     };
     match result {
-        eval::Value::Desc(desc) => match plan {
-            true => {
-                let mut out = String::from("plan:\n");
-                eval::render_plan(&desc, &mut out);
-                print!("{out}");
-                ExitCode::SUCCESS
-            }
-            false => {
-                let mut executor = eval::RealExecutor { program_args: program_args() };
-                match interp.execute(&desc, &mut executor) {
-                    Ok(eval::Value::ErrV(reason)) => {
-                        eprintln!(
-                            "error[endpoint]: unhandled err reached the executor: {}",
-                            eval::render(&reason, true)
-                        );
-                        ExitCode::FAILURE
-                    }
-                    Ok(_) => ExitCode::SUCCESS,
-                    Err(runtime) => {
-                        let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
-                        eprint!("{}", diag::render(&[d], file, source));
-                        ExitCode::FAILURE
-                    }
-                }
-            }
-        },
-        eval::Value::ErrV(reason) => {
-            eprintln!(
-                "error[endpoint]: unhandled err reached main: {}",
-                eval::render(&reason, true)
-            );
+        eval::Value::Desc(desc) => {
+            let mut out = String::from("plan:\n");
+            eval::render_plan(&desc, &mut out);
+            print!("{out}");
+            ExitCode::SUCCESS
+        }
+        _ => {
+            eprintln!("error: main is not a description; there is no plan to show");
             ExitCode::FAILURE
         }
-        eval::Value::NoneV => {
-            eprintln!("error[endpoint]: unhandled none reached main");
-            ExitCode::FAILURE
-        }
-        _ => ExitCode::SUCCESS,
     }
 }

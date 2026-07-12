@@ -1,4 +1,1 @@
 error[runtime]: a keyed read omits at least one field; reading every field is the positional form
-  --> keyed_reads_all_fields.kso:6:20
-   6 |   { admin name } = user false "clay"
-                          ^
