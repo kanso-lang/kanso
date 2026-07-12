@@ -56,8 +56,8 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
 }
 
 fn build(program: &ast::Program, file: &str) -> ExitCode {
-    let c_source = match kanso::codegen::emit_c(program) {
-        Ok(c_source) => c_source,
+    let ir = match kanso::codegen::emit_ir(program) {
+        Ok(ir) => ir,
         Err(unsupported) => {
             eprintln!("error: {unsupported}");
             return ExitCode::from(2);
@@ -68,21 +68,31 @@ fn build(program: &ast::Program, file: &str) -> ExitCode {
         .and_then(|s| s.to_str())
         .unwrap_or("out")
         .to_string();
-    let c_path = format!("{stem}.c");
-    if let Err(io) = std::fs::write(&c_path, c_source) {
-        eprintln!("error: cannot write {c_path}: {io}");
+    let ll_path = format!("{stem}.ll");
+    if let Err(io) = std::fs::write(&ll_path, ir) {
+        eprintln!("error: cannot write {ll_path}: {io}");
+        return ExitCode::from(2);
+    }
+    let runtime_path = std::env::temp_dir().join("kanso_runtime.c");
+    if let Err(io) = std::fs::write(&runtime_path, include_str!("runtime.c")) {
+        eprintln!("error: cannot write runtime: {io}");
         return ExitCode::from(2);
     }
     let status = std::process::Command::new("cc")
-        .args(["-O2", "-o", &stem, &c_path])
+        .arg("-O2")
+        .arg("-Wno-override-module")
+        .arg("-o")
+        .arg(&stem)
+        .arg(&ll_path)
+        .arg(&runtime_path)
         .status();
     match status {
         Ok(code) if code.success() => {
-            println!("built ./{stem} (via {c_path})");
+            println!("built ./{stem} (llvm ir at {ll_path})");
             ExitCode::SUCCESS
         }
         Ok(_) => {
-            eprintln!("error: cc failed on {c_path}");
+            eprintln!("error: cc failed on {ll_path}");
             ExitCode::FAILURE
         }
         Err(io) => {
