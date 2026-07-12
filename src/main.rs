@@ -78,13 +78,14 @@ fn build(program: &ast::Program, file: &str) -> ExitCode {
         eprintln!("error: cannot write runtime: {io}");
         return ExitCode::from(2);
     }
-    let status = std::process::Command::new("cc")
+    let status = std::process::Command::new("clang")
         .arg("-O2")
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(&stem)
         .arg(&ll_path)
         .arg(&runtime_path)
+        .arg("-lm")
         .status();
     match status {
         Ok(code) if code.success() => {
@@ -92,11 +93,11 @@ fn build(program: &ast::Program, file: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         Ok(_) => {
-            eprintln!("error: cc failed on {ll_path}");
+            eprintln!("error: clang failed on {ll_path}");
             ExitCode::FAILURE
         }
         Err(io) => {
-            eprintln!("error: cannot invoke cc: {io}");
+            eprintln!("error: cannot invoke clang: {io}");
             ExitCode::FAILURE
         }
     }
