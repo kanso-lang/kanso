@@ -1,0 +1,104 @@
+{
+  "name": "kanso",
+  "scopeName": "source.kanso",
+  "fileTypes": ["kso"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#fn-declaration" },
+    { "include": "#type-declaration" },
+    { "include": "#field" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#constant" },
+    { "include": "#builtin" },
+    { "include": "#primitive-type" },
+    { "include": "#wildcard" },
+    { "include": "#operator" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "//.*$",
+      "name": "comment.line.double-slash.kanso"
+    },
+    "fn-declaration": {
+      "match": "^(fn)\\s+([a-z][a-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.function.kanso" },
+        "2": { "name": "entity.name.function.kanso" }
+      }
+    },
+    "type-declaration": {
+      "match": "^(type|typeset)\\s+([a-z][a-z0-9_]*)",
+      "captures": {
+        "1": { "name": "keyword.declaration.type.kanso" },
+        "2": { "name": "entity.name.type.kanso" }
+      }
+    },
+    "field": {
+      "match": "^  ([a-z][a-z0-9_]*)(:)\\s",
+      "captures": {
+        "1": { "name": "variable.other.member.kanso" },
+        "2": { "name": "punctuation.separator.field.kanso" }
+      }
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.kanso",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.kanso" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.kanso" }
+      },
+      "patterns": [
+        {
+          "match": "\\\\[\"\\\\{n]",
+          "name": "constant.character.escape.kanso"
+        },
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "name": "meta.interpolation.kanso",
+          "beginCaptures": {
+            "0": { "name": "punctuation.section.interpolation.begin.kanso" }
+          },
+          "endCaptures": {
+            "0": { "name": "punctuation.section.interpolation.end.kanso" }
+          },
+          "patterns": [{ "include": "$self" }]
+        }
+      ]
+    },
+    "number": {
+      "match": "\\b[0-9]+\\b",
+      "name": "constant.numeric.integer.kanso"
+    },
+    "constant": {
+      "match": "\\b(true|false|none)\\b",
+      "name": "constant.language.kanso"
+    },
+    "builtin": {
+      "match": "\\b(at|err|filter|if|length|map|print|sort|sum)\\b",
+      "name": "support.function.builtin.kanso"
+    },
+    "primitive-type": {
+      "match": "\\b(bool|float32|float64|int|int8|int16|int32|int64|string|uint8|uint16|uint32|uint64)\\b",
+      "name": "support.type.primitive.kanso"
+    },
+    "wildcard": {
+      "match": "\\b_\\b",
+      "name": "variable.language.wildcard.kanso"
+    },
+    "operator": {
+      "patterns": [
+        { "match": "->", "name": "keyword.operator.arrow.kanso" },
+        { "match": ">>", "name": "keyword.operator.sequence.kanso" },
+        { "match": "(?<= )\\.(?= )", "name": "keyword.operator.pipe.kanso" },
+        { "match": "==|!=|<=|>=|<|>", "name": "keyword.operator.comparison.kanso" },
+        { "match": "(?<= )=(?= )", "name": "keyword.operator.assignment.kanso" },
+        { "match": "[+*/-]", "name": "keyword.operator.arithmetic.kanso" }
+      ]
+    }
+  }
+}

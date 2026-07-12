@@ -66,6 +66,10 @@ Decisions the spec leaves open (or that phase 1 approximates), flagged for revis
 - `if cond, then, else` as a lazy call-shaped form is provisional (spec defers multi-way conditionals)
 - not yet: typesets, modules/imports, maps, record update, `build` regions, processes, effect polymorphism, the LSP
 
+## editor support
+
+One TextMate bundle in [editors/](editors) highlights `.kso` in both JetBrains IDEs (Settings → Editor → TextMate Bundles → add `editors/kanso`) and VS Code (symlink into `~/.vscode/extensions`) — see [editors/README.md](editors/README.md).
+
 ## development
 
 ```

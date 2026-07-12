@@ -1,0 +1,29 @@
+{
+  "name": "kanso-syntax",
+  "displayName": "kanso",
+  "description": "Syntax highlighting for the kanso language",
+  "version": "0.1.0",
+  "publisher": "kanso-lang",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "kanso",
+        "aliases": ["kanso"],
+        "extensions": [".kso"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "kanso",
+        "scopeName": "source.kanso",
+        "path": "./syntaxes/kanso.tmLanguage.json"
+      }
+    ]
+  }
+}
