@@ -1,3 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M 78.2 30.3 A 36 36 0 1 0 84.5 44.5" fill="none" stroke="#f03a00" stroke-width="11.5" stroke-linecap="round"/>
+  <circle cx="50" cy="50" r="40" fill="none" stroke="#f03a00" stroke-width="10" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
 </svg>
