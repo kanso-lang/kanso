@@ -120,7 +120,7 @@
       <div class="feature">
         <span class="feature-num">errors.kso</span>
         <h3>failure propagates; dispatch handles it</h3>
-        <p><code>safe_ratio 10, 0</code> returns an <code>err</code> — division by zero is a value, not a panic. it flows through untouched until <code>describe</code> dispatches on it: one overload for <code>err reason</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
+        <p><code>safe_ratio 10 0</code> returns an <code>err</code> — division by zero is a value, not a panic. it flows through untouched until <code>describe</code> dispatches on it: one overload for <code>err reason</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
       </div>
       <div class="code-panel">
         <div class="code-panel-title">examples/errors.kso</div>
@@ -235,21 +235,18 @@ three</code></pre>
         <p>the <a href="spec.html">v0.1 specification</a> (july 2026) is the authoritative record of every design decision to date. anything marked <span class="open-flag">open</span> is not yet decided — and it says so.</p>
       </div>
       <div class="status-card">
-        <span class="badge">phase 1</span>
-        <h3>reference interpreter</h3>
-        <p>a tree-walking interpreter in rust, built query-based from day one so the lsp shares the engine. phase 0 comes first: a paper proof that inference and dispatch — the language's two founding features — are mutually consistent.</p>
+        <span class="badge">two engines</span>
+        <h3>faster than go at json</h3>
+        <p>a reference interpreter (the semantics oracle — it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical by differential ci. the compiler decodes a 188&nbsp;KB document in <strong>~1.6&nbsp;ms</strong>; go's <code>encoding/json</code> takes ~1.88&nbsp;ms. real tail calls, jump-table dispatch, whole-program inference — see <a href="https://github.com/ClayShentrup/kanso/blob/main/bench/RESULTS.md">the numbers</a>.</p>
       </div>
       <div class="status-card">
-        <span class="badge">honest gaps</span>
-        <h3>open questions (spec §14)</h3>
+        <span class="badge">real software</span>
+        <h3>libraries and tools exist</h3>
         <ul>
-          <li>inference fixpoint formalization</li>
-          <li>destructuring syntax</li>
-          <li>module qualification syntax</li>
-          <li>build totality; map literals</li>
-          <li>pipe-vs-rebind canonicality</li>
-          <li>multi-way conditional; ffi; coercion</li>
-          <li>process mailbox &amp; restart details</li>
+          <li><a href="https://github.com/ClayShentrup/kanso-json">kanso-json</a> — the decoder that beat go</li>
+          <li><strong>kq</strong> — a jq-style query cli, byte-identical to <code>jq&nbsp;-S</code>, faster on path extraction</li>
+          <li>a <a href="book/index.html">seven-chapter book</a> — every sample executed before it was printed</li>
+          <li>a repl (<code>kanso repl</code>) with <code>it0</code>-history, in your terminal and on the <a href="playground.html">playground</a></li>
         </ul>
       </div>
     </div>
