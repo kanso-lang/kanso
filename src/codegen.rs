@@ -35,11 +35,52 @@ declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
 declare i64 @k_truthy(%KValue)
 declare void @k_die(ptr) noreturn
+declare %KValue @k_list_lit(i64, ptr)
+declare %KValue @k_map_lit(i64, ptr)
+declare %KValue @k_closure(ptr, i64, ptr)
+declare %KValue @k_fnref(ptr)
+declare %KValue @k_env_get(ptr, i64)
+declare %KValue @k_b_at(%KValue, %KValue)
+declare %KValue @k_b_chars(%KValue)
+declare %KValue @k_b_char_code(%KValue)
+declare %KValue @k_b_entries(%KValue)
+declare %KValue @k_b_filter(%KValue, %KValue)
+declare %KValue @k_b_from_code(%KValue)
+declare %KValue @k_b_join(%KValue, %KValue)
+declare %KValue @k_b_length(%KValue)
+declare %KValue @k_b_map(%KValue, %KValue)
+declare %KValue @k_b_push(%KValue, %KValue)
+declare %KValue @k_b_put(%KValue, %KValue, %KValue)
+declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
+declare %KValue @k_b_sort(%KValue)
+declare %KValue @k_b_sum(%KValue)
+declare %KValue @k_b_to_float(%KValue)
+declare %KValue @k_b_to_int(%KValue)
 
 "#;
 
+const BUILTIN_CALLS: [(&str, usize); 16] = [
+    ("at", 2),
+    ("char_code", 1),
+    ("chars", 1),
+    ("entries", 1),
+    ("filter", 2),
+    ("from_code", 1),
+    ("join", 2),
+    ("length", 1),
+    ("map", 2),
+    ("push", 2),
+    ("put", 3),
+    ("slice", 3),
+    ("sort", 1),
+    ("sum", 1),
+    ("to_float", 1),
+    ("to_int", 1),
+];
+
 pub fn emit_ir(program: &Program) -> Result<String, String> {
     let mut type_ids = HashMap::new();
+    type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {
         type_ids.insert(ty.name.as_str(), (i + 1) as i64);
     }
@@ -49,6 +90,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         strings: Vec::new(),
         interned: HashMap::new(),
         body: String::new(),
+        lift_counter: 0,
     };
     backend.emit()
 }
@@ -59,6 +101,7 @@ struct Backend<'a> {
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
     body: String,
+    lift_counter: usize,
 }
 
 struct FnEmit {
@@ -173,6 +216,9 @@ impl<'a> Backend<'a> {
             let _ = writeln!(cases, "    i64 {id}, label %T{id}");
             let _ = writeln!(arms, "T{id}:\n  ret ptr @{name}");
         }
+        let (entry_name, _) = self.intern("entry");
+        let _ = writeln!(cases, "    i64 0, label %T0");
+        let _ = writeln!(arms, "T0:\n  ret ptr @{entry_name}");
         let (fallback, _) = self.intern("record");
         let _ = writeln!(body, "  switch i64 %id, label %TD [\n{cases}  ]");
         body.push_str(&arms);
@@ -260,6 +306,16 @@ impl<'a> Backend<'a> {
                 f.bind(name, value);
             }
             Pattern::Annotated { name, ty, .. } => {
+                if ty.ends_with("[]") {
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 9)"));
+                    f.bind(name, value);
+                    return Ok(());
+                }
+                if ty.contains('[') {
+                    check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 10)"));
+                    f.bind(name, value);
+                    return Ok(());
+                }
                 let call = match ty.as_str() {
                     "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
                     "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
@@ -424,6 +480,25 @@ impl<'a> Backend<'a> {
                     f.line(&format!("{t} = call %KValue @d_{name}_0()"));
                     return Ok(t);
                 }
+                let arities: Vec<usize> = {
+                    let mut seen = Vec::new();
+                    for d in self.program.fns.iter().filter(|d| d.name == *name) {
+                        if !seen.contains(&d.params.len()) {
+                            seen.push(d.params.len());
+                        }
+                    }
+                    seen
+                };
+                if arities == [1] {
+                    let t = f.tmp();
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @d_{name}_1)"));
+                    return Ok(t);
+                }
+                if !arities.is_empty() {
+                    return Err(format!(
+                        "native backend: `{name}` as a function value needs arity 1"
+                    ));
+                }
                 let t = f.tmp();
                 match name.as_str() {
                     "true" => f.line(&format!("{t} = call %KValue @k_bool(i64 1)")),
@@ -431,7 +506,7 @@ impl<'a> Backend<'a> {
                     "none" => f.line(&format!("{t} = call %KValue @k_none()")),
                     _ => {
                         return Err(format!(
-                            "native backend: `{name}` as a bare value is slice 2 (function values)"
+                            "native backend: `{name}` as a bare value is not yet supported"
                         ))
                     }
                 }
@@ -464,9 +539,83 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{t} = {call}"));
                 Ok(t)
             }
-            Expr::Lambda { .. } => Err("native backend: lambdas are slice 2".to_string()),
-            Expr::List(..) | Expr::MapLit(..) => {
-                Err("native backend: lists and maps are slice 2".to_string())
+            Expr::Lambda { params, body, .. } => {
+                if params.len() != 1 {
+                    return Err("native backend: multi-parameter lambdas need arity 1".to_string());
+                }
+                let mut idents = Vec::new();
+                collect_idents(body, &mut idents);
+                let mut captures: Vec<String> = Vec::new();
+                for name in idents {
+                    if f.lookup(&name).is_some() && !captures.contains(&name) && name != params[0].0 {
+                        captures.push(name);
+                    }
+                }
+                let lifted = format!("klam{}", self.lift_counter);
+                self.lift_counter += 1;
+                self.emit_lifted(&lifted, &params[0].0, &captures, body, f)?;
+                let n = captures.len().max(1);
+                let arr = f.tmp();
+                f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+                for (i, cap) in captures.iter().enumerate() {
+                    let temp = f.lookup(cap).expect("capture is bound");
+                    let slot = f.tmp();
+                    f.line(&format!(
+                        "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
+                    ));
+                    f.line(&format!("store %KValue {temp}, ptr {slot}"));
+                }
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_closure(ptr @{lifted}, i64 {}, ptr {arr})",
+                    captures.len()
+                ));
+                Ok(t)
+            }
+            Expr::List(items, _) => {
+                let mut emitted = Vec::new();
+                for item in items {
+                    emitted.push(self.emit_expr(f, item)?);
+                }
+                let n = emitted.len().max(1);
+                let arr = f.tmp();
+                f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+                for (i, value) in emitted.iter().enumerate() {
+                    let slot = f.tmp();
+                    f.line(&format!(
+                        "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
+                    ));
+                    f.line(&format!("store %KValue {value}, ptr {slot}"));
+                }
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_list_lit(i64 {}, ptr {arr})",
+                    emitted.len()
+                ));
+                Ok(t)
+            }
+            Expr::MapLit(pairs, _) => {
+                let mut emitted = Vec::new();
+                for (key, value) in pairs {
+                    emitted.push(self.emit_expr(f, key)?);
+                    emitted.push(self.emit_expr(f, value)?);
+                }
+                let n = emitted.len().max(1);
+                let arr = f.tmp();
+                f.line(&format!("{arr} = alloca [{n} x %KValue]"));
+                for (i, value) in emitted.iter().enumerate() {
+                    let slot = f.tmp();
+                    f.line(&format!(
+                        "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
+                    ));
+                    f.line(&format!("store %KValue {value}, ptr {slot}"));
+                }
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_map_lit(i64 {}, ptr {arr})",
+                    pairs.len()
+                ));
+                Ok(t)
             }
         }
     }
@@ -548,7 +697,85 @@ impl<'a> Backend<'a> {
             f.line(&format!("{t} = call %KValue @d_{name}_{n}({})", args_ir.join(", ")));
             return Ok(t);
         }
-        Err(format!("native backend: builtin `{name}` is slice 2"))
+        if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| b == name) {
+            if emitted.len() != *arity {
+                return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
+            }
+            let args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
+            let t = f.tmp();
+            f.line(&format!("{t} = call %KValue @k_b_{name}({})", args_ir.join(", ")));
+            return Ok(t);
+        }
+        Err(format!("native backend: `{name}` is not yet supported"))
+    }
+}
+
+impl<'a> Backend<'a> {
+    fn emit_lifted(
+        &mut self,
+        lifted: &str,
+        param: &str,
+        captures: &[String],
+        body: &Expr,
+        outer: &FnEmit,
+    ) -> Result<(), String> {
+        let _ = outer;
+        let mut f = FnEmit::new();
+        f.start_block("entry");
+        for (i, cap) in captures.iter().enumerate() {
+            let t = f.tmp();
+            f.line(&format!("{t} = call %KValue @k_env_get(ptr %env, i64 {i})"));
+            f.bind(cap, &t);
+        }
+        f.bind(param, "%a0");
+        let value = self.emit_expr(&mut f, body)?;
+        f.line(&format!("ret %KValue {value}"));
+        let _ = writeln!(
+            self.body,
+            "define %KValue @{lifted}(ptr %env, %KValue %a0) {{\n{}}}\n",
+            f.out
+        );
+        Ok(())
+    }
+}
+
+fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
+    match expr {
+        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Str(parts, _) => {
+            for part in parts {
+                if let TemplatePart::Interp(inner) = part {
+                    collect_idents(inner, out);
+                }
+            }
+        }
+        Expr::Ident(name, _) => out.push(name.clone()),
+        Expr::List(items, _) => {
+            for item in items {
+                collect_idents(item, out);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (key, value) in pairs {
+                collect_idents(key, out);
+                collect_idents(value, out);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            collect_idents(head, out);
+            for arg in args {
+                collect_idents(arg, out);
+            }
+        }
+        Expr::Seq(lhs, rhs, _) => {
+            collect_idents(lhs, out);
+            collect_idents(rhs, out);
+        }
+        Expr::Lambda { body, .. } => collect_idents(body, out),
+        Expr::BinOp { lhs, rhs, .. } => {
+            collect_idents(lhs, out);
+            collect_idents(rhs, out);
+        }
     }
 }
 
