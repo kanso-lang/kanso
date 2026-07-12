@@ -341,6 +341,16 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         let (prev, _) = &pair[0];
         let (next, next_span) = &pair[1];
         let gap = next_span.col.saturating_sub(*prev_end);
+        if matches!(prev, Tok::Colon) {
+            if gap > 1 {
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    "canonical form requires at most one space here".to_string(),
+                    Span { line, col: next_span.col },
+                ));
+            }
+            continue;
+        }
         if matches!((prev, next), (Tok::Ident(_), Tok::LBracket)) {
             if gap > 1 {
                 diags.push(Diagnostic::new(

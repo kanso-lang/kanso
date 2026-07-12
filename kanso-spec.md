@@ -69,7 +69,7 @@ typeset numeric
   integral
 ```
 
-- typesets/unions may appear **anywhere a type can**: parameter guards `(x: int float64)` (inline, space-separated), field types (`result: done err pending`), container elements, inferred return sets.
+- typesets/unions may appear **anywhere a type can**: parameter guards — tight single-type ascription `x:int`, parenthesized only for inline enumerated sets `(x: int float64)` (gaveled 2026-07-12: parens carry information or they are illegal), field types (`result: done err pending`), container elements, inferred return sets.
 - **values may inhabit unions. the only eliminator is dispatch.** no `match`, no tag tests, no narrowing syntax, no `instanceof`. runtime discriminants exist but are compiler-owned; no user syntax reads them. monomorphic code carries no tags.
 - primitives (math, string ops) are concretely typed at the bottom, so every union is resolved by dispatch before computation touches it.
 - ownership/coherence: a module may define an overload only if it owns the function name or the argument type. no extending others' typesets. overlapping guard sets on one function: compile error.
@@ -106,7 +106,7 @@ type matrix[n: numeric]
   ...
 ```
 
-- functions may use the slot (`fn zip_with[a] f (xs: a[]) (ys: a[])`) only when stipulating sharing beyond what the body forces; otherwise redundant → error.
+- functions may use the slot (`fn zip_with[a] f xs:a[] ys:a[]`) only when stipulating sharing beyond what the body forces; otherwise redundant → error.
 - requirements attach to usage paths, not type existence: `stats[string]` constructs fine; calling `absorb` (which adds) on it fails at that call site. eager narrowing is opt-in via slot constraint (`type stats[a: numeric]`).
 - instantiation mirrors declaration: `cache[user]`, `pair[int string]`. no variance annotations (immutability → everything covariant), no higher-kinded types, no explicit instantiation of inferables.
 

@@ -1,0 +1,4 @@
+fn area (w: int)
+  w * w
+
+main = print "{area 3}"

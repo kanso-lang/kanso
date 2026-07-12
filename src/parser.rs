@@ -179,7 +179,16 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
 fn parse_field(line: &Line) -> Result<(String, String, Span), Diagnostic> {
     let mut p = P::new(&line.tokens, line.number);
     let (name, span) = p.expect_ident("a field name")?;
+    let colon_span = p.span_here();
     p.expect_colon()?;
+    let ty_span = p.span_here();
+    if ty_span.col != colon_span.col + 2 {
+        return Err(Diagnostic::new(
+            "formatting",
+            "a field is spaced: `name: type`".to_string(),
+            colon_span,
+        ));
+    }
     let ty = p.parse_type_expr()?;
     p.expect_done()?;
     Ok((name, ty, span))
@@ -337,6 +346,22 @@ impl<'a> P<'a> {
             }
             Some(Tok::Ident(name)) => {
                 self.pos += 1;
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    let colon_span = self.span_here();
+                    let tight_before = colon_span.col == span.col + name.len();
+                    self.pos += 1;
+                    let ty_span = self.span_here();
+                    let tight_after = ty_span.col == colon_span.col + 1;
+                    if !tight_before || !tight_after {
+                        return Err(Diagnostic::new(
+                            "formatting",
+                            format!("type ascription is tight: `{name}:type`"),
+                            colon_span,
+                        ));
+                    }
+                    let ty = self.parse_type_expr()?;
+                    return Ok(Pattern::Annotated { name, ty, span });
+                }
                 match NULLARY.contains(&name.as_str()) {
                     true => Ok(Pattern::Nullary(name, span)),
                     false => Ok(Pattern::Var(name, span)),
@@ -344,13 +369,18 @@ impl<'a> P<'a> {
             }
             Some(Tok::LParen) => {
                 self.pos += 1;
-                let (name, _) = self.expect_ident("a name or type")?;
+                let (name, name_span) = self.expect_ident("a name or type")?;
                 match self.peek() {
                     Some(Tok::Colon) => {
-                        self.pos += 1;
-                        let ty = self.parse_type_expr()?;
-                        self.expect_rparen()?;
-                        Ok(Pattern::Annotated { name, ty, span })
+                        let _ = name_span;
+                        Err(Diagnostic::new(
+                            "formatting",
+                            format!(
+                                "a single-type ascription is written tight: `{name}:type` \
+                                 (parenthesized guards return with typesets)"
+                            ),
+                            self.span_here(),
+                        ))
                     }
                     _ => {
                         let mut fields = vec![self.parse_pattern()?];
@@ -405,7 +435,16 @@ impl<'a> P<'a> {
             let (field, field_span) = self.expect_ident("a field name")?;
             let bind_name = match self.peek() {
                 Some(Tok::Colon) => {
+                    let colon_span = self.span_here();
                     self.pos += 1;
+                    let target_span = self.span_here();
+                    if target_span.col != colon_span.col + 2 {
+                        return Err(Diagnostic::new(
+                            "formatting",
+                            "a rename is spaced: `field: name`".to_string(),
+                            colon_span,
+                        ));
+                    }
                     self.expect_ident("a binding name")?.0
                 }
                 _ => field.clone(),
@@ -559,7 +598,16 @@ impl<'a> P<'a> {
                     let mut key = first;
                     loop {
                         self.require_literal_key(&key)?;
+                        let colon_span = self.span_here();
                         self.pos += 1;
+                        let value_span = self.span_here();
+                        if value_span.col != colon_span.col + 2 {
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                "a map pair is spaced: `key: value`".to_string(),
+                                colon_span,
+                            ));
+                        }
                         let value = self.parse_atom()?;
                         pairs.push((key, value));
                         if matches!(self.peek(), Some(Tok::RBracket)) {

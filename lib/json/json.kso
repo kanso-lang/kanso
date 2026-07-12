@@ -41,20 +41,20 @@ fn encode false
 fn encode (json_null _)
   "null"
 
-fn encode (n: int)
+fn encode n:int
   "{n}"
 
-fn encode (x: float64)
+fn encode x:float64
   "{x}"
 
-fn encode (s: string)
+fn encode s:string
   "\"{_escape_str s}\""
 
-fn encode (xs: json[])
+fn encode xs:json[]
   inner = join (map xs (v -> encode v)) ","
   "[{inner}]"
 
-fn encode (m: json[string])
+fn encode m:json[string]
   inner = join (map (entries m) (e -> _encode_entry e)) ","
   "\{{inner}}"
 
