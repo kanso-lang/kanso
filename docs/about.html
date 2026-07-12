@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>about kanso</title>
+<meta name="description" content="where kanso's taste comes from, how its two engines work, what it learned racing go, and why there is no formatter.">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.essay {
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="spec.html">spec</a>
+    <a href="about.html">about</a>
+    <a href="decisions.html">decisions</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">about</span>
+<h1>about kanso</h1>
+
+<p>this page is the language's brain: where the taste comes from, how the machine works, and what it learned taking on go. kanso's toolchain makes some choices that look strange at first: it ships two engines instead of one, its <code>print</code> doesn't print, its scariest theoretical problem was solved by deleting the solution, and its formatter doesn't exist. each of these is the same decision wearing a different outfit. this essay walks through them — and ends with the audience the design accidentally optimized for.</p>
+
+<h2 id="p0"><span class="sec-num">prelude</span>on taste</h2>
+
+<p>paul graham wrote that taste is real — that "good design" is not a matter of opinion, and the people who insist it is are usually the ones without any. most languages are terrified of this idea. they ship eight ways to write a loop and call it freedom, they bolt on a formatter as an apology, and they let a thousand style guides bloom because taking a position might cost them a user. kanso takes the other bet: it has opinions the way DHH has opinions — loudly, in writing, and enforced by machinery. your formatting preferences are a compile error here. we're aware of how that sounds. we're comfortable.</p>
+
+<p>the opinions aren't ours alone; they're inherited from a lineage that spent forty years learning them the expensive way. from kent beck: the four rules of simple design, and the discipline of never trusting a test you haven't seen fail. from sandi metz: duplication is cheaper than the wrong abstraction. from avdi grimm: confident code — a raise is for the case you do <em>not</em> handle, and nil should never leak. from martin fowler: refactoring means behavior-preserving, and the words matter. from rob mee and abhi hiremagalur and the pivotal school of extreme programming: the codebase belongs to everyone, so it must read as if one careful person wrote it. from DHH: convention over configuration, omakase — the chef chooses, and that's a feature. kanso is what happens when that value system stops being a style guide you have to teach and becomes a compiler that already knows.</p>
+
+<h2 id="p1"><span class="sec-num">part 01</span>two engines, one truth</h2>
+
+<p>kanso ships two ways to run a program. <code>kanso run</code> is the interpreter: no codegen, no artifacts, the whole pipeline cold in about ten milliseconds — the dev loop. <code>kanso build</code> is the compiler: it lowers kanso straight to llvm ir — dispatch becomes branch chains, patterns become field offsets, and every call in tail position is a <em>guaranteed</em> tail call, so ten million frames of mutual recursion run in constant stack — then hands the ir to clang for optimized machine code. on a 188kb json benchmark the resulting binary decodes at parity with go's <code>encoding/json</code>, before kanso's type-driven optimizations (monomorphized dispatch, unboxed integers, perceus reference counting) have shipped at all.</p>
+
+<p>two engines isn't indecision; it's the refusal of a trade every toolchain gets bullied into. go bought instant compiles and pays with slower binaries forever. rust bought maximum binaries and makes every developer wait. kanso declines the bundle: the dev loop never touches a backend, and the release path never compromises. the price is that both engines must mean the same thing — so they're forced to: ci builds every example native and requires byte-identical output against the interpreter. the interpreter is the conscience, the compiler is the muscle, and a one-bit disagreement fails the build.</p>
+
+<p>and there's a flex buried in that architecture, worth stating plainly. go famously refused llvm — too big, too slow for the compile times they wanted — and paid for the refusal with slower binaries, forever. kanso gets go's instant feedback loop <em>and</em> llvm's binaries, because it never asked llvm to be the dev loop: the interpreter answers in ten milliseconds, and llvm is summoned only when a release binary should be as fast as machinery allows. go dodged the dragon. kanso saddled it.</p>
+
+<p>which also retires the question every new language gets: "why rust and not llvm?" is a category error. rust is the <em>host</em> — the language the compiler is written in. llvm is the <em>backend</em>, and kanso employs it directly: the emitter writes llvm ir, clang turns it into machine code. the speed still on the table lives in kanso's own analyses, not in the backend — llvm multiplies what the front end proves.</p>
+
+<h2 id="p2"><span class="sec-num">part 02</span>the print that doesn't print</h2>
+
+<p>here's a two-line program. what does <code>print "one"</code> do when it's evaluated?</p>
+
+<p>nothing. it returns a value — a <em>description</em> of printing. every kanso function is pure; <code>&gt;&gt;</code> glues descriptions into bigger descriptions; and nothing in the entire program executes until the runtime receives <code>main</code>'s description and walks it. the same program, run two ways:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">examples/effects.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"one"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"two"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"three"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run examples/effects.kso</div>
+    <pre><code>one
+two
+three</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run examples/effects.kso --plan</div>
+    <pre><code>plan:
+  print "one"    // from line 1
+  print "two"    // from line 1
+  print "three"    // from line 1</code></pre>
+  </div>
+</div>
+
+<p><code>--plan</code> isn't a debugging trick bolted on afterwards — it falls out of the design. the description already exists as inspectable data; the flag just renders it instead of handing it to the executor. (each step carries its origin span, which is where the <code>// from line 2</code> provenance comes from.)</p>
+
+<p>the payoff lands in testing. in most languages, testing effectful code means mocks: intercept the i/o call, record what would have happened, hope the interception is faithful. in kanso there is nothing to intercept, because evaluation never does i/o. the interpreter's runtime is a trait with two implementations — a real executor that prints, and a scripted one that appends each effect to a transcript:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">src/eval.rs</div>
+  <pre><code><span class="k">pub struct</span> <span class="t">ScriptedExecutor</span> {
+    <span class="k">pub</span> transcript: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,
+}</code></pre>
+</div>
+
+<p>tests run <code>main</code>, hand the resulting description to the scripted executor, and assert on the transcript: <code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no mocks, no stubbing framework, no "was this called with these arguments" — just data equality on what the program said it would do.</p>
+
+<h2 id="p3"><span class="sec-num">part 03</span>the conjecture that dissolved</h2>
+
+<p>this is the best story in the repository, and it's a mystery in three acts.</p>
+
+<p><strong>act one: the circle.</strong> kanso has no interfaces, and return types are never written — they're inferred. it also has overload dispatch, and it auto-generates pass-throughs: for any failure type an overload group doesn't handle, the compiler adds an identity overload so <code>err</code> and <code>none</code> flow through untouched. put those together and three facts chase each other's tails. dispatch needs types: which overload a call targets depends on its arguments' types. types come from bodies: a function's return set is computed from whichever body dispatch selects. and pass-through generation changes return sets: the argument's type set leaks into the result. sets determine dispatch, dispatch determines bodies, bodies determine sets.</p>
+
+<p><strong>act two: it gets worse.</strong> the standard cure for circular definitions is a fixpoint: start from nothing, apply the rules, repeat until nothing changes. that only works if the rules are <em>monotone</em> — learning more can never un-conclude something. and dispatch, framed naively, isn't. suppose inference has established that an argument's type set is <code>{string}</code>, dispatching a call to the generic body. a later round grows it to <code>{string, int}</code> — and now an int-specific overload outranks the generic one. dispatch <em>shifted</em>. learning more changed an earlier answer, which is exactly the thing fixpoint iteration cannot survive. draft 0.1 of the formalization built the machinery you build when you're scared: a two-phase algorithm — an over-approximate phase, an exact phase, a verification round — plus a reserved class of rejected programs, the ones "where dispatch would feed back into sets."</p>
+
+<p><strong>act three: the resolution was in the spec the whole time.</strong> section 5 of the design freeze says dispatch resolution is fully static <em>per monomorphized instantiation</em>. read that carefully: dispatch was never a function of type sets. it's a function of <em>vectors</em> — concrete type assignments to a call site's arguments, drawn from the product of the argument sets. and a vector's dispatch reads no inferred set at all: it depends only on the declared overloads and the concrete types in hand. re-run the scary example under that lens. growing <code>{string}</code> to <code>{string, int}</code> shifts nothing — the vector <code>(string)</code> dispatches to the generic body before and after, and the vector <code>(int)</code> is <em>new</em>, arriving with its int-specific body in tow. nothing is removed; return sets only grow. the non-monotonicity was an artifact of asking the wrong question. the two-phase algorithm collapses into a single monotone kleene fixpoint with exact dispatch — no over-approximation, no verification round.</p>
+
+<p>and here's the payoff, the part that matters to someone who will never read a proof: the rejection class is <em>empty</em>. under vector-indexed dispatch there is no feedback channel, so every program that passes the ordinary static checks has well-defined inference. no kanso developer will ever hit a "your program confused the fixpoint" wall — a wall that, had it existed, would have been unexplainable at exactly the moment it appeared. the conjecture wasn't proven. it dissolved. (the full argument, including what's still genuinely owed — finiteness of the type universe, termination of monomorphization — is in <a href="https://github.com/ClayShentrup/kanso/blob/main/design/fixpoint.md">design/fixpoint.md</a>.)</p>
+
+<h2 id="p4"><span class="sec-num">part 04</span>the formatter that doesn't exist</h2>
+
+<p>every serious language eventually ships a formatter, and every formatter is a confession: the grammar admits many renderings of the same program, so a second tool exists to pick one. kanso skips the confession. canonical form <em>is</em> the grammar — one rendering per program — so there is nothing left for a formatter to do. non-canonical spacing is a syntax error. blank lines inside a body, trailing whitespace, declarations out of alphabetical order: compile errors. so are unused bindings and unused expressions, because a line that does nothing is a rendering decision too. these are real diagnostics from the interpreter's golden-file corpus:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">tests/golden/errors/trailing_whitespace.stderr</div>
+  <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
+<span class="c">  --&gt; trailing_whitespace.kso:2:13</span>
+   2 |   print "hi" 
+                   <span class="k">^</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">tests/golden/errors/fn_order.stderr</div>
+  <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
+<span class="c">  --&gt; fn_order.kso:4:4</span>
+   4 | fn main
+          <span class="k">^</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">tests/golden/errors/unused_expression.stderr</div>
+  <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
+<span class="c">  --&gt; unused_expression.kso:2:5</span>
+   2 |   1 + 1
+           <span class="k">^</span></code></pre>
+</div>
+
+<p>the error corpus matters as much as the success corpus, deliberately — half this language's value is its compile errors. notice what each message does: it doesn't just reject, it states the rule, as if the rule had always been obvious. that's the whole posture of the language. there is no style to have an opinion about, so the diagnostic can afford to be calm.</p>
+
+<h2 id="p5"><span class="sec-num">part 05</span>strictness is machine ergonomics</h2>
+
+<p>none of this was designed for language models. kanso's founding principle — anything a style guide, linter, or code review would enforce by convention becomes a compile error or unrepresentable — was written for human readers, so that no reviewer ever spends attention adjudicating style. but follow the consequence to its end and you arrive somewhere interesting.</p>
+
+<p>think about what teams actually write into their llm system prompts today: don't leave unused variables, delete dead code, match the project's formatting, don't drift from the house style. it's the same list that used to live in style guides and code-review checklists, migrated to a third home. in kanso that list has nowhere to live, because every item on it fails to compile. unused bindings, unused expressions, non-canonical whitespace, out-of-order declarations — the compiler already rejects them, for everyone, with the diagnostics you just read. there is nothing subjective left to teach a model, and no slop for it to gradually accumulate: the classic failure mode where generated code is <em>correct but slightly off</em> — an orphaned binding here, a dead expression there — is a compile error, caught before any reviewer sees it.</p>
+
+<p>one rendering per program has a second-order effect on review itself. if a program has exactly one canonical form, then any diff between two versions of a file is purely semantic — no formatting churn, no reflowed lines, no argument about where the blank line goes. review, whether the reviewer is a human or a machine, shrinks to the only thing it was ever supposed to be about: decisions.</p>
+
+<p>the honest framing is that this is a consequence, not a motivation. kanso was designed so that readers never adjudicate style; it just happens that the cheapest reader to confuse — the one most prone to absorbing a codebase's bad habits and repeating them at scale — is now a language model. a language with exactly one rendering per program is unusually friendly to machine-generated code, not because anyone benchmarked it, but by construction.</p>
+
+<p class="eyebrow" style="margin-top: 4rem">dedication</p>
+
+<p><em>kanso is dedicated to abhi hiremagalur — pivot, extremist of simplicity, patient zero of several of these opinions. he would have deleted half of this page, and it would have been better.</em></p>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="index.html">home</a>
+      <a href="spec.html">spec</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
