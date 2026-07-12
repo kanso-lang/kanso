@@ -1,0 +1,11 @@
+fn fib 0
+  0
+
+fn fib 1
+  1
+
+fn fib n
+  (fib (n - 1)) + (fib (n - 2))
+
+fn main
+  print "fib 32 = {fib 32}"

@@ -8,7 +8,7 @@ fn main() -> ExitCode {
         None => {
             eprintln!(
                 "usage: kanso run <file.kso> [--plan] | kanso check <file.kso> | kanso \
-                 test <file.kso>"
+                 test <file.kso> | kanso build <file.kso>"
             );
             return ExitCode::from(2);
         }
@@ -35,12 +35,15 @@ fn main() -> ExitCode {
     if command == "test" {
         return run_tests(&program, &file, &source);
     }
+    if command == "build" {
+        return build(&program, &file);
+    }
     run(&program, &file, &source, plan)
 }
 
 fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
     let command = args.first()?.clone();
-    if command != "run" && command != "check" && command != "test" {
+    if command != "run" && command != "check" && command != "test" && command != "build" {
         return None;
     }
     let file = args.get(1)?.clone();
@@ -49,6 +52,43 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
     match extra || (plan && command == "check") {
         true => None,
         false => Some((command, file, plan)),
+    }
+}
+
+fn build(program: &ast::Program, file: &str) -> ExitCode {
+    let c_source = match kanso::codegen::emit_c(program) {
+        Ok(c_source) => c_source,
+        Err(unsupported) => {
+            eprintln!("error: {unsupported}");
+            return ExitCode::from(2);
+        }
+    };
+    let stem = std::path::Path::new(file)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("out")
+        .to_string();
+    let c_path = format!("{stem}.c");
+    if let Err(io) = std::fs::write(&c_path, c_source) {
+        eprintln!("error: cannot write {c_path}: {io}");
+        return ExitCode::from(2);
+    }
+    let status = std::process::Command::new("cc")
+        .args(["-O2", "-o", &stem, &c_path])
+        .status();
+    match status {
+        Ok(code) if code.success() => {
+            println!("built ./{stem} (via {c_path})");
+            ExitCode::SUCCESS
+        }
+        Ok(_) => {
+            eprintln!("error: cc failed on {c_path}");
+            ExitCode::FAILURE
+        }
+        Err(io) => {
+            eprintln!("error: cannot invoke cc: {io}");
+            ExitCode::FAILURE
+        }
     }
 }
 
