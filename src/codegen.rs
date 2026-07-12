@@ -1,5 +1,5 @@
 use crate::ast::*;
-use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, INT, LIST, MAP, NONE, REC, STR, TOP};
+use crate::infer::{self, Set, BYTES, DESC, ERR, FAIL, FLOAT, INT, LIST, MAP, NONE, REC, STR, TOP};
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
