@@ -1,4 +1,4 @@
 plan:
-  print "one"    // from line 1
-  print "two"    // from line 1
-  print "three"    // from line 1
+  print "one"    # from line 1
+  print "two"    # from line 1
+  print "three"    # from line 1

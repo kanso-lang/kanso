@@ -59,11 +59,27 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
         return None;
     }
     let file = args.get(1)?.clone();
-    let plan = args.iter().skip(2).any(|a| a == "--plan");
-    let extra = args.iter().skip(2).any(|a| a != "--plan");
-    match extra || (plan && command == "check") {
+    let mut rest = args.iter().skip(2);
+    let mut plan = false;
+    for arg in rest.by_ref() {
+        match arg.as_str() {
+            "--plan" => plan = true,
+            "--" => break,
+            _ => return None,
+        }
+    }
+    match plan && command != "run" {
         true => None,
         false => Some((command, file, plan)),
+    }
+}
+
+/// Everything after `--` belongs to the program.
+fn program_args() -> Vec<String> {
+    let all: Vec<String> = std::env::args().collect();
+    match all.iter().position(|a| a == "--") {
+        Some(i) => all[i + 1..].to_vec(),
+        None => Vec::new(),
     }
 }
 
@@ -172,9 +188,22 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
                 ExitCode::SUCCESS
             }
             false => {
-                let mut executor = eval::RealExecutor;
-                eval::execute(&desc, &mut executor);
-                ExitCode::SUCCESS
+                let mut executor = eval::RealExecutor { program_args: program_args() };
+                match interp.execute(&desc, &mut executor) {
+                    Ok(eval::Value::ErrV(reason)) => {
+                        eprintln!(
+                            "error[endpoint]: unhandled err reached the executor: {}",
+                            eval::render(&reason, true)
+                        );
+                        ExitCode::FAILURE
+                    }
+                    Ok(_) => ExitCode::SUCCESS,
+                    Err(runtime) => {
+                        let d = diag::Diagnostic::new("runtime", runtime.message, runtime.span);
+                        eprint!("{}", diag::render(&[d], file, source));
+                        ExitCode::FAILURE
+                    }
+                }
             }
         },
         eval::Value::ErrV(reason) => {

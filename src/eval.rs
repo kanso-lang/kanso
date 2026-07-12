@@ -39,6 +39,11 @@ pub struct ClosureData {
 pub enum Desc {
     Print(String, Span),
     Seq(Rc<Desc>, Rc<Desc>),
+    Args,
+    Stdin,
+    ReadFile(String),
+    WriteFile(String, String),
+    Bind(Rc<Desc>, Value),
 }
 
 #[derive(Debug)]
@@ -75,23 +80,70 @@ type EvalResult = Result<Value, RuntimeError>;
 
 pub trait Executor {
     fn print(&mut self, text: &str);
+    fn args(&mut self) -> Vec<String>;
+    fn stdin(&mut self) -> Result<String, String>;
+    fn read_file(&mut self, path: &str) -> Result<String, String>;
+    fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
 }
 
-pub struct RealExecutor;
+pub struct RealExecutor {
+    pub program_args: Vec<String>,
+}
 
 impl Executor for RealExecutor {
     fn print(&mut self, text: &str) {
         println!("{text}");
     }
+
+    fn args(&mut self) -> Vec<String> {
+        self.program_args.clone()
+    }
+
+    fn stdin(&mut self) -> Result<String, String> {
+        use std::io::Read;
+        let mut buffer = String::new();
+        std::io::stdin().read_to_string(&mut buffer).map_err(|e| e.to_string())?;
+        Ok(buffer)
+    }
+
+    fn read_file(&mut self, path: &str) -> Result<String, String> {
+        std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))
+    }
+
+    fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
+        std::fs::write(path, content).map_err(|e| format!("cannot write {path}: {e}"))
+    }
 }
 
+#[derive(Default)]
 pub struct ScriptedExecutor {
     pub transcript: Vec<String>,
+    pub script_args: Vec<String>,
+    pub script_stdin: String,
+    pub files: std::collections::HashMap<String, String>,
 }
 
 impl Executor for ScriptedExecutor {
     fn print(&mut self, text: &str) {
         self.transcript.push(format!("print {text:?}"));
+    }
+
+    fn args(&mut self) -> Vec<String> {
+        self.script_args.clone()
+    }
+
+    fn stdin(&mut self) -> Result<String, String> {
+        Ok(self.script_stdin.clone())
+    }
+
+    fn read_file(&mut self, path: &str) -> Result<String, String> {
+        self.transcript.push(format!("read_file {path:?}"));
+        self.files.get(path).cloned().ok_or_else(|| format!("cannot read {path}"))
+    }
+
+    fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
+        self.transcript.push(format!("write_file {path:?} {content:?}"));
+        Ok(())
     }
 }
 
@@ -261,7 +313,31 @@ impl<'a> Interp<'a> {
                 }
             }
             Expr::App { head, args, span, piped } => {
-                let _ = piped;
+                if *piped && !args.is_empty() {
+                    let piped_value = self.eval(&args[0], env)?;
+                    if let Value::Desc(inner) = piped_value {
+                        let mut body_args: Vec<Expr> =
+                            vec![Expr::Ident("__piped".to_string(), *span)];
+                        body_args.extend(args[1..].iter().cloned());
+                        let closure = Value::Closure(Rc::new(ClosureData {
+                            params: vec!["__piped".to_string()],
+                            body: Expr::App {
+                                head: head.clone(),
+                                args: body_args,
+                                span: *span,
+                                piped: false,
+                            },
+                            env: env.clone(),
+                        }));
+                        return Ok(Value::Desc(Rc::new(Desc::Bind(inner, closure))));
+                    }
+                    let callee = self.eval(head, env)?;
+                    let mut values = vec![piped_value];
+                    for arg in &args[1..] {
+                        values.push(self.eval(arg, env)?);
+                    }
+                    return self.call(callee, values, *span);
+                }
                 let callee = self.eval(head, env)?;
                 let lazy_if = matches!(&callee, Value::FnRef(name) if &**name == "if");
                 let mut values = Vec::new();
@@ -317,6 +393,11 @@ impl<'a> Interp<'a> {
             if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
                 return self.eval_body(&constant.body, None);
             }
+        }
+        match name {
+            "args" => return Ok(Value::Desc(Rc::new(Desc::Args))),
+            "stdin" => return Ok(Value::Desc(Rc::new(Desc::Stdin))),
+            _ => {}
         }
         match name {
             "true" => Ok(Value::True),
@@ -460,6 +541,26 @@ impl<'a> Interp<'a> {
             return Ok(bad.clone());
         }
         match name {
+            "read_file" => {
+                let [path] = arity(args, name, span)?;
+                let Value::Str(path) = path else {
+                    return Err(RuntimeError {
+                        message: "read_file takes a path string".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::ReadFile(path))))
+            }
+            "write_file" => {
+                let [path, content] = arity(args, name, span)?;
+                let (Value::Str(path), Value::Str(content)) = (&path, &content) else {
+                    return Err(RuntimeError {
+                        message: "write_file takes a path and content strings".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::WriteFile(path.clone(), content.clone()))))
+            }
             "print" => {
                 let [text] = arity(args, name, span)?;
                 match text {
@@ -1132,12 +1233,45 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
     }
 }
 
-pub fn execute(desc: &Desc, executor: &mut dyn Executor) {
-    match desc {
-        Desc::Print(text, _) => executor.print(text),
-        Desc::Seq(a, b) => {
-            execute(a, executor);
-            execute(b, executor);
+impl<'a> Interp<'a> {
+    pub fn execute(&self, desc: &Desc, executor: &mut dyn Executor) -> EvalResult {
+        let origin = Span { line: 0, col: 0 };
+        match desc {
+            Desc::Print(text, _) => {
+                executor.print(text);
+                Ok(Value::NoneV)
+            }
+            Desc::Seq(a, b) => {
+                let left = self.execute(a, executor)?;
+                if is_failure(&left) && matches!(left, Value::ErrV(_)) {
+                    return Ok(left);
+                }
+                self.execute(b, executor)
+            }
+            Desc::Args => {
+                let list = executor.args().into_iter().map(Value::Str).collect();
+                Ok(Value::List(Rc::new(list)))
+            }
+            Desc::Stdin => Ok(match executor.stdin() {
+                Ok(text) => Value::Str(text),
+                Err(reason) => Value::ErrV(Rc::new(Value::Str(reason))),
+            }),
+            Desc::ReadFile(path) => Ok(match executor.read_file(path) {
+                Ok(text) => Value::Str(text),
+                Err(reason) => Value::ErrV(Rc::new(Value::Str(reason))),
+            }),
+            Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => Value::ErrV(Rc::new(Value::Str(reason))),
+            }),
+            Desc::Bind(inner, callee) => {
+                let yielded = self.execute(inner, executor)?;
+                let next = self.call(callee.clone(), vec![yielded], origin)?;
+                match next {
+                    Value::Desc(d) => self.execute(&d, executor),
+                    other => Ok(other),
+                }
+            }
         }
     }
 }
@@ -1145,11 +1279,19 @@ pub fn execute(desc: &Desc, executor: &mut dyn Executor) {
 pub fn render_plan(desc: &Desc, out: &mut String) {
     match desc {
         Desc::Print(text, span) => {
-            out.push_str(&format!("  print {text:?}    // from line {}\n", span.line));
+            out.push_str(&format!("  print {text:?}    # from line {}\n", span.line));
         }
         Desc::Seq(a, b) => {
             render_plan(a, out);
             render_plan(b, out);
+        }
+        Desc::Args => out.push_str("  args\n"),
+        Desc::Stdin => out.push_str("  stdin\n"),
+        Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
+        Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
+        Desc::Bind(inner, _) => {
+            render_plan(inner, out);
+            out.push_str("  . <continuation>\n");
         }
     }
 }
@@ -1172,8 +1314,11 @@ mod tests {
         let value = run_main("main = print \"a\" >> print \"b\"\n");
 
         let Value::Desc(desc) = value else { panic!("main yields a description") };
-        let mut executor = ScriptedExecutor { transcript: Vec::new() };
-        execute(&desc, &mut executor);
+        let lexed = crate::lexer::lex("main = print \"a\" >> print \"b\"\n").expect("lexes");
+        let program = crate::parser::parse(&lexed).expect("parses");
+        let interp = Interp::new(&program);
+        let mut executor = ScriptedExecutor::default();
+        interp.execute(&desc, &mut executor).map_err(|e| e.message).expect("executes");
 
         assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""]);
     }

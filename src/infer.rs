@@ -218,6 +218,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
         "true" => TRUE,
         "false" => FALSE,
         "none" => NONE,
+        "args" | "stdin" => DESC,
         _ => {
             // constant mention evaluates; fn mention is a value (params go TOP)
             if let Some(decls) = ctx.groups.get(&(name, 0)) {
@@ -319,6 +320,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => INT | fails,
+        "read_file" | "write_file" => DESC | fails,
         _ => TOP,
     }
 }
