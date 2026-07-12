@@ -71,6 +71,69 @@ pub extern "C" fn kanso_reset() {
     SESSION.with(|session| *session.borrow_mut() = Session::new());
 }
 
+#[cfg(target_arch = "wasm32")]
+thread_local! {
+    static WASM_BYTES: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Compile the program to a wasm module for in-browser execution. Returns
+/// 0 with module bytes ready, 1 when the program uses something the browser
+/// backend doesn't cover (caller falls back to the interpreter; reason in
+/// the output buffer), or 2 on a compile error (rendered in the buffer).
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
+    let source = take_input(ptr, len);
+    let program = match crate::compile("playground", &source, true) {
+        Ok(program) => program,
+        Err(rendered) => {
+            set_out(&rendered);
+            return 2;
+        }
+    };
+    match crate::wasm_backend::compile(&program, tailcalls != 0) {
+        Ok(compiled) => {
+            crate::wasm_rt::load(program, &compiled.lits, compiled.types);
+            WASM_BYTES.with(|b| *b.borrow_mut() = compiled.bytes);
+            0
+        }
+        Err(reason) => {
+            set_out(&reason);
+            1
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_wasm_ptr() -> *const u8 {
+    WASM_BYTES.with(|b| b.borrow().as_ptr())
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_wasm_len() -> usize {
+    WASM_BYTES.with(|b| b.borrow().len())
+}
+
+/// Execute the handle the compiled program's main returned; output text
+/// lands in the buffer, status mirrors the native binary's exit code.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_exec_main(h: u32) -> i32 {
+    let (status, text) = crate::wasm_rt::exec_main(h);
+    set_out(&text);
+    status
+}
+
+/// After a trap inside compiled code, fetch the runtime error message.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_take_rt_error() {
+    let message = crate::wasm_rt::take_error();
+    set_out(&format!("error[runtime]: {message}\n"));
+}
+
 /// Evaluate one repl input against the persistent session. Returns 0 on
 /// success, 1 on error; the output buffer holds printed text + result.
 #[no_mangle]

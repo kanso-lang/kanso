@@ -8,6 +8,9 @@ pub mod lexer;
 pub mod parser;
 pub mod repl;
 pub mod wasm;
+pub mod wasm_backend;
+pub mod wasm_encode;
+pub mod wasm_rt;
 
 pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;

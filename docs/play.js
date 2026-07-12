@@ -125,19 +125,84 @@ function highlight(source) {
 
 let wasm = null;
 
+/* the compiled program's function table; k_callback lets host-side closures
+   (map, filter, bind) call back into it */
+let programTable = null;
+
+/* wasm tail calls: a tiny module using return_call, validated up front */
+const TAILCALL_PROBE = new Uint8Array([
+  0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+  0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
+  0x03, 0x02, 0x01, 0x00,
+  0x0a, 0x06, 0x01, 0x04, 0x00, 0x12, 0x00, 0x0b,
+]);
+const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
+
 async function loadWasm() {
   const response = await fetch('kanso.wasm');
-  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), {});
+  const imports = { env: { k_callback: (t, e, a) => programTable.get(t)(e, a) } };
+  const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
   wasm = instance.exports;
 }
 
-function callKanso(entry, text) {
+function writeInput(text) {
   const bytes = new TextEncoder().encode(text);
   const ptr = wasm.kanso_alloc(bytes.length);
   new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
-  const code = wasm[entry](ptr, bytes.length);
+  return { ptr, len: bytes.length };
+}
+
+function readOut() {
   const out = new Uint8Array(wasm.memory.buffer, wasm.kanso_out_ptr(), wasm.kanso_out_len());
-  return { code, text: new TextDecoder().decode(out) };
+  return new TextDecoder().decode(out);
+}
+
+function callKanso(entry, text) {
+  const { ptr, len } = writeInput(text);
+  const code = wasm[entry](ptr, len);
+  return { code, text: readOut() };
+}
+
+function rtImports() {
+  const env = {};
+  for (const key of Object.keys(wasm)) {
+    if (key.startsWith('rt_')) env[key] = wasm[key];
+  }
+  return env;
+}
+
+/* compile the editor's program to a wasm module and run it natively in the
+   tab; returns null when the browser backend doesn't cover the program yet
+   (the interpreter picks it up) */
+async function runCompiled(src) {
+  const { ptr, len } = writeInput(src);
+  const status = wasm.kanso_compile_wasm(ptr, len, tailCalls ? 1 : 0);
+  if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
+  if (status === 1) return null;
+  const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr(), wasm.kanso_wasm_len()).slice();
+  let instance;
+  try {
+    ({ instance } = await WebAssembly.instantiate(bytes, { env: rtImports() }));
+  } catch (e) {
+    console.warn('kanso wasm backend emitted a module the engine rejected', e);
+    return null;
+  }
+  programTable = instance.exports.table;
+  let handle;
+  try {
+    handle = instance.exports.main();
+  } catch (e) {
+    wasm.kanso_take_rt_error();
+    return { code: 1, text: readOut(), engine: 'wasm' };
+  }
+  let code;
+  try {
+    code = wasm.kanso_exec_main(handle);
+  } catch (e) {
+    wasm.kanso_take_rt_error();
+    return { code: 1, text: readOut(), engine: 'wasm' };
+  }
+  return { code, text: readOut(), engine: 'wasm' };
 }
 
 /* ---------- editor: transparent textarea over a highlighted mirror ---------- */
@@ -157,11 +222,17 @@ function syncMirror() {
   mirror.scrollLeft = editor.scrollLeft;
 }
 
-function run() {
+async function run() {
   if (!wasm) return;
-  const { code, text } = callKanso('kanso_run', editor.value);
-  output.textContent = text || '(no output)';
-  output.classList.toggle('play-error', code !== 0);
+  let result = await runCompiled(editor.value);
+  let engine = result ? result.engine : null;
+  if (!result) {
+    result = callKanso('kanso_run', editor.value);
+    engine = 'interp';
+  }
+  const badge = { wasm: '⚡ compiled to wasm in your tab', interp: 'interpreted', error: '' }[engine];
+  output.textContent = (result.text || '(no output)') + (badge ? `\n\n— ${badge}` : '');
+  output.classList.toggle('play-error', result.code !== 0);
 }
 
 editor.addEventListener('input', syncMirror);

@@ -533,7 +533,7 @@ impl<'a> Interp<'a> {
         }
     }
 
-    fn call_builtin(&self, name: &str, args: Vec<Value>, span: Span) -> EvalResult {
+    pub fn call_builtin(&self, name: &str, args: Vec<Value>, span: Span) -> EvalResult {
         if name == "if" {
             return self.builtin_if(args, span);
         }
@@ -1012,7 +1012,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
     }
 }
 
-fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
+pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
     if is_failure(&container) {
         return Ok(container);
     }
@@ -1066,7 +1066,7 @@ fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
     }
 }
 
-fn is_failure(value: &Value) -> bool {
+pub fn is_failure(value: &Value) -> bool {
     matches!(value, Value::ErrV(_) | Value::NoneV)
 }
 
@@ -1100,7 +1100,7 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     }
 }
 
-fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
+pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
     if is_failure(&left) {
         return Ok(left);
     }
