@@ -7,3 +7,4 @@ jsonbench.ll
 bench/jsonbench/
 /kq
 /kq.ll
+__pycache__/
