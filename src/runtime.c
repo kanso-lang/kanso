@@ -807,10 +807,10 @@ KValue k_b_to_float(KValue v) {
     return k_float(d);
 }
 
-extern KValue d_main_0(void);
+extern KValue k_user_main(void);
 
 int main(void) {
-    KValue v = d_main_0();
+    KValue v = k_user_main();
     if (v.tag == K_DESC) { k_exec(k_as_desc(v)); return 0; }
     if (v.tag == K_ERR) {
         KValue r = k_render(k_err_inner(v), 1);

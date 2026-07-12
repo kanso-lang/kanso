@@ -101,6 +101,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         interned: HashMap::new(),
         body: String::new(),
         lift_counter: 0,
+        fn_value_wrappers: Vec::new(),
     };
     backend.emit()
 }
@@ -112,6 +113,7 @@ struct Backend<'a> {
     interned: HashMap<Vec<u8>, String>,
     body: String,
     lift_counter: usize,
+    fn_value_wrappers: Vec<String>,
 }
 
 struct FnEmit {
@@ -205,6 +207,19 @@ impl<'a> Backend<'a> {
                 self.emit_dispatcher(name, arity, &by_arity[&arity])?;
             }
         }
+        self.fn_value_wrappers.sort();
+        self.fn_value_wrappers.dedup();
+        for name in &self.fn_value_wrappers {
+            let _ = writeln!(
+                self.body,
+                "define %KValue @w_{name}_1(%KValue %a0) {{\nentry:\n  %r = call tailcc \
+                 %KValue @d_{name}_1(%KValue %a0)\n  ret %KValue %r\n}}\n"
+            );
+        }
+        self.body.push_str(
+            "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
+             @d_main_0()\n  ret %KValue %r\n}\n",
+        );
         let mut out = String::from(DECLARES);
         for (name, bytes) in &self.strings {
             let _ = writeln!(
@@ -263,7 +278,7 @@ impl<'a> Backend<'a> {
     fn emit_dispatcher(&mut self, name: &str, arity: usize, decls: &[&FnDecl]) -> Result<(), String> {
         let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
         let mut f = FnEmit::new();
-        let header = format!("define %KValue @d_{name}_{arity}({}) {{", params.join(", "));
+        let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
         f.start_block("entry");
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
@@ -471,9 +486,10 @@ impl<'a> Backend<'a> {
                     }
                 }
                 Stmt::Expr(expr) => {
-                    let value = self.emit_expr(f, expr)?;
                     if i == last {
-                        f.line(&format!("ret %KValue {value}"));
+                        self.emit_tail(f, expr)?;
+                    } else {
+                        let _ = self.emit_expr(f, expr)?;
                     }
                 }
             }
@@ -523,7 +539,7 @@ impl<'a> Backend<'a> {
                 }
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @d_{name}_0()"));
+                    f.line(&format!("{t} = call tailcc %KValue @d_{name}_0()"));
                     return Ok(t);
                 }
                 let arities: Vec<usize> = {
@@ -536,8 +552,9 @@ impl<'a> Backend<'a> {
                     seen
                 };
                 if arities == [1] {
+                    self.fn_value_wrappers.push(name.clone());
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @d_{name}_1)"));
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @w_{name}_1)"));
                     return Ok(t);
                 }
                 if !arities.is_empty() {
@@ -655,6 +672,61 @@ impl<'a> Backend<'a> {
                 Ok(t)
             }
         }
+    }
+
+    /// Emit an expression in tail position: direct calls to kanso functions
+    /// become guaranteed tail calls, and an if's branches stay tails.
+    fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
+        if let Expr::App { head, args, .. } = expr {
+            if let Expr::Ident(name, _) = &**head {
+                if name == "if" && f.lookup(name).is_none() {
+                    let cond = self.emit_expr(f, &args[0])?;
+                    let ok = inline_not_failure(f, &cond);
+                    let check = f.label();
+                    let bail = f.label();
+                    f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
+                    f.start_block(&bail);
+                    f.line(&format!("ret %KValue {cond}"));
+                    f.start_block(&check);
+                    let tv = f.tmp();
+                    f.line(&format!("{tv} = call i64 @k_truthy(%KValue {cond})"));
+                    let tb = f.tmp();
+                    f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
+                    let then_label = f.label();
+                    let else_label = f.label();
+                    f.line(&format!("br i1 {tb}, label %{then_label}, label %{else_label}"));
+                    f.start_block(&then_label);
+                    self.emit_tail(f, &args[1])?;
+                    f.start_block(&else_label);
+                    self.emit_tail(f, &args[2])?;
+                    return Ok(());
+                }
+                let is_program_fn = f.lookup(name).is_none()
+                    && self.type_ids.get(name.as_str()).is_none()
+                    && name != "err"
+                    && name != "print"
+                    && self.program.fns.iter().any(|d| d.name == *name);
+                if is_program_fn {
+                    let mut emitted = Vec::new();
+                    for arg in args {
+                        emitted.push(self.emit_expr(f, arg)?);
+                    }
+                    let n = emitted.len();
+                    let args_ir: Vec<String> =
+                        emitted.iter().map(|e| format!("%KValue {e}")).collect();
+                    let t = f.tmp();
+                    f.line(&format!(
+                        "{t} = musttail call tailcc %KValue @d_{name}_{n}({})",
+                        args_ir.join(", ")
+                    ));
+                    f.line(&format!("ret %KValue {t}"));
+                    return Ok(());
+                }
+            }
+        }
+        let value = self.emit_expr(f, expr)?;
+        f.line(&format!("ret %KValue {value}"));
+        Ok(())
     }
 
     fn emit_binop(
@@ -824,7 +896,7 @@ impl<'a> Backend<'a> {
             let n = emitted.len();
             let args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @d_{name}_{n}({})", args_ir.join(", ")));
+            f.line(&format!("{t} = call tailcc %KValue @d_{name}_{n}({})", args_ir.join(", ")));
             return Ok(t);
         }
         if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| b == name) {
@@ -858,12 +930,16 @@ impl<'a> Backend<'a> {
             f.bind(cap, &t);
         }
         f.bind(param, "%a0");
-        let value = self.emit_expr(&mut f, body)?;
-        f.line(&format!("ret %KValue {value}"));
+        self.emit_tail(&mut f, body)?;
         let _ = writeln!(
             self.body,
-            "define %KValue @{lifted}(ptr %env, %KValue %a0) {{\n{}}}\n",
+            "define tailcc %KValue @{lifted}(ptr %env, %KValue %a0) {{\n{}}}\n",
             f.out
+        );
+        let _ = writeln!(
+            self.body,
+            "define %KValue @w_{lifted}(ptr %env, %KValue %a0) {{\nentry:\n  %r = call \
+             tailcc %KValue @{lifted}(ptr %env, %KValue %a0)\n  ret %KValue %r\n}}\n"
         );
         Ok(())
     }
