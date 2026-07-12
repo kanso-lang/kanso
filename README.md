@@ -59,7 +59,7 @@ The error corpus in `tests/golden` matters as much as the success corpus — hal
 
 Decisions the spec leaves open (or that phase 1 approximates), flagged for revisit:
 
-- **the endpoint rule is enforced at runtime**, not compile time — the real rule needs the §14.1 inference fixpoint, which is still owed on paper
+- **the endpoint rule is enforced at runtime**, not compile time — the real rule needs the §14.1 inference fixpoint, being formalized in [design/fixpoint.md](design/fixpoint.md)
 - **generic parameters never bind `err`/`none`**; handle failure explicitly (literal `none`, `(err reason)`) or it propagates — a conservative stand-in for inferred pass-throughs
 - **canonical declaration order**: types before functions, each alphabetical, overloads adjacent and most-specific first — an interpretation of the spec's "wherever order is semantically inert" rule
 - **the pipe target parses as a single atom** (an identifier or parenthesized expression) and the piped value becomes its first argument; a non-callable target fails at runtime, not parse time
