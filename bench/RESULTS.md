@@ -55,7 +55,7 @@ numbers were reached without any of these.
 ```sh
 bench/make_jsonbench.sh          # regenerates bench/jsonbench from lib/json
 cargo build --release
-./target/release/kanso build bench/jsonbench
+./target/release/kanso build bench/jsonbench --release
 time ./jsonbench                 # 150 decodes
 go run bench/main.go             # the rival
 ```

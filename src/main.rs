@@ -6,12 +6,12 @@ fn main() -> ExitCode {
     if args.first().map(String::as_str) == Some("repl") {
         return repl();
     }
-    let (command, file, plan) = match parse_args(&args) {
+    let (command, file, plan, release) = match parse_args(&args) {
         Some(parsed) => parsed,
         None => {
             eprintln!(
                 "usage: kanso run <file.kso> [--plan] | kanso check <file.kso> | kanso \
-                 test <file.kso> | kanso build <file.kso> | kanso repl"
+                 test <file.kso> | kanso build <file.kso> [--release] | kanso repl"
             );
             return ExitCode::from(2);
         }
@@ -51,12 +51,12 @@ fn main() -> ExitCode {
         return run_tests(&program, &file, &source);
     }
     if command == "build" {
-        return build(&program, &file);
+        return build(&program, &file, release);
     }
     run(&program, &file, &source, plan)
 }
 
-fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
+fn parse_args(args: &[String]) -> Option<(String, String, bool, bool)> {
     let command = args.first()?.clone();
     if command != "run" && command != "check" && command != "test" && command != "build" {
         return None;
@@ -64,17 +64,22 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
     let file = args.get(1)?.clone();
     let mut rest = args.iter().skip(2);
     let mut plan = false;
+    let mut release = false;
     for arg in rest.by_ref() {
         match arg.as_str() {
             "--plan" => plan = true,
+            "--release" => release = true,
             "--" => break,
             _ => return None,
         }
     }
-    match plan && command != "run" {
-        true => None,
-        false => Some((command, file, plan)),
+    if plan && command != "run" {
+        return None;
     }
+    if release && command != "build" {
+        return None;
+    }
+    Some((command, file, plan, release))
 }
 
 fn repl() -> ExitCode {
@@ -144,7 +149,7 @@ fn program_args() -> Vec<String> {
     }
 }
 
-fn build(program: &ast::Program, file: &str) -> ExitCode {
+fn build(program: &ast::Program, file: &str, release: bool) -> ExitCode {
     let ir = match kanso::codegen::emit_ir(program) {
         Ok(ir) => ir,
         Err(unsupported) => {
@@ -162,21 +167,10 @@ fn build(program: &ast::Program, file: &str) -> ExitCode {
         eprintln!("error: cannot write {ll_path}: {io}");
         return ExitCode::from(2);
     }
-    let runtime_path = std::env::temp_dir().join("kanso_runtime.c");
-    if let Err(io) = std::fs::write(&runtime_path, include_str!("runtime.c")) {
-        eprintln!("error: cannot write runtime: {io}");
-        return ExitCode::from(2);
-    }
-    let status = std::process::Command::new("clang")
-        .arg("-O3")
-        .arg("-flto")
-        .arg("-Wno-override-module")
-        .arg("-o")
-        .arg(&stem)
-        .arg(&ll_path)
-        .arg(&runtime_path)
-        .arg("-lm")
-        .status();
+    let status = match release {
+        true => release_clang(&stem, &ll_path),
+        false => dev_clang(&stem, &ll_path),
+    };
     match status {
         Ok(code) if code.success() => {
             println!("built ./{stem} (llvm ir at {ll_path})");
@@ -191,6 +185,66 @@ fn build(program: &ast::Program, file: &str) -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// Release: whole-program LTO across the program and a freshly compiled
+/// runtime — the slowest build and the fastest binary.
+fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
+    let runtime_path = std::env::temp_dir().join("kanso_runtime.c");
+    std::fs::write(&runtime_path, include_str!("runtime.c"))?;
+    std::process::Command::new("clang")
+        .arg("-O3")
+        .arg("-flto")
+        .arg("-Wno-override-module")
+        .arg("-o")
+        .arg(stem)
+        .arg(ll_path)
+        .arg(&runtime_path)
+        .arg("-lm")
+        .status()
+}
+
+/// Dev (the default): the program compiles unoptimized and links against a
+/// cached optimized runtime object, so the runtime's cost is paid once per
+/// runtime version, not per build.
+fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
+    let runtime_obj = cached_runtime_object()?;
+    std::process::Command::new("clang")
+        .arg("-O0")
+        .arg("-Wno-override-module")
+        .arg("-o")
+        .arg(stem)
+        .arg(ll_path)
+        .arg(&runtime_obj)
+        .arg("-lm")
+        .status()
+}
+
+fn cached_runtime_object() -> std::io::Result<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let source = include_str!("runtime.c");
+    let mut hasher = std::hash::DefaultHasher::new();
+    source.hash(&mut hasher);
+    let key = hasher.finish();
+    let object = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}.o"));
+    if object.exists() {
+        return Ok(object);
+    }
+    let c_path = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}.c"));
+    std::fs::write(&c_path, source)?;
+    let staging = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}_{}.o", std::process::id()));
+    let status = std::process::Command::new("clang")
+        .arg("-O2")
+        .arg("-c")
+        .arg(&c_path)
+        .arg("-o")
+        .arg(&staging)
+        .status()?;
+    if !status.success() {
+        return Err(std::io::Error::other("clang failed on the runtime"));
+    }
+    std::fs::rename(&staging, &object)?;
+    Ok(object)
 }
 
 fn run_tests(program: &ast::Program, file: &str, source: &str) -> ExitCode {

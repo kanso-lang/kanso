@@ -64,7 +64,7 @@ kanso run jsonbench  0.36s user 0.01s system 52% cpu 0.690 total</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">shell</div>
-  <pre><code><span class="prompt">$ </span>kanso build bench/jsonbench
+  <pre><code><span class="prompt">$ </span>kanso build bench/jsonbench --release
 <span class="s">built ./jsonbench (llvm ir at jsonbench.ll)</span>
 <span class="prompt">$ </span>time ./jsonbench
 <span class="s">decoded 24000 totals</span>
@@ -115,7 +115,7 @@ kanso run jsonbench  0.36s user 0.01s system 52% cpu 0.690 total</code></pre>
 <span class="k">fn</span> <span class="f">odd</span> n
   <span class="f">even</span> (n <span class="o">-</span> <span class="n">1</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso build pingpong.kso &amp;&amp; time ./pingpong</div>
+    <div class="code-panel-title">kanso build pingpong.kso --release &amp;&amp; time ./pingpong</div>
     <pre><code>10000000 even? true
 ./pingpong  0.00s user 0.00s system 1% cpu 0.209 total</code></pre>
   </div>
