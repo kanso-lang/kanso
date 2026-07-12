@@ -698,3 +698,20 @@ a:hover {
     columns: 1;
   }
 }
+
+.lore {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-end;
+  justify-content: center;
+  margin: 4rem 0 1rem;
+}
+.lore figure { margin: 0; text-align: center; }
+.lore .sprite { width: 64px; height: auto; display: block; margin: 0 auto; }
+.lore figcaption {
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  opacity: 0.65;
+  margin-top: 0.6rem;
+  max-width: 11rem;
+}
