@@ -253,6 +253,13 @@ impl Resolver<'_> {
     }
 
     fn push_local(&mut self, name: &str, span: Span) {
+        if self.globals.contains(name) {
+            self.diags.push(Diagnostic::new(
+                "name",
+                format!("`{name}` is already a declaration; rename the binding"),
+                span,
+            ));
+        }
         self.locals.push(Local { name: name.to_string(), span, used: false });
     }
 

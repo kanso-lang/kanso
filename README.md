@@ -52,6 +52,7 @@ This is the **phase-1 reference interpreter** ([spec §15](kanso-spec.md)): a tr
 - arbitrary-precision `int`, string interpolation `"{expr}"`, lists with 1-based indexing, `.` pipe, lambdas
 - canonical form as grammar: indentation, spacing, blank-line placement, snake_case, alphabetical declarations and fields — all compile errors (see [tests/golden/errors](tests/golden/errors))
 - nothing-wasted checks: unused bindings, unused expressions, and rebind-before-use are compile errors
+- one name, one meaning: a binding may not shadow a declared function, type, or builtin
 
 The error corpus in `tests/golden` matters as much as the success corpus — half this language's value is its compile errors.
 

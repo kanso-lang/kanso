@@ -1,0 +1,4 @@
+error[name]: `greet` is already a declaration; rename the binding
+  --> shadowed_declaration.kso:5:3
+   5 |   greet = 1
+         ^

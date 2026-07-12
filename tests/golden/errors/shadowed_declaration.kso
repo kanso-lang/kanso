@@ -1,0 +1,6 @@
+fn greet name
+  "hi, {name}"
+
+fn main
+  greet = 1
+  print "{greet}"
