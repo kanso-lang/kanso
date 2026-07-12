@@ -1,10 +1,17 @@
+type employee
+  age: int
+  name: string
+  salary: int
+
 type user
-  admin: bool
+  age: int
   name: string
 
 fn main
-  clay = user true, "clay"
-  print (welcome clay)
+  clay = user 47 "clay"
+  user age name = clay
+  worker = employee age name 90000
+  print (welcome worker)
 
-fn welcome (user _, name)
+fn welcome (employee _ name _)
   "irasshaimase, {name}"

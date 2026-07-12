@@ -1,0 +1,9 @@
+type post
+  author: string
+  body: string
+  title: string
+
+fn main
+  hello = post "clay" "a language of only decisions" "hello kanso"
+  { author: writer title } = hello
+  print "{title}, by {writer}"

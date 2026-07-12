@@ -97,13 +97,9 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     p.expect_kw_fn()?;
     let (name, span) = p.expect_ident("a function name")?;
     let mut params = Vec::new();
-    if !p.done() {
+    while !p.done() {
         params.push(p.parse_pattern()?);
-        while p.eat_comma() {
-            params.push(p.parse_pattern()?);
-        }
     }
-    p.expect_done()?;
     if body.is_empty() {
         return Err(Diagnostic::new(
             "syntax",
@@ -137,18 +133,32 @@ fn parse_field(line: &Line) -> Result<(String, String, Span), Diagnostic> {
 }
 
 fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
-    let mut p = P::new(&line.tokens, line.number);
-    if let (Some((Tok::Ident(name), span)), Some((Tok::Bind, _))) =
-        (line.tokens.first(), line.tokens.get(1))
-    {
-        p.pos = 2;
-        let expr = p.parse_expr_with_commas()?;
-        p.expect_done()?;
-        return Ok(Stmt::Bind { name: name.clone(), span: *span, expr });
+    let mut depth = 0usize;
+    let mut bind_at = None;
+    for (i, (tok, _)) in line.tokens.iter().enumerate() {
+        match tok {
+            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
+            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
+            Tok::Bind if depth == 0 => {
+                bind_at = Some(i);
+                break;
+            }
+            _ => {}
+        }
     }
-    let expr = p.parse_expr_with_commas()?;
-    p.expect_done()?;
-    Ok(Stmt::Expr(expr))
+    let Some(i) = bind_at else {
+        let mut p = P::new(&line.tokens, line.number);
+        let expr = p.parse_expr()?;
+        p.expect_done()?;
+        return Ok(Stmt::Expr(expr));
+    };
+    let mut lhs = P::new(&line.tokens[..i], line.number);
+    let pattern = lhs.parse_bind_target()?;
+    lhs.expect_done()?;
+    let mut rhs = P::new(&line.tokens[i + 1..], line.number);
+    let expr = rhs.parse_expr()?;
+    rhs.expect_done()?;
+    Ok(Stmt::Bind { pattern, expr })
 }
 
 pub struct P<'a> {
@@ -229,16 +239,6 @@ impl<'a> P<'a> {
         }
     }
 
-    fn eat_comma(&mut self) -> bool {
-        match self.peek() {
-            Some(Tok::Comma) => {
-                self.pos += 1;
-                true
-            }
-            _ => false,
-        }
-    }
-
     fn parse_type_expr(&mut self) -> Result<String, Diagnostic> {
         let (mut ty, _) = self.expect_ident("a type")?;
         while matches!(self.peek(), Some(Tok::LBracket)) {
@@ -280,7 +280,7 @@ impl<'a> P<'a> {
             }
             Some(Tok::Underscore) => {
                 self.pos += 1;
-                Ok(Pattern::Wildcard)
+                Ok(Pattern::Wildcard(span))
             }
             Some(Tok::Ident(name)) => {
                 self.pos += 1;
@@ -301,7 +301,7 @@ impl<'a> P<'a> {
                     }
                     _ => {
                         let mut fields = vec![self.parse_pattern()?];
-                        while self.eat_comma() {
+                        while !matches!(self.peek(), Some(Tok::RParen)) {
                             fields.push(self.parse_pattern()?);
                         }
                         self.expect_rparen()?;
@@ -323,21 +323,47 @@ impl<'a> P<'a> {
         }
     }
 
-    pub fn parse_expr_with_commas(&mut self) -> Result<Expr, Diagnostic> {
-        let mut expr = self.parse_pipe()?;
-        while self.eat_comma() {
-            let arg = self.parse_pipe()?;
-            match &mut expr {
-                Expr::App { args, .. } => args.push(arg),
-                _ => {
-                    let message =
-                        "a comma adds an argument to a call, and nothing here is a call"
-                            .to_string();
-                    return Err(self.err(message));
+    pub fn parse_expr(&mut self) -> Result<Expr, Diagnostic> {
+        self.parse_pipe()
+    }
+
+    pub fn parse_bind_target(&mut self) -> Result<Pattern, Diagnostic> {
+        if matches!(self.peek(), Some(Tok::LBrace)) {
+            return self.parse_keyed();
+        }
+        let (first, span) = self.expect_ident("a binding name or type")?;
+        match self.done() {
+            true => Ok(Pattern::Var(first, span)),
+            false => {
+                let mut fields = Vec::new();
+                while !self.done() {
+                    fields.push(self.parse_pattern()?);
                 }
+                Ok(Pattern::Ctor { ty: first, fields })
             }
         }
-        Ok(expr)
+    }
+
+    fn parse_keyed(&mut self) -> Result<Pattern, Diagnostic> {
+        let span = self.span_here();
+        self.pos += 1;
+        let mut entries = Vec::new();
+        while !matches!(self.peek(), Some(Tok::RBrace)) {
+            let (field, field_span) = self.expect_ident("a field name")?;
+            let bind_name = match self.peek() {
+                Some(Tok::Colon) => {
+                    self.pos += 1;
+                    self.expect_ident("a binding name")?.0
+                }
+                _ => field.clone(),
+            };
+            entries.push(KeyedEntry { field, bind_name, span: field_span });
+        }
+        self.pos += 1;
+        match entries.is_empty() {
+            true => Err(self.err("a keyed read names at least one field".to_string())),
+            false => Ok(Pattern::Keyed { entries, span }),
+        }
     }
 
     fn parse_pipe(&mut self) -> Result<Expr, Diagnostic> {
@@ -347,8 +373,14 @@ impl<'a> P<'a> {
                 Some(Tok::Pipe) => {
                     let span = self.span_here();
                     self.pos += 1;
-                    let target = self.parse_atom()?;
-                    expr = Expr::App { head: Box::new(target), args: vec![expr], span };
+                    let target = self.parse_app()?;
+                    expr = match target {
+                        Expr::App { head, mut args, .. } => {
+                            args.insert(0, expr);
+                            Expr::App { head, args, span }
+                        }
+                        atom => Expr::App { head: Box::new(atom), args: vec![expr], span },
+                    };
                 }
                 Some(Tok::SeqOp) => {
                     let span = self.span_here();
@@ -408,16 +440,18 @@ impl<'a> P<'a> {
     }
 
     fn parse_app(&mut self) -> Result<Expr, Diagnostic> {
-        let mut atoms = vec![self.parse_atom()?];
+        let head = self.parse_atom()?;
+        let mut args = Vec::new();
         while self.starts_atom() {
-            atoms.push(self.parse_atom()?);
+            args.push(self.parse_atom()?);
         }
-        let mut expr = atoms.pop().expect("at least one atom");
-        for head in atoms.into_iter().rev() {
-            let span = head.span();
-            expr = Expr::App { head: Box::new(head), args: vec![expr], span };
+        match args.is_empty() {
+            true => Ok(head),
+            false => {
+                let span = head.span();
+                Ok(Expr::App { head: Box::new(head), args, span })
+            }
         }
-        Ok(expr)
     }
 
     fn parse_atom(&mut self) -> Result<Expr, Diagnostic> {
@@ -442,19 +476,11 @@ impl<'a> P<'a> {
             Some(Tok::LBracket) => {
                 self.pos += 1;
                 let mut items = Vec::new();
-                if !matches!(self.peek(), Some(Tok::RBracket)) {
-                    items.push(self.parse_pipe()?);
-                    while self.eat_comma() {
-                        items.push(self.parse_pipe()?);
-                    }
+                while !matches!(self.peek(), Some(Tok::RBracket)) {
+                    items.push(self.parse_atom()?);
                 }
-                match self.peek() {
-                    Some(Tok::RBracket) => {
-                        self.pos += 1;
-                        Ok(Expr::List(items, span))
-                    }
-                    _ => Err(self.err("expected `]`".to_string())),
-                }
+                self.pos += 1;
+                Ok(Expr::List(items, span))
             }
             Some(Tok::LParen) => {
                 self.pos += 1;
@@ -463,14 +489,13 @@ impl<'a> P<'a> {
                     while self.pos < arrow_end {
                         let (name, pspan) = self.expect_ident("a lambda parameter")?;
                         params.push((name, pspan));
-                        self.eat_comma();
                     }
                     self.pos = arrow_end + 1;
-                    let body = self.parse_expr_with_commas()?;
+                    let body = self.parse_expr()?;
                     self.expect_rparen()?;
                     return Ok(Expr::Lambda { params, body: Box::new(body), span });
                 }
-                let inner = self.parse_expr_with_commas()?;
+                let inner = self.parse_expr()?;
                 self.expect_rparen()?;
                 Ok(inner)
             }
@@ -480,17 +505,13 @@ impl<'a> P<'a> {
 
     fn lambda_lookahead(&self) -> Option<usize> {
         let mut i = self.pos;
-        loop {
-            match self.toks.get(i).map(|(t, _)| t) {
-                Some(Tok::Ident(_)) => i += 1,
-                _ => return None,
-            }
-            match self.toks.get(i).map(|(t, _)| t) {
-                Some(Tok::Arrow) => return Some(i),
-                Some(Tok::Comma) => i += 1,
-                _ => return None,
+        while let Some(Tok::Ident(_)) = self.toks.get(i).map(|(t, _)| t) {
+            i += 1;
+            if let Some(Tok::Arrow) = self.toks.get(i).map(|(t, _)| t) {
+                return Some(i);
             }
         }
+        None
     }
 }
 
@@ -510,7 +531,7 @@ fn template_part(part: &StrPart, line: usize) -> Result<TemplatePart, Diagnostic
         StrPart::Lit(s) => Ok(TemplatePart::Lit(s.clone())),
         StrPart::Interp(tokens) => {
             let mut p = P::new(tokens, line);
-            let expr = p.parse_expr_with_commas()?;
+            let expr = p.parse_expr()?;
             p.expect_done()?;
             Ok(TemplatePart::Interp(expr))
         }

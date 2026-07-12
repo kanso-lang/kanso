@@ -1,0 +1,4 @@
+error[syntax]: `_` does not appear in binding patterns; omit fields with a keyed read
+  --> underscore_in_binding.kso:6:8
+   6 |   user _ name = user false "clay"
+              ^

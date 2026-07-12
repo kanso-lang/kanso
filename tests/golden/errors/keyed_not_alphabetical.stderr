@@ -1,0 +1,4 @@
+error[formatting]: keyed reads list fields in alphabetical order: `admin` before `name`
+  --> keyed_not_alphabetical.kso:6:10
+   6 |   { name admin } = user false "clay"
+                ^

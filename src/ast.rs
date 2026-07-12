@@ -40,9 +40,17 @@ pub enum Pattern {
     StrLit(String, Span),
     Nullary(String, Span),
     Var(String, Span),
-    Wildcard,
+    Wildcard(Span),
     Annotated { name: String, ty: String, span: Span },
     Ctor { ty: String, fields: Vec<Pattern> },
+    Keyed { entries: Vec<KeyedEntry>, span: Span },
+}
+
+#[derive(Clone, Debug)]
+pub struct KeyedEntry {
+    pub field: String,
+    pub bind_name: String,
+    pub span: Span,
 }
 
 impl Pattern {
@@ -50,14 +58,14 @@ impl Pattern {
         match self {
             Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 0,
             Pattern::Annotated { .. } | Pattern::Ctor { .. } => 1,
-            Pattern::Var(..) | Pattern::Wildcard => 2,
+            Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. } => 2,
         }
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum Stmt {
-    Bind { name: String, span: Span, expr: Expr },
+    Bind { pattern: Pattern, expr: Expr },
     Expr(Expr),
 }
 

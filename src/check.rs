@@ -168,7 +168,7 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         (Pattern::Nullary(x, _), Pattern::Nullary(y, _)) => x == y,
         (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => x == y,
         (Pattern::Ctor { ty: x, .. }, Pattern::Ctor { ty: y, .. }) => x == y,
-        (Pattern::Var(..) | Pattern::Wildcard, Pattern::Var(..) | Pattern::Wildcard) => true,
+        (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => true,
         _ => false,
     })
 }
@@ -186,6 +186,16 @@ fn check_main(program: &Program, diags: &mut Vec<Diagnostic>) {
             "a program defines `main`".to_string(),
             Span { line: 1, col: 1 },
         )),
+    }
+}
+
+fn other_span(pattern: &Pattern) -> Span {
+    match pattern {
+        Pattern::IntLit(_, s) | Pattern::StrLit(_, s) | Pattern::Nullary(_, s) => *s,
+        Pattern::Annotated { span, .. } | Pattern::Keyed { span, .. } => *span,
+        Pattern::Var(_, s) => *s,
+        Pattern::Wildcard(s) => *s,
+        Pattern::Ctor { .. } => Span { line: 0, col: 0 },
     }
 }
 
@@ -209,16 +219,16 @@ fn check_fn_body(decl: &FnDecl, globals: &HashSet<String>, diags: &mut Vec<Diagn
     let last = decl.body.len() - 1;
     for (i, stmt) in decl.body.iter().enumerate() {
         match stmt {
-            Stmt::Bind { name, span, expr } => {
+            Stmt::Bind { pattern, expr } => {
                 resolver.resolve_expr(expr);
                 if i == last {
                     resolver.diags.push(Diagnostic::new(
                         "unused",
                         "a body ends with its result expression, not a binding".to_string(),
-                        *span,
+                        expr.span(),
                     ));
                 }
-                resolver.rebind(name, *span);
+                resolver.bind_target(pattern);
             }
             Stmt::Expr(expr) => {
                 resolver.resolve_expr(expr);
@@ -249,6 +259,61 @@ impl Resolver<'_> {
                 }
             }
             _ => {}
+        }
+    }
+
+    fn bind_target(&mut self, pattern: &Pattern) {
+        match pattern {
+            Pattern::Var(name, span) => self.rebind(name, *span),
+            Pattern::Ctor { fields, .. } => {
+                for field in fields {
+                    self.bind_target_field(field);
+                }
+            }
+            Pattern::Keyed { entries, span } => {
+                for pair in entries.windows(2) {
+                    if pair[0].field >= pair[1].field {
+                        self.diags.push(Diagnostic::new(
+                            "formatting",
+                            format!(
+                                "keyed reads list fields in alphabetical order: `{}` before \
+                                 `{}`",
+                                pair[1].field, pair[0].field
+                            ),
+                            pair[1].span,
+                        ));
+                    }
+                }
+                let _ = span;
+                for entry in entries {
+                    self.rebind(&entry.bind_name, entry.span);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn bind_target_field(&mut self, pattern: &Pattern) {
+        match pattern {
+            Pattern::Var(name, span) => self.rebind(name, *span),
+            Pattern::Ctor { fields, .. } => {
+                for field in fields {
+                    self.bind_target_field(field);
+                }
+            }
+            Pattern::Wildcard(span) => self.diags.push(Diagnostic::new(
+                "syntax",
+                "`_` does not appear in binding patterns; omit fields with a keyed read"
+                    .to_string(),
+                *span,
+            )),
+            other => self.diags.push(Diagnostic::new(
+                "syntax",
+                "binding patterns are irrefutable: names and nested constructor patterns \
+                 only"
+                    .to_string(),
+                other_span(other),
+            )),
         }
     }
 

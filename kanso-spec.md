@@ -44,7 +44,8 @@ type user
 ```
 
 - **fields in alphabetical order, enforced** (formatting error otherwise). general rule: wherever order is semantically inert (fields, imports, typeset members, overloads within specificity rank), canonical order is mandatory.
-- **positional construction only**, in alphabetical field order: `user false, "e@x.com", "clay"`. no keyed construction. single-field types construct bare: `err reason`, `circle r`.
+- **positional construction only**, in alphabetical field order: `user false "e@x.com" "clay"`. no keyed construction. single-field types construct bare: `err reason`, `circle r`.
+- **destructuring (gaveled 2026-07-11):** full positional constructor patterns in parameters and bindings (`user age name = clay`), mirroring construction. keyed subset reads are the dual of record update — partial, by name, alphabetical, binding locals named after fields: `{ author title } = post`, with rename-on-bind for collisions (`{ author: writer } = post`); a keyed read omits at least one field. `_` discards appear in parameters only; binding discards are expressed by omission via the keyed form. bindings are irrefutable: a constructor pattern binds only a value whose inferred set is exactly that type (dispatch remains the only eliminator); literals never appear in binding patterns. records have no field-access syntax — reads happen through patterns.
 - record update is the only keyed form (it's a different operation — partial, by name): `u { admin: true }`. keys within an update: alphabetical.
 - adding a field is loud: every construction site and destructuring pattern becomes arity-wrong (compile error with locations). renaming a field can reorder the constructor — mitigated by distinct field types catching transposition, LSP field-name inlays at call sites, and rename refactors flagging call sites.
 - `_` discards in patterns and is exempt from unused-binding errors.
@@ -105,19 +106,19 @@ type matrix[n: numeric]
   ...
 ```
 
-- functions may use the slot (`fn zip_with[a] f, (xs: a[]), (ys: a[])`) only when stipulating sharing beyond what the body forces; otherwise redundant → error.
+- functions may use the slot (`fn zip_with[a] f (xs: a[]) (ys: a[])`) only when stipulating sharing beyond what the body forces; otherwise redundant → error.
 - requirements attach to usage paths, not type existence: `stats[string]` constructs fine; calling `absorb` (which adds) on it fails at that call site. eager narrowing is opt-in via slot constraint (`type stats[a: numeric]`).
-- instantiation mirrors declaration: `cache[user]`, `pair[int, string]`. no variance annotations (immutability → everything covariant), no higher-kinded types, no explicit instantiation of inferables.
+- instantiation mirrors declaration: `cache[user]`, `pair[int string]`. no variance annotations (immutability → everything covariant), no higher-kinded types, no explicit instantiation of inferables.
 
 ## 8. containers
 
-- **lists:** `T[]` in type position (postfix). literals `[1, 2, 3]`. the word `list` does not appear in surface syntax.
+- **lists:** `T[]` in type position (postfix). literals `[1 2 3]`. the word `list` does not appear in surface syntax.
 - **maps:** `T[K]` — element type first, key type in brackets. postfix composes left-to-right: `user[string][]` is a list of string-keyed user maps.
-- lookup `at m, k` returns the value or `none` (propagates). no panicking access anywhere.
-- `put m, k, v` is functional; perceus makes it in-place when uniquely owned.
+- lookup `at m k` returns the value or `none` (propagates). no panicking access anywhere.
+- `put m k v` is functional; perceus makes it in-place when uniquely owned.
 - map keys require derivable `eq`/`hash` (inferred constraint).
 - `entries m` returns pairs in **sorted key order** — deterministic iteration, always.
-- **1-based indexing, everywhere, no exceptions.** `slice xs, 2, 4` is inclusive both ends. `index_of` returns a position or `none`.
+- **1-based indexing, everywhere, no exceptions.** `slice xs 2 4` is inclusive both ends. `index_of` returns a position or `none`.
 - map literals: OPEN (candidate `["k": v]`, no pressure yet).
 
 ## 9. bindings, rebinding, flow
@@ -126,7 +127,7 @@ type matrix[n: numeric]
 - no `var`, no `const` — one kind of binding, zero keywords.
 - unused expressions and unused bindings are compile errors.
 - pipe is canonical for linear chains where each intermediate is used once; rebind ladders are for what pipes can't express. (tentative: pipeable ladder = compile error; fallback: tooling auto-pipes. decide during implementation.)
-- **commas separate arguments, mandatory for multi-arg calls and signatures.** juxtaposition = application: `forward to_string x` is one argument. pipe binds tighter than comma. lists use commas. no semicolons.
+- **kanso has no commas (gaveled 2026-07-11).** application is flat juxtaposition: `f a b` is a two-argument call; every enumeration (arguments, list elements, patterns, lambda parameters) is space-separated, and non-atomic elements are parenthesized (`f (g x) y`, `[(a + b)]`). the pipe inserts the piped value as the first argument of its target application: `x . f y` is `f x y`; the stdlib is subject-first so chains stay pipeable. no semicolons.
 - string interpolation `"{x}"`. comments `//`. 2-space indent. snake_case, all lowercase, always.
 - canonical formatting is grammar: non-canonical whitespace is a syntax error. no formatter tool exists.
 
@@ -141,7 +142,7 @@ type matrix[n: numeric]
 ## 11. concurrency and processes
 
 - arguments and independent bindings evaluate in runtime-chosen order; only the description graph constrains effects. implicit parallelism falls out.
-- **processes, erlang-shaped:** `spawn f` (description yielding pid), `send pid, m` (effect), `receive` (effect yielding next message). servers are recursion-held state: `fn serve state` / `receive >> (m -> serve (handle state, m))`. message handling is dispatch-by-overload on message types.
+- **processes, erlang-shaped:** `spawn f` (description yielding pid), `send pid m` (effect), `receive` (effect yielding next message). servers are recursion-held state: `fn serve state` / `receive >> (m -> serve (handle state m))`. message handling is dispatch-by-overload on message types.
 - no shared memory, no locks, no channel primitives. supervision trees: a child's unhandled err becomes a supervisor message with restart policy as data. **the root supervisor is user code** — global error reporting (sentry etc.) is an ordinary overload there, with provenance spans riding along. no ambient handlers.
 
 ## 12. modules
@@ -159,7 +160,7 @@ type matrix[n: numeric]
 ## 14. open questions (priority order)
 
 1. **inference fixpoint formalization.** dispatch depends on types; types depend on generated pass-throughs; pass-throughs change return sets. plan: propagable sets as monotone least fixpoint over the call graph, then dispatch resolution, with programs where dispatch would feed back into sets rejected. **do this on paper before any code.** unions-as-values made the lattice natural; the stratification proof is still owed.
-2. destructuring syntax: list patterns (`fn sum []`, cons/rest spelling), multi-field record patterns, partial patterns with `_`.
+2. destructuring: record patterns gaveled 2026-07-11 (see §3); still open: list patterns (`fn sum []`, cons/rest spelling — leading candidate `[first *rest]`, mirroring construction splats).
 3. qualification syntax (§12). 4. build totality (§10). 5. pipe-vs-rebind canonicality (§9). 6. map literals. 7. multi-way conditional. 8. ffi (route through effect descriptions at the edge; 1-based translation layer lives there). 9. build tool (`kanso run/build/test/publish`; publish does contract diffs). 10. numeric coercion. 11. process details: mailbox ordering guarantees, selective receive or strict FIFO, restart policy vocabulary.
 
 ## 15. implementation plan
@@ -167,4 +168,4 @@ type matrix[n: numeric]
 - **phase 0 (paper, ~a week):** fixpoint formalization (§14.1). the language's two founding features must be proven mutually consistent before code.
 - **phase 1: tree-walking interpreter** as reference implementation. suggested host: rust (query-based/salsa-style incremental architecture from day one — the LSP shares the query engine; this was always the architecture). deliverables: lexer/parser for the canonical grammar (formatting errors included), name resolution, the inference engine (sets + unification + constraints), dispatch resolution, pass-through generation, endpoint checking, description-building runtime with a pluggable executor (real + scripted-for-tests), `kanso run`, golden-file test corpus of programs and expected errors (the error corpus matters as much as the success corpus — half this language's value is its compile errors).
 - **phase 2: LSP** on the same query engine: contract inlays, field-name inlays at construction sites, provenance chains.
-- **phase 3: native compiler.** target **C** (the koka/lean/nim-proven path for perceus) or cranelift for a jit story. **not llvm first** — kanso's performance lives in its own analyses (perceus, FBIP, monomorphization); llvm is the backend for the year kanso needs to win benchmarks, and that is not year one. monomorphization + pass-through generation is a code-size multiplier: measure early. adopt rust's ban on polymorphic recursion.
+- **phase 3: native compiler.** performance is a founding goal, not a later phase: the abstract cost model (op-count baselines in CI) governs it from phase 1, before any backend exists. first native target: **C** (the koka/lean-proven path for perceus) or cranelift for a jit story — emitting C is not the slow path, it is renting clang/gcc's entire world-class optimizer without maintaining IR bindings; koka and lean post C/C++-competitive numbers this way. kanso's headline speed comes from its own analyses — perceus refcount elision, FBIP, monomorphization (zero dynamic dispatch), and ordering-principle parallelism — which must exist before any backend can multiply them. direct llvm ir lands when profiling shows the C detour leaves speed on the table. monomorphization + pass-through generation is a code-size multiplier: measure early. adopt rust's ban on polymorphic recursion.

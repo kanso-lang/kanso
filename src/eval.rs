@@ -111,14 +111,85 @@ impl<'a> Interp<'a> {
         let mut result = Value::NoneV;
         for stmt in body {
             match stmt {
-                Stmt::Bind { name, expr, .. } => {
+                Stmt::Bind { pattern, expr } => {
                     let value = self.eval(expr, &env)?;
-                    env = bind(env, name, value);
+                    env = self.destructure(pattern, value, env, expr.span())?;
                 }
                 Stmt::Expr(expr) => result = self.eval(expr, &env)?,
             }
         }
         Ok(result)
+    }
+
+    fn destructure(
+        &self,
+        pattern: &Pattern,
+        value: Value,
+        env: Option<Rc<Env>>,
+        span: Span,
+    ) -> Result<Option<Rc<Env>>, RuntimeError> {
+        match pattern {
+            Pattern::Var(name, _) => Ok(bind(env, name, value)),
+            Pattern::Ctor { ty, .. } => {
+                let mut binds = Vec::new();
+                match match_one(pattern, &value, &mut binds) {
+                    Some(()) => {
+                        let mut env = env;
+                        for (name, bound) in binds {
+                            env = bind(env, &name, bound);
+                        }
+                        Ok(env)
+                    }
+                    None => Err(RuntimeError {
+                        message: format!(
+                            "cannot destructure {} as `{ty}`; bindings are irrefutable, so \
+                             handle other types by dispatch first",
+                            render(&value, true)
+                        ),
+                        span,
+                    }),
+                }
+            }
+            Pattern::Keyed { entries, .. } => {
+                let Value::Record { ty, fields } = &value else {
+                    return Err(RuntimeError {
+                        message: format!(
+                            "cannot read fields of {}; keyed reads take a record",
+                            render(&value, true)
+                        ),
+                        span,
+                    });
+                };
+                let decl = self.types.get(&**ty).expect("constructed types are declared");
+                if entries.len() >= decl.fields.len() {
+                    return Err(RuntimeError {
+                        message: "a keyed read omits at least one field; reading every \
+                                  field is the positional form"
+                            .to_string(),
+                        span,
+                    });
+                }
+                let mut env = env;
+                for entry in entries {
+                    let position =
+                        decl.fields.iter().position(|(name, _, _)| *name == entry.field);
+                    let Some(position) = position else {
+                        return Err(RuntimeError {
+                            message: format!("`{ty}` has no field `{}`", entry.field),
+                            span,
+                        });
+                    };
+                    env = bind(env, &entry.bind_name, fields[position].clone());
+                }
+                Ok(env)
+            }
+            _ => Err(RuntimeError {
+                message: "binding patterns are irrefutable: names and constructor \
+                          patterns only"
+                    .to_string(),
+                span,
+            }),
+        }
     }
 
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>) -> EvalResult {
@@ -509,7 +580,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
         (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(()),
         (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(()),
         (Pattern::Nullary(name, _), Value::NoneV) if name == "none" => Some(()),
-        (Pattern::Wildcard, _) => match is_failure(arg) {
+        (Pattern::Wildcard(_), _) => match is_failure(arg) {
             true => None,
             false => Some(()),
         },
@@ -529,6 +600,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
                 false => None,
             }
         }
+        (Pattern::Keyed { .. }, _) => None,
         (Pattern::Ctor { ty, fields }, Value::ErrV(reason)) if ty == "err" => {
             match fields.len() == 1 {
                 true => match_one(&fields[0], reason, binds),
@@ -650,11 +722,11 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
         Value::ErrV(reason) => format!("err {}", render(reason, true)),
         Value::List(items) => {
             let inner: Vec<String> = items.iter().map(|i| render(i, true)).collect();
-            format!("[{}]", inner.join(", "))
+            format!("[{}]", inner.join(" "))
         }
         Value::Record { ty, fields } => {
             let inner: Vec<String> = fields.iter().map(|f| render(f, true)).collect();
-            format!("{} {}", ty, inner.join(", "))
+            format!("{} {}", ty, inner.join(" "))
         }
         Value::FnRef(name) => format!("<fn {name}>"),
         Value::Closure(_) => "<fn>".to_string(),

@@ -10,7 +10,8 @@ pub enum Tok {
     RParen,
     LBracket,
     RBracket,
-    Comma,
+    LBrace,
+    RBrace,
     Colon,
     Bind,
     Arrow,
@@ -147,12 +148,20 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             end_cols.push(s.span().col);
             continue;
         }
+        if c == ',' {
+            return Err(Diagnostic::new(
+                "formatting",
+                "kanso has no commas; enumerations are space-separated".to_string(),
+                span,
+            ));
+        }
         let tok = match c {
             '(' => Some(Tok::LParen),
             ')' => Some(Tok::RParen),
             '[' => Some(Tok::LBracket),
             ']' => Some(Tok::RBracket),
-            ',' => Some(Tok::Comma),
+            '{' => Some(Tok::LBrace),
+            '}' => Some(Tok::RBrace),
             ':' => Some(Tok::Colon),
             '.' => Some(Tok::Pipe),
             _ => None,
@@ -306,7 +315,6 @@ impl Scanner {
 
 fn required_gap(prev: &Tok, next: &Tok) -> usize {
     match (prev, next) {
-        (_, Tok::Comma) => 0,
         (_, Tok::RParen) | (_, Tok::RBracket) => 0,
         (Tok::LParen, _) | (Tok::LBracket, _) => 0,
         (_, Tok::Colon) => 0,

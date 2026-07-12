@@ -129,11 +129,11 @@
   <span class="s">"result: <span class="i">{n}</span>"</span>
 
 <span class="k">fn</span> <span class="f">main</span>
-  good <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span>, <span class="n">2</span>
-  bad <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span>, <span class="n">0</span>
+  good <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">2</span>
+  bad <span class="o">=</span> <span class="f">safe_ratio</span> <span class="n">10</span> <span class="n">0</span>
   <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)
 
-<span class="k">fn</span> <span class="f">safe_ratio</span> a, b
+<span class="k">fn</span> <span class="f">safe_ratio</span> a b
   a <span class="o">/</span> b</code></pre>
         <div class="code-output">
           <div class="code-panel-title">output</div>
@@ -172,10 +172,10 @@ failed: division by zero</code></pre>
   name: <span class="t">string</span>
 
 <span class="k">fn</span> <span class="f">main</span>
-  clay <span class="o">=</span> <span class="t">user</span> <span class="t">true</span>, <span class="s">"clay"</span>
+  clay <span class="o">=</span> <span class="t">user</span> <span class="t">true</span> <span class="s">"clay"</span>
   <span class="f">print</span> (<span class="f">welcome</span> clay)
 
-<span class="k">fn</span> <span class="f">welcome</span> (<span class="t">user</span> <span class="o">_</span>, name)
+<span class="k">fn</span> <span class="f">welcome</span> (<span class="t">user</span> <span class="o">_</span> name)
   <span class="s">"irasshaimase, <span class="i">{name}</span>"</span></code></pre>
           <div class="code-output">
             <div class="code-panel-title">output</div>
@@ -210,12 +210,12 @@ three</code></pre>
   <span class="s">"ninth price: <span class="i">{x}</span>"</span>
 
 <span class="k">fn</span> <span class="f">main</span>
-  prices <span class="o">=</span> [<span class="n">30</span>, <span class="n">10</span>, <span class="n">20</span>]
-  doubled <span class="o">=</span> <span class="f">map</span> prices, (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
-  ninth <span class="o">=</span> <span class="f">at</span> prices, <span class="n">9</span>
+  prices <span class="o">=</span> [<span class="n">30</span> <span class="n">10</span> <span class="n">20</span>]
+  doubled <span class="o">=</span> <span class="f">map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+  ninth <span class="o">=</span> <span class="f">at</span> prices <span class="n">9</span>
   <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
         </div>
-        <p>no panicking access anywhere: <code>at prices, 9</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it. <code>sort prices</code> needs no interface — <code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
+        <p>no panicking access anywhere: <code>at prices 9</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it. <code>sort prices</code> needs no interface — <code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
       </div>
     </div>
   </div>
