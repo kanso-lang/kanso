@@ -63,7 +63,7 @@ pub fn infer(program: &Program) -> Inference {
             let mut env: HashMap<&str, Set> = HashMap::new();
             let param_sets = ctx.params[i].clone();
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
-                bind_pattern(&ctx, pattern, *joined, &mut env);
+                bind_pattern(pattern, *joined, &mut env);
             }
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
             if ret | ctx.returns[i] != ctx.returns[i] {
@@ -75,7 +75,7 @@ pub fn infer(program: &Program) -> Inference {
     Inference { params: ctx.params, returns: ctx.returns }
 }
 
-fn bind_pattern<'a>(ctx: &Ctx<'a>, pattern: &'a Pattern, joined: Set, env: &mut HashMap<&'a str, Set>) {
+fn bind_pattern<'a>(pattern: &'a Pattern, joined: Set, env: &mut HashMap<&'a str, Set>) {
     match pattern {
         // generics never bind failures
         Pattern::Var(name, _) => {
@@ -97,7 +97,7 @@ fn bind_pattern<'a>(ctx: &Ctx<'a>, pattern: &'a Pattern, joined: Set, env: &mut 
         }
         Pattern::Ctor { fields, .. } => {
             for field in fields {
-                bind_pattern(ctx, field, TOP & !FAIL, env);
+                bind_pattern(field, TOP & !FAIL, env);
             }
         }
         Pattern::Keyed { entries, .. } => {
@@ -118,7 +118,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
                     Pattern::Var(name, _) => {
                         env.insert(name, value);
                     }
-                    _ => bind_pattern(&*ctx, pattern, value, env),
+                    _ => bind_pattern(pattern, value, env),
                 }
             }
             Stmt::Expr(expr) => result = eval_expr(ctx, expr, env),
