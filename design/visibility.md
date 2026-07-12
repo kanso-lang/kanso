@@ -47,7 +47,13 @@ pub type parse_failure
 ## why not the alternatives
 
 - **Capitalization (Go):** collides with all-lowercase snake_case; kanso names
-  would grow a second alphabet for one bit of information.
+  would grow a second alphabet for one bit of information. Worth naming what
+  Go's capitals actually buy, though: visibility is visible at every **use**
+  site (`json.Marshal` wears its publicness), not just the declaration. kanso
+  gets that property free once cross-module references are qualified — from
+  outside a module only public names are reachable, so a qualified mention is
+  itself proof of publicness. The use-site benefit Go pays a whole case
+  system for falls out of module qualification.
 - **Export list at the top of the module:** separates the fact from the
   declaration it describes; every read of a fn requires a second lookup.
 - **File-based (public = declared in the file named after the module):**

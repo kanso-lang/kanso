@@ -46,6 +46,45 @@
 
 <article class="spec-doc prose essay">
 
+<span class="eyebrow">gavel queue</span>
+<h1>decisions in flight</h1>
+
+<p>the standing queue of language decisions awaiting a ruling, in priority order — priority meaning "what blocks what," not "what is loudest." each has a recommendation and a reversible implementation plan. below the queue, the original json-gauntlet field report stands as the receipt trail for the calls already made.</p>
+
+<h2 id="q1"><span class="sec-num">01</span>what is an int? (urgent: the engines now disagree in public)</h2>
+
+<p><code>kanso run</code> now builds and executes a native binary, whose <code>int</code> is int64 with a trap on overflow. the interpreter — which still powers the repl, <code>--plan</code>, and the playground's fallback — has arbitrary-precision ints, and the playground's compiled path inherits bigints from the registry. so <code>fact 100</code> currently works in the browser and overflows on your laptop. one semantics must win. <strong>options:</strong> (a) <code>int</code> is int64, overflow is a defect that traps loudly; arbitrary precision becomes an explicit <code>bigint</code> type later — fast, honest, go-shaped, and the recommendation; (b) <code>int</code> is arbitrary-precision everywhere and the native backend grows small-int tagging with overflow promotion — keeps the "20! just works" brag at a real cost to the hot path and to the 1.6ms number. the spec currently says (b); the fastest engine currently does (a).</p>
+
+<h2 id="q2"><span class="sec-num">02</span>destructuring: drop the type name, bind by field name</h2>
+
+<p>from the latest litigation: in <code>track artist minutes title = song</code> the type name is <em>derivable</em> — inference knows what <code>song</code> is — and the annotation doctrine says derivable information is unwritable. positional binding is also fragile: add a field and every positional destructure silently reshuffles. <strong>proposal:</strong> bindings destructure by field name, bare, subset allowed (<code>artist minutes = song</code>); braces only where something needs delimiting — a rename (<code>{ artist: who } = song</code>, spaced colon because a rename is a key-value pair) and the single-field case (<code>{ artist } = song</code>, since bare <code>artist = song</code> is an ordinary binding). the type name stays in dispatch arms (<code>fn describe (err reason)</code>) where it is the discriminator — the decision itself. tight colon stays ascription-only, everywhere. kills the "keyed read must omit one field" rule.</p>
+
+<h2 id="q3"><span class="sec-num">03</span>zero-field types</h2>
+
+<p>today a type requires at least one field, which is why kanso-json's <code>json_null</code> carries a dummy bool — the one visibly inelegant thing in the library. <code>type null</code> with no body makes marker types first-class. small, self-contained, and it unblocks the next item.</p>
+
+<h2 id="q4"><span class="sec-num">04</span>typeset fields — the nullable column, done right</h2>
+
+<p>a database field that is "string or absent" should be a typeset field: <code>title: string null</code>, eliminated by ordinary dispatch, one arm per member. the absence member must be a <em>marker type</em>, never <code>none</code> — <code>none</code> is propagation-hostile as data (construct a record with it and propagation eats the record; the json-null lesson generalizes). kanso says <em>typeset</em>, not union: the members are bare values discriminated by dispatch, not wrapped variants.</p>
+
+<h2 id="q5"><span class="sec-num">05</span>visibility: something more elegant than underscores</h2>
+
+<p>the current rule — <code>_name</code> is module-private — has two real defects: changing visibility renames every call site, and <code>_</code> already means wildcard and deliberately-unused, so privacy overloads the most loaded character in the language. the survey of alternatives, honestly scored:</p>
+
+<ul>
+<li><strong>go's capitalization</strong> — the most elegant version of name-encoded visibility, and unavailable: kanso is all-lowercase by construction. worth noting <em>what</em> go's capitals actually buy: visibility is visible at every <strong>use</strong> site, not just the declaration. but kanso gets that for free once cross-module references are qualified — from outside a module you can only reach public names, so a qualified call is proof of publicness. the use-site benefit go pays a whole case system for falls out of module qualification.</li>
+<li><strong>export lists</strong> (erlang, ocaml interfaces) — separates the fact from the declaration it describes; every read requires a second lookup. braided.</li>
+<li><strong>file-based</strong> (public = declared in the module-named file) — braids file layout with api surface; moving a fn between files would change its meaning.</li>
+<li><strong>a different sigil</strong> — trades one overloaded character for a new one; the annotation doctrine already rejected sigils once.</li>
+<li><strong><code>pub</code> modifier, private by default</strong> — the recommendation. visibility is a decision, and kanso's motto is that source contains only decisions: a decision deserves a token, not a naming convention. <code>pub fn decode text</code> makes the api surface <code>grep pub</code>; promoting a name touches one line; every arm of a public overload group carries it (mixed marking is a compile error). canonical order ignores it. the unused-private check becomes unused-unmarked. full draft in <code>design/visibility.md</code>.</li>
+</ul>
+
+<h2 id="q6"><span class="sec-num">06</span>smaller, ready when wanted</h2>
+
+<p><strong>kq's own repo</strong> — committed and ready at <code>~/dev/kq</code> with a readme and the jq benchmark; publishing awaits an explicit go. <strong><code>kanso test --native</code></strong> — tests still interpret; heavy suites are exactly where the build-and-run crossover bites. <strong><code>&gt;&gt;</code> statically effect-only</strong> — runtime-enforced today, wants the effect-inference pass. <strong>imports slice b</strong> — slash qualification, the prerequisite for retiring vendored copies of kanso-json.</p>
+
+<hr>
+
 <span class="eyebrow">field report</span>
 <h1>the json gauntlet</h1>
 

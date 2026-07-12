@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>kanso playground</title>
-<meta name="description" content="run kanso in your browser: the real reference interpreter compiled to webassembly, with a live syntax-highlighted editor and a repl.">
+<meta name="description" content="run kanso in your browser: programs compile to wasm modules right in the tab via kanso's own wasm backend, with a live syntax-highlighted editor and a repl.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -202,7 +202,7 @@
 </textarea>
     </div>
     <div class="play-side">
-      <pre class="play-output" id="output">loading the interpreter…</pre>
+      <pre class="play-output" id="output">loading the toolchain…</pre>
       <div class="play-repl">
         <div class="play-repl-log" id="repl-log">
           <div class="repl-in"># a repl with history: try  1 + 2  then  it0 * 10</div>
@@ -215,11 +215,14 @@
     </div>
   </div>
 
-  <p class="play-note">this is not a toy evaluator: it is kanso's reference interpreter — the same rust
-  code that runs <code>kanso run</code> on your machine — compiled to webassembly (428&nbsp;KB), with a
-  hand-rolled editor on top. integers are arbitrary-precision here, so <code>fact 100</code> just works.
-  descriptions execute when they reach the edge; there is no filesystem in a browser tab, so
-  <code>read_file</code> answers with an err, exactly as the model says it should.</p>
+  <p class="play-note">this is not a toy evaluator: it is kanso's whole toolchain compiled to
+  webassembly, with a hand-rolled editor on top. your program <strong>compiles to a wasm module
+  right here in the tab</strong> — kanso's own wasm backend, no llvm, no server — and runs as machine
+  code, tail calls included; the badge under the output names the engine that ran. programs the
+  browser backend doesn't cover yet fall back to the reference interpreter, byte-identically.
+  integers are arbitrary-precision here, so <code>fact 100</code> just works. descriptions execute when
+  they reach the edge; there is no filesystem in a browser tab, so <code>read_file</code> answers with an
+  err, exactly as the model says it should.</p>
 </div>
 
 <script src="play.js"></script>
