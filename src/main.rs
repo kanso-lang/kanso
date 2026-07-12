@@ -91,7 +91,8 @@ fn build(program: &ast::Program, file: &str) -> ExitCode {
         return ExitCode::from(2);
     }
     let status = std::process::Command::new("clang")
-        .arg("-O2")
+        .arg("-O3")
+        .arg("-flto")
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(&stem)

@@ -17,9 +17,20 @@ typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct KDesc KDesc;
 struct KDesc { int dtag; KStr* text; KDesc* a; KDesc* b; };
 
+static char* k_arena = NULL;
+static size_t k_arena_left = 0;
+
 static void* k_alloc(size_t n) {
-    void* p = malloc(n);
-    if (!p) { fputs("out of memory\n", stderr); exit(1); }
+    n = (n + 15) & ~(size_t)15;
+    if (n > k_arena_left) {
+        size_t block = n > (1 << 20) ? n : (1 << 20);
+        k_arena = malloc(block);
+        if (!k_arena) { fputs("out of memory\n", stderr); exit(1); }
+        k_arena_left = block;
+    }
+    void* p = k_arena;
+    k_arena += n;
+    k_arena_left -= n;
     return p;
 }
 
@@ -46,7 +57,21 @@ KValue k_int(long long i) { KValue v; v.tag = K_INT; v.payload = i; return v; }
 KValue k_bool(long long b) { KValue v; v.tag = b ? K_TRUE : K_FALSE; v.payload = 0; return v; }
 KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
 
+static KStr k_ascii[128];
+static char k_ascii_data[128];
+
 KValue k_str_n(const char* data, long long len) {
+    if (len == 1) {
+        unsigned char b = (unsigned char)data[0];
+        if (b < 128) {
+            if (k_ascii_data[b] == 0 && b != 0) {
+                k_ascii_data[b] = (char)b;
+                k_ascii[b].len = 1;
+                k_ascii[b].data = &k_ascii_data[b];
+            }
+            KValue v; v.tag = K_STR; v.payload = k_ptr(&k_ascii[b]); return v;
+        }
+    }
     KStr* s = k_alloc(sizeof(KStr));
     s->len = (long)len;
     s->data = k_alloc(len + 1);
