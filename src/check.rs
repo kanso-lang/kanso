@@ -24,18 +24,87 @@ pub const BUILTINS: [&str; 18] = [
 ];
 
 pub fn check(program: &Program, require_main: bool) -> Vec<Diagnostic> {
+    let mut used = HashSet::new();
+    let mut diags = check_file(program, &HashSet::new(), &mut used);
+    if require_main {
+        check_main(program, &mut diags);
+    }
+    check_unused_private(program, &used, &mut diags);
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    diags
+}
+
+/// Names a file declares, for the module-wide first pass.
+pub fn declared_names(program: &Program) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for ty in &program.types {
+        names.insert(ty.name.clone());
+    }
+    for decl in &program.fns {
+        names.insert(decl.name.clone());
+    }
+    names
+}
+
+/// Per-file checks: canonical order plus name resolution against this file's
+/// globals extended with the rest of the module. Records which module-level
+/// names the file uses, for the unused-private check.
+pub fn check_file(
+    program: &Program,
+    extern_globals: &HashSet<String>,
+    used_globals: &mut HashSet<String>,
+) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
     check_constants(program, &mut diags);
+    let mut globals = collect_globals(program, &mut diags);
+    globals.extend(extern_globals.iter().cloned());
+    for decl in &program.fns {
+        check_fn_body(decl, &globals, used_globals, &mut diags);
+    }
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    diags
+}
+
+/// A `_`-prefixed declaration is module-private and must be used somewhere
+/// in the module; public names are API surface and exempt.
+pub fn check_unused_private(
+    program: &Program,
+    used_globals: &HashSet<String>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let mut reported: HashSet<&str> = HashSet::new();
+    for decl in &program.fns {
+        if decl.name.starts_with('_')
+            && !used_globals.contains(&decl.name)
+            && reported.insert(&decl.name)
+        {
+            diags.push(Diagnostic::new(
+                "unused",
+                format!("private `{}` is never used in its module", decl.name),
+                decl.span,
+            ));
+        }
+    }
+    for ty in &program.types {
+        if ty.name.starts_with('_') && !used_globals.contains(&ty.name) {
+            diags.push(Diagnostic::new(
+                "unused",
+                format!("private type `{}` is never used in its module", ty.name),
+                ty.span,
+            ));
+        }
+    }
+}
+
+/// Merged-namespace coherence for a directory module.
+pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
+    check_constants(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }
-    let globals = collect_globals(program, &mut diags);
-    for decl in &program.fns {
-        check_fn_body(decl, &globals, &mut diags);
-    }
-    diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
 }
 
@@ -251,11 +320,18 @@ struct Local {
 struct Resolver<'a> {
     globals: &'a HashSet<String>,
     locals: Vec<Local>,
+    used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
 }
 
-fn check_fn_body(decl: &FnDecl, globals: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
-    let mut resolver = Resolver { globals, locals: Vec::new(), diags: Vec::new() };
+fn check_fn_body(
+    decl: &FnDecl,
+    globals: &HashSet<String>,
+    used_globals: &mut HashSet<String>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let mut resolver =
+        Resolver { globals, locals: Vec::new(), used_globals, diags: Vec::new() };
     for param in &decl.params {
         resolver.bind_pattern(param);
     }
@@ -451,8 +527,13 @@ impl Resolver<'_> {
             local.used = true;
             return;
         }
-        if !self.globals.contains(name) {
-            self.diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+        match self.globals.contains(name) {
+            true => {
+                self.used_globals.insert(name.to_string());
+            }
+            false => {
+                self.diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+            }
         }
     }
 }

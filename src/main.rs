@@ -13,19 +13,31 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let source = match std::fs::read_to_string(&file) {
-        Ok(source) => source,
-        Err(io) => {
-            eprintln!("error: cannot read {file}: {io}");
-            return ExitCode::from(2);
-        }
-    };
     let require_main = command == "run";
-    let program = match compile(&file, &source, require_main) {
-        Ok(program) => program,
-        Err(rendered) => {
-            eprint!("{rendered}");
-            return ExitCode::from(2);
+    let path = std::path::Path::new(&file);
+    let (program, source) = match path.is_dir() {
+        true => match kanso::compile_module(path, require_main) {
+            Ok(program) => (program, String::new()),
+            Err(rendered) => {
+                eprint!("{rendered}");
+                return ExitCode::from(2);
+            }
+        },
+        false => {
+            let source = match std::fs::read_to_string(&file) {
+                Ok(source) => source,
+                Err(io) => {
+                    eprintln!("error: cannot read {file}: {io}");
+                    return ExitCode::from(2);
+                }
+            };
+            match compile(&file, &source, require_main) {
+                Ok(program) => (program, source),
+                Err(rendered) => {
+                    eprint!("{rendered}");
+                    return ExitCode::from(2);
+                }
+            }
         }
     };
     if command == "check" {

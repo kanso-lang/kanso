@@ -1,0 +1,104 @@
+fn _escape_char "\""
+  "\\\""
+
+fn _escape_char "\\"
+  "\\\\"
+
+fn _escape_char "\n"
+  "\\n"
+
+fn _escape_char "\r"
+  "\\r"
+
+fn _escape_char "\t"
+  "\\t"
+
+fn _escape_char c
+  if ((char_code c) < 32) (_u_escape c) c
+
+fn _escape_str s
+  join (map (chars s) (c -> _escape_char c)) ""
+
+fn _hex4 n
+  d1 = n / 4096
+  r1 = n - (d1 * 4096)
+  d2 = r1 / 256
+  r2 = r1 - (d2 * 256)
+  d3 = r2 / 16
+  d4 = r2 - (d3 * 16)
+  join [(_hex_char d1) (_hex_char d2) (_hex_char d3) (_hex_char d4)] ""
+
+fn _hex_alpha code
+  if (_both (96 < code) (code < 103)) (code - 87) (_hex_upper code)
+
+fn _hex_char n
+  at "0123456789abcdef" (n + 1)
+
+fn _hex_digit c
+  code = char_code c
+  if (_both (47 < code) (code < 58)) (code - 48) (_hex_alpha code)
+
+fn _hex_upper code
+  if (_both (64 < code) (code < 71)) (code - 55) (err "invalid hex digit")
+
+fn _parse_string cs p
+  _str_chars cs p []
+
+fn _str_char _ "\"" p acc
+  _parsed (p + 1) (join acc "")
+
+fn _str_char cs "\\" p acc
+  _str_escape cs (at cs (p + 1)) p acc
+
+fn _str_char _ none p _
+  _fail p "unterminated string"
+
+fn _str_char cs c p acc
+  _str_chars cs (p + 1) (push acc c)
+
+fn _str_chars cs p acc
+  _str_char cs (at cs p) p acc
+
+fn _str_escape cs "\"" p acc
+  _str_chars cs (p + 2) (push acc "\"")
+
+fn _str_escape cs "\\" p acc
+  _str_chars cs (p + 2) (push acc "\\")
+
+fn _str_escape cs "/" p acc
+  _str_chars cs (p + 2) (push acc "/")
+
+fn _str_escape cs "b" p acc
+  _str_chars cs (p + 2) (push acc (from_code 8))
+
+fn _str_escape cs "f" p acc
+  _str_chars cs (p + 2) (push acc (from_code 12))
+
+fn _str_escape cs "n" p acc
+  _str_chars cs (p + 2) (push acc "\n")
+
+fn _str_escape cs "r" p acc
+  _str_chars cs (p + 2) (push acc "\r")
+
+fn _str_escape cs "t" p acc
+  _str_chars cs (p + 2) (push acc "\t")
+
+fn _str_escape cs "u" p acc
+  _str_unicode cs p acc
+
+fn _str_escape _ none p _
+  _fail p "unterminated string"
+
+fn _str_escape _ c p _
+  _fail p "invalid escape `\\{c}`"
+
+fn _str_unicode cs p acc
+  h1 = _hex_digit (at cs (p + 2))
+  h2 = _hex_digit (at cs (p + 3))
+  h3 = _hex_digit (at cs (p + 4))
+  h4 = _hex_digit (at cs (p + 5))
+  code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
+  _str_chars cs (p + 6) (push acc (from_code code))
+
+fn _u_escape c
+  "\\u{_hex4 (char_code c)}"

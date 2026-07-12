@@ -1,0 +1,41 @@
+fn _is_defect (err (defect _))
+  true
+
+fn _is_defect _
+  false
+
+test_decode_array = (decode "[1, 2, 3]") == [1 2 3]
+
+test_decode_bool = (decode "true") == true
+
+test_decode_escapes = (decode "\"a\\n\\\"b\\\"\"") == "a\n\"b\""
+
+test_decode_float = (decode "3.25") == 3.25
+
+test_decode_int = (decode "42") == 42
+
+test_decode_nested = (decode "\{\"a\": [1, \{\"b\": null}]}") == ["a": [1 ["b": (json_null true)]]]
+
+test_decode_object = (decode "\{\"a\": 1, \"b\": 2}") == ["a": 1 "b": 2]
+
+test_decode_string = (decode "\"hello\"") == "hello"
+
+test_decode_unicode = (decode "\"\\u00e9\"") == "é"
+
+test_decode_whitespace = (decode "  [ 1 , 2 ]  ") == [1 2]
+
+test_encode_escapes = (encode "a\"b\nc") == "\"a\\\"b\\nc\""
+
+test_encode_nested =
+  value = ["a": true "b": [1 2]]
+  (encode value) == "\{\"a\":true,\"b\":[1,2]}"
+
+test_error_position = (_failure_position (decode "[1, nope]")) == 5
+
+test_error_trailing = (_failure_position (decode "1 x")) == 3
+
+test_must_wraps_defect = _is_defect (must (decode "nope"))
+
+test_roundtrip =
+  text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"
+  (encode (decode text)) == text

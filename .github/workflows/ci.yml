@@ -13,4 +13,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo clippy -- -D warnings
       - run: cargo test
-      - run: cargo run -- test lib/json/json.kso
+      - run: cargo run -- test lib/json

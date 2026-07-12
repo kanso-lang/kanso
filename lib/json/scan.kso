@@ -1,0 +1,35 @@
+fn _both true true
+  true
+
+fn _both _ _
+  false
+
+fn _expect_char cs p c
+  _expect_check (at cs p) p c
+
+fn _expect_check found p c
+  if (found == c) (p + 1) (_fail p "expected `{c}`")
+
+fn _fail p reason
+  err (parse_failure p reason)
+
+fn _is_ws " "
+  true
+
+fn _is_ws "\n"
+  true
+
+fn _is_ws "\r"
+  true
+
+fn _is_ws "\t"
+  true
+
+fn _is_ws none
+  false
+
+fn _is_ws _
+  false
+
+fn _skip_ws cs p
+  if (_is_ws (at cs p)) (_skip_ws cs (p + 1)) p

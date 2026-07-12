@@ -1,0 +1,121 @@
+fn _array_delim cs "," p acc
+  _array_items cs (p + 1) acc
+
+fn _array_delim _ "]" p acc
+  _parsed (p + 1) acc
+
+fn _array_delim _ none p _
+  _fail p "unexpected end of input"
+
+fn _array_delim _ c p _
+  _fail p "expected `,` or `]`, found `{c}`"
+
+fn _array_items cs p acc
+  p2 = _skip_ws cs p
+  _array_step cs (_parse_value cs p2) acc
+
+fn _array_open _ "]" p
+  _parsed (p + 1) []
+
+fn _array_open _ none p
+  _fail p "unexpected end of input"
+
+fn _array_open cs _ p
+  _array_items cs p []
+
+fn _array_step cs (_parsed p v) acc
+  acc2 = push acc v
+  p2 = _skip_ws cs p
+  _array_delim cs (at cs p2) p2 acc2
+
+fn _obj_colon cs p k acc
+  _obj_value cs (_parse_value cs p) k acc
+
+fn _obj_delim cs "," p acc
+  _obj_items cs (p + 1) acc
+
+fn _obj_delim _ "}" p acc
+  _parsed (p + 1) acc
+
+fn _obj_delim _ none p _
+  _fail p "unexpected end of input"
+
+fn _obj_delim _ c p _
+  _fail p "expected `,` or `}`, found `{c}`"
+
+fn _obj_items cs p acc
+  p2 = _skip_ws cs p
+  _obj_key_start cs (at cs p2) p2 acc
+
+fn _obj_key cs (_parsed p k) acc
+  p2 = _skip_ws cs p
+  _obj_colon cs (_expect_char cs p2 ":") k acc
+
+fn _obj_key_start cs "\"" p acc
+  _obj_key cs (_parse_string cs (p + 1)) acc
+
+fn _obj_key_start _ none p _
+  _fail p "unexpected end of input"
+
+fn _obj_key_start _ _ p _
+  _fail p "expected a string key"
+
+fn _obj_open _ "}" p
+  _parsed (p + 1) [:]
+
+fn _obj_open _ none p
+  _fail p "unexpected end of input"
+
+fn _obj_open cs _ p
+  _obj_items cs p [:]
+
+fn _obj_value cs (_parsed p v) k acc
+  acc2 = put acc k v
+  p2 = _skip_ws cs p
+  _obj_delim cs (at cs p2) p2 acc2
+
+fn _parse_array cs p
+  p2 = _skip_ws cs p
+  _array_open cs (at cs p2) p2
+
+fn _parse_number cs p
+  q = _number_end cs p
+  text = join (slice cs p (q - 1)) ""
+  _parsed q (_number_value p text)
+
+fn _parse_object cs p
+  p2 = _skip_ws cs p
+  _obj_open cs (at cs p2) p2
+
+fn _parse_value cs p
+  p2 = _skip_ws cs p
+  _value_for (at cs p2) cs p2
+
+fn _value_for "\"" cs p
+  _parse_string cs (p + 1)
+
+fn _value_for "[" cs p
+  _parse_array cs (p + 1)
+
+fn _value_for "\{" cs p
+  _parse_object cs (p + 1)
+
+fn _value_for "t" cs p
+  _word cs p "true" true
+
+fn _value_for "f" cs p
+  _word cs p "false" false
+
+fn _value_for "n" cs p
+  _word cs p "null" (json_null true)
+
+fn _value_for none _ p
+  _fail p "unexpected end of input"
+
+fn _value_for c cs p
+  if (_is_number_start c) (_parse_number cs p) (_fail p "unexpected character `{c}`")
+
+fn _word cs p txt v
+  n = length txt
+  seg = join (slice cs p (p + n - 1)) ""
+  if (seg == txt) (_parsed (p + n) v) (_fail p "invalid literal")

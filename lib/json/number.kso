@@ -1,0 +1,55 @@
+fn _is_float_mark "."
+  true
+
+fn _is_float_mark "e"
+  true
+
+fn _is_float_mark "E"
+  true
+
+fn _is_float_mark _
+  false
+
+fn _is_number_char "-"
+  true
+
+fn _is_number_char "+"
+  true
+
+fn _is_number_char "."
+  true
+
+fn _is_number_char "e"
+  true
+
+fn _is_number_char "E"
+  true
+
+fn _is_number_char none
+  false
+
+fn _is_number_char c
+  _both ("/" < c) (c < ":")
+
+fn _is_number_start "-"
+  true
+
+fn _is_number_start none
+  false
+
+fn _is_number_start c
+  _both ("/" < c) (c < ":")
+
+fn _number_end cs p
+  if (_is_number_char (at cs p)) (_number_end cs (p + 1)) p
+
+fn _number_ok p (err _)
+  _fail p "invalid number"
+
+fn _number_ok _ n
+  n
+
+fn _number_value p text
+  marks = filter (chars text) (c -> _is_float_mark c)
+  raw = if ((length marks) > 0) (to_float text) (to_int text)
+  _number_ok p raw

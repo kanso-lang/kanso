@@ -149,6 +149,8 @@ type matrix[n: numeric]
 ## 12. modules
 
 - modules are directories (go-style); subdirectories private to parent. imports: `import "std/http"`, alphabetized.
+- **files (gaveled 2026-07-12):** a module splits into any number of `.kso` files sharing one namespace. file names are decisions (organization carries information); canonical ordering holds per file; an overload group lives in one file.
+- **visibility (gaveled 2026-07-12):** a `_`-prefixed top-level name is module-private, enforced at the module boundary. visibility lives in the name, so every call site displays it; no export lists. a private declaration unused anywhere in its module is a compile error (nothing-wasted); public names are API surface and exempt.
 - bare identifiers mandatory; qualification only on collision; qualifying a unique name is a compile error.
 - qualification syntax: OPEN — `json.decode` (whitespace-distinguished from pipe) vs `json/decode` (matches import paths, frees `.`). recommendation on file: slash.
 
