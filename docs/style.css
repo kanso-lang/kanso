@@ -508,7 +508,8 @@ a:hover {
 
 .site-footer nav {
   display: flex;
-  gap: 1.75rem;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.75rem;
 }
 
 .site-footer a {
@@ -678,6 +679,26 @@ a:hover {
   }
 }
 
+@media (max-width: 44rem) {
+  .site-header {
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1.1rem 1.25rem;
+  }
+
+  .site-nav {
+    column-gap: 1.15rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 0.45rem;
+  }
+
+  .site-nav a {
+    font-size: 0.7rem;
+    letter-spacing: 0.24em;
+  }
+}
+
 @media (max-width: 40rem) {
   .feature-grid,
   .status-grid,
@@ -687,11 +708,6 @@ a:hover {
 
   .section {
     padding: 4rem 0;
-  }
-
-  .site-header {
-    flex-direction: column;
-    gap: 0.75rem;
   }
 
   .toc ol {
