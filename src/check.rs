@@ -27,6 +27,7 @@ pub fn check(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
+    check_constants(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }
@@ -153,6 +154,26 @@ fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
     }
     check_overload_ranks(program, diags);
+}
+
+fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let mut groups: Vec<(&str, Vec<&FnDecl>)> = Vec::new();
+    for decl in &program.fns {
+        match groups.last_mut() {
+            Some((name, decls)) if *name == decl.name => decls.push(decl),
+            _ => groups.push((&decl.name, vec![decl])),
+        }
+    }
+    for (name, decls) in groups {
+        let has_constant = decls.iter().any(|d| d.params.is_empty());
+        if has_constant && decls.len() > 1 {
+            diags.push(Diagnostic::new(
+                "dispatch",
+                format!("`{name}` is a constant (arity 0); a constant admits no overloads"),
+                decls[1].span,
+            ));
+        }
+    }
 }
 
 fn check_overload_ranks(program: &Program, diags: &mut Vec<Diagnostic>) {

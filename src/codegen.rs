@@ -419,6 +419,11 @@ impl<'a> Backend<'a> {
                 if let Some(temp) = f.lookup(name) {
                     return Ok(temp);
                 }
+                if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
+                    let t = f.tmp();
+                    f.line(&format!("{t} = call %KValue @d_{name}_0()"));
+                    return Ok(t);
+                }
                 let t = f.tmp();
                 match name.as_str() {
                     "true" => f.line(&format!("{t} = call %KValue @k_bool(i64 1)")),

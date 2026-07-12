@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-const SLICE_ONE: [&str; 6] = ["hello", "pipes", "dispatch", "errors", "records", "effects"];
+const SLICE_ONE: [&str; 7] =
+    ["hello", "pipes", "dispatch", "errors", "records", "effects", "constants"];
 
 #[test]
 fn native_builds_match_interpreter_output() {

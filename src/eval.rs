@@ -301,6 +301,11 @@ impl<'a> Interp<'a> {
         if let Some(value) = lookup(env, name) {
             return Ok(value);
         }
+        if let Some(decls) = self.fns.get(name) {
+            if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
+                return self.eval_body(&constant.body, None);
+            }
+        }
         match name {
             "true" => Ok(Value::True),
             "false" => Ok(Value::False),

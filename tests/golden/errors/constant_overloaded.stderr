@@ -1,0 +1,4 @@
+error[dispatch]: `size` is a constant (arity 0); a constant admits no overloads
+  --> constant_overloaded.kso:7:4
+   7 | fn size x
+          ^

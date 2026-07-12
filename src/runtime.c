@@ -33,7 +33,7 @@ static KValue* k_as_boxed(KValue v) { return (KValue*)(intptr_t)v.payload; }
 
 static double k_as_f(KValue v) { double d; memcpy(&d, &v.payload, 8); return d; }
 
-static KValue k_float(double d) {
+KValue k_float(double d) {
     KValue v; v.tag = K_FLOAT; memcpy(&v.payload, &d, 8); return v;
 }
 
@@ -109,8 +109,11 @@ KValue k_render(KValue v, long long quote) {
             double d = k_as_f(v);
             if (d == floor(d) && fabs(d) < 1e15 && isfinite(d)) {
                 snprintf(buf, sizeof buf, "%.1f", d);
-            } else {
-                snprintf(buf, sizeof buf, "%.17g", d);
+                return k_str(buf);
+            }
+            for (int prec = 1; prec <= 17; prec++) {
+                snprintf(buf, sizeof buf, "%.*g", prec, d);
+                if (strtod(buf, NULL) == d) break;
             }
             return k_str(buf);
         }

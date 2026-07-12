@@ -1,0 +1,5 @@
+fn main
+  print "tau is {tau}, twice the classic"
+
+fn tau
+  6.28318
