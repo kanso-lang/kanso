@@ -702,7 +702,7 @@ impl<'a> Backend<'a> {
                     return Ok(());
                 }
                 let is_program_fn = f.lookup(name).is_none()
-                    && self.type_ids.get(name.as_str()).is_none()
+                    && !self.type_ids.contains_key(name.as_str())
                     && name != "err"
                     && name != "print"
                     && self.program.fns.iter().any(|d| d.name == *name);
