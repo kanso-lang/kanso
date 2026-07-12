@@ -51,6 +51,11 @@ declare %KValue @k_b_bytes(%KValue)
 declare %KValue @k_b_chars(%KValue)
 declare %KValue @k_b_concat(%KValue, %KValue)
 declare %KValue @k_b_utf8(%KValue)
+declare %KValue @k_desc_args()
+declare %KValue @k_desc_stdin()
+declare %KValue @k_b_read_file(%KValue)
+declare %KValue @k_b_write_file(%KValue, %KValue)
+declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
@@ -68,9 +73,11 @@ declare %KValue @k_b_to_int(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 19] = [
+const BUILTIN_CALLS: [(&str, usize); 21] = [
     ("at", 2),
     ("bytes", 1),
+    ("read_file", 1),
+    ("write_file", 2),
     ("concat", 2),
     ("utf8", 1),
     ("char_code", 1),
@@ -811,12 +818,24 @@ impl<'a> Backend<'a> {
                     "true" => Ok("{ i64 2, i64 0 }".to_string()),
                     "false" => Ok("{ i64 3, i64 0 }".to_string()),
                     "none" => Ok("{ i64 4, i64 0 }".to_string()),
+                    "args" => {
+                        let t = f.tmp();
+                        f.line(&format!("{t} = call %KValue @k_desc_args()"));
+                        f.record(&t, DESC);
+                        Ok(t)
+                    }
+                    "stdin" => {
+                        let t = f.tmp();
+                        f.line(&format!("{t} = call %KValue @k_desc_stdin()"));
+                        f.record(&t, DESC);
+                        Ok(t)
+                    }
                     _ => Err(format!(
                         "native backend: `{name}` as a bare value is not yet supported"
                     )),
                 }
             }
-            Expr::App { head, args, .. } => self.emit_call(f, head, args),
+            Expr::App { head, args, piped, .. } => self.emit_call_full(f, head, args, *piped),
             Expr::Index { base, index, .. } => {
                 let container = self.emit_expr(f, base)?;
                 let key = self.emit_expr(f, index)?;
@@ -921,7 +940,12 @@ impl<'a> Backend<'a> {
     /// Emit an expression in tail position: direct calls to kanso functions
     /// become guaranteed tail calls, and an if's branches stay tails.
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
-        if let Expr::App { head, args, .. } = expr {
+        if let Expr::App { head, args, piped, .. } = expr {
+            if *piped && !args.is_empty() {
+                let value = self.emit_expr(f, expr)?;
+                f.line(&format!("ret %KValue {value}"));
+                return Ok(());
+            }
             if let Expr::Ident(name, _) = &**head {
                 if name == "if" && f.lookup(name).is_none() {
                     let cond = self.emit_expr(f, &args[0])?;
@@ -1247,6 +1271,54 @@ impl<'a> Backend<'a> {
     }
 
     fn emit_call(&mut self, f: &mut FnEmit, head: &Expr, args: &[Expr]) -> Result<String, String> {
+        self.emit_call_full(f, head, args, false)
+    }
+
+    fn emit_call_full(
+        &mut self,
+        f: &mut FnEmit,
+        head: &Expr,
+        args: &[Expr],
+        piped: bool,
+    ) -> Result<String, String> {
+        if piped && !args.is_empty() {
+            let piped_value = self.emit_expr(f, &args[0])?;
+            if f.set_of(&piped_value) & DESC != 0 {
+                let span = head.span();
+                let mut body_args: Vec<Expr> =
+                    vec![Expr::Ident("__piped".to_string(), span)];
+                body_args.extend(args[1..].iter().cloned());
+                let lambda = Expr::Lambda {
+                    params: vec![("__piped".to_string(), span)],
+                    body: Box::new(Expr::App {
+                        head: Box::new(head.clone()),
+                        args: body_args,
+                        span,
+                        piped: false,
+                    }),
+                    span,
+                };
+                let closure = self.emit_expr(f, &lambda)?;
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_maybe_bind(%KValue {piped_value}, %KValue {closure})"
+                ));
+                f.record(&t, TOP);
+                return Ok(t);
+            }
+            // no description can flow here: an ordinary call, first arg already emitted
+            return self.emit_call_rest(f, head, args, Some(piped_value));
+        }
+        self.emit_call_rest(f, head, args, None)
+    }
+
+    fn emit_call_rest(
+        &mut self,
+        f: &mut FnEmit,
+        head: &Expr,
+        args: &[Expr],
+        first: Option<String>,
+    ) -> Result<String, String> {
         let Expr::Ident(name, _) = head else {
             return Err("native backend: computed call heads are slice 2".to_string());
         };
@@ -1292,7 +1364,12 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         let mut emitted = Vec::new();
-        for arg in args {
+        let mut iter = args.iter();
+        if let Some(first_value) = first {
+            emitted.push(first_value);
+            iter.next();
+        }
+        for arg in iter {
             emitted.push(self.emit_expr(f, arg)?);
         }
         if name == "err" {

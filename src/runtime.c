@@ -17,7 +17,11 @@ typedef struct { long long len; KValue* pairs; } KMap; /* [k0 v0 k1 v1...] sorte
 typedef struct { KValue (*fn)(void*, KValue); void* env; } KClosure;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct KDesc KDesc;
-struct KDesc { int dtag; KStr* text; KDesc* a; KDesc* b; };
+struct KDesc { long long dtag; KValue x; KValue y; };
+/* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind */
+
+static KValue k_mklist(long long n, KValue* items);
+static KValue k_call1(KValue f, KValue a);
 
 static char* k_arena = NULL;
 static size_t k_arena_left = 0;
@@ -353,30 +357,114 @@ KValue k_cmp(KValue a, KValue b, long long op) {
     }
 }
 
+static KValue k_mkdesc(long long dtag, KValue x, KValue y) {
+    KDesc* d = k_alloc(sizeof(KDesc));
+    d->dtag = dtag; d->x = x; d->y = y;
+    KValue v; v.tag = K_DESC; v.payload = k_ptr(d); return v;
+}
+
 KValue k_desc_print(KValue text) {
     if (!k_not_failure(text)) return text;
     if (text.tag != K_STR) k_die("print takes a string; interpolate instead");
-    KDesc* d = k_alloc(sizeof(KDesc));
-    d->dtag = 0; d->text = k_as_str(text); d->a = d->b = NULL;
-    KValue v; v.tag = K_DESC; v.payload = k_ptr(d); return v;
+    return k_mkdesc(0, text, k_none());
 }
 
 KValue k_seq(KValue a, KValue b) {
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
     if (a.tag != K_DESC || b.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
-    KDesc* d = k_alloc(sizeof(KDesc));
-    d->dtag = 1; d->text = NULL; d->a = k_as_desc(a); d->b = k_as_desc(b);
-    KValue v; v.tag = K_DESC; v.payload = k_ptr(d); return v;
+    return k_mkdesc(1, a, b);
 }
 
-static void k_exec(KDesc* d) {
-    if (d->dtag == 0) {
-        fwrite(d->text->data, 1, d->text->len, stdout);
-        fputc('\n', stdout);
-    } else {
-        k_exec(d->a);
-        k_exec(d->b);
+KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
+KValue k_desc_stdin(void) { return k_mkdesc(3, k_none(), k_none()); }
+
+KValue k_b_read_file(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("read_file takes a path string");
+    return k_mkdesc(4, path, k_none());
+}
+
+KValue k_b_write_file(KValue path, KValue content) {
+    if (!k_not_failure(path)) return path;
+    if (!k_not_failure(content)) return content;
+    if (path.tag != K_STR || content.tag != K_STR) k_die("write_file takes strings");
+    return k_mkdesc(5, path, content);
+}
+
+KValue k_maybe_bind(KValue piped, KValue closure) {
+    if (piped.tag == K_DESC) return k_mkdesc(6, piped, closure);
+    return k_call1(closure, piped);
+}
+
+static int k_argc_global = 0;
+static char** k_argv_global = NULL;
+
+static KValue k_exec(KDesc* d) {
+    switch (d->dtag) {
+        case 0: {
+            KStr* s = k_as_str(d->x);
+            fwrite(s->data, 1, s->len, stdout);
+            fputc('\n', stdout);
+            return k_none();
+        }
+        case 1: {
+            KValue left = k_exec(k_as_desc(d->x));
+            if (left.tag == K_ERR) return left;
+            return k_exec(k_as_desc(d->y));
+        }
+        case 2: {
+            long long n = k_argc_global > 1 ? k_argc_global - 1 : 0;
+            KValue* items = k_alloc(sizeof(KValue) * (n ? n : 1));
+            for (long long i = 0; i < n; i++) items[i] = k_str(k_argv_global[i + 1]);
+            return k_mklist(n, items);
+        }
+        case 3: {
+            size_t cap = 1 << 16, len = 0;
+            char* data = malloc(cap);
+            size_t got;
+            while ((got = fread(data + len, 1, cap - len, stdin)) > 0) {
+                len += got;
+                if (len == cap) { cap *= 2; data = realloc(data, cap); }
+            }
+            KValue out = k_str_n(data, (long long)len);
+            free(data);
+            return out;
+        }
+        case 4: {
+            KStr* p = k_as_str(d->x);
+            FILE* fh = fopen(p->data, "rb");
+            if (!fh) {
+                return k_err(k_concat(k_concat(k_str("cannot read "), d->x),
+                                      k_str(": no such file or unreadable")));
+            }
+            fseek(fh, 0, SEEK_END);
+            long size = ftell(fh);
+            fseek(fh, 0, SEEK_SET);
+            char* data = malloc(size + 1);
+            size_t got = fread(data, 1, size, fh);
+            fclose(fh);
+            KValue out = k_str_n(data, (long long)got);
+            free(data);
+            return out;
+        }
+        case 5: {
+            KStr* p = k_as_str(d->x);
+            KStr* c = k_as_str(d->y);
+            FILE* fh = fopen(p->data, "wb");
+            if (!fh) {
+                return k_err(k_concat(k_str("cannot write "), d->x));
+            }
+            fwrite(c->data, 1, c->len, fh);
+            fclose(fh);
+            return k_none();
+        }
+        default: {
+            KValue yielded = k_exec(k_as_desc(d->x));
+            KValue next = k_call1(d->y, yielded);
+            if (next.tag == K_DESC) return k_exec(k_as_desc(next));
+            return next;
+        }
     }
 }
 
@@ -875,9 +963,20 @@ KValue k_b_to_float(KValue v) {
 
 extern KValue k_user_main(void);
 
-int main(void) {
+int main(int argc, char** argv) {
+    k_argc_global = argc;
+    k_argv_global = argv;
     KValue v = k_user_main();
-    if (v.tag == K_DESC) { k_exec(k_as_desc(v)); return 0; }
+    if (v.tag == K_DESC) {
+        KValue y = k_exec(k_as_desc(v));
+        if (y.tag == K_ERR) {
+            KValue r = k_render(k_err_inner(y), 1);
+            fprintf(stderr, "error[endpoint]: unhandled err reached the executor: %s\n",
+                    k_as_str(r)->data);
+            return 1;
+        }
+        return 0;
+    }
     if (v.tag == K_ERR) {
         KValue r = k_render(k_err_inner(v), 1);
         fprintf(stderr, "error[endpoint]: unhandled err reached main: %s\n", k_as_str(r)->data);
