@@ -401,8 +401,6 @@ impl<'a> Backend<'a> {
         ));
         f.start_block(&not_int);
         // nullary tags, then generic (non-failure) or propagation
-        let mut cursor = not_int.clone();
-        let _ = cursor;
         for (t, l) in &nullary_cases {
             let hit = f.tmp();
             f.line(&format!("{hit} = icmp eq i64 {tag}, {t}"));
