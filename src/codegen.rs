@@ -722,6 +722,75 @@ impl<'a> Backend<'a> {
         Ok(())
     }
 
+    /// Constructor enforcement for multi-member field typesets: a field value
+    /// matching no member is a defect (failures skip the check and propagate
+    /// through `k_rec`).
+    fn emit_typeset_checks(
+        &mut self,
+        f: &mut FnEmit,
+        name: &str,
+        emitted: &[String],
+    ) -> Result<(), String> {
+        let Some(decl) = self.program.types.iter().find(|t| t.name == name) else {
+            return Ok(());
+        };
+        let fields = decl.fields.clone();
+        for ((field, tys, _), value) in fields.iter().zip(emitted) {
+            if tys.len() < 2 {
+                continue;
+            }
+            let mut matched: Option<String> = None;
+            for member in tys {
+                let call = self.member_check_call(value, member)?;
+                let c = f.tmp();
+                f.line(&format!("{c} = {call}"));
+                let b = f.tmp();
+                f.line(&format!("{b} = icmp ne i64 {c}, 0"));
+                matched = Some(match matched {
+                    None => b,
+                    Some(prev) => {
+                        let t = f.tmp();
+                        f.line(&format!("{t} = or i1 {prev}, {b}"));
+                        t
+                    }
+                });
+            }
+            let matched = matched.expect("a typeset has members");
+            let not_fail = inline_not_failure(f, value);
+            let not_matched = f.tmp();
+            f.line(&format!("{not_matched} = xor i1 {matched}, true"));
+            let bad = f.tmp();
+            f.line(&format!("{bad} = and i1 {not_matched}, {not_fail}"));
+            let die = f.label();
+            let ok = f.label();
+            f.line(&format!("br i1 {bad}, label %{die}, label %{ok}"));
+            f.start_block(&die);
+            let msg = format!("field `{field}` of `{name}` takes {}\0", tys.join(" "));
+            let (m, _) = self.intern(&msg);
+            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line("unreachable");
+            f.start_block(&ok);
+        }
+        Ok(())
+    }
+
+    fn member_check_call(&self, value: &str, member: &str) -> Result<String, String> {
+        Ok(match member {
+            "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
+            "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
+            "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),
+            "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
+            other => {
+                let id = self
+                    .type_ids
+                    .get(other)
+                    .ok_or_else(|| format!("native backend: unknown type `{other}`"))?;
+                let nfields = self.field_count(other)?;
+                format!("call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})")
+            }
+        })
+    }
+
     fn field_count(&self, ty: &str) -> Result<usize, String> {
         self.program
             .types
@@ -1451,6 +1520,7 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         if let Some(id) = self.type_ids.get(name.as_str()).copied() {
+            self.emit_typeset_checks(f, name, &emitted)?;
             let n = emitted.len();
             let arr = f.tmp();
             f.line(&format!("{arr} = alloca [{n} x %KValue]"));

@@ -672,9 +672,24 @@ impl<'a> WasmBackend<'a> {
             return Ok(());
         }
         if let Some(tid) = self.type_ids.get(name.as_str()).copied() {
-            for arg in args {
+            let fields = self
+                .program
+                .types
+                .iter()
+                .find(|t| t.name == *name)
+                .map(|t| t.fields.clone())
+                .unwrap_or_default();
+            for (i, arg) in args.iter().enumerate() {
                 self.emit_expr(ctx, arg, false)?;
-                ctx.body.call(RT_ARG);
+                match fields.get(i).filter(|(_, tys, _)| tys.len() >= 2) {
+                    Some((field, tys, _)) => {
+                        let value = ctx.body.local();
+                        ctx.body.local_tee(value);
+                        ctx.body.call(RT_ARG);
+                        self.emit_typeset_check(ctx, value, name, field, tys)?;
+                    }
+                    None => ctx.body.call(RT_ARG),
+                }
             }
             ctx.body.i32_const(tid);
             ctx.body.i32_const(args.len() as i64);
@@ -703,6 +718,37 @@ impl<'a> WasmBackend<'a> {
             return Ok(());
         }
         Err(format!("unsupported call to `{name}`"))
+    }
+
+    /// Constructor enforcement for a multi-member field typeset: a field value
+    /// matching no member is a defect (failures skip the check and propagate
+    /// through `rt_mkrec`).
+    fn emit_typeset_check(
+        &mut self,
+        ctx: &mut Ctx,
+        value: u32,
+        ty_name: &str,
+        field: &str,
+        tys: &[String],
+    ) -> Result<(), String> {
+        ctx.body.local_get(value);
+        ctx.body.call(RT_IS_FAILURE);
+        for member in tys {
+            let code = self.type_code(member)?;
+            ctx.body.local_get(value);
+            ctx.body.i32_const(code);
+            ctx.body.call(RT_CHECK_TYPE);
+            ctx.body.op(0x72); // i32.or
+        }
+        ctx.body.eqz();
+        ctx.body.if_void();
+        let msg =
+            self.str_lit(&format!("field `{field}` of `{ty_name}` takes {}", tys.join(" ")));
+        ctx.body.i32_const(msg as i64);
+        ctx.body.call(RT_DIE);
+        ctx.body.unreachable();
+        ctx.body.end();
+        Ok(())
     }
 
     /// A piped application binds when the piped value is a description:

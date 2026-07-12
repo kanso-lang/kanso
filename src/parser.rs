@@ -173,7 +173,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     Ok(TypeDecl { name, span, fields })
 }
 
-fn parse_field(line: &Line) -> Result<(String, String, Span), Diagnostic> {
+fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
     let mut p = P::new(&line.tokens, &line.end_cols, line.number);
     let (name, span) = p.expect_ident("a field name")?;
     let colon_span = p.span_here();
@@ -186,9 +186,11 @@ fn parse_field(line: &Line) -> Result<(String, String, Span), Diagnostic> {
             colon_span,
         ));
     }
-    let ty = p.parse_type_expr()?;
-    p.expect_done()?;
-    Ok((name, ty, span))
+    let mut tys = vec![p.parse_type_expr()?];
+    while !p.done() {
+        tys.push(p.parse_type_expr()?);
+    }
+    Ok((name, tys, span))
 }
 
 fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {

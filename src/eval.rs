@@ -165,8 +165,8 @@ impl<'a> Interp<'a> {
             name: "entry".to_string(),
             span: origin,
             fields: vec![
-                ("key".to_string(), "any".to_string(), origin),
-                ("value".to_string(), "any".to_string(), origin),
+                ("key".to_string(), vec!["any".to_string()], origin),
+                ("value".to_string(), vec!["any".to_string()], origin),
             ],
         };
         Interp { fns, types, entry_decl }
@@ -498,6 +498,18 @@ impl<'a> Interp<'a> {
         }
         if let Some(bad) = args.iter().find(|a| is_failure(a)) {
             return Ok(bad.clone());
+        }
+        for ((field, tys, _), arg) in ty.fields.iter().zip(&args) {
+            if tys.len() >= 2 && !tys.iter().any(|t| type_matches(t, arg)) {
+                return Err(RuntimeError {
+                    message: format!(
+                        "field `{field}` of `{}` takes {}",
+                        ty.name,
+                        tys.join(" ")
+                    ),
+                    span,
+                });
+            }
         }
         Ok(Value::Record { ty: Rc::from(ty.name.as_str()), fields: Rc::new(args) })
     }

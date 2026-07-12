@@ -87,7 +87,8 @@ pub struct FnDecl {
 pub struct TypeDecl {
     pub name: String,
     pub span: Span,
-    pub fields: Vec<(String, String, Span)>,
+    /// Field name, permitted types (a typeset: one or more members), span.
+    pub fields: Vec<(String, Vec<String>, Span)>,
 }
 
 #[derive(Debug)]

@@ -1,0 +1,33 @@
+type active
+
+type archived
+
+type null
+
+type pending
+
+type task
+  status: active archived pending
+  title: null string
+
+fn label active
+  "active"
+
+fn label archived
+  "archived"
+
+fn label pending
+  "pending"
+
+main =
+  a = task active "write the spec"
+  b = task pending null
+  task s1 t1 = a
+  task s2 t2 = b
+  print "{label s1}: {title_line t1}" >> print "{label s2}: {title_line t2}"
+
+fn title_line null
+  "(untitled)"
+
+fn title_line t:string
+  "titled {t}"

@@ -46,9 +46,11 @@ pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::
     }
     let mut all_names = std::collections::HashSet::new();
     let mut all_markers = std::collections::HashSet::new();
+    let mut all_type_names = std::collections::HashSet::new();
     for (_, _, program) in &parsed {
         all_names.extend(check::declared_names(program));
         all_markers.extend(check::marker_names(program));
+        all_type_names.extend(program.types.iter().map(|t| t.name.clone()));
     }
     let mut used = std::collections::HashSet::new();
     for (file, source, program) in &mut parsed {
@@ -57,6 +59,7 @@ pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::
             extern_globals.remove(&name);
         }
         let mut diags = check::resolve_markers(program, &all_markers);
+        diags.extend(check::check_typesets(program, &all_type_names));
         diags.extend(check::check_file(program, &extern_globals, &mut used));
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {

@@ -32,8 +32,10 @@ pub const BUILTINS: [&str; 25] = [
 
 pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
+    let type_names = program.types.iter().map(|t| t.name.clone()).collect();
     let mut used = HashSet::new();
     let mut diags = resolve_markers(program, &markers);
+    diags.extend(check_typesets(program, &type_names));
     diags.extend(check_file(program, &HashSet::new(), &mut used));
     if require_main {
         check_main(program, &mut diags);
@@ -148,6 +150,37 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
             check_marker_calls(rhs, markers, diags);
         }
     }
+}
+
+/// Builtin type words legal as typeset members alongside declared types.
+const TYPESET_BUILTINS: [&str; 4] = ["bool", "float64", "int", "string"];
+
+/// A multi-member field typeset enumerates concrete types: each member must
+/// name a declared type or a builtin type word.
+pub fn check_typesets(program: &Program, type_names: &HashSet<String>) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
+    for ty in &program.types {
+        for (field, tys, span) in &ty.fields {
+            if tys.len() < 2 {
+                continue;
+            }
+            for member in tys {
+                let known = TYPESET_BUILTINS.contains(&member.as_str())
+                    || type_names.contains(member.as_str());
+                if !known {
+                    diags.push(Diagnostic::new(
+                        "name",
+                        format!(
+                            "`{member}` in the typeset of field `{field}` names no \
+                             declared or builtin type"
+                        ),
+                        *span,
+                    ));
+                }
+            }
+        }
+    }
+    diags
 }
 
 /// Names a file declares, for the module-wide first pass.
@@ -292,6 +325,18 @@ fn check_type_order(program: &Program, diags: &mut Vec<Diagnostic>) {
                     ),
                     *next_span,
                 ));
+            }
+        }
+        for (_, tys, span) in &ty.fields {
+            for pair in tys.windows(2) {
+                if pair[0] >= pair[1] {
+                    diags.push(Diagnostic::new(
+                        "formatting",
+                        "typeset members appear in alphabetical order, without duplicates"
+                            .to_string(),
+                        *span,
+                    ));
+                }
             }
         }
     }
