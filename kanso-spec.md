@@ -79,7 +79,7 @@ typeset numeric
 
 - overloads dispatch on literal values, concrete types (via destructuring or annotation), or typeset guards. resolution is fully static per monomorphized instantiation.
 - **specificity ladder:** literal > single concrete type > typeset (any size) > unannotated generic. sets never rank against each other; overlap is illegal.
-- annotations distinguishing overloads are legal exactly when bodies don't (`fn process (x: float32)` vs generic `fn process x` where both call `to_string`). if bodies structurally distinguish the types, the annotation is redundant → error.
+- annotations distinguishing overloads are legal exactly when bodies don't (`fn process x:float32` vs generic `fn process x` where both call `to_string`). if bodies structurally distinguish the types, the annotation is redundant → error.
 - return-type-directed dispatch: a concrete return annotation is legal where context can't infer it (`decode: config`).
 - `switch` doesn't exist; literal/constructor dispatch is the switch. `if` is a binary expression conditional. multi-way conditional: deferred pending evidence from real code.
 
