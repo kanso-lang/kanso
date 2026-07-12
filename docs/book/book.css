@@ -1,0 +1,143 @@
+/* kanso book — chapter chrome shared across docs/book/ pages */
+
+.essay {
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+
+.tip {
+  align-items: flex-start;
+  display: flex;
+  gap: 1.1rem;
+  margin: 2.75rem 0;
+}
+
+.tip .sprite {
+  flex-shrink: 0;
+  height: auto;
+  margin-top: 0.35rem;
+  width: 48px;
+}
+
+.tip-bubble {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.85rem 1.15rem 0.9rem;
+  position: relative;
+}
+
+.tip-bubble::before {
+  border-bottom: 8px solid transparent;
+  border-right: 9px solid var(--line);
+  border-top: 8px solid transparent;
+  content: "";
+  left: -9px;
+  position: absolute;
+  top: 1.1rem;
+}
+
+.tip-bubble::after {
+  border-bottom: 7px solid transparent;
+  border-right: 8px solid var(--surface);
+  border-top: 7px solid transparent;
+  content: "";
+  left: -8px;
+  position: absolute;
+  top: calc(1.1rem + 1px);
+}
+
+.tip-who {
+  color: var(--accent);
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+}
+
+.tip-bubble p {
+  font-size: 0.94rem;
+  margin: 0;
+}
+
+.chapter-nav {
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-top: 4.5rem;
+  padding-top: 1.75rem;
+}
+
+.chapter-nav a {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+
+.chapter-nav .nav-spacer {
+  flex: 1;
+}
+
+.book-toc {
+  list-style: none;
+  margin: 3rem 0 0;
+  padding: 0;
+}
+
+.book-toc li {
+  margin: 0;
+}
+
+.book-toc a {
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.35rem 0.25rem;
+}
+
+.book-toc a:hover {
+  background: var(--accent-soft);
+}
+
+.book-toc .ch-num {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  min-width: 3.5rem;
+}
+
+.book-toc li:last-child a {
+  border-bottom: 1px solid var(--line);
+}
+
+.book-toc .ch-title {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.book-toc .ch-blurb {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-left: auto;
+  max-width: 24rem;
+  text-align: right;
+}
+
+@media (max-width: 40rem) {
+  .book-toc .ch-blurb {
+    display: none;
+  }
+}

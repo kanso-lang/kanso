@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the kanso book</title>
+<meta name="description" content="a guided tour of kanso in seven chapters: values, dispatch, failure, effects, modules, and the compiler that keeps the receipts.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../spec.html">spec</a>
+    <a href="../about.html">about</a>
+    <a href="index.html">book</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">the book</span>
+<h1>the kanso book</h1>
+
+<p>this is the guided tour. the <a href="../spec.html">spec</a> is the law and the <a href="../about.html">about page</a> is the philosophy; this book is the part where you sit down and actually write some kanso. seven chapters, each one runnable, each one short enough to finish with your tea still warm.</p>
+
+<p>a promise before we start: every program in this book was run before it was printed, and every output panel shows what actually came back — including the failures, especially the failures. half of kanso's value is its compile errors, so this book treats a red diagnostic as a feature demo, not an apology. when a chapter shows you something breaking, that's the product.</p>
+
+<p>you don't need to have used a language like this before. you need a terminal, a rust toolchain, and about an evening. by the end you'll have written pure functions, dispatched on literals, watched an error ride the rails past three functions that never mentioned it, tested effects without a single mock, and compiled a program that decodes json faster than go does. it's a language that is better than whatever language you're using. we measured.</p>
+
+<ol class="book-toc">
+  <li><a href="ch01.html"><span class="ch-num">01</span><span class="ch-title">hello, kanso</span><span class="ch-blurb">install it, run it, meet the two engines</span></a></li>
+  <li><a href="ch02.html"><span class="ch-num">02</span><span class="ch-title">values and bindings</span><span class="ch-blurb">ints, floats, strings, constants — and a compiler that wastes nothing</span></a></li>
+  <li><a href="ch03.html"><span class="ch-num">03</span><span class="ch-title">types and dispatch</span><span class="ch-blurb">records, destructuring, and the only switch you get</span></a></li>
+  <li><a href="ch04.html"><span class="ch-num">04</span><span class="ch-title">failure is a value</span><span class="ch-blurb">err, none, the railway, and the endpoint rule</span></a></li>
+  <li><a href="ch05.html"><span class="ch-num">05</span><span class="ch-title">effects are descriptions</span><span class="ch-blurb">the print that doesn't print, pipes that bind, tests without mocks</span></a></li>
+  <li><a href="ch06.html"><span class="ch-num">06</span><span class="ch-title">modules and tests</span><span class="ch-blurb">a directory is a module; a test is a constant</span></a></li>
+  <li><a href="ch07.html"><span class="ch-num">07</span><span class="ch-title">fast by construction</span><span class="ch-blurb">the benchmark, the profile, and ten million stack frames</span></a></li>
+</ol>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../spec.html">spec</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

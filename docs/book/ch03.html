@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chapter 03 — types and dispatch</title>
+<meta name="description" content="records, construction, destructuring both ways, and overload dispatch — the only switch kanso gives you.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../spec.html">spec</a>
+    <a href="../about.html">about</a>
+    <a href="index.html">book</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">chapter 03</span>
+<h1>types and dispatch</h1>
+
+<p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical — enforced, like everything else that used to be a review comment. construction is positional, using the type name as the constructor, and taking a record apart is a <em>binding pattern</em> — write the constructor shape on the left of <code>=</code> and every field gets a name:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">records.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">track</span>
+  artist: <span class="t">string</span>
+  minutes: <span class="t">int</span>
+  title: <span class="t">string</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+  <span class="t">track</span> artist minutes title <span class="o">=</span> song
+  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{artist}</span> — <span class="i">{minutes}</span> minutes"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>long season, by fishmans — 6 minutes</code></pre>
+  </div>
+</div>
+
+<p>the positional form binds every field, which is honest but sometimes more than you want. when you only care about a couple of fields, use the <em>keyed read</em> — name the fields you want, rename freely with <code>:</code>, skip the rest:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">keyed.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+  { artist: who title } <span class="o">=</span> song
+  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{who}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>long season, by fishmans</code></pre>
+  </div>
+</div>
+
+<p>if you try to split the difference — positional destructuring with <code>_</code> for the fields you'd rather not name — the compiler redirects you to the right tool:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">peek.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">track</span>
+  artist: <span class="t">string</span>
+  minutes: <span class="t">int</span>
+  title: <span class="t">string</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+  <span class="t">track</span> artist <span class="o">_</span> title <span class="o">=</span> song
+  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{artist}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check peek.kso</div>
+    <pre><code><span class="k">error[syntax]</span>: `_` does not appear in binding patterns; omit fields with a keyed read
+<span class="c">  --&gt; peek.kso:8:16</span>
+   8 |   track artist _ title = song
+                      <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the third place records come apart is in a function head, where <code>_</code> <em>is</em> welcome — a parameter pattern both selects the type and unpacks it in one gesture:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">credit.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">credit</span> (<span class="t">track</span> artist <span class="o">_</span> title)
+  <span class="s">"<span class="i">{title}</span> — <span class="i">{artist}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+  <span class="f">print</span> (<span class="f">credit</span> song)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>long season — fishmans</code></pre>
+  </div>
+</div>
+
+<h2>the only switch</h2>
+
+<p>that function head is doing something bigger than convenience. kanso has no <code>match</code>, no <code>instanceof</code>, no tag tests, no narrowing syntax. a value may inhabit a typeset — it might be an <code>int</code> or a <code>string</code>, a result or an <code>err</code> — and the <em>only</em> way to take that apart is to define overloads and let dispatch choose. the conditional you would have written lives in the function head instead:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">describe.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="n">0</span>
+  <span class="s">"zero"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> n:<span class="t">int</span>
+  <span class="s">"the int <span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> s:<span class="t">string</span>
+  <span class="s">"the string <span class="i">{s}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> x
+  <span class="s">"something else: <span class="i">{x}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">0</span>) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">7</span>) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="s">"seven"</span>) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">1.5</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>zero
+the int 7
+the string seven
+something else: 1.5</code></pre>
+  </div>
+</div>
+
+<p>four arms, one name, and a <em>specificity ladder</em> deciding who answers: a literal like <code>0</code> beats an ascribed concrete type like <code>n:int</code>, which beats the bare generic <code>x</code>. (note the ascription is tight — <code>n:int</code>, no spaces; <code>n: int</code> is a formatting error.) constructor patterns like <code>(track artist _ title)</code> sit with the concrete types on this ladder, which is exactly what makes them the way to handle <code>err</code> in the next chapter.</p>
+
+<p>dispatch on literals is what turns the classic recursive definition into something you can read aloud — the base case is an overload, not an <code>if</code> guarding the real body:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fact.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">fact</span> <span class="n">0</span>
+  <span class="n">1</span>
+
+<span class="k">fn</span> <span class="f">fact</span> n
+  n <span class="o">*</span> <span class="f">fact</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+<span class="f">main</span> <span class="o">=</span>
+  answer <span class="o">=</span> <span class="f">fact</span> <span class="n">20</span>
+  <span class="f">print</span> <span class="s">"20! = <span class="i">{answer}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>20! = 2432902008176640000</code></pre>
+  </div>
+</div>
+
+<p>that answer doesn't fit in 64 bits and nobody had to care — <code>int</code> is arbitrary-precision, as promised.</p>
+
+<h2>the ladder is law</h2>
+
+<p>because dispatch replaces every switch you'd otherwise write, kanso is strict about how overload groups are laid out and what they may contain. the arms appear most-specific first, so the file reads like the dispatcher resolves:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">backwards.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">fact</span> n
+  n <span class="o">*</span> <span class="f">fact</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">fact</span> <span class="n">0</span>
+  <span class="n">1</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check backwards.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: overloads of `fact` appear most-specific first: literal, then concrete type, then generic
+<span class="c">  --&gt; backwards.kso:4:4</span>
+   4 | fn fact 0
+          <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>and two arms that dispatch can never tell apart are rejected outright, because a switch with two identical cases is a bug wherever it appears:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">twins.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">same</span> x
+  x
+
+<span class="k">fn</span> <span class="f">same</span> y
+  y</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check twins.kso</div>
+    <pre><code><span class="k">error[dispatch]</span>: overlapping overloads of `same` are illegal
+<span class="c">  --&gt; twins.kso:6:4</span>
+   6 | fn same y
+          <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>for the honest cases where a value is just a boolean decision, <code>if</code> exists — but as a plain function, <code>if condition then_value else_value</code>, an expression like everything else. no statement form, no dangling else, no ternary syntax to argue about:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">admission.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">admission</span> age
+  <span class="f">if</span> (age <span class="o">&lt;</span> <span class="n">13</span>) <span class="s">"child ticket"</span> <span class="s">"regular ticket"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">admission</span> <span class="n">9</span>) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">admission</span> <span class="n">30</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>child ticket
+regular ticket</code></pre>
+  </div>
+</div>
+
+<p>the rule of taste: <code>if</code> is for decisions about one value's <em>content</em>; overloads are for decisions about a value's <em>shape</em>. when you find yourself asking "which kind of thing is this?", the answer is never a conditional — it's another arm.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>fields alphabetical, arms most-specific first, ascription tight as <code>n:int</code>. there is exactly one place everything goes, which means you never have to decide — and neither does the person reading after you.</p>
+</div>
+</div>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 56 58" role="img" aria-label="tsuru" shape-rendering="crispEdges"><title>tsuru - folds your program until it is small enough to fly</title><rect x="39" y="3" width="1" height="1" fill="#dfc9a2"/><rect x="39" y="4" width="1" height="1" fill="#dfc9a2"/><rect x="38" y="5" width="3" height="1" fill="#dfc9a2"/><rect x="38" y="6" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="7" width="1" height="1" fill="#f03a00"/><rect x="37" y="7" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="8" width="3" height="1" fill="#f03a00"/><rect x="37" y="8" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="9" width="5" height="1" fill="#f03a00"/><rect x="36" y="9" width="5" height="1" fill="#dfc9a2"/><rect x="3" y="10" width="2" height="1" fill="#f2e3c8"/><rect x="5" y="10" width="4" height="1" fill="#f03a00"/><rect x="36" y="10" width="6" height="1" fill="#dfc9a2"/><rect x="2" y="11" width="2" height="1" fill="#f2e3c8"/><rect x="4" y="11" width="2" height="1" fill="#f03a00"/><rect x="6" y="11" width="4" height="1" fill="#f2e3c8"/><rect x="35" y="11" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="12" width="1" height="1" fill="#2b2320"/><rect x="3" y="12" width="10" height="1" fill="#f2e3c8"/><rect x="35" y="12" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="13" width="1" height="1" fill="#2b2320"/><rect x="3" y="13" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="13" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="14" width="2" height="1" fill="#2b2320"/><rect x="3" y="14" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="14" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="15" width="3" height="1" fill="#2b2320"/><rect x="4" y="15" width="8" height="1" fill="#f2e3c8"/><rect x="33" y="15" width="10" height="1" fill="#dfc9a2"/><rect x="0" y="16" width="4" height="1" fill="#2b2320"/><rect x="4" y="16" width="9" height="1" fill="#f2e3c8"/><rect x="33" y="16" width="10" height="1" fill="#dfc9a2"/><rect x="2" y="17" width="2" height="1" fill="#2b2320"/><rect x="4" y="17" width="9" height="1" fill="#f2e3c8"/><rect x="32" y="17" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="18" width="6" height="1" fill="#f2e3c8"/><rect x="32" y="18" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="19" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="19" width="12" height="1" fill="#dfc9a2"/><rect x="7" y="20" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="20" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="21" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="22" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="23" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="23" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="24" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="24" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="25" width="8" height="1" fill="#f2e3c8"/><rect x="28" y="25" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="26" width="7" height="1" fill="#f2e3c8"/><rect x="28" y="26" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="27" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="27" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="28" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="28" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="29" width="8" height="1" fill="#f2e3c8"/><rect x="25" y="29" width="1" height="1" fill="#f2e3c8"/><rect x="26" y="29" width="19" height="1" fill="#dfc9a2"/><rect x="10" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="24" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="30" width="15" height="1" fill="#dfc9a2"/><rect x="10" y="31" width="8" height="1" fill="#f2e3c8"/><rect x="23" y="31" width="18" height="1" fill="#f2e3c8"/><rect x="41" y="31" width="5" height="1" fill="#dfc9a2"/><rect x="10" y="32" width="8" height="1" fill="#f2e3c8"/><rect x="22" y="32" width="25" height="1" fill="#f2e3c8"/><rect x="10" y="33" width="8" height="1" fill="#f2e3c8"/><rect x="20" y="33" width="27" height="1" fill="#f2e3c8"/><rect x="11" y="34" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="35" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="36" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="37" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="38" width="37" height="1" fill="#f2e3c8"/><rect x="12" y="39" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="40" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="41" width="1" height="1" fill="#dfc9a2"/><rect x="13" y="41" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="42" width="2" height="1" fill="#dfc9a2"/><rect x="14" y="42" width="37" height="1" fill="#f2e3c8"/><rect x="10" y="43" width="4" height="1" fill="#dfc9a2"/><rect x="15" y="43" width="37" height="1" fill="#f2e3c8"/><rect x="9" y="44" width="5" height="1" fill="#dfc9a2"/><rect x="16" y="44" width="33" height="1" fill="#f2e3c8"/><rect x="8" y="45" width="6" height="1" fill="#dfc9a2"/><rect x="17" y="45" width="27" height="1" fill="#f2e3c8"/><rect x="7" y="46" width="8" height="1" fill="#dfc9a2"/><rect x="18" y="46" width="19" height="1" fill="#f2e3c8"/><rect x="37" y="46" width="2" height="1" fill="#2b2320"/><rect x="6" y="47" width="9" height="1" fill="#dfc9a2"/><rect x="19" y="47" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="47" width="2" height="1" fill="#2b2320"/><rect x="29" y="47" width="5" height="1" fill="#f2e3c8"/><rect x="37" y="47" width="2" height="1" fill="#2b2320"/><rect x="5" y="48" width="10" height="1" fill="#dfc9a2"/><rect x="20" y="48" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="48" width="2" height="1" fill="#2b2320"/><rect x="37" y="48" width="2" height="1" fill="#2b2320"/><rect x="4" y="49" width="12" height="1" fill="#dfc9a2"/><rect x="21" y="49" width="3" height="1" fill="#f2e3c8"/><rect x="27" y="49" width="2" height="1" fill="#2b2320"/><rect x="37" y="49" width="2" height="1" fill="#2b2320"/><rect x="3" y="50" width="10" height="1" fill="#dfc9a2"/><rect x="27" y="50" width="2" height="1" fill="#2b2320"/><rect x="37" y="50" width="2" height="1" fill="#2b2320"/><rect x="2" y="51" width="6" height="1" fill="#dfc9a2"/><rect x="27" y="51" width="2" height="1" fill="#2b2320"/><rect x="37" y="51" width="2" height="1" fill="#2b2320"/><rect x="1" y="52" width="2" height="1" fill="#dfc9a2"/><rect x="27" y="52" width="2" height="1" fill="#2b2320"/><rect x="37" y="52" width="2" height="1" fill="#2b2320"/><rect x="27" y="53" width="2" height="1" fill="#2b2320"/><rect x="37" y="53" width="2" height="1" fill="#2b2320"/><rect x="27" y="54" width="2" height="1" fill="#2b2320"/><rect x="37" y="54" width="2" height="1" fill="#2b2320"/><rect x="27" y="55" width="2" height="1" fill="#2b2320"/><rect x="27" y="56" width="2" height="1" fill="#2b2320"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">tsuru</span>
+<p>a note for later: those overload arms are not tag checks at runtime. i resolve dispatch statically per instantiation, and literal arms on one parameter become a jump table. chapter 07 has the ir to prove it.</p>
+</div>
+</div>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch02.html">← values and bindings</a>
+  <a href="ch04.html">next: failure is a value →</a>
+</nav>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../spec.html">spec</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

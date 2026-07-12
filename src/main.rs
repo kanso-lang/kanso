@@ -3,12 +3,15 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("repl") {
+        return repl();
+    }
     let (command, file, plan) = match parse_args(&args) {
         Some(parsed) => parsed,
         None => {
             eprintln!(
                 "usage: kanso run <file.kso> [--plan] | kanso check <file.kso> | kanso \
-                 test <file.kso> | kanso build <file.kso>"
+                 test <file.kso> | kanso build <file.kso> | kanso repl"
             );
             return ExitCode::from(2);
         }
@@ -71,6 +74,64 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool)> {
     match plan && command != "run" {
         true => None,
         false => Some((command, file, plan)),
+    }
+}
+
+fn repl() -> ExitCode {
+    use std::io::{BufRead, Write};
+    println!("kanso repl — expressions evaluate, declarations persist, ctrl-d exits");
+    let mut session = kanso::repl::Session::new();
+    let mut executor = eval::RealExecutor { program_args: Vec::new() };
+    let stdin = std::io::stdin();
+    let mut buffer = String::new();
+    loop {
+        let prompt = match buffer.is_empty() {
+            true => "» ",
+            false => "… ",
+        };
+        print!("{prompt}");
+        let _ = std::io::stdout().flush();
+        let mut line = String::new();
+        match stdin.lock().read_line(&mut line) {
+            Ok(0) | Err(_) => return ExitCode::SUCCESS,
+            Ok(_) => {}
+        }
+        let line = line.trim_end().to_string();
+        let submit = match buffer.is_empty() {
+            true if opens_block(&line) => {
+                buffer = line;
+                continue;
+            }
+            true => line,
+            false if line.is_empty() => std::mem::take(&mut buffer),
+            false => {
+                buffer.push('\n');
+                buffer.push_str(&line);
+                continue;
+            }
+        };
+        report(session.eval(&submit, &mut executor));
+    }
+}
+
+/// Multi-line input: fn/type declarations and block-form constants read
+/// until a blank line.
+fn opens_block(line: &str) -> bool {
+    line.starts_with("fn ") || line.starts_with("type ") || line.ends_with('=')
+}
+
+fn report(outcome: Result<kanso::repl::Outcome, String>) {
+    match outcome {
+        Ok(kanso::repl::Outcome::Defined(names)) => println!("defined {names}"),
+        Ok(kanso::repl::Outcome::Value(rendered)) => match rendered.is_empty() {
+            true => {}
+            false => println!("{rendered}"),
+        },
+        Ok(kanso::repl::Outcome::Executed(rendered)) => match rendered.is_empty() {
+            true => {}
+            false => println!("{rendered}"),
+        },
+        Err(message) => eprint!("{message}"),
     }
 }
 

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chapter 04 — failure is a value</title>
+<meta name="description" content="err and none, automatic propagation, strict indexing versus at, and the endpoint rule that makes ignoring failure a compile error.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../spec.html">spec</a>
+    <a href="../about.html">about</a>
+    <a href="index.html">book</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">chapter 04</span>
+<h1>failure is a value</h1>
+
+<p>kanso has no exceptions and no panics. it also has no <code>Ok</code>, no <code>Some</code>, no <code>.unwrap()</code> — none of the wrapper ceremony that result types usually charge. success is the bare value. failure is <code>err reason</code>, an ordinary value of an ordinary type. absence is <code>none</code>, a different ordinary value. that's the entire error model, and this chapter is about how far it goes.</p>
+
+<p>start by breaking something:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">ratio.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+  <span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run ratio.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"</code></pre>
+  </div>
+</div>
+
+<p>read that carefully, because it is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and <em>the endpoint rule</em> fired: an err reaching the top of the program with no arm to receive it is an error in its own right. nothing was thrown; a value arrived somewhere that had no plan for it, and kanso considers having no plan the bug.</p>
+
+<h2>an arm for the err</h2>
+
+<p>the plan is dispatch — the only switch, doing its second job. <code>err reason</code> is a constructor pattern like any other, so handling failure is just one more overload:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">handle.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
+  <span class="s">"failed: <span class="i">{reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> n
+  <span class="s">"got <span class="i">{n}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+  <span class="f">print</span> (<span class="f">describe</span> ratio)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>failed: division by zero</code></pre>
+  </div>
+</div>
+
+<p>no <code>try</code>, no <code>catch</code>, no <code>rescue</code> block changing the shape of the code. the happy path and the sad path are two arms of the same function, sitting at the same indentation, both just returning strings.</p>
+
+<h2>the railway</h2>
+
+<p>here is the part that deletes real code from real programs. when an <code>err</code> flows into a function with no arm for it, the function doesn't run — the err passes through, untouched, automatically. watch a failure born three calls deep ride past every function on the way up:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">railway.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
+  <span class="s">"could not price the order: <span class="i">{reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> total
+  <span class="s">"order total: <span class="i">{total}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  good <span class="o">=</span> <span class="f">total_price</span> <span class="n">120</span> <span class="n">4</span>
+  bad <span class="o">=</span> <span class="f">total_price</span> <span class="n">120</span> <span class="n">0</span>
+  <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)
+
+<span class="k">fn</span> <span class="f">total_price</span> cents people
+  share <span class="o">=</span> cents <span class="o">/</span> people
+  <span class="f">with_tip</span> share
+
+<span class="k">fn</span> <span class="f">with_tip</span> share
+  share <span class="o">+</span> (share <span class="o">/</span> <span class="n">10</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>order total: 33
+could not price the order: division by zero</code></pre>
+  </div>
+</div>
+
+<p>count the lines of error handling in <code>total_price</code> and <code>with_tip</code>: zero. the division by zero happens inside <code>total_price</code>, the resulting err flows into <code>with_tip</code> — whose arms don't match it, so it flows through — back out to <code>main</code>, and finally into <code>describe</code>, the first function that declared an arm for it. this is the railway: the sad track runs parallel to the happy one, and only stations with an err platform can receive the train. functions in the middle state their happy-path logic and nothing else, ever.</p>
+
+<h2>none is not err</h2>
+
+<p>absence gets its own value, and the standard library is opinionated about which one you should meet. indexing with <code>xs[i]</code> is <em>strict</em>: it means "i know this element exists," and a miss is an err — a broken promise:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">ninth.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
+  <span class="f">print</span> <span class="s">"ninth: <span class="i">{flavors[9]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run ninth.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index 9"</code></pre>
+  </div>
+</div>
+
+<p>(indexing is 1-based, everywhere, no exceptions. the first flavor is <code>flavors[1]</code>. we are at peace with this.)</p>
+
+<p>when absence is <em>expected</em> — you're asking, not promising — use <code>at</code>, which returns <code>none</code> on a miss. and <code>none</code>, like <code>err</code>, is dispatched on, not checked for:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fourth.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+  <span class="s">"no fourth flavor"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> x
+  <span class="s">"fourth flavor: <span class="i">{x}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
+  first <span class="o">=</span> flavors[<span class="n">1</span>]
+  fourth <span class="o">=</span> <span class="f">at</span> flavors <span class="n">4</span>
+  <span class="f">print</span> <span class="s">"first: <span class="i">{first}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> fourth)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>first: matcha
+no fourth flavor</code></pre>
+  </div>
+</div>
+
+<p>the same pair of tools covers maps — literal syntax <code>["dango": 350]</code>, strict lookup with brackets, polite lookup with <code>at</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">menu.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+  <span class="s">"not on the menu"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> price
+  <span class="s">"<span class="i">{price}</span> yen"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  menu <span class="o">=</span> [<span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span>]
+  <span class="f">print</span> (<span class="f">describe</span> (<span class="f">at</span> menu <span class="s">"pocky"</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>not on the menu</code></pre>
+  </div>
+</div>
+
+<p>choosing between them is a design act, and the language makes you commit: brackets document an invariant ("this key exists, and if it doesn't, that's a bug — fail here"), <code>at</code> documents a question ("this may be absent, and absence is a case my code handles"). the distinction other languages leave to comments and code review, kanso puts in the call site.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">err</span>
+<p>people confuse me with my cousin none. none is what you get when you <em>asked</em> — a lookup that may miss. i am what you get when something <em>broke</em>. seat us at different tables and your program's intent reads itself.</p>
+</div>
+</div>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">err</span>
+<p>i never sneak. i knock at every function on the way up, and the endpoint rule guarantees somebody eventually opens the door — because pretending i'm not there refuses to compile. write the arm where the context to respond actually lives, and nowhere else.</p>
+</div>
+</div>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch03.html">← types and dispatch</a>
+  <a href="ch05.html">next: effects are descriptions →</a>
+</nav>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../spec.html">spec</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
