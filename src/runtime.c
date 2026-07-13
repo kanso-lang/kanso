@@ -14,7 +14,18 @@ typedef struct { long len; char* data; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
 typedef struct { long long len; const unsigned char* data; } KBytes;
 typedef struct { long long len; KValue* items; } KList;
-typedef struct { long long len; KValue* pairs; } KMap; /* [k0 v0 k1 v1...] sorted by key */
+/* A map is built by appending pairs to a frontier-shared buffer in O(1) (like
+   lists), leaving them unsorted with possible duplicate keys. The canonical
+   sorted-and-deduped view is computed once on first read and cached; appends
+   invalidate it. Appending never reorders, so older shorter views stay valid;
+   the sorted view is a fresh buffer, so no shared mutation. This turns object
+   construction from O(n^2) copies into O(n) appends plus one O(n log n) sort. */
+typedef struct {
+    long long len;        /* raw appended pair count (unsorted, dups allowed) */
+    KValue* pairs;        /* k_buf-backed, frontier-shared like list items */
+    KValue* sorted;       /* cached sorted+deduped [k v k v...], or NULL */
+    long long sorted_len; /* deduped entry count */
+} KMap;
 typedef struct { KValue (*fn)(void*, KValue); void* env; } KClosure;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct KDesc KDesc;
@@ -30,6 +41,7 @@ typedef struct { KValue reason; const char* origin; KHop* hops; } KErrBox;
 
 static KValue k_mklist(long long n, KValue* items);
 static KValue k_call1(KValue f, KValue a);
+static KValue* k_map_sorted(KMap* m, long long* out_len);
 
 static char* k_arena = NULL;
 static size_t k_arena_left = 0;
@@ -335,13 +347,15 @@ KValue k_render(KValue v, long long quote) {
         }
         case K_MAP: {
             KMap* m = (KMap*)(intptr_t)v.payload;
-            if (m->len == 0) return k_str("[:]");
+            long long n;
+            KValue* s = k_map_sorted(m, &n);
+            if (n == 0) return k_str("[:]");
             KValue out = k_str("[");
-            for (long long i = 0; i < m->len; i++) {
+            for (long long i = 0; i < n; i++) {
                 if (i) out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render(m->pairs[i * 2], 1));
+                out = k_concat(out, k_render(s[i * 2], 1));
                 out = k_concat(out, k_str(": "));
-                out = k_concat(out, k_render(m->pairs[i * 2 + 1], 1));
+                out = k_concat(out, k_render(s[i * 2 + 1], 1));
             }
             return k_concat(out, k_str("]"));
         }
@@ -405,11 +419,12 @@ static long long k_eq(KValue a, KValue b) {
             return 1;
         }
         case K_MAP: {
-            KMap* ma = k_as_map(a);
-            KMap* mb = k_as_map(b);
-            if (ma->len != mb->len) return 0;
-            for (long long i = 0; i < ma->len * 2; i++) {
-                if (!k_eq(ma->pairs[i], mb->pairs[i])) return 0;
+            long long na, nb;
+            KValue* sa = k_map_sorted(k_as_map(a), &na);
+            KValue* sb = k_map_sorted(k_as_map(b), &nb);
+            if (na != nb) return 0;
+            for (long long i = 0; i < na * 2; i++) {
+                if (!k_eq(sa[i], sb[i])) return 0;
             }
             return 1;
         }
@@ -690,29 +705,60 @@ static int k_key_cmp(KValue a, KValue b) {
     return (sa->len > sb->len) - (sa->len < sb->len);
 }
 
-static long long k_map_find(KMap* m, KValue key, long long* insert_at) {
-    long long lo = 0, hi = m->len - 1;
-    while (lo <= hi) {
-        long long mid = (lo + hi) / 2;
-        int c = k_key_cmp(key, m->pairs[mid * 2]);
-        if (c == 0) return mid;
-        if (c < 0) hi = mid - 1; else lo = mid + 1;
+/* Sort indices by (key, insertion order) so equal keys stay ordered by when
+   they were put — single-threaded, so a file-scope context pointer is fine. */
+static KValue* k_msort_pairs;
+static int k_msort_cmp(const void* pa, const void* pb) {
+    long long ia = *(const long long*)pa, ib = *(const long long*)pb;
+    int c = k_key_cmp(k_msort_pairs[ia * 2], k_msort_pairs[ib * 2]);
+    if (c) return c;
+    return ia < ib ? -1 : (ia > ib ? 1 : 0);
+}
+
+/* The canonical sorted+deduped view, computed once and cached on the map.
+   Duplicate keys collapse keeping the last put (json's last-key-wins). */
+static KValue* k_map_sorted(KMap* m, long long* out_len) {
+    if (!m->sorted) {
+        long long n = m->len;
+        KValue* out = k_alloc(sizeof(KValue) * 2 * (n ? n : 1));
+        if (n > 0) {
+            long long* idx = k_alloc(sizeof(long long) * n);
+            for (long long i = 0; i < n; i++) idx[i] = i;
+            k_msort_pairs = m->pairs;
+            qsort(idx, n, sizeof(long long), k_msort_cmp);
+            long long w = 0;
+            for (long long i = 0; i < n; i++) {
+                long long si = idx[i];
+                KValue k = m->pairs[si * 2], v = m->pairs[si * 2 + 1];
+                if (w > 0 && k_key_cmp(k, out[(w - 1) * 2]) == 0) {
+                    out[(w - 1) * 2 + 1] = v;
+                } else {
+                    out[w * 2] = k;
+                    out[w * 2 + 1] = v;
+                    w++;
+                }
+            }
+            m->sorted_len = w;
+        } else {
+            m->sorted_len = 0;
+        }
+        m->sorted = out;
     }
-    if (insert_at) *insert_at = lo;
-    return -1;
+    if (out_len) *out_len = m->sorted_len;
+    return m->sorted;
 }
 
 KValue k_map_lit(long long n, KValue* flat_pairs) {
+    /* literal keys arrive sorted and unique from the parser; k_map_sorted
+       still recomputes on first read, cheaply (already sorted, no dups). */
     KMap* m = k_alloc_obj(sizeof(KMap));
-    m->len = 0;
-    m->pairs = k_alloc(sizeof(KValue) * 2 * (n ? n : 1));
-    KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m);
-    for (long long i = 0; i < n; i++) {
-        m->pairs[m->len * 2] = flat_pairs[i * 2];
-        m->pairs[m->len * 2 + 1] = flat_pairs[i * 2 + 1];
-        m->len++;
-    }
-    return mv;
+    m->pairs = k_buf(2 * (n ? n : 1));
+    memcpy(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
+    k_buf_of(m->pairs)->used = 2 * n;
+    m->len = n;
+    m->sorted = NULL;
+    m->sorted_len = 0;
+    KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
 KValue k_b_put(KValue mv, KValue key, KValue val) {
@@ -721,23 +767,30 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (!k_not_failure(val)) return val;
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     KMap* m = k_as_map(mv);
-    long long at;
-    long long found = k_map_find(m, key, &at);
+    KBuf* buf = k_buf_of(m->pairs);
     KMap* out = k_alloc_obj(sizeof(KMap));
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
-    if (found >= 0) {
-        out->len = m->len;
-        out->pairs = k_alloc(sizeof(KValue) * 2 * out->len);
-        memcpy(out->pairs, m->pairs, sizeof(KValue) * 2 * m->len);
-        out->pairs[found * 2 + 1] = val;
+    out->sorted = NULL;
+    out->sorted_len = 0;
+    if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
+        /* frontier-owned: claim the next pair slot in place (O(1)), leaving
+           the key unsorted and any duplicate to be resolved on read */
+        m->pairs[m->len * 2] = key;
+        m->pairs[m->len * 2 + 1] = val;
+        buf->used += 2;
+        out->len = m->len + 1;
+        out->pairs = m->pairs;
         return ov;
     }
+    long long need = 2 * (m->len + 1);
+    long long cap = need < 4 ? 4 : need * 2;
+    KValue* np = k_buf(cap);
+    memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
+    np[m->len * 2] = key;
+    np[m->len * 2 + 1] = val;
+    k_buf_of(np)->used = m->len * 2 + 2;
     out->len = m->len + 1;
-    out->pairs = k_alloc(sizeof(KValue) * 2 * out->len);
-    memcpy(out->pairs, m->pairs, sizeof(KValue) * 2 * at);
-    out->pairs[at * 2] = key;
-    out->pairs[at * 2 + 1] = val;
-    memcpy(out->pairs + (at + 1) * 2, m->pairs + at * 2, sizeof(KValue) * 2 * (m->len - at));
+    out->pairs = np;
     return ov;
 }
 
@@ -745,14 +798,16 @@ KValue k_b_entries(KValue mv) {
     if (!k_not_failure(mv)) return mv;
     if (mv.tag != K_MAP) k_die("entries takes a map");
     KMap* m = k_as_map(mv);
-    KValue* items = k_alloc(sizeof(KValue) * (m->len ? m->len : 1));
-    for (long long i = 0; i < m->len; i++) {
+    long long n;
+    KValue* s = k_map_sorted(m, &n);
+    KValue* items = k_alloc(sizeof(KValue) * (n ? n : 1));
+    for (long long i = 0; i < n; i++) {
         KValue* fields = k_alloc(sizeof(KValue) * 2);
-        fields[0] = m->pairs[i * 2];
-        fields[1] = m->pairs[i * 2 + 1];
+        fields[0] = s[i * 2];
+        fields[1] = s[i * 2 + 1];
         items[i] = k_rec(0, 2, fields);
     }
-    return k_mklist(m->len, items);
+    return k_mklist(n, items);
 }
 
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */
@@ -885,9 +940,16 @@ KValue k_b_at(KValue container, KValue index) {
     }
     if (container.tag == K_MAP) {
         KMap* m = k_as_map(container);
-        long long found = k_map_find(m, index, NULL);
-        if (found < 0) return k_none();
-        return m->pairs[found * 2 + 1];
+        long long n;
+        KValue* s = k_map_sorted(m, &n);
+        long long lo = 0, hi = n - 1;
+        while (lo <= hi) {
+            long long mid = (lo + hi) / 2;
+            int c = k_key_cmp(index, s[mid * 2]);
+            if (c == 0) return s[mid * 2 + 1];
+            if (c < 0) hi = mid - 1; else lo = mid + 1;
+        }
+        return k_none();
     }
     k_die("at takes a list or string with a 1-based position, or a map with a key");
     return k_none();
@@ -930,7 +992,11 @@ KValue k_b_length(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_LIST) return k_int(k_as_list(v)->len);
     if (v.tag == K_BYTES) return k_int(k_as_bytes(v)->len);
-    if (v.tag == K_MAP) return k_int(k_as_map(v)->len);
+    if (v.tag == K_MAP) {
+        long long n;
+        k_map_sorted(k_as_map(v), &n);
+        return k_int(n);
+    }
     if (v.tag == K_STR) {
         KStr* s = k_as_str(v);
         long count = 0;
