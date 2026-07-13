@@ -10,6 +10,7 @@ const K_NONE: i64 = 4;
 const K_ERR: i64 = 5;
 
 const DECLARES: &str = r#"%KValue = type { i64, i64 }
+%parsed = type { i64, i64 }
 %KBytes = type { i64, ptr }
 
 declare %KValue @k_int(i64)
@@ -108,9 +109,32 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     for (i, ty) in program.types.iter().enumerate() {
         type_ids.insert(ty.name.as_str(), (i + 1) as i64);
     }
+    let mut escape = crate::escape::analyze(program);
+    // The by-value `%parsed` is two i64s, so it only fits a record shaped like
+    // the scanner's `_parsed`: exactly two fields, a small int position packed
+    // into the tag word and a non-failure value in the payload word. Any other
+    // register-returnable record keeps the heap representation.
+    let type_index: HashMap<&str, usize> = program
+        .types
+        .iter()
+        .enumerate()
+        .map(|(i, t)| (t.name.as_str(), i))
+        .collect();
+    escape.field_count.retain(|ty, n| {
+        *n == 2
+            && type_index.get(ty.as_str()).is_some_and(|&i| {
+                inference.type_fields.get(i).is_some_and(|fields| {
+                    fields.len() == 2 && fields[0] == INT && fields[1] & FAIL == 0
+                })
+            })
+    });
+    let packable: std::collections::HashSet<String> = escape.field_count.keys().cloned().collect();
+    escape.returns.retain(|_, ty| packable.contains(ty));
+    escape.carries.retain(|_, ty| packable.contains(ty));
     let mut backend = Backend {
         program,
         inference,
+        escape,
         type_ids,
         strings: Vec::new(),
         interned: HashMap::new(),
@@ -124,6 +148,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
 struct Backend<'a> {
     program: &'a Program,
     inference: infer::Inference,
+    escape: crate::escape::EscapeInfo,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -141,6 +166,8 @@ struct FnEmit {
     sets: HashMap<String, Set>,
     /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
     origin_prefix: String,
+    /// LLVM return type of the function being emitted: `%parsed` or `%KValue`.
+    ret_ty: String,
 }
 
 impl FnEmit {
@@ -153,6 +180,7 @@ impl FnEmit {
             versions: HashMap::new(),
             sets: HashMap::new(),
             origin_prefix: String::new(),
+            ret_ty: "%KValue".to_string(),
         }
     }
 
@@ -261,7 +289,11 @@ impl<'a> Backend<'a> {
     /// Render one call argument in the callee's ABI: raw i64 for an unboxed
     /// slot (extract the payload), boxed KValue otherwise.
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
-        if self.unboxed_param(callee, arity, i) {
+        if self.escape.carries_ty(callee, arity, i).is_some() {
+            // `e` is already a %parsed value (the analysis guarantees a %parsed
+            // parameter is only ever fed a register-returnable call result).
+            format!("%parsed {e}")
+        } else if self.unboxed_param(callee, arity, i) {
             let p = f.tmp();
             f.line(&format!("{p} = extractvalue %KValue {e}, 1"));
             format!("i64 {p}")
@@ -282,17 +314,30 @@ impl<'a> Backend<'a> {
         }
     }
 
-    /// The dispatcher's parameter list, unboxing proven-int slots.
+    /// The dispatcher's parameter list, unboxing proven-int slots and passing
+    /// register-returnable records as `%parsed` structs.
     fn abi_params(&self, name: &str, arity: usize) -> Vec<String> {
         (0..arity)
             .map(|i| {
-                if self.unboxed_param(name, arity, i) {
+                if self.escape.carries_ty(name, arity, i).is_some() {
+                    format!("%parsed %x{i}")
+                } else if self.unboxed_param(name, arity, i) {
                     format!("i64 %x{i}r")
                 } else {
                     format!("%KValue %x{i}")
                 }
             })
             .collect()
+    }
+
+    /// The LLVM return type of a function group: `%parsed` when it hands back a
+    /// register-returnable record by value, else `%KValue`.
+    fn ret_ty(&self, name: &str, arity: usize) -> &'static str {
+        if self.escape.returns_ty(name, arity).is_some() {
+            "%parsed"
+        } else {
+            "%KValue"
+        }
     }
 
     fn emit(&mut self) -> Result<String, String> {
@@ -479,8 +524,10 @@ impl<'a> Backend<'a> {
         disc: usize,
     ) -> Result<(), String> {
         let params = self.abi_params(name, arity);
+        let ret = self.ret_ty(name, arity);
         let mut f = FnEmit::new();
-        let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
+        f.ret_ty = ret.to_string();
+        let header = format!("define tailcc {ret} @d_{name}_{arity}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
@@ -518,7 +565,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!(
                     "{hopped} = call %KValue @k_err_hop(%KValue %x{i}, ptr @{hop_name})"
                 ));
-                f.line(&format!("ret %KValue {hopped}"));
+                self.emit_ret_failure(&mut f, name, arity, &hopped);
                 f.start_block(&next);
             }
             f.line("unreachable");
@@ -599,7 +646,7 @@ impl<'a> Backend<'a> {
         f.start_block(&ret_disc);
         let hopped = f.tmp();
         f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
-        f.line(&format!("ret %KValue {hopped}"));
+        self.emit_ret_failure(&mut f, name, arity, &hopped);
         f.start_block(&die);
         let msg = format!("no overload of `{name}` matches these arguments ");
         let (m, _len) = self.intern(&msg);
@@ -628,33 +675,60 @@ impl<'a> Backend<'a> {
             return self.emit_switch_dispatcher(name, arity, decls, disc);
         }
         let params = self.abi_params(name, arity);
+        let ret = self.ret_ty(name, arity);
         let mut f = FnEmit::new();
-        let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
+        f.ret_ty = ret.to_string();
+        let header = format!("define tailcc {ret} @d_{name}_{arity}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
+        // A `%parsed` and a `%KValue` share a `{i64,i64}` layout: reinterpret the
+        // parameter's two words as the discriminator KValue once, so the arms can
+        // match failures and the propagation loop can hop. On the failure path it
+        // *is* the failure; on success its low word (value.tag | pos<<8) is never
+        // a failure tag, so `k_not_failure` still separates the two.
+        for i in 0..arity {
+            if self.escape.carries_ty(name, arity, i).is_some() {
+                f.line(&format!("%x{i}w0 = extractvalue %parsed %x{i}, 0"));
+                f.line(&format!("%x{i}w1 = extractvalue %parsed %x{i}, 1"));
+                f.line(&format!("%x{i}sa = insertvalue %KValue undef, i64 %x{i}w0, 0"));
+                f.line(&format!("%x{i}s = insertvalue %KValue %x{i}sa, i64 %x{i}w1, 1"));
+            }
+        }
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
             for (i, pattern) in decl.params.iter().enumerate() {
-                let known = self.group_param_set(name, arity, i);
-                self.emit_pattern_known(&mut f, &format!("%x{i}"), pattern, &fail, known)?;
+                match self.escape.carries_ty(name, arity, i) {
+                    Some(ty) => {
+                        let ty = ty.to_string();
+                        self.emit_parsed_pattern(&mut f, &format!("%x{i}s"), pattern, &fail, &ty)?;
+                    }
+                    None => {
+                        let known = self.group_param_set(name, arity, i);
+                        self.emit_pattern_known(&mut f, &format!("%x{i}"), pattern, &fail, known)?;
+                    }
+                }
             }
             self.emit_fn_body(&mut f, &decl.body)?;
             f.start_block(&fail);
         }
         for i in 0..arity {
-            let ok = inline_not_failure(&mut f, &format!("%x{i}"));
+            let val = match self.escape.carries_ty(name, arity, i).is_some() {
+                true => format!("%x{i}s"),
+                false => format!("%x{i}"),
+            };
+            let ok = inline_not_failure(&mut f, &val);
             let ret_label = f.label();
             let next = f.label();
             f.line(&format!("br i1 {ok}, label %{next}, label %{ret_label}"));
             f.start_block(&ret_label);
             let hopped = f.tmp();
             f.line(&format!(
-                "{hopped} = call %KValue @k_err_hop(%KValue %x{i}, ptr @{hop_name})"
+                "{hopped} = call %KValue @k_err_hop(%KValue {val}, ptr @{hop_name})"
             ));
-            f.line(&format!("ret %KValue {hopped}"));
+            self.emit_ret_failure(&mut f, name, arity, &hopped);
             f.start_block(&next);
         }
         let msg = format!("no overload of `{name}` matches these arguments");
@@ -673,6 +747,127 @@ impl<'a> Backend<'a> {
         fail: &str,
     ) -> Result<(), String> {
         self.emit_pattern_known(f, value, pattern, fail, TOP)
+    }
+
+    /// Match a pattern against a `%parsed` parameter. The `(ty ...)` arm succeeds
+    /// when the discriminator is not a failure and binds the fields straight from
+    /// the struct (no heap read); every other pattern (`none`, `(err ...)`,
+    /// wildcard) matches the discriminator KValue exactly as the old boxed value
+    /// would have.
+    fn emit_parsed_pattern(
+        &mut self,
+        f: &mut FnEmit,
+        status: &str,
+        pattern: &Pattern,
+        fail: &str,
+        ty: &str,
+    ) -> Result<(), String> {
+        if let Pattern::Ctor { ty: pty, fields } = pattern {
+            if pty == ty {
+                let ok = inline_not_failure(f, status);
+                let cont = f.label();
+                f.line(&format!("br i1 {ok}, label %{cont}, label %{fail}"));
+                f.start_block(&cont);
+                let w0 = f.tmp();
+                f.line(&format!("{w0} = extractvalue %KValue {status}, 0"));
+                let w1 = f.tmp();
+                f.line(&format!("{w1} = extractvalue %KValue {status}, 1"));
+                // field 0: the position, unshifted out of the tag word.
+                let posp = f.tmp();
+                f.line(&format!("{posp} = lshr i64 {w0}, 8"));
+                let posa = f.tmp();
+                f.line(&format!("{posa} = insertvalue %KValue undef, i64 0, 0"));
+                let poskv = f.tmp();
+                f.line(&format!("{poskv} = insertvalue %KValue {posa}, i64 {posp}, 1"));
+                self.emit_pattern(f, &poskv, &fields[0], fail)?;
+                // field 1: the value, its tag masked back out of the low byte.
+                let vtag = f.tmp();
+                f.line(&format!("{vtag} = and i64 {w0}, 255"));
+                let va = f.tmp();
+                f.line(&format!("{va} = insertvalue %KValue undef, i64 {vtag}, 0"));
+                let vkv = f.tmp();
+                f.line(&format!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
+                self.emit_pattern(f, &vkv, &fields[1], fail)?;
+                return Ok(());
+            }
+        }
+        self.emit_pattern_known(f, status, pattern, fail, TOP)
+    }
+
+    /// Return a failure in the group's ABI shape: wrapped in a `%parsed` when the
+    /// group returns records by value, a bare KValue otherwise.
+    fn emit_ret_failure(&self, f: &mut FnEmit, name: &str, arity: usize, failure: &str) {
+        if self.ret_ty(name, arity) == "%parsed" {
+            self.emit_parsed_from_failure(f, failure);
+        } else {
+            f.line(&format!("ret %KValue {failure}"));
+        }
+    }
+
+    /// Return a KValue in the current function's ABI shape. A `%parsed`-returning
+    /// function only reaches here with a failure (its record tails are built
+    /// directly), so the failure's two words become the `%parsed`.
+    fn emit_ret(&self, f: &mut FnEmit, value: &str) {
+        if f.ret_ty == "%parsed" {
+            self.emit_parsed_from_failure(f, value);
+        } else {
+            f.line(&format!("ret %KValue {value}"));
+        }
+    }
+
+    /// A `%parsed` and a `%KValue` share a `{i64,i64}` layout. On the failure
+    /// path the two are the same value: the failure's tag/payload become the
+    /// `%parsed` words, so the discriminator (low word ∈ {4,5}) stays intact.
+    fn emit_parsed_from_failure(&self, f: &mut FnEmit, failure: &str) {
+        let w0 = f.tmp();
+        f.line(&format!("{w0} = extractvalue %KValue {failure}, 0"));
+        let w1 = f.tmp();
+        f.line(&format!("{w1} = extractvalue %KValue {failure}, 1"));
+        let a = f.tmp();
+        f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+        let p = f.tmp();
+        f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        f.line(&format!("ret %parsed {p}"));
+    }
+
+    /// Build a register-returnable record in tail position as a by-value
+    /// `%parsed`. The two words hold `(value.tag | pos << 8, value.payload)` — a
+    /// non-failure value's tag never collides with the failure tags 4/5, so the
+    /// low byte of word 0 still tells success from failure. A failing field
+    /// propagates exactly as `k_rec` would have.
+    fn emit_parsed_construction(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<(), String> {
+        let pos = self.emit_expr(f, &args[0])?;
+        self.bail_on_failure(f, &pos);
+        let value = self.emit_expr(f, &args[1])?;
+        self.bail_on_failure(f, &value);
+        let pos_payload = f.tmp();
+        f.line(&format!("{pos_payload} = extractvalue %KValue {pos}, 1"));
+        let shifted = f.tmp();
+        f.line(&format!("{shifted} = shl i64 {pos_payload}, 8"));
+        let vtag = f.tmp();
+        f.line(&format!("{vtag} = extractvalue %KValue {value}, 0"));
+        let w0 = f.tmp();
+        f.line(&format!("{w0} = or i64 {shifted}, {vtag}"));
+        let w1 = f.tmp();
+        f.line(&format!("{w1} = extractvalue %KValue {value}, 1"));
+        let a = f.tmp();
+        f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
+        let p = f.tmp();
+        f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
+        f.line(&format!("ret %parsed {p}"));
+        Ok(())
+    }
+
+    /// If `value` is a failure, return it in the current ABI shape; otherwise
+    /// fall through with `value` known good.
+    fn bail_on_failure(&self, f: &mut FnEmit, value: &str) {
+        let ok = inline_not_failure(f, value);
+        let cont = f.label();
+        let bail = f.label();
+        f.line(&format!("br i1 {ok}, label %{cont}, label %{bail}"));
+        f.start_block(&bail);
+        self.emit_ret(f, value);
+        f.start_block(&cont);
     }
 
     fn emit_pattern_known(
@@ -1168,7 +1363,7 @@ impl<'a> Backend<'a> {
         if let Expr::App { head, args, piped, .. } = expr {
             if *piped && !args.is_empty() {
                 let value = self.emit_expr(f, expr)?;
-                f.line(&format!("ret %KValue {value}"));
+                self.emit_ret(f, &value);
                 return Ok(());
             }
             if let Expr::Ident(name, _) = &**head {
@@ -1179,7 +1374,7 @@ impl<'a> Backend<'a> {
                     let bail = f.label();
                     f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
                     f.start_block(&bail);
-                    f.line(&format!("ret %KValue {cond}"));
+                    self.emit_ret(f, &cond);
                     f.start_block(&check);
                     let tv = f.tmp();
                     f.line(&format!("{tv} = call i64 @k_truthy(%KValue {cond})"));
@@ -1193,6 +1388,13 @@ impl<'a> Backend<'a> {
                     f.start_block(&else_label);
                     self.emit_tail(f, &args[2])?;
                     return Ok(());
+                }
+                // A register-returnable record built in tail position becomes the
+                // by-value %parsed result directly — no heap allocation.
+                if let Some(&nfields) = self.escape.field_count.get(name.as_str()) {
+                    if f.ret_ty == "%parsed" && args.len() == nfields {
+                        return self.emit_parsed_construction(f, args);
+                    }
                 }
                 let is_program_fn = f.lookup(name).is_none()
                     && !self.type_ids.contains_key(name.as_str())
@@ -1210,18 +1412,29 @@ impl<'a> Backend<'a> {
                         .enumerate()
                         .map(|(i, e)| self.call_arg(f, name, n, i, e))
                         .collect();
+                    let callee_ret = self.ret_ty(name, n);
                     let t = f.tmp();
-                    f.line(&format!(
-                        "{t} = musttail call tailcc %KValue @d_{name}_{n}({})",
-                        args_ir.join(", ")
-                    ));
-                    f.line(&format!("ret %KValue {t}"));
+                    if callee_ret == f.ret_ty {
+                        f.line(&format!(
+                            "{t} = musttail call tailcc {callee_ret} @d_{name}_{n}({})",
+                            args_ir.join(", ")
+                        ));
+                        f.line(&format!("ret {callee_ret} {t}"));
+                    } else {
+                        // A %parsed function tail-calling a KValue failure helper:
+                        // can't musttail across the type change, so call and wrap.
+                        f.line(&format!(
+                            "{t} = call tailcc {callee_ret} @d_{name}_{n}({})",
+                            args_ir.join(", ")
+                        ));
+                        self.emit_ret(f, &t);
+                    }
                     return Ok(());
                 }
             }
         }
         let value = self.emit_expr(f, expr)?;
-        f.line(&format!("ret %KValue {value}"));
+        self.emit_ret(f, &value);
         Ok(())
     }
 
@@ -1671,8 +1884,12 @@ impl<'a> Backend<'a> {
                 .enumerate()
                 .map(|(i, e)| self.call_arg(f, name, n, i, e))
                 .collect();
+            let callee_ret = self.ret_ty(name, n);
             let t = f.tmp();
-            f.line(&format!("{t} = call tailcc %KValue @d_{name}_{n}({})", args_ir.join(", ")));
+            f.line(&format!(
+                "{t} = call tailcc {callee_ret} @d_{name}_{n}({})",
+                args_ir.join(", ")
+            ));
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
             f.record(&t, self.group_return_set(name, n) | fails);
             return Ok(t);

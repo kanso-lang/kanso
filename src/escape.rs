@@ -12,7 +12,66 @@
 //! stay syntactic (no heap-flow dataflow) while remaining sound.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+/// What codegen needs to hand register-returnable records back by value.
+pub struct EscapeInfo {
+    /// Register-returnable type name -> field count.
+    pub field_count: HashMap<String, usize>,
+    /// (function name, arity) groups whose result is a register-returnable
+    /// type, mapped to that type's name.
+    pub returns: HashMap<(String, usize), String>,
+    /// (function name, arity, parameter index) positions that carry a
+    /// register-returnable type (destructured as `(T ...)` by some arm),
+    /// mapped to the type's name.
+    pub carries: HashMap<(String, usize, usize), String>,
+}
+
+impl EscapeInfo {
+    pub fn returns_ty(&self, name: &str, arity: usize) -> Option<&str> {
+        self.returns.get(&(name.to_string(), arity)).map(String::as_str)
+    }
+
+    pub fn carries_ty(&self, name: &str, arity: usize, param: usize) -> Option<&str> {
+        self.carries
+            .get(&(name.to_string(), arity, param))
+            .map(String::as_str)
+    }
+}
+
+/// Full analysis result for codegen: the returnable types plus the groups that
+/// return them and the parameter positions that carry them.
+pub fn analyze(program: &Program) -> EscapeInfo {
+    let returnable = register_returnable(program);
+    let mut field_count = HashMap::new();
+    let mut returns = HashMap::new();
+    let mut carries = HashMap::new();
+    for ty in &returnable {
+        if let Some(decl) = program.types.iter().find(|t| &t.name == ty) {
+            field_count.insert(ty.clone(), decl.fields.len());
+        }
+        let mut analysis = Analysis {
+            program,
+            returns_ty: HashSet::new(),
+        };
+        analysis.compute_returns_ty(ty);
+        for key in analysis.returns_ty {
+            returns.insert(key, ty.clone());
+        }
+        for f in &program.fns {
+            for (i, p) in f.params.iter().enumerate() {
+                if matches!(p, Pattern::Ctor { ty: pty, .. } if pty == ty) {
+                    carries.insert((f.name.clone(), f.params.len(), i), ty.clone());
+                }
+            }
+        }
+    }
+    EscapeInfo {
+        field_count,
+        returns,
+        carries,
+    }
+}
 
 /// Record type names that may be returned by value. A type qualifies when:
 ///  - it is never a field of another record type,
@@ -37,7 +96,7 @@ pub fn register_returnable(program: &Program) -> HashSet<String> {
 
     ctors
         .iter()
-        .filter(|ty| analysis.clone().is_returnable(ty))
+        .filter(|ty| analysis.clone().returnable(ty))
         .map(|ty| ty.to_string())
         .collect()
 }
@@ -50,7 +109,7 @@ struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
-    fn is_returnable(mut self, ty: &str) -> bool {
+    fn returnable(mut self, ty: &str) -> bool {
         // A type stored inside another record escapes through that record.
         for decl in &self.program.types {
             for (_, members, _) in &decl.fields {
