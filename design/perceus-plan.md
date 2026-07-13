@@ -60,3 +60,45 @@ while `k_drop` is a no-op, then flip freeing on only once counts balance.
 - `bash scripts/browser_differential.sh` (wasm↔native, unaffected but proves it)
 - benchmark A/B where a commit claims a speed change
 - from commit 4: an ASan build over the golden corpus to prove no use-after-free
+
+## commit 2 — worked-out contract (borrow-default)
+
+Ownership rules, decided:
+- **User function calls BORROW their args** (callee doesn't own params; the
+  caller keeps ownership and drops at scope exit). So a variable passed to a
+  user fn is NOT dup'd.
+- **Constructor builtins CONSUME what they store** — no runtime change needed
+  (they just keep the ref they're given); codegen dups the arg if it's a
+  variable. Constructors: k_rec, k_mklist, k_b_push, k_b_put (key+val), k_err,
+  k_closure, k_mkdesc/k_seq, list/map literals.
+- **Accessor builtins DUP the inner value they return** (runtime change):
+  k_field, k_err_inner, k_keyed_field, k_b_at (list-item and map-value returns
+  only — fresh k_str_n/k_int/k_none returns don't dup), k_b_entries (dups the
+  key/val it stores into entry records), k_b_slice (dups shared list items),
+  k_b_sort / k_b_map / k_b_filter (produce new lists sharing item values → dup
+  each shared item). Audit every k_b_* that exposes a value from inside a
+  container.
+- **Borrow builtins untouched:** k_check_*, k_render, k_eq, k_length, k_truthy,
+  arithmetic, comparisons, k_type_name.
+
+codegen (the key simplification): kanso function bodies are FLAT — all bindings
+are top-level Stmts, `if` appears only in tail position with single-expression
+branches (no nested binding scopes; Expr has no Block variant). Therefore
+**every local is in scope at every return point**, so drop placement is just
+"drop all owned locals before each ret" — no per-path liveness needed.
+- Track owned locals in FnEmit (Pattern::Var binds + destructured field vars).
+  Params are NOT owned (borrowed from caller).
+- **Consuming read of an Expr::Ident → dup** (fresh temps transfer without dup;
+  only variables, co-owned by their binding, get dup'd). Consuming positions:
+  constructor args, return/tail value, list/map literal elements, `x = y`
+  where y is a variable.
+- **Before every return** (emit_tail's piped-ret, if-branch rets, the musttail
+  call — drops go BEFORE it so TCO's call/ret adjacency is preserved — the
+  fallback ret, and the dispatcher's pass-through rets): emit k_drop for each
+  owned local. NOT before k_die/unreachable.
+- k_drop stays non-freeing; add assert `rc >= 1` before decrement to catch
+  under-retain (rc going negative) as a clean abort.
+
+Validation for commits 2-3: byte-identical output (lattice) + no assertion
+abort across the whole suite + benchmark (expect a temporary slowdown from rc
+traffic, recovered by freeing/reuse in commits 4-5).
