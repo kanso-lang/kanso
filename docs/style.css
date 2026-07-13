@@ -18,6 +18,11 @@
   --accent-contrast: #fff6f2;
   --accent-soft: rgba(240, 58, 0, 0.07);
 
+  /* crane bill and legs are near-black; on the near-black dark-theme page
+     they vanish, so dark theme swaps in a warm taupe that still reads as
+     dark limbs. light theme keeps the original ink. */
+  --crane-dark: #2b2320;
+
   /* code panels are dark in both themes — terminal-true */
   --code-bg: #101014;
   --code-border: #26262e;
@@ -47,7 +52,12 @@
     --accent-hover: #ff7a52;
     --accent-contrast: #1a0d08;
     --accent-soft: rgba(255, 90, 46, 0.1);
+    --crane-dark: #8a7c6d;
   }
+}
+
+svg[aria-label="tsuru"] rect[fill="#2b2320"] {
+  fill: var(--crane-dark);
 }
 
 html {
