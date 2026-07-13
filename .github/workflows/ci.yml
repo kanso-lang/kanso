@@ -14,3 +14,51 @@ jobs:
       - run: cargo clippy -- -D warnings
       - run: cargo test
       - run: cargo run -- test lib/json
+      - name: json decoder end-to-end (native, 150 decodes)
+        run: |
+          cargo build --release
+          bash bench/make_jsonbench.sh
+          ./target/release/kanso build bench/jsonbench --release
+          out=$(./jsonbench)
+          echo "$out"
+          echo "$out" | grep -q "checksum 24000" \
+            || { echo "::error::native json decoder produced the wrong checksum"; exit 1; }
+
+  # Non-blocking: reports the kanso-vs-serde decode ratio (the optimization
+  # campaign's headline metric) to the run summary. CI runners are noisy, so
+  # this tracks the number for visibility rather than gating on it.
+  benchmark:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build engines
+        run: |
+          cargo build --release
+          bash bench/make_jsonbench.sh
+          ./target/release/kanso build bench/jsonbench --release
+          (cd bench/serde_bench && cargo build --release)
+      - name: race (best of 3)
+        run: |
+          best() {
+            b=99999
+            for i in 1 2 3; do
+              t=$( { /usr/bin/time -f '%e' "$@" >/dev/null; } 2>&1 )
+              awk -v a="$t" -v b="$b" 'BEGIN{exit !(a<b)}' && b=$t
+            done
+            echo "$b"
+          }
+          kanso_wall=$(best ./jsonbench)
+          kanso_ms=$(awk -v w="$kanso_wall" 'BEGIN{printf "%.2f", w/150*1000}')
+          serde_line=$(./bench/serde_bench/target/release/serde_bench bench/large.json | tail -1)
+          {
+            echo "## json decode benchmark (188 KB, 150 decodes)"
+            echo ""
+            echo "| engine | per decode |"
+            echo "| --- | --- |"
+            echo "| kanso (native) | ${kanso_ms} ms |"
+            echo "| serde_json | ${serde_line#serde mean over 150 decodes: } |"
+            echo ""
+            echo "serde is the target; the gap closes as the reference-counting tier ships."
+          } >> "$GITHUB_STEP_SUMMARY"
