@@ -12,10 +12,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	// mirror the kanso and serde harnesses: decode 150 times, report the mean
+	const runs = 150
+	var top int
 	start := time.Now()
-	var v any
-	if err := json.Unmarshal(data, &v); err != nil {
-		panic(err)
+	for i := 0; i < runs; i++ {
+		var v any
+		if err := json.Unmarshal(data, &v); err != nil {
+			panic(err)
+		}
+		top = len(v.([]any))
 	}
-	fmt.Printf("go decoded %d top-level values in %v\n", len(v.([]any)), time.Since(start))
+	per := time.Since(start) / runs
+	fmt.Printf("go decoded %d top-level values, mean over %d: %v\n", top, runs, per)
 }

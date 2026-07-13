@@ -8,3 +8,6 @@ bench/jsonbench/
 /kq
 /kq.ll
 __pycache__/
+/bench/serde_bench/target
+/bench/serde_bench/Cargo.lock
+*.ll
