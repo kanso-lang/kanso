@@ -146,8 +146,27 @@ KValue k_err_hop(KValue v, const char* fn) {
     KValue out; out.tag = K_ERR; out.payload = k_ptr(box); return out;
 }
 
+/* Zero-field marker types (null, enum tags) have exactly one inhabitant, so
+   every instance is interchangeable — intern one per type id instead of
+   allocating. json's 2000+ nulls in a document collapse to a single record. */
+#define K_MARKER_CACHE 256
+static KValue k_marker_cache[K_MARKER_CACHE];
+static char k_marker_ready[K_MARKER_CACHE];
+
 KValue k_rec(long long type_id, long long n, KValue* args) {
     for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
+    if (n == 0 && type_id >= 0 && type_id < K_MARKER_CACHE) {
+        if (!k_marker_ready[type_id]) {
+            KRec* r = k_alloc(sizeof(KRec));
+            r->type_id = type_id;
+            r->nfields = 0;
+            r->fields = NULL;
+            KValue v; v.tag = K_REC; v.payload = k_ptr(r);
+            k_marker_cache[type_id] = v;
+            k_marker_ready[type_id] = 1;
+        }
+        return k_marker_cache[type_id];
+    }
     KRec* r = k_alloc(sizeof(KRec));
     r->type_id = type_id;
     r->nfields = n;
