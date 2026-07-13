@@ -55,6 +55,18 @@ pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
     Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new() }))
 }
 
+/// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
+/// number can be parsed straight from bytes without first materializing a
+/// string. None when the bytes aren't valid utf-8 byte values.
+fn bytes_to_str(items: &[Value]) -> Option<String> {
+    let mut raw = Vec::with_capacity(items.len());
+    for item in items {
+        let Value::Int(n) = item else { return None };
+        raw.push(u8::try_from(n.clone()).ok()?);
+    }
+    String::from_utf8(raw).ok()
+}
+
 /// A dispatcher passing a failure through appends its name; none stays bare.
 pub fn hop(failure: Value, name: &str) -> Value {
     match failure {
@@ -888,41 +900,65 @@ impl<'a> Interp<'a> {
             }
             "to_int" => {
                 let [value] = arity(args, name, span)?;
-                match &value {
-                    Value::Str(s) => Ok(match s.parse::<BigInt>() {
-                        Ok(n) => Value::Int(n),
-                        Err(_) => err_value(
-                            Value::Str(format!("\"{s}\" is not an integer")),
-                            origin_at(frame, span),
-                        ),
-                    }),
-                    Value::Int(_) => Ok(value),
-                    _ => Err(RuntimeError {
-                        message: "to_int takes a string".to_string(),
-                        span,
-                    }),
-                }
+                let text = match &value {
+                    Value::Str(s) => s.clone(),
+                    Value::List(items) => match bytes_to_str(items) {
+                        Some(s) => s,
+                        None => {
+                            return Ok(err_value(
+                                Value::Str("bytes are not an integer".to_string()),
+                                origin_at(frame, span),
+                            ))
+                        }
+                    },
+                    Value::Int(_) => return Ok(value),
+                    _ => {
+                        return Err(RuntimeError {
+                            message: "to_int takes a string".to_string(),
+                            span,
+                        })
+                    }
+                };
+                Ok(match text.parse::<BigInt>() {
+                    Ok(n) => Value::Int(n),
+                    Err(_) => err_value(
+                        Value::Str(format!("\"{text}\" is not an integer")),
+                        origin_at(frame, span),
+                    ),
+                })
             }
             "to_float" => {
                 let [value] = arity(args, name, span)?;
-                match &value {
-                    Value::Str(s) => Ok(match s.parse::<f64>() {
-                        Ok(x) => Value::Float(x),
-                        Err(_) => err_value(
-                            Value::Str(format!("\"{s}\" is not a number")),
-                            origin_at(frame, span),
-                        ),
-                    }),
+                let text = match &value {
+                    Value::Str(s) => s.clone(),
+                    Value::List(items) => match bytes_to_str(items) {
+                        Some(s) => s,
+                        None => {
+                            return Ok(err_value(
+                                Value::Str("bytes are not a number".to_string()),
+                                origin_at(frame, span),
+                            ))
+                        }
+                    },
                     Value::Int(n) => {
                         let approx = n.to_string().parse::<f64>().unwrap_or(f64::INFINITY);
-                        Ok(Value::Float(approx))
+                        return Ok(Value::Float(approx));
                     }
-                    Value::Float(_) => Ok(value),
-                    _ => Err(RuntimeError {
-                        message: "to_float takes a string or int".to_string(),
-                        span,
-                    }),
-                }
+                    Value::Float(_) => return Ok(value),
+                    _ => {
+                        return Err(RuntimeError {
+                            message: "to_float takes a string or int".to_string(),
+                            span,
+                        })
+                    }
+                };
+                Ok(match text.parse::<f64>() {
+                    Ok(x) => Value::Float(x),
+                    Err(_) => err_value(
+                        Value::Str(format!("\"{text}\" is not a number")),
+                        origin_at(frame, span),
+                    ),
+                })
             }
             "length" => {
                 let [list] = arity(args, name, span)?;

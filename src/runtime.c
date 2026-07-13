@@ -1153,15 +1153,24 @@ KValue k_b_from_code(KValue nv, const char* origin) {
     return k_str_n(data, w);
 }
 
+/* A number's digits sit in a null-terminated buffer (KStr data, or a bytes
+   view over it), and strtoll/strtod halt at the first non-digit — which the
+   scanner guarantees is the delimiter at data[len]. So we parse in place
+   straight from the bytes, skipping the string the scanner would otherwise
+   allocate per number. */
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag == K_INT) return sv;
-    if (sv.tag != K_STR) k_die("to_int takes a string");
-    KStr* s = k_as_str(sv);
+    if (sv.tag != K_STR && sv.tag != K_BYTES) k_die("to_int takes a string");
+    const char* data;
+    long long len;
+    if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
+    else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
     char* end = NULL;
-    long long n = strtoll(s->data, &end, 10);
-    if (s->len == 0 || end != s->data + s->len) {
-        return k_err(k_concat(k_concat(k_str("\""), sv), k_str("\" is not an integer")), origin);
+    long long n = strtoll(data, &end, 10);
+    if (len == 0 || end != data + len) {
+        KValue str = k_str_n(data, len);
+        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
     }
     return k_int(n);
 }
@@ -1170,12 +1179,16 @@ KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;
     if (v.tag == K_INT) return k_float((double)v.payload);
-    if (v.tag != K_STR) k_die("to_float takes a string or int");
-    KStr* s = k_as_str(v);
+    if (v.tag != K_STR && v.tag != K_BYTES) k_die("to_float takes a string or int");
+    const char* data;
+    long long len;
+    if (v.tag == K_STR) { KStr* s = k_as_str(v); data = s->data; len = s->len; }
+    else { KBytes* b = k_as_bytes(v); data = (const char*)b->data; len = b->len; }
     char* end = NULL;
-    double d = strtod(s->data, &end);
-    if (s->len == 0 || end != s->data + s->len) {
-        return k_err(k_concat(k_concat(k_str("\""), v), k_str("\" is not a number")), origin);
+    double d = strtod(data, &end);
+    if (len == 0 || end != data + len) {
+        KValue str = k_str_n(data, len);
+        return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not a number")), origin);
     }
     return k_float(d);
 }

@@ -55,6 +55,6 @@ fn _number_ok _ n
   n
 
 fn _number_value cs p q
-  text = utf8 (slice cs p q)
-  raw = if (_mark_from cs p q) (to_float text) (to_int text)
+  digits = slice cs p q
+  raw = if (_mark_from cs p q) (to_float digits) (to_int digits)
   _number_ok p raw
