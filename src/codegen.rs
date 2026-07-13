@@ -247,6 +247,54 @@ impl<'a> Backend<'a> {
             .fold(0, |acc, i| acc | self.inference.returns[*i])
     }
 
+    /// A parameter proven to be exactly `int` crosses the tailcc boundary as a
+    /// raw i64 instead of a boxed KValue. The dispatcher re-boxes it at entry so
+    /// the body is untouched; LLVM's SROA folds that rebox against the body's
+    /// payload reads (same function), and folds each caller's box against the
+    /// extract we emit here — so only a raw i64 travels the musttail edge LLVM
+    /// cannot otherwise see through. Sound because inference forces every param
+    /// of a function used as a first-class value to TOP, never a bare `int`.
+    fn unboxed_param(&self, name: &str, arity: usize, param: usize) -> bool {
+        self.group_param_set(name, arity, param) == INT
+    }
+
+    /// Render one call argument in the callee's ABI: raw i64 for an unboxed
+    /// slot (extract the payload), boxed KValue otherwise.
+    fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+        if self.unboxed_param(callee, arity, i) {
+            let p = f.tmp();
+            f.line(&format!("{p} = extractvalue %KValue {e}, 1"));
+            format!("i64 {p}")
+        } else {
+            format!("%KValue {e}")
+        }
+    }
+
+    /// Emit the entry-block reboxes that reconstruct each unboxed `%xi` param as
+    /// the KValue the body expects.
+    fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
+        for i in 0..arity {
+            if self.unboxed_param(name, arity, i) {
+                f.line(&format!(
+                    "%x{i} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
+                ));
+            }
+        }
+    }
+
+    /// The dispatcher's parameter list, unboxing proven-int slots.
+    fn abi_params(&self, name: &str, arity: usize) -> Vec<String> {
+        (0..arity)
+            .map(|i| {
+                if self.unboxed_param(name, arity, i) {
+                    format!("i64 %x{i}r")
+                } else {
+                    format!("%KValue %x{i}")
+                }
+            })
+            .collect()
+    }
+
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
         self.emit_type_fields();
@@ -270,11 +318,19 @@ impl<'a> Backend<'a> {
         }
         self.fn_value_wrappers.sort();
         self.fn_value_wrappers.dedup();
-        for name in &self.fn_value_wrappers {
+        let wrappers = self.fn_value_wrappers.clone();
+        for name in &wrappers {
+            let call = if self.unboxed_param(name, 1, 0) {
+                format!(
+                    "  %p = extractvalue %KValue %a0, 1\n  %r = call tailcc %KValue \
+                     @d_{name}_1(i64 %p)\n"
+                )
+            } else {
+                format!("  %r = call tailcc %KValue @d_{name}_1(%KValue %a0)\n")
+            };
             let _ = writeln!(
                 self.body,
-                "define %KValue @w_{name}_1(%KValue %a0) {{\nentry:\n  %r = call tailcc \
-                 %KValue @d_{name}_1(%KValue %a0)\n  ret %KValue %r\n}}\n"
+                "define %KValue @w_{name}_1(%KValue %a0) {{\nentry:\n{call}  ret %KValue %r\n}}\n"
             );
         }
         self.body.push_str(
@@ -422,11 +478,12 @@ impl<'a> Backend<'a> {
         decls: &[&FnDecl],
         disc: usize,
     ) -> Result<(), String> {
-        let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
+        let params = self.abi_params(name, arity);
         let mut f = FnEmit::new();
         let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
+        self.rebox_params(&mut f, name, arity);
         // any non-discriminator failure means no arm can match: propagate leftmost
         let mut all_ok: Option<String> = None;
         for i in 0..arity {
@@ -570,11 +627,12 @@ impl<'a> Backend<'a> {
         if let Some(disc) = Self::switch_shape(decls) {
             return self.emit_switch_dispatcher(name, arity, decls, disc);
         }
-        let params: Vec<String> = (0..arity).map(|i| format!("%KValue %x{i}")).collect();
+        let params = self.abi_params(name, arity);
         let mut f = FnEmit::new();
         let header = format!("define tailcc %KValue @d_{name}_{arity}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
+        self.rebox_params(&mut f, name, arity);
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
             f.versions.clear();
@@ -1147,8 +1205,11 @@ impl<'a> Backend<'a> {
                         emitted.push(self.emit_expr(f, arg)?);
                     }
                     let n = emitted.len();
-                    let args_ir: Vec<String> =
-                        emitted.iter().map(|e| format!("%KValue {e}")).collect();
+                    let args_ir: Vec<String> = emitted
+                        .iter()
+                        .enumerate()
+                        .map(|(i, e)| self.call_arg(f, name, n, i, e))
+                        .collect();
                     let t = f.tmp();
                     f.line(&format!(
                         "{t} = musttail call tailcc %KValue @d_{name}_{n}({})",
@@ -1605,7 +1666,11 @@ impl<'a> Backend<'a> {
         }
         if self.program.fns.iter().any(|d| d.name == *name) {
             let n = emitted.len();
-            let args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
+            let args_ir: Vec<String> = emitted
+                .iter()
+                .enumerate()
+                .map(|(i, e)| self.call_arg(f, name, n, i, e))
+                .collect();
             let t = f.tmp();
             f.line(&format!("{t} = call tailcc %KValue @d_{name}_{n}({})", args_ir.join(", ")));
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
