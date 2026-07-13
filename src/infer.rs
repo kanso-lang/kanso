@@ -123,6 +123,14 @@ fn bind_pattern<'a>(
     }
 }
 
+fn pattern_catches(pat: &Pattern) -> Set {
+    match pat {
+        Pattern::Nullary(name, _) if name == "none" => NONE,
+        Pattern::Ctor { ty, .. } if ty == "err" => ERR,
+        _ => 0,
+    }
+}
+
 fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str, Set>) -> Set {
     let mut result = NONE;
     for stmt in body {
@@ -315,9 +323,16 @@ fn eval_call<'a>(ctx: &mut Ctx<'a>, head: &'a Expr, args: &'a [Expr], env: &mut 
     if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
         let decls = decls.clone();
         let mut out: Set = 0;
-        // pass-through: failures flow when unhandled; coarse union keeps it monotone
-        let arg_fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
-        out |= arg_fails;
+        // pass-through: a failure in arg `pos` reaches the result only when no arm
+        // catches it there. an arm whose pattern is `none`/`(err _)` handles that
+        // failure (e.g. `_is_ws none -> false`), so it must not contaminate the
+        // result — that spurious `none` is what kept scanner positions off `int`.
+        for (pos, arg) in arg_sets.iter().enumerate() {
+            let caught = decls.iter().fold(0, |acc, &i| {
+                acc | ctx.program.fns[i].params.get(pos).map_or(0, pattern_catches)
+            });
+            out |= (arg & FAIL) & !caught;
+        }
         for i in decls {
             for (p, set) in arg_sets.iter().enumerate() {
                 widen_param(ctx, i, p, *set);
