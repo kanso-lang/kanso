@@ -2,6 +2,7 @@ pub mod ast;
 pub mod check;
 pub mod codegen;
 pub mod diag;
+pub mod dispatch;
 pub mod escape;
 pub mod eval;
 pub mod infer;
