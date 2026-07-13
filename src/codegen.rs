@@ -133,10 +133,12 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     let packable: std::collections::HashSet<String> = escape.field_count.keys().cloned().collect();
     escape.returns.retain(|_, ty| packable.contains(ty));
     escape.carries.retain(|_, ty| packable.contains(ty));
+    let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
     let mut backend = Backend {
         program,
         inference,
         escape,
+        byte_disc,
         type_ids,
         strings: Vec::new(),
         interned: HashMap::new(),
@@ -151,6 +153,7 @@ struct Backend<'a> {
     program: &'a Program,
     inference: infer::Inference,
     escape: crate::escape::EscapeInfo,
+    byte_disc: std::collections::HashSet<(String, usize, usize)>,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -291,6 +294,20 @@ impl<'a> Backend<'a> {
     /// Render one call argument in the callee's ABI: raw i64 for an unboxed
     /// slot (extract the payload), boxed KValue otherwise.
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+        if self.is_byte_disc(callee, arity, i) {
+            // `e` is an `at`-on-bytes KValue (byte or none); hand it over as a
+            // raw i64 — the byte value, or 256 for none. The box `at` built and
+            // this unbox fold away in the caller, so a raw byte crosses the edge.
+            let tag = f.tmp();
+            f.line(&format!("{tag} = extractvalue %KValue {e}, 0"));
+            let payload = f.tmp();
+            f.line(&format!("{payload} = extractvalue %KValue {e}, 1"));
+            let is_none = f.tmp();
+            f.line(&format!("{is_none} = icmp eq i64 {tag}, {K_NONE}"));
+            let raw = f.tmp();
+            f.line(&format!("{raw} = select i1 {is_none}, i64 256, i64 {payload}"));
+            return format!("i64 {raw}");
+        }
         if self.escape.carries_ty(callee, arity, i).is_some() {
             // `e` is already a %parsed value (the analysis guarantees a %parsed
             // parameter is only ever fed a register-returnable call result).
@@ -308,7 +325,19 @@ impl<'a> Backend<'a> {
     /// the KValue the body expects.
     fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
         for i in 0..arity {
-            if self.unboxed_param(name, arity, i) {
+            if self.is_byte_disc(name, arity, i) {
+                // Reconstruct the KValue the boxed dispatch expects: 256 is none,
+                // anything else is that byte. The reconstruction folds back into
+                // a raw switch, so only the raw i64 actually crossed the edge.
+                let is_none = f.tmp();
+                f.line(&format!("{is_none} = icmp eq i64 %x{i}r, 256"));
+                f.line(&format!(
+                    "%x{i}b = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
+                ));
+                f.line(&format!(
+                    "%x{i} = select i1 {is_none}, %KValue {{ i64 4, i64 0 }}, %KValue %x{i}b"
+                ));
+            } else if self.unboxed_param(name, arity, i) {
                 f.line(&format!(
                     "%x{i} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
                 ));
@@ -316,12 +345,21 @@ impl<'a> Backend<'a> {
         }
     }
 
-    /// The dispatcher's parameter list, unboxing proven-int slots and passing
-    /// register-returnable records as `%parsed` structs.
+    /// A switch discriminator inference proves is `at`-on-bytes, so it crosses
+    /// as a raw i64 (byte value, or 256 for none) and is switched on directly.
+    fn is_byte_disc(&self, name: &str, arity: usize, param: usize) -> bool {
+        self.byte_disc.contains(&(name.to_string(), arity, param))
+    }
+
+    /// The dispatcher's parameter list: a raw i64 for a byte discriminator or a
+    /// proven-int slot, a `%parsed` struct for a register-returnable record,
+    /// else a boxed KValue.
     fn abi_params(&self, name: &str, arity: usize) -> Vec<String> {
         (0..arity)
             .map(|i| {
-                if self.escape.carries_ty(name, arity, i).is_some() {
+                if self.is_byte_disc(name, arity, i) {
+                    format!("i64 %x{i}r")
+                } else if self.escape.carries_ty(name, arity, i).is_some() {
                     format!("%parsed %x{i}")
                 } else if self.unboxed_param(name, arity, i) {
                     format!("i64 %x{i}r")
