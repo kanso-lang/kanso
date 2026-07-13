@@ -119,7 +119,8 @@ fn _string_ok _ v
   v
 
 fn _string_scan cs start p
-  _string_at cs (at cs p) start p
+  n = find2 cs p 34 92
+  _string_at cs (at cs n) start n
 
 fn _u_escape c
   "\\u{_hex4 (char_code c)}"

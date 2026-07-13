@@ -1007,6 +1007,26 @@ KValue k_b_length(KValue v) {
     return k_none();
 }
 
+/* Scan for the first of two bytes at or after a 1-based position — the string
+   scanner's inner loop, done as a tight pass instead of one boxed dispatch per
+   byte. Returns the 1-based hit, or len+1 when neither byte appears. */
+KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
+    if (!k_not_failure(cs)) return cs;
+    if (!k_not_failure(from)) return from;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (cs.tag != K_BYTES) k_die("find2 takes bytes");
+    KBytes* by = k_as_bytes(cs);
+    long long p = from.payload < 1 ? 0 : from.payload - 1;
+    unsigned char ca = (unsigned char)(a.payload & 0xff);
+    unsigned char cb = (unsigned char)(b.payload & 0xff);
+    const unsigned char* d = by->data;
+    for (long long i = p; i < by->len; i++) {
+        if (d[i] == ca || d[i] == cb) return k_int(i + 1);
+    }
+    return k_int(by->len + 1);
+}
+
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(fromv)) return fromv;

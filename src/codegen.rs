@@ -71,6 +71,7 @@ declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
+declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
@@ -78,8 +79,9 @@ declare %KValue @k_b_to_int(%KValue, ptr)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 21] = [
+const BUILTIN_CALLS: [(&str, usize); 22] = [
     ("at", 2),
+    ("find2", 4),
     ("bytes", 1),
     ("read_file", 1),
     ("write_file", 2),

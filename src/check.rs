@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::HashSet;
 
-pub const BUILTINS: [&str; 25] = [
+pub const BUILTINS: [&str; 26] = [
     "args",
     "at",
     "bytes",
@@ -11,6 +11,7 @@ pub const BUILTINS: [&str; 25] = [
     "concat",
     "entries",
     "filter",
+    "find2",
     "from_code",
     "if",
     "join",
