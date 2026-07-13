@@ -27,6 +27,8 @@ pub struct Inference {
     pub params: Vec<Vec<Set>>,
     /// per fn-decl index: return set
     pub returns: Vec<Set>,
+    /// per type index, per field: joined set seen at construction sites
+    pub type_fields: Vec<Vec<Set>>,
 }
 
 struct Ctx<'a> {
@@ -35,6 +37,7 @@ struct Ctx<'a> {
     type_names: HashMap<&'a str, usize>,
     params: Vec<Vec<Set>>,
     returns: Vec<Set>,
+    type_fields: Vec<Vec<Set>>,
     changed: bool,
 }
 
@@ -50,6 +53,7 @@ pub fn infer(program: &Program) -> Inference {
         type_names,
         params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
         returns: vec![0; program.fns.len()],
+        type_fields: program.types.iter().map(|t| vec![0; t.fields.len()]).collect(),
         changed: true,
     };
     // seed: entry points (main, constants, tests) run with no arguments;
@@ -63,7 +67,7 @@ pub fn infer(program: &Program) -> Inference {
             let mut env: HashMap<&str, Set> = HashMap::new();
             let param_sets = ctx.params[i].clone();
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
-                bind_pattern(pattern, *joined, &mut env);
+                bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
             }
             let ret = eval_body(&mut ctx, &decl.body, &mut env);
             if ret | ctx.returns[i] != ctx.returns[i] {
@@ -72,10 +76,16 @@ pub fn infer(program: &Program) -> Inference {
             }
         }
     }
-    Inference { params: ctx.params, returns: ctx.returns }
+    Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
 }
 
-fn bind_pattern<'a>(pattern: &'a Pattern, joined: Set, env: &mut HashMap<&'a str, Set>) {
+fn bind_pattern<'a>(
+    pattern: &'a Pattern,
+    joined: Set,
+    type_fields: &[Vec<Set>],
+    type_names: &HashMap<&'a str, usize>,
+    env: &mut HashMap<&'a str, Set>,
+) {
     match pattern {
         // generics never bind failures
         Pattern::Var(name, _) => {
@@ -95,9 +105,14 @@ fn bind_pattern<'a>(pattern: &'a Pattern, joined: Set, env: &mut HashMap<&'a str
             };
             env.insert(name, set);
         }
-        Pattern::Ctor { fields, .. } => {
-            for field in fields {
-                bind_pattern(field, TOP & !FAIL, env);
+        // destructuring a declared type refines each field to the join of what
+        // construction sites stored there — so `_parsed p v` gives p its real
+        // int-ness instead of TOP, which is what unblocks the scanner's hot path
+        Pattern::Ctor { ty, fields } => {
+            let field_sets = type_names.get(ty.as_str()).map(|i| &type_fields[*i]);
+            for (fi, field) in fields.iter().enumerate() {
+                let s = field_sets.and_then(|fs| fs.get(fi)).copied().unwrap_or(TOP & !FAIL);
+                bind_pattern(field, s, type_fields, type_names, env);
             }
         }
         Pattern::Keyed { entries, .. } => {
@@ -118,7 +133,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
                     Pattern::Var(name, _) => {
                         env.insert(name, value);
                     }
-                    _ => bind_pattern(pattern, value, env),
+                    _ => bind_pattern(pattern, value, &ctx.type_fields, &ctx.type_names, env),
                 }
             }
             Stmt::Expr(expr) => result = eval_expr(ctx, expr, env),
@@ -277,7 +292,23 @@ fn eval_call<'a>(ctx: &mut Ctx<'a>, head: &'a Expr, args: &'a [Expr], env: &mut 
     if name == "print" {
         return DESC | (arg_sets[0] & FAIL);
     }
-    if ctx.type_names.contains_key(name.as_str()) || name == "entry" {
+    if let Some(&idx) = ctx.type_names.get(name.as_str()) {
+        // constructing a declared type: grow each field's set by this arg's,
+        // dropping failures (a failing arg makes construction propagate, so the
+        // field itself only ever holds the successful value's type)
+        for (fi, argset) in arg_sets.iter().enumerate() {
+            if let Some(slot) = ctx.type_fields[idx].get_mut(fi) {
+                let refined = *slot | (*argset & !FAIL);
+                if refined != *slot {
+                    *slot = refined;
+                    ctx.changed = true;
+                }
+            }
+        }
+        let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
+        return REC | fails;
+    }
+    if name == "entry" {
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
         return REC | fails;
     }
