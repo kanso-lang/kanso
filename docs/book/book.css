@@ -265,3 +265,10 @@
     display: none;
   }
 }
+
+.book-start {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin-top: 2.5rem;
+}
+.book-start a { color: var(--accent); }
