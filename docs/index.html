@@ -77,32 +77,32 @@
       <div class="feature">
         <span class="feature-num">01</span>
         <h3>effects are values</h3>
-        <p><code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives <code>main</code>'s description. effect sets are inferred and propagate up the call graph — no async/await, no function coloring, zero overhead for pure calls. tests assert on descriptions; no mocks.</p>
+        <p><code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives <code>main</code>'s description. effect sets are inferred and propagate up the call graph—no async/await, no function coloring, zero overhead for pure calls. tests assert on descriptions; no mocks.</p>
       </div>
       <div class="feature">
         <span class="feature-num">02</span>
         <h3>failure is a value</h3>
-        <p>no exceptions, no panics — and no ok/some wrappers either. success is the bare value; <code>err reason</code> and <code>none</code> are ordinary types that propagate on their own. an <code>err</code> reaching <code>main</code> unhandled is a compile error, not a crash.</p>
+        <p>no exceptions, no panics—and no ok/some wrappers either. success is the bare value; <code>err reason</code> and <code>none</code> are ordinary types that propagate on their own. an <code>err</code> reaching <code>main</code> unhandled is a compile error, not a crash.</p>
       </div>
       <div class="feature">
         <span class="feature-num">03</span>
         <h3>dispatch is the only eliminator</h3>
-        <p>values may inhabit typesets, and the only way out is dispatch. no <code>match</code>, no <code>instanceof</code>, no tag tests, no narrowing syntax. overloads dispatch on literals, concrete types, or typeset guards — resolved statically, and monomorphic code carries no tags.</p>
+        <p>values may inhabit typesets, and the only way out is dispatch. no <code>match</code>, no <code>instanceof</code>, no tag tests, no narrowing syntax. overloads dispatch on literals, concrete types, or typeset guards—resolved statically, and monomorphic code carries no tags.</p>
       </div>
       <div class="feature">
         <span class="feature-num">04</span>
         <h3>no interfaces</h3>
-        <p>no interface, class, or instance construct exists. a generic function's requirements are inferred from its body — minimal by construction, transitive through call chains. the lsp renders the effective contract; publish tooling diffs it and enforces semver.</p>
+        <p>no interface, class, or instance construct exists. a generic function's requirements are inferred from its body—minimal by construction, transitive through call chains. the lsp renders the effective contract; publish tooling diffs it and enforces semver.</p>
       </div>
       <div class="feature">
         <span class="feature-num">05</span>
         <h3>canonical form</h3>
-        <p>one rendering per program. non-canonical whitespace is a syntax error; fields, imports, and typeset members are alphabetical, enforced. no formatter tool exists — there is nothing left to format.</p>
+        <p>one rendering per program. non-canonical whitespace is a syntax error; fields, imports, and typeset members are alphabetical, enforced. no formatter tool exists—there is nothing left to format.</p>
       </div>
       <div class="feature">
         <span class="feature-num">06</span>
         <h3>memory without gc or borrow checker</h3>
-        <p>values are immutable, so the heap is a dag, so reference counting is complete. perceus-style, after koka, lean 4, and roc — kanso's no-shadowing and nothing-wasted rules make the same analyses more complete. no annotations, no rejected programs, no memory syntax in source; where uniqueness can't be proven, a reuse site pays one predictable branch (closeable per-function by opt-in fip).</p>
+        <p>values are immutable, so the heap is a dag, so reference counting is complete. perceus-style, after koka, lean 4, and roc—kanso's no-shadowing and nothing-wasted rules make the same analyses more complete. no annotations, no rejected programs, no memory syntax in source; where uniqueness can't be proven, a reuse site pays one predictable branch (closeable per-function by opt-in fip).</p>
       </div>
     </div>
   </div>
@@ -120,7 +120,7 @@
       <div class="feature">
         <span class="feature-num">errors.kso</span>
         <h3>failure propagates; dispatch handles it</h3>
-        <p><code>safe_ratio 10 0</code> returns an <code>err</code> — division by zero is a value, not a panic. it flows through untouched until <code>describe</code> dispatches on it: one overload for <code>err reason</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
+        <p><code>safe_ratio 10 0</code> returns an <code>err</code>—division by zero is a value, not a panic. it flows through untouched until <code>describe</code> dispatches on it: one overload for <code>err reason</code>, one for the bare number. no wrapper to unwrap, no exception to catch.</p>
       </div>
       <div class="code-panel">
         <div class="code-panel-title">examples/errors.kso</div>
@@ -163,7 +163,7 @@ failed: division by zero</code></pre>
             <pre><code>20! = 2432902008176640000</code></pre>
           </div>
         </div>
-        <p>literal <code>0</code> outranks the generic overload — the base case is dispatch, not a conditional. and <code>int</code> is arbitrary-precision by default, so 20! just works.</p>
+        <p>literal <code>0</code> outranks the generic overload—the base case is dispatch, not a conditional. and <code>int</code> is arbitrary-precision by default, so 20! just works.</p>
       </div>
 
       <div class="showcase-cell">
@@ -198,7 +198,7 @@ two
 three</code></pre>
           </div>
         </div>
-        <p><code>&gt;&gt;</code> sequences descriptions without passing data. together with <code>.</code>, it is the complete vocabulary of "before" — everywhere else, the runtime owns order.</p>
+        <p><code>&gt;&gt;</code> sequences descriptions without passing data. together with <code>.</code>, it is the complete vocabulary of "before"—everywhere else, the runtime owns order.</p>
       </div>
 
       <div class="showcase-cell">
@@ -216,7 +216,7 @@ three</code></pre>
   ninth <span class="o">=</span> <span class="f">at</span> prices <span class="n">9</span>
   <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
         </div>
-        <p>no panicking access anywhere: <code>at prices 9</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it. <code>sort prices</code> needs no interface — <code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
+        <p>no panicking access anywhere: <code>at prices 9</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it. <code>sort prices</code> needs no interface—<code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
       </div>
     </div>
   </div>
@@ -232,20 +232,20 @@ three</code></pre>
       <div class="status-card">
         <span class="badge">v0.1 design freeze</span>
         <h3>the spec is gaveled</h3>
-        <p>the <a href="spec.html">v0.1 specification</a> (july 2026) is the authoritative record of every design decision to date. anything marked <span class="open-flag">open</span> is not yet decided — and it says so.</p>
+        <p>the <a href="spec.html">v0.1 specification</a> (july 2026) is the authoritative record of every design decision to date. anything marked <span class="open-flag">open</span> is not yet decided—and it says so.</p>
       </div>
       <div class="status-card">
         <span class="badge">two engines</span>
         <h3>faster than go at json</h3>
-        <p>a reference interpreter (the semantics oracle — it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci — floats included, because every engine renders the shortest round-trip. the compiler decodes a 188&nbsp;KB document in <strong>~1.8&nbsp;ms</strong>, ahead of go's <code>encoding/json</code> at ~1.9&nbsp;ms — while rust's <code>serde_json</code> does it in ~0.86&nbsp;ms, about twice as fast. closing that gap (perceus, a real map) is the campaign — see <a href="https://github.com/ClayShentrup/kanso/blob/main/bench/RESULTS.md">the numbers</a>.</p>
+        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. the compiler decodes a 188&nbsp;KB document in <strong>~1.8&nbsp;ms</strong>, ahead of go's <code>encoding/json</code> at ~1.9&nbsp;ms—while rust's <code>serde_json</code> does it in ~0.86&nbsp;ms, about twice as fast. closing that gap (perceus, a real map) is the campaign—see <a href="https://github.com/ClayShentrup/kanso/blob/main/bench/RESULTS.md">the numbers</a>.</p>
       </div>
       <div class="status-card">
         <span class="badge">real software</span>
         <h3>libraries and tools exist</h3>
         <ul>
-          <li><a href="https://github.com/ClayShentrup/kanso-json">kanso-json</a> — the decoder that beat go</li>
-          <li><strong>kq</strong> — a jq-style query cli, byte-identical to <code>jq&nbsp;-S</code> on the 188&nbsp;KB benchmark document, faster on path extraction</li>
-          <li>a <a href="book/index.html">seven-chapter book</a> — every sample executed before it was printed</li>
+          <li><a href="https://github.com/ClayShentrup/kanso-json">kanso-json</a>—the decoder that beat go</li>
+          <li><strong>kq</strong>—a jq-style query cli, byte-identical to <code>jq&nbsp;-S</code> on the 188&nbsp;KB benchmark document, faster on path extraction</li>
+          <li>a <a href="book/index.html">seven-chapter book</a>—every sample executed before it was printed</li>
           <li>a repl (<code>kanso repl</code>) with <code>it0</code>-history, in your terminal and on the <a href="playground.html">playground</a></li>
         </ul>
       </div>
@@ -258,7 +258,7 @@ three</code></pre>
     <div>
       <span class="eyebrow">quickstart</span>
       <h2 class="section-title">run it</h2>
-      <p class="lede">clone, build, run. the interpreter is under construction — the examples are the golden-file corpus it is built against.</p>
+      <p class="lede">clone, build, run. the interpreter is under construction—the examples are the golden-file corpus it is built against.</p>
     </div>
     <div class="code-panel">
       <div class="code-panel-title">shell</div>
@@ -268,15 +268,15 @@ three</code></pre>
 <span class="prompt">$ </span>./target/release/kanso run examples/hello.kso
 <span class="s">hello, world</span></code></pre>
     </div>
-    <p class="quickstart-note">editors: one <a href="https://github.com/ClayShentrup/kanso/tree/main/editors">textmate bundle</a> highlights <code>.kso</code> in jetbrains ides and vs code — the grammar itself is <a href="https://github.com/ClayShentrup/kanso/blob/main/editors/kanso/syntaxes/kanso.tmLanguage.json">kanso.tmLanguage.json</a>.</p>
+    <p class="quickstart-note">editors: one <a href="https://github.com/ClayShentrup/kanso/tree/main/editors">textmate bundle</a> highlights <code>.kso</code> in jetbrains ides and vs code—the grammar itself is <a href="https://github.com/ClayShentrup/kanso/blob/main/editors/kanso/syntaxes/kanso.tmLanguage.json">kanso.tmLanguage.json</a>.</p>
   </div>
 </section>
 
-<div class="lore"><figure><svg class="sprite" viewBox="0 0 32 29" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="14" y="0" width="2" height="1" fill="#f03a00"/><rect x="21" y="0" width="2" height="1" fill="#f03a00"/><rect x="14" y="1" width="1" height="1" fill="#f03a00"/><rect x="15" y="1" width="1" height="1" fill="#2b2320"/><rect x="20" y="1" width="1" height="1" fill="#f03a00"/><rect x="21" y="1" width="1" height="1" fill="#2b2320"/><rect x="22" y="1" width="1" height="1" fill="#f03a00"/><rect x="13" y="2" width="1" height="1" fill="#f03a00"/><rect x="14" y="2" width="2" height="1" fill="#2b2320"/><rect x="16" y="2" width="5" height="1" fill="#f03a00"/><rect x="21" y="2" width="1" height="1" fill="#2b2320"/><rect x="22" y="2" width="1" height="1" fill="#f03a00"/><rect x="13" y="3" width="9" height="1" fill="#f03a00"/><rect x="22" y="3" width="1" height="1" fill="#2b2320"/><rect x="23" y="3" width="1" height="1" fill="#f03a00"/><rect x="14" y="4" width="10" height="1" fill="#f03a00"/><rect x="13" y="5" width="11" height="1" fill="#f03a00"/><rect x="13" y="6" width="2" height="1" fill="#f03a00"/><rect x="15" y="6" width="3" height="1" fill="#2b2320"/><rect x="18" y="6" width="2" height="1" fill="#f03a00"/><rect x="20" y="6" width="3" height="1" fill="#2b2320"/><rect x="23" y="6" width="1" height="1" fill="#f03a00"/><rect x="5" y="7" width="2" height="1" fill="#faf3e3"/><rect x="13" y="7" width="2" height="1" fill="#f03a00"/><rect x="15" y="7" width="3" height="1" fill="#2b2320"/><rect x="18" y="7" width="2" height="1" fill="#f03a00"/><rect x="20" y="7" width="3" height="1" fill="#2b2320"/><rect x="23" y="7" width="1" height="1" fill="#f03a00"/><rect x="4" y="8" width="4" height="1" fill="#faf3e3"/><rect x="13" y="8" width="4" height="1" fill="#f03a00"/><rect x="17" y="8" width="3" height="1" fill="#faf3e3"/><rect x="20" y="8" width="5" height="1" fill="#f03a00"/><rect x="4" y="9" width="4" height="1" fill="#faf3e3"/><rect x="14" y="9" width="2" height="1" fill="#f03a00"/><rect x="16" y="9" width="5" height="1" fill="#faf3e3"/><rect x="21" y="9" width="5" height="1" fill="#f03a00"/><rect x="4" y="10" width="4" height="1" fill="#faf3e3"/><rect x="15" y="10" width="1" height="1" fill="#f03a00"/><rect x="16" y="10" width="5" height="1" fill="#faf3e3"/><rect x="21" y="10" width="5" height="1" fill="#f03a00"/><rect x="3" y="11" width="5" height="1" fill="#f03a00"/><rect x="16" y="11" width="2" height="1" fill="#f03a00"/><rect x="18" y="11" width="1" height="1" fill="#faf3e3"/><rect x="19" y="11" width="2" height="1" fill="#f03a00"/><rect x="22" y="11" width="5" height="1" fill="#f03a00"/><rect x="3" y="12" width="4" height="1" fill="#f03a00"/><rect x="23" y="12" width="4" height="1" fill="#f03a00"/><rect x="3" y="13" width="4" height="1" fill="#f03a00"/><rect x="23" y="13" width="4" height="1" fill="#f03a00"/><rect x="3" y="14" width="4" height="1" fill="#f03a00"/><rect x="23" y="14" width="4" height="1" fill="#f03a00"/><rect x="3" y="15" width="4" height="1" fill="#f03a00"/><rect x="23" y="15" width="4" height="1" fill="#f03a00"/><rect x="3" y="16" width="4" height="1" fill="#f03a00"/><rect x="23" y="16" width="4" height="1" fill="#f03a00"/><rect x="3" y="17" width="2" height="1" fill="#f03a00"/><rect x="5" y="17" width="2" height="1" fill="#c33206"/><rect x="23" y="17" width="2" height="1" fill="#c33206"/><rect x="25" y="17" width="2" height="1" fill="#f03a00"/><rect x="3" y="18" width="3" height="1" fill="#f03a00"/><rect x="6" y="18" width="1" height="1" fill="#c33206"/><rect x="23" y="18" width="1" height="1" fill="#c33206"/><rect x="24" y="18" width="3" height="1" fill="#f03a00"/><rect x="3" y="19" width="3" height="1" fill="#f03a00"/><rect x="6" y="19" width="1" height="1" fill="#c33206"/><rect x="23" y="19" width="1" height="1" fill="#c33206"/><rect x="24" y="19" width="3" height="1" fill="#f03a00"/><rect x="3" y="20" width="3" height="1" fill="#f03a00"/><rect x="6" y="20" width="2" height="1" fill="#c33206"/><rect x="22" y="20" width="2" height="1" fill="#c33206"/><rect x="24" y="20" width="3" height="1" fill="#f03a00"/><rect x="4" y="21" width="3" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#c33206"/><rect x="21" y="21" width="2" height="1" fill="#c33206"/><rect x="23" y="21" width="3" height="1" fill="#f03a00"/><rect x="4" y="22" width="4" height="1" fill="#f03a00"/><rect x="8" y="22" width="2" height="1" fill="#c33206"/><rect x="20" y="22" width="2" height="1" fill="#c33206"/><rect x="22" y="22" width="4" height="1" fill="#f03a00"/><rect x="5" y="23" width="4" height="1" fill="#f03a00"/><rect x="9" y="23" width="2" height="1" fill="#c33206"/><rect x="19" y="23" width="2" height="1" fill="#c33206"/><rect x="21" y="23" width="4" height="1" fill="#f03a00"/><rect x="6" y="24" width="4" height="1" fill="#f03a00"/><rect x="10" y="24" width="10" height="1" fill="#c33206"/><rect x="20" y="24" width="4" height="1" fill="#f03a00"/><rect x="7" y="25" width="6" height="1" fill="#f03a00"/><rect x="13" y="25" width="4" height="1" fill="#c33206"/><rect x="17" y="25" width="6" height="1" fill="#f03a00"/><rect x="8" y="26" width="14" height="1" fill="#f03a00"/><rect x="10" y="27" width="10" height="1" fill="#f03a00"/></svg><figcaption>ensō-neko — sleeps in a circle she never quite closes</figcaption></figure></div>
+<div class="lore"><figure><svg class="sprite" viewBox="0 0 32 29" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="14" y="0" width="2" height="1" fill="#f03a00"/><rect x="21" y="0" width="2" height="1" fill="#f03a00"/><rect x="14" y="1" width="1" height="1" fill="#f03a00"/><rect x="15" y="1" width="1" height="1" fill="#2b2320"/><rect x="20" y="1" width="1" height="1" fill="#f03a00"/><rect x="21" y="1" width="1" height="1" fill="#2b2320"/><rect x="22" y="1" width="1" height="1" fill="#f03a00"/><rect x="13" y="2" width="1" height="1" fill="#f03a00"/><rect x="14" y="2" width="2" height="1" fill="#2b2320"/><rect x="16" y="2" width="5" height="1" fill="#f03a00"/><rect x="21" y="2" width="1" height="1" fill="#2b2320"/><rect x="22" y="2" width="1" height="1" fill="#f03a00"/><rect x="13" y="3" width="9" height="1" fill="#f03a00"/><rect x="22" y="3" width="1" height="1" fill="#2b2320"/><rect x="23" y="3" width="1" height="1" fill="#f03a00"/><rect x="14" y="4" width="10" height="1" fill="#f03a00"/><rect x="13" y="5" width="11" height="1" fill="#f03a00"/><rect x="13" y="6" width="2" height="1" fill="#f03a00"/><rect x="15" y="6" width="3" height="1" fill="#2b2320"/><rect x="18" y="6" width="2" height="1" fill="#f03a00"/><rect x="20" y="6" width="3" height="1" fill="#2b2320"/><rect x="23" y="6" width="1" height="1" fill="#f03a00"/><rect x="5" y="7" width="2" height="1" fill="#faf3e3"/><rect x="13" y="7" width="2" height="1" fill="#f03a00"/><rect x="15" y="7" width="3" height="1" fill="#2b2320"/><rect x="18" y="7" width="2" height="1" fill="#f03a00"/><rect x="20" y="7" width="3" height="1" fill="#2b2320"/><rect x="23" y="7" width="1" height="1" fill="#f03a00"/><rect x="4" y="8" width="4" height="1" fill="#faf3e3"/><rect x="13" y="8" width="4" height="1" fill="#f03a00"/><rect x="17" y="8" width="3" height="1" fill="#faf3e3"/><rect x="20" y="8" width="5" height="1" fill="#f03a00"/><rect x="4" y="9" width="4" height="1" fill="#faf3e3"/><rect x="14" y="9" width="2" height="1" fill="#f03a00"/><rect x="16" y="9" width="5" height="1" fill="#faf3e3"/><rect x="21" y="9" width="5" height="1" fill="#f03a00"/><rect x="4" y="10" width="4" height="1" fill="#faf3e3"/><rect x="15" y="10" width="1" height="1" fill="#f03a00"/><rect x="16" y="10" width="5" height="1" fill="#faf3e3"/><rect x="21" y="10" width="5" height="1" fill="#f03a00"/><rect x="3" y="11" width="5" height="1" fill="#f03a00"/><rect x="16" y="11" width="2" height="1" fill="#f03a00"/><rect x="18" y="11" width="1" height="1" fill="#faf3e3"/><rect x="19" y="11" width="2" height="1" fill="#f03a00"/><rect x="22" y="11" width="5" height="1" fill="#f03a00"/><rect x="3" y="12" width="4" height="1" fill="#f03a00"/><rect x="23" y="12" width="4" height="1" fill="#f03a00"/><rect x="3" y="13" width="4" height="1" fill="#f03a00"/><rect x="23" y="13" width="4" height="1" fill="#f03a00"/><rect x="3" y="14" width="4" height="1" fill="#f03a00"/><rect x="23" y="14" width="4" height="1" fill="#f03a00"/><rect x="3" y="15" width="4" height="1" fill="#f03a00"/><rect x="23" y="15" width="4" height="1" fill="#f03a00"/><rect x="3" y="16" width="4" height="1" fill="#f03a00"/><rect x="23" y="16" width="4" height="1" fill="#f03a00"/><rect x="3" y="17" width="2" height="1" fill="#f03a00"/><rect x="5" y="17" width="2" height="1" fill="#c33206"/><rect x="23" y="17" width="2" height="1" fill="#c33206"/><rect x="25" y="17" width="2" height="1" fill="#f03a00"/><rect x="3" y="18" width="3" height="1" fill="#f03a00"/><rect x="6" y="18" width="1" height="1" fill="#c33206"/><rect x="23" y="18" width="1" height="1" fill="#c33206"/><rect x="24" y="18" width="3" height="1" fill="#f03a00"/><rect x="3" y="19" width="3" height="1" fill="#f03a00"/><rect x="6" y="19" width="1" height="1" fill="#c33206"/><rect x="23" y="19" width="1" height="1" fill="#c33206"/><rect x="24" y="19" width="3" height="1" fill="#f03a00"/><rect x="3" y="20" width="3" height="1" fill="#f03a00"/><rect x="6" y="20" width="2" height="1" fill="#c33206"/><rect x="22" y="20" width="2" height="1" fill="#c33206"/><rect x="24" y="20" width="3" height="1" fill="#f03a00"/><rect x="4" y="21" width="3" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#c33206"/><rect x="21" y="21" width="2" height="1" fill="#c33206"/><rect x="23" y="21" width="3" height="1" fill="#f03a00"/><rect x="4" y="22" width="4" height="1" fill="#f03a00"/><rect x="8" y="22" width="2" height="1" fill="#c33206"/><rect x="20" y="22" width="2" height="1" fill="#c33206"/><rect x="22" y="22" width="4" height="1" fill="#f03a00"/><rect x="5" y="23" width="4" height="1" fill="#f03a00"/><rect x="9" y="23" width="2" height="1" fill="#c33206"/><rect x="19" y="23" width="2" height="1" fill="#c33206"/><rect x="21" y="23" width="4" height="1" fill="#f03a00"/><rect x="6" y="24" width="4" height="1" fill="#f03a00"/><rect x="10" y="24" width="10" height="1" fill="#c33206"/><rect x="20" y="24" width="4" height="1" fill="#f03a00"/><rect x="7" y="25" width="6" height="1" fill="#f03a00"/><rect x="13" y="25" width="4" height="1" fill="#c33206"/><rect x="17" y="25" width="6" height="1" fill="#f03a00"/><rect x="8" y="26" width="14" height="1" fill="#f03a00"/><rect x="10" y="27" width="10" height="1" fill="#f03a00"/></svg><figcaption>ensō-neko—sleeps in a circle she never quite closes</figcaption></figure></div>
 
 <footer class="site-footer">
   <div class="container site-footer-inner">
-    <span>kanso 簡素 — simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
     <nav>
       <a href="spec.html">spec</a>
       <a href="about.html">about</a>
