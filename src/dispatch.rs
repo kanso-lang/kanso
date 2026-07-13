@@ -5,14 +5,13 @@
 //! a `musttail` call.
 //!
 //! Soundness turns on one point: the none case is encoded as the sentinel 256,
-//! so the discriminator must be provably in `0..=255` or none. Two local facts
-//! together guarantee it, with no whole-value range tracking:
-//!   - every call site passes `at _ _` at the discriminator position, and
-//!   - the group's inferred discriminator set is exactly `int | none`.
-//! `at` yields `int | none` only on a bytes container; on a list/map/string it
-//! yields a wider set, which would push the joined param set past `int | none`.
-//! So the two facts force every container to be bytes, hence every value to be a
-//! byte (0..=255) or none. Anything less certain leaves the discriminator boxed.
+//! so the discriminator must be provably in the range 0 to 255 or none. Two
+//! local facts together guarantee it, with no whole-value range tracking. First,
+//! every call site passes `at _ _` at the discriminator position. Second, the
+//! group's inferred discriminator set is exactly `int | none`, which `at`
+//! produces only on a bytes container — a list, map, or string widens the set
+//! past `int | none`. Together they force every container to be bytes, hence
+//! every value to be a byte or none. Anything less certain leaves it boxed.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
 use crate::infer::{Inference, Set, INT, NONE};
