@@ -27,6 +27,7 @@
     <a href="index.html">book</a>
     <a href="../spec.html">spec</a>
     <a href="../about.html">about</a>
+    <a href="../compiler.html">compiler</a>
     <a href="https://github.com/ClayShentrup/kanso">github</a>
   </nav>
 </header>
@@ -88,7 +89,7 @@ kanso run jsonbench  0.36s user 0.01s system 52% cpu 0.690 total</code></pre>
 
 <p>0.24 seconds of cpu for 150 decodes: <strong>1.6ms per decode, against go's 1.88ms.</strong> the pure language with values-only semantics, automatic failure propagation, and no mutation decodes json faster than go — from source code that never once mentions a buffer, an index check, or a memory strategy. that's 350ms to 1.6ms between the two engines, one program, zero changes.</p>
 
-<p>and this is the score <em>before</em> the deepest type-driven optimizations ship: reference-counting elision (perceus) and unboxed integers are still on the roadmap. the compiler is winning on fundamentals.</p>
+<p>and this is the score <em>before</em> the deepest type-driven optimizations ship: reference-counting elision (perceus — koka's technique, shipped by lean 4 and roc) and unboxed integers are still on the roadmap. the compiler is winning on fundamentals.</p>
 
 <h2>zero-cost, with receipts</h2>
 

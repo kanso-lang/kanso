@@ -15,7 +15,8 @@ at exactly this.
 | kanso (reference interpreter) | ~350 ms |
 
 The interpreter is the semantics oracle, not the product; CI holds both
-engines to byte-identical output on every golden test.
+engines to byte-identical output on every golden test — floats included,
+because both engines render the shortest round-trip that survives re-parsing.
 
 ## how it got there (~350 ms → ~1.6 ms, in commit order)
 

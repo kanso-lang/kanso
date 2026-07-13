@@ -27,6 +27,7 @@
     <a href="index.html">book</a>
     <a href="../spec.html">spec</a>
     <a href="../about.html">about</a>
+    <a href="../compiler.html">compiler</a>
     <a href="https://github.com/ClayShentrup/kanso">github</a>
   </nav>
 </header>
@@ -81,7 +82,7 @@
 
 <h2>numbers don't blur</h2>
 
-<p>ints and floats are different types, and kanso will not quietly promote one into the other. mixed arithmetic is an error with the fix in the message:</p>
+<p>ints and floats are different types, and kanso will not quietly promote one into the other. mixed arithmetic is an error:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">mixed.kso</div>
@@ -90,14 +91,11 @@
   <span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run mixed.kso</div>
-    <pre><code><span class="k">error[runtime]</span>: no implicit numeric coercion; convert explicitly with `to_float`
-<span class="c">  --&gt; mixed.kso:2:13</span>
-   2 |   total = 3 + 0.5
-                   <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[runtime]</span>: `+` is not defined for these values</code></pre>
   </div>
 </div>
 
-<p>do what it says and everything is fine — and notice the float renders as <code>3.5</code>, never a bare <code>3</code> pretending to be an int. floats always show their point:</p>
+<p>the fix is an explicit conversion — <code>to_float</code> — and everything is fine. notice the float renders as <code>3.5</code>, never a bare <code>3</code> pretending to be an int. floats always show their point:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">conv.kso</div>
