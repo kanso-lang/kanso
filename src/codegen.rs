@@ -1047,8 +1047,9 @@ impl<'a> Backend<'a> {
                     f.line(&format!("store %KValue {temp}, ptr {slot}"));
                 }
                 let t = f.tmp();
+                // the ccc wrapper, never the tailcc fn: C calls this pointer
                 f.line(&format!(
-                    "{t} = call %KValue @k_closure(ptr @{lifted}, i64 {}, ptr {arr})",
+                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, ptr {arr})",
                     captures.len()
                 ));
                 Ok(t)
