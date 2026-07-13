@@ -69,6 +69,7 @@ declare %KValue @k_b_join(%KValue, %KValue)
 declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
+declare %KValue @k_b_push_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
@@ -134,11 +135,13 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     escape.returns.retain(|_, ty| packable.contains(ty));
     escape.carries.retain(|_, ty| packable.contains(ty));
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
+    let in_place_pushes = crate::linear::in_place_pushes(program);
     let mut backend = Backend {
         program,
         inference,
         escape,
         byte_disc,
+        in_place_pushes,
         type_ids,
         strings: Vec::new(),
         interned: HashMap::new(),
@@ -154,6 +157,7 @@ struct Backend<'a> {
     inference: infer::Inference,
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
+    in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -171,6 +175,8 @@ struct FnEmit {
     sets: HashMap<String, Set>,
     /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
     origin_prefix: String,
+    /// Source file of the declaration being emitted, for keying push sites.
+    file: String,
     /// LLVM return type of the function being emitted: `%parsed` or `%KValue`.
     ret_ty: String,
 }
@@ -185,6 +191,7 @@ impl FnEmit {
             versions: HashMap::new(),
             sets: HashMap::new(),
             origin_prefix: String::new(),
+            file: String::new(),
             ret_ty: "%KValue".to_string(),
         }
     }
@@ -697,6 +704,7 @@ impl<'a> Backend<'a> {
             f.start_block(&arm_labels[k]);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
+            f.file = decl.file.clone();
             for (i, pattern) in decl.params.iter().enumerate() {
                 if let Pattern::Var(pname, _) = pattern {
                     f.bind(pname, &format!("%x{i}"));
@@ -739,6 +747,7 @@ impl<'a> Backend<'a> {
             let fail = format!("fail{k}");
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
+            f.file = decl.file.clone();
             for (i, pattern) in decl.params.iter().enumerate() {
                 match self.escape.carries_ty(name, arity, i) {
                     Some(ty) => {
@@ -1947,8 +1956,19 @@ impl<'a> Backend<'a> {
             if matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code") {
                 args_ir.push(self.origin_arg(f, span));
             }
+            // A push the linearity analysis proved unique extends its list in
+            // place instead of allocating a fresh header.
+            let sym = if name == "push"
+                && self
+                    .in_place_pushes
+                    .contains(&(f.file.clone(), span.line, span.col))
+            {
+                "push_mut"
+            } else {
+                name
+            };
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_b_{name}({})", args_ir.join(", ")));
+            f.line(&format!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
             f.record(&t, infer::builtin_set(name, &arg_sets));
             return Ok(t);
