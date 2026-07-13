@@ -48,6 +48,57 @@ static void* k_alloc(size_t n) {
     return p;
 }
 
+/* Reference counting (Perceus, native backend only). Every heap object —
+   the thing a KValue's payload points at — carries a 16-byte header with a
+   refcount immediately before it. codegen is opaque about object layout, so
+   this is entirely runtime-private. Commit 1: counts are maintained by
+   k_dup/k_drop but nothing frees yet and codegen emits no calls, so behavior
+   is unchanged. Immortal objects (interned strings, marker singletons) pin
+   their count so dup/drop are no-ops on them. */
+typedef struct { long long rc; long long pad; } KHeader;
+#define K_IMMORTAL (1LL << 60)
+
+static void* k_alloc_obj(size_t n) {
+    KHeader* h = k_alloc(sizeof(KHeader) + n);
+    h->rc = 1;
+    return (void*)(h + 1);
+}
+
+static KHeader* k_hdr(long long payload) {
+    return ((KHeader*)(intptr_t)payload) - 1;
+}
+
+static void k_make_immortal(long long payload) {
+    k_hdr(payload)->rc = K_IMMORTAL;
+}
+
+static int k_is_heap(long long tag) {
+    switch (tag) {
+        case K_STR: case K_ERR: case K_REC: case K_DESC:
+        case K_LIST: case K_MAP: case K_CLOSURE: case K_BYTES:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+KValue k_dup(KValue v) {
+    if (k_is_heap(v.tag)) {
+        KHeader* h = k_hdr(v.payload);
+        if (h->rc < K_IMMORTAL) h->rc++;
+    }
+    return v;
+}
+
+void k_drop(KValue v) {
+    if (k_is_heap(v.tag)) {
+        KHeader* h = k_hdr(v.payload);
+        if (h->rc < K_IMMORTAL && --h->rc == 0) {
+            /* commit 1: no freeing yet — counts only. */
+        }
+    }
+}
+
 /* Diagnostics color from the site palette, only when stderr is a tty and
    NO_COLOR is unset: vermillion (24-bit 0xf03a00; 256-color 202) for the
    error kind, dim for trace lines. Piped output stays plain. */
@@ -94,22 +145,28 @@ KValue k_int(long long i) { KValue v; v.tag = K_INT; v.payload = i; return v; }
 KValue k_bool(long long b) { KValue v; v.tag = b ? K_TRUE : K_FALSE; v.payload = 0; return v; }
 KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
 
-static KStr k_ascii[128];
-static char k_ascii_data[128];
+static KValue k_ascii_cache[128];
+static char k_ascii_ready[128];
 
 KValue k_str_n(const char* data, long long len) {
     if (len == 1) {
         unsigned char b = (unsigned char)data[0];
-        if (b < 128) {
-            if (k_ascii_data[b] == 0 && b != 0) {
-                k_ascii_data[b] = (char)b;
-                k_ascii[b].len = 1;
-                k_ascii[b].data = &k_ascii_data[b];
+        if (b < 128 && b != 0) {
+            if (!k_ascii_ready[b]) {
+                KStr* s = k_alloc_obj(sizeof(KStr));
+                s->len = 1;
+                s->data = k_alloc(2);
+                s->data[0] = (char)b;
+                s->data[1] = 0;
+                KValue v; v.tag = K_STR; v.payload = k_ptr(s);
+                k_make_immortal(v.payload);
+                k_ascii_cache[b] = v;
+                k_ascii_ready[b] = 1;
             }
-            KValue v; v.tag = K_STR; v.payload = k_ptr(&k_ascii[b]); return v;
+            return k_ascii_cache[b];
         }
     }
-    KStr* s = k_alloc(sizeof(KStr));
+    KStr* s = k_alloc_obj(sizeof(KStr));
     s->len = (long)len;
     s->data = k_alloc(len + 1);
     memcpy(s->data, data, len);
@@ -125,7 +182,7 @@ static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
 KValue k_err(KValue reason, const char* origin) {
     if (!k_not_failure(reason)) return reason;
-    KErrBox* box = k_alloc(sizeof(KErrBox));
+    KErrBox* box = k_alloc_obj(sizeof(KErrBox));
     box->reason = reason;
     box->origin = origin;
     box->hops = NULL;
@@ -136,7 +193,7 @@ KValue k_err(KValue reason, const char* origin) {
 KValue k_err_hop(KValue v, const char* fn) {
     if (v.tag != K_ERR) return v;
     KErrBox* old = k_err_box(v);
-    KErrBox* box = k_alloc(sizeof(KErrBox));
+    KErrBox* box = k_alloc_obj(sizeof(KErrBox));
     KHop* hop = k_alloc(sizeof(KHop));
     hop->fn = fn;
     hop->prev = old->hops;
@@ -157,17 +214,18 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
     for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
     if (n == 0 && type_id >= 0 && type_id < K_MARKER_CACHE) {
         if (!k_marker_ready[type_id]) {
-            KRec* r = k_alloc(sizeof(KRec));
+            KRec* r = k_alloc_obj(sizeof(KRec));
             r->type_id = type_id;
             r->nfields = 0;
             r->fields = NULL;
             KValue v; v.tag = K_REC; v.payload = k_ptr(r);
+            k_make_immortal(v.payload);
             k_marker_cache[type_id] = v;
             k_marker_ready[type_id] = 1;
         }
         return k_marker_cache[type_id];
     }
-    KRec* r = k_alloc(sizeof(KRec));
+    KRec* r = k_alloc_obj(sizeof(KRec));
     r->type_id = type_id;
     r->nfields = n;
     r->fields = k_alloc(sizeof(KValue) * n);
@@ -192,7 +250,7 @@ KValue k_concat(KValue a, KValue b) {
     if (!k_not_failure(b)) return b;
     KStr* sa = k_as_str(a);
     KStr* sb = k_as_str(b);
-    KStr* s = k_alloc(sizeof(KStr));
+    KStr* s = k_alloc_obj(sizeof(KStr));
     s->len = sa->len + sb->len;
     s->data = k_alloc(s->len + 1);
     memcpy(s->data, sa->data, sa->len);
@@ -453,7 +511,7 @@ KValue k_cmp(KValue a, KValue b, long long op) {
 }
 
 static KValue k_mkdesc(long long dtag, KValue x, KValue y) {
-    KDesc* d = k_alloc(sizeof(KDesc));
+    KDesc* d = k_alloc_obj(sizeof(KDesc));
     d->dtag = dtag; d->x = x; d->y = y;
     KValue v; v.tag = K_DESC; v.payload = k_ptr(d); return v;
 }
@@ -582,7 +640,7 @@ static KValue* k_buf(long long cap) {
 static KBuf* k_buf_of(KValue* items) { return ((KBuf*)items) - 1; }
 
 static KValue k_mklist(long long n, KValue* items) {
-    KList* l = k_alloc(sizeof(KList));
+    KList* l = k_alloc_obj(sizeof(KList));
     l->len = n;
     l->items = k_buf(n ? n : 1);
     memcpy(l->items, items, sizeof(KValue) * n);
@@ -595,7 +653,7 @@ KValue k_list_lit(long long n, KValue* items) {
 }
 
 KValue k_closure(KValue (*fn)(void*, KValue), long long ncaps, KValue* caps) {
-    KClosure* c = k_alloc(sizeof(KClosure));
+    KClosure* c = k_alloc_obj(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
     memcpy(env, caps, sizeof(KValue) * ncaps);
     c->fn = fn; c->env = env;
@@ -645,7 +703,7 @@ static long long k_map_find(KMap* m, KValue key, long long* insert_at) {
 }
 
 KValue k_map_lit(long long n, KValue* flat_pairs) {
-    KMap* m = k_alloc(sizeof(KMap));
+    KMap* m = k_alloc_obj(sizeof(KMap));
     m->len = 0;
     m->pairs = k_alloc(sizeof(KValue) * 2 * (n ? n : 1));
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m);
@@ -665,7 +723,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     KMap* m = k_as_map(mv);
     long long at;
     long long found = k_map_find(m, key, &at);
-    KMap* out = k_alloc(sizeof(KMap));
+    KMap* out = k_alloc_obj(sizeof(KMap));
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     if (found >= 0) {
         out->len = m->len;
@@ -706,7 +764,7 @@ static long k_cp_len(unsigned char b) {
 }
 
 static KValue k_bytes_view(const unsigned char* data, long long len) {
-    KBytes* b = k_alloc(sizeof(KBytes));
+    KBytes* b = k_alloc_obj(sizeof(KBytes));
     b->len = len;
     b->data = data;
     KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
@@ -852,7 +910,7 @@ KValue k_b_push(KValue lv, KValue item) {
         /* this list is the frontier of its buffer: claim the next slot */
         l->items[l->len] = item;
         buf->used++;
-        KList* out = k_alloc(sizeof(KList));
+        KList* out = k_alloc_obj(sizeof(KList));
         out->len = l->len + 1;
         out->items = l->items;
         KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
@@ -862,7 +920,7 @@ KValue k_b_push(KValue lv, KValue item) {
     memcpy(items, l->items, sizeof(KValue) * l->len);
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
-    KList* out = k_alloc(sizeof(KList));
+    KList* out = k_alloc_obj(sizeof(KList));
     out->len = l->len + 1;
     out->items = items;
     KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
