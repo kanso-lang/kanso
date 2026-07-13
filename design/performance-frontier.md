@@ -75,3 +75,41 @@ borrow checker pushes people into, (2) fusion is unconditional under purity,
 (4) the cost model schedules parallelism the user never wrote. Rust's
 performance requires the user to be excellent; kanso's should require the
 compiler to be.
+
+## Ownership pipeline + positioning guardrails (Clay handoff, 2026-07-12)
+
+Goal reframed: not "no borrow checker" but **"no annotations and no rejected
+programs"** — ownership is whole-program compiler inference, never
+user-supplied proof.
+
+1. Owned/borrowed parameter-mode inference per function (kills most RC traffic).
+2. Perceus reuse + FIP discipline: hot paths = zero-allocation, reusing freed cells.
+3. Static uniqueness inference: delete the refcount==1 branch where provable;
+   recover `noalias`-grade aliasing facts.
+4. Non-atomic RC by default; escape-based promotion to atomic only where a
+   value provably crosses threads.
+5. Tail-recursion-modulo-cons for builder loops.
+6. Structured scoped parallelism: tasks borrow shared data, so cross-thread
+   ownership (and atomics) mostly never arises.
+7. Residual gap stays: unprovable-uniqueness reuse sites pay one predictable
+   branch. Closeable only as opt-in per-function FIP guarantee (annotated fn
+   fails to compile if unmet). Never close globally — that rebuilds the
+   borrow checker.
+
+Items 1–6 are kanso-side analyses LLVM cannot do — backend choice is
+orthogonal; compile-to-C/cranelift-before-LLVM for phase 3 remains sound.
+
+### Positioning guardrails (in force for ALL public docs)
+- No unfalsifiable superlatives ("absolute obsolescence of go and rust" — rejected).
+- No primacy claims: Koka, Lean 4, Roc have prior art on Perceus+reuse — credit
+  explicitly; kanso's edge is its extra static rules (no-shadowing,
+  nothing-wasted) making the analyses more complete, not being first.
+- "Renders the borrow checker obsolete" — rejected; say "no annotations and no
+  rejected programs" + state both residual gaps honestly.
+- "Byte-identical execution" requires floating-point caveats.
+- House style: aggressive claims grounded in falsifiable specifics +
+  preemptive transparency about open problems.
+
+AUDIT QUEUED: sweep index.html doctrine #6, compiler.html, about.html,
+book ch07, bench/RESULTS.md for guardrail compliance (esp. byte-identical
+phrasing + FP caveat, borrow-checker phrasing, prior-art credits).
