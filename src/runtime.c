@@ -43,21 +43,68 @@ static KValue k_mklist(long long n, KValue* items);
 static KValue k_call1(KValue f, KValue a);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
+/* The arena is a chain of blocks, newest first; allocation bumps in the head
+   block. k_beat_boundary rewinds the chain to a snapshot taken on its first
+   call, retiring newer blocks to a spare pool for reuse — a steady-state loop
+   recycles the same warm pages instead of marching through cold memory. If no
+   boundary is ever signalled the arena only grows, exactly as before. */
+typedef struct KBlock { struct KBlock* next; size_t cap; } KBlock;
+static KBlock* k_blocks = NULL;
+static KBlock* k_spare = NULL;
 static char* k_arena = NULL;
 static size_t k_arena_left = 0;
+
+static void k_arena_push(size_t need) {
+    KBlock** link = &k_spare;
+    while (*link && (*link)->cap < need) link = &(*link)->next;
+    KBlock* b = *link;
+    if (b) {
+        *link = b->next;
+    } else {
+        b = malloc(sizeof(KBlock) + need);
+        if (!b) { fputs("out of memory\n", stderr); exit(1); }
+        b->cap = need;
+    }
+    b->next = k_blocks;
+    k_blocks = b;
+    k_arena = (char*)(b + 1);
+    k_arena_left = b->cap;
+}
 
 static void* k_alloc(size_t n) {
     n = (n + 15) & ~(size_t)15;
     if (n > k_arena_left) {
-        size_t block = n > (1 << 20) ? n : (1 << 20);
-        k_arena = malloc(block);
-        if (!k_arena) { fputs("out of memory\n", stderr); exit(1); }
-        k_arena_left = block;
+        k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
     }
     void* p = k_arena;
     k_arena += n;
     k_arena_left -= n;
     return p;
+}
+
+/* A beat boundary: the first call snapshots the arena frontier; every later
+   call rewinds to that snapshot. Everything allocated before the first
+   boundary (program input, lazily-built immortal caches) persists; everything
+   after it is beat-transient and its blocks recycle through the spare pool.
+   Experimental: only emitted for provably nothing-escapes loops. */
+static struct { KBlock* block; char* ptr; size_t left; int set; } k_beat;
+
+void k_beat_boundary(void) {
+    if (!k_beat.set) {
+        k_beat.block = k_blocks;
+        k_beat.ptr = k_arena;
+        k_beat.left = k_arena_left;
+        k_beat.set = 1;
+        return;
+    }
+    while (k_blocks != k_beat.block) {
+        KBlock* b = k_blocks;
+        k_blocks = b->next;
+        b->next = k_spare;
+        k_spare = b;
+    }
+    k_arena = k_beat.ptr;
+    k_arena_left = k_beat.left;
 }
 
 /* Reference counting (Perceus, native backend only). Every heap object —
