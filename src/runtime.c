@@ -40,6 +40,8 @@ typedef struct KHop { const char* fn; struct KHop* prev; } KHop;
 typedef struct { KValue reason; const char* origin; KHop* hops; } KErrBox;
 
 static KValue k_mklist(long long n, KValue* items);
+static KValue* k_buf(long long cap);
+static KValue k_list_own(KValue* items, long long n);
 KValue k_call1(KValue f, KValue a);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
@@ -607,6 +609,33 @@ KValue k_b_write_file(KValue path, KValue content) {
     return k_mkdesc(5, path, content);
 }
 
+/* Merge two failures: err + err becomes one err whose reason lists both
+   reasons (origin-less: the merge has no single birthplace); a none adds
+   nothing to an err; two nones stay none. Mirrors eval.rs exactly. */
+static KValue k_accumulate_failures(KValue l, KValue r) {
+    if (l.tag == K_ERR && r.tag == K_ERR) {
+        KValue* items = k_buf(2);
+        items[0] = k_err_inner(l);
+        items[1] = k_err_inner(r);
+        return k_err(k_list_own(items, 2), NULL);
+    }
+    if (l.tag == K_ERR) return l;
+    if (r.tag == K_ERR) return r;
+    return l;
+}
+
+/* a & b: join two descriptions to run with no order between them. Both sides
+   are already evaluated; failures accumulate instead of short-circuiting. */
+KValue k_desc_join(KValue a, KValue b) {
+    int lf = !k_not_failure(a);
+    int rf = !k_not_failure(b);
+    if (lf && rf) return k_accumulate_failures(a, b);
+    if (lf) return a;
+    if (rf) return b;
+    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`&` joins two descriptions");
+    return k_mkdesc(7, a, b);
+}
+
 KValue k_maybe_bind(KValue piped, KValue closure) {
     if (piped.tag == K_DESC) return k_mkdesc(6, piped, closure);
     return k_call1(closure, piped);
@@ -672,6 +701,18 @@ static KValue k_exec(KDesc* d) {
             }
             fwrite(c->data, 1, c->len, fh);
             fclose(fh);
+            return k_none();
+        }
+        case 7: {
+            /* no order between the sides, and both always run — a failure on
+               one never abandons the other; failures accumulate */
+            KValue left = k_exec(k_as_desc(d->x));
+            KValue right = k_exec(k_as_desc(d->y));
+            int lf = !k_not_failure(left);
+            int rf = !k_not_failure(right);
+            if (lf && rf) return k_accumulate_failures(left, right);
+            if (lf) return left;
+            if (rf) return right;
             return k_none();
         }
         default: {

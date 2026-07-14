@@ -48,7 +48,7 @@ pub struct Lexed {
     pub blank_lines: Vec<usize>,
 }
 
-const OPS: [&str; 10] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "<", ">"];
+const OPS: [&str; 11] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "<", ">", "&"];
 
 pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     let mut diags = Vec::new();

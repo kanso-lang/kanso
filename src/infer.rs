@@ -228,6 +228,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                     }
                     out
                 }
+                // the join yields a description, a lone propagated failure, or
+                // an accumulated err merged from both sides
+                "&" => DESC | fails | ERR,
                 _ => BOOL | fails,
             }
         }

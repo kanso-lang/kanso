@@ -113,6 +113,7 @@ pub struct ClosureData {
 pub enum Desc {
     Print(String, Span),
     Seq(Rc<Desc>, Rc<Desc>),
+    Join(Rc<Desc>, Rc<Desc>),
     Args,
     Stdin,
     ReadFile(String),
@@ -1261,6 +1262,42 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     }
 }
 
+/// `a & b`: join two descriptions to run with no order between them.
+/// Failures accumulate — two errs merge into one whose reason lists both
+/// (origin-less: the merge has no single birthplace) — and a lone failure
+/// propagates as itself. Anything that isn't a description or a failure
+/// cannot be joined.
+fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
+    match (is_failure(&left), is_failure(&right)) {
+        (true, true) => Ok(accumulate_failures(left, right)),
+        (true, false) => Ok(left),
+        (false, true) => Ok(right),
+        (false, false) => match (&left, &right) {
+            (Value::Desc(a), Value::Desc(b)) => {
+                Ok(Value::Desc(Rc::new(Desc::Join(a.clone(), b.clone()))))
+            }
+            _ => Err(RuntimeError {
+                message: "`&` joins two descriptions".to_string(),
+                span,
+            }),
+        },
+    }
+}
+
+/// Merge two failures: err + err becomes one err whose reason is the list of
+/// both reasons; a `none` adds nothing to an err; two nones stay none.
+fn accumulate_failures(left: Value, right: Value) -> Value {
+    match (&left, &right) {
+        (Value::ErrV(a), Value::ErrV(b)) => err_value(
+            Value::List(Rc::new(vec![a.reason.clone(), b.reason.clone()])),
+            None,
+        ),
+        (Value::ErrV(_), _) => left,
+        (_, Value::ErrV(_)) => right,
+        _ => left,
+    }
+}
+
 pub fn eval_binop(
     op: &str,
     left: Value,
@@ -1268,6 +1305,11 @@ pub fn eval_binop(
     span: Span,
     frame: &Frame,
 ) -> EvalResult {
+    if op == "&" {
+        // the join accumulates: both sides already evaluated (eager), so a
+        // failure on either — or both — combines instead of short-circuiting
+        return join_values(left, right, span);
+    }
     if is_failure(&left) {
         return Ok(left);
     }
@@ -1424,6 +1466,18 @@ impl<'a> Interp<'a> {
                 }
                 self.execute(b, executor)
             }
+            Desc::Join(a, b) => {
+                // no order between the sides, and both always run — a failure
+                // on one never abandons the other; failures accumulate
+                let left = self.execute(a, executor)?;
+                let right = self.execute(b, executor)?;
+                Ok(match (is_failure(&left), is_failure(&right)) {
+                    (true, true) => accumulate_failures(left, right),
+                    (true, false) => left,
+                    (false, true) => right,
+                    (false, false) => Value::NoneV,
+                })
+            }
             Desc::Args => {
                 let list = executor.args().into_iter().map(Value::Str).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -1460,6 +1514,12 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Seq(a, b) => {
             render_plan(a, out);
             render_plan(b, out);
+        }
+        Desc::Join(a, b) => {
+            out.push_str("  join {\n");
+            render_plan(a, out);
+            render_plan(b, out);
+            out.push_str("  } # unordered; both run\n");
         }
         Desc::Args => out.push_str("  args\n"),
         Desc::Stdin => out.push_str("  stdin\n"),
