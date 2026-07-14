@@ -1,6 +1,8 @@
 type deposit
   amount: int
 
+type logger
+
 type withdraw
   amount: int
 
@@ -8,21 +10,35 @@ fn describe (err reason)
   "gomen: {reason}"
 
 fn describe n
-  "balance: {n} yen"
+  "{n} yen"
 
 main =
-  good = play 0 [(deposit 100) (withdraw 30) (deposit 5)] 1
-  bad = play 0 [(deposit 10) (withdraw 60)] 1
-  print (describe good) >> print (describe bad)
+  monday_moves = [(deposit 100) (withdraw 30)]
+  monday = run 0 monday_moves 1
+  tuesday = run monday [(withdraw 100)] 1
+  play 0 monday_moves 1 logger (print "watch monday live, opening at 0 yen") >> print "monday closed at {describe monday}" >> print "tuesday closed at {describe tuesday}"
 
-fn play balance actions i
-  step balance actions i (at actions i)
+fn notify logger balance
+  print "[logger] balance is now {balance} yen"
 
-fn step balance _ _ none
-  balance
+fn play store actions i sub out
+  step store actions i sub out (at actions i)
 
-fn step balance actions i action
-  play (update balance action) actions (i + 1)
+fn run store actions i
+  settle store actions i (at actions i)
+
+fn settle store _ _ none
+  store
+
+fn settle store actions i action
+  run (update store action) actions (i + 1)
+
+fn step _ _ _ _ out none
+  out
+
+fn step store actions i sub out action
+  next = update store action
+  play next actions (i + 1) sub (out >> notify sub next)
 
 fn update balance (deposit n)
   balance + n
