@@ -258,6 +258,40 @@ mod tests {
         assert_eq!(sig[&("a".to_string(), 1)][0], Mode::Borrow);
     }
 
+    // --- memory-model ratchets (compiler.html §10, the four-construct model) ---
+    // These encode the design's testable claims so it cannot be silently
+    // relitigated. Each fails if a change violates the property it names.
+
+    #[test]
+    fn ratchet_redux_fold_state_is_uniquely_owned() {
+        // "state is a fold": a state value threaded through update(state, action)
+        // and returned is CONSUME — i.e. uniquely owned, so the executor reuses
+        // it in place. Caching-as-a-fold is the ideal in-place case, not a hazard.
+        let src = "main = print \"{length (entries (reduce [:] 3))}\"\n\nfn reduce state 0\n  state\n\nfn reduce state n\n  reduce (put state n n) (n - 1)\n";
+        let program = crate::compile("test.kso", src, true).unwrap();
+        let sig = signatures(&program);
+        assert_eq!(
+            sig[&("reduce".to_string(), 2)][0],
+            Mode::Consume,
+            "the folded state must be uniquely owned (consume), reusable in place"
+        );
+    }
+
+    #[test]
+    fn ratchet_value_read_many_times_stays_borrow() {
+        // value semantics: reading a value any number of times never consumes it,
+        // so it never forces a copy. `x` is read by both `length` and `sum` and
+        // must stay BORROW — no copy, no count, just reads.
+        let src = "main = print \"{twice [1 2 3]}\"\n\nfn twice x\n  a = length x\n  b = sum x\n  a + b\n";
+        let program = crate::compile("test.kso", src, true).unwrap();
+        let sig = signatures(&program);
+        assert_eq!(
+            sig[&("twice".to_string(), 1)][0],
+            Mode::Borrow,
+            "a value read multiple times must stay borrow (reads never force a copy)"
+        );
+    }
+
     #[test]
     fn json_scanner_input_is_borrow_accumulator_is_consume() {
         // the whole-program payoff: across the recursive-descent parser the byte
