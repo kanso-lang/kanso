@@ -303,6 +303,38 @@ main = print (describe (half 42))
   total = [9 1 8 2 7] . sort . map (n -> n * n) . sum
   print "sum of squares: {total}"
 `,
+  redux: `type deposit
+  amount: int
+
+type withdraw
+  amount: int
+
+fn describe (err reason)
+  "gomen: {reason}"
+
+fn describe n
+  "balance: {n} yen"
+
+main =
+  good = play 0 [(deposit 100) (withdraw 30) (deposit 5)] 1
+  bad = play 0 [(deposit 10) (withdraw 60)] 1
+  print (describe good) >> print (describe bad)
+
+fn play balance actions i
+  step balance actions i (at actions i)
+
+fn step balance _ _ none
+  balance
+
+fn step balance actions i action
+  play (update balance action) actions (i + 1)
+
+fn update balance (deposit n)
+  balance + n
+
+fn update balance (withdraw n)
+  if (balance < n) (err "overdrawn: tried {n} against {balance}") (balance - n)
+`,
 };
 
 examples.addEventListener('change', () => {
