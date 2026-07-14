@@ -860,10 +860,10 @@ static KValue k_utf8_check(char* data, long long len, const char* origin);
 KValue k_b_utf8(KValue lv, const char* origin) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag == K_BYTES) {
+        /* validate directly on the view (read-only) and let k_str_n do the one
+           copy into the string — a pre-copy here would just be a second pass. */
         KBytes* b = k_as_bytes(lv);
-        char* data = k_alloc(b->len + 1);
-        memcpy(data, b->data, b->len);
-        return k_utf8_check(data, b->len, origin);
+        return k_utf8_check((char*)b->data, b->len, origin);
     }
     if (lv.tag != K_LIST) k_die("utf8 takes a list of byte values");
     KList* l = k_as_list(lv);
