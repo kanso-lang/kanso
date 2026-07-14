@@ -1,5 +1,6 @@
-watch monday live, opening at 0 yen
-[logger] balance is now 100 yen
-[logger] balance is now 70 yen
-monday closed at 70 yen
-tuesday closed at gomen: overdrawn: tried 100 against 70
+the till opens at 0 yen
+[logger] +100 yen in -> the till holds 100
+[logger] -30 yen out -> the till holds 70
+[logger] -60 yen out -> the till holds 10
+[logger] +5 yen in -> the till holds 15
+the till closes
