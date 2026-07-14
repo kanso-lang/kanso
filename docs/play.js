@@ -306,28 +306,27 @@ main = print (describe (half 42))
   redux: `type deposit
   amount: int
 
+type logger
+
 type withdraw
   amount: int
 
-fn describe (err reason)
-  "gomen: {reason}"
-
-fn describe n
-  "balance: {n} yen"
-
 main =
-  good = play 0 [(deposit 100) (withdraw 30) (deposit 5)] 1
-  bad = play 0 [(deposit 10) (withdraw 60)] 1
-  print (describe good) >> print (describe bad)
+  actions = [(deposit 100) (withdraw 30) (deposit 5)]
+  play 0 actions 1 logger (print "opening balance: 0 yen")
 
-fn play balance actions i
-  step balance actions i (at actions i)
+fn notify logger balance
+  print "[logger] balance is now {balance} yen"
 
-fn step balance _ _ none
-  balance
+fn play store actions i sub out
+  step store actions i sub out (at actions i)
 
-fn step balance actions i action
-  play (update balance action) actions (i + 1)
+fn step store _ _ _ out none
+  out >> print "closing balance: {store} yen"
+
+fn step store actions i sub out action
+  next = update store action
+  play next actions (i + 1) sub (out >> notify sub next)
 
 fn update balance (deposit n)
   balance + n
