@@ -676,7 +676,9 @@ impl Resolver<'_> {
             Expr::Lambda { params, body, .. } => {
                 let base = self.locals.len();
                 for (name, span) in params {
-                    self.push_local(name, *span);
+                    if name != "_" {
+                        self.push_local(name, *span);
+                    }
                 }
                 self.resolve_expr(body);
                 self.flush_unused(base);
