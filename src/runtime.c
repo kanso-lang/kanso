@@ -654,13 +654,22 @@ static KValue* k_buf(long long cap) {
 
 static KBuf* k_buf_of(KValue* items) { return ((KBuf*)items) - 1; }
 
-static KValue k_mklist(long long n, KValue* items) {
+/* Take ownership of an already-filled k_buf-backed item buffer as a list, with
+   no copy: set its `used` to the length and wrap it. Callers that can build
+   straight into a k_buf use this instead of k_mklist, whose job is to copy a
+   caller's transient buffer into a fresh k_buf. */
+static KValue k_list_own(KValue* items, long long n) {
     KList* l = k_alloc_obj(sizeof(KList));
     l->len = n;
-    l->items = k_buf(n ? n : 1);
-    memcpy(l->items, items, sizeof(KValue) * n);
-    k_buf_of(l->items)->used = n;
+    l->items = items;
+    k_buf_of(items)->used = n;
     KValue v; v.tag = K_LIST; v.payload = k_ptr(l); return v;
+}
+
+static KValue k_mklist(long long n, KValue* items) {
+    KValue* buf = k_buf(n ? n : 1);
+    memcpy(buf, items, sizeof(KValue) * n);
+    return k_list_own(buf, n);
 }
 
 KValue k_list_lit(long long n, KValue* items) {
@@ -800,14 +809,14 @@ KValue k_b_entries(KValue mv) {
     KMap* m = k_as_map(mv);
     long long n;
     KValue* s = k_map_sorted(m, &n);
-    KValue* items = k_alloc(sizeof(KValue) * (n ? n : 1));
+    KValue* items = k_buf(n ? n : 1);
     for (long long i = 0; i < n; i++) {
         KValue* fields = k_alloc(sizeof(KValue) * 2);
         fields[0] = s[i * 2];
         fields[1] = s[i * 2 + 1];
         items[i] = k_rec(0, 2, fields);
     }
-    return k_mklist(n, items);
+    return k_list_own(items, n);
 }
 
 /* utf-8 helpers: kanso strings are opaque utf-8, positions are codepoints */
@@ -832,29 +841,38 @@ KValue k_b_bytes(KValue sv) {
     return k_bytes_view((const unsigned char*)s->data, s->len);
 }
 
-static KValue k_view_to_list(KValue v) {
-    if (v.tag != K_BYTES) return v;
+/* A list or a bytes view, seen as a sequence of values. */
+static long long k_seq_len(KValue v) {
+    if (v.tag == K_LIST) return k_as_list(v)->len;
+    if (v.tag == K_BYTES) return k_as_bytes(v)->len;
+    k_die("concat takes two lists");
+    return 0;
+}
+
+/* Write a list or bytes view into dst[0..len). A bytes view expands to int
+   values in place, without first materializing an intermediate list. */
+static void k_seq_into(KValue v, KValue* dst) {
+    if (v.tag == K_LIST) {
+        KList* l = k_as_list(v);
+        memcpy(dst, l->items, sizeof(KValue) * l->len);
+        return;
+    }
     KBytes* b = k_as_bytes(v);
-    KValue* items = k_alloc(sizeof(KValue) * (b->len ? b->len : 1));
-    for (long long i = 0; i < b->len; i++) items[i] = k_int(b->data[i]);
-    return k_mklist(b->len, items);
+    for (long long i = 0; i < b->len; i++) dst[i] = k_int(b->data[i]);
 }
 
 KValue k_b_concat(KValue av, KValue bv) {
     if (!k_not_failure(av)) return av;
     if (!k_not_failure(bv)) return bv;
-    av = k_view_to_list(av);
-    bv = k_view_to_list(bv);
-    if (av.tag != K_LIST || bv.tag != K_LIST) k_die("concat takes two lists");
-    KList* a = k_as_list(av);
-    KList* b = k_as_list(bv);
-    long long n = a->len + b->len;
-    KValue* items = k_alloc(sizeof(KValue) * (n ? n : 1));
-    memcpy(items, a->items, sizeof(KValue) * a->len);
-    memcpy(items + a->len, b->items, sizeof(KValue) * b->len);
-    return k_mklist(n, items);
+    long long alen = k_seq_len(av), blen = k_seq_len(bv);
+    long long n = alen + blen;
+    KValue* items = k_buf(n ? n : 1);
+    k_seq_into(av, items);
+    k_seq_into(bv, items + alen);
+    return k_list_own(items, n);
 }
 
+static KValue k_utf8_bad(const char* data, long long len, const char* origin);
 static KValue k_utf8_check(char* data, long long len, const char* origin);
 
 KValue k_b_utf8(KValue lv, const char* origin) {
@@ -867,19 +885,26 @@ KValue k_b_utf8(KValue lv, const char* origin) {
     }
     if (lv.tag != K_LIST) k_die("utf8 takes a list of byte values");
     KList* l = k_as_list(lv);
-    char* data = k_alloc(l->len + 1);
+    /* build straight into the string's own buffer, then validate in place — the
+       old path filled a scratch buffer and let k_str_n copy it a second time. */
+    KStr* s = k_alloc_obj(sizeof(KStr));
+    s->len = (long)l->len;
+    s->data = k_alloc(l->len + 1);
     for (long long i = 0; i < l->len; i++) {
         KValue item = l->items[i];
         if (!k_not_failure(item)) return item;
         if (item.tag != K_INT || item.payload < 0 || item.payload > 255) {
             return k_err(k_str("utf8 takes byte values (0-255)"), origin);
         }
-        data[i] = (char)item.payload;
+        s->data[i] = (char)item.payload;
     }
-    return k_utf8_check(data, l->len, origin);
+    s->data[l->len] = 0;
+    KValue bad = k_utf8_bad(s->data, l->len, origin);
+    if (bad.tag == K_ERR) return bad;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
 
-static KValue k_utf8_check(char* data, long long len, const char* origin) {
+static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     long long i = 0;
     while (i < len) {
         unsigned char b0 = (unsigned char)data[i];
@@ -890,6 +915,12 @@ static KValue k_utf8_check(char* data, long long len, const char* origin) {
         }
         i += w;
     }
+    return k_none();
+}
+
+static KValue k_utf8_check(char* data, long long len, const char* origin) {
+    KValue bad = k_utf8_bad(data, len, origin);
+    if (bad.tag == K_ERR) return bad;
     return k_str_n(data, len);
 }
 
@@ -899,14 +930,14 @@ KValue k_b_chars(KValue sv) {
     KStr* s = k_as_str(sv);
     long count = 0;
     for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
-    KValue* items = k_alloc(sizeof(KValue) * (count ? count : 1));
+    KValue* items = k_buf(count ? count : 1);
     long at = 0;
     for (long i = 0; i < count; i++) {
         long w = k_cp_len((unsigned char)s->data[at]);
         items[i] = k_str_n(s->data + at, w);
         at += w;
     }
-    return k_mklist(count, items);
+    return k_list_own(items, count);
 }
 
 KValue k_b_at(KValue container, KValue index) {
