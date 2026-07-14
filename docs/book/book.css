@@ -1,10 +1,5 @@
 /* kanso book — chapter chrome shared across docs/book/ pages */
 
-.essay {
-  margin: 0 auto;
-  padding: 4rem 1.5rem 6rem;
-}
-
 .book-layout {
   display: grid;
   gap: 4rem;
