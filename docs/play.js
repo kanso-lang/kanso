@@ -303,6 +303,36 @@ main = print (describe (half 42))
   total = [9 1 8 2 7] . sort . map (n -> n * n) . sum
   print "sum of squares: {total}"
 `,
+  ordering: `fn cheapest prices
+  sort prices . at 1
+
+main =
+  prices = [520 380 450 610 290]
+  # these two share nothing: the compiler is free to run them in parallel
+  low = cheapest prices
+  total = sum prices
+  # report consumes both, so it waits for both -- the barrier is the data
+  report low total
+
+fn report low total
+  print "cheapest: {low} yen / total: {total} yen"
+`,
+  fanout: `# in go this is four goroutines, a channel, a WaitGroup, and a select.
+# in kanso the channel is the data flow itself: fan-out is a map whose
+# calls share nothing (the compiler is free to run them in parallel),
+# and fan-in is whatever consumes the results -- the join is the data.
+# go's select-over-message-types is kanso's dispatch-over-message-types:
+# one arm per message, no select statement -- the redux example's update
+# and notify arms are exactly that receive loop.
+fn fetch_quote city
+  length city * 130
+
+main =
+  cities = ["tokyo" "kyoto" "osaka" "sapporo"]
+  quotes = map cities (c -> fetch_quote c)
+  cheapest = sort quotes . at 1
+  print "four lookups fanned out, one answer fanned in: {cheapest} yen"
+`,
   redux: `type deposit
   amount: int
 

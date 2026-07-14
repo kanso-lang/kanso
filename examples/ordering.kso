@@ -1,0 +1,13 @@
+fn cheapest prices
+  sort prices . at 1
+
+main =
+  prices = [520 380 450 610 290]
+  # these two share nothing: the compiler is free to run them in parallel
+  low = cheapest prices
+  total = sum prices
+  # report consumes both, so it waits for both -- the barrier is the data
+  report low total
+
+fn report low total
+  print "cheapest: {low} yen / total: {total} yen"
