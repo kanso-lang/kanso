@@ -157,6 +157,13 @@ a:hover {
 
 /* ---------- shared type ---------- */
 
+/* the reading column every essay-shaped page uses (about, lore, compiler,
+   the book) — one definition; the book layout overrides its gutters. */
+.essay {
+  margin: 0 auto;
+  padding: 4rem 1.5rem 6rem;
+}
+
 .eyebrow {
   color: var(--accent);
   display: block;
@@ -421,10 +428,15 @@ a:hover {
 
 /* ---------- program showcase ---------- */
 
+/* the 5/7 split both the showcase and quickstart use */
+.quickstart-inner,
 .showcase-featured {
   display: grid;
   gap: 3rem;
   grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+}
+
+.showcase-featured {
   margin-bottom: 3rem;
 }
 
@@ -488,14 +500,6 @@ a:hover {
   margin-bottom: 1rem;
   padding: 0.35rem 0.75rem;
   text-transform: uppercase;
-}
-
-/* ---------- quickstart ---------- */
-
-.quickstart-inner {
-  display: grid;
-  gap: 3rem;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
 }
 
 /* ---------- footer ---------- */
