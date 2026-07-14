@@ -236,8 +236,8 @@ three</code></pre>
       </div>
       <div class="status-card">
         <span class="badge">two engines</span>
-        <h3>faster than go at json</h3>
-        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. the compiler decodes a 188&nbsp;KB document in <strong>~1.8&nbsp;ms</strong>, ahead of go's <code>encoding/json</code> at ~1.9&nbsp;ms—while rust's <code>serde_json</code> does it in ~0.86&nbsp;ms, about twice as fast. closing that gap (perceus, a real map) is the campaign—see <a href="https://github.com/ClayShentrup/kanso/blob/main/bench/RESULTS.md">the numbers</a>.</p>
+        <h3>faster than rust at json</h3>
+        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. the compiler decodes a 188&nbsp;KB document in <strong>~1.26&nbsp;ms</strong>—well ahead of go's <code>encoding/json</code> at ~1.9&nbsp;ms—and with the heartbeat memory experiment it runs <strong>~1.00&nbsp;ms</strong>, past a reasonably-written rust parser at ~1.11&nbsp;ms, six percent behind hand-tuned <code>serde_json</code>, in flat memory. the story, the diagrams, and the reproduce-it-yourself recipe: <a href="compiler.html#c11">the heartbeat</a>.</p>
       </div>
       <div class="status-card">
         <span class="badge">real software</span>
