@@ -61,6 +61,7 @@ declare %KValue @k_desc_stdin()
 declare %KValue @k_b_read_file(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
+declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
@@ -1842,12 +1843,36 @@ impl<'a> Backend<'a> {
         first: Option<String>,
         span: Span,
     ) -> Result<String, String> {
-        let Expr::Ident(name, _) = head else {
-            return Err("native backend: computed call heads are slice 2".to_string());
+        let computed_head = match head {
+            Expr::Ident(name, _) => f.lookup(name).is_some(),
+            _ => true,
         };
-        if f.lookup(name).is_some() {
-            return Err("native backend: calling local function values is slice 2".to_string());
+        if computed_head {
+            // The callee is a value (a lambda, a parameter, a bound function),
+            // not a declared group: emit the head as a value and dispatch at
+            // runtime. Unary only — kanso lambdas take one parameter.
+            let total = first.iter().len() + args.len() - usize::from(first.is_some());
+            if total != 1 {
+                return Err(
+                    "native backend: multi-argument calls on function values are slice 2"
+                        .to_string(),
+                );
+            }
+            let callee = self.emit_expr(f, head)?;
+            let arg = match first {
+                Some(v) => v,
+                None => self.emit_expr(f, &args[0])?,
+            };
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = call %KValue @k_call1(%KValue {callee}, %KValue {arg})"
+            ));
+            f.record(&t, TOP);
+            return Ok(t);
         }
+        let Expr::Ident(name, _) = head else {
+            unreachable!("non-ident heads take the computed path");
+        };
         if name == "if" {
             let cond = self.emit_expr(f, &args[0])?;
             let nf = f.tmp();

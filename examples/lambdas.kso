@@ -1,0 +1,4 @@
+fn apply f x
+  f x
+
+main = apply (s -> print "s = {s}") 7 >> apply (_ -> print "ignored, ran anyway") 9

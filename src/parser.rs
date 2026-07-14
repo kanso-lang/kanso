@@ -667,6 +667,11 @@ impl<'a> P<'a> {
                 if let Some(arrow_end) = self.lambda_lookahead() {
                     let mut params = Vec::new();
                     while self.pos < arrow_end {
+                        if let Some((Tok::Underscore, uspan)) = self.toks.get(self.pos) {
+                            params.push(("_".to_string(), *uspan));
+                            self.pos += 1;
+                            continue;
+                        }
                         let (name, pspan) = self.expect_ident("a lambda parameter")?;
                         params.push((name, pspan));
                     }
@@ -729,7 +734,10 @@ impl<'a> P<'a> {
 
     fn lambda_lookahead(&self) -> Option<usize> {
         let mut i = self.pos;
-        while let Some(Tok::Ident(_)) = self.toks.get(i).map(|(t, _)| t) {
+        while matches!(
+            self.toks.get(i).map(|(t, _)| t),
+            Some(Tok::Ident(_)) | Some(Tok::Underscore)
+        ) {
             i += 1;
             if let Some(Tok::Arrow) = self.toks.get(i).map(|(t, _)| t) {
                 return Some(i);

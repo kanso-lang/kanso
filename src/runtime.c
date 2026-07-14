@@ -40,7 +40,7 @@ typedef struct KHop { const char* fn; struct KHop* prev; } KHop;
 typedef struct { KValue reason; const char* origin; KHop* hops; } KErrBox;
 
 static KValue k_mklist(long long n, KValue* items);
-static KValue k_call1(KValue f, KValue a);
+KValue k_call1(KValue f, KValue a);
 static KValue* k_map_sorted(KMap* m, long long* out_len);
 
 /* The arena is a chain of blocks, newest first; allocation bumps in the head
@@ -745,7 +745,7 @@ KValue k_fnref(void* dispatcher) {
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
 
-static KValue k_call1(KValue f, KValue a) {
+KValue k_call1(KValue f, KValue a) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {
         if (!k_not_failure(a)) return a;
