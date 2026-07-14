@@ -69,6 +69,7 @@ declare %KValue @k_b_join(%KValue, %KValue)
 declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
+declare %KValue @k_b_push_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
@@ -133,10 +134,14 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     let packable: std::collections::HashSet<String> = escape.field_count.keys().cloned().collect();
     escape.returns.retain(|_, ty| packable.contains(ty));
     escape.carries.retain(|_, ty| packable.contains(ty));
+    let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
+    let in_place_pushes = crate::linear::in_place_pushes(program);
     let mut backend = Backend {
         program,
         inference,
         escape,
+        byte_disc,
+        in_place_pushes,
         type_ids,
         strings: Vec::new(),
         interned: HashMap::new(),
@@ -151,6 +156,8 @@ struct Backend<'a> {
     program: &'a Program,
     inference: infer::Inference,
     escape: crate::escape::EscapeInfo,
+    byte_disc: std::collections::HashSet<(String, usize, usize)>,
+    in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -168,6 +175,8 @@ struct FnEmit {
     sets: HashMap<String, Set>,
     /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
     origin_prefix: String,
+    /// Source file of the declaration being emitted, for keying push sites.
+    file: String,
     /// LLVM return type of the function being emitted: `%parsed` or `%KValue`.
     ret_ty: String,
 }
@@ -182,6 +191,7 @@ impl FnEmit {
             versions: HashMap::new(),
             sets: HashMap::new(),
             origin_prefix: String::new(),
+            file: String::new(),
             ret_ty: "%KValue".to_string(),
         }
     }
@@ -291,6 +301,20 @@ impl<'a> Backend<'a> {
     /// Render one call argument in the callee's ABI: raw i64 for an unboxed
     /// slot (extract the payload), boxed KValue otherwise.
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+        if self.is_byte_disc(callee, arity, i) {
+            // `e` is an `at`-on-bytes KValue (byte or none); hand it over as a
+            // raw i64 — the byte value, or 256 for none. The box `at` built and
+            // this unbox fold away in the caller, so a raw byte crosses the edge.
+            let tag = f.tmp();
+            f.line(&format!("{tag} = extractvalue %KValue {e}, 0"));
+            let payload = f.tmp();
+            f.line(&format!("{payload} = extractvalue %KValue {e}, 1"));
+            let is_none = f.tmp();
+            f.line(&format!("{is_none} = icmp eq i64 {tag}, {K_NONE}"));
+            let raw = f.tmp();
+            f.line(&format!("{raw} = select i1 {is_none}, i64 256, i64 {payload}"));
+            return format!("i64 {raw}");
+        }
         if self.escape.carries_ty(callee, arity, i).is_some() {
             // `e` is already a %parsed value (the analysis guarantees a %parsed
             // parameter is only ever fed a register-returnable call result).
@@ -308,7 +332,19 @@ impl<'a> Backend<'a> {
     /// the KValue the body expects.
     fn rebox_params(&self, f: &mut FnEmit, name: &str, arity: usize) {
         for i in 0..arity {
-            if self.unboxed_param(name, arity, i) {
+            if self.is_byte_disc(name, arity, i) {
+                // Reconstruct the KValue the boxed dispatch expects: 256 is none,
+                // anything else is that byte. The reconstruction folds back into
+                // a raw switch, so only the raw i64 actually crossed the edge.
+                let is_none = f.tmp();
+                f.line(&format!("{is_none} = icmp eq i64 %x{i}r, 256"));
+                f.line(&format!(
+                    "%x{i}b = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
+                ));
+                f.line(&format!(
+                    "%x{i} = select i1 {is_none}, %KValue {{ i64 4, i64 0 }}, %KValue %x{i}b"
+                ));
+            } else if self.unboxed_param(name, arity, i) {
                 f.line(&format!(
                     "%x{i} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
                 ));
@@ -316,12 +352,21 @@ impl<'a> Backend<'a> {
         }
     }
 
-    /// The dispatcher's parameter list, unboxing proven-int slots and passing
-    /// register-returnable records as `%parsed` structs.
+    /// A switch discriminator inference proves is `at`-on-bytes, so it crosses
+    /// as a raw i64 (byte value, or 256 for none) and is switched on directly.
+    fn is_byte_disc(&self, name: &str, arity: usize, param: usize) -> bool {
+        self.byte_disc.contains(&(name.to_string(), arity, param))
+    }
+
+    /// The dispatcher's parameter list: a raw i64 for a byte discriminator or a
+    /// proven-int slot, a `%parsed` struct for a register-returnable record,
+    /// else a boxed KValue.
     fn abi_params(&self, name: &str, arity: usize) -> Vec<String> {
         (0..arity)
             .map(|i| {
-                if self.escape.carries_ty(name, arity, i).is_some() {
+                if self.is_byte_disc(name, arity, i) {
+                    format!("i64 %x{i}r")
+                } else if self.escape.carries_ty(name, arity, i).is_some() {
                     format!("%parsed %x{i}")
                 } else if self.unboxed_param(name, arity, i) {
                     format!("i64 %x{i}r")
@@ -659,6 +704,7 @@ impl<'a> Backend<'a> {
             f.start_block(&arm_labels[k]);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
+            f.file = decl.file.clone();
             for (i, pattern) in decl.params.iter().enumerate() {
                 if let Pattern::Var(pname, _) = pattern {
                     f.bind(pname, &format!("%x{i}"));
@@ -701,6 +747,7 @@ impl<'a> Backend<'a> {
             let fail = format!("fail{k}");
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
+            f.file = decl.file.clone();
             for (i, pattern) in decl.params.iter().enumerate() {
                 match self.escape.carries_ty(name, arity, i) {
                     Some(ty) => {
@@ -1909,8 +1956,19 @@ impl<'a> Backend<'a> {
             if matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code") {
                 args_ir.push(self.origin_arg(f, span));
             }
+            // A push the linearity analysis proved unique extends its list in
+            // place instead of allocating a fresh header.
+            let sym = if name == "push"
+                && self
+                    .in_place_pushes
+                    .contains(&(f.file.clone(), span.line, span.col))
+            {
+                "push_mut"
+            } else {
+                name
+            };
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_b_{name}({})", args_ir.join(", ")));
+            f.line(&format!("{t} = call %KValue @k_b_{sym}({})", args_ir.join(", ")));
             let arg_sets: Vec<Set> = emitted.iter().map(|e| f.set_of(e)).collect();
             f.record(&t, infer::builtin_set(name, &arg_sets));
             return Ok(t);

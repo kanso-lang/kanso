@@ -7,6 +7,7 @@ pub mod escape;
 pub mod eval;
 pub mod infer;
 pub mod lexer;
+pub mod linear;
 pub mod parser;
 pub mod repl;
 pub mod wasm;

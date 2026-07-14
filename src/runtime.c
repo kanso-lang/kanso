@@ -988,6 +988,24 @@ KValue k_b_push(KValue lv, KValue item) {
     KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
 }
 
+/* In-place push, emitted only where the linearity analysis proved the list is
+   uniquely owned. On the frontier it mutates the header — no per-element
+   allocation — which is the whole win; off the frontier it grows like a normal
+   push (a uniquely-owned list is never off-frontier unless it just grew). */
+KValue k_b_push_mut(KValue lv, KValue item) {
+    if (!k_not_failure(lv)) return lv;
+    if (lv.tag != K_LIST) k_die("push takes a list and a value");
+    KList* l = k_as_list(lv);
+    KBuf* buf = k_buf_of(l->items);
+    if (buf->used == l->len && l->len < buf->cap) {
+        l->items[l->len] = item;
+        buf->used++;
+        l->len++;
+        return lv;
+    }
+    return k_b_push(lv, item);
+}
+
 KValue k_b_length(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_LIST) return k_int(k_as_list(v)->len);
