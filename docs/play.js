@@ -333,6 +333,14 @@ main =
   cheapest = sort quotes . at 1
   print "four lookups fanned out, one answer fanned in: {cheapest} yen"
 `,
+  join: `# two effects with no order between them, joined by &; the >> is the
+# barrier: serving happens only after both. failures accumulate -- if
+# both sides err you get both reasons, not just the first.
+main =
+  steep = print "steeping the sencha"
+  warm = print "warming the cups"
+  steep & warm >> print "serving"
+`,
   redux: `type deposit
   amount: int
 

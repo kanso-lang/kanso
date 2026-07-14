@@ -466,7 +466,7 @@ impl<'a> P<'a> {
     }
 
     fn parse_pipe(&mut self) -> Result<Expr, Diagnostic> {
-        let mut expr = self.parse_cmp()?;
+        let mut expr = self.parse_join()?;
         loop {
             match self.peek() {
                 Some(Tok::Pipe) => {
@@ -489,12 +489,23 @@ impl<'a> P<'a> {
                 Some(Tok::SeqOp) => {
                     let span = self.span_here();
                     self.pos += 1;
-                    let rhs = self.parse_cmp()?;
+                    let rhs = self.parse_join()?;
                     expr = Expr::Seq(Box::new(expr), Box::new(rhs), span);
                 }
                 _ => return Ok(expr),
             }
         }
+    }
+
+    fn parse_join(&mut self) -> Result<Expr, Diagnostic> {
+        let mut lhs = self.parse_cmp()?;
+        while let Some(Tok::Op("&")) = self.peek() {
+            let span = self.span_here();
+            self.pos += 1;
+            let rhs = self.parse_cmp()?;
+            lhs = Expr::BinOp { op: "&", lhs: Box::new(lhs), rhs: Box::new(rhs), span };
+        }
+        Ok(lhs)
     }
 
     fn parse_cmp(&mut self) -> Result<Expr, Diagnostic> {

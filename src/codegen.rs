@@ -61,6 +61,7 @@ declare %KValue @k_desc_stdin()
 declare %KValue @k_b_read_file(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
+declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
@@ -1504,6 +1505,7 @@ impl<'a> Backend<'a> {
                 let origin = self.origin_arg(f, span);
                 format!("call %KValue @k_div(%KValue {a}, %KValue {b}, {origin})")
             }
+            "&" => format!("call %KValue @k_desc_join(%KValue {a}, %KValue {b})"),
             "==" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 0)"),
             "!=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 1)"),
             "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
@@ -1515,6 +1517,12 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR);
+            return Ok(t);
+        }
+        if op == "&" {
+            let t = f.tmp();
+            f.line(&format!("{t} = {slow_call}"));
+            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | DESC | ERR);
             return Ok(t);
         }
         let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;

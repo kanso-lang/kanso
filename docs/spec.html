@@ -67,13 +67,14 @@
 
 <p><strong>the annotation doctrine (governs everything):</strong> an annotation is legal iff it carries a stipulation the compiler cannot derive. redundant annotations are compile errors. this one rule decides return types (never written), interfaces (deleted), type variables (written only when stipulating), typeset guards (written because enumeration is non-derivable), and field types (written because declarations have no body).</p>
 
-<p><strong>the ordering principle:</strong> order is never implicit. <code>.</code>, <code>&gt;&gt;</code>, and recursive data flow are the complete vocabulary of "before." where there is no mutation, the runtime owns order (reorder, parallelize, dedupe, cache freely).</p>
+<p><strong>the ordering principle:</strong> order is never implicit. <code>.</code>, <code>&gt;&gt;</code>, <code>&amp;</code>, and recursive data flow are the complete vocabulary of "before" and "together." where there is no mutation, the runtime owns order (reorder, parallelize, dedupe, cache freely).</p>
 
 <h2 id="s1"><span class="sec-num">section 01</span>purity and effects</h2>
 <ul>
   <li>every function is pure and returns exactly one value.</li>
   <li>effects are values (descriptions). <code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives <code>main</code>'s description.</li>
   <li><code>.</code> (spaces around it) composes descriptions with data flow (pipe). <code>&gt;&gt;</code> composes with pure sequencing, no data.</li>
+  <li><code>a &amp; b</code> joins two descriptions with <em>no order between them</em> — the runtime may run them together; <code>&gt;&gt;</code> after a join is the barrier. failures accumulate: both sides always run, and two errs merge into one whose reason lists both (validation, not first-wins). <code>&amp;</code> binds tighter than <code>&gt;&gt;</code>. a lone failure operand propagates as itself; joining a non-description is a runtime error.</li>
   <li>descriptions are inspectable data: testing asserts on descriptions or runs them against a scripted executor and asserts on the transcript. no mocks. (structural equality holds only up to closure boundaries; the transcript method is the general story.)</li>
   <li>effect sets are inferred per function and propagate up the call graph. no function coloring, no async/await. <code>main</code>'s inferred effect set is the program's permission manifest.</li>
   <li>pure calls are plain calls: zero monadic overhead when both the effect set and propagable set are empty.</li>
