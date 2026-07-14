@@ -62,6 +62,9 @@ declare %KValue @k_b_read_file(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_desc_join(%KValue, %KValue)
+declare void @k_beat_push()
+declare void @k_beat_iter()
+declare %KValue @k_beat_pop(%KValue)
 declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
@@ -138,12 +141,18 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     escape.carries.retain(|_, ty| packable.contains(ty));
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
     let in_place_pushes = crate::linear::in_place_pushes(program);
+    // Beat loops rewind the arena between iterations. Groups returning the
+    // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
+    // returned tag word, and the packed representation would mislead it.
+    let mut beat = crate::beat::beat_loops(program, &inference);
+    beat.retain(|(n, a)| escape.returns_ty(n, *a).is_none());
     let mut backend = Backend {
         program,
         inference,
         escape,
         byte_disc,
         in_place_pushes,
+        beat,
         type_ids,
         strings: Vec::new(),
         interned: HashMap::new(),
@@ -160,6 +169,7 @@ struct Backend<'a> {
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
+    beat: std::collections::HashSet<(String, usize)>,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -181,6 +191,9 @@ struct FnEmit {
     file: String,
     /// LLVM return type of the function being emitted: `%parsed` or `%KValue`.
     ret_ty: String,
+    /// Dispatcher group being emitted, for recognizing self-tail-calls.
+    group: String,
+    arity: usize,
 }
 
 impl FnEmit {
@@ -195,6 +208,8 @@ impl FnEmit {
             origin_prefix: String::new(),
             file: String::new(),
             ret_ty: "%KValue".to_string(),
+            group: String::new(),
+            arity: 0,
         }
     }
 
@@ -576,6 +591,8 @@ impl<'a> Backend<'a> {
         let ret = self.ret_ty(name, arity);
         let mut f = FnEmit::new();
         f.ret_ty = ret.to_string();
+        f.group = name.to_string();
+        f.arity = arity;
         let header = format!("define tailcc {ret} @d_{name}_{arity}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
@@ -728,6 +745,8 @@ impl<'a> Backend<'a> {
         let ret = self.ret_ty(name, arity);
         let mut f = FnEmit::new();
         f.ret_ty = ret.to_string();
+        f.group = name.to_string();
+        f.arity = arity;
         let header = format!("define tailcc {ret} @d_{name}_{arity}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
@@ -1466,6 +1485,11 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, n);
                     let t = f.tmp();
                     if callee_ret == f.ret_ty {
+                        if *name == f.group && n == f.arity && self.beat.contains(&(name.clone(), n)) {
+                            // a proven beat loop: everything this iteration
+                            // allocated is dead; rewind to the entry mark
+                            f.line("call void @k_beat_iter()");
+                        }
                         f.line(&format!(
                             "{t} = musttail call tailcc {callee_ret} @d_{name}_{n}({})",
                             args_ir.join(", ")
@@ -1967,14 +1991,27 @@ impl<'a> Backend<'a> {
                 .map(|(i, e)| self.call_arg(f, name, n, i, e))
                 .collect();
             let callee_ret = self.ret_ty(name, n);
+            let beat_entry = self.beat.contains(&(name.clone(), n));
+            if beat_entry {
+                // entering a beat loop: mark the frontier; args are already
+                // evaluated, so they live below the mark
+                f.line("call void @k_beat_push()");
+            }
             let t = f.tmp();
             f.line(&format!(
                 "{t} = call tailcc {callee_ret} @d_{name}_{n}({})",
                 args_ir.join(", ")
             ));
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
-            f.record(&t, self.group_return_set(name, n) | fails);
-            return Ok(t);
+            let result = if beat_entry {
+                let p = f.tmp();
+                f.line(&format!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
+                p
+            } else {
+                t
+            };
+            f.record(&result, self.group_return_set(name, n) | fails);
+            return Ok(result);
         }
         if name == "at" && emitted.len() == 2 {
             return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));
