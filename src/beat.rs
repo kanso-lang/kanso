@@ -135,15 +135,10 @@ fn expr_allocates(e: &Expr, allocating: &HashSet<&str>, seed_pass: bool) -> bool
         Expr::App { head, args, .. } => {
             let head_allocates = match head.as_ref() {
                 Expr::Ident(n, _) => {
-                    if ALLOCATING.contains(&n.as_str()) {
-                        true
-                    } else if PURE.contains(&n.as_str()) {
-                        false
-                    } else if seed_pass {
-                        false
-                    } else {
-                        allocating.contains(n.as_str())
-                    }
+                    ALLOCATING.contains(&n.as_str())
+                        || (!PURE.contains(&n.as_str())
+                            && !seed_pass
+                            && allocating.contains(n.as_str()))
                 }
                 other => expr_allocates(other, allocating, seed_pass),
             };
