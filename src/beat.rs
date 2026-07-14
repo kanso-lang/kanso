@@ -16,13 +16,13 @@
 //! 1. some arm ends in a self-tail-call (it is a loop);
 //! 2. every self-tail-call argument is either
 //!    a) a bare own-parameter (top-level `Var` pattern) whose group set —
-//!       failures aside, since the dispatcher propagates those before any arm
-//!       body (and so before any boundary) runs — is int/float/bool, string,
-//!       or bytes: immutable payloads with no lazily-allocated internals
-//!       (maps memoize a sorted view *above* the mark into a header *below*
-//!       it; lists grow their shared buffer; both stay ineligible), or
+//!    failures aside, since the dispatcher propagates those before any arm
+//!    body (and so before any boundary) runs — is int/float/bool, string, or
+//!    bytes: immutable payloads with no lazily-allocated internals (maps
+//!    memoize a sorted view *above* the mark into a header *below* it; lists
+//!    grow their shared buffer; both stay ineligible), or
 //!    b) any expression, when the callee's parameter set at that position is —
-//!       failures aside — pure non-heap scalars;
+//!    failures aside — pure non-heap scalars;
 //! 3. no other group tail-calls it (every outside entry is a plain call, so
 //!    codegen brackets each one with `k_beat_push`/`k_beat_pop`); and
 //! 4. its name is never used as a function value (an `Ident` outside call-head
