@@ -6,7 +6,7 @@
 
 A language where the source file contains only decisions. Anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error or unrepresentable. Programs have a canonical form — one rendering per program — so no formatter tool exists: non-canonical whitespace is a syntax error.
 
-**Docs:** https://clayshentrup.github.io/kanso/ · **Spec:** [kanso-spec.md](kanso-spec.md)
+**Docs:** https://clayshentrup.github.io/kanso/ · **Spec:** https://clayshentrup.github.io/kanso/spec.html · **Compiler:** https://clayshentrup.github.io/kanso/compiler.html
 
 ```
 fn describe (err reason)
@@ -45,7 +45,7 @@ cargo build --release
 
 ## status
 
-This is the **phase-1 reference interpreter** ([spec §15](kanso-spec.md)): a tree-walking evaluator in Rust covering a subset of the v0.1 design freeze. What runs today:
+This began as the **phase-1 reference interpreter** ([spec](https://clayshentrup.github.io/kanso/spec.html)) and now ships three engines — the tree-walking interpreter (the semantics oracle), an LLVM-backed native compiler, and a direct-to-wasm browser backend — held byte-identical by differential CI. What runs today:
 
 - purity and effects-as-descriptions: `print`, `>>` sequencing, `--plan` to inspect the description, a scripted executor for transcript-based tests
 - failure as values: `err reason` and `none` propagate; division by zero and out-of-range `at` are values, not crashes
@@ -66,7 +66,7 @@ The error corpus in `tests/golden` matters as much as the success corpus — hal
 
 Decisions the spec leaves open (or that phase 1 approximates), flagged for revisit:
 
-- **the endpoint rule is enforced at runtime**, not compile time — the real rule needs the §14.1 inference fixpoint, being formalized in [design/fixpoint.md](design/fixpoint.md)
+- **the endpoint rule is enforced at runtime**, not compile time — the real rule needs the inference fixpoint (its story: [about, part 03](https://clayshentrup.github.io/kanso/about.html#p3))
 - **generic parameters never bind `err`/`none`**; handle failure explicitly (literal `none`, `(err reason)`) or it propagates — a conservative stand-in for inferred pass-throughs
 - **canonical declaration order**: types before functions, each alphabetical, overloads adjacent and most-specific first — an interpretation of the spec's "wherever order is semantically inert" rule
 - **the pipe target parses as one application** and the piped value becomes its first argument; a non-callable target fails at runtime, not parse time

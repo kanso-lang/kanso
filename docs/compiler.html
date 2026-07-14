@@ -91,7 +91,25 @@
 
 <p>a dynamic-feeling language usually pays a runtime tax: tag checks before every operation, failure guards after every call. kanso's whole-program inference—the monotone fixpoint whose near-death story is <a href="about.html#p3">about, part 03</a>—computes, per call site, the exact set of concrete type vectors that can arrive. the emitter then monomorphizes per vector: dispatch resolves statically, patterns become field offsets, and on proven paths the tag checks and failure guards are simply <em>deleted</em>—not predicted well, not branch-hinted, absent.</p>
 
-<p>the receipt is the benchmark: a 188kb nested json document, read at runtime and decoded 150 times. when this page was first written the llvm backend averaged ~1.8ms per decode—ahead of go's <code>encoding/json</code> at ~1.9ms, and about half the speed of <code>serde_json</code>'s hand-tuned ~0.9ms. the campaign since then—unboxed dispatch, in-place list building, a sweep of provably-redundant copies—brought the shipped default to ~1.26ms, and the fair fight got a fair stick: a <em>reasonably-written</em> rust parser (recursive descent, std types, no simd, no zero-copy—the same algorithm kanso uses) decodes at ~1.11ms, because racing hand-tuned serde measures hand-tuning, not the language. the remaining gap is allocation traffic, and §11 shows the experiment where the memory model itself closes it—past the fair stick, to ~1.00ms. full numbers and the reproduction recipe live in <a href="https://github.com/ClayShentrup/kanso/blob/main/bench/RESULTS.md">bench/RESULTS.md</a>.</p>
+<p>the receipt is the benchmark: a 188kb nested json document, read at runtime and decoded 150 times. when this page was first written the llvm backend averaged ~1.8ms per decode—ahead of go's <code>encoding/json</code> at ~1.9ms, and about half the speed of <code>serde_json</code>'s hand-tuned ~0.9ms. the campaign since then—unboxed dispatch, in-place list building, a sweep of provably-redundant copies—brought the shipped default to ~1.26ms, and the fair fight got a fair stick: a <em>reasonably-written</em> rust parser (recursive descent, std types, no simd, no zero-copy—the same algorithm kanso uses) decodes at ~1.11ms, because racing hand-tuned serde measures hand-tuning, not the language. the remaining gap is allocation traffic, and §11 shows the experiment where the memory model itself closes it—past the fair stick, to ~1.00ms. the scoreboard and the recipe, so any number here can be checked rather than believed—every engine reads the file at runtime (an embedded constant would let llvm fold the decode) and the kanso harness accumulates a checksum so the loop provably runs:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">the scoreboard — mean per decode, and how to reproduce it</div>
+  <pre><code><span class="c"># serde_json (hand-tuned)   ~0.94 ms   7.1 mb rss</span>
+<span class="c"># kanso + heartbeat (§11)   ~1.00 ms   12.4 mb rss, flat — experimental</span>
+<span class="c"># reasonably-written rust   ~1.11 ms   7.1 mb rss</span>
+<span class="c"># kanso, shipped default    ~1.26 ms   arena never freed (yet)</span>
+<span class="c"># go encoding/json          ~1.90 ms</span>
+
+cargo build --release
+bash bench/make_jsonbench.sh
+./target/release/kanso build bench/jsonbench --release
+time ./jsonbench                                  <span class="c"># divide by 150</span>
+(cd bench/serde_bench && cargo build --release)
+./bench/serde_bench/target/release/serde_bench bench/large.json
+(cd bench/naive_json && cargo build --release)
+./bench/naive_json/target/release/naive_json bench/large.json</code></pre>
+</div>
 
 <h2 id="c5"><span class="sec-num">05</span>run is build-and-run</h2>
 
@@ -117,11 +135,11 @@
 
 <p>the third engine emits wasm bytecode directly—hand-rolled section encoding, no llvm within a hundred miles, because llvm is a dependency measured in hundreds of megabytes and a browser tab is not. its value representation is deliberately strange: every kanso value is an i32 <em>handle</em> into a registry owned by the toolchain module, which reuses the interpreter's value machinery so semantics stay oracle-identical. the emitted program module owns <em>no linear memory at all</em>—literals are pre-registered at compile time, so the module is pure control flow over handles. host-driven iteration (map and filter walking a list, description continuations) calls back into compiled closures through a single imported trampoline, <code>k_callback</code>, wired by the javascript glue to the program's function table.</p>
 
-<p>this is how the <a href="playground.html">playground</a> compiles the program you type into machine code inside the tab, tail calls included, with the whole toolchain at about half a megabyte of wasm. the registry design is the first cut, not the final one—the path to a self-contained module (its own memory, its own bignums, <code>call_indirect</code> retiring the trampoline) is scoped in <a href="https://github.com/ClayShentrup/kanso/blob/main/design/wasm-runtime.md">design/wasm-runtime.md</a>, and every step of that migration is verifiable because the differential harness pins the corpus to native-engine bytes.</p>
+<p>this is how the <a href="playground.html">playground</a> compiles the program you type into machine code inside the tab, tail calls included, with the whole toolchain at about half a megabyte of wasm. the registry design is the first cut, not the final one—the path to a self-contained module is scoped and staged (its own memory, its own bignums, <code>call_indirect</code> retiring the trampoline), and every step of that migration is verifiable because the differential harness pins the corpus to native-engine bytes.</p>
 
 <h2 id="c9"><span class="sec-num">09</span>the frontier</h2>
 
-<p>the standing directive for what lands next: core changes are on the table iff they don't tax the user and the payoff is game-changing. the goal, stated plainly—faster than rust, with no ownership annotations and no rejected programs. the queue, each entry named with the semantic property that licenses it (the full scoring is in <a href="https://github.com/ClayShentrup/kanso/blob/main/design/performance-frontier.md">design/performance-frontier.md</a>):</p>
+<p>the standing directive for what lands next: core changes are on the table iff they don't tax the user and the payoff is game-changing. the goal, stated plainly—faster than rust, with no ownership annotations and no rejected programs. the queue, each entry named with the semantic property that licenses it:</p>
 
 <p><strong>perceus reference counting with reuse analysis</strong>—<em>demoted, honorably.</em> this entry used to read "queued next, the main unplayed card," and the prior art still deserves its credit: koka invented perceus, lean 4 and roc ship it in production, and the in-place-reuse-when-unique idea is the seed of everything below. but the design moved past the count itself. per-object counting fails kanso's own budget twice—a header on every object paid always, and a cascade on the last drop of a big structure that is a garbage-collection pause in a trench coat—and §10's four constructs plus §11's heartbeat answer the question the count exists to ask ("who frees this last?") structurally, so it never gets asked. perceus survives here as the measured floor: if real programs ever show the static model copying too much, the count returns as a fallback for exactly that pattern, knowingly. the reuse targets stand and are landing by other means—the uniquely-owned builder loops already update in place with zero counting.</p>
 
@@ -248,7 +266,7 @@
 <p><em>temporary section. these are the still-open rulings; as each one lands it graduates from this list into the essay above, and the section ends at zero.</em></p>
 
 <ul>
-<li><strong>pub visibility</strong>—<code>_name</code> as module-private has two real defects: promoting a name renames every call site, and <code>_</code> already means wildcard and deliberately-unused. the <code>pub</code>-modifier draft (private by default, every arm of a public group marked, api surface greppable in one pass) is written in <a href="https://github.com/ClayShentrup/kanso/blob/main/design/visibility.md">design/visibility.md</a>; awaiting the gavel.</li>
+<li><strong>pub visibility</strong>—<code>_name</code> as module-private has two real defects: promoting a name renames every call site, and <code>_</code> already means wildcard and deliberately-unused. the <code>pub</code>-modifier draft is settled in shape—private by default, every arm of a public group marked, api surface greppable in one pass—and awaiting the gavel.</li>
 <li><strong>parameter typesets</strong>—fields ship; parameters wait on the annotation-redundancy checker, so a guard the body already derives can be rejected as clutter before parameter guards become legal.</li>
 <li><strong>dispatch positional-field fragility</strong>—the destructuring ruling deleted positional binds because a type growing a field reshuffles them; dispatch arms still consume fields positionally, which is the same flank unguarded. wants litigation.</li>
 <li><strong>kq repo publish</strong>—committed and ready at <code>~/dev/kq</code> with a readme and the jq benchmark; publishing awaits an explicit go.</li>

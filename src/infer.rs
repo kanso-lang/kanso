@@ -1,8 +1,9 @@
 use crate::ast::*;
 use std::collections::HashMap;
 
-/// Propagable type sets as tag bitsets — the fixpoint of design/fixpoint.md,
-/// coarse to start: one bit per runtime tag, records unrefined.
+/// Propagable type sets as tag bitsets — the single monotone inference
+/// fixpoint (the story is told in about.html part 03), coarse to start:
+/// one bit per runtime tag, records unrefined.
 pub type Set = u16;
 
 pub const INT: Set = 1 << 0;
