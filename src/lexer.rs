@@ -84,6 +84,37 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             continue;
         }
         let indent = trimmed.len() - trimmed.trim_start().len();
+        let content = &trimmed[indent..];
+        // A continuation line starts with a chain operator (`>>` or `.`) at the
+        // parent statement's indent plus two; its tokens splice into the parent
+        // so the parser sees one logical line. Spans keep the source line, so
+        // diagnostics still point home. No statement can begin with an
+        // operator, so the form is unambiguous.
+        let continues = content.starts_with(">>") || content.starts_with(". ");
+        if continues {
+            let parent_ok = lines.last().is_some_and(|p: &Line| indent == p.indent + 2)
+                && blank_lines.last() != Some(&(number - 1));
+            if !parent_ok {
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    "a `>>`/`.` continuation line sits directly under its statement, \
+                     indented two spaces deeper"
+                        .to_string(),
+                    Span { line: number, col: 1 },
+                ));
+                continue;
+            }
+            match lex_line(content, number, indent + 1) {
+                Ok(lexed_line) => {
+                    validate_spacing(&lexed_line, number, &mut diags);
+                    let parent = lines.last_mut().expect("parent_ok checked");
+                    parent.tokens.extend(lexed_line.tokens);
+                    parent.end_cols.extend(lexed_line.end_cols);
+                }
+                Err(d) => diags.push(d),
+            }
+            continue;
+        }
         if indent != 0 && indent != 2 {
             diags.push(Diagnostic::new(
                 "formatting",
@@ -92,7 +123,6 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             ));
             continue;
         }
-        let content = &trimmed[indent..];
         if content.starts_with('#') {
             continue;
         }

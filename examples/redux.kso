@@ -16,7 +16,9 @@ main =
   monday_moves = [(deposit 100) (withdraw 30)]
   monday = run 0 monday_moves 1
   tuesday = run monday [(withdraw 100)] 1
-  play 0 monday_moves 1 logger (print "watch monday live, opening at 0 yen") >> print "monday closed at {describe monday}" >> print "tuesday closed at {describe tuesday}"
+  play 0 monday_moves 1 logger (print "watch monday live, opening at 0 yen")
+    >> print "monday closed at {describe monday}"
+    >> print "tuesday closed at {describe tuesday}"
 
 fn notify logger balance
   print "[logger] balance is now {balance} yen"
