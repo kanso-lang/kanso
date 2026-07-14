@@ -636,11 +636,19 @@ static KValue k_exec(KDesc* d) {
     }
 }
 
+static long long k_truthy_bad(void) {
+    k_die("an if condition is true or false");
+    return 0;
+}
+
+/* Fires on every `if` condition. Keeping the cold k_die path out of line
+   leaves this body small enough that LTO inlines it into the hot loops,
+   instead of leaving a real call+return the size estimate would otherwise
+   force. */
 long long k_truthy(KValue v) {
     if (v.tag == K_TRUE) return 1;
     if (v.tag == K_FALSE) return 0;
-    k_die("an if condition is true or false");
-    return 0;
+    return k_truthy_bad();
 }
 
 /* ---- slice 2: lists, maps, closures, builtins ---- */
