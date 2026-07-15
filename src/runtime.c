@@ -682,8 +682,13 @@ static KValue k_exec(KDesc* d) {
             return k_none();
         }
         case 1: {
+            /* a >> step is a beat: the left side's yield is discarded by
+               contract, so everything it allocated dies here — unless it
+               failed, in which case the err (and its region) survives. */
+            k_beat_push();
             KValue left = k_exec(k_as_desc(d->x));
-            if (left.tag == K_ERR) return left;
+            if (left.tag == K_ERR) return k_beat_pop(left);
+            k_beat_pop(k_none());
             return k_exec(k_as_desc(d->y));
         }
         case 2: {
@@ -734,9 +739,23 @@ static KValue k_exec(KDesc* d) {
         }
         case 7: {
             /* no order between the sides, and both always run — a failure on
-               one never abandons the other; failures accumulate */
+               one never abandons the other; failures accumulate. each side is
+               a beat: its yield is discarded on success, so only a failing
+               side keeps its region. */
+            k_beat_push();
             KValue left = k_exec(k_as_desc(d->x));
+            if (left.tag == K_ERR) {
+                left = k_beat_pop(left);
+            } else {
+                k_beat_pop(k_none());
+            }
+            k_beat_push();
             KValue right = k_exec(k_as_desc(d->y));
+            if (right.tag == K_ERR) {
+                right = k_beat_pop(right);
+            } else {
+                k_beat_pop(k_none());
+            }
             int lf = !k_not_failure(left);
             int rf = !k_not_failure(right);
             if (lf && rf) return k_accumulate_failures(left, right);
@@ -745,7 +764,12 @@ static KValue k_exec(KDesc* d) {
             return k_none();
         }
         default: {
+            /* a bind is a beat: the executed description's yield crosses into
+               the continuation, so a heap yield keeps its region; a scalar
+               yield frees the step's garbage before the continuation runs. */
+            k_beat_push();
             KValue yielded = k_exec(k_as_desc(d->x));
+            yielded = k_beat_pop(yielded);
             KValue next = k_call1(d->y, yielded);
             if (next.tag == K_DESC) return k_exec(k_as_desc(next));
             return next;
