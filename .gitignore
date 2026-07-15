@@ -11,3 +11,4 @@ __pycache__/
 /bench/serde_bench/target
 /bench/serde_bench/Cargo.lock
 *.ll
+/chain
