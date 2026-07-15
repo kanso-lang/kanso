@@ -1,138 +1,54 @@
 # the gavel stack
 
-Ephemeral decision doc — each ruling deletes its section here and lands in the
-spec / compiler page / corpus. Every "proposed" example desugars to machinery
-that is already merged and byte-identical (the Join/Seq nodes, gather excepted).
-
-Rule by letter: "A yes, C yield, D done, …"
+Ephemeral decision doc. Ruled items live only in the ledger; open items keep
+thorough examples. Rule by letter: "T3, W2, B yes, C yield, …"
 
 ---
 
-## A. the concurrency surface (rule as one unit)
+## ruled so far (the ledger)
 
-### A1 — bare effect lines become legal, and they're an unordered set ✅ GAVELED (2026-07-15: "of course — parallelism should be the default; you go out of your way to NOT have it")
+| item | ruling | status |
+| --- | --- | --- |
+| A1 bare effect lines = unordered group, failures accumulate | ✅ "parallelism should be the default; you go out of your way to NOT have it" | **implemented** |
+| A2 same-resource auto-ordering | ❌ "parallel lines are EXACTLY as if in two threads — the resource does not matter." Resource-dependent order would add inconsistency, more to memorize, exceptions to rules. One rule, no asterisks. | — |
+| A3 lone `>>` line = wall; `>> expr` = fused singleton (identical meaning) | ✅ | **implemented** |
+| A4 `<< labels` for DAG edges | ⏸ parked — walls suffice; true DAGs pay a false edge or decompose into functions; revive on real demand | — |
+| A5 `&` retires from the surface (bitwise future orthogonal) | ✅ | **implemented** (teaching error; Join node stays internal) |
+| R5 bindings precede the effect chain (the desugar hoists them; interleaving lied) | ✅ correctness, auto-adopted | **implemented** |
+| T indent trap | ✅ resolved by killing `>>`-continuation lines entirely — `>>` never splices; `.` continuations unchanged | **implemented** |
+| W fused walls | ✅ **fused closes**: `>> step` is a complete sequential step (Clay's space-saver for singleton stages); a bare line can't silently join it (teaching error); multi-member groups use the lone wall | **implemented** |
 
-**Today** (compile error):
-
-```
-main =
-  print "steeping the sencha"    # error[unused]: expression result unused
-  print "warming the cups"
-```
-
-**Proposed** — legal; the lines are a group with *no order between them*
-(parallel license), and their failures accumulate:
-
-```
-main =
-  steep_the_sencha
-  warm_the_cups
-```
-
-If both fail, you get both reasons — `["kettle is cold" "no cups left"]` —
-not whichever lost a race. (Accumulation is forced by determinism: "first
-error wins" is nondeterministic under real parallelism.)
-
-### A2 — effects on the same resource keep program order ❌ REJECTED (2026-07-15: "no — parallel prints have no order guarantee; if you care about order, indicate sequential, duh")
-
-The rule that makes A1 sane. Two prints share stdout, so they stay in
-program order automatically — beginners write top-to-bottom programs and get
-top-to-bottom output, **never seeing a mark**, and every existing golden
-survives:
+The live semantics, in one example — **bare lines are two threads; no order
+exists unless you wrote one**:
 
 ```
 main =
-  print "one"      # same resource (stdout):
-  print "two"      # program order preserved, deterministic
-  print "three"
-```
+  print "steeping the sencha"    # ┐ unordered — like two threads; any
+  print "warming the cups"       # ┘ interleaving is legal output
+  >> print "serving"             # the wall: only runs after both settle
 
-Different resources genuinely float:
-
-```
 main =
-  write_file "menu.txt" menu       # different files:
-  write_file "prices.txt" prices   # free to run concurrently
+  foo_a                          # a fully sequential chain: each fused
+  >> foo_b                       # `>> step` is one CLOSED sequential step
+  >> foo_c                       # (a bare line can't silently join it)
 ```
 
-### A3 — a lone `>>` line is a wall ✅ GAVELED (with Clay's fused-prefix reduction: `>> expr` ≡ wall + first member of the next group, so `>> a / b` ≡ `>>`/`a`/`b`; canonical-rendering rules under committee review with an example battery)
-
-Sequences the group above and the group below. Staircases need nothing else:
-
-```
-main =
-  steep_the_sencha     # ┐ group 1: unordered
-  warm_the_cups        # ┘
-  >>
-  unlock_the_door      # ┐ group 2: unordered, after group 1 settles
-  set_the_table        # ┘
-  >>
-  serve_tea            # after group 2
-```
-
-A failing group **gates** the wall: the next group never runs; the failure
-(accumulated) rides the railway out.
-
-Canonical-form rider: a wall between *single* statements renders inline —
-`a >> b` — so the block form only ever appears for real groups.
-
-### A4 — `<< labels` for true DAG edges ⏸ PARKED (2026-07-15: "totally unneeded now that we have this new >> syntax" — walls suffice; the DAG boundary stays on record: a true DAG pays a false edge or decomposes into named functions; revive on real demand, per Beck's razor)
-
-Walls express staircases only. When the graph has cross-references, label the
-lines (ordinary bindings) and put the edge **on the dependent line** — your
-founding requirement, "only the thing that needs the wait changes":
-
-```
-main =
-  a = brew_pot
-  b = rinse_cups
-  c = arrange_tray << a b     # needs exactly a and b
-  d = unlock_door
-  e = light_lanterns
-  f = greet_guests << d e     # needs exactly d and e — NOT c
-  serve << c f                # needs exactly c and f
-```
-
-After `<<` only names are legal (no calls — a restricted position, like
-patterns), so `<< a b` can never parse as "apply a to b". A `<<` edge moves
-**time only, no values**; needing a value is data flow, which orders itself.
-
-*Consequence:* this settles **binding-as-bind against Metz's proposal** — a
-binding on an effect line is a *label*, not run-and-bind-the-yield. The
-value-crossing bind stays visible as `.`.
-
-### A5 — `&` retires from the surface ✅ GAVELED (2026-07-15: "& retires from service; maybe ends up doing bitwise stuff but that's orthogonal") — IMPLEMENTED: user-facing & is a teaching error; Join node stays internal
-
-Shipped this week, superseded by A1–A3 (adjacency already says "and").
-The Join node stays as what groups *compile to*; the operator leaves the
-spec and docs. Inline grouping, if ever demanded, would be `;`
-(Haskell's own same-line answer) — parked, YAGNI.
-
-```
-steep & warm >> print "serving"    # dies (was legal for ~3 hours)
-
-steep                              # the one rendering
-warm
->>
-print "serving"
-```
-
-**My rec: adopt A whole.**
+(Today's executor happens to run in program order — that's scheduling, not
+semantics. Corpus/goldens may only pin programs whose output order is forced
+by `>>`.)
 
 ---
 
-## B. gather at consumption
+## B. gather at consumption (open — yes/no + surface)
 
-The third failure posture (besides wall-gating and letting it rise):
-*respond to the outcomes*. Question: does consuming description **labels as
-value arguments** mean "execute, gather, reify, dispatch"?
+Does consuming description **labels as value arguments** mean "execute,
+gather, reify the outcomes, dispatch"?
 
 ```
 main =
   r = reserve_tatami
   w = order_wagashi
-  confirmation r w        # <- the gavel: this means "run both, hand me
-                          #    the outcomes as plain data, dispatch"
+  confirmation r w        # <- the gavel
 
 fn confirmation booking:tatami_success order:wagashi_success
   print "confirmed: see you at {time booking}"
@@ -142,58 +58,48 @@ fn confirmation booking order
   print (parts . filter (s -> 0 < length s) . join ", ")
 ```
 
-Key mechanics: outcomes arrive **reified** — the success value, or an inert
-`failure` record (`reason f` etc.) — never a live err, so the railway can't
-skip your arms and the catch-all can actually say "gomen." A gather is a
-mini-boundary.
+Outcomes arrive **reified** — the success value, or an inert `failure`
+record — never a live err, so the railway can't skip your arms and the
+catch-all can say "gomen." A gather is a mini-boundary.
 
-**Alternative surface** — explicit word, no implicit execution-at-argument:
+**Alternative surface** — an explicit word instead of implicit
+execution-at-argument:
 
 ```
 gather [reserve_tatami order_wagashi] . confirmation
 ```
 
-More visible, one more name; the implicit form reads better and the label
-consumption is already unambiguous (a desc-label used as a value has no other
-possible meaning).
-
-Same primitive powers value-collecting fan-out (your three-random-numbers
-example).
+Same primitive powers value-collecting fan-out (three random dice).
 
 **My rec: adopt, implicit form.**
 
 ---
 
-## C. `pure` / `yield` — the unit primitive
+## C. `pure` / `yield` — the unit primitive (open — C1/C2 + name)
 
-The missing piece the fold-yield idiom needs. Today the only spelling dies:
+Today the fold-yield idiom dies:
 
 ```
 fn step _ _ _ _ out none
   out . (_ -> store)      # BROKEN: out ends in a print, print yields none,
-                          # the bind railway-skips the lambda -> yields none
+                          # the bind railway-skips the lambda
 ```
 
-**Option C1 — a named primitive** (`yield x` = a description that just
-yields x):
+**C1 — a named primitive:**
 
 ```
 fn step _ _ _ _ out none
-  out >> yield store      # run the effects, then the description's value
-                          # is the closing balance
+  out >> yield store      # effects run, then the description yields store
 ```
 
-**Option C2 — Metz's generalization**: a plain value on `>>`'s right is
-auto-lifted:
+**C2 — a plain value on `>>`'s right auto-lifts (Metz):**
 
 ```
 fn step _ _ _ _ out none
   out >> store
 ```
 
-C2 is one token lighter; C1 keeps "everything right of `>>` is a
-description" simple and greppable. Either unlocks the one-fold redux
-(no more computing the fold twice):
+Either unlocks the one-fold redux:
 
 ```
 main = play 0 moves 1 logger (print "opens at 0") . resume
@@ -206,118 +112,91 @@ fn resume monday
 
 ---
 
-## D. what does `print` yield?
-
-Today: `none` — which is why bind-after-print skips silently:
+## D. what does `print` yield? (open — D1/D2)
 
 ```
 main = print "a" . (x -> print "got {x}")
-# today:      prints "a", then NOTHING (none skips the continuation)
-# with done:  prints "a", then "got done"
+# D1 (today, none):  prints "a", then NOTHING — none skips the continuation
+# D2 (done marker):  prints "a", then "got done"
 ```
 
-**Option D1 — keep `none`**: consistent with "no meaningful value," but a
-*succeeded* effect yielding a failure-class value is a footgun (the skip
-above surprises everyone once).
+**D1** keeps `none` — but a *succeeded* effect yielding a failure-class
+value is a footgun (the silent skip surprises everyone once). **D2** adds a
+`done` zero-field marker: succeeded effects yield `done`; `none` stays
+purely absence/failure.
 
-**Option D2 — a `done` marker** (zero-field type, ordinary data): effects
-that succeed yield `done`; binds after them run; `none` stays purely a
-failure/absence.
-
-**My rec: D2 (`done`).** Interacts with C: `out >> yield store` works under
-either, but D2 removes the whole class of silent skips.
+**My rec: D2.**
 
 ---
 
-## E. the err-arm restriction (Avdi)
+## E. the err-arm restriction (open — yes/no)
 
 *A live-err arm may only return a description or another failure — never an
-ordinary value.* Makes resurrect-the-happy-track unwritable:
+ordinary value.*
 
 ```
 fn describe (err reason)
-  "gomen: {reason}"            # ILLEGAL under E: err in, plain string out —
-                               # the failure vanishes into the happy track
+  "gomen: {reason}"            # ILLEGAL under E: resurrects the happy track
 
 fn close day (err reason)
-  print "{day} failed"          # legal: handling = describing what happens
-                                # next, not undoing the failure
+  print "{day} failed"          # legal: handling = describing what's next
 
 fn retag (err reason)
-  err (wrapped reason)          # legal: failure to failure (context added)
-```
+  err (wrapped reason)          # legal: failure to failure
 
-Reified failure records (from B, or a boundary) are exempt — they're inert
-data, formatting them is fine:
-
-```
 fn failure_message (failure f)
-  "problem: {reason f}"         # legal: f is data, not a live err
+  "problem: {reason f}"         # legal always: f is REIFIED data (from a
+                                # gather/boundary), not a live err
 ```
 
-**My rec: adopt.** (The old redux example violated this; it's already gone.)
+**My rec: adopt.**
 
 ---
 
-## F. labeled nameless patterns (5a) + the type-constrained wildcard
+## F. labeled nameless patterns + type-constrained wildcard (open — yes/no)
 
-*A pattern that binds no name must wear one.* Fixes the wart you found:
+*A pattern that binds no name must wear one.*
 
 ```
-fn step _ _ _ _ out none          # today: what is none HERE? unreadable
+fn step _ _ _ _ out none          # today: what is none HERE?
 fn step _ _ _ _ out action:none   # with F: the action slot, matching none
 
 fn _value_for 34 cs p             # today (json byte table)
 fn _value_for byte:34 cs p        # with F
 
-fn menu_price item:"dango"        # string literals too
+fn failure_message _:tatami_success   # the type-constrained wildcard:
+  ""                                  # match the type, bind nothing
 ```
 
-Patterns that already bind names stay untouched: `n`, `(err reason)`,
-`(deposit n)` are self-documenting.
+Patterns that bind names (`n`, `(err reason)`, `(deposit n)`) stay bare.
+Group headers stay parked behind this (your naming-freedom argument).
 
-Plus the **type-constrained wildcard** your failure_message sketch needed
-(match the type, bind nothing, no nothing-wasted violation):
-
-```
-fn failure_message _:tatami_success
-  ""
-```
-
-Group headers (5b) stay parked behind this — your naming-freedom argument
-("a string vs an int in that slot is a different *thing*") killed the
-shared-header version.
-
-**My rec: adopt F; keep 5b parked.**
+**My rec: adopt.**
 
 ---
 
-## G. eta-reduction as canon
-
-A lambda that only forwards to a named function is derivable clutter —
-formatting error, like every other redundancy:
+## G. eta-reduction as canon (open — yes/no)
 
 ```
 slots . filter (s -> failed s) . map (f -> message f)   # ILLEGAL under G
 slots . filter failed . map message                      # the one rendering
 ```
 
-(Bare names as function values already compile — shipped this week.)
-Adopting G sweeps the corpus: `fanout.kso`'s `map cities (c -> fetch_quote c)`
-becomes `map cities fetch_quote`.
+A forwarding lambda is derivable clutter (annotation-doctrine logic). Bare
+names as function values already compile. Adopting sweeps the corpus
+(`fanout.kso`'s `map cities (c -> fetch_quote c)`).
 
 **My rec: adopt.**
 
 ---
 
-## H. the `random` effect
+## H. the `random` effect (open — H1/H2)
 
-Needed for the IO fan-out example ("pass 3 random numbers then be done").
 `random n` = a description yielding 1..n, executor-owned. The gavel is the
-**determinism policy**:
+determinism policy:
 
 - **H1**: real entropy by default; `KANSO_SEED=42` pins it (goldens, the
-  differential lattice, reproducible bug reports).
+  lattice, reproducible bug reports).
 - **H2**: fixed seed by default; entropy is the opt-in.
 
 ```
@@ -326,17 +205,17 @@ main =
   print (rolls . map render_die . join " ")
 ```
 
-**My rec: H1** — "random is random" is least surprising; tests set the seed.
+**My rec: H1.**
 
 ---
 
 ## parked (on the record, no action)
 
-- **dot-absorbs-`>>`** — argued no: erases the visible pure→then→bind
-  stratification; `>>` and `.` have different failure semantics.
+- **`<<` labels (A4)** — walls cover staircases; revive on real DAG demand.
+- **dot-absorbs-`>>`** — argued no: erases the visible then/bind split.
 - **postfix index on `)`** — `(sort xs)[1]` stays illegal; bind-then-index.
-- **group headers (5b)** — behind F.
-- **`;` inline separator** — the honest borrow if inline groups are ever
-  demanded; YAGNI today.
+- **group headers** — behind F.
+- **`;` inline separator** — the borrow if inline groups are ever demanded.
+- **`&` as bitwise** — orthogonal, someday.
 - **`serve` / processes** — the executor-loop primitive; next design
   campaign (three investigations already terminate there).

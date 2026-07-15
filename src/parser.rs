@@ -212,10 +212,11 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let mut binds: Vec<Stmt> = Vec::new();
     let mut segments: Vec<Vec<Expr>> = vec![Vec::new()];
     let mut wall_spans: Vec<Span> = Vec::new();
+    let mut closed_by_fuse = false;
     for line in body {
-        let prefixed = matches!(line.tokens.first(), Some((Tok::SeqOp, _)))
+        let fused = matches!(line.tokens.first(), Some((Tok::SeqOp, _)))
             && line.tokens.len() > 1;
-        if is_wall(line) || prefixed {
+        if is_wall(line) || fused {
             let span = line.tokens[0].1;
             if segments.last().is_some_and(Vec::is_empty) {
                 return Err(Diagnostic::new(
@@ -226,27 +227,21 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             }
             wall_spans.push(span);
             segments.push(Vec::new());
-            if !prefixed {
-                continue;
+            if fused {
+                // `>> expr` is a COMPLETE sequential step: wall plus its one
+                // member, closed — nothing may silently join it
+                let mut p = P::new(&line.tokens[1..], &line.end_cols[1..], line.number);
+                let expr = p.parse_expr()?;
+                p.expect_done()?;
+                reject_never_effect(&expr)?;
+                segments.last_mut().expect("segment").push(expr);
+                closed_by_fuse = true;
+            } else {
+                closed_by_fuse = false;
             }
-        }
-        let toks = if prefixed { &line.tokens[1..] } else { &line.tokens[..] };
-        let ends = if prefixed { &line.end_cols[1..] } else { &line.end_cols[..] };
-        let stmt_line = Line {
-            number: line.number,
-            indent: line.indent,
-            tokens: toks.to_vec(),
-            end_cols: ends.to_vec(),
-        };
-        if prefixed {
-            let mut p = P::new(&stmt_line.tokens, &stmt_line.end_cols, stmt_line.number);
-            let expr = p.parse_expr()?;
-            p.expect_done()?;
-            reject_never_effect(&expr)?;
-            segments.last_mut().expect("segment").push(expr);
             continue;
         }
-        match parse_stmt(&stmt_line)? {
+        match parse_stmt(line)? {
             Stmt::Bind { pattern, expr } => {
                 // every binding runs before every bare effect line, wherever
                 // it appears — so the surface may not show it interleaved
@@ -262,6 +257,16 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 binds.push(Stmt::Bind { pattern, expr });
             }
             Stmt::Expr(e) => {
+                if closed_by_fuse {
+                    return Err(Diagnostic::new(
+                        "formatting",
+                        "a fused `>> step` is a single sequential step — a line \
+                         cannot silently join it. for a group, put the wall alone \
+                         and list the members below it"
+                            .to_string(),
+                        expr_span(&e),
+                    ));
+                }
                 reject_never_effect(&e)?;
                 segments.last_mut().expect("segment").push(e);
             }

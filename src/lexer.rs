@@ -90,16 +90,14 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         // so the parser sees one logical line. Spans keep the source line, so
         // diagnostics still point home. No statement can begin with an
         // operator, so the form is unambiguous.
-        // Two leading->> forms, told apart by indent: at the parent statement's
-        // indent PLUS TWO it continues that statement (one long expression);
-        // at statement indent it is the concurrency surface (a wall, fused or
-        // alone) and flows to the parser as a statement. `. ` only continues.
+        // Only `.` continues a statement onto the next line (indent + two).
+        // `>>` never shares a line or splices: a lone `>>` is a wall statement,
+        // and anything else `>>`-led is a formatting error downstream.
         let cont_indent_ok = lines.last().is_some_and(|p: &Line| indent == p.indent + 2)
             && blank_lines.last() != Some(&(number - 1));
         let dot_cont = content.starts_with(". ");
-        let seq_cont = content.starts_with(">>") && content != ">>" && cont_indent_ok;
-        if dot_cont || seq_cont {
-            if dot_cont && !cont_indent_ok {
+        if dot_cont {
+            if !cont_indent_ok {
                 diags.push(Diagnostic::new(
                     "formatting",
                     "a `.` continuation line sits directly under its statement, \
