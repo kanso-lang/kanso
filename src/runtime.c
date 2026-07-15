@@ -84,29 +84,58 @@ static void* k_alloc(size_t n) {
     return p;
 }
 
-/* A beat boundary: the first call snapshots the arena frontier; every later
-   call rewinds to that snapshot. Everything allocated before the first
-   boundary (program input, lazily-built immortal caches) persists; everything
-   after it is beat-transient and its blocks recycle through the spare pool.
-   Experimental: only emitted for provably nothing-escapes loops. */
-static struct { KBlock* block; char* ptr; size_t left; int set; } k_beat;
+/* Beat marks form a stack, bracketing every entry into a compiler-proven
+   beat loop. k_beat_push snapshots the frontier at entry; k_beat_iter rewinds
+   to the innermost mark between iterations (the analysis guarantees the only
+   values crossing an iteration are entry-threaded or scalar); k_beat_pop
+   closes the entry, rewinding only when the loop's result is a non-heap
+   scalar — a heap result keeps its region alive (a leak until an outer beat,
+   traded knowingly for never freeing live data). Every operation is O(1) and
+   every reclamation is a pointer reset; retired blocks recycle warm through
+   the spare pool. Programs with no beat loop never call any of this and the
+   arena only grows, exactly as before. */
+static int k_is_heap(long long tag);
 
-void k_beat_boundary(void) {
-    if (!k_beat.set) {
-        k_beat.block = k_blocks;
-        k_beat.ptr = k_arena;
-        k_beat.left = k_arena_left;
-        k_beat.set = 1;
-        return;
-    }
-    while (k_blocks != k_beat.block) {
+typedef struct { KBlock* block; char* ptr; size_t left; } KMark;
+#define K_BEAT_MAX 64
+static KMark k_beat_stack[K_BEAT_MAX];
+static int k_beat_depth = 0;
+
+static void k_beat_rewind(KMark* m) {
+    while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
         b->next = k_spare;
         k_spare = b;
     }
-    k_arena = k_beat.ptr;
-    k_arena_left = k_beat.left;
+    k_arena = m->ptr;
+    k_arena_left = m->left;
+}
+
+void k_beat_push(void) {
+    if (k_beat_depth < K_BEAT_MAX) {
+        KMark* m = &k_beat_stack[k_beat_depth];
+        m->block = k_blocks;
+        m->ptr = k_arena;
+        m->left = k_arena_left;
+    }
+    k_beat_depth++;
+}
+
+void k_beat_iter(void) {
+    if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+        k_beat_rewind(&k_beat_stack[k_beat_depth - 1]);
+    }
+}
+
+KValue k_beat_pop(KValue r) {
+    if (k_beat_depth > 0) {
+        k_beat_depth--;
+        if (k_beat_depth < K_BEAT_MAX && !k_is_heap(r.tag)) {
+            k_beat_rewind(&k_beat_stack[k_beat_depth]);
+        }
+    }
+    return r;
 }
 
 /* Reference counting (Perceus, native backend only). Every heap object —
