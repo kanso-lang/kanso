@@ -17,7 +17,7 @@ main = (
     '  acc\n\n'
     'fn _bench cs n acc\n'
     '  _bench cs (n - 1) (acc + (length (decode cs)))\n\n'
-    'fn _run cs:string\n'
+    'fn _run cs\n'
     '  print "decoded 150 times, checksum {_bench cs 150 0}"\n\n'
     'main = read_file "bench/large.json" . _run\n'
 )

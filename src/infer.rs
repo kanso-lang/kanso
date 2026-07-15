@@ -234,7 +234,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                 _ => BOOL | fails,
             }
         }
-        Expr::App { head, args, .. } => eval_call(ctx, head, args, env),
+        Expr::App { head, args, piped, .. } => eval_call(ctx, head, args, env, *piped),
     }
 }
 
@@ -286,23 +286,40 @@ fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     }
 }
 
-fn eval_call<'a>(ctx: &mut Ctx<'a>, head: &'a Expr, args: &'a [Expr], env: &mut HashMap<&'a str, Set>) -> Set {
-    let arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
+fn eval_call<'a>(
+    ctx: &mut Ctx<'a>,
+    head: &'a Expr,
+    args: &'a [Expr],
+    env: &mut HashMap<&'a str, Set>,
+    piped: bool,
+) -> Set {
+    let mut arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
+    let mut piped_fail: Set = 0;
+    if piped && !arg_sets.is_empty() && arg_sets[0] & DESC != 0 {
+        // a description piped into a continuation: the executor runs it and
+        // hands the continuation its YIELD, never the description itself —
+        // and never a failure, which the bind skips before the call. the
+        // piped value's own failure bits short-circuit at the call site, so
+        // they reach the result directly.
+        piped_fail = arg_sets[0] & FAIL;
+        arg_sets[0] = (arg_sets[0] & !DESC & !FAIL) | desc_yield(&args[0]);
+    }
+    let piped_fail = piped_fail;
     let Expr::Ident(name, _) = head else {
-        return TOP;
+        return TOP | piped_fail;
     };
     if env.contains_key(name.as_str()) {
-        return TOP; // calling a local function value
+        return TOP | piped_fail; // calling a local function value
     }
     if name == "if" {
         let cond_fail = arg_sets[0] & FAIL;
-        return arg_sets[1] | arg_sets[2] | cond_fail;
+        return arg_sets[1] | arg_sets[2] | cond_fail | piped_fail;
     }
     if name == "err" {
-        return ERR;
+        return ERR | piped_fail;
     }
     if name == "print" {
-        return DESC | (arg_sets[0] & FAIL);
+        return DESC | (arg_sets[0] & FAIL) | piped_fail;
     }
     if let Some(&idx) = ctx.type_names.get(name.as_str()) {
         // constructing a declared type: grow each field's set by this arg's,
@@ -318,11 +335,11 @@ fn eval_call<'a>(ctx: &mut Ctx<'a>, head: &'a Expr, args: &'a [Expr], env: &mut 
             }
         }
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
-        return REC | fails;
+        return REC | fails | piped_fail;
     }
     if name == "entry" {
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
-        return REC | fails;
+        return REC | fails | piped_fail;
     }
     if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
         let decls = decls.clone();
@@ -343,9 +360,29 @@ fn eval_call<'a>(ctx: &mut Ctx<'a>, head: &'a Expr, args: &'a [Expr], env: &mut 
             }
             out |= ctx.returns[i];
         }
-        return out;
+        return out | piped_fail;
     }
-    builtin_set(name, &arg_sets)
+    builtin_set(name, &arg_sets) | piped_fail
+}
+
+/// What a description's execution hands a bound continuation, syntactically:
+/// the yield of the lexical description expression, failures stripped (the
+/// bind skips them before the continuation runs). Anything unrecognized is
+/// conservatively any-non-failure.
+fn desc_yield(e: &Expr) -> Set {
+    match e {
+        Expr::App { head, piped: false, .. } => match head.as_ref() {
+            Expr::Ident(n, _) if n == "read_file" || n == "stdin" => STR,
+            Expr::Ident(n, _) if n == "args" => LIST,
+            Expr::Ident(n, _) if n == "print" || n == "write_file" => 0,
+            _ => TOP & !FAIL,
+        },
+        // `a >> b` yields what its right side yields
+        Expr::Seq(_, b, _) => desc_yield(b),
+        // a join yields nothing a continuation would see
+        Expr::BinOp { op: "&", .. } => 0,
+        _ => TOP & !FAIL,
+    }
 }
 
 pub fn builtin_set(name: &str, args: &[Set]) -> Set {
