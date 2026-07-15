@@ -8,4 +8,6 @@ main =
   prices = [30 10 20]
   doubled = map prices (x -> x * 2)
   ninth = at prices 9
-  print "sorted: {sort prices}" >> print "doubled: {doubled}" >> print (describe ninth)
+  print "sorted: {sort prices}"
+  >> print "doubled: {doubled}"
+  >> print (describe ninth)

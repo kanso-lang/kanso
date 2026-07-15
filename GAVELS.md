@@ -17,6 +17,7 @@ thorough examples. Rule by letter: "T3, W2, B yes, C yield, …"
 | R5 bindings precede the effect chain (the desugar hoists them; interleaving lied) | ✅ correctness, auto-adopted | **implemented** |
 | T indent trap | ✅ resolved by killing `>>`-continuation lines entirely — `>>` never splices; `.` continuations unchanged | **implemented** |
 | W fused walls | ✅ **fused closes**: `>> step` is a complete sequential step (Clay's space-saver for singleton stages); a bare line can't silently join it (teaching error); multi-member groups use the lone wall | **implemented** |
+| X width canon | ✅ "the compiler fails if you do a needless multi-liner version or a one-liner version that's actually multiple lines." Lines cap at 80. Fits-on-one-line ⇒ MUST be one line (needless `.` continuation, needless multi-line chain, lone wall before a one-step stage: all errors). Doesn't-fit ⇒ one step per line, no partial chaining. Width alone decides. | **implemented** |
 
 The live semantics, in one example — **bare lines are two threads; no order
 exists unless you wrote one**:
@@ -28,10 +29,13 @@ main =
   >> print "serving"             # the wall: only runs after both settle
 
 main =
-  foo_a                          # a fully sequential chain: each fused
-  >> foo_b                       # `>> step` is one CLOSED sequential step
-  >> foo_c                       # (a bare line can't silently join it)
+  simmer_the_dashi_for_an_hour   # a fully sequential chain: each fused
+  >> strain_out_the_katsuobushi  # `>> step` is one CLOSED sequential step
+  >> season_and_serve_the_broth  # (a bare line can't silently join it)
 ```
+
+(X: this block form is only legal because the inline chain would blow the
+80 column cap — `main = a >> b >> c` that fits MUST be written inline.)
 
 (Today's executor happens to run in program order — that's scheduling, not
 semantics. Corpus/goldens may only pin programs whose output order is forced

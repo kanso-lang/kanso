@@ -1,0 +1,4 @@
+error[formatting]: no partial chaining: a chain fits on one line, or each step gets its own line
+  --> partial_chain.kso:2:20
+   2 |   print "steeping" >> print "pouring"
+                          ^
