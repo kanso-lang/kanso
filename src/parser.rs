@@ -123,7 +123,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             span,
         ));
     }
-    let stmts = parse_body(body)?;
+    let stmts = parse_body(body, None)?;
     Ok(FnDecl { name, span, params, body: stmts, file: String::new() })
 }
 
@@ -148,7 +148,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
                 span,
             ));
         }
-        let stmts = parse_body(body)?;
+        let stmts = parse_body(body, Some(name.len() + 3))?;
         return Ok(FnDecl { name, span, params: Vec::new(), body: stmts, file: String::new() });
     }
     if !body.is_empty() {
@@ -199,7 +199,7 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
 /// groups. Bindings keep their places; the folded chain becomes the body's
 /// final expression. A body with no bare lines and no walls passes through
 /// untouched.
-fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
+fn parse_body(body: &[Line], head_width: Option<usize>) -> Result<Vec<Stmt>, Diagnostic> {
     let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _)]);
     let has_surface = body.iter().enumerate().any(|(i, l)| {
         is_wall(l)
@@ -211,7 +211,10 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     }
     let mut binds: Vec<Stmt> = Vec::new();
     let mut segments: Vec<Vec<Expr>> = vec![Vec::new()];
+    let mut seg_widths: Vec<Vec<usize>> = vec![Vec::new()];
     let mut wall_spans: Vec<Span> = Vec::new();
+    let mut wall_fused: Vec<bool> = Vec::new();
+    let mut seq_stmts: Vec<(usize, Span)> = Vec::new();
     let mut closed_by_fuse = false;
     for line in body {
         let fused = matches!(line.tokens.first(), Some((Tok::SeqOp, _)))
@@ -226,7 +229,9 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 ));
             }
             wall_spans.push(span);
+            wall_fused.push(fused);
             segments.push(Vec::new());
+            seg_widths.push(Vec::new());
             if fused {
                 // `>> expr` is a COMPLETE sequential step: wall plus its one
                 // member, closed — nothing may silently join it
@@ -234,7 +239,11 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 let expr = p.parse_expr()?;
                 p.expect_done()?;
                 reject_never_effect(&expr)?;
+                if matches!(expr, Expr::Seq(..)) {
+                    seq_stmts.push((segments.len() - 1, expr_span(&expr)));
+                }
                 segments.last_mut().expect("segment").push(expr);
+                seg_widths.last_mut().expect("segment").push(stmt_width(line, 1));
                 closed_by_fuse = true;
             } else {
                 closed_by_fuse = false;
@@ -268,6 +277,10 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                     ));
                 }
                 reject_never_effect(&e)?;
+                if matches!(e, Expr::Seq(..)) {
+                    seq_stmts.push((segments.len() - 1, expr_span(&e)));
+                }
+                seg_widths.last_mut().expect("segment").push(stmt_width(line, 0));
                 segments.last_mut().expect("segment").push(e);
             }
         }
@@ -280,6 +293,15 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             *wall_spans.last().expect("a trailing wall exists"),
         ));
     }
+    check_width_canon(
+        &segments,
+        &seg_widths,
+        &wall_spans,
+        &wall_fused,
+        &seq_stmts,
+        binds.is_empty(),
+        head_width,
+    )?;
     let joined: Vec<Expr> = segments
         .into_iter()
         .map(|seg| {
@@ -299,6 +321,92 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     });
     binds.push(Stmt::Expr(chain));
     Ok(binds)
+}
+
+/// Width of a statement's tokens as they would render on one line, indent
+/// excluded. A statement spanning `.` continuation lines never fits anywhere,
+/// so it reports an unbounded width. `skip` drops leading tokens (the fused
+/// wall) from the measure.
+fn stmt_width(line: &Line, skip: usize) -> usize {
+    let multi = line.tokens.iter().any(|(_, s)| s.line != line.number);
+    if multi {
+        return usize::MAX;
+    }
+    let first = line.tokens[skip].1.col;
+    let last = *line.end_cols.last().expect("tokens exist");
+    last - first
+}
+
+/// One meaning, one rendering — width alone decides. A chain that fits on
+/// one line is written on one line; a chain that does not gives each step
+/// its own line; a one-step stage fuses with its wall.
+fn check_width_canon(
+    segments: &[Vec<Expr>],
+    seg_widths: &[Vec<usize>],
+    wall_spans: &[Span],
+    wall_fused: &[bool],
+    seq_stmts: &[(usize, Span)],
+    no_binds: bool,
+    head_width: Option<usize>,
+) -> Result<(), Diagnostic> {
+    if segments.len() > 1 {
+        for (seg, span) in seq_stmts {
+            if segments[*seg].len() == 1 {
+                return Err(Diagnostic::new(
+                    "formatting",
+                    "no partial chaining: a chain fits on one line, or each step \
+                     gets its own line"
+                        .to_string(),
+                    *span,
+                ));
+            }
+        }
+    }
+    for (i, fused) in wall_fused.iter().enumerate() {
+        let fits = seg_widths[i + 1]
+            .first()
+            .is_some_and(|w| w.saturating_add(5) <= crate::lexer::MAX_WIDTH);
+        if !fused && segments[i + 1].len() == 1 && fits {
+            return Err(Diagnostic::new(
+                "formatting",
+                "a one-step stage fuses with its wall: write `>> step` on one line"
+                    .to_string(),
+                wall_spans[i],
+            ));
+        }
+    }
+    let singleton: Vec<bool> = segments.iter().map(|s| s.len() == 1).collect();
+    let mut i = 0;
+    while i < segments.len() {
+        if !singleton[i] {
+            i += 1;
+            continue;
+        }
+        let mut j = i;
+        while j + 1 < segments.len() && singleton[j + 1] {
+            j += 1;
+        }
+        if j > i {
+            let whole = i == 0 && j == segments.len() - 1 && no_binds;
+            let budget = match whole {
+                true => head_width.unwrap_or(2),
+                false => 2,
+            };
+            let steps = (i..=j).map(|k| seg_widths[k][0]);
+            let joined = steps.fold(budget, |acc, w| acc.saturating_add(w).saturating_add(4));
+            if joined - 4 <= crate::lexer::MAX_WIDTH {
+                return Err(Diagnostic::new(
+                    "formatting",
+                    "needless multi-liner: these steps fit on one line — join them \
+                     inline with `>>`"
+                        .to_string(),
+                    wall_spans[i],
+                ));
+            }
+        }
+        i = j + 1;
+    }
+    Ok(())
 }
 
 /// A bare line in an effect group must at least plausibly be a description.

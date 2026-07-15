@@ -174,7 +174,8 @@ test_unknown_item_fails ... ok
   <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
 
 <span class="k">fn</span> <span class="f">_value_for</span> c cs p
-  <span class="f">if</span> (<span class="f">_is_number_start</span> c) (<span class="f">_parse_number</span> cs p) (<span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>)</code></pre>
+  numeric <span class="o">=</span> <span class="f">_is_number_start</span> c
+  <span class="f">if</span> numeric (<span class="f">_parse_number</span> cs p) (<span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>)</code></pre>
 </div>
 
 <p>eight arms, one per way a json value can begin—including the <code>none</code> arm, because running off the end of the input is just an absent byte, dispatched like everything else. no scanner state machine, no switch statement, no lookahead abstraction. and the parser contains not one line of "check if the last step failed": a bad escape or truncated input becomes an err deep inside, and the railway carries it out of <code>decode</code> with its position intact.</p>

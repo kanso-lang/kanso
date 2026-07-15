@@ -50,6 +50,8 @@ pub struct Lexed {
 
 const OPS: [&str; 11] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "<", ">", "&"];
 
+pub const MAX_WIDTH: usize = 80;
+
 pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut lines = Vec::new();
@@ -82,6 +84,14 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         if trimmed.is_empty() {
             blank_lines.push(number);
             continue;
+        }
+        let width = trimmed.chars().count();
+        if width > MAX_WIDTH {
+            diags.push(Diagnostic::new(
+                "formatting",
+                format!("a line holds at most {MAX_WIDTH} characters — this one has {width}"),
+                Span { line: number, col: MAX_WIDTH + 1 },
+            ));
         }
         let indent = trimmed.len() - trimmed.trim_start().len();
         let content = &trimmed[indent..];
@@ -142,7 +152,36 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             Err(d) => diags.push(d),
         }
     }
+    for line in &lines {
+        check_needless_continuation(line, &mut diags);
+    }
     if diags.is_empty() { Ok(Lexed { lines, blank_lines }) } else { Err(diags) }
+}
+
+/// One meaning, one rendering: a statement split across `.` continuation
+/// lines is only legal when the spliced one-line form would not fit.
+fn check_needless_continuation(line: &Line, diags: &mut Vec<Diagnostic>) {
+    let mut pieces: Vec<(usize, usize, Span)> = Vec::new();
+    for ((_, span), end) in line.tokens.iter().zip(&line.end_cols) {
+        match pieces.last_mut() {
+            Some(piece) if piece.2.line == span.line => piece.1 = *end,
+            _ => pieces.push((span.col, *end, *span)),
+        }
+    }
+    if pieces.len() < 2 {
+        return;
+    }
+    let mut width = pieces[0].1 - 1;
+    for piece in &pieces[1..] {
+        width += 1 + (piece.1 - piece.0);
+    }
+    if width <= MAX_WIDTH {
+        diags.push(Diagnostic::new(
+            "formatting",
+            format!("needless continuation: this statement fits on one line ({width} characters)"),
+            pieces[1].2,
+        ));
+    }
 }
 
 struct Scanner {

@@ -14,7 +14,9 @@ test_decode_float = (decode "3.25") == 3.25
 
 test_decode_int = (decode "42") == 42
 
-test_decode_nested = (decode "\{\"a\": [1, \{\"b\": null}]}") == ["a": [1 ["b": json_null]]]
+test_decode_nested =
+  decoded = decode "\{\"a\": [1, \{\"b\": null}]}"
+  decoded == ["a": [1 ["b": json_null]]]
 
 test_decode_object = (decode "\{\"a\": 1, \"b\": 2}") == ["a": 1 "b": 2]
 

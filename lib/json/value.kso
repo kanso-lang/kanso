@@ -119,7 +119,8 @@ fn _value_for none _ p
   _fail p "unexpected end of input"
 
 fn _value_for c cs p
-  if (_is_number_start c) (_parse_number cs p) (_fail p "unexpected character `{utf8 [c]}`")
+  numeric = _is_number_start c
+  if numeric (_parse_number cs p) (_fail p "unexpected character `{utf8 [c]}`")
 
 fn _word cs p expected v
   n = length expected
