@@ -247,7 +247,20 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             continue;
         }
         match parse_stmt(&stmt_line)? {
-            Stmt::Bind { pattern, expr } => binds.push(Stmt::Bind { pattern, expr }),
+            Stmt::Bind { pattern, expr } => {
+                // every binding runs before every bare effect line, wherever
+                // it appears — so the surface may not show it interleaved
+                if !segments[0].is_empty() || segments.len() > 1 {
+                    return Err(Diagnostic::new(
+                        "formatting",
+                        "bindings precede the effects in a body: every binding runs \
+                         before every bare effect line, so move it above the chain"
+                            .to_string(),
+                        expr_span(&expr),
+                    ));
+                }
+                binds.push(Stmt::Bind { pattern, expr });
+            }
             Stmt::Expr(e) => {
                 reject_never_effect(&e)?;
                 segments.last_mut().expect("segment").push(e);
