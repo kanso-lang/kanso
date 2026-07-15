@@ -1,4 +1,7 @@
-main = risky 1 & risky 2 >> print "never served"
+main =
+  risky 1
+  risky 2
+  >> print "never served"
 
 fn risky 1
   err "kettle is cold"

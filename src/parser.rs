@@ -123,7 +123,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             span,
         ));
     }
-    let stmts = body.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
+    let stmts = parse_body(body)?;
     Ok(FnDecl { name, span, params, body: stmts, file: String::new() })
 }
 
@@ -148,7 +148,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
                 span,
             ));
         }
-        let stmts = body.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
+        let stmts = parse_body(body)?;
         return Ok(FnDecl { name, span, params: Vec::new(), body: stmts, file: String::new() });
     }
     if !body.is_empty() {
@@ -191,6 +191,158 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
         tys.push(p.parse_type_expr()?);
     }
     Ok((name, tys, span))
+}
+
+/// Parse a body's lines into statements, desugaring the concurrency surface:
+/// bare description lines form unordered groups (joined with the internal `&`
+/// node, failures accumulating) and a lone `>>` line is a wall sequencing the
+/// groups. Bindings keep their places; the folded chain becomes the body's
+/// final expression. A body with no bare lines and no walls passes through
+/// untouched.
+fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
+    let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _)]);
+    let has_surface = body.iter().enumerate().any(|(i, l)| {
+        is_wall(l)
+            || matches!(l.tokens.first(), Some((Tok::SeqOp, _)))
+            || (i + 1 < body.len() && matches!(parse_stmt_shape(l), StmtShape::Expr))
+    });
+    if !has_surface {
+        return body.iter().map(parse_stmt).collect();
+    }
+    let mut binds: Vec<Stmt> = Vec::new();
+    let mut segments: Vec<Vec<Expr>> = vec![Vec::new()];
+    let mut wall_spans: Vec<Span> = Vec::new();
+    for line in body {
+        let prefixed = matches!(line.tokens.first(), Some((Tok::SeqOp, _)))
+            && line.tokens.len() > 1;
+        if is_wall(line) || prefixed {
+            let span = line.tokens[0].1;
+            if segments.last().is_some_and(Vec::is_empty) {
+                return Err(Diagnostic::new(
+                    "syntax",
+                    "nothing to sequence: a `>>` wall needs statements above it".to_string(),
+                    span,
+                ));
+            }
+            wall_spans.push(span);
+            segments.push(Vec::new());
+            if !prefixed {
+                continue;
+            }
+        }
+        let toks = if prefixed { &line.tokens[1..] } else { &line.tokens[..] };
+        let ends = if prefixed { &line.end_cols[1..] } else { &line.end_cols[..] };
+        let stmt_line = Line {
+            number: line.number,
+            indent: line.indent,
+            tokens: toks.to_vec(),
+            end_cols: ends.to_vec(),
+        };
+        if prefixed {
+            let mut p = P::new(&stmt_line.tokens, &stmt_line.end_cols, stmt_line.number);
+            let expr = p.parse_expr()?;
+            p.expect_done()?;
+            reject_never_effect(&expr)?;
+            segments.last_mut().expect("segment").push(expr);
+            continue;
+        }
+        match parse_stmt(&stmt_line)? {
+            Stmt::Bind { pattern, expr } => binds.push(Stmt::Bind { pattern, expr }),
+            Stmt::Expr(e) => {
+                reject_never_effect(&e)?;
+                segments.last_mut().expect("segment").push(e);
+            }
+        }
+    }
+    let Some(last) = segments.last() else { unreachable!() };
+    if last.is_empty() {
+        return Err(Diagnostic::new(
+            "syntax",
+            "nothing follows the final `>>` wall".to_string(),
+            *wall_spans.last().expect("a trailing wall exists"),
+        ));
+    }
+    let joined: Vec<Expr> = segments
+        .into_iter()
+        .map(|seg| {
+            let mut it = seg.into_iter();
+            let first = it.next().expect("segments are non-empty");
+            it.fold(first, |acc, e| {
+                let span = expr_span(&e);
+                Expr::BinOp { op: "&", lhs: Box::new(acc), rhs: Box::new(e), span }
+            })
+        })
+        .collect();
+    let mut it = joined.into_iter().rev();
+    let tail = it.next().expect("at least one segment");
+    let chain = it.fold(tail, |acc, seg| {
+        let span = expr_span(&seg);
+        Expr::Seq(Box::new(seg), Box::new(acc), span)
+    });
+    binds.push(Stmt::Expr(chain));
+    Ok(binds)
+}
+
+/// A bare line in an effect group must at least plausibly be a description.
+/// Literals, arithmetic, comparisons, and lambdas never are — those keep the
+/// classic unused-expression error instead of dying inside the runtime join.
+fn reject_never_effect(e: &Expr) -> Result<(), Diagnostic> {
+    let never = matches!(
+        e,
+        Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Str(..)
+            | Expr::List(..)
+            | Expr::MapLit(..)
+            | Expr::Lambda { .. }
+            | Expr::BinOp { .. }
+    );
+    if never {
+        return Err(Diagnostic::new(
+            "unused",
+            "unused expression: every non-final line binds a name (sequence effects \
+             with `>>`)"
+                .to_string(),
+            expr_span(e),
+        ));
+    }
+    Ok(())
+}
+
+enum StmtShape {
+    Bind,
+    Expr,
+}
+
+/// Is this line a binding or a bare expression? (Mirrors parse_stmt's split
+/// without committing to a full parse.)
+fn parse_stmt_shape(line: &Line) -> StmtShape {
+    let mut depth = 0usize;
+    for (tok, _) in &line.tokens {
+        match tok {
+            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
+            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
+            Tok::Bind if depth == 0 => return StmtShape::Bind,
+            _ => {}
+        }
+    }
+    StmtShape::Expr
+}
+
+fn expr_span(e: &Expr) -> Span {
+    match e {
+        Expr::Int(_, s)
+        | Expr::Float(_, s)
+        | Expr::MapLit(_, s)
+        | Expr::Str(_, s)
+        | Expr::Ident(_, s)
+        | Expr::List(_, s)
+        | Expr::Seq(_, _, s)
+        | Expr::Lambda { span: s, .. }
+        | Expr::App { span: s, .. }
+        | Expr::Index { span: s, .. }
+        | Expr::BinOp { span: s, .. } => *s,
+    }
 }
 
 fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
@@ -498,12 +650,15 @@ impl<'a> P<'a> {
     }
 
     fn parse_join(&mut self) -> Result<Expr, Diagnostic> {
-        let mut lhs = self.parse_cmp()?;
-        while let Some(Tok::Op("&")) = self.peek() {
-            let span = self.span_here();
-            self.pos += 1;
-            let rhs = self.parse_cmp()?;
-            lhs = Expr::BinOp { op: "&", lhs: Box::new(lhs), rhs: Box::new(rhs), span };
+        let lhs = self.parse_cmp()?;
+        if let Some(Tok::Op("&")) = self.peek() {
+            return Err(Diagnostic::new(
+                "syntax",
+                "parallel statements are unordered by default — write them as \
+                 separate lines; sequence with `>>`"
+                    .to_string(),
+                self.span_here(),
+            ));
         }
         Ok(lhs)
     }
