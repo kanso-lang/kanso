@@ -301,7 +301,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             let first = it.next().expect("segments are non-empty");
             it.fold(first, |acc, e| {
                 let span = expr_span(&e);
-                Expr::BinOp { op: "&", lhs: Box::new(acc), rhs: Box::new(e), span }
+                Expr::Join { lhs: Box::new(acc), rhs: Box::new(e), span }
             })
         })
         .collect();
@@ -370,6 +370,7 @@ fn expr_span(e: &Expr) -> Span {
         | Expr::Ident(_, s)
         | Expr::List(_, s)
         | Expr::Seq(_, _, s)
+        | Expr::Join { span: s, .. }
         | Expr::Lambda { span: s, .. }
         | Expr::App { span: s, .. }
         | Expr::Index { span: s, .. }

@@ -235,7 +235,7 @@ impl<'a> Analysis<'a> {
                     && self.expr_safe_calls(ty, base)
                     && self.expr_safe_calls(ty, index)
             }
-            Expr::BinOp { lhs, rhs, .. } => {
+            Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
                 !self.produces_ty(ty, lhs)
                     && !self.produces_ty(ty, rhs)
                     && self.expr_safe_calls(ty, lhs)
@@ -336,7 +336,7 @@ impl<'a> Analysis<'a> {
             Expr::Index { base, index, .. } => {
                 self.expr_mentions_ty(ty, base) || self.expr_mentions_ty(ty, index)
             }
-            Expr::BinOp { lhs, rhs, .. } => {
+            Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
                 self.expr_mentions_ty(ty, lhs) || self.expr_mentions_ty(ty, rhs)
             }
             Expr::Seq(a, b, _) => self.expr_mentions_ty(ty, a) || self.expr_mentions_ty(ty, b),

@@ -465,6 +465,11 @@ impl<'a> Interp<'a> {
                 let right = self.eval(rhs, env, frame)?;
                 eval_binop(op, left, right, *span, frame)
             }
+            Expr::Join { lhs, rhs, span } => {
+                let left = self.eval(lhs, env, frame)?;
+                let right = self.eval(rhs, env, frame)?;
+                join_values(left, right, *span)
+            }
         }
     }
 
@@ -1277,7 +1282,7 @@ fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
                 Ok(Value::Desc(Rc::new(Desc::Join(a.clone(), b.clone()))))
             }
             _ => Err(RuntimeError {
-                message: "`&` joins two descriptions".to_string(),
+                message: "a group joins descriptions".to_string(),
                 span,
             }),
         },
@@ -1305,11 +1310,6 @@ pub fn eval_binop(
     span: Span,
     frame: &Frame,
 ) -> EvalResult {
-    if op == "&" {
-        // the join accumulates: both sides already evaluated (eager), so a
-        // failure on either — or both — combines instead of short-circuiting
-        return join_values(left, right, span);
-    }
     if is_failure(&left) {
         return Ok(left);
     }

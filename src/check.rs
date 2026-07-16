@@ -146,7 +146,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
             check_marker_calls(rhs, markers, diags);
         }
         Expr::Lambda { body, .. } => check_marker_calls(body, markers, diags),
-        Expr::BinOp { lhs, rhs, .. } => {
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             check_marker_calls(lhs, markers, diags);
             check_marker_calls(rhs, markers, diags);
         }
@@ -683,7 +683,7 @@ impl Resolver<'_> {
                 self.resolve_expr(body);
                 self.flush_unused(base);
             }
-            Expr::BinOp { lhs, rhs, .. } => {
+            Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
                 self.resolve_expr(lhs);
                 self.resolve_expr(rhs);
             }

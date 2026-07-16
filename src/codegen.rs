@@ -1338,6 +1338,16 @@ impl<'a> Backend<'a> {
                 f.record(&t, DESC | (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL));
                 Ok(t)
             }
+            Expr::Join { lhs, rhs, .. } => {
+                let a = self.emit_expr(f, lhs)?;
+                let b = self.emit_expr(f, rhs)?;
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
+                ));
+                f.record(&t, (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL) | DESC | ERR);
+                Ok(t)
+            }
             Expr::BinOp { op, lhs, rhs, span } => {
                 let a = self.emit_expr(f, lhs)?;
                 let b = self.emit_expr(f, rhs)?;
@@ -1529,7 +1539,6 @@ impl<'a> Backend<'a> {
                 let origin = self.origin_arg(f, span);
                 format!("call %KValue @k_div(%KValue {a}, %KValue {b}, {origin})")
             }
-            "&" => format!("call %KValue @k_desc_join(%KValue {a}, %KValue {b})"),
             "==" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 0)"),
             "!=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 1)"),
             "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
@@ -1541,12 +1550,6 @@ impl<'a> Backend<'a> {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR);
-            return Ok(t);
-        }
-        if op == "&" {
-            let t = f.tmp();
-            f.line(&format!("{t} = {slow_call}"));
-            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | DESC | ERR);
             return Ok(t);
         }
         let pure_int = f.set_of(a) == INT && f.set_of(b) == INT;
@@ -2117,7 +2120,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
             collect_idents(rhs, out);
         }
         Expr::Lambda { body, .. } => collect_idents(body, out),
-        Expr::BinOp { lhs, rhs, .. } => {
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             collect_idents(lhs, out);
             collect_idents(rhs, out);
         }
