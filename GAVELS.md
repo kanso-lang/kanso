@@ -328,15 +328,20 @@ right):**
   CLOS/Julia ambiguity hell (SPJ). Avdi's counter-want (a small standard
   taxonomy — user/logic/transient — for coarse boundary handling) is the
   live tension; flat won the room.
-- **Cleanup:** the synthesized pass-through skips your frame, so
-  ensure/defer-style cleanup needs a scope-exit construct that fires on
-  that path. NOTE: the runtime's region beats already pop on the err
-  path today (heartbeat case 1) — memory cleanup fires; user-level defer
-  is YAGNI until the language has resources to leak.
-- **Context:** an intermediate that can't touch the value can't wrap it
-  (Go's `%w` has no home). Context lives at BIRTH (fields on the error
-  type — precise types beat string-wrapping) plus the automatic
-  provenance trail, which must carry call-site data.
+- **Cleanup (designed now per Clay: language design isn't speculative —
+  every language retrofitted this at great cost):** no `defer` statement.
+  Resources are BRACKETED DESCRIPTIONS — `with_file path (f -> ...)` —
+  acquire/release owned by the executor around the inner description,
+  releasing on every exit including the synthesized pass-through. A
+  leaked handle is unrepresentable. Same shape the runtime already has
+  for memory (region beats pop on the err path today), extended to
+  resources; implementation lands when resources do.
+- **Context (designed now, same reasoning):** errors are BORN RICH,
+  never dressed in transit. The birth site is the only frame with the
+  facts (`read_file` knows the path), so facts go in the error type's
+  fields at construction; the provenance trail carries call-site spans.
+  Go's `%w` culture compensates for poor births — kanso mandates rich
+  ones instead. No mid-flight wrapping API, ever.
 - **The checked-exceptions disease stays dead only because unions are
   INFERRED** — a leaf adding an error type edits nobody's source. SPJ's
   condition: higher-order fns must stay polymorphic over their argument's
@@ -356,6 +361,49 @@ exist (types have fields); provenance already exists on `err`. If
 adopted: B's letter is superseded (its spirit survives as the wildcard
 guard: no handling *by accident*), and E dissolves (arms naming your own
 error types are ordinary dispatch).
+
+---
+
+## AA. newtypes and dispatch across a family (open — AA1/AA2/AA3)
+
+Clay: "go lets a subtype of string be passed to a function that accepts
+string [note: Go actually requires the explicit conversion for defined
+types]. should we be able to cast a subtype of string to string so
+dispatch matches it? should it match automatically to the first ancestor
+type with a matching arm?"
+
+```
+type user_id string          # a newtype: distinct on purpose
+
+fn greet s:string
+  print "hello {s}"
+```
+
+**AA1 — ancestor-walking dispatch:** `greet (user_id "mika")` matches the
+`string` arm because user_id's ancestor matches. REJECTED by every prior
+finding: action at a distance (adding a `user_id` arm anywhere silently
+changes which arm fires), the CLOS/Julia multi-param ambiguity explosion
+(SPJ, gavel Z), and it destroys exact-type preservation — the typeset
+novelty Clay named as a favorite. The value arrives wearing a costume.
+
+**AA2 — explicit cast only:** `greet (string uid)` — Go-strict. A
+newtype exists to NOT be its underlying type; crossing back is a visible
+decision. Casts get syntax you can see.
+
+**AA3 — callee-declared acceptance via typesets (+ AA2's cast as escape
+hatch):** the arm says what it takes; the value never changes type:
+
+```
+fn label t:text              # text = string | user_id — the CALLEE
+  print "[{t}]"              # opted in; t keeps its EXACT type inside
+```
+
+Same construct answers Avdi's coarse error handling (gavel Z):
+`transient = timeout | connection_reset` is a typeset, not a supertype —
+no hierarchy anywhere, acceptance is visible at the arm.
+
+**My rec: AA3** (typeset acceptance as the idiom, explicit cast as the
+deliberate escape hatch, no ancestor-walking ever).
 
 ---
 
