@@ -17,6 +17,7 @@ thorough examples. Rule by letter: "T3, W2, B yes, C yield, …"
 | R5 bindings precede the effect chain (the desugar hoists them; interleaving lied) | ✅ correctness, auto-adopted | **implemented** |
 | T indent trap | ✅ superseded by X: `>>` continuation lines are BACK (indent+2, mirroring `.`) as the wrap for over-wide statements. The trap is defanged structurally: a mis-indented wrap either hits a loud error (headers aren't wrappable; walls need groups) or lands on the same execution order | **implemented** |
 | W fused walls | ✅ **fused closes**: `>> step` is a complete sequential step (Clay's space-saver for singleton stages); a bare line can't silently join it (teaching error); multi-member groups use the lone wall | **implemented** |
+| B gather / failure reification | ❌ "an err is a true exception, so you can't handle it. it should short circuit except where it can't because of parallelism. if you want something that can be handled, don't use an exception." No gather, no freeze point, no reified-failure records in user code. An err short-circuits to the top; a parallel join is the sole concession (every member still runs; errs accumulate into one, which then short-circuits). Handleable outcomes are ordinary VALUES — dispatch already covers them, zero new machinery | — |
 | X statement canon + width-as-rendering | ✅ v2 after Clay's correction: "width can break a line down into wrapped lines, but it doesn't turn one statement into multiple statements." STRUCTURE (width-free): a lone wall exists only for multi-member groups; a one-step stage ALWAYS fuses (`>> step`); fused closes; so `[a b] >> [c] >> d` renders `>> foo_c` / `>> foo_d`, never a lone wall over `foo_c`. WIDTH (rendering only): 80-col cap; an over-wide statement wraps onto `.`/`>>` continuation lines at indent+2, one step per line (no partial chaining); a wrap that would fit on one line is an error. Width never merges or splits statements. | **implemented** |
 
 The live semantics, in one example — **bare lines are two threads; no order
@@ -44,39 +45,30 @@ by `>>`.)
 
 ---
 
-## B. gather at consumption (open — yes/no + surface)
+## B′. the value version of confirmation (consequence of B, no gavel)
 
-Does consuming description **labels as value arguments** mean "execute,
-gather, reify the outcomes, dispatch"?
+B is dead: errs are true exceptions and never reify. The confirmation
+pattern needs **no machinery at all** — a fallible-but-expected outcome
+is an ordinary value, and dispatch was always the handler:
 
 ```
+fn reserve_tatami
+  ... (tatami_success time) or (tatami_full next_free) ...
+
 main =
   r = reserve_tatami
   w = order_wagashi
-  confirmation r w        # <- the gavel
+  confirmation r w        # values flow; dispatch picks the arm
 
-fn confirmation booking:tatami_success order:wagashi_success
-  print "confirmed: see you at {time booking}"
+fn confirmation (tatami_success t) (wagashi_ready w)
+  print "confirmed: see you at {t}"
 
-fn confirmation booking order
-  parts = [(failure_message booking) (failure_message order)]
-  print (parts . filter (s -> 0 < length s) . join ", ")
+fn confirmation (tatami_full next) _
+  print "gomen — the tatami room opens next at {next}"
 ```
 
-Outcomes arrive **reified** — the success value, or an inert `failure`
-record — never a live err, so the railway can't skip your arms and the
-catch-all can say "gomen." A gather is a mini-boundary.
-
-**Alternative surface** — an explicit word instead of implicit
-execution-at-argument:
-
-```
-gather [reserve_tatami order_wagashi] . confirmation
-```
-
-Same primitive powers value-collecting fan-out (three random dice).
-
-**My rec: adopt, implicit form.**
+If the venue burns down mid-request, THAT is the err: it short-circuits
+past all of this to the top, as it should.
 
 ---
 
@@ -134,27 +126,36 @@ purely absence/failure.
 
 ---
 
-## E. the err-arm restriction (open — yes/no)
+## E. err arms in user code (open — E1/E2; B's ruling raised the stakes)
 
-*A live-err arm may only return a description or another failure — never an
-ordinary value.*
+The original E was a restriction on what an err arm may return. B's
+ruling ("you can't handle it") suggests something stronger:
+
+**E1 — no `(err ...)` patterns in user code at all.** An err is opaque
+in flight; only the runtime's outermost handler sees it. Dispatching on
+err IS handling it.
+
+**E2 — err arms exist but only pass it along** (return a description or
+another err — never resurrect a value; the original E).
+
+What's in the corpus today (would need sweeping under E1):
 
 ```
 fn describe (err reason)
-  "gomen: {reason}"            # ILLEGAL under E: resurrects the happy track
+  "gomen: {reason}"              # examples/errors.kso + playground railway
+                                 # demo — resurrection, illegal under BOTH
 
-fn close day (err reason)
-  print "{day} failed"          # legal: handling = describing what's next
-
-fn retag (err reason)
-  err (wrapped reason)          # legal: failure to failure
-
-fn failure_message (failure f)
-  "problem: {reason f}"         # legal always: f is REIFIED data (from a
-                                # gather/boundary), not a live err
+fn _string_ok p (err _)          # lib/json internals dispatch on their own
+fn must (err reason)             # errs as railway plumbing — under E1 these
+                                 # become ordinary values (Malformed-style
+                                 # determinations), err reserved for defects
 ```
 
-**My rec: adopt.**
+The json sweep is consistent with the settled doctrine ("a parser that
+decides bytes are invalid *succeeded* — that's a value"), so E1 mostly
+forces the lib to say what it already means.
+
+**My rec: E1.**
 
 ---
 
@@ -206,9 +207,14 @@ determinism policy:
 
 ```
 main =
-  rolls = gather [(random 6) (random 6) (random 6)]   # needs B
-  print (rolls . map render_die . join " ")
+  a = random 6            # bindings already fan out: no shared data, so
+  b = random 6            # the compiler is free to run these in parallel
+  c = random 6
+  print ([a b c] . map render_die . join " ")
 ```
+
+(B's death costs nothing here — value fan-out was always just bindings
+plus data flow.)
 
 **My rec: H1.**
 
