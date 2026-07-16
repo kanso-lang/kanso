@@ -137,7 +137,9 @@ fn children(e: &Expr) -> Vec<&Expr> {
             v
         }
         Expr::Index { base, index, .. } => vec![base.as_ref(), index.as_ref()],
-        Expr::BinOp { lhs, rhs, .. } => vec![lhs.as_ref(), rhs.as_ref()],
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
+            vec![lhs.as_ref(), rhs.as_ref()]
+        }
         Expr::Seq(a, b, _) => vec![a.as_ref(), b.as_ref()],
         Expr::Lambda { body, .. } => vec![body.as_ref()],
         Expr::List(items, _) => items.iter().collect(),

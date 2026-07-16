@@ -14,6 +14,7 @@ pub enum Expr {
     Seq(Box<Expr>, Box<Expr>, Span),
     Lambda { params: Vec<(String, Span)>, body: Box<Expr>, span: Span },
     BinOp { op: &'static str, lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
+    Join { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
 }
 
 #[derive(Clone, Debug)]
@@ -35,7 +36,8 @@ impl Expr {
             | Expr::Index { span: s, .. }
             | Expr::Seq(_, _, s)
             | Expr::Lambda { span: s, .. }
-            | Expr::BinOp { span: s, .. } => *s,
+            | Expr::BinOp { span: s, .. }
+            | Expr::Join { span: s, .. } => *s,
         }
     }
 }

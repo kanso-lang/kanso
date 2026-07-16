@@ -228,11 +228,15 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                     }
                     out
                 }
-                // the join yields a description, a lone propagated failure, or
-                // an accumulated err merged from both sides
-                "&" => DESC | fails | ERR,
                 _ => BOOL | fails,
             }
+        }
+        // the join yields a description, a lone propagated failure, or an
+        // accumulated err merged from both sides
+        Expr::Join { lhs, rhs, .. } => {
+            let a = eval_expr(ctx, lhs, env);
+            let b = eval_expr(ctx, rhs, env);
+            DESC | ((a | b) & FAIL) | ERR
         }
         Expr::App { head, args, piped, .. } => eval_call(ctx, head, args, env, *piped),
     }
@@ -380,7 +384,7 @@ fn desc_yield(e: &Expr) -> Set {
         // `a >> b` yields what its right side yields
         Expr::Seq(_, b, _) => desc_yield(b),
         // a join yields nothing a continuation would see
-        Expr::BinOp { op: "&", .. } => 0,
+        Expr::Join { .. } => 0,
         _ => TOP & !FAIL,
     }
 }

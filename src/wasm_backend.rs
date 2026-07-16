@@ -458,6 +458,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_SEQ);
             }
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
+            Expr::Join { .. } => return Err("join not yet in the wasm backend".to_string()),
             Expr::BinOp { op, lhs, rhs, span } => {
                 let code = match *op {
                     "+" => 0,
@@ -932,7 +933,7 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
                 }
             });
         }
-        Expr::BinOp { lhs, rhs, .. } => {
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             free_idents(lhs, visit);
             free_idents(rhs, visit);
         }
