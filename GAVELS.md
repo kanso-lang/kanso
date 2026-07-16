@@ -15,9 +15,9 @@ thorough examples. Rule by letter: "T3, W2, B yes, C yield, …"
 | A4 `<< labels` for DAG edges | ⏸ parked — walls suffice; true DAGs pay a false edge or decompose into functions; revive on real demand | — |
 | A5 `&` retires from the surface (bitwise future orthogonal) | ✅ | **implemented** (teaching error; Join node stays internal) |
 | R5 bindings precede the effect chain (the desugar hoists them; interleaving lied) | ✅ correctness, auto-adopted | **implemented** |
-| T indent trap | ✅ resolved by killing `>>`-continuation lines entirely — `>>` never splices; `.` continuations unchanged | **implemented** |
+| T indent trap | ✅ superseded by X: `>>` continuation lines are BACK (indent+2, mirroring `.`) as the wrap for over-wide statements. The trap is defanged structurally: a mis-indented wrap either hits a loud error (headers aren't wrappable; walls need groups) or lands on the same execution order | **implemented** |
 | W fused walls | ✅ **fused closes**: `>> step` is a complete sequential step (Clay's space-saver for singleton stages); a bare line can't silently join it (teaching error); multi-member groups use the lone wall | **implemented** |
-| X width canon | ✅ "the compiler fails if you do a needless multi-liner version or a one-liner version that's actually multiple lines." Lines cap at 80. Fits-on-one-line ⇒ MUST be one line (needless `.` continuation, needless multi-line chain, lone wall before a one-step stage: all errors). Doesn't-fit ⇒ one step per line, no partial chaining. Width alone decides. | **implemented** |
+| X statement canon + width-as-rendering | ✅ v2 after Clay's correction: "width can break a line down into wrapped lines, but it doesn't turn one statement into multiple statements." STRUCTURE (width-free): a lone wall exists only for multi-member groups; a one-step stage ALWAYS fuses (`>> step`); fused closes; so `[a b] >> [c] >> d` renders `>> foo_c` / `>> foo_d`, never a lone wall over `foo_c`. WIDTH (rendering only): 80-col cap; an over-wide statement wraps onto `.`/`>>` continuation lines at indent+2, one step per line (no partial chaining); a wrap that would fit on one line is an error. Width never merges or splits statements. | **implemented** |
 
 The live semantics, in one example — **bare lines are two threads; no order
 exists unless you wrote one**:
@@ -29,13 +29,14 @@ main =
   >> print "serving"             # the wall: only runs after both settle
 
 main =
-  simmer_the_dashi_for_an_hour   # a fully sequential chain: each fused
-  >> strain_out_the_katsuobushi  # `>> step` is one CLOSED sequential step
-  >> season_and_serve_the_broth  # (a bare line can't silently join it)
+  foo_a                          # a fully sequential chain: each fused
+  >> foo_b                       # `>> step` is one CLOSED sequential step
+  >> foo_c                       # (a bare line can't silently join it)
 ```
 
-(X: this block form is only legal because the inline chain would blow the
-80 column cap — `main = a >> b >> c` that fits MUST be written inline.)
+(X: this stage-statement structure is legal at any width — statements are
+the programmer's semantic choice. Width only ever WRAPS one over-wide
+statement onto `>>`/`.` continuation lines at indent+2, one step per line.)
 
 (Today's executor happens to run in program order — that's scheduling, not
 semantics. Corpus/goldens may only pin programs whose output order is forced
@@ -210,6 +211,66 @@ main =
 ```
 
 **My rec: H1.**
+
+---
+
+## Y. the sequencing surface: `>>` vs a word (open — Y1/Y2/Y3)
+
+Clay: "it's possible we want a different symbol, or to use a word like
+`then` perhaps? i'm open minded." The surface appears in four positions:
+
+```
+# Y1 — keep `>>` (today)
+main =
+  print "steeping the sencha"
+  print "warming the cups"
+  >> print "serving"                  # fused stage
+
+main = reserve_tatami >> order_wagashi >> confirm   # inline
+
+main = apply (s -> print "s = {s}") 7
+  >> apply (_ -> print "ignored, ran anyway") 9     # wrap leader
+
+# Y2 — the word `then`
+main =
+  print "steeping the sencha"
+  print "warming the cups"
+  then print "serving"
+
+main = reserve_tatami then order_wagashi then confirm
+
+# Y3 — another symbol (|>, ~>, =>) — same shapes as Y1
+```
+
+Committee findings (Metz / Hickey / Pike-school pragmatist, unanimous for
+Y1 but for three different reasons):
+
+- **Metz**: a construct must hold up in its WORST position, and `then`'s
+  worst is the lone wall line — a bare `then` on its own line reads like a
+  conditional with its `if` clipped off. `>>` is the only surface that
+  stays legible standing completely alone. `|>` is worse: it borrows the
+  pipe shape, which reads as "the value flows through" — precisely false
+  here.
+- **Hickey**: `>>` is the true name of the operation — bind minus the
+  value. `.` and `>>` are visible siblings: narrow mark while the value
+  still matters, wide mark the moment it stops. A word severs that kinship
+  AND braids in baggage (`then` already names branching). `~>`/`=>` would
+  be arbitrary glyphs by comparison.
+- **Pragmatist**: the one honest risk nobody else named — `>>` is bitwise
+  right-shift in every C-family language the target audience knows. But a
+  bare-word infix operator (`a then b`) is a bigger grammar surprise than
+  a reused punctuation shape, and position disambiguates in practice (no
+  numeric operands in sight). Flag the collision; revisit only if kanso
+  ever grows bitwise operators.
+
+Strongest argument against keeping it, stated honestly: kanso spends a
+glyph every Go/C/JS/Rust dev already knows on an unrelated meaning — a
+"wait, what does this mean here" moment in a newcomer's first five
+minutes, and internal elegance with `.` doesn't fix that.
+
+**My rec: Y1, keep `>>` in all four positions.** The committee is
+advisory-not-oracle, but three independent lenses landing on the same
+answer for non-overlapping reasons is the strong version of the signal.
 
 ---
 

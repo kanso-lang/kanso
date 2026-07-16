@@ -1,3 +1,2 @@
-main =
-  print "steeping" >> print "pouring"
-  >> print "serving"
+main = print "steeping the finest uji sencha" >> print "pouring the hot water"
+  >> print "serving it in the warmed cups with seasonal wagashi"
