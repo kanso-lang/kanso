@@ -468,6 +468,19 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
             check_marker_calls(lhs, markers, diags);
             check_marker_calls(rhs, markers, diags);
         }
+        Expr::Guard { cond, early, rest, .. } => {
+            check_marker_calls(cond, markers, diags);
+            check_marker_calls(early, markers, diags);
+            for stmt in rest {
+                match stmt {
+                    Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. } => {
+                        check_marker_calls(expr, markers, diags)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1211,6 +1224,25 @@ impl Resolver<'_> {
             Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
                 self.resolve_expr(lhs);
                 self.resolve_expr(rhs);
+            }
+            Expr::Guard { cond, early, rest, .. } => {
+                self.resolve_expr(cond);
+                self.resolve_expr(early);
+                let base = self.locals.len();
+                for stmt in rest {
+                    match stmt {
+                        Stmt::Bind { pattern, expr } => {
+                            self.resolve_expr(expr);
+                            self.bind_pattern(pattern);
+                        }
+                        Stmt::Expr(expr) => self.resolve_expr(expr),
+                        Stmt::Set { target, value, span, .. } => {
+                            self.resolve_name(target, *span);
+                            self.resolve_expr(value);
+                        }
+                    }
+                }
+                self.flush_unused(base);
             }
         }
     }

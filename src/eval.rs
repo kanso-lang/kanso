@@ -748,6 +748,21 @@ impl<'a> Interp<'a> {
                 }
                 eval_binop(op, sub_base(left), sub_base(right), *span, frame)
             }
+            Expr::Guard { cond, early, rest, span } => {
+                let c = self.eval(cond, env, frame)?;
+                match c {
+                    Value::True => self.eval(early, env, frame),
+                    Value::False => self.eval_body(rest, env.clone(), frame),
+                    bad if is_failure(&bad) => Ok(bad),
+                    other => Err(RuntimeError {
+                        message: format!(
+                            "a return condition is true or false, got {}",
+                            render(&other, false)
+                        ),
+                        span: *span,
+                    }),
+                }
+            }
             Expr::Join { lhs, rhs, span } => {
                 let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
                 let right = self.force_thunk(self.eval(rhs, env, frame)?)?;

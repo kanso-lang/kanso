@@ -572,7 +572,92 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
 /// groups. Bindings keep their places; the folded chain becomes the body's
 /// final expression. A body with no bare lines and no walls passes through
 /// untouched.
+/// The guard section: leading bindings and `return X if C` lines. A return
+/// folds everything after it into the untaken branch of a compiler-built
+/// conditional — the body below a fired guard is unreachable, not skipped.
 fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
+    let is_return = |line: &Line| matches!(line.tokens.first(), Some((Tok::KwReturn, _)));
+    let lead_end = body
+        .iter()
+        .position(|l| !is_return(l) && !matches!(parse_stmt_shape(l), StmtShape::Bind))
+        .unwrap_or(body.len());
+    if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
+        return Err(Diagnostic::new(
+            "formatting",
+            "a `return` sits with the bindings, before the effect chain".to_string(),
+            stray.tokens[0].1,
+        ));
+    }
+    if !body[..lead_end].iter().any(|l| is_return(l)) {
+        return parse_effect_body(&body[lead_end..], &body[..lead_end]);
+    }
+    let mut cont = parse_effect_body(&body[lead_end..], &[])?;
+    for line in body[..lead_end].iter().rev() {
+        if !is_return(line) {
+            let stmt = parse_stmt(line)?;
+            cont.insert(0, stmt);
+            continue;
+        }
+        let (cond, early, span) = parse_return(line)?;
+        if cont.is_empty() {
+            return Err(Diagnostic::new(
+                "syntax",
+                "nothing follows this `return` — the body needs a result for \
+                 when the condition does not fire"
+                    .to_string(),
+                span,
+            ));
+        }
+        let rest = std::mem::take(&mut cont);
+        let guard = Expr::Guard {
+            cond: Box::new(cond),
+            early: Box::new(early),
+            rest,
+            span,
+        };
+        cont = vec![Stmt::Expr(guard)];
+    }
+    Ok(cont)
+}
+
+/// `return X if C`: X and C split at the line's single top-level `if`.
+fn parse_return(line: &Line) -> Result<(Expr, Expr, Span), Diagnostic> {
+    let span = line.tokens[0].1;
+    let mut depth = 0usize;
+    let mut splits = Vec::new();
+    for (i, (tok, _)) in line.tokens.iter().enumerate().skip(1) {
+        match tok {
+            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
+            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
+            Tok::Ident(name) if depth == 0 && name == "if" => splits.push(i),
+            _ => {}
+        }
+    }
+    let [at] = splits.as_slice() else {
+        let message = match splits.is_empty() {
+            true => "an unconditional result is the final expression — drop the `return`",
+            false => "one `if` decides a return — parenthesize any inner `if`",
+        };
+        return Err(Diagnostic::new("formatting", message.to_string(), span));
+    };
+    let mut early_p = P::new(&line.tokens[1..*at], &line.end_cols[1..*at], line.number);
+    let early = early_p.parse_expr()?;
+    early_p.expect_done()?;
+    let mut cond_p = P::new(&line.tokens[*at + 1..], &line.end_cols[*at + 1..], line.number);
+    let cond = cond_p.parse_expr()?;
+    cond_p.expect_done()?;
+    Ok((cond, early, span))
+}
+
+fn parse_effect_body(body: &[Line], lead_binds: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
+    let mut stmts: Vec<Stmt> =
+        lead_binds.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
+    let tail = parse_effect_tail(body)?;
+    stmts.extend(tail);
+    Ok(stmts)
+}
+
+fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _)]);
     let is_else = |line: &Line| {
         matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
@@ -1064,6 +1149,7 @@ fn expr_span(e: &Expr) -> Span {
         | Expr::Seq(_, _, s)
         | Expr::Join { span: s, .. }
         | Expr::Block(_, s)
+        | Expr::Guard { span: s, .. }
         | Expr::Lambda { span: s, .. }
         | Expr::App { span: s, .. }
         | Expr::Index { span: s, .. }

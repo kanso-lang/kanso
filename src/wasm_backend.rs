@@ -580,6 +580,9 @@ impl<'a> WasmBackend<'a> {
                 self.emit_expr(ctx, rhs, false)?;
                 ctx.body.call(RT_JOIN);
             }
+            Expr::Guard { .. } => {
+                return Err("return guards not yet in the wasm backend".to_string())
+            }
             Expr::BinOp { op, lhs, rhs, span } => {
                 let armable = matches!(*op, "+" | "-" | "*" | "/" | "%")
                     && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
@@ -1147,6 +1150,16 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             free_idents(lhs, visit);
             free_idents(rhs, visit);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            free_idents(cond, visit);
+            free_idents(early, visit);
+            for stmt in rest {
+                match stmt {
+                    Stmt::Bind { expr, .. } => free_idents(expr, visit),
+                    Stmt::Expr(expr) => free_idents(expr, visit),
+                }
+            }
         }
         Expr::App { head, args, .. } => {
             free_idents(head, visit);

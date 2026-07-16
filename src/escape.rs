@@ -278,6 +278,19 @@ impl<'a> Analysis<'a> {
                     && self.expr_safe_calls(ty, base)
                     && self.expr_safe_calls(ty, index)
             }
+            Expr::Guard { cond, early, rest, .. } => {
+                !self.produces_ty(ty, cond)
+                    && !self.produces_ty(ty, early)
+                    && self.expr_safe_calls(ty, cond)
+                    && self.expr_safe_calls(ty, early)
+                    && rest.iter().all(|s| {
+                        let e = match s {
+                            Stmt::Bind { expr, .. } => expr,
+                            Stmt::Expr(expr) => expr,
+                        };
+                        !self.produces_ty(ty, e) && self.expr_safe_calls(ty, e)
+                    })
+            }
             Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
                 !self.produces_ty(ty, lhs)
                     && !self.produces_ty(ty, rhs)
@@ -386,6 +399,17 @@ impl<'a> Analysis<'a> {
             }
             Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
                 self.expr_mentions_ty(ty, lhs) || self.expr_mentions_ty(ty, rhs)
+            }
+            Expr::Guard { cond, early, rest, .. } => {
+                self.expr_mentions_ty(ty, cond)
+                    || self.expr_mentions_ty(ty, early)
+                    || rest.iter().any(|s| {
+                        let e = match s {
+                            Stmt::Bind { expr, .. } => expr,
+                            Stmt::Expr(expr) => expr,
+                        };
+                        self.expr_mentions_ty(ty, e)
+                    })
             }
             Expr::Seq(a, b, _) => self.expr_mentions_ty(ty, a) || self.expr_mentions_ty(ty, b),
             Expr::Lambda { body, .. } => self.expr_mentions_ty(ty, body),

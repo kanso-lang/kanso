@@ -149,6 +149,13 @@ fn children(e: &Expr) -> Vec<&Expr> {
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             vec![lhs.as_ref(), rhs.as_ref()]
         }
+        Expr::Guard { cond, early, rest, .. } => {
+            let mut v: Vec<&Expr> = vec![cond.as_ref(), early.as_ref()];
+            v.extend(rest.iter().map(|s| match s {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            }));
+            v
+        }
         Expr::Seq(a, b, _) => vec![a.as_ref(), b.as_ref()],
         Expr::Lambda { body, .. } => vec![body.as_ref()],
         Expr::List(items, _) => items.iter().collect(),

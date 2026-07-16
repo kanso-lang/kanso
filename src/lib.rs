@@ -1305,6 +1305,15 @@ fn private_uses(
 pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
         ast::Expr::Upcast { expr, .. } => vec![expr.as_ref()],
+        ast::Expr::Guard { cond, early, rest, .. } => {
+            let mut v = vec![cond.as_ref(), early.as_ref()];
+            v.extend(rest.iter().map(|st| match st {
+                ast::Stmt::Bind { expr, .. }
+                | ast::Stmt::Expr(expr)
+                | ast::Stmt::Set { value: expr, .. } => expr,
+            }));
+            v
+        }
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => stmts
             .iter()
             .map(|st| match st {

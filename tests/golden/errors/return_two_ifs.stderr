@@ -1,0 +1,4 @@
+error[formatting]: one `if` decides a return — parenthesize any inner `if`
+  --> return_two_ifs.kso:2:3
+   2 |   return if (n < 0) "neg" "pos" if (n != 0)
+         ^

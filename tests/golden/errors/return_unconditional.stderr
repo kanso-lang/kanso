@@ -1,0 +1,4 @@
+error[formatting]: an unconditional result is the final expression — drop the `return`
+  --> return_unconditional.kso:2:3
+   2 |   return n / 2
+         ^

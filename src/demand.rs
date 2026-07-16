@@ -49,7 +49,7 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
     }
     fn expr_safe(e: &Expr, name: &str, is_result: bool) -> bool {
         match e {
-            Expr::Build(..) => false,
+            Expr::Build(..) | Expr::Guard { .. } => false,
             Expr::Ident(id, _) if id == name => is_result,
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
             Expr::BinOp { lhs, rhs, .. } => {
