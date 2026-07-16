@@ -1,4 +1,0 @@
-error[formatting]: needless multi-liner: these steps fit on one line — join them inline with `>>`
-  --> needless_multiline_chain.kso:3:3
-   3 |   >> print "serving"
-         ^
