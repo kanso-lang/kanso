@@ -280,6 +280,85 @@ answer for non-overlapping reasons is the strong version of the signal.
 
 ---
 
+## Z. errors without exceptions (open — Z1/Z2; supersedes B and dissolves E if adopted)
+
+Clay, from a run: "do we REALLY need exceptions at all? can't methods just
+use whatever kind of error type they like? a default zero-width error
+type, users can sub-type it — does it need any special behavior really?"
+
+**The proposal (Z1):** no exception mechanism. Errors are ordinary
+zero-width value types declared into a flat family (concrete type →
+`error`, one level, no deeper). Exactly ONE kept rule: *an error-family
+value passes unchanged through any call that has no arm literally naming
+its type* — the compiler writes the pass-through arms (spec §06's
+auto-propagation, generalized off the `err` builtin). Corollaries: joins
+accumulate, walls gate, top reports with provenance. The guard: error
+values NEVER match `_` or unannotated params — handling requires naming
+the type, so accidental swallowing is unrepresentable.
+
+```
+error cant_halve
+
+fn halve 0
+  cant_halve
+
+fn halve n
+  n / 2
+# inferred: halve returns int | cant_halve
+
+fn describe (cant_halve)
+  "can't halve that one"          # deliberate, named — legal
+
+fn log_all x
+  print "{x}"                     # x never binds an error value:
+                                  # a cant_halve passes THROUGH log_all
+```
+
+**Committee findings (Avdi / Hickey / SPJ / Pike, all four: the shape is
+right):**
+
+- Unanimous: the pass-through rule + wildcard exclusion IS the
+  raise-for-unhandled doctrine as dispatch, Go's errors-are-values with
+  the `if err != nil` industrialized, and Either-with-ambient-bind
+  without the monad tax. No hidden unwinding returns.
+- **Loophole to close:** an arm naming the base `error` type itself is
+  `rescue StandardError` reincarnated — forbid arms on the bare family
+  type (or confine them to the outermost boundary).
+- **Keep the family flat.** Subtype hierarchies + multiple dispatch =
+  CLOS/Julia ambiguity hell (SPJ). Avdi's counter-want (a small standard
+  taxonomy — user/logic/transient — for coarse boundary handling) is the
+  live tension; flat won the room.
+- **Cleanup:** the synthesized pass-through skips your frame, so
+  ensure/defer-style cleanup needs a scope-exit construct that fires on
+  that path. NOTE: the runtime's region beats already pop on the err
+  path today (heartbeat case 1) — memory cleanup fires; user-level defer
+  is YAGNI until the language has resources to leak.
+- **Context:** an intermediate that can't touch the value can't wrap it
+  (Go's `%w` has no home). Context lives at BIRTH (fields on the error
+  type — precise types beat string-wrapping) plus the automatic
+  provenance trail, which must carry call-site data.
+- **The checked-exceptions disease stays dead only because unions are
+  INFERRED** — a leaf adding an error type edits nobody's source. SPJ's
+  condition: higher-order fns must stay polymorphic over their argument's
+  error family. Pike's condition: when public module boundaries exist,
+  allow PINNING a declared union there (semver signal), inferred
+  everywhere internal.
+- **Dissent worth keeping:** the committee's own recommendation asked for
+  three subsystems before shipping; the recorded counter-argument is
+  Hickey's — ship the one rule now, design cleanup/context from observed
+  pain, not speculation.
+
+**Z2 — status quo:** keep the blessed `err` builtin as-is.
+
+**My rec: Z1, shipped lean per the dissent** — one rule + flat family +
+wildcard exclusion + no bare-`error` arms; birth-site fields already
+exist (types have fields); provenance already exists on `err`. If
+adopted: B's letter is superseded (its spirit survives as the wildcard
+guard: no handling *by accident*), and E dissolves (arms naming your own
+error types are ordinary dispatch).
+
+---
+
 ## parked (on the record, no action)
 
 - **`<<` labels (A4)** — walls cover staircases; revive on real DAG demand.
