@@ -328,20 +328,32 @@ right):**
   CLOS/Julia ambiguity hell (SPJ). Avdi's counter-want (a small standard
   taxonomy — user/logic/transient — for coarse boundary handling) is the
   live tension; flat won the room.
-- **Cleanup (designed now per Clay: language design isn't speculative —
-  every language retrofitted this at great cost):** no `defer` statement.
-  Resources are BRACKETED DESCRIPTIONS — `with_file path (f -> ...)` —
-  acquire/release owned by the executor around the inner description,
-  releasing on every exit including the synthesized pass-through. A
-  leaked handle is unrepresentable. Same shape the runtime already has
-  for memory (region beats pop on the err path today), extended to
-  resources; implementation lands when resources do.
-- **Context (designed now, same reasoning):** errors are BORN RICH,
-  never dressed in transit. The birth site is the only frame with the
-  facts (`read_file` knows the path), so facts go in the error type's
-  fields at construction; the provenance trail carries call-site spans.
-  Go's `%w` culture compensates for poor births — kanso mandates rich
-  ones instead. No mid-flight wrapping API, ever.
+- **Cleanup — evaluated against history (Clay: the record tells us
+  WHETHER it's useful, not that it is):** the release-on-every-exit
+  problem is real and not an exception artifact (Go needed `defer` with
+  no exceptions; C needed `goto cleanup`). But every language that
+  needed it EXPOSES HANDLES. Kanso can refuse to create the problem:
+  locks unrepresentable (no shared mutable state), transactions are
+  descriptions, connections are the pending `serve` design, file IO is
+  executor-owned. Verdict: `defer` cleans up after a design decision
+  kanso hasn't made. Bracketed descriptions (`with_file path (f -> ...)`,
+  executor-owned release on every exit incl. pass-through) are the
+  CONTINGENCY if a user-visible resource lifetime ever proves
+  unavoidable; the bet is none will.
+- **Context — evaluated against history:** Go's pre-1.13 pain came from
+  poor births (bare strings) plus no provenance; exceptions never had it
+  because the stack trace WAS the context; `%w` patches the lack of
+  both. Kanso has both: typed fields at birth, provenance trail in
+  flight. The remaining legitimate use — semantic context the birth site
+  can't know ("while processing user 42's upload") — is ALREADY
+  expressible in Z with no new API: an arm NAMING the error type returns
+  its own richer error with the inner as a field (Avdi's
+  wrap-on-re-raise, spelled as dispatch). Only touching an error you
+  didn't name is banned.
+- **Exceptions themselves, against the record:** every language of the
+  last fifteen years moved away (Go values, Rust Result, Swift typed
+  throws); the convergent endpoint is typed error values with ambient
+  propagation — Z1 nearly verbatim. Kanso starts at the endpoint.
 - **The checked-exceptions disease stays dead only because unions are
   INFERRED** — a leaf adding an error type edits nobody's source. SPJ's
   condition: higher-order fns must stay polymorphic over their argument's
