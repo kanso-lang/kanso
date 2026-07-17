@@ -154,13 +154,23 @@ static void* k_alloc_obj(size_t n) {
     return (void*)(h + 1);
 }
 
+/* A permanent object: malloc'd with an immortal header, so it lives outside
+   the beat arena and survives every rewind. Interned single-char strings and
+   zero-field marker records are cached and reused across beats — an arena
+   rewind moves the bump pointer regardless of refcount, so caching arena
+   storage and reusing it after a pop hands back reclaimed, since-reused
+   memory. Permanent storage is the only cache that is sound across beats. */
+static void* k_alloc_perm(size_t n) {
+    KHeader* h = malloc(sizeof(KHeader) + n);
+    if (!h) { fputs("out of memory\n", stderr); exit(1); }
+    h->rc = K_IMMORTAL;
+    return (void*)(h + 1);
+}
+
 static KHeader* k_hdr(long long payload) {
     return ((KHeader*)(intptr_t)payload) - 1;
 }
 
-static void k_make_immortal(long long payload) {
-    k_hdr(payload)->rc = K_IMMORTAL;
-}
 
 static int k_is_heap(long long tag) {
     switch (tag) {
@@ -243,13 +253,12 @@ KValue k_str_n(const char* data, long long len) {
         unsigned char b = (unsigned char)data[0];
         if (b < 128 && b != 0) {
             if (!k_ascii_ready[b]) {
-                KStr* s = k_alloc_obj(sizeof(KStr));
+                KStr* s = k_alloc_perm(sizeof(KStr));
                 s->len = 1;
-                s->data = k_alloc(2);
+                s->data = malloc(2);
                 s->data[0] = (char)b;
                 s->data[1] = 0;
                 KValue v; v.tag = K_STR; v.payload = k_ptr(s);
-                k_make_immortal(v.payload);
                 k_ascii_cache[b] = v;
                 k_ascii_ready[b] = 1;
             }
@@ -304,12 +313,11 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
     for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
     if (n == 0 && type_id >= 0 && type_id < K_MARKER_CACHE) {
         if (!k_marker_ready[type_id]) {
-            KRec* r = k_alloc_obj(sizeof(KRec));
+            KRec* r = k_alloc_perm(sizeof(KRec));
             r->type_id = type_id;
             r->nfields = 0;
             r->fields = NULL;
             KValue v; v.tag = K_REC; v.payload = k_ptr(r);
-            k_make_immortal(v.payload);
             k_marker_cache[type_id] = v;
             k_marker_ready[type_id] = 1;
         }
@@ -343,8 +351,8 @@ KValue k_concat(KValue a, KValue b) {
     KStr* s = k_alloc_obj(sizeof(KStr));
     s->len = sa->len + sb->len;
     s->data = k_alloc(s->len + 1);
-    memcpy(s->data, sa->data, sa->len);
-    memcpy(s->data + sa->len, sb->data, sb->len);
+    memmove(s->data, sa->data, sa->len);
+    memmove(s->data + sa->len, sb->data, sb->len);
     s->data[s->len] = 0;
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
 }
@@ -670,6 +678,54 @@ KValue k_maybe_bind(KValue piped, KValue closure) {
     return k_call1(closure, piped);
 }
 
+KValue k_desc_sleep(KValue ms) {
+    if (!k_not_failure(ms)) return ms;
+    if (ms.tag != K_INT) k_die("sleep takes milliseconds (an int)");
+    return k_mkdesc(8, ms, k_none());
+}
+
+KValue k_desc_random(KValue n) {
+    if (!k_not_failure(n)) return n;
+    if (n.tag != K_INT) k_die("random takes a bound (an int)");
+    return k_mkdesc(9, n, k_none());
+}
+
+static KValue k_desc_nil(void) { return k_mkdesc(10, k_none(), k_none()); }
+
+/* SplitMix64, seeded from KANSO_SEED (else a fixed constant) — never from
+   entropy, so a concurrent program's output is byte-identical across runs and
+   engines, exactly matching the interpreter's Rng. */
+static uint64_t k_rng_state = 0;
+static int k_rng_ready = 0;
+
+static void k_rng_seed(void) {
+    const char* s = getenv("KANSO_SEED");
+    k_rng_state = s ? strtoull(s, NULL, 10) : 0x2545F4914F6CDD1DULL;
+    k_rng_ready = 1;
+}
+
+static uint64_t k_rng_next(void) {
+    if (!k_rng_ready) k_rng_seed();
+    k_rng_state += 0x9E3779B97F4A7C15ULL;
+    uint64_t z = k_rng_state;
+    z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+    z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+    return z ^ (z >> 31);
+}
+
+static long long k_rng_below(long long n) {
+    return n <= 0 ? 0 : (long long)(k_rng_next() % (uint64_t)n);
+}
+
+/* One step of a fiber: it finished (blocked=0, value set) or blocked on a
+   `sleep` (blocked=1, ms + cont). Blocking threads the continuation up through
+   Seq and Bind, so `sleep` may sit anywhere and suspension needs no coroutine.
+   Mirrors eval.rs's Step exactly. */
+typedef struct { int blocked; unsigned long long ms; KValue cont; KValue value; } KStep;
+
+static KValue k_schedule(KDesc* join);
+static KStep k_step(KDesc* d);
+
 static int k_argc_global = 0;
 static char** k_argv_global = NULL;
 
@@ -742,25 +798,19 @@ static KValue k_exec(KDesc* d) {
                one never abandons the other; failures accumulate. each side is
                a beat: its yield is discarded on success, so only a failing
                side keeps its region. */
-            k_beat_push();
-            KValue left = k_exec(k_as_desc(d->x));
-            if (left.tag == K_ERR) {
-                left = k_beat_pop(left);
-            } else {
-                k_beat_pop(k_none());
-            }
-            k_beat_push();
-            KValue right = k_exec(k_as_desc(d->y));
-            if (right.tag == K_ERR) {
-                right = k_beat_pop(right);
-            } else {
-                k_beat_pop(k_none());
-            }
-            int lf = !k_not_failure(left);
-            int rf = !k_not_failure(right);
-            if (lf && rf) return k_accumulate_failures(left, right);
-            if (lf) return left;
-            if (rf) return right;
+            return k_schedule(d);
+        }
+        case 8: {
+            /* a bare sleep executed outside a group: pause for real */
+            long long ms = d->x.tag == K_INT ? d->x.payload : 0;
+            if (ms > 0) usleep((useconds_t)(ms * 1000));
+            return k_none();
+        }
+        case 9: {
+            long long n = d->x.tag == K_INT ? d->x.payload : 0;
+            return k_int(k_rng_below(n));
+        }
+        case 10: {
             return k_none();
         }
         default: {
@@ -775,6 +825,100 @@ static KValue k_exec(KDesc* d) {
             return next;
         }
     }
+}
+
+static KStep k_step(KDesc* d) {
+    switch (d->dtag) {
+        case 8: {
+            long long ms = d->x.tag == K_INT ? d->x.payload : 0;
+            KStep s = {1, (unsigned long long)(ms < 0 ? 0 : ms), k_desc_nil(), k_none()};
+            return s;
+        }
+        case 1: {
+            KStep l = k_step(k_as_desc(d->x));
+            if (l.blocked) {
+                KStep s = {1, l.ms, k_mkdesc(1, l.cont, d->y), k_none()};
+                return s;
+            }
+            if (l.value.tag == K_ERR) {
+                KStep s = {0, 0, k_none(), l.value};
+                return s;
+            }
+            return k_step(k_as_desc(d->y));
+        }
+        case 6: {
+            KStep in = k_step(k_as_desc(d->x));
+            if (in.blocked) {
+                KStep s = {1, in.ms, k_mkdesc(6, in.cont, d->y), k_none()};
+                return s;
+            }
+            KValue next = k_call1(d->y, in.value);
+            if (next.tag == K_DESC) return k_step(k_as_desc(next));
+            KStep s = {0, 0, k_none(), next};
+            return s;
+        }
+        default: {
+            /* leaf effect or nested join: run to completion synchronously */
+            KStep s = {0, 0, k_none(), k_exec(d)};
+            return s;
+        }
+    }
+}
+
+static void k_flatten_join(KDesc* d, KValue* out, int* n, int cap) {
+    if (d->dtag == 7) {
+        k_flatten_join(k_as_desc(d->x), out, n, cap);
+        k_flatten_join(k_as_desc(d->y), out, n, cap);
+    } else {
+        if (*n >= cap) k_die("parallel group exceeds the scheduler's fiber cap");
+        KValue v; v.tag = K_DESC; v.payload = k_ptr(d);
+        out[(*n)++] = v;
+    }
+}
+
+/* Run a parallel group as cooperative green threads: each member a fiber,
+   deterministic earliest-wake scheduling (ties by spawn order), `sleep`
+   yields. Values are discarded (a group yields none); failures accumulate.
+   The whole group runs under one beat — grow-only inside, everything the
+   fibers allocate reclaimed at the end (their yields are garbage), which
+   sidesteps any interaction between suspension and the beat mark-stack. */
+static KValue k_schedule(KDesc* join) {
+    int n = 0;
+    KValue tmp[256];
+    k_flatten_join(join, tmp, &n, 256);
+    unsigned long long* wake = malloc(sizeof(unsigned long long) * n);
+    KValue* fiber = malloc(sizeof(KValue) * n);
+    int* done = malloc(sizeof(int) * n);
+    for (int i = 0; i < n; i++) { wake[i] = 0; fiber[i] = tmp[i]; done[i] = 0; }
+    unsigned long long now = 0;
+    KValue result = k_none();
+    int remaining = n;
+    k_beat_push();
+    while (remaining > 0) {
+        int pick = -1;
+        for (int i = 0; i < n; i++) {
+            if (!done[i] && (pick < 0 || wake[i] < wake[pick])) pick = i;
+        }
+        if (wake[pick] > now) {
+            usleep((useconds_t)((wake[pick] - now) * 1000));
+            now = wake[pick];
+        }
+        KStep s = k_step(k_as_desc(fiber[pick]));
+        if (s.blocked) {
+            wake[pick] = now + s.ms;
+            fiber[pick] = s.cont;
+        } else {
+            done[pick] = 1;
+            remaining--;
+            if (!k_not_failure(s.value)) {
+                result = result.tag == K_ERR
+                    ? k_accumulate_failures(result, s.value)
+                    : s.value;
+            }
+        }
+    }
+    free(wake); free(fiber); free(done);
+    return k_beat_pop(result);
 }
 
 static long long k_truthy_bad(void) {

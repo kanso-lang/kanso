@@ -24,7 +24,7 @@ fn step _ _ _ _ out none
 
 fn step store actions i sub out action
   next = update store action
-  play next actions (i + 1) sub (out >> notify sub action next)
+  play next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
 
 fn update balance (deposit n)
   balance + n

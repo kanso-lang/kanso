@@ -27,12 +27,17 @@ pub extern "C" fn kanso_set_file(ptr: *const u8, len: usize) {
 /// filesystem, argv, or stdin in the browser.
 struct BrowserExecutor {
     stdout: String,
+    rng: crate::eval::Rng,
 }
 
 impl Executor for BrowserExecutor {
     fn print(&mut self, text: &str) {
         self.stdout.push_str(text);
         self.stdout.push('\n');
+    }
+
+    fn random(&mut self, n: u64) -> u64 {
+        self.rng.below(n)
     }
 
     fn args(&mut self) -> Vec<String> {
@@ -152,7 +157,7 @@ pub extern "C" fn kanso_take_rt_error() {
 #[no_mangle]
 pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
     let input = take_input(ptr, len);
-    let mut executor = BrowserExecutor { stdout: String::new() };
+    let mut executor = BrowserExecutor { stdout: String::new(), rng: crate::eval::Rng::seeded() };
     let result =
         SESSION.with(|session| session.borrow_mut().eval(&input, &mut executor));
     match result {
@@ -196,7 +201,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
             return 1;
         }
     };
-    let mut executor = BrowserExecutor { stdout: String::new() };
+    let mut executor = BrowserExecutor { stdout: String::new(), rng: crate::eval::Rng::seeded() };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),

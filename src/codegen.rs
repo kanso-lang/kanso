@@ -62,6 +62,8 @@ declare %KValue @k_b_read_file(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_desc_join(%KValue, %KValue)
+declare %KValue @k_desc_sleep(%KValue)
+declare %KValue @k_desc_random(%KValue)
 declare void @k_beat_push()
 declare void @k_beat_iter()
 declare %KValue @k_beat_pop(%KValue)
@@ -1965,6 +1967,12 @@ impl<'a> Backend<'a> {
         if name == "print" {
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_desc_print(%KValue {})", emitted[0]));
+            f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
+            return Ok(t);
+        }
+        if name == "sleep" || name == "random" {
+            let t = f.tmp();
+            f.line(&format!("{t} = call %KValue @k_desc_{name}(%KValue {})", emitted[0]));
             f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
             return Ok(t);
         }

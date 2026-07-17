@@ -30,12 +30,17 @@ fn expected(path: &Path, extension: &str) -> String {
 struct CollectExecutor {
     program_args: Vec<String>,
     stdout: String,
+    rng: kanso::eval::Rng,
 }
 
 impl Executor for CollectExecutor {
     fn print(&mut self, text: &str) {
         self.stdout.push_str(text);
         self.stdout.push('\n');
+    }
+
+    fn random(&mut self, n: u64) -> u64 {
+        self.rng.below(n)
     }
 
     fn args(&mut self) -> Vec<String> {
@@ -76,7 +81,7 @@ fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluat
             }
         }
     };
-    let mut executor = CollectExecutor { program_args, stdout: String::new() };
+    let mut executor = CollectExecutor { program_args, stdout: String::new(), rng: kanso::eval::Rng::seeded() };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),

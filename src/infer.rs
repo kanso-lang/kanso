@@ -378,7 +378,8 @@ fn desc_yield(e: &Expr) -> Set {
         Expr::App { head, piped: false, .. } => match head.as_ref() {
             Expr::Ident(n, _) if n == "read_file" || n == "stdin" => STR,
             Expr::Ident(n, _) if n == "args" => LIST,
-            Expr::Ident(n, _) if n == "print" || n == "write_file" => 0,
+            Expr::Ident(n, _) if n == "random" => INT,
+            Expr::Ident(n, _) if n == "print" || n == "write_file" || n == "sleep" => 0,
             _ => TOP & !FAIL,
         },
         // `a >> b` yields what its right side yields
@@ -419,7 +420,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => INT | fails,
-        "read_file" | "write_file" => DESC | fails,
+        "read_file" | "write_file" | "sleep" | "random" => DESC | fails,
         _ => TOP,
     }
 }
