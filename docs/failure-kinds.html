@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the two failures — kanso</title>
+<meta name="description" content="a design note on the one bit under every failure: was it born at an effect that couldn't complete, or in pure code that produced a verdict? the birthplace, not the input's history, decides everything — including whether retry means anything.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .fk-tag {
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    margin-left: 0.55rem;
+    padding: 0.14rem 0.55rem;
+    text-transform: uppercase;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .fk-real { background: rgba(108, 207, 163, 0.14); color: var(--tok-str); }
+  .fk-proposed { background: rgba(255, 107, 69, 0.14); color: var(--accent); }
+  .fk-lede {
+    font-size: 1.18rem;
+    line-height: 1.6;
+    max-width: 40rem;
+  }
+  .fk-twocol {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+    margin: 1.6rem 0;
+  }
+  @media (max-width: 680px) { .fk-twocol { grid-template-columns: 1fr; } }
+  .fk-pull {
+    border-left: 2px solid var(--accent);
+    font-family: var(--font-display);
+    font-size: clamp(1.3rem, 3vw, 1.7rem);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    margin: 2.4rem 0;
+    max-width: 44rem;
+    padding-left: 1.4rem;
+  }
+  .fk-legend {
+    color: var(--code-muted);
+    font-size: 0.9rem;
+    margin-top: 3rem;
+  }
+  .fk-legend .fk-tag { margin-left: 0; margin-right: 0.4rem; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="playground.html">playground</a>
+    <a href="book/index.html">book</a>
+    <a href="spec.html">spec</a>
+    <a href="about.html">about</a>
+    <a href="compiler.html">compiler</a>
+    <a href="https://github.com/ClayShentrup/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">design note</span>
+<h1>the two failures</h1>
+
+<p class="fk-lede">a failure shows up as a hundred different things: a missing key, a dead socket, a number that won't parse. they all answer the same question, though—did the world fail you, or did your own code produce a wrong?—and that answer decides whether you handle it, where you handle it, and whether trying again could help.</p>
+
+<h2>assume, or handle</h2>
+
+<p>you, not the world, decide whether a call is one you assume works or one whose failure you handle. the same missing key can be an error you let rise or an absence you cope with, depending on what you meant by the lookup—so kanso makes you say which, in the function you reach for, instead of picking a default for you. you can't assume by accident, and you can't cope by accident.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">access is a decision, not a lookup</div>
+  <pre><code>count <span class="o">=</span> m<span class="o">[</span><span class="s">"dango"</span><span class="o">]</span>          <span class="c"># i assume it's there. a miss is an err that rises.</span>
+count <span class="o">=</span> <span class="f">at</span> m <span class="s">"dango"</span> <span class="t">none</span>   <span class="c"># i'm choosing to cope. a miss is a none i dispatch on.</span></code></pre>
+</div>
+
+<p>the same shape governs the wire. a dead network is rare enough that wrapping every send in coping-logic is complexity you'd pay a thousand times to catch a once—so by default you don't, and a dead network becomes exceptional precisely <em>because</em> you decided it wasn't worth pre-paying for. the day you want best-effort, you say so, and it's a different word:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">the wire is a decision too</div>
+  <pre><code>receipt <span class="o">=</span> <span class="f">send</span> bytes            <span class="c"># i assume this lands. non-delivery is an err.</span>
+result  <span class="o">=</span> <span class="f">try_send</span> bytes        <span class="c"># i'll cope. non-delivery comes back as a none.</span></code></pre>
+</div>
+
+<p>this is error handling as yagni. not-handling is the correct default, because a handler for a failure that never recurs is speculative complexity. you add coping <em>reactively</em>, one place at a time, when a real failure earns it—the exact inverse of defensive code, which pays the tax on every line up front to guard against things that mostly never happen. the happy path stays happy not because failures can't occur, but because you refused to complicate it for failures you judged too rare to warrant it.</p>
+
+<h2>nothing in kanso rescues</h2>
+
+<p>an <code>err</code> is the failure you <em>declined</em> to handle. so it does the only sensible thing: it rises. it rides the rails out through every function that never mentioned it, carrying where it was born and everywhere it passed through, until it reaches a boundary.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">an err reaching the top<span class="fk-tag fk-real">shipped</span></div>
+  <pre><code><span class="k">fn</span> <span class="f">price</span> item
+  <span class="f">_base_price</span> item <span class="o">+</span> <span class="n">50</span>     <span class="c"># + 50 never runs on the sad track</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run</div>
+    <pre><code>error[endpoint]: unhandled err reached main: we do not serve pocky
+  born in _base_price
+  passed through price ← main</code></pre>
+  </div>
+</div>
+
+<p>the rule underneath it: <strong>no function in the language can turn an <code>err</code> back into a value.</strong> not a helper, not a library, not even <code>main</code>. the arm that would swallow one—<code>(err reason) → </code> some ordinary value—can't be written at all. so there's nothing to restrict and nothing to leak: no rescuer to define, none to pass down, and no dependency that can quietly eat your errors, because the language never handed it the means.</p>
+
+<p>so who recovers? a <strong>boundary</strong>—and a boundary isn't a value you hold, it's a privileged construct: the top-level executor, a request loop, a supervisor. when an <code>err</code> escapes into one, the boundary catches it and hands you a plain <code>Failure</code> <em>record</em>: inert data describing what went wrong. you supply an ordinary function on that data, and it can't leak, because it was never the thing doing the catching.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">policy is data-in, effect-out<span class="fk-tag fk-proposed">proposed</span></div>
+  <pre><code><span class="k">fn</span> <span class="f">report</span> failure              <span class="c"># Failure -&gt; Description. a normal function.</span>
+  <span class="f">respond</span> <span class="n">500</span> (<span class="f">page</span> (<span class="f">reason</span> failure))
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">serve</span> app <span class="o">.</span> <span class="f">on_failure</span> report</code></pre>
+</div>
+
+<p><code>report</code> takes a <code>Failure</code> and returns a description. it is <em>not</em> a rescuer—it can't catch anything, so passing it anywhere is harmless. the boundary does the catching; you only describe what happens next. there's no capability to lock down, because the capability was never expressible in the first place—same as everywhere else in the language.</p>
+
+<h2>a value, or an event</h2>
+
+<p>here's the distinction the rest of it rests on. take two failures:</p>
+
+<div class="fk-twocol">
+  <div class="code-panel">
+    <div class="code-panel-title">a value</div>
+    <pre><code>n <span class="o">=</span> <span class="f">to_int</span> <span class="s">"abc"</span></code></pre>
+  </div>
+  <div class="code-panel">
+    <div class="code-panel-title">an event</div>
+    <pre><code>body <span class="o">=</span> <span class="f">get</span> <span class="s">"https://api/rows"</span></code></pre>
+  </div>
+</div>
+
+<p><code>to_int "abc"</code> does not <em>sometimes</em> fail. it <strong>equals</strong> an err, the way <code>2 + 2</code> equals <code>4</code>. it is a constant. re-evaluating it is meaningless—you can't retry a value into being a different value, any more than you can retry <code>4</code> into being <code>5</code>. <code>get url</code> is the opposite: it doesn't <em>equal</em> anything until it runs, and running it again is a genuinely new occurrence with a possibly different result. one is a value; the other is an event.</p>
+
+<p class="fk-pull">a failure's kind is fixed by where it is <em>born</em>—not by where its inputs <em>came from</em>.</p>
+
+<p>this is the part that looks like a paradox and isn't. "but <code>\"abc\"</code> came from input—input can always change, so isn't every failure contingent?" no. trace it carefully: the input <em>already arrived</em>. the read <strong>succeeded</strong>; it delivered <code>"abc"</code> intact. the parse then failed in pure code that never touched a socket—it merely turned a value into a verdict. the provenance of <code>"abc"</code> is irrelevant. the failure was born in the core, so it is deterministic, so it is a value. the changeability you feel lives one step upstream, at the <em>read</em>—and retrying the read is a different call, not a retry of the parse.</p>
+
+<h2>when the wire hands back a verdict</h2>
+
+<p>the sharpest test is a failure that arrives <em>over the wire</em> and is still a value. an http <code>400</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">same socket, two kinds<span class="fk-tag fk-proposed">proposed</span></div>
+  <pre><code><span class="k">fn</span> <span class="f">_verdict</span> (<span class="f">status</span> <span class="n">503</span> body)
+  <span class="t">err</span> (<span class="f">stalled</span> body)      <span class="c"># the io itself faltered — a not-yet. retry may land.</span>
+
+<span class="k">fn</span> <span class="f">_verdict</span> (<span class="f">status</span> <span class="n">400</span> body)
+  <span class="t">err</span> (<span class="f">rejected</span> body)     <span class="c"># the round-trip SUCCEEDED and returned a no — a wrong.</span>
+
+<span class="k">fn</span> <span class="f">_verdict</span> (<span class="f">status</span> <span class="n">200</span> body)
+  body</code></pre>
+</div>
+
+<p>a <code>400</code> came from io as hard as anything can. but the round-trip <em>completed</em>—it delivered a verdict about your request. the io didn't fail; a pure judgment on io-delivered bytes did. so <code>400</code> is a <strong>wrong</strong>—retrying ships the same rejected bytes and earns the same rejection, three times, at three times the latency. a connection-refused on the very same socket is a <strong>not-yet</strong>—the io itself couldn't complete, and the world may have moved by the next attempt. the wire is identical; the failure kind is not. the question was never "did it come over io," it was "did the <em>io itself</em> fail, or did a completed io hand back a value pure code then rejected?"</p>
+
+<h2>the compiler can see which is which</h2>
+
+<p>which means kanso doesn't have to <em>ask</em> you whether a failure is retryable. it can see it. effects are descriptions—a <code>K_DESC</code> the executor runs—and pure computation is values; the runtime already records where every err was born. born executing a description, at an io that couldn't complete → a not-yet, and retry is meaningful. born in pure reduction → a wrong, and retry is a category error.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">retry only means something for events<span class="fk-tag fk-proposed">proposed</span></div>
+  <pre><code><span class="f">get</span> <span class="s">"https://api/rows"</span> <span class="o">.</span> <span class="f">retry</span> <span class="n">3</span>   <span class="c"># retrying an event — the only place the word means anything</span>
+
+<span class="f">to_int</span> x <span class="o">.</span> <span class="f">retry</span> <span class="n">3</span>                 <span class="c"># retrying a value — a no-op the compiler is entitled to reject</span></code></pre>
+</div>
+
+<p>and <code>retry</code> is a policy on the event, not a rescue: it re-runs on a not-yet, and lets a permanent failure rise. it never turns a failure into an unrelated value, so it needs no rescue authority—which is exactly why a library can hand it to you. it can only re-attempt and then get out of the way. the one care it demands is idempotency: re-running a <code>get</code> is free; re-running a charge is not, so the library retries safe methods by default and makes you assert the rest.</p>
+
+<h2>the whole model</h2>
+
+<p>a failure asks one question—<em>did the world fail me, or did i produce a wrong?</em>—and the rest follows from the answer. a wrong is a value: deterministic, born in the core, unit-testable, and futile to retry; you fix it by changing the code or the inputs, which is a different call. a not-yet is an event: born at the shell, contingent on a world that can move, and the only thing retry was ever for. you decide whether to assume or handle it when you write the call. and if you handle none of it, the failure rises—carrying its receipts—to a boundary that hands it back as inert data and asks only what to do next. no function can swallow it along the way, because the language never gives one the means to.</p>
+
+<div class="fk-legend">
+  <p><span class="fk-tag fk-real">shipped</span> works in the compiler today: failure as a value, automatic propagation with born-in / passed-through receipts, none as dispatchable absence.</p>
+  <p><span class="fk-tag fk-proposed">proposed</span> the design in this note not yet wired to the executor: <code>Failure</code> reification at boundaries, <code>on_failure</code> / <code>serve</code> / <code>supervise</code>, the structural io-vs-logic failure kind, and <code>retry</code> derived from it.</p>
+</div>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="index.html">home</a>
+      <a href="spec.html">spec</a>
+      <a href="about.html">about</a>
+      <a href="lore.html">lore</a>
+      <a href="https://github.com/ClayShentrup/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
