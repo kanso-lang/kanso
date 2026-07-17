@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::diag::Span;
 use num_bigint::BigInt;
-use num_traits::Zero;
+use num_traits::{ToPrimitive, Zero};
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
@@ -109,7 +109,7 @@ pub struct ClosureData {
     pub frame: Frame,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Desc {
     Print(String, Span),
     Seq(Rc<Desc>, Rc<Desc>),
@@ -119,6 +119,50 @@ pub enum Desc {
     ReadFile(String),
     WriteFile(String, String),
     Bind(Rc<Desc>, Value),
+    Sleep(u64),
+    Random(u64),
+    Nil,
+}
+
+/// SplitMix64: a deterministic, seedable generator. `random` must be
+/// reproducible so the differential lattice and goldens hold; the seed comes
+/// from KANSO_SEED (else a fixed constant), never from entropy — that keeps a
+/// concurrent program's output byte-identical across engines and runs.
+pub struct Rng(u64);
+
+impl Rng {
+    pub fn seeded() -> Self {
+        let seed = std::env::var("KANSO_SEED")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(0x2545_F491_4F6C_DD1D);
+        Rng(seed)
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.0;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    pub fn below(&mut self, n: u64) -> u64 {
+        match n {
+            0 => 0,
+            n => self.next_u64() % n,
+        }
+    }
+}
+
+/// One step of a fiber: it either finished with a value, or blocked on a
+/// `sleep` for `ms` with the rest of its work as the continuation. Blocking
+/// propagates up through `Seq` and `Bind`, so `sleep` may sit anywhere in a
+/// description and suspension needs no coroutine — the continuation is the
+/// remaining Desc tree, made explicit.
+enum Step {
+    Done(Value),
+    Blocked(u64, Rc<Desc>),
 }
 
 #[derive(Debug)]
@@ -159,15 +203,38 @@ pub trait Executor {
     fn stdin(&mut self) -> Result<String, String>;
     fn read_file(&mut self, path: &str) -> Result<String, String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
+    /// Pause wall-clock time. The scheduler decides output *order*; sleep only
+    /// makes a concurrent program take real time, so a viewer feels the
+    /// overlap. Default is virtual (no wait) — output is identical either way.
+    fn sleep(&mut self, _ms: u64) {}
+    /// A pseudo-random int in `[0, n)` off the executor's seeded generator.
+    fn random(&mut self, _n: u64) -> u64 {
+        0
+    }
+}
+
+impl Default for Rng {
+    fn default() -> Self {
+        Rng::seeded()
+    }
 }
 
 pub struct RealExecutor {
     pub program_args: Vec<String>,
+    pub rng: Rng,
 }
 
 impl Executor for RealExecutor {
     fn print(&mut self, text: &str) {
         println!("{text}");
+    }
+
+    fn sleep(&mut self, ms: u64) {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+
+    fn random(&mut self, n: u64) -> u64 {
+        self.rng.below(n)
     }
 
     fn args(&mut self) -> Vec<String> {
@@ -196,11 +263,16 @@ pub struct ScriptedExecutor {
     pub script_args: Vec<String>,
     pub script_stdin: String,
     pub files: std::collections::HashMap<String, String>,
+    pub rng: Rng,
 }
 
 impl Executor for ScriptedExecutor {
     fn print(&mut self, text: &str) {
         self.transcript.push(format!("print {text:?}"));
+    }
+
+    fn random(&mut self, n: u64) -> u64 {
+        self.rng.below(n)
     }
 
     fn args(&mut self) -> Vec<String> {
@@ -682,6 +754,34 @@ impl<'a> Interp<'a> {
                     });
                 };
                 Ok(Value::Desc(Rc::new(Desc::WriteFile(path.clone(), content.clone()))))
+            }
+            "sleep" => {
+                let [ms] = arity(args, name, span)?;
+                match ms {
+                    Value::Int(n) => {
+                        let ms = n.to_u64().unwrap_or(0);
+                        Ok(Value::Desc(Rc::new(Desc::Sleep(ms))))
+                    }
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        message: format!("sleep takes milliseconds (an int), got {}", render(&other, false)),
+                        span,
+                    }),
+                }
+            }
+            "random" => {
+                let [n] = arity(args, name, span)?;
+                match n {
+                    Value::Int(n) => {
+                        let bound = n.to_u64().unwrap_or(0);
+                        Ok(Value::Desc(Rc::new(Desc::Random(bound))))
+                    }
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        message: format!("random takes a bound (an int), got {}", render(&other, false)),
+                        span,
+                    }),
+                }
             }
             "print" => {
                 let [text] = arity(args, name, span)?;
@@ -1466,18 +1566,13 @@ impl<'a> Interp<'a> {
                 }
                 self.execute(b, executor)
             }
-            Desc::Join(a, b) => {
-                // no order between the sides, and both always run — a failure
-                // on one never abandons the other; failures accumulate
-                let left = self.execute(a, executor)?;
-                let right = self.execute(b, executor)?;
-                Ok(match (is_failure(&left), is_failure(&right)) {
-                    (true, true) => accumulate_failures(left, right),
-                    (true, false) => left,
-                    (false, true) => right,
-                    (false, false) => Value::NoneV,
-                })
+            Desc::Join(_, _) => self.schedule(desc, executor),
+            Desc::Sleep(ms) => {
+                executor.sleep(*ms);
+                Ok(Value::NoneV)
             }
+            Desc::Random(n) => Ok(Value::Int(executor.random(*n).into())),
+            Desc::Nil => Ok(Value::NoneV),
             Desc::Args => {
                 let list = executor.args().into_iter().map(Value::Str).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -1504,6 +1599,93 @@ impl<'a> Interp<'a> {
             }
         }
     }
+
+    /// Run a parallel group as cooperative green threads. Each member is a
+    /// fiber; a fiber runs until it finishes or blocks on `sleep`, at which
+    /// point the scheduler advances to the next fiber. The policy is fully
+    /// deterministic — always resume the fiber with the earliest wake time,
+    /// ties broken by spawn order — so a concurrent program's output is
+    /// byte-identical across engines and runs, which the goldens require.
+    /// Members' *values* are discarded (a group yields none); their failures
+    /// accumulate, exactly as the sequential Join did.
+    fn schedule(&self, join: &Desc, executor: &mut dyn Executor) -> EvalResult {
+        let mut fibers = Vec::new();
+        flatten_join(join, &mut fibers);
+        // (wake_time, spawn_index, remaining work)
+        let mut ready: Vec<(u64, usize, Rc<Desc>)> = fibers
+            .into_iter()
+            .enumerate()
+            .map(|(i, d)| (0u64, i, d))
+            .collect();
+        let mut now = 0u64;
+        let mut failures: Vec<Value> = Vec::new();
+        while !ready.is_empty() {
+            let pick = (0..ready.len())
+                .min_by_key(|&i| (ready[i].0, ready[i].1))
+                .expect("non-empty");
+            let (wake, idx, desc) = ready.remove(pick);
+            if wake > now {
+                executor.sleep(wake - now);
+                now = wake;
+            }
+            match self.step(&desc, executor)? {
+                Step::Done(value) => {
+                    if is_failure(&value) {
+                        failures.push(value);
+                    }
+                }
+                Step::Blocked(ms, cont) => ready.push((now + ms, idx, cont)),
+            }
+        }
+        Ok(failures
+            .into_iter()
+            .reduce(|acc, f| accumulate_failures(acc, f))
+            .unwrap_or(Value::NoneV))
+    }
+
+    /// Advance one fiber until it finishes (`Done`) or hits a `sleep`
+    /// (`Blocked`, carrying the rest of its work). Blocking threads back up
+    /// through `Seq` and `Bind`, so the continuation is always the remaining
+    /// description — no saved stack, no coroutine.
+    fn step(&self, desc: &Rc<Desc>, executor: &mut dyn Executor) -> Result<Step, RuntimeError> {
+        let origin = Span { line: 0, col: 0 };
+        match &**desc {
+            Desc::Sleep(ms) => Ok(Step::Blocked(*ms, Rc::new(Desc::Nil))),
+            Desc::Seq(a, b) => match self.step(a, executor)? {
+                Step::Blocked(ms, cont) => {
+                    Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone()))))
+                }
+                Step::Done(left) if matches!(left, Value::ErrV(_)) => Ok(Step::Done(left)),
+                Step::Done(_) => self.step(b, executor),
+            },
+            Desc::Bind(inner, callee) => match self.step(inner, executor)? {
+                Step::Blocked(ms, cont) => {
+                    Ok(Step::Blocked(ms, Rc::new(Desc::Bind(cont, callee.clone()))))
+                }
+                Step::Done(yielded) => {
+                    let next = self.call(callee.clone(), vec![yielded], origin, &None)?;
+                    match next {
+                        Value::Desc(d) => self.step(&d, executor),
+                        other => Ok(Step::Done(other)),
+                    }
+                }
+            },
+            // leaf effects and nested joins run to completion synchronously
+            _ => Ok(Step::Done(self.execute(desc, executor)?)),
+        }
+    }
+}
+
+/// Collect the members of a (possibly nested) parallel group left-to-right —
+/// the spawn order the scheduler breaks ties by.
+fn flatten_join(desc: &Desc, out: &mut Vec<Rc<Desc>>) {
+    match desc {
+        Desc::Join(a, b) => {
+            flatten_join(a, out);
+            flatten_join(b, out);
+        }
+        other => out.push(Rc::new(other.clone())),
+    }
 }
 
 pub fn render_plan(desc: &Desc, out: &mut String) {
@@ -1529,6 +1711,9 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
             render_plan(inner, out);
             out.push_str("  . <continuation>\n");
         }
+        Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
+        Desc::Random(n) => out.push_str(&format!("  random {n}\n")),
+        Desc::Nil => {}
     }
 }
 

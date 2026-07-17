@@ -6,11 +6,11 @@ fn main() -> ExitCode {
     if args.first().map(String::as_str) == Some("repl") {
         return repl();
     }
-    let (command, file, plan, release) = match parse_args(&args) {
+    let (command, file, plan, release, interp) = match parse_args(&args) {
         Some(parsed) => parsed,
         None => {
             eprintln!(
-                "usage: kanso run <file.kso> [--plan] | kanso check <file.kso> | kanso \
+                "usage: kanso run <file.kso> [--plan|--interp] | kanso check <file.kso> | kanso \
                  test <file.kso> | kanso build <file.kso> [--release] | kanso repl"
             );
             return ExitCode::from(2);
@@ -53,10 +53,13 @@ fn main() -> ExitCode {
     if command == "build" {
         return build(&program, &file, release);
     }
+    if interp {
+        return run_interpreted(&program);
+    }
     run(&program, &file, &source, plan)
 }
 
-fn parse_args(args: &[String]) -> Option<(String, String, bool, bool)> {
+fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let command = args.first()?.clone();
     if command != "run" && command != "check" && command != "test" && command != "build" {
         return None;
@@ -65,28 +68,54 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool)> {
     let mut rest = args.iter().skip(2);
     let mut plan = false;
     let mut release = false;
+    let mut interp = false;
     for arg in rest.by_ref() {
         match arg.as_str() {
             "--plan" => plan = true,
             "--release" => release = true,
+            "--interp" => interp = true,
             "--" => break,
             _ => return None,
         }
     }
-    if plan && command != "run" {
+    if (plan || interp) && command != "run" {
         return None;
     }
     if release && command != "build" {
         return None;
     }
-    Some((command, file, plan, release))
+    Some((command, file, plan, release, interp))
+}
+
+/// Execute `main` on the reference interpreter — the semantics oracle. `run`
+/// compiles native; this path is for effects the backend doesn't lower yet
+/// (the cooperative scheduler, `sleep`, `random`), so the concurrency model
+/// can be seen before it is ported to the native and wasm engines.
+fn run_interpreted(program: &ast::Program) -> ExitCode {
+    let interp = eval::Interp::new(program);
+    let desc = match interp.run_main() {
+        Ok(eval::Value::Desc(d)) => d,
+        Ok(_) => return ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {}", e.message);
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut executor = eval::RealExecutor { program_args: program_args(), rng: eval::Rng::seeded() };
+    match interp.execute(&desc, &mut executor) {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {}", e.message);
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn repl() -> ExitCode {
     use std::io::{BufRead, Write};
     println!("kanso repl — expressions evaluate, declarations persist, ctrl-d exits");
     let mut session = kanso::repl::Session::new();
-    let mut executor = eval::RealExecutor { program_args: Vec::new() };
+    let mut executor = eval::RealExecutor { program_args: Vec::new(), rng: eval::Rng::seeded() };
     let stdin = std::io::stdin();
     let mut buffer = String::new();
     loop {
