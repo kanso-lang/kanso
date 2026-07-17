@@ -87,15 +87,14 @@
 
 <p>a dynamic-feeling language usually pays a runtime tax: tag checks before every operation, failure guards after every call. kanso's whole-program inference—the monotone fixpoint whose near-death story is <a href="about.html#p3">about, part 03</a>—computes, per call site, the exact set of concrete type vectors that can arrive. the emitter then monomorphizes per vector: dispatch resolves statically, patterns become field offsets, and on proven paths the tag checks and failure guards are simply <em>deleted</em>—not predicted well, not branch-hinted, absent.</p>
 
-<p>the receipt is the benchmark: a 188kb nested json document, read at runtime and decoded 150 times. when this page was first written the llvm backend averaged ~1.8ms per decode—ahead of go's <code>encoding/json</code> at ~1.9ms, and about half the speed of <code>serde_json</code>'s hand-tuned ~0.9ms. the campaign since then—unboxed dispatch, in-place list building, a sweep of provably-redundant copies—brought the shipped default to ~1.26ms, and the fair fight got a fair stick: a <em>reasonably-written</em> rust parser (recursive descent, std types, no simd, no zero-copy—the same algorithm kanso uses) decodes at ~1.11ms, because racing hand-tuned serde measures hand-tuning, not the language. the remaining gap is allocation traffic, and §11 shows the experiment where the memory model itself closes it—past the fair stick, to ~1.00ms. the scoreboard and the recipe, so any number here can be checked rather than believed—every engine reads the file at runtime (an embedded constant would let llvm fold the decode) and the kanso harness accumulates a checksum so the loop provably runs:</p>
+<p>the receipt is the benchmark: a 188kb nested json document, read at runtime and decoded 150 times. when this page was first written the llvm backend averaged ~1.8ms per decode—ahead of go's <code>encoding/json</code>, and about half the speed of <code>serde_json</code>'s hand-tuned ~0.9ms. the campaign since then—unboxed dispatch, in-place list building, a sweep of provably-redundant copies, and the heartbeat memory model of §11 now shipped by default—brought it to <strong>~0.99ms per decode at memory parity</strong>: kanso decodes as fast as a <em>reasonably-written</em> rust parser (recursive descent, std types, no simd, no zero-copy—the same algorithm kanso uses) and holds the same peak footprint as <code>serde_json</code> itself, ~6.8mb flat. the honest remaining gap is to hand-tuned serde (~0.87ms), and it is no longer allocation traffic—the arena rewind of §11 already reclaims that—but the cost of a tagged value representation and per-call dispatch, a representational frontier rather than a memory-management one. the scoreboard and the recipe, so any number here can be checked rather than believed—every engine reads the file at runtime (an embedded constant would let llvm fold the decode) and the kanso harness accumulates a checksum so the loop provably runs:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">the scoreboard — mean per decode, and how to reproduce it</div>
-  <pre><code><span class="c"># serde_json (hand-tuned)   ~0.94 ms   7.1 mb rss</span>
-<span class="c"># kanso + heartbeat (§11)   ~1.00 ms   12.4 mb rss, flat — experimental</span>
-<span class="c"># reasonably-written rust   ~1.11 ms   7.1 mb rss</span>
-<span class="c"># kanso, shipped default    ~1.26 ms   arena never freed (yet)</span>
-<span class="c"># go encoding/json          ~1.90 ms</span>
+  <pre><code><span class="c"># serde_json (hand-tuned)   ~0.87 ms   6.7 mb rss</span>
+<span class="c"># kanso, shipped default    ~0.99 ms   6.8 mb rss, flat  (heartbeat, §11)</span>
+<span class="c"># reasonably-written rust   ~1.02 ms   6.8 mb rss</span>
+<span class="c"># go encoding/json          ~1.83 ms   10.2 mb rss</span>
 
 cargo build --release
 bash bench/make_jsonbench.sh
@@ -212,42 +211,42 @@ time ./jsonbench                                  <span class="c"># divide by 15
 
 <p>now the part you actually feel: what does the kanso programmer do to get all this? <strong>nothing.</strong> there is no keyword in this section. no lifetime, no annotation, no region name, no tuning flag. you write the fold, the parser, the handler — the pulse is already in the program's shape, and the compiler places every memory decision at compile time by leaning on it. the janitor isn't hidden; the janitor isn't <em>hired</em>.</p>
 
-<p>and here is the receipt. kanso's runtime allocator was, until last night, the degenerate case of this design — one giant workbench that never got swept, so a long-running program's memory just climbed. we made the bench resettable and inserted one beat boundary between iterations of the json benchmark: 150 decodes of a 188kb file.</p>
+<p>and here is the receipt. kanso's runtime allocator was, once, the degenerate case of this design — one giant workbench that never got swept, so a long-running program's memory just climbed. we made the bench resettable and let the compiler place a beat boundary between iterations of the json benchmark: a 188kb file decoded over and over. the difference is not a percentage. it is the difference between <em>bounded</em> and <em>unbounded</em>.</p>
 
 <figure style="margin:2rem 0">
-<svg viewBox="0 0 640 210" width="100%" role="img" aria-label="memory over time: before, a line climbing to 800 megabytes; after, a flat sawtooth at 12 megabytes" style="font-family:var(--font-mono);max-width:640px">
+<svg viewBox="0 0 640 210" width="100%" role="img" aria-label="memory over time: before, a line climbing without bound past 15 gigabytes; after, a flat sawtooth at under 7 megabytes that never rises" style="font-family:var(--font-mono);max-width:640px">
   <line x1="50" y1="20" x2="50" y2="170" stroke="var(--line)" stroke-width="1"/>
   <line x1="50" y1="170" x2="620" y2="170" stroke="var(--line)" stroke-width="1"/>
   <text x="46" y="30" fill="var(--muted)" font-size="11" text-anchor="end">mem</text>
-  <text x="618" y="188" fill="var(--muted)" font-size="11" text-anchor="end">time →</text>
-  <polyline points="50,168 620,34" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="428" y="52" fill="var(--muted)" font-size="12">before: never swept — 800 mb and climbing</text>
+  <text x="618" y="188" fill="var(--muted)" font-size="11" text-anchor="end">decodes →</text>
+  <polyline points="50,168 620,28" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text x="360" y="46" fill="var(--muted)" font-size="12">before: never swept — 0.76 gb at 150, 15 gb at 3000, climbing</text>
   <polyline points="50,168 90,152 90,168 130,152 130,168 170,152 170,168 210,152 210,168 250,152 250,168 290,152 290,168 330,152 330,168 370,152 370,168 410,152 410,168 450,152 450,168 490,152 490,168 530,152 530,168 570,152 570,168 610,152" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
-  <text x="428" y="140" fill="var(--accent)" font-size="12">after: swept every beat — 12 mb, flat forever</text>
+  <text x="360" y="140" fill="var(--accent)" font-size="12">after: swept every beat — 6.8 mb, flat at any count</text>
 </svg>
 </figure>
 
-<p>max resident memory fell from <strong>800&nbsp;mb to 12.4&nbsp;mb</strong> — sixty-five times less, and flat: at 3000 decodes it is still 12.4&nbsp;mb. and the run got <em>faster</em>, about twenty percent, which is the detail that turns a memory feature into a performance thesis. the tell is in the kernel accounting: system time fell from 0.03s to 0.00s, because the program stopped asking the operating system for fresh cold pages and started recycling the same warm ones — the chef rinsing one cutting board instead of unwrapping a new one per carrot, with the cache staying hot the whole shift.</p>
+<p>grow-only, peak memory tracks the work: <strong>0.76&nbsp;gb</strong> at 150 decodes, <strong>15&nbsp;gb</strong> at 3000 — the program keeps every scrap it ever touches. swept every beat, peak is <strong>6.8&nbsp;mb</strong> at 150 decodes and <strong>6.8&nbsp;mb</strong> at 3000 — <em>flat</em>, because a decode's scraps die with the decode. the point isn't the ratio at any one size (it is already a hundredfold at 150, two-thousandfold at 3000); it's that one curve has a slope and the other is a line. and the run got <em>faster</em> in the bargain: the program stopped asking the operating system for fresh cold pages and started recycling the same warm ones — the chef rinsing one cutting board instead of unwrapping a new one per carrot, cache hot the whole shift.</p>
 
 <figure style="margin:2rem 0">
-<svg viewBox="0 0 640 190" width="100%" role="img" aria-label="milliseconds per decode, shorter is faster: serde 0.94, kanso with heartbeat 1.00, reasonably-written rust 1.11, kanso yesterday 1.26" style="font-family:var(--font-mono);max-width:640px">
-  <text x="20" y="22" fill="var(--muted)" font-size="11">ms per decode — shorter is faster</text>
-  <rect x="20" y="40" width="357" height="20" fill="var(--line)"/>
+<svg viewBox="0 0 640 190" width="100%" role="img" aria-label="mean milliseconds per decode, shorter is faster: serde 0.87, kanso 0.99, reasonably-written rust 1.02, go 1.83" style="font-family:var(--font-mono);max-width:640px">
+  <text x="20" y="22" fill="var(--muted)" font-size="11">ms per decode — shorter is faster (all at ~6.8 mb, go at 10.2)</text>
+  <rect x="20" y="40" width="228" height="20" fill="var(--line)"/>
   <text x="24" y="54" fill="var(--ink)" font-size="11.5">serde_json (rust, hand-tuned)</text>
-  <text x="385" y="54" fill="var(--muted)" font-size="11.5">0.94</text>
-  <rect x="20" y="72" width="380" height="20" fill="var(--accent)"/>
+  <text x="256" y="54" fill="var(--muted)" font-size="11.5">0.87</text>
+  <rect x="20" y="72" width="259" height="20" fill="var(--accent)"/>
   <text x="24" y="86" fill="#fff6f2" font-size="11.5" font-weight="600">kanso + heartbeat</text>
-  <text x="408" y="86" fill="var(--accent)" font-size="11.5" font-weight="600">1.00</text>
-  <rect x="20" y="104" width="422" height="20" fill="var(--line)"/>
+  <text x="287" y="86" fill="var(--accent)" font-size="11.5" font-weight="600">0.99</text>
+  <rect x="20" y="104" width="267" height="20" fill="var(--line)"/>
   <text x="24" y="118" fill="var(--ink)" font-size="11.5">reasonably-written rust</text>
-  <text x="450" y="118" fill="var(--muted)" font-size="11.5">1.11</text>
-  <rect x="20" y="136" width="479" height="20" fill="var(--line)"/>
-  <text x="24" y="150" fill="var(--ink)" font-size="11.5">kanso, the morning before</text>
-  <text x="507" y="150" fill="var(--muted)" font-size="11.5">1.26</text>
+  <text x="295" y="118" fill="var(--muted)" font-size="11.5">1.02</text>
+  <rect x="20" y="136" width="480" height="20" fill="var(--line)"/>
+  <text x="24" y="150" fill="var(--ink)" font-size="11.5">go encoding/json</text>
+  <text x="508" y="150" fill="var(--muted)" font-size="11.5">1.83</text>
 </svg>
 </figure>
 
-<p>read the second bar against the third: <strong>kanso now beats reasonably-written rust</strong> — the honest benchmark from §04's methodology, a recursive-descent parser a competent rust developer writes in an afternoon, same algorithm as ours — by about ten percent, and stands six percent behind serde_json, the hand-tuned simd parser rust teams actually ship. the pass came from the memory model, not the parser: rust pays malloc and free per object unless its programmer hand-builds an arena, which is exactly the kind of expert move most code never gets. kanso's shape makes the arena automatic, sound, and invisible.</p>
+<p>read the second bar against the third: <strong>kanso beats reasonably-written rust</strong> — the honest benchmark from §04's methodology, a recursive-descent parser a competent rust developer writes in an afternoon, same algorithm as ours — and holds the same ~6.8&nbsp;mb peak footprint as serde_json itself, the hand-tuned parser rust teams actually ship, while landing about thirteen percent behind it on speed. the win came from the memory model, not the parser: rust pays malloc and free per object unless its programmer hand-builds an arena, which is exactly the kind of expert move most code never gets. kanso's shape makes the arena automatic, sound, and invisible. the remaining thirteen percent to serde is not allocation traffic — the sweep already reclaimed that — but the cost of a tagged value and per-call dispatch, a representational frontier the next campaign takes up.</p>
 
 <p>the honesty tier, updated: rung two has landed. the compiler now emits the boundaries itself — an analysis proves a loop's iterations keep nothing (every value crossing an iteration is entry-threaded or a register scalar, iterations transitively allocate, every outside entry is bracketed), and the emitted version beat the hand experiment: max resident memory <strong>7.1&nbsp;mb</strong>, byte-for-byte the footprint of serde and the reasonably-written rust — because the true entry mark reclaims even the first iteration's scraps the experiment's lazy mark kept. the one annotation the harness briefly needed (<code>cs:string</code>, stipulating what inference couldn't yet see across the executor boundary) is already gone — the compiler now infers what a description yields to its bound continuation, so the whole chain is derivation, no stipulations. after that: copy-or-pin for survivors, then static sweep points for long beats. and the number that ultimately judges the whole design is not on this page yet: write the compiler in kanso, count the survivors per beat, and see how rare "rare" really is.</p>
 

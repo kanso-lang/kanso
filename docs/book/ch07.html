@@ -74,10 +74,10 @@
   <div class="code-panel-title">shell</div>
   <pre><code><span class="prompt">$ </span>time kanso run bench/jsonbench
 <span class="s">decoded 150 times, checksum 24000</span>
-kanso run bench/jsonbench  0.39s user 0.05s system 99% cpu 0.442 total</code></pre>
+kanso run bench/jsonbench  0.25s user 0.00s system 99% cpu 0.252 total</code></pre>
 </div>
 
-<p>a tree-walker doing 150 full decodes in under half a second is closer to the compiler than folklore predicts—and the honest reason is unflattering to both engines: they spend most of their time in the same place, copying growing maps (the <code>memmove</code> the profiler flags), so the compiler's per-node speedup is partly hidden behind an allocation cost neither engine has fixed yet. that changes when reuse analysis ships. either way, the interpreter's job was never this race: it answers in milliseconds on programs of human size, keeps zero state between runs, and is the reference the compiler must match byte for byte.</p>
+<p>a tree-walker doing 150 full decodes in a quarter second is closer to the compiler than folklore predicts—and the interpreter's job was never this race anyway: it answers in milliseconds on programs of human size, keeps zero state between runs, and is the reference the compiler must match byte for byte. the allocation cost that once hid the compiler's per-node speedup behind map-copying is the very thing the next section removes outright.</p>
 
 <h2>the compiler, same program</h2>
 
@@ -89,12 +89,12 @@ kanso run bench/jsonbench  0.39s user 0.05s system 99% cpu 0.442 total</code></p
 <span class="s">built ./jsonbench (llvm ir at jsonbench.ll)</span>
 <span class="prompt">$ </span>time ./jsonbench
 <span class="s">decoded 150 times, checksum 24000</span>
-./jsonbench  0.23s user 0.04s system 97% cpu 0.277 total</code></pre>
+./jsonbench  0.14s user 0.00s system 99% cpu 0.140 total</code></pre>
 </div>
 
-<p>0.27 seconds of wall time for 150 decodes (the fixture is read at runtime, so the optimizer can't fold it, and the checksum proves every decode ran): <strong>~1.8ms per decode</strong>. that edges go's ~1.83ms—a pure language with values-only semantics, automatic failure propagation, and no mutation matches go's standard library from source that never mentions a buffer, an index check, or a memory strategy. but serde is still twice as fast, and pretending otherwise would make this whole chapter untrustworthy.</p>
+<p>0.14 seconds of wall time for 150 decodes (the fixture is read at runtime, so the optimizer can't fold it, and the checksum proves every decode ran): once process startup is discounted, <strong>~0.99ms per decode</strong>. that beats a reasonably-written rust parser (~1.02ms, the same recursive-descent algorithm kanso uses) and go's <code>encoding/json</code> (~1.83ms), at the same ~6.8mb peak footprint—a pure language with values-only semantics, automatic failure propagation, and no mutation, out in front of hand-written rust that never mentions a buffer, an index check, or a memory strategy. serde_json, rust's hand-tuned parser, still leads at ~0.87ms, and pretending otherwise would make this whole chapter untrustworthy.</p>
 
-<p>the gap is not the abstractions—it is the allocation. the cpu profile shows <code>memmove</code> and map insertion on top, because building an n-key object still copies the whole map on every <code>put</code>. that is exactly what the deepest type-driven optimizations delete: reference-counting with reuse (perceus—koka's technique, shipped by lean 4 and roc) turns unique-owner updates in place, and <a href="../compiler.html#c9">the compiler page</a> stages the campaign to catch serde. the abstractions are already free; the memory strategy is the next chapter of the story, not this one.</p>
+<p>the remaining thirteen percent to serde is no longer allocation—the memory model of <a href="../compiler.html#c11">the compiler page</a> already reclaims that, in place and for free, and the profile below proves it. what's left on top is <em>dispatch</em>: the cost of a tagged value threaded through per-call pattern matching. that is a representational frontier, the next chapter of the story, not this one.</p>
 
 <h2>zero-cost, with receipts</h2>
 
@@ -103,16 +103,18 @@ kanso run bench/jsonbench  0.39s user 0.05s system 99% cpu 0.442 total</code></p
 <div class="code-panel">
   <div class="code-panel-title">sample jsonbench (top of stack)</div>
   <pre><code>Sort by top of stack, same collapsed (when >= 5):
-        _platform_memmove  (in libsystem_platform.dylib)        25
-        d__skip_ws_2  (in jsonbench)        14
-        k_b_put  (in jsonbench)        14
-        k_b_push  (in jsonbench)        12
-        d__string_at_4  (in jsonbench)        11
-        d__parse_number_2  (in jsonbench)        10
-        d__value_for_3  (in jsonbench)        10</code></pre>
+        d__value_for_3  (in jsonbench)        504
+        k_truthy  (in jsonbench)        180
+        k_b_push_mut  (in jsonbench)        179
+        k_utf8_bad  (in jsonbench)        132
+        _platform_memmove  (in libsystem_platform.dylib)        126
+        d__str_char_4  (in jsonbench)        114
+        d__obj_key_start_4  (in jsonbench)        106
+        k_b_find2  (in jsonbench)        98
+        k_b_put  (in jsonbench)        97</code></pre>
 </div>
 
-<p>read the ledger. the hottest symbol is <code>memmove</code>—the program is spending its time <em>moving bytes</em>, which is what a decoder is for. everything else is either a runtime primitive (<code>k_b_put</code>, <code>k_b_push</code>—map and list construction) or the parser's own functions, monomorphized: <code>d__skip_ws_2</code>, <code>d__value_for_3</code> are the <code>_skip_ws</code> and <code>_value_for</code> you read in chapter 06, compiled into type-specialized copies. what's absent is the tell: no dispatcher, no tag-checking loop, no interpreter, no garbage collector. the abstractions you wrote in—overloads, patterns, the railway—do not appear in the profile, because by the time tsuru is done folding, they aren't <em>in</em> the program anymore.</p>
+<p>read the ledger. the hottest symbol is <code>d__value_for_3</code>—the <code>_value_for</code> you wrote in chapter 06, monomorphized, the seven-way byte dispatch at the heart of the scanner, now compiled to a single indexed jump. under it, the parser's own functions (<code>d__str_char_4</code>, <code>d__obj_key_start_4</code>) and runtime primitives: <code>k_b_push_mut</code> is list-append <em>mutating in place</em>—the reference-counting-with-reuse trick (perceus, koka's technique, shipped by lean 4 and roc) proving out, a unique-owner accumulator extended without a copy. that it outranks <code>memmove</code>, which has fallen to fifth, is the whole memory-model story in one profile: the allocation traffic that used to dominate is gone, and what remains on top is dispatch and byte-moving—the irreducible work of a decoder. what's absent is the tell: no dispatcher, no tag-checking loop, no interpreter, no garbage collector. the abstractions you wrote in—overloads, patterns, the railway—do not appear in the profile, because by the time tsuru is done folding, they aren't <em>in</em> the program anymore.</p>
 
 <h2>ten million frames</h2>
 
