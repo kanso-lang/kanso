@@ -9,8 +9,8 @@ const NULLARY = new Set(['true', 'false', 'none', 'err']);
 const BUILTINS = new Set([
   'args', 'at', 'bytes', 'char_code', 'chars', 'concat', 'entries', 'filter',
   'from_code', 'if', 'join', 'length', 'map', 'print', 'push', 'put',
-  'read_file', 'slice', 'sort', 'stdin', 'sum', 'to_float', 'to_int',
-  'utf8', 'write_file',
+  'random', 'read_file', 'slice', 'sleep', 'sort', 'stdin', 'sum',
+  'to_float', 'to_int', 'utf8', 'write_file',
 ]);
 
 function esc(text) {
@@ -341,6 +341,23 @@ main =
   print "warming the cups"
   >> print "serving"
 `,
+  concurrency: `# in go, two things at once + waiting for both is a goroutine, a
+# channel or WaitGroup, and a select. in kanso bare lines already run as
+# cooperative green threads: the scheduler overlaps them and >> is the
+# only sync. brew blocks on a slow steep while the dice keep rolling,
+# so the rolls land during the steep, not after. (in the browser sleep
+# is instant, but the interleaved ORDER is the same as running it live.)
+brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
+
+main =
+  brew
+  rolls
+
+fn roll i
+  random 6 . (n -> print "roll {i}: a {n + 1}")
+
+rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
+`,
   redux: `type deposit
   amount: int
 
@@ -367,7 +384,7 @@ fn step _ _ _ _ out none
 
 fn step store actions i sub out action
   next = update store action
-  play next actions (i + 1) sub (out >> notify sub action next)
+  play next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
 
 fn update balance (deposit n)
   balance + n
