@@ -90,6 +90,10 @@
   white-space: pre;
 }
 .play-editor pre { color: var(--code-ink); pointer-events: none; }
+/* the <code> mirror must share the textarea's exact font metrics, or the
+   highlight drifts from the caret; the UA `code { font-family: monospace }`
+   rule would otherwise override the inherited editor font */
+.play-editor pre code { font: inherit; }
 .play-editor textarea {
   background: transparent;
   border: none;

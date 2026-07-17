@@ -209,6 +209,10 @@ async function runCompiled(src) {
 
 const editor = document.getElementById('editor');
 const mirror = document.getElementById('mirror');
+/* the <pre> is the scroll container (overflow:auto); the <code> mirror
+   inside it is inline and can't scroll, so the highlight layer must be
+   scrolled via its parent to track the textarea */
+const mirrorScroll = mirror.parentElement;
 const output = document.getElementById('output');
 const runButton = document.getElementById('run');
 const examples = document.getElementById('examples');
@@ -218,8 +222,8 @@ const replLog = document.getElementById('repl-log');
 
 function syncMirror() {
   mirror.innerHTML = highlight(editor.value) + '\n';
-  mirror.scrollTop = editor.scrollTop;
-  mirror.scrollLeft = editor.scrollLeft;
+  mirrorScroll.scrollTop = editor.scrollTop;
+  mirrorScroll.scrollLeft = editor.scrollLeft;
 }
 
 async function run() {
@@ -237,8 +241,8 @@ async function run() {
 
 editor.addEventListener('input', syncMirror);
 editor.addEventListener('scroll', () => {
-  mirror.scrollTop = editor.scrollTop;
-  mirror.scrollLeft = editor.scrollLeft;
+  mirrorScroll.scrollTop = editor.scrollTop;
+  mirrorScroll.scrollLeft = editor.scrollLeft;
 });
 editor.addEventListener('keydown', (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
