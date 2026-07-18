@@ -562,6 +562,8 @@ KValue k_add(KValue a, KValue b) {
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) + k_as_f(b));
+    if (a.tag == K_INT && b.tag == K_FLOAT) return k_float((double)a.payload + k_as_f(b));
+    if (a.tag == K_FLOAT && b.tag == K_INT) return k_float(k_as_f(a) + (double)b.payload);
     k_die("`+` is not defined for these values");
     return k_none();
 }
@@ -575,6 +577,8 @@ KValue k_sub(KValue a, KValue b) {
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) - k_as_f(b));
+    if (a.tag == K_INT && b.tag == K_FLOAT) return k_float((double)a.payload - k_as_f(b));
+    if (a.tag == K_FLOAT && b.tag == K_INT) return k_float(k_as_f(a) - (double)b.payload);
     k_die("`-` is not defined for these values");
     return k_none();
 }
@@ -588,6 +592,8 @@ KValue k_mul(KValue a, KValue b) {
         return k_int(r);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) return k_float(k_as_f(a) * k_as_f(b));
+    if (a.tag == K_INT && b.tag == K_FLOAT) return k_float((double)a.payload * k_as_f(b));
+    if (a.tag == K_FLOAT && b.tag == K_INT) return k_float(k_as_f(a) * (double)b.payload);
     k_die("`*` is not defined for these values");
     return k_none();
 }
@@ -603,6 +609,12 @@ KValue k_div(KValue a, KValue b, const char* origin) {
         if (k_as_f(b) == 0.0) return k_err(k_str("division by zero"), origin);
         return k_float(k_as_f(a) / k_as_f(b));
     }
+    if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
+        double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
+        double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
+        if (y == 0.0) return k_err(k_str("division by zero"), origin);
+        return k_float(x / y);
+    }
     k_die("`/` is not defined for these values");
     return k_none();
 }
@@ -612,6 +624,11 @@ static int k_order(KValue a, KValue b) {
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) {
         double x = k_as_f(a);
         double y = k_as_f(b);
+        return (x > y) - (x < y);
+    }
+    if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
+        double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
+        double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
         return (x > y) - (x < y);
     }
     if (a.tag == K_STR && b.tag == K_STR) {
@@ -1024,6 +1041,58 @@ KValue k_call1(KValue f, KValue a) {
     }
     if (f.tag == K_FNREF) {
         return ((KValue(*)(KValue))(intptr_t)f.payload)(a);
+    }
+    k_die("this value is not callable");
+    return k_none();
+}
+
+/* Calling a lambda value with more than one argument. The closure's fn pointer
+   is stored generically; cast it to the arity the call site knows. Failures in
+   the callable or any argument propagate before the body runs, matching the
+   dispatcher. Arity is checked by the type system, so no runtime arity guard. */
+KValue k_call2(KValue f, KValue a, KValue b) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (f.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)f.payload;
+        return ((KValue(*)(void*, KValue, KValue))c->fn)(c->env, a, b);
+    }
+    if (f.tag == K_FNREF) {
+        return ((KValue(*)(KValue, KValue))(intptr_t)f.payload)(a, b);
+    }
+    k_die("this value is not callable");
+    return k_none();
+}
+
+KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(c)) return c;
+    if (f.tag == K_CLOSURE) {
+        KClosure* cl = (KClosure*)(intptr_t)f.payload;
+        return ((KValue(*)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
+    }
+    if (f.tag == K_FNREF) {
+        return ((KValue(*)(KValue, KValue, KValue))(intptr_t)f.payload)(a, b, c);
+    }
+    k_die("this value is not callable");
+    return k_none();
+}
+
+KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
+    if (!k_not_failure(f)) return f;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(c)) return c;
+    if (!k_not_failure(d)) return d;
+    if (f.tag == K_CLOSURE) {
+        KClosure* cl = (KClosure*)(intptr_t)f.payload;
+        return ((KValue(*)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
+    }
+    if (f.tag == K_FNREF) {
+        return ((KValue(*)(KValue, KValue, KValue, KValue))(intptr_t)f.payload)(a, b, c, d);
     }
     k_die("this value is not callable");
     return k_none();
