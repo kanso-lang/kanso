@@ -13,12 +13,78 @@ const DECLARES: &str = r#"%KValue = type { i64, i64 }
 %parsed = type { i64, i64 }
 %KBytes = type { i64, ptr }
 
-declare %KValue @k_int(i64)
-declare %KValue @k_float(double)
-declare %KValue @k_bool(i64)
-declare %KValue @k_none()
+; Inline twins of the runtime's hot one-liners (tag tests and value
+; constructors). LTO declines to inline these across the .ll/.o module
+; boundary, leaving a real call on every `if` condition and constructor;
+; internal linkage keeps them from colliding with the runtime's own
+; definitions, and alwaysinline folds them into every call site.
+define internal %KValue @k_int(i64 %n) alwaysinline {
+  %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
+  ret %KValue %v
+}
+define internal %KValue @k_float(double %d) alwaysinline {
+  %bits = bitcast double %d to i64
+  %v = insertvalue %KValue { i64 1, i64 undef }, i64 %bits, 1
+  ret %KValue %v
+}
+define internal %KValue @k_bool(i64 %b) alwaysinline {
+  %c = icmp ne i64 %b, 0
+  %tag = select i1 %c, i64 2, i64 3
+  %v = insertvalue %KValue { i64 undef, i64 0 }, i64 %tag, 0
+  ret %KValue %v
+}
+define internal %KValue @k_none() alwaysinline {
+  ret %KValue { i64 4, i64 0 }
+}
+define internal i64 @k_not_failure(%KValue %v) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %ne = icmp ne i64 %tag, 5
+  %nn = icmp ne i64 %tag, 4
+  %ok = and i1 %ne, %nn
+  %r = zext i1 %ok to i64
+  ret i64 %r
+}
+define internal i64 @k_truthy(%KValue %v) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %t = icmp eq i64 %tag, 2
+  br i1 %t, label %yes, label %chkf
+yes:
+  ret i64 1
+chkf:
+  %f = icmp eq i64 %tag, 3
+  br i1 %f, label %no, label %bad
+no:
+  ret i64 0
+bad:
+  %r = call i64 @k_truthy_bad()
+  ret i64 %r
+}
+define internal i64 @k_check_tag(%KValue %v, i64 %t) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %c = icmp eq i64 %tag, %t
+  %r = zext i1 %c to i64
+  ret i64 %r
+}
+define internal i64 @k_check_int(%KValue %v, i64 %n) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %pay = extractvalue %KValue %v, 1
+  %ct = icmp eq i64 %tag, 0
+  %cp = icmp eq i64 %pay, %n
+  %c = and i1 %ct, %cp
+  %r = zext i1 %c to i64
+  ret i64 %r
+}
+define internal i64 @k_check_bool(%KValue %v) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %t = icmp eq i64 %tag, 2
+  %f = icmp eq i64 %tag, 3
+  %c = or i1 %t, %f
+  %r = zext i1 %c to i64
+  ret i64 %r
+}
+declare i64 @k_truthy_bad()
+
 declare %KValue @k_str_n(ptr, i64)
-declare i64 @k_not_failure(%KValue)
 declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
@@ -26,10 +92,7 @@ declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_err_inner(%KValue)
-declare i64 @k_check_tag(%KValue, i64)
-declare i64 @k_check_int(%KValue, i64)
 declare i64 @k_check_rec(%KValue, i64, i64)
-declare i64 @k_check_bool(%KValue)
 declare i64 @k_check_str(%KValue, ptr, i64)
 declare %KValue @k_concat(%KValue, %KValue)
 declare %KValue @k_render(%KValue, i64)
@@ -40,7 +103,6 @@ declare %KValue @k_div(%KValue, %KValue, ptr)
 declare %KValue @k_cmp(%KValue, %KValue, i64)
 declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
-declare i64 @k_truthy(%KValue)
 declare void @k_die(ptr) noreturn
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)

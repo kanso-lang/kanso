@@ -921,15 +921,18 @@ static KValue k_schedule(KDesc* join) {
     return k_beat_pop(result);
 }
 
-static long long k_truthy_bad(void) {
+/* Exported (not static): the codegen prelude's inline k_truthy calls this on
+   its cold path, so the die message lives in exactly one place. */
+long long k_truthy_bad(void) {
     k_die("an if condition is true or false");
     return 0;
 }
 
-/* Fires on every `if` condition. Keeping the cold k_die path out of line
-   leaves this body small enough that LTO inlines it into the hot loops,
-   instead of leaving a real call+return the size estimate would otherwise
-   force. */
+/* Fires on every `if` condition. The codegen prelude carries an
+   alwaysinline IR twin of this body (internal linkage, so the symbols never
+   collide) — LTO declined to inline across the .ll/.o boundary, leaving a
+   real call on the hottest path; the IR twin makes the inline deterministic.
+   This copy remains for the runtime's own internal callers. */
 long long k_truthy(KValue v) {
     if (v.tag == K_TRUE) return 1;
     if (v.tag == K_FALSE) return 0;
