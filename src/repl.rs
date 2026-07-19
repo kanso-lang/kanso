@@ -17,7 +17,8 @@ pub struct Session {
 }
 
 pub enum Outcome {
-    /// A declaration was committed; the string names it.
+    /// A declaration was committed; the string is the full echo, e.g.
+    /// `defined foo` or `redefined greet`.
     Defined(String),
     /// An expression evaluated to this rendered value.
     Value(String),
@@ -66,12 +67,53 @@ impl Session {
             }
         }
         let names: Vec<String> = incoming.iter().map(|u| u.name.clone()).collect();
+        let echo: Vec<String> = names
+            .iter()
+            .map(|n| match self.units.iter().any(|u| &u.name == n) {
+                true => format!("redefined {n}"),
+                false => format!("defined {n}"),
+            })
+            .collect();
         let mut candidate = self.units.clone();
         candidate.retain(|u| !names.contains(&u.name));
         candidate.extend(incoming);
         let _ = compile_units(&candidate)?;
         self.units = candidate;
-        Ok(Outcome::Defined(names.join(" ")))
+        Ok(Outcome::Defined(echo.join(", ")))
+    }
+
+    /// `:delete name` — remove a declaration from the session, refused (with
+    /// the compiler's own evidence) while anything still depends on it.
+    pub fn delete(&mut self, name: &str) -> Result<String, String> {
+        if !self.units.iter().any(|u| u.name == name) {
+            return Err(format!("error[name]: nothing named `{name}` is defined\n"));
+        }
+        let mut candidate = self.units.clone();
+        candidate.retain(|u| u.name != name);
+        match compile_units(&candidate) {
+            Ok(_) => {
+                self.units = candidate;
+                Ok(format!("deleted {name}"))
+            }
+            Err(diag) => Err(format!("cannot delete `{name}` — the session still uses it:\n{diag}")),
+        }
+    }
+
+    /// `:show` — the session as its canonical file; `:show name` — one
+    /// declaration's source, without running anything.
+    pub fn show(&self, name: Option<&str>) -> Result<String, String> {
+        match name {
+            None => match self.units.is_empty() {
+                true => Ok("the session is empty".to_string()),
+                false => Ok(assemble(&self.units).trim_end().to_string()),
+            },
+            Some(n) => self
+                .units
+                .iter()
+                .find(|u| u.name == n)
+                .map(|u| u.source.clone())
+                .ok_or_else(|| format!("error[name]: nothing named `{n}` is defined\n")),
+        }
     }
 
     fn eval_expression(
