@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>the compiler — kanso</title>
+<title>the compiler—kanso</title>
 <meta name="description" content="how kanso's semantics license an aggressive compiler: differential oracles, jump tables, guaranteed tail calls, deleted guards, tiered bignums, and the frontier past rust.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
@@ -56,7 +56,7 @@
     <a href="spec.html">spec</a>
     <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
-    <a href="https://github.com/ClayShentrup/kanso">github</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
   </nav>
 </header>
 
@@ -87,14 +87,14 @@
 
 <p>a dynamic-feeling language usually pays a runtime tax: tag checks before every operation, failure guards after every call. kanso's whole-program inference—the monotone fixpoint whose near-death story is <a href="about.html#p3">about, part 03</a>—computes, per call site, the exact set of concrete type vectors that can arrive. the emitter then monomorphizes per vector: dispatch resolves statically, patterns become field offsets, and on proven paths the tag checks and failure guards are simply <em>deleted</em>—not predicted well, not branch-hinted, absent.</p>
 
-<p>the receipt is the benchmark: a 188kb nested json document, read at runtime and decoded 150 times. when this page was first written the llvm backend averaged ~1.8ms per decode—ahead of go's <code>encoding/json</code>, and about half the speed of <code>serde_json</code>'s hand-tuned ~0.9ms. the campaign since then—unboxed dispatch, in-place list building, a sweep of provably-redundant copies, and the heartbeat memory model of §11 now shipped by default—brought it to <strong>~0.99ms per decode at memory parity</strong>: kanso decodes as fast as a <em>reasonably-written</em> rust parser (recursive descent, std types, no simd, no zero-copy—the same algorithm kanso uses) and holds the same peak footprint as <code>serde_json</code> itself, ~6.8mb flat. the honest remaining gap is to hand-tuned serde (~0.87ms), and it is no longer allocation traffic—the arena rewind of §11 already reclaims that—but the cost of a tagged value representation and per-call dispatch, a representational frontier rather than a memory-management one. the scoreboard and the recipe, so any number here can be checked rather than believed—every engine reads the file at runtime (an embedded constant would let llvm fold the decode) and the kanso harness accumulates a checksum so the loop provably runs:</p>
+<p>the receipt is the benchmark: a 188kb nested json document, read at runtime and decoded 150 times. when this page was first written the llvm backend averaged ~1.8ms per decode—ahead of go's <code>encoding/json</code>, and about half the speed of <code>serde_json</code>'s hand-tuned ~0.9ms. the campaign since then—unboxed dispatch, in-place list building, a sweep of provably-redundant copies, the heartbeat memory model of §11, and a later tuning pass (also §11, at the end) that went after the representational cost once the allocation cost was gone—brought it past parity. on an interleaved best-of-25 run, on this machine, on this fixture, kanso decodes at <strong>~0.81ms</strong> against <code>serde_json</code>'s hand-tuned <strong>~0.83ms</strong>: a 5% median win and 24 of 25 head-to-head heats, at the same ~6.8mb peak footprint serde itself holds. it is also ~16% faster than a <em>reasonably-written</em> rust parser (recursive descent, std types, no simd, no zero-copy—the same algorithm kanso uses). the scoreboard and the recipe, so any number here can be checked rather than believed—every engine reads the file at runtime (an embedded constant would let llvm fold the decode) and the kanso harness accumulates a checksum so the loop provably runs:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">the scoreboard — mean per decode, and how to reproduce it</div>
-  <pre><code><span class="c"># serde_json (hand-tuned)   ~0.87 ms   6.7 mb rss</span>
-<span class="c"># kanso, shipped default    ~0.99 ms   6.8 mb rss, flat  (heartbeat, §11)</span>
-<span class="c"># reasonably-written rust   ~1.02 ms   6.8 mb rss</span>
-<span class="c"># go encoding/json          ~1.83 ms   10.2 mb rss</span>
+  <div class="code-panel-title">the scoreboard—best-of-25 per decode, and how to reproduce it</div>
+  <pre><code><span class="c"># kanso, shipped default    ~0.81 ms   6.8 mb rss, flat  (heartbeat, §11)</span>
+<span class="c"># serde_json (hand-tuned)   ~0.83 ms   6.7 mb rss</span>
+<span class="c"># reasonably-written rust   ~0.98 ms   6.8 mb rss</span>
+<span class="c"># go encoding/json          ~1.73 ms   10.2 mb rss</span>
 
 cargo build --release
 bash bench/make_jsonbench.sh
@@ -105,6 +105,10 @@ time ./jsonbench                                  <span class="c"># divide by 15
 (cd bench/naive_json && cargo build --release)
 ./bench/naive_json/target/release/naive_json bench/large.json</code></pre>
 </div>
+
+<p>closing that gap took three changes, landing in this order. <strong>ir-inlining, -10.7%</strong>: a batch of one-line predicates and constructors were marked for inlining and still weren't showing up inlined in the compiled output—<code>-flto</code>'s cross-unit inliner was silently declining them at the .ll/.o boundary, a discovery that cost an evening of disassembly-staring before the missing frames explained themselves. moving the inlining into ir emission, so the compiler does it itself instead of asking lto to do it later, was worth more than the other two changes combined. <strong>simd find2, -1.4%</strong>: the string scanner's two-byte lookahead (closing quote, escape) now runs as a neon/sse2 vector scan instead of a byte-at-a-time loop. <strong>to_int fast path, -2.2%</strong>: the common case in integer parsing skips the general bignum-capable path. all three are byte-identical in output to the versions they replaced, verified across engines and gated on both x86 and arm64 ci.</p>
+
+<p>a fourth change wasn't a speedup at all—it was insurance against losing the first three by accident. <strong>cost goldens</strong> now gate ci: the 150-decode gauntlet is pinned to exact allocation counts (14,799,465 allocations, 790,444,432 bytes, 6 arena blocks, 1 permanent allocation) rather than wall-clock time, which drifts machine to machine and buries small regressions in noise. a change that nudges any of those numbers fails the build before anyone has to eyeball a flaky benchmark to notice—deterministic, bit-identical across arm64 and x86_64.</p>
 
 <h2 id="c5"><span class="sec-num">05</span>run is build-and-run</h2>
 
@@ -174,11 +178,11 @@ time ./jsonbench                                  <span class="c"># divide by 15
 
 <h2 id="c11"><span class="sec-num">11</span>the heartbeat, gently</h2>
 
-<p>§10 is the theory. this section is the same idea told slowly, with pictures and a measurement at the end — no prerequisites beyond "programs use memory."</p>
+<p>§10 is the theory. this section is the same idea told slowly, with pictures and a measurement at the end—no prerequisites beyond "programs use memory."</p>
 
-<p>here is the problem every language has to solve. a running program constantly asks for little pieces of memory — a list here, a string there, thousands of times a second. asking is easy. the hard part is giving the pieces <em>back</em>, because handing back a piece something still needs corrupts the program, and never handing anything back fills the machine. the classic answers: do it by hand (c — fast, and famously how programs get hacked), employ a janitor who periodically stops the world to figure out what's dead (garbage collection — safe, with pauses and overhead), or prove to the compiler exactly when every piece dies (rust — fast and safe, but the proof is homework called lifetimes, and the homework is the tax kanso refuses).</p>
+<p>here is the problem every language has to solve. a running program constantly asks for little pieces of memory—a list here, a string there, thousands of times a second. asking is easy. the hard part is giving the pieces <em>back</em>, because handing back a piece something still needs corrupts the program, and never handing anything back fills the machine. the classic answers: do it by hand (c—fast, and famously how programs get hacked), employ a janitor who periodically stops the world to figure out what's dead (garbage collection—safe, with pauses and overhead), or prove to the compiler exactly when every piece dies (rust—fast and safe, but the proof is homework called lifetimes, and the homework is the tax kanso refuses).</p>
 
-<p>kanso's answer starts from an observation about the <em>shape</em> of programs: they have a pulse. serve a request. handle a keystroke. decode a file. take one step of the fold from §10. work arrives, work happens, an answer leaves — and then it all repeats. call each cycle a <strong>beat</strong>. almost everything a program makes, it makes <em>inside</em> a beat, in service of that beat's answer — and the instant the answer leaves, all of it is trash at once.</p>
+<p>kanso's answer starts from an observation about the <em>shape</em> of programs: they have a pulse. serve a request. handle a keystroke. decode a file. take one step of the fold from §10. work arrives, work happens, an answer leaves—and then it all repeats. call each cycle a <strong>beat</strong>. almost everything a program makes, it makes <em>inside</em> a beat, in service of that beat's answer—and the instant the answer leaves, all of it is trash at once.</p>
 
 <p>so kanso keeps two kinds of memory, matching the two kinds of thing a beat touches:</p>
 
@@ -186,32 +190,32 @@ time ./jsonbench                                  <span class="c"># divide by 15
 <svg viewBox="0 0 640 250" width="100%" role="img" aria-label="two tiers: the shelf holds fold state, updated in place; the workbench holds everything made during a beat and is swept at the end" style="font-family:var(--font-mono);max-width:640px">
   <rect x="20" y="30" width="270" height="130" rx="6" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
   <text x="40" y="62" fill="var(--ink)" font-size="15" font-weight="600">the shelf</text>
-  <text x="40" y="88" fill="var(--muted)" font-size="12">the fold state — one value, one owner</text>
+  <text x="40" y="88" fill="var(--muted)" font-size="12">the fold state—one value, one owner</text>
   <text x="40" y="110" fill="var(--muted)" font-size="12">updated in place, forever</text>
   <text x="40" y="132" fill="var(--muted)" font-size="12">never swept, never counted</text>
   <rect x="350" y="30" width="270" height="130" rx="6" fill="none" stroke="var(--line)" stroke-width="1.5"/>
   <text x="370" y="62" fill="var(--ink)" font-size="15" font-weight="600">the workbench</text>
   <text x="370" y="88" fill="var(--muted)" font-size="12">everything made during the beat</text>
-  <text x="370" y="110" fill="var(--muted)" font-size="12">shared freely — no bookkeeping</text>
+  <text x="370" y="110" fill="var(--muted)" font-size="12">shared freely—no bookkeeping</text>
   <text x="370" y="132" fill="var(--muted)" font-size="12">all of it dies together</text>
   <line x1="485" y1="160" x2="485" y2="205" stroke="var(--accent)" stroke-width="1.5"/>
   <polygon points="485,213 480,203 490,203" fill="var(--accent)"/>
-  <text x="485" y="235" fill="var(--accent)" font-size="12" text-anchor="middle">swept at the beat — one pointer reset</text>
+  <text x="485" y="235" fill="var(--accent)" font-size="12" text-anchor="middle">swept at the beat—one pointer reset</text>
   <line x1="350" y1="95" x2="298" y2="95" stroke="var(--muted)" stroke-width="1" stroke-dasharray="4 4"/>
   <polygon points="292,95 300,90 300,100" fill="var(--muted)"/>
   <text x="322" y="182" fill="var(--muted)" font-size="11" text-anchor="middle">the rare survivor is carried across</text>
 </svg>
 </figure>
 
-<p>the <em>shelf</em> holds the fold state — §10 already established it has exactly one owner, handed from beat to beat, so the compiler updates it in place forever and never has to wonder about it. the <em>workbench</em> holds everything else: intermediate lists, parsed fragments, half-built strings, all the scaffolding a beat erects on the way to its answer. and at the end of the beat kanso does not ask which scraps on the bench are garbage. <strong>they all are</strong> — the answer already left. so it sweeps the bench: one pointer moves back to where it started. not "fast garbage collection" — the cost doesn't depend on how much junk there is. a thousand allocations and one allocation sweep for the same price, which is roughly the price of <code>x&nbsp;=&nbsp;0</code>.</p>
+<p>the <em>shelf</em> holds the fold state—§10 already established it has exactly one owner, handed from beat to beat, so the compiler updates it in place forever and never has to wonder about it. the <em>workbench</em> holds everything else: intermediate lists, parsed fragments, half-built strings, all the scaffolding a beat erects on the way to its answer. and at the end of the beat kanso does not ask which scraps on the bench are garbage. <strong>they all are</strong>—the answer already left. so it sweeps the bench: one pointer moves back to where it started. not "fast garbage collection"—the cost doesn't depend on how much junk there is. a thousand allocations and one allocation sweep for the same price, which is roughly the price of <code>x&nbsp;=&nbsp;0</code>.</p>
 
-<p>this is also the moment sharing becomes free, and it's worth slowing down for, because it's the trick under the trick. the entire reason reference counting exists is one question: <em>when two things point at the same piece of memory, who frees it last?</em> counting answers by tallying pointers, paying a little on every share and — the dirty secret — occasionally paying a lot, because dropping the last reference to a big structure triggers a cascade that walks and frees every child, a garbage-collection pause wearing a trench coat. the beat answers by making the question unaskable: inside a beat, share anything with anything, point twice, point ten times — nobody tallies, because everything on the bench dies at the same instant regardless. the who-frees-it-last question has no meaning when the answer is always "the beat does."</p>
+<p>this is also the moment sharing becomes free, and it's worth slowing down for, because it's the trick under the trick. the entire reason reference counting exists is one question: <em>when two things point at the same piece of memory, who frees it last?</em> counting answers by tallying pointers, paying a little on every share and—the dirty secret—occasionally paying a lot, because dropping the last reference to a big structure triggers a cascade that walks and frees every child, a garbage-collection pause wearing a trench coat. the beat answers by making the question unaskable: inside a beat, share anything with anything, point twice, point ten times—nobody tallies, because everything on the bench dies at the same instant regardless. the who-frees-it-last question has no meaning when the answer is always "the beat does."</p>
 
-<p>two loose ends, both handled. <em>survivors:</em> occasionally a value made on the workbench needs to outlive its beat. the compiler's escape analysis — already built and tested — spots these at compile time. a small survivor is copied to the shelf, a copy placed statically, before the program ever runs. a big survivor isn't copied at all: its whole workbench is kept, a fresh one is started, and the old bench carries a tally of how many survivors still point into it — one integer <em>per bench</em>, never per object, bumped O(1) at the escape, and when it reaches zero the bench is swept the only way benches are ever swept. no walk, no cascade, no per-object header. <em>long beats:</em> a beat that builds a mountain of scrap before finishing can be given intermediate sweep points — and because kanso function bodies are flat and the world is closed, the compiler knows <em>exactly</em> which values are live at any line, so even those are placed statically.</p>
+<p>two loose ends, both handled. <em>survivors:</em> occasionally a value made on the workbench needs to outlive its beat. the compiler's escape analysis—already built and tested—spots these at compile time. a small survivor is copied to the shelf, a copy placed statically, before the program ever runs. a big survivor isn't copied at all: its whole workbench is kept, a fresh one is started, and the old bench carries a tally of how many survivors still point into it—one integer <em>per bench</em>, never per object, bumped O(1) at the escape, and when it reaches zero the bench is swept the only way benches are ever swept. no walk, no cascade, no per-object header. <em>long beats:</em> a beat that builds a mountain of scrap before finishing can be given intermediate sweep points—and because kanso function bodies are flat and the world is closed, the compiler knows <em>exactly</em> which values are live at any line, so even those are placed statically.</p>
 
-<p>now the part you actually feel: what does the kanso programmer do to get all this? <strong>nothing.</strong> there is no keyword in this section. no lifetime, no annotation, no region name, no tuning flag. you write the fold, the parser, the handler — the pulse is already in the program's shape, and the compiler places every memory decision at compile time by leaning on it. the janitor isn't hidden; the janitor isn't <em>hired</em>.</p>
+<p>now the part you actually feel: what does the kanso programmer do to get all this? <strong>nothing.</strong> there is no keyword in this section. no lifetime, no annotation, no region name, no tuning flag. you write the fold, the parser, the handler—the pulse is already in the program's shape, and the compiler places every memory decision at compile time by leaning on it. the janitor isn't hidden; the janitor isn't <em>hired</em>.</p>
 
-<p>and here is the receipt. kanso's runtime allocator was, once, the degenerate case of this design — one giant workbench that never got swept, so a long-running program's memory just climbed. we made the bench resettable and let the compiler place a beat boundary between iterations of the json benchmark: a 188kb file decoded over and over. the difference is not a percentage. it is the difference between <em>bounded</em> and <em>unbounded</em>.</p>
+<p>and here is the receipt. kanso's runtime allocator was, once, the degenerate case of this design—one giant workbench that never got swept, so a long-running program's memory just climbed. we made the bench resettable and let the compiler place a beat boundary between iterations of the json benchmark: a 188kb file decoded over and over. the difference is not a percentage. it is the difference between <em>bounded</em> and <em>unbounded</em>.</p>
 
 <figure style="margin:2rem 0">
 <svg viewBox="0 0 640 210" width="100%" role="img" aria-label="memory over time: before, a line climbing without bound past 15 gigabytes; after, a flat sawtooth at under 7 megabytes that never rises" style="font-family:var(--font-mono);max-width:640px">
@@ -220,35 +224,35 @@ time ./jsonbench                                  <span class="c"># divide by 15
   <text x="46" y="30" fill="var(--muted)" font-size="11" text-anchor="end">mem</text>
   <text x="618" y="188" fill="var(--muted)" font-size="11" text-anchor="end">decodes →</text>
   <polyline points="50,168 620,28" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
-  <text x="360" y="46" fill="var(--muted)" font-size="12">before: never swept — 0.76 gb at 150, 15 gb at 3000, climbing</text>
+  <text x="360" y="46" fill="var(--muted)" font-size="12">before: never swept—0.76 gb at 150, 15 gb at 3000, climbing</text>
   <polyline points="50,168 90,152 90,168 130,152 130,168 170,152 170,168 210,152 210,168 250,152 250,168 290,152 290,168 330,152 330,168 370,152 370,168 410,152 410,168 450,152 450,168 490,152 490,168 530,152 530,168 570,152 570,168 610,152" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
-  <text x="360" y="140" fill="var(--accent)" font-size="12">after: swept every beat — 6.8 mb, flat at any count</text>
+  <text x="360" y="140" fill="var(--accent)" font-size="12">after: swept every beat—6.8 mb, flat at any count</text>
 </svg>
 </figure>
 
-<p>grow-only, peak memory tracks the work: <strong>0.76&nbsp;gb</strong> at 150 decodes, <strong>15&nbsp;gb</strong> at 3000 — the program keeps every scrap it ever touches. swept every beat, peak is <strong>6.8&nbsp;mb</strong> at 150 decodes and <strong>6.8&nbsp;mb</strong> at 3000 — <em>flat</em>, because a decode's scraps die with the decode. the point isn't the ratio at any one size (it is already a hundredfold at 150, two-thousandfold at 3000); it's that one curve has a slope and the other is a line. and the run got <em>faster</em> in the bargain: the program stopped asking the operating system for fresh cold pages and started recycling the same warm ones — the chef rinsing one cutting board instead of unwrapping a new one per carrot, cache hot the whole shift.</p>
+<p>grow-only, peak memory tracks the work: <strong>0.76&nbsp;gb</strong> at 150 decodes, <strong>15&nbsp;gb</strong> at 3000—the program keeps every scrap it ever touches. swept every beat, peak is <strong>6.8&nbsp;mb</strong> at 150 decodes and <strong>6.8&nbsp;mb</strong> at 3000—<em>flat</em>, because a decode's scraps die with the decode. the point isn't the ratio at any one size (it is already a hundredfold at 150, two-thousandfold at 3000); it's that one curve has a slope and the other is a line. and the run got <em>faster</em> in the bargain: the program stopped asking the operating system for fresh cold pages and started recycling the same warm ones—the chef rinsing one cutting board instead of unwrapping a new one per carrot, cache hot the whole shift.</p>
 
 <figure style="margin:2rem 0">
-<svg viewBox="0 0 640 190" width="100%" role="img" aria-label="mean milliseconds per decode, shorter is faster: serde 0.87, kanso 0.99, reasonably-written rust 1.02, go 1.83" style="font-family:var(--font-mono);max-width:640px">
-  <text x="20" y="22" fill="var(--muted)" font-size="11">ms per decode — shorter is faster (all at ~6.8 mb, go at 10.2)</text>
-  <rect x="20" y="40" width="228" height="20" fill="var(--line)"/>
-  <text x="24" y="54" fill="var(--ink)" font-size="11.5">serde_json (rust, hand-tuned)</text>
-  <text x="256" y="54" fill="var(--muted)" font-size="11.5">0.87</text>
-  <rect x="20" y="72" width="259" height="20" fill="var(--accent)"/>
-  <text x="24" y="86" fill="#fff6f2" font-size="11.5" font-weight="600">kanso + heartbeat</text>
-  <text x="287" y="86" fill="var(--accent)" font-size="11.5" font-weight="600">0.99</text>
-  <rect x="20" y="104" width="267" height="20" fill="var(--line)"/>
+<svg viewBox="0 0 640 190" width="100%" role="img" aria-label="best-of-25 milliseconds per decode, shorter is faster: kanso 0.81, serde 0.83, reasonably-written rust 0.98, go 1.73" style="font-family:var(--font-mono);max-width:640px">
+  <text x="20" y="22" fill="var(--muted)" font-size="11">ms per decode—shorter is faster (all at ~6.8 mb, go at 10.2)</text>
+  <rect x="20" y="40" width="212" height="20" fill="var(--accent)"/>
+  <text x="24" y="54" fill="#fff6f2" font-size="11.5" font-weight="600">kanso + heartbeat</text>
+  <text x="240" y="54" fill="var(--accent)" font-size="11.5" font-weight="600">0.81</text>
+  <rect x="20" y="72" width="218" height="20" fill="var(--line)"/>
+  <text x="24" y="86" fill="var(--ink)" font-size="11.5">serde_json (rust, hand-tuned)</text>
+  <text x="246" y="86" fill="var(--muted)" font-size="11.5">0.83</text>
+  <rect x="20" y="104" width="257" height="20" fill="var(--line)"/>
   <text x="24" y="118" fill="var(--ink)" font-size="11.5">reasonably-written rust</text>
-  <text x="295" y="118" fill="var(--muted)" font-size="11.5">1.02</text>
-  <rect x="20" y="136" width="480" height="20" fill="var(--line)"/>
+  <text x="285" y="118" fill="var(--muted)" font-size="11.5">0.98</text>
+  <rect x="20" y="136" width="453" height="20" fill="var(--line)"/>
   <text x="24" y="150" fill="var(--ink)" font-size="11.5">go encoding/json</text>
-  <text x="508" y="150" fill="var(--muted)" font-size="11.5">1.83</text>
+  <text x="481" y="150" fill="var(--muted)" font-size="11.5">1.73</text>
 </svg>
 </figure>
 
-<p>read the second bar against the third: <strong>kanso beats reasonably-written rust</strong> — the honest benchmark from §04's methodology, a recursive-descent parser a competent rust developer writes in an afternoon, same algorithm as ours — and holds the same ~6.8&nbsp;mb peak footprint as serde_json itself, the hand-tuned parser rust teams actually ship, while landing about thirteen percent behind it on speed. the win came from the memory model, not the parser: rust pays malloc and free per object unless its programmer hand-builds an arena, which is exactly the kind of expert move most code never gets. kanso's shape makes the arena automatic, sound, and invisible. the remaining thirteen percent to serde is not allocation traffic — the sweep already reclaimed that — but the cost of a tagged value and per-call dispatch, a representational frontier the next campaign takes up.</p>
+<p>read the bars top to bottom: <strong>kanso is now the fastest engine on this gauntlet</strong>—the honest benchmark from §04's methodology, on this machine, this fixture, an interleaved best-of-25 run. it beats serde_json, the hand-tuned parser rust teams actually ship, by a median 5% (24 of 25 head-to-head heats), and beats a reasonably-written rust parser (recursive descent, std types, same algorithm as ours) by about 16%—all three within a few hundred kb of the same ~6.8&nbsp;mb peak footprint. the memory model closed most of the distance first: rust pays malloc and free per object unless its programmer hand-builds an arena, which is exactly the kind of expert move most code never gets, and kanso's shape makes the arena automatic, sound, and invisible. but the memory model alone landed at parity, not ahead—the last stretch to serde was a representational one, and §04 tells that part: an ir-inlining fix, a simd scan, and an integer fast path, held in place by cost goldens gating ci so none of the three regresses unnoticed.</p>
 
-<p>the honesty tier, updated: rung two has landed. the compiler now emits the boundaries itself — an analysis proves a loop's iterations keep nothing (every value crossing an iteration is entry-threaded or a register scalar, iterations transitively allocate, every outside entry is bracketed), and the emitted version beat the hand experiment: max resident memory <strong>7.1&nbsp;mb</strong>, byte-for-byte the footprint of serde and the reasonably-written rust — because the true entry mark reclaims even the first iteration's scraps the experiment's lazy mark kept. the one annotation the harness briefly needed (<code>cs:string</code>, stipulating what inference couldn't yet see across the executor boundary) is already gone — the compiler now infers what a description yields to its bound continuation, so the whole chain is derivation, no stipulations. after that: copy-or-pin for survivors, then static sweep points for long beats. and the number that ultimately judges the whole design is not on this page yet: write the compiler in kanso, count the survivors per beat, and see how rare "rare" really is.</p>
+<p>the honesty tier, updated: rung two has landed. the compiler now emits the boundaries itself—an analysis proves a loop's iterations keep nothing (every value crossing an iteration is entry-threaded or a register scalar, iterations transitively allocate, every outside entry is bracketed), and the emitted version beat the hand experiment: max resident memory <strong>7.1&nbsp;mb</strong>, byte-for-byte the footprint of serde and the reasonably-written rust—because the true entry mark reclaims even the first iteration's scraps the experiment's lazy mark kept. the one annotation the harness briefly needed (<code>cs:string</code>, stipulating what inference couldn't yet see across the executor boundary) is already gone—the compiler now infers what a description yields to its bound continuation, so the whole chain is derivation, no stipulations. after that: copy-or-pin for survivors, then static sweep points for long beats. and the number that ultimately judges the whole design is not on this page yet: write the compiler in kanso, count the survivors per beat, and see how rare "rare" really is.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
@@ -349,7 +353,7 @@ time ./jsonbench                                  <span class="c"># divide by 15
       <a href="spec.html">spec</a>
       <a href="about.html">about</a>
       <a href="lore.html">lore</a>
-      <a href="https://github.com/ClayShentrup/kanso">github</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
 </footer>

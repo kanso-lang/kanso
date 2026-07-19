@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>chapter 03 — types and dispatch</title>
+<title>chapter 03—types and dispatch</title>
 <meta name="description" content="records, construction, destructuring both ways, and overload dispatch—the only switch kanso gives you.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
@@ -28,7 +28,7 @@
     <a href="../spec.html">spec</a>
     <a href="../about.html">about</a>
     <a href="../compiler.html">compiler</a>
-    <a href="https://github.com/ClayShentrup/kanso">github</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
   </nav>
 </header>
 
@@ -51,6 +51,8 @@
 
 <span class="eyebrow">chapter 03</span>
 <h1>types and dispatch</h1>
+
+<p>most languages hand you a drawer of tools for the question "what kind of thing is this?"—<code>switch</code>, <code>match</code>, <code>instanceof</code>, a type tag to test by hand. kanso gives you exactly one, and it doubles as the way you build data and take it back apart. we start with how data goes together.</p>
 
 <p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical—enforced, like everything else other languages leave to code review. construction is positional, using the type name as the constructor, and taking a record apart is a <em>binding pattern</em>—write the constructor shape on the left of <code>=</code> and every field gets a name:</p>
 
@@ -277,7 +279,7 @@ regular ticket</code></pre>
       <a href="../spec.html">spec</a>
       <a href="../about.html">about</a>
       <a href="../lore.html">lore</a>
-      <a href="https://github.com/ClayShentrup/kanso">github</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
 </footer>

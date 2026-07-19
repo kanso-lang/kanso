@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kanso language specification — v0.1</title>
+<title>kanso language specification—v0.1</title>
 <meta name="description" content="the authoritative kanso v0.1 specification: purity and effects, errors, types, typesets, dispatch, auto-propagation, generics without interfaces, containers, memory model, processes, and the implementation plan.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
@@ -27,7 +27,7 @@
     <a href="spec.html">spec</a>
     <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
-    <a href="https://github.com/ClayShentrup/kanso">github</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
   </nav>
 </header>
 
@@ -57,7 +57,7 @@
 <article class="spec-doc prose">
 
 <span class="eyebrow">the specification</span>
-<h1>kanso language specification — v0.1 (design freeze, july 2026)</h1>
+<h1>kanso language specification—v0.1 (design freeze, july 2026)</h1>
 
 <p>working name <strong>kanso</strong> (japanese: simplicity through elimination of clutter), extension <code>.kso</code>. pronounced KAHN-so, unvoiced s.</p>
 
@@ -74,7 +74,7 @@
   <li>every function is pure and returns exactly one value.</li>
   <li>effects are values (descriptions). <code>print "hi"</code> returns a description of printing; nothing executes until the runtime receives <code>main</code>'s description.</li>
   <li><code>.</code> (spaces around it) composes descriptions with data flow (pipe). <code>&gt;&gt;</code> composes with pure sequencing, no data.</li>
-  <li>bare description statements in a body are an <em>unordered group</em> — exactly as if each ran on its own thread; no order exists between them unless written. a lone <code>&gt;&gt;</code> line is a wall: the next group runs only after the one above settles. <code>&gt;&gt; step</code> is the fused form — a wall plus one <em>closed</em> sequential step (a bare line may not silently join it; multi-member groups use the lone wall). group failures accumulate — every member always runs, and two errs merge into one whose reason lists both; a failed group gates the wall. a one-step stage always fuses with its wall: <code>&gt;&gt; step</code>, never a lone wall over a single line. width never reshapes statements — an over-wide statement wraps onto <code>.</code>/<code>&gt;&gt;</code> continuation lines at indent + two (<a href="#s9">§9</a>). <strong>what crosses a wall — the definitive walkthrough: <a href="flow.html">the flow model</a>.</strong></li>
+  <li>bare description statements in a body are an <em>unordered group</em>—exactly as if each ran on its own thread; no order exists between them unless written. a lone <code>&gt;&gt;</code> line is a wall: the next group runs only after the one above settles. <code>&gt;&gt; step</code> is the fused form—a wall plus one <em>closed</em> sequential step (a bare line may not silently join it; multi-member groups use the lone wall). group failures accumulate—every member always runs, and two errs merge into one whose reason lists both; a failed group gates the wall. a one-step stage always fuses with its wall: <code>&gt;&gt; step</code>, never a lone wall over a single line. width never reshapes statements—an over-wide statement wraps onto <code>.</code>/<code>&gt;&gt;</code> continuation lines at indent + two (<a href="#s9">§9</a>). <strong>what crosses a wall—the definitive walkthrough: <a href="flow.html">the flow model</a>.</strong></li>
   <li>descriptions are inspectable data: testing asserts on descriptions or runs them against a scripted executor and asserts on the transcript. no mocks. (structural equality holds only up to closure boundaries; the transcript method is the general story.)</li>
   <li>effect sets are inferred per function and propagate up the call graph. no function coloring, no async/await. <code>main</code>'s inferred effect set is the program's permission manifest.</li>
   <li>pure calls are plain calls: zero monadic overhead when both the effect set and propagable set are empty.</li>
@@ -205,7 +205,7 @@
   <li><strong>kanso has no commas (gaveled 2026-07-11).</strong> application is flat juxtaposition: <code>f a b</code> is a two-argument call; every enumeration (arguments, list elements, patterns, lambda parameters) is space-separated, and non-atomic elements are parenthesized (<code>f (g x) y</code>, <code>[(a + b)]</code>). the pipe inserts the piped value as the first argument of its target application: <code>x . f y</code> is <code>f x y</code>; the stdlib is subject-first so chains stay pipeable. no semicolons.</li>
   <li>string interpolation <code>"{x}"</code>. comments <code>#</code> (gaveled 2026-07-12: shebang lines are comments for free). 2-space indent. snake_case, all lowercase, always.</li>
   <li>canonical formatting is grammar: non-canonical whitespace is a syntax error. no formatter tool exists.</li>
-  <li><strong>width is rendering only (gaveled 2026-07-15):</strong> lines hold at most 80 characters, and width never changes how many statements there are. an over-wide statement wraps onto <code>.</code>/<code>&gt;&gt;</code> continuation lines (indent + two, one step per line — no partial chaining); a wrap whose spliced form fits on one line is a compile error. statement structure has its own canon, width-free: a lone <code>&gt;&gt;</code> wall exists only for multi-member groups; a one-step stage always fuses with its wall (<code>&gt;&gt; step</code>); a fused stage is closed. one meaning, one rendering.</li>
+  <li><strong>width is rendering only (gaveled 2026-07-15):</strong> lines hold at most 80 characters, and width never changes how many statements there are. an over-wide statement wraps onto <code>.</code>/<code>&gt;&gt;</code> continuation lines (indent + two, one step per line—no partial chaining); a wrap whose spliced form fits on one line is a compile error. statement structure has its own canon, width-free: a lone <code>&gt;&gt;</code> wall exists only for multi-member groups; a one-step stage always fuses with its wall (<code>&gt;&gt; step</code>); a fused stage is closed. one meaning, one rendering.</li>
 </ul>
 
 <h2 id="s10"><span class="sec-num">section 10</span>memory model</h2>
@@ -228,7 +228,7 @@
 <ul>
   <li>modules are directories (go-style); subdirectories private to parent. imports: <code>import "std/http"</code>, alphabetized.</li>
   <li><strong>files (gaveled 2026-07-12):</strong> a module splits into any number of <code>.kso</code> files sharing one namespace. file names are decisions (organization carries information); canonical ordering holds per file; an overload group lives in one file.</li>
-  <li><strong>visibility (gaveled 2026-07-12):</strong> a <code>_</code>-prefixed top-level name is module-private, enforced at the module boundary. visibility lives in the name, so every call site displays it; no export lists. a private declaration unused anywhere in its module is a compile error (nothing-wasted); public names are API surface and exempt.</li>
+  <li><strong>visibility:</strong> top-level names are module-private by default; <code>pub</code> is a leading keyword on a <code>fn</code>, <code>type</code>, or constant that marks it public. no export lists—the keyword sits at the declaration, so every reader sees it there. enforcement lands at the module boundary once cross-module <code>import</code> ships: only <code>pub</code> names are visible to an importer, everything else is invisible outside its own directory. a private declaration unused anywhere in its module is a compile error (nothing-wasted); <code>pub</code> names are API surface and exempt.</li>
   <li>bare identifiers mandatory; qualification only on collision; qualifying a unique name is a compile error.</li>
   <li>qualification syntax: <span class="open-flag">open</span>—<code>json.decode</code> (whitespace-distinguished from pipe) vs <code>json/decode</code> (matches import paths, frees <code>.</code>). recommendation on file: slash.</li>
 </ul>
@@ -275,7 +275,7 @@
       <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
       <a href="lore.html">lore</a>
-      <a href="https://github.com/ClayShentrup/kanso">github</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
 </footer>

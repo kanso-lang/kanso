@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>the flow model — kanso</title>
+<title>the flow model—kanso</title>
 <meta name="description" content="the definitive answer to what moves through a kanso program: data crosses only at bindings and the dot; >> carries permission, not values; a group's member values die where they stand and only failure survives, merged.">
 <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
@@ -73,7 +73,7 @@
     <a href="spec.html">spec</a>
     <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
-    <a href="https://github.com/ClayShentrup/kanso">github</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
   </nav>
 </header>
 
@@ -113,9 +113,9 @@ report low total           <span class="c"># needs both -- the barrier is the da
 
 <table class="fl-crossing">
   <tr><th>what</th><th>crosses the wall?</th></tr>
-  <tr><td>a member's value</td><td>no — discarded at the member's own line, never collected</td></tr>
-  <tr><td>timing</td><td>yes — everything above has fully settled before anything below starts</td></tr>
-  <tr><td>failure</td><td>yes — and it is the <em>only</em> survivor: every member still runs to completion, then all errs merge into one, and that one err gates the wall and short-circuits from there to the top</td></tr>
+  <tr><td>a member's value</td><td>no—discarded at the member's own line, never collected</td></tr>
+  <tr><td>timing</td><td>yes—everything above has fully settled before anything below starts</td></tr>
+  <tr><td>failure</td><td>yes—and it is the <em>only</em> survivor: every member still runs to completion, then all errs merge into one, and that one err gates the wall and short-circuits from there to the top</td></tr>
 </table>
 
 <div class="fl-diagram">
@@ -175,11 +175,11 @@ b <span class="o">=</span> random <span class="i">6</span>              <span cl
 
 <div class="fl-rules">
 <ul>
-  <li><strong>data crosses only at bindings and <code>.</code></strong> — if downstream needs a value, name it or pipe it; the dependency is the order.</li>
-  <li><strong><code>&gt;&gt;</code> carries no data</strong> — it carries one bit: nothing above me failed.</li>
-  <li><strong>a group discards every member's value</strong> — members exist for their effects; all of them always run.</li>
-  <li><strong>only failure survives a group</strong> — errs merge into one and short-circuit from the wall onward. an err is a true exception: you don't handle it, and the parallel join is the one place it pauses (to collect its siblings) before resuming its exit.</li>
-  <li><strong>parallel is the default because nothing can depend on anything</strong> — the group's syntax has no way to express a dependency, so the compiler doesn't have to prove independence; it is unrepresentable to violate.</li>
+  <li><strong>data crosses only at bindings and <code>.</code></strong>—if downstream needs a value, name it or pipe it; the dependency is the order.</li>
+  <li><strong><code>&gt;&gt;</code> carries no data</strong>—it carries one bit: nothing above me failed.</li>
+  <li><strong>a group discards every member's value</strong>—members exist for their effects; all of them always run.</li>
+  <li><strong>only failure survives a group</strong>—errs merge into one and short-circuit from the wall onward. an err is a true exception: you don't handle it, and the parallel join is the one place it pauses (to collect its siblings) before resuming its exit.</li>
+  <li><strong>parallel is the default because nothing can depend on anything</strong>—the group's syntax has no way to express a dependency, so the compiler doesn't have to prove independence; it is unrepresentable to violate.</li>
 </ul>
 </div>
 
@@ -195,7 +195,7 @@ b <span class="o">=</span> random <span class="i">6</span>              <span cl
       <a href="spec.html">spec</a>
       <a href="about.html">about</a>
       <a href="lore.html">lore</a>
-      <a href="https://github.com/ClayShentrup/kanso">github</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
 </footer>
