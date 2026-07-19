@@ -513,11 +513,9 @@ impl<'a> Backend<'a> {
                 "define %KValue @w_{name}_1(%KValue %a0) {{\nentry:\n{call}  ret %KValue %r\n}}\n"
             );
         }
-        let entry = crate::check::entry_name(self.program).unwrap_or("main");
-        let _ = writeln!(
-            self.body,
-            "define %KValue @k_user_main() {{\nentry:\n  %r = call tailcc %KValue \
-             @d_{entry}_0()\n  ret %KValue %r\n}}"
+        self.body.push_str(
+            "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
+             @d_main_0()\n  ret %KValue %r\n}\n",
         );
         let mut out = String::from(DECLARES);
         for (name, bytes) in &self.strings {
