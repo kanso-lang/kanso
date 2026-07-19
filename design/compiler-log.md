@@ -287,3 +287,17 @@ it, revisit with the printer work.
 
 apps/kq removed from this repo — kanso-lang/kq is the sole home (the
 err-migration plan applies to it there).
+
+---
+
+## 2026-07-19 — Go's arena post-mortem strengthens the beats story (Clay flag)
+
+Go's arena experiment (GOEXPERIMENT=arenas, proposal 51317) was shelved
+indefinitely: an arena as a LIBRARY API inside a GC'd language with pervasive
+aliasing cannot be made safe — any alias into a freed arena is a
+use-after-free the compiler cannot see, and the API composes badly with the
+GC. kanso's beats survive the same idea because the LANGUAGE deletes
+aliasing: purity means nothing can point into a swept region without the
+compiler knowing, so the arena is a consequence of semantics, not an API to
+misuse. Defensive talking point for HN + a journey-section beat for
+compiler.html (add on the next docs pass, not during launch traffic).
