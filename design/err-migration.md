@@ -64,3 +64,23 @@ checker+infer+builtin → lib/json (suite green) → kq (race harness green,
 byte-identity vs jq re-verified) → examples+goldens → book samples+panels
 (book_check green) → homepage/playground. One PR; CI (incl. book_check + cost
 golden) is the gate; merge on green.
+
+## Findings from enforcement (2026-07-19, branch err-unhandleable)
+
+Checker + infer changes are IN on the branch (rejection fires with the
+teaching diagnostic; pattern_catches lost its err case). Corpus breakage:
+
+- **lib/json's failure-positions contract reads through err**:
+  `_failure_position (err (parse_failure p _))` unwraps to extract the
+  position. Migration (per consensus doctrine): **decode returns the bare
+  typed `parse_failure` value** — askable by dispatch, no unwrapping, the
+  positions feature survives as a first-class value. Callers who want
+  propagate-on-failure convert (`err`-construct) at their boundary; the
+  json test suite asserts on the value directly. `_fail` mints
+  parse_failure, not err.
+- **Four src unit tests embed err-arm json sources** (beat, dispatch,
+  escape, linear) — update their fixtures to the migrated lib.
+- Remaining per the plan: valid_utf8 builtin, _string_ok/_number_ok
+  validity-first, must deletion, kq mirror (kanso-lang/kq), examples/
+  errors.kso typed-value redesign + homepage, book ch05/ch07 samples,
+  goldens, playground.

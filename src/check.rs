@@ -80,6 +80,30 @@ pub fn resolve_markers(program: &mut Program, markers: &HashSet<String>) -> Vec<
     diags
 }
 
+/// An err is unhandleable by design: it rises to the endpoint. A dispatch
+/// arm that names it would be a catch, so the pattern is rejected outright.
+fn check_err_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
+    fn names_err(pattern: &Pattern) -> bool {
+        match pattern {
+            Pattern::Ctor { ty, fields } => {
+                ty == "err" || fields.iter().any(names_err)
+            }
+            _ => false,
+        }
+    }
+    for decl in &program.fns {
+        if decl.params.iter().any(names_err) {
+            diags.push(Diagnostic::new(
+                "failure",
+                "an err is unhandleable — it rises to the endpoint; ask with \
+                 `none` or return a typed value instead"
+                    .to_string(),
+                decl.span,
+            ));
+        }
+    }
+}
+
 fn resolve_marker_pattern(
     pattern: &mut Pattern,
     markers: &HashSet<String>,
@@ -211,6 +235,7 @@ pub fn check_file(
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
+    check_err_arms(program, &mut diags);
     check_constants(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());

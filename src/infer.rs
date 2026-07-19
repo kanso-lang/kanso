@@ -127,7 +127,6 @@ fn bind_pattern<'a>(
 fn pattern_catches(pat: &Pattern) -> Set {
     match pat {
         Pattern::Nullary(name, _) if name == "none" => NONE,
-        Pattern::Ctor { ty, .. } if ty == "err" => ERR,
         _ => 0,
     }
 }
