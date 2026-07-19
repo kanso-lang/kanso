@@ -22,6 +22,7 @@ pub enum Tok {
     Underscore,
     KwFn,
     KwType,
+    KwPub,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -106,7 +107,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         let cont_indent_ok = lines.last().is_some_and(|p: &Line| indent == p.indent + 2)
             && blank_lines.last() != Some(&(number - 1));
         let parent_wrappable = lines.last().is_some_and(|p: &Line| {
-            !matches!(p.tokens.first(), Some((Tok::KwFn | Tok::KwType, _)))
+            !matches!(p.tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _)))
                 && !matches!(p.tokens.last(), Some((Tok::Bind, _)))
         });
         let dot_cont = content.starts_with(". ");
@@ -372,6 +373,7 @@ impl Scanner {
             "_" => Tok::Underscore,
             "fn" => Tok::KwFn,
             "type" => Tok::KwType,
+            "pub" => Tok::KwPub,
             _ => Tok::Ident(word),
         })
     }

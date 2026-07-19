@@ -310,6 +310,7 @@ impl<'a> Interp<'a> {
         let origin = Span { line: 0, col: 0 };
         let entry_decl = TypeDecl {
             name: "entry".to_string(),
+            is_pub: false,
             span: origin,
             fields: vec![
                 ("key".to_string(), vec!["any".to_string()], origin),

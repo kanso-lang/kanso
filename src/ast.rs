@@ -80,6 +80,7 @@ pub enum Stmt {
 #[derive(Debug)]
 pub struct FnDecl {
     pub name: String,
+    pub is_pub: bool,
     pub span: Span,
     pub params: Vec<Pattern>,
     pub body: Vec<Stmt>,
@@ -90,6 +91,7 @@ pub struct FnDecl {
 #[derive(Debug)]
 pub struct TypeDecl {
     pub name: String,
+    pub is_pub: bool,
     pub span: Span,
     /// Field name, permitted types (a typeset: one or more members), span.
     pub fields: Vec<(String, Vec<String>, Span)>,
