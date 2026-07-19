@@ -27,7 +27,7 @@
     <a href="spec.html">spec</a>
     <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
-    <a href="https://github.com/ClayShentrup/kanso">github</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
   </nav>
 </header>
 
@@ -46,7 +46,7 @@
 
 <h2 id="p1"><span class="sec-num">part 01</span>two engines, one truth</h2>
 
-<p>kanso ships two engines. <code>kanso run</code> builds and runs: it compiles your program to a native binary cached by content hash, so an unchanged program re-runs in about five milliseconds with no compiler invocation at all, and a changed one rebuilds in tens of milliseconds against a cached, already-optimized runtime. <code>kanso build --release</code> is the shipping artifact: it lowers kanso straight to llvm ir—dispatch becomes branch chains, patterns become field offsets, and every call in tail position is a <em>guaranteed</em> tail call, so ten million frames of mutual recursion run in constant stack—then hands the ir to clang for optimized machine code. on a 188kb json benchmark, read at runtime and decoded 150 times, the resulting binary averages ~0.99ms per decode—ahead of a reasonably-written rust parser (~1.02ms, the same recursive-descent algorithm) and go's <code>encoding/json</code> (~1.83ms), at the same ~6.8mb peak footprint, with whole-program inference feeding the emitter so proven paths carry no tag checks and no failure guards. the honest comparison, though, is <code>serde_json</code>: the parser a rust team actually ships does it in ~0.87ms, about thirteen percent faster. that gap used to be allocation—kanso copying where serde reuses—but reference-counting-with-reuse (koka's perceus technique, shipped by lean 4 and roc) is now proven out for unique-owner accumulators, and the heartbeat memory model holds memory flat; what remains is the cost of a tagged value and per-call dispatch, a representational frontier.</p>
+<p>kanso ships two engines. <code>kanso run</code> builds and runs: it compiles your program to a native binary cached by content hash, so an unchanged program re-runs in about five milliseconds with no compiler invocation at all, and a changed one rebuilds in tens of milliseconds against a cached, already-optimized runtime. <code>kanso build --release</code> is the shipping artifact: it lowers kanso straight to llvm ir—dispatch becomes branch chains, patterns become field offsets, and every call in tail position is a <em>guaranteed</em> tail call, so ten million frames of mutual recursion run in constant stack—then hands the ir to clang for optimized machine code. on a 188kb json benchmark, read at runtime and decoded 150 times, the resulting binary now beats <code>serde_json</code> itself: an interleaved best-of-25 run puts kanso at ~0.81ms per decode against serde's hand-tuned ~0.83ms—a median win, 24 of 25 head-to-head heats—at the same ~6.8mb peak footprint, with whole-program inference feeding the emitter so proven paths carry no tag checks and no failure guards. it also leads a reasonably-written rust parser (~0.98ms, same recursive-descent algorithm) and go's <code>encoding/json</code> (~1.73ms). the gap to serde used to be allocation—kanso copying where serde reuses—and the heartbeat memory model closed that first; what was left after was a representational cost, tagged values and per-call dispatch, closed by a later tuning pass: an ir-inlining fix that recovered inlining <code>-flto</code> was silently dropping across the .ll/.o boundary, a simd two-byte scan in the string scanner, and a fast path for common-case integers.</p>
 
 <p>two engines isn't indecision; it's the refusal of a trade every toolchain gets bullied into. go bought instant compiles and pays with slower binaries forever. rust bought maximum binaries and makes every developer wait. kanso declines the bundle: the dev loop never pays the optimizer, and the release path never compromises. the price is that both engines must mean the same thing—so they're forced to: ci builds every example native and requires byte-identical output against the interpreter—floats included, because both engines render the shortest round-trip. the interpreter is the conscience, the compiler is the muscle, and a one-bit disagreement fails the build.</p>
 
@@ -160,7 +160,7 @@ three</code></pre>
       <a href="index.html">home</a>
       <a href="spec.html">spec</a>
       <a href="lore.html">lore</a>
-      <a href="https://github.com/ClayShentrup/kanso">github</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
 </footer>

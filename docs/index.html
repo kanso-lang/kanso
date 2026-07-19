@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kanso — the language where the source contains only decisions</title>
+<title>kanso—the language where the source contains only decisions</title>
 <meta name="description" content="kanso (簡素): a pure language where effects are values, failure is a value, dispatch is the only eliminator, and programs have exactly one canonical form.">
   <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
   <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
@@ -27,7 +27,7 @@
     <a href="spec.html">spec</a>
     <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
-    <a href="https://github.com/ClayShentrup/kanso">github</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
   </nav>
 </header>
 
@@ -105,6 +105,24 @@
         <p>values are immutable, so the heap is a dag, so reference counting is complete. perceus-style, after koka, lean 4, and roc—kanso's no-shadowing and nothing-wasted rules make the same analyses more complete. no annotations, no rejected programs, no memory syntax in source; where uniqueness can't be proven, a reuse site pays one predictable branch (closeable per-function by opt-in fip).</p>
       </div>
     </div>
+  </div>
+</section>
+
+<section class="section" id="receipts">
+  <div class="container">
+    <div class="section-head">
+      <span class="eyebrow">receipts</span>
+      <h2 class="section-title">purity is not a tax</h2>
+      <p class="lede">the same discipline that deletes the footguns hands the compiler everything rust asks the programmer to manage. on the json gauntlet—one 188&nbsp;kb document, decoded 150 times—the pure language outruns the parser rust hand-tunes:</p>
+    </div>
+    <div class="code-panel">
+      <div class="code-panel-title">ms per decode—m-series mac, interleaved best of 25, recipe in the repo</div>
+      <pre><code><span class="c"># kanso                     0.81    no lifetimes, no gc, no annotations</span>
+<span class="c"># serde_json (hand-tuned)   0.83</span>
+<span class="c"># reasonably-written rust   0.98</span>
+<span class="c"># go encoding/json          1.73</span></code></pre>
+    </div>
+    <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong>14,799,465</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. six arena blocks across 150 decodes is the flat-memory guarantee as a constant; 150 beat iterations is one heartbeat per decode, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">the scoreboard</a> and <a href="book/ch07.html">chapter 07</a>.</p>
   </div>
 </section>
 
@@ -236,14 +254,14 @@ three</code></pre>
       </div>
       <div class="status-card">
         <span class="badge">two engines</span>
-        <h3>faster than rust at json</h3>
-        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. with the heartbeat memory model now shipped by default, the compiler decodes a 188&nbsp;KB document in <strong>~0.99&nbsp;ms</strong>—past a reasonably-written rust parser at ~1.02&nbsp;ms and go's <code>encoding/json</code> at ~1.83&nbsp;ms, about thirteen percent behind hand-tuned <code>serde_json</code>, at the same ~6.8&nbsp;mb peak footprint and flat at any decode count. the story, the diagrams, and the reproduce-it-yourself recipe: <a href="compiler.html#c11">the heartbeat</a>.</p>
+        <h3>faster than rust and serde_json at json</h3>
+        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. with the heartbeat memory model now shipped by default, the compiler decodes a 188&nbsp;KB document in <strong>~0.81&nbsp;ms</strong>—past a reasonably-written rust parser at ~0.98&nbsp;ms, go's <code>encoding/json</code> at ~1.73&nbsp;ms, and hand-tuned <code>serde_json</code> at ~0.83&nbsp;ms (24 of 25 pairwise best-of-25 runs, m-series mac), at the same ~6.8&nbsp;mb peak footprint and flat at any decode count. the story, the diagrams, and the reproduce-it-yourself recipe: <a href="compiler.html#c11">the heartbeat</a>.</p>
       </div>
       <div class="status-card">
         <span class="badge">real software</span>
         <h3>libraries and tools exist</h3>
         <ul>
-          <li><a href="https://github.com/ClayShentrup/kanso-json">kanso-json</a>—the decoder that beat go</li>
+          <li><a href="https://github.com/ClayShentrup/kanso-json">kanso-json</a>—the decoder that beat go and serde_json</li>
           <li><strong>kq</strong>—a jq-style query cli, byte-identical to <code>jq&nbsp;-S</code> on the 188&nbsp;KB benchmark document, faster on path extraction</li>
           <li>a <a href="book/index.html">seven-chapter book</a>—every sample executed before it was printed</li>
           <li>a repl (<code>kanso repl</code>) with <code>it0</code>-history, in your terminal and on the <a href="playground.html">playground</a></li>
@@ -262,13 +280,13 @@ three</code></pre>
     </div>
     <div class="code-panel">
       <div class="code-panel-title">shell</div>
-      <pre><code><span class="prompt">$ </span>git clone https://github.com/ClayShentrup/kanso
+      <pre><code><span class="prompt">$ </span>git clone https://github.com/kanso-lang/kanso
 <span class="prompt">$ </span>cd kanso
 <span class="prompt">$ </span>cargo build --release
 <span class="prompt">$ </span>./target/release/kanso run examples/hello.kso
 <span class="s">hello, world</span></code></pre>
     </div>
-    <p class="quickstart-note">editors: one <a href="https://github.com/ClayShentrup/kanso/tree/main/editors">textmate bundle</a> highlights <code>.kso</code> in jetbrains ides and vs code—the grammar itself is <a href="https://github.com/ClayShentrup/kanso/blob/main/editors/kanso/syntaxes/kanso.tmLanguage.json">kanso.tmLanguage.json</a>.</p>
+    <p class="quickstart-note">editors: one <a href="https://github.com/kanso-lang/kanso/tree/main/editors">textmate bundle</a> highlights <code>.kso</code> in jetbrains ides and vs code—the grammar itself is <a href="https://github.com/kanso-lang/kanso/blob/main/editors/kanso/syntaxes/kanso.tmLanguage.json">kanso.tmLanguage.json</a>.</p>
   </div>
 </section>
 
@@ -282,7 +300,7 @@ three</code></pre>
       <a href="about.html">about</a>
     <a href="compiler.html">compiler</a>
       <a href="lore.html">lore</a>
-      <a href="https://github.com/ClayShentrup/kanso">github</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
 </footer>
