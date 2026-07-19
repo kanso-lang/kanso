@@ -1,4 +1,4 @@
-error[name]: a program defines `main` (a library may offer `play` instead)
+error[name]: a program defines `main`
   --> no_main.kso:1:1
    1 | fn greet name
        ^

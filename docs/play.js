@@ -226,12 +226,34 @@ function syncMirror() {
   mirrorScroll.scrollLeft = editor.scrollLeft;
 }
 
+/* the playground's hidden entrypoint: the editor holds a library. when it
+   defines `play` and no `main`, an unseen entry — `main = play` — is spliced
+   in at its canonical (alphabetical) slot before the engines see the source.
+   the entrypoint is the playground's business, never the language's. */
+function withEntry(source) {
+  const nameOf = (block) => {
+    const line = block.split('\n').find((l) => l && !l.startsWith('#'));
+    const m = line && line.match(/^(?:pub )?(?:fn )?([a-z_][a-z0-9_]*)/);
+    return m ? m[1] : '';
+  };
+  const blocks = source.replace(/\n+$/, '').split('\n\n');
+  const names = blocks.map(nameOf);
+  if (!names.includes('play') || names.includes('main')) return source;
+  let at = blocks.length;
+  for (let i = 0; i < blocks.length; i++) {
+    if (names[i] > 'main') { at = i; break; }
+  }
+  blocks.splice(at, 0, 'main = play');
+  return blocks.join('\n\n') + '\n';
+}
+
 async function run() {
   if (!wasm) return;
-  let result = await runCompiled(editor.value);
+  const program = withEntry(editor.value);
+  let result = await runCompiled(program);
   let engine = result ? result.engine : null;
   if (!result) {
-    result = callKanso('kanso_run', editor.value);
+    result = callKanso('kanso_run', program);
     engine = 'interp';
   }
   const badge = { wasm: '⚡ compiled to wasm in your tab', interp: 'interpreted', error: '' }[engine];
