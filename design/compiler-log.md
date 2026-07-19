@@ -170,3 +170,49 @@ so startup is negligible; naive/serde self-report decode-only mean):
   Beating serde specifically needs simdjson-class SIMD byte-classification — a
   separate, harder frontier — and per Clay's 2026-07-14 reframe serde was never the
   right north star. The tag-hoist OPEN thread above is superseded by this entry.
+
+---
+
+## 2026-07-18 (night, SIMD-frontier campaign) — KANSO BEATS SERDE, 25/25
+
+Clay opened the SIMD frontier ("squeeze the lemon dry"). Ladder, each change
+same-window A/B'd, lattice-gated (checksum 480000, goldens, json 16/16), merged
+as PR #36 (x86 CI green on the final SHA):
+
+1. **[DONE — the big one, −10.7%] IR-inlined predicates + constructors.**
+   Discovery: `release_clang` passes `-flto` but LTO NEVER inlined the runtime's
+   one-liner tag tests across the .ll/.o boundary — 27 `bl _k_truthy` calls
+   survived in the release binary (169 profile samples), despite a runtime.c
+   comment claiming LTO would inline it. Fix: `define internal ... alwaysinline`
+   IR twins in the codegen DECLARES prelude for k_truthy / k_not_failure /
+   k_check_tag / k_check_int / k_check_bool + constructors k_int / k_float /
+   k_bool / k_none; cold path via newly-exported `k_truthy_bad`. Internal
+   linkage avoids duplicate symbols vs runtime.c's own copies. Fully general —
+   every program, every arch. **LESSON: never trust -flto to inline across the
+   IR/C boundary; verify with `otool -tv | grep bl.*_fn`.**
+2. **[DONE, −1.4%] SIMD find2** — NEON (shrn-by-4 mask, ctz>>2) on aarch64,
+   SSE2 movemask on x86_64, scalar tail. serde's own memchr2 mechanism.
+3. **[DONE, −2.2%] to_int integer fast path** — bare accumulate loop for strict
+   [-]?digits{1,18} (can't overflow i64); everything else falls to strtoll
+   unchanged. Floats NOT hand-rolled (shortest-roundtrip parity is sacred).
+4. **[REVERTED, +3.0% regression] utf8 8-byte ASCII word-skip** — second time
+   this exact idea failed on this fixture (strings < 8 bytes; the guard costs,
+   the skip never fires). Do not try a third time without a long-string workload.
+
+**RESULT (interleaved, 25 rounds, this M-series machine, 188KB gauntlet):**
+kanso min 0.818 / median 0.846; serde min 0.853 / median 0.867 —
+**kanso −4.2% min, −2.4% median, 25/25 pairwise wins. naive Rust −16%.**
+Session start → now: 0.932 → 0.825 ms/decode.
+
+**[OPEN] Scoreboard docs are stale the OTHER way now** — index.html §04 /
+compiler.html §11 / book ch07 still say "~13% behind serde" / "~0.99ms". Update
+with a careful fresh reproduced run (numbers above are same-window A/B deltas;
+docs deserve a clean best-of-N pass + the reproduce recipe).
+
+**[OPEN] Remaining profile after the ladder** (self-samples): d__value_for 393,
+k_b_push_mut 161, k_utf8_bad 104, memmove 102 + memcpy 37, str_char 86,
+obj_key_start 76, find2 76 (post-SIMD), slice 76 + bytes_view 53 (the parked
+fusion, proportionally bigger now), mklist 66, utf8 61, put 57 + k_eq 46 (map-key
+compares), strtoll residue 39→less. Next candidates: bytes-view/slice fusion
+re-test (musttail-adjacent codegen — x86-risk zone, Clay watching), k_cmp int
+fast path inline, dispatch-chain depth reduction (architectural).
