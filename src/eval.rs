@@ -1043,6 +1043,21 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
+            "valid_utf8" => {
+                let [v] = arity(args, name, span)?;
+                match &v {
+                    Value::List(items) => Ok(match bytes_to_str(items) {
+                        Some(_) => Value::True,
+                        None => Value::False,
+                    }),
+                    Value::Str(_) => Ok(Value::True),
+                    other if is_failure(other) => Ok(v),
+                    _ => Err(RuntimeError {
+                        message: "valid_utf8 takes a list of byte values".to_string(),
+                        span,
+                    }),
+                }
+            }
             "round" => {
                 let [x] = arity(args, name, span)?;
                 match x {

@@ -150,11 +150,12 @@ declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
+declare %KValue @k_b_valid_utf8(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 24] = [
+const BUILTIN_CALLS: [(&str, usize); 25] = [
     ("at", 2),
     ("find2", 4),
     ("bytes", 1),
@@ -176,6 +177,7 @@ const BUILTIN_CALLS: [(&str, usize); 24] = [
     ("sort", 1),
     ("sqrt", 1),
     ("round", 1),
+    ("valid_utf8", 1),
     ("sum", 1),
     ("to_float", 1),
     ("to_int", 1),

@@ -1690,6 +1690,25 @@ KValue k_b_sqrt(KValue v) {
     return k_none();
 }
 
+KValue k_b_valid_utf8(KValue v) {
+    if (!k_not_failure(v)) return v;
+    if (v.tag == K_STR) return k_bool(1);
+    if (v.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(v);
+        return k_bool(k_utf8_bad((const char*)b->data, b->len, "").tag != K_ERR);
+    }
+    if (v.tag != K_LIST) k_die("valid_utf8 takes a list of byte values");
+    KList* l = k_as_list(v);
+    char* buf = k_alloc(l->len + 1);
+    for (long long i = 0; i < l->len; i++) {
+        KValue item = l->items[i];
+        if (!k_not_failure(item)) return item;
+        if (item.tag != K_INT || item.payload < 0 || item.payload > 255) return k_bool(0);
+        buf[i] = (char)item.payload;
+    }
+    return k_bool(k_utf8_bad(buf, l->len, "").tag != K_ERR);
+}
+
 KValue k_b_round(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return v;
