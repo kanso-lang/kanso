@@ -1,16 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>the compiler—kanso</title>
-<meta name="description" content="how kanso's semantics license an aggressive compiler: differential oracles, jump tables, guaranteed tail calls, deleted guards, tiered bignums, and the frontier past rust.">
-<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
-<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+---
+layout: default
+title: "the compiler—kanso"
+description: "how kanso's semantics license an aggressive compiler: differential oracles, jump tables, guaranteed tail calls, deleted guards, tiered bignums, and the frontier past rust."
+---
 <style>
 .essay h3 {
   font-family: var(--font-display);
@@ -40,24 +32,6 @@
   color: var(--accent);
 }
 </style>
-</head>
-<body>
-
-<header class="site-header">
-  <a class="brand" href="index.html">
-    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
-    </svg>
-    kanso <span class="brand-kanji">簡素</span>
-  </a>
-  <nav class="site-nav">
-    <a href="playground.html">playground</a>
-    <a href="book/index.html">book</a>
-    <a href="about.html">about</a>
-    <a href="compiler.html">compiler</a>
-    <a href="https://github.com/kanso-lang/kanso">github</a>
-  </nav>
-</header>
 
 <article class="spec-doc prose essay">
 
@@ -343,19 +317,3 @@ time ./jsonbench                                  <span class="c"># divide by 15
 <div class="lore"><figure><svg class="sprite" viewBox="0 0 22 19" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="7" y="2" width="8" height="1" fill="#f03a00"/><rect x="6" y="3" width="10" height="1" fill="#f03a00"/><rect x="5" y="4" width="12" height="1" fill="#f03a00"/><rect x="4" y="5" width="1" height="1" fill="#f03a00"/><rect x="5" y="5" width="2" height="1" fill="#ff7a52"/><rect x="7" y="5" width="11" height="1" fill="#f03a00"/><rect x="4" y="6" width="1" height="1" fill="#f03a00"/><rect x="5" y="6" width="2" height="1" fill="#ff7a52"/><rect x="7" y="6" width="11" height="1" fill="#f03a00"/><rect x="3" y="7" width="16" height="1" fill="#f03a00"/><rect x="3" y="8" width="4" height="1" fill="#f03a00"/><rect x="7" y="8" width="1" height="1" fill="#2b2320"/><rect x="8" y="8" width="1" height="1" fill="#faf3e3"/><rect x="9" y="8" width="4" height="1" fill="#f03a00"/><rect x="13" y="8" width="1" height="1" fill="#2b2320"/><rect x="14" y="8" width="1" height="1" fill="#faf3e3"/><rect x="15" y="8" width="4" height="1" fill="#f03a00"/><rect x="3" y="9" width="4" height="1" fill="#f03a00"/><rect x="7" y="9" width="2" height="1" fill="#2b2320"/><rect x="9" y="9" width="4" height="1" fill="#f03a00"/><rect x="13" y="9" width="2" height="1" fill="#2b2320"/><rect x="15" y="9" width="4" height="1" fill="#f03a00"/><rect x="2" y="10" width="5" height="1" fill="#f03a00"/><rect x="7" y="10" width="2" height="1" fill="#2b2320"/><rect x="9" y="10" width="4" height="1" fill="#f03a00"/><rect x="13" y="10" width="2" height="1" fill="#2b2320"/><rect x="15" y="10" width="5" height="1" fill="#f03a00"/><rect x="3" y="11" width="4" height="1" fill="#f03a00"/><rect x="7" y="11" width="2" height="1" fill="#2b2320"/><rect x="9" y="11" width="4" height="1" fill="#f03a00"/><rect x="13" y="11" width="2" height="1" fill="#2b2320"/><rect x="15" y="11" width="4" height="1" fill="#f03a00"/><rect x="3" y="12" width="16" height="1" fill="#f03a00"/><rect x="3" y="13" width="6" height="1" fill="#f03a00"/><rect x="9" y="13" width="4" height="1" fill="#2b2320"/><rect x="13" y="13" width="6" height="1" fill="#f03a00"/><rect x="4" y="14" width="14" height="1" fill="#f03a00"/><rect x="5" y="15" width="12" height="1" fill="#f03a00"/><rect x="6" y="16" width="10" height="1" fill="#f03a00"/><rect x="4" y="17" width="13" height="1" fill="#f03a00"/></svg><figcaption>err—always arrives, never uninvited</figcaption></figure></div>
 
 </article>
-
-<footer class="site-footer">
-  <div class="container site-footer-inner">
-    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
-    <nav>
-      <a href="index.html">home</a>
-      <a href="about.html">about</a>
-      <a href="lore.html">lore</a>
-      <a href="influences.html">influences</a>
-      <a href="https://github.com/kanso-lang/kanso">github</a>
-    </nav>
-  </div>
-</footer>
-
-</body>
-</html>

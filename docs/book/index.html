@@ -1,70 +1,9 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>the kanso book</title>
-<meta name="description" content="the kanso book: the language taught in ten chapters and three appendices—values, dispatch, failure, effects, concurrency, modules, two real programs, the compiler that keeps receipts, and the full reference.">
-<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
-<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../style.css">
-<link rel="stylesheet" href="book.css">
-</head>
-<body>
-
-<header class="site-header">
-  <a class="brand" href="../index.html">
-    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
-    </svg>
-    kanso <span class="brand-kanji">簡素</span>
-  </a>
-  <nav class="site-nav">
-    <a href="../playground.html">playground</a>
-    <a href="index.html">book</a>
-    <a href="../about.html">about</a>
-    <a href="../compiler.html">compiler</a>
-    <a href="https://github.com/kanso-lang/kanso">github</a>
-  </nav>
-</header>
-
-<div>
-
-<div class="book-layout">
-<nav class="book-side" aria-label="book chapters">
-  <a class="book-side-home" href="index.html" aria-current="page">the book</a>
-  <span class="bs-part">part i — the language</span>
-  <ol>
-    <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
-    <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
-    <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
-    <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
-    <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
-    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
-  </ol>
-  <span class="bs-part">part ii — real programs</span>
-  <ol start="8">
-    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
-    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
-  </ol>
-  <span class="bs-part">part iii — under the hood</span>
-  <ol start="10">
-    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
-  </ol>
-  <span class="bs-part">appendices</span>
-  <ol class="bs-appendix">
-    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
-    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
-    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
-  </ol>
-</nav>
-
-<article class="spec-doc prose essay">
-
+---
+layout: book
+title: "the kanso book"
+description: "the kanso book: the language taught in ten chapters and three appendices—values, dispatch, failure, effects, concurrency, modules, two real programs, the compiler that keeps receipts, and the full reference."
+extra_css: /book/book.css
+---
 <span class="eyebrow">the book</span>
 <h1>the kanso book</h1>
 
@@ -109,24 +48,3 @@
 </ul>
 
 <p class="book-start"><a href="ch01.html">start with chapter 01—hello, kanso →</a></p>
-
-</article>
-</div>
-
-</div>
-
-<footer class="site-footer">
-  <div class="container site-footer-inner">
-    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
-    <nav>
-      <a href="../index.html">home</a>
-      <a href="../about.html">about</a>
-      <a href="../lore.html">lore</a>
-      <a href="../influences.html">influences</a>
-      <a href="https://github.com/kanso-lang/kanso">github</a>
-    </nav>
-  </div>
-</footer>
-
-</body>
-</html>
