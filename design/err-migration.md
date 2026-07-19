@@ -84,3 +84,36 @@ teaching diagnostic; pattern_catches lost its err case). Corpus breakage:
   validity-first, must deletion, kq mirror (kanso-lang/kq), examples/
   errors.kso typed-value redesign + homepage, book ch05/ch07 samples,
   goldens, playground.
+
+## The typed-railway recipe (worked out 2026-07-19; execute mechanically)
+
+`_fail` returns bare `parse_failure p reason` (no err). Typed values do NOT
+auto-propagate, so every consumer of a maybe-failed value dispatches:
+
+- **Result dispatchers** gain one arm `fn X cs f:parse_failure ... -> f`:
+  `_finish`, `_array_step`, `_obj_key`, `_obj_value` (value.kso, json.kso).
+- **Position consumers** (the trap): `_expect`'s return feeds arithmetic —
+  its callers must dispatch (`fn _after_colon cs p2:parse_failure ... -> p2`
+  shape) before using the position. Inventory every `_fail` call site and
+  trace its consumer: scan.kso `_expect`; value.kso literal/unexpected-char
+  paths; text.kso unterminated-string; `_finish`'s trailing check.
+- **text.kso**: delete `_string_ok`; `_str_char 34` and `_string_at 34`
+  become `if (valid_utf8 acc) (_parsed (p+1) (utf8 acc)) (_fail p "invalid
+  utf-8 in string")`.
+- **number.kso**: delete `_number_ok`; `_number_value` gates on shape
+  predicates then converts: `_int_shape` = `-`? digit+ exactly (strtoll's
+  accept set given the scan alphabet); `_float_shape` = sign? digit* frac?
+  exp? with >=1 digit before any exponent, exp = [eE] sign? digit+
+  (strtod's accept set; "1." and "-.5" legal). Residual conversion err =
+  defect rising loudly (correct for should-never-happen).
+- **json.kso**: `_failure_position` dispatches on bare
+  `(parse_failure p _)` (legal, typed); `must` + its test delete
+  (`defect` stays only if still referenced); `decode` returns the bare
+  parse_failure — callers ask by dispatch.
+- **Mirrors after lib/json is green** (16 tests): the four embedded rust
+  fixtures (src/beat,dispatch,escape,linear tests), then kanso-lang/kq
+  (same five files + _render_result arm deletion + kq specs), then
+  examples/errors.kso typed redesign + golden + homepage card + playground,
+  then book ch05 fallback (becomes a rejection _check sample) + ch07
+  teahouse (off_menu type) with panels re-executed; book_check + cost
+  golden + full suite gate the PR.
