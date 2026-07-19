@@ -23,7 +23,7 @@ banned. Askable failures are `none` or your own typed values.
 - **kq `_render_result (err reason)` → DELETE the arm.** The railway already
   carries err past `print` to the endpoint; the arm is a hand-rolled no-op.
   Verify kq's error-output goldens (endpoint report replaces any bespoke text).
-- **`must` (lib/json + kq) → DELETE.** Tests call `decode` directly; an err
+- **`must` (lib/json; kq mirrors in kanso-lang/kq) → DELETE.** Tests call `decode` directly; an err
   result fails a test by itself (non-true). Update json_test/kq_test call
   sites; `defect` type stays for true invariants.
 - **`_string_ok p (err _)` → validity-first:**

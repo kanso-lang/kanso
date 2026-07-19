@@ -262,3 +262,28 @@ building; an encode-into-buffer printer should flip the identity rows.
 earlier ungated 1.9MB path number timed kq ERRORING (missing key — jq yields
 null on missing paths, kanso errs; a real semantic difference now documented
 in apps/kq/README.md). Never publish an ungated race.
+
+---
+
+## 2026-07-19 — kq broken out (kanso-lang/kq); fixtures caught a REAL bignum bug
+
+kq now lives at github.com/kanso-lang/kq: fixture-gated specs (unicode/CJK/
+emoji + escapes, precision numbers, deep nesting, the 188KB doc), each case
+checked against a committed golden AND live `jq -S`; CI builds kanso from
+source and gates. First run green.
+
+**[OPEN — CORRECTNESS, HIGH] native bignum decode truncation.** The new
+numbers fixture caught it: decoding `2^100` from json, the NATIVE engine
+returns 9223372036854775807 (i64 max) — `k_b_to_int` parses via strtoll,
+which SATURATES on overflow while still consuming every digit, so the
+saturated value is silently accepted. The interpreter would produce the true
+bignum → **engine divergence the differential lattice never caught** (no
+huge-number golden existed). Fix: overflow detection in the native to_int
+path with a bignum fallback (the int-tiering restart mechanism is the
+designed home). Add a huge-number case to the golden corpus WITH the fix.
+Also noted: float exponent rendering diverges from jq on exponent-form
+values (kanso 1.5e-08 vs jq 1.5E-8) — parity edge, fixtures scoped around
+it, revisit with the printer work.
+
+apps/kq removed from this repo — kanso-lang/kq is the sole home (the
+err-migration plan applies to it there).
