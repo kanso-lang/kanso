@@ -247,3 +247,18 @@ wall time. Built two halves, both gating in CI:
 explicit i64 structs, so x86 counters should be bit-identical to arm64. If
 ubuntu CI diffs, split per-arch goldens and investigate the divergence (that
 would be a differential-lattice-class finding in its own right).
+
+---
+
+## 2026-07-19 — kq vs jq raced (gated); pretty-printer is the next target
+
+`bench/kq_race.sh` (byte-identity gate per query, then interleaved timing):
+path queries **kq 1.52x @188KB (25/25), 1.61x @1.9MB (15/15)** — the gap grows
+with size (kq prints only the subtree). Full pretty-print: parity @188KB
+(1.07x, 20/25), jq ahead 1.03x @1.9MB (0/15) — printer-bound, not
+decoder-bound. **[OPEN] kq/_pretty is the target**: join-of-maps string
+building; an encode-into-buffer printer should flip the identity rows.
+**GATE STORY (log-worthy):** the harness's byte-identity gate caught that an
+earlier ungated 1.9MB path number timed kq ERRORING (missing key — jq yields
+null on missing paths, kanso errs; a real semantic difference now documented
+in apps/kq/README.md). Never publish an ungated race.

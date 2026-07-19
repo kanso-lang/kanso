@@ -28,6 +28,9 @@ fn _array_step cs (_parsed p v) acc
   p2 = _skip_ws cs p
   _array_delim cs (at cs p2) p2 acc2
 
+fn _bad_start c p
+  _fail p "unexpected character `{utf8 [c]}`"
+
 _bytes_false = [102 97 108 115 101]
 
 _bytes_null = [110 117 108 108]
@@ -119,7 +122,7 @@ fn _value_for none _ p
   _fail p "unexpected end of input"
 
 fn _value_for c cs p
-  if (_is_number_start c) (_parse_number cs p) (_fail p "unexpected character `{utf8 [c]}`")
+  if (_is_number_start c) (_parse_number cs p) (_bad_start c p)
 
 fn _word cs p expected v
   n = length expected

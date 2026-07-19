@@ -10,7 +10,7 @@ fn _render_result (err reason)
 fn _render_result v
   print (_pretty v 0)
 
-_usage = print "usage: kq <path> [file.json]    e.g. kq .users[3].name data.json"
+_usage = print "usage: kq <path> [file.json]   e.g. kq .users[3].name data.json"
 
 fn _with_query argv
   source = if ((length argv) > 1) (read_file argv[2]) stdin
