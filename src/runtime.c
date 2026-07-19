@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <stdint.h>
+#include <errno.h>
 #include <unistd.h>
 
 #if defined(__aarch64__)
@@ -1664,7 +1665,16 @@ KValue k_b_to_int(KValue sv, const char* origin) {
         if (j == len) return k_int(start ? -acc : acc);
     }
     char* end = NULL;
+    errno = 0;
     long long n = strtoll(data, &end, 10);
+    if (errno == ERANGE) {
+        /* strtoll saturates while consuming every digit — without this check
+           an overflowing literal decodes as a silently wrong value. Loud
+           limit beats quiet lie until native bignum tiering ships. */
+        KValue str = k_str_n(data, len);
+        return k_err(k_concat(k_concat(k_str("\""), str),
+            k_str("\" overflows this engine's integers")), origin);
+    }
     if (len == 0 || end != data + len) {
         KValue str = k_str_n(data, len);
         return k_err(k_concat(k_concat(k_str("\""), str), k_str("\" is not an integer")), origin);
