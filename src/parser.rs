@@ -25,11 +25,15 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             body_end += 1;
         }
         let body = &lexed.lines[body_start..body_end];
+        let head_idx = match line.tokens.first() {
+            Some((Tok::KwPub, _)) => 1,
+            _ => 0,
+        };
         let is_constant = matches!(
-            (line.tokens.first(), line.tokens.get(1)),
+            (line.tokens.get(head_idx), line.tokens.get(head_idx + 1)),
             (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
         );
-        match line.tokens.first() {
+        match line.tokens.get(head_idx) {
             Some((Tok::KwFn, _)) => match parse_fn(line, body) {
                 Ok(decl) => fns.push(decl),
                 Err(d) => diags.push(d),
@@ -103,6 +107,7 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
 
 fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let mut p = P::new(&header.tokens, &header.end_cols, header.number);
+    let is_pub = p.consume_pub();
     p.expect_kw_fn()?;
     let (name, span) = p.expect_ident("a function name")?;
     let mut params = Vec::new();
@@ -124,16 +129,18 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         ));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl { name, span, params, body: stmts, file: String::new() })
+    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new() })
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
-    let Some((Tok::Ident(name), span)) = header.tokens.first() else {
+    let is_pub = matches!(header.tokens.first(), Some((Tok::KwPub, _)));
+    let off = usize::from(is_pub);
+    let Some((Tok::Ident(name), span)) = header.tokens.get(off) else {
         return Err(Diagnostic::new("syntax", "expected a constant name".to_string(), head_span(header)));
     };
     let name = name.clone();
     let span = *span;
-    if header.tokens.len() == 2 {
+    if header.tokens.len() == off + 2 {
         if body.is_empty() {
             return Err(Diagnostic::new(
                 "syntax",
@@ -149,7 +156,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             ));
         }
         let stmts = parse_body(body)?;
-        return Ok(FnDecl { name, span, params: Vec::new(), body: stmts, file: String::new() });
+        return Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: stmts, file: String::new() });
     }
     if !body.is_empty() {
         return Err(Diagnostic::new(
@@ -158,19 +165,20 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             head_span(&body[0]),
         ));
     }
-    let mut p = P::new(&header.tokens[2..], &header.end_cols[2..], header.number);
+    let mut p = P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
-    Ok(FnDecl { name, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() })
+    Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() })
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     let mut p = P::new(&header.tokens, &header.end_cols, header.number);
+    let is_pub = p.consume_pub();
     p.expect_kw_type()?;
     let (name, span) = p.expect_ident("a type name")?;
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, span, fields })
+    Ok(TypeDecl { name, is_pub, span, fields })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
@@ -470,6 +478,16 @@ impl<'a> P<'a> {
                 Ok(())
             }
             _ => Err(self.err("expected `type`".to_string())),
+        }
+    }
+
+    fn consume_pub(&mut self) -> bool {
+        match self.peek() {
+            Some(Tok::KwPub) => {
+                self.pos += 1;
+                true
+            }
+            _ => false,
         }
     }
 
