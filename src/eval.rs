@@ -1639,7 +1639,7 @@ impl<'a> Interp<'a> {
         }
         Ok(failures
             .into_iter()
-            .reduce(|acc, f| accumulate_failures(acc, f))
+            .reduce(accumulate_failures)
             .unwrap_or(Value::NoneV))
     }
 
