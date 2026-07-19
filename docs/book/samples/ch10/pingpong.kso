@@ -1,0 +1,15 @@
+fn even 0
+  true
+
+fn even n
+  odd (n - 1)
+
+main =
+  verdict = even 10000000
+  print "10000000 even? {verdict}"
+
+fn odd 0
+  false
+
+fn odd n
+  even (n - 1)

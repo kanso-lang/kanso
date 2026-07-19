@@ -1,0 +1,4 @@
+error[formatting]: kanso has no commas; enumerations are space-separated
+  --> commas_check.kso:2:17
+   2 |   total = sum [1, 2]
+                       ^

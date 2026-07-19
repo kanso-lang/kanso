@@ -1,0 +1,4 @@
+fn zeta x
+  x
+
+main = print "{zeta 1}"

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>chapter 07—fast by construction</title>
-<meta name="description" content="kanso's json decoder beats serde_json on the gauntlet, zero-cost abstractions with profiler receipts, guaranteed tail calls, and the cost goldens that keep them honest.">
+<title>chapter 07—modules and tests</title>
+<meta name="description" content="a directory is a module, one namespace across its files, canonical order per file, pub and private-by-default, and tests that are nothing but test_ constants.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,178 +35,239 @@
 
 <nav class="book-side" aria-label="book chapters">
   <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
   <ol>
     <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
     <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
     <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
     <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
     <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">modules and tests</span></a></li>
-    <li><a href="ch07.html" aria-current="page"><span class="bs-num">07</span><span class="bs-title">fast by construction</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html" aria-current="page"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
   </ol>
 </nav>
 
 <article class="spec-doc prose essay">
 
 <span class="eyebrow">chapter 07</span>
-<h1>fast by construction</h1>
+<h1>modules and tests</h1>
 
-<p>six chapters of "everything is a value" and "dispatch is the only switch" earn a fair question: what does all this purity cost at runtime? this chapter answers with receipts. the benchmark is the json module you toured in chapter 06, decoding a 188kb nested fixture—objects, arrays, escapes, unicode—against the incumbent: go's <code>encoding/json</code>, one of the most heavily optimized decoders in industrial use, running the same fixture in its own harness:</p>
+<p>a kanso module is a directory. that's the whole definition. the files inside share one namespace—no import statements between them, no export lists, no manifest declaring what lives where. you split a module across files for the reader's benefit, and the compiler treats the result as one program. here is a two-file teahouse:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">go run bench/main.go</div>
-  <pre><code>go decoded 160 top-level values, mean over 150: 1.827406ms</code></pre>
+  <div class="code-panel-title">teahouse/menu.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">base_price</span> <span class="s">"dango"</span>
+  <span class="n">350</span>
+
+<span class="k">fn</span> <span class="f">base_price</span> <span class="s">"taiyaki"</span>
+  <span class="n">500</span>
+
+<span class="k">fn</span> <span class="f">base_price</span> item
+  <span class="t">err</span> <span class="s">"we do not serve <span class="i">{item}</span>"</span>
+
+<span class="k">pub fn</span> <span class="f">price</span> item
+  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span></code></pre>
 </div>
 
-<p>~1.83ms per decode. but go's standard library is the <em>easy</em> bar. the hard one is rust: <code>serde_json</code>, the parser a rust team actually ships, decodes the same fixture in the mid-0.8ms range in its own harness:</p>
-
 <div class="code-panel">
-  <div class="code-panel-title">serde_bench/target/release/serde_bench bench/large.json</div>
-  <pre><code>serde mean over 150 decodes: 863.687µs</code></pre>
-</div>
+  <div class="code-panel-title">teahouse/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
+  <span class="s">"gomen: <span class="i">{reason}</span>"</span>
 
-<p>that is the number to beat. the interpreter can't—no tree-walker will—but the compiled binary, by the end of this chapter, does, on a harness that measures every decoder the same way. first, though, the honest baseline.</p>
-
-<h2>the interpreter, honestly</h2>
-
-<p>first, the engine you've been using all book. <code>kanso run</code> on the same 150-decode harness—and remember this times the <em>whole pipeline</em>: parse, check, infer, then tree-walk a four-hundred-line parser over 188kb, a hundred and fifty times:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">shell</div>
-  <pre><code><span class="prompt">$ </span>time kanso run bench/jsonbench
-<span class="s">decoded 150 times, checksum 24000</span>
-kanso run bench/jsonbench  0.25s user 0.00s system 99% cpu 0.252 total</code></pre>
-</div>
-
-<p>a tree-walker doing 150 full decodes in a quarter second is closer to the compiler than folklore predicts—and the interpreter's job was never this race anyway: it answers in milliseconds on programs of human size, keeps zero state between runs, and is the reference the compiler must match byte for byte. the allocation cost that once hid the compiler's per-node speedup behind map-copying is the very thing the next section removes outright.</p>
-
-<h2>the compiler, same program</h2>
-
-<p>now hand the very same module to the other engine. the harness runs 150 decodes so the clock has something to chew on:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">shell</div>
-  <pre><code><span class="prompt">$ </span>kanso build bench/jsonbench --release
-<span class="s">built ./jsonbench (llvm ir at jsonbench.ll)</span>
-<span class="prompt">$ </span>time ./jsonbench
-<span class="s">decoded 150 times, checksum 24000</span>
-./jsonbench  0.14s user 0.00s system 99% cpu 0.140 total</code></pre>
-</div>
-
-<p>0.14 seconds of wall time for 150 decodes—the fixture is read at runtime, so the optimizer can't fold it away, and the checksum proves every decode ran. but wall-clock <code>time</code> is a coarse instrument: it counts process startup, and it can't interleave runs to cancel thermal drift. the honest comparison measures every decoder the same way—an interleaved best-of-25 harness, same 188kb fixture, same machine—and there the compiled binary lands at <strong>0.81ms per decode</strong>. serde_json, measured beside it, takes 0.83ms. a reasonably-written recursive-descent rust parser takes 0.98ms; go's <code>encoding/json</code> takes 1.73ms. read that ordering twice: a pure language with values-only semantics, automatic failure propagation, and no mutation, decoding json <em>faster than serde_json</em>—the parser a rust team hand-tunes—without ever naming a buffer, an index check, or a memory strategy.</p>
-
-<p>the margin is small and it is real: 24 of the 25 interleaved pairs went to kanso, median 0.89ms against serde's 0.93ms. one fixture, one machine—this is "faster than serde_json on the gauntlet," not "the fastest json parser alive," and the recipe is in the repo so you can run it yourself. the footprint holds flat while the clock does its work: ~6.8mb peak whether the harness decodes once or a hundred and fifty times, because each decode's arena is reclaimed before the next begins. the six arena blocks one decode touches are the same six that 150 decodes touch.</p>
-
-<p>the win did not arrive in one stroke. it arrived in three, each measured in isolation and each byte-identical across interpreter and compiler. a batch of one-liner predicates and constructors that <code>-flto</code> silently declined to inline across the .ll/.o boundary got inlined in the ir itself, where the choice is the compiler's to make and not the linker's to skip: −10.7%. the two-byte scan at the heart of string parsing became a NEON/SSE2 SIMD <code>find2</code>: −1.4%. an integer fast path in <code>to_int</code> skipped the float machinery for the common case: −2.2%. none of it touched the module you wrote in chapter 06. this is the compiler getting better at the same program, and the profile below shows where the time now goes.</p>
-
-<h2>zero-cost, with receipts</h2>
-
-<p>"zero-cost abstraction" is a phrase every compiled language uses and almost none can produce evidence for. here is a cpu profile of that binary mid-benchmark, top of stack:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">sample jsonbench (top of stack)</div>
-  <pre><code>Sort by top of stack, same collapsed (when >= 5):
-        d__value_for_3  (in jsonbench)        504
-        k_truthy  (in jsonbench)        180
-        k_b_push_mut  (in jsonbench)        179
-        k_utf8_bad  (in jsonbench)        132
-        _platform_memmove  (in libsystem_platform.dylib)        126
-        d__str_char_4  (in jsonbench)        114
-        d__obj_key_start_4  (in jsonbench)        106
-        k_b_find2  (in jsonbench)        98
-        k_b_put  (in jsonbench)        97</code></pre>
-</div>
-
-<p>read the ledger. the hottest symbol is <code>d__value_for_3</code>—the <code>_value_for</code> you wrote in chapter 06, monomorphized, the seven-way byte dispatch at the heart of the scanner, now compiled to a single indexed jump. under it, the parser's own functions (<code>d__str_char_4</code>, <code>d__obj_key_start_4</code>) and runtime primitives: <code>k_b_push_mut</code> is list-append <em>mutating in place</em>—the reference-counting-with-reuse trick (perceus, koka's technique, shipped by lean 4 and roc) proving out, a unique-owner accumulator extended without a copy. that it outranks <code>memmove</code>, which has fallen to fifth, is the memory model made visible: the allocation traffic that used to dominate is gone, and what remains on top is dispatch and byte-moving—the irreducible work of a decoder. what's absent matters as much: no dispatcher, no tag-checking loop, no interpreter, no garbage collector. the abstractions you wrote in—overloads, patterns, the railway—do not appear in the profile, because by the time tsuru is done folding, they aren't <em>in</em> the program anymore.</p>
-
-<h2>ten million frames</h2>
-
-<p>recursion is kanso's only loop, so the compiler doesn't treat tail calls as an optimization it might apply in a good mood—every call in tail position is a <em>guaranteed</em> tail call. mutual recursion, ten million frames deep, in constant stack:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">pingpong.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">even</span> <span class="n">0</span>
-  <span class="t">true</span>
-
-<span class="k">fn</span> <span class="f">even</span> n
-  <span class="f">odd</span> (n <span class="o">-</span> <span class="n">1</span>)
+<span class="k">fn</span> <span class="f">describe</span> n
+  <span class="s">"<span class="i">{n}</span> yen, service included"</span>
 
 <span class="f">main</span> <span class="o">=</span>
-  verdict <span class="o">=</span> <span class="f">even</span> <span class="n">10000000</span>
-  <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span>
-
-<span class="k">fn</span> <span class="f">odd</span> <span class="n">0</span>
-  <span class="t">false</span>
-
-<span class="k">fn</span> <span class="f">odd</span> n
-  <span class="f">even</span> (n <span class="o">-</span> <span class="n">1</span>)</code></pre>
+  dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
+  pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
+  <span class="f">print</span> (<span class="f">describe</span> dango) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> pocky)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso build pingpong.kso --release &amp;&amp; time ./pingpong</div>
-    <pre><code>10000000 even? true
-./pingpong  0.00s user 0.00s system 1% cpu 0.209 total</code></pre>
+    <div class="code-panel-title">kanso run teahouse</div>
+    <pre><code>400 yen, service included
+gomen: we do not serve pocky</code></pre>
   </div>
 </div>
 
-<p>the guarantee is visible in the ir—<code>musttail</code> is llvm's strongest promise, an instruction the backend is <em>required</em> to honor:</p>
+<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice three earlier chapters shaking hands in a dozen lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and the railway carries it from <code>base_price</code> through <code>price</code>—whose <code>+ 50</code> never runs on the sad track—out to the arm in <code>describe</code>.</p>
+
+<h2>one namespace, many files</h2>
+
+<p>most languages make a file a unit of encapsulation: each file is its own scope, and getting a name from one file into another costs an import at the top and an export at the source. kanso spends none of that. the module is the unit; the files are just where you chose to put things. every top-level name in <code>menu.kso</code> is visible in <code>main.kso</code> with no ceremony, and the reverse holds too.</p>
+
+<p>this is a deliberate trade. a file boundary that carried meaning would be a second thing to keep consistent with the first—two files that must agree on what crosses between them, drifting the moment someone forgets. kanso deletes the boundary and keeps the organization: file names still carry information—you named <code>menu.kso</code> because it holds the menu—but they name a chapter of one book, not a wall inside it. want to know what a name means? there is exactly one place it is defined, anywhere in the directory.</p>
+
+<h2>canonical order within a file</h2>
+
+<p>inside a file, declarations are not in whatever order you typed them—they're in <em>the</em> order. types come first, then everything else alphabetically by name. this is grammar, not advice: get it wrong and the file does not compile.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">pingpong.ll</div>
-  <pre><code>  %t12 = <span class="k">musttail call</span> tailcc %KValue @d_odd_1(%KValue %t11)
-  ...
-  %t12 = <span class="k">musttail call</span> tailcc %KValue @d_even_1(%KValue %t11)</code></pre>
+  <div class="code-panel-title">shop.kso</div>
+  <pre><code><span class="k">pub type</span> <span class="t">receipt</span>
+  total: <span class="t">int</span>
+
+<span class="k">pub fn</span> <span class="f">checkout</span> item qty
+  <span class="t">receipt</span> (<span class="f">line</span> item qty)
+
+<span class="k">fn</span> <span class="f">line</span> item qty
+  qty <span class="o">*</span> (<span class="f">price</span> item) <span class="o">+</span> service
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout "matcha" 2}</span>"</span>
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"matcha"</span>
+  <span class="n">600</span>
+
+<span class="k">fn</span> <span class="f">price</span> <span class="s">"mochi"</span>
+  <span class="n">300</span>
+
+service <span class="o">=</span> <span class="n">50</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run shop.kso</div>
+    <pre><code>receipt 1250</code></pre>
+  </div>
 </div>
 
-<h2>what the compiler actually does</h2>
+<p>read the declaration heads top to bottom: the type <code>receipt</code>, then <code>checkout</code>, <code>line</code>, <code>main</code>, <code>price</code>, <code>service</code>—alphabetical, with constants, functions, and <code>main</code> itself all interleaved by name into one sorted list. definition order is not scope: <code>checkout</code> calls <code>line</code> and <code>main</code> reads <code>service</code>, both defined below them, and it all resolves. the two <code>price</code> overloads stay together as one group, because an overload set is a single declaration split across arms.</p>
 
-<p>no magic in any of this—just the front end proving things and llvm multiplying the proof. <code>kanso build</code> runs whole-program inference, monomorphizes every function per concrete instantiation (dispatch resolves <em>statically</em>—the "only switch" from chapter 03 costs nothing at runtime in monomorphic code), and emits llvm ir that clang compiles at <code>-O3</code>. patterns become field offsets. and a literal-dispatch group discriminating on one parameter—the scanner shape that kanso-json is made of—compiles to a genuine jump table. here is <code>_is_number_char</code>, whose arms are the byte literals <code>43 45 46 69 101</code> (<code>+ - . E e</code>), in the emitted ir:</p>
+<p>type the same file with two functions out of order and the compiler stops you:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">jsonbench.ll</div>
-  <pre><code>  <span class="k">switch</span> i64 %t3, label %arm6 [
-    i64 43, label %arm0
-    i64 45, label %arm1
-    i64 46, label %arm2
-    i64 69, label %arm3
-    i64 101, label %arm4
-  ]</code></pre>
+  <div class="code-panel-title">order_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">taiyaki</span> n
+  n <span class="o">+</span> <span class="n">50</span>
+
+<span class="k">fn</span> <span class="f">dango</span> n
+  n <span class="o">+</span> <span class="n">50</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{dango 350}</span> <span class="i">{taiyaki 500}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check order_check.kso</div>
+    <pre><code>error[formatting]: function declarations appear in alphabetical order: `dango` before `taiyaki`
+  --&gt; order_check.kso:4:4
+   4 | fn dango n
+          ^</code></pre>
+  </div>
 </div>
 
-<p>seven overloads in the source, one indexed branch in the machine. this is the book's closing argument, and it's the same argument every chapter has made: kanso deletes things—commas, formatters, wrappers, exceptions, mocks, and finally the runtime cost of its own abstractions. what's left, in the source and in the profile alike, is only the decisions.</p>
-
-<p>one last thing, and it is the part that outlasts any single benchmark run. every number in this chapter is now a test. run the gauntlet with <code>KANSO_COUNTERS=1</code> and the runtime reports what it did—not how long it took:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">KANSO_COUNTERS=1 ./jsonbench</div>
-  <pre><code>allocs=14799465
-alloc_bytes=790444432
-arena_blocks=6
-perm_allocs=1
-beat_iters=150</code></pre>
-</div>
-
-<p>a deterministic language has deterministic costs, so these are not measurements—they are <em>facts</em>, the same five integers on every run, every machine, both architectures, and ci diffs them against a committed golden the way it diffs program output. six arena blocks across a hundred and fifty decodes is the flat-memory guarantee as a constant; a hundred and fifty beat iterations is one heartbeat per decode, on the record. no clocks, no flaky thresholds, no "it felt slower on my laptop." a regression in the folding shows up as a changed integer in a diff, the same way a regression in behavior shows up as a failing assertion. the wins in this chapter stopped being anecdotes the day they became goldens.</p>
+<p>there is no formatter to run and no debate to have in review. a program has one canonical rendering, and non-canonical order is a syntax error the same way a stray brace would be. the payoff shows up when you split a real module by topic: alphabetical order inside each file stops being a constraint and becomes an index—you always know where a name will be before you look.</p>
 
 <div class="tip">
-<svg class="sprite" viewBox="0 0 56 58" role="img" aria-label="tsuru" shape-rendering="crispEdges"><title>tsuru - folds your program until it is small enough to fly</title><rect x="39" y="3" width="1" height="1" fill="#dfc9a2"/><rect x="39" y="4" width="1" height="1" fill="#dfc9a2"/><rect x="38" y="5" width="3" height="1" fill="#dfc9a2"/><rect x="38" y="6" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="7" width="1" height="1" fill="#f03a00"/><rect x="37" y="7" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="8" width="3" height="1" fill="#f03a00"/><rect x="37" y="8" width="4" height="1" fill="#dfc9a2"/><rect x="5" y="9" width="5" height="1" fill="#f03a00"/><rect x="36" y="9" width="5" height="1" fill="#dfc9a2"/><rect x="3" y="10" width="2" height="1" fill="#f2e3c8"/><rect x="5" y="10" width="4" height="1" fill="#f03a00"/><rect x="36" y="10" width="6" height="1" fill="#dfc9a2"/><rect x="2" y="11" width="2" height="1" fill="#f2e3c8"/><rect x="4" y="11" width="2" height="1" fill="#f03a00"/><rect x="6" y="11" width="4" height="1" fill="#f2e3c8"/><rect x="35" y="11" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="12" width="1" height="1" fill="#2b2320"/><rect x="3" y="12" width="10" height="1" fill="#f2e3c8"/><rect x="35" y="12" width="7" height="1" fill="#dfc9a2"/><rect x="2" y="13" width="1" height="1" fill="#2b2320"/><rect x="3" y="13" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="13" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="14" width="2" height="1" fill="#2b2320"/><rect x="3" y="14" width="9" height="1" fill="#f2e3c8"/><rect x="34" y="14" width="8" height="1" fill="#dfc9a2"/><rect x="1" y="15" width="3" height="1" fill="#2b2320"/><rect x="4" y="15" width="8" height="1" fill="#f2e3c8"/><rect x="33" y="15" width="10" height="1" fill="#dfc9a2"/><rect x="0" y="16" width="4" height="1" fill="#2b2320"/><rect x="4" y="16" width="9" height="1" fill="#f2e3c8"/><rect x="33" y="16" width="10" height="1" fill="#dfc9a2"/><rect x="2" y="17" width="2" height="1" fill="#2b2320"/><rect x="4" y="17" width="9" height="1" fill="#f2e3c8"/><rect x="32" y="17" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="18" width="6" height="1" fill="#f2e3c8"/><rect x="32" y="18" width="11" height="1" fill="#dfc9a2"/><rect x="7" y="19" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="19" width="12" height="1" fill="#dfc9a2"/><rect x="7" y="20" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="20" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="21" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="22" width="7" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="14" height="1" fill="#dfc9a2"/><rect x="8" y="23" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="23" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="24" width="7" height="1" fill="#f2e3c8"/><rect x="29" y="24" width="15" height="1" fill="#dfc9a2"/><rect x="8" y="25" width="8" height="1" fill="#f2e3c8"/><rect x="28" y="25" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="26" width="7" height="1" fill="#f2e3c8"/><rect x="28" y="26" width="17" height="1" fill="#dfc9a2"/><rect x="9" y="27" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="27" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="28" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="28" width="18" height="1" fill="#dfc9a2"/><rect x="9" y="29" width="8" height="1" fill="#f2e3c8"/><rect x="25" y="29" width="1" height="1" fill="#f2e3c8"/><rect x="26" y="29" width="19" height="1" fill="#dfc9a2"/><rect x="10" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="24" y="30" width="7" height="1" fill="#f2e3c8"/><rect x="31" y="30" width="15" height="1" fill="#dfc9a2"/><rect x="10" y="31" width="8" height="1" fill="#f2e3c8"/><rect x="23" y="31" width="18" height="1" fill="#f2e3c8"/><rect x="41" y="31" width="5" height="1" fill="#dfc9a2"/><rect x="10" y="32" width="8" height="1" fill="#f2e3c8"/><rect x="22" y="32" width="25" height="1" fill="#f2e3c8"/><rect x="10" y="33" width="8" height="1" fill="#f2e3c8"/><rect x="20" y="33" width="27" height="1" fill="#f2e3c8"/><rect x="11" y="34" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="35" width="37" height="1" fill="#f2e3c8"/><rect x="11" y="36" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="37" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="38" width="37" height="1" fill="#f2e3c8"/><rect x="12" y="39" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="40" width="38" height="1" fill="#f2e3c8"/><rect x="12" y="41" width="1" height="1" fill="#dfc9a2"/><rect x="13" y="41" width="38" height="1" fill="#f2e3c8"/><rect x="11" y="42" width="2" height="1" fill="#dfc9a2"/><rect x="14" y="42" width="37" height="1" fill="#f2e3c8"/><rect x="10" y="43" width="4" height="1" fill="#dfc9a2"/><rect x="15" y="43" width="37" height="1" fill="#f2e3c8"/><rect x="9" y="44" width="5" height="1" fill="#dfc9a2"/><rect x="16" y="44" width="33" height="1" fill="#f2e3c8"/><rect x="8" y="45" width="6" height="1" fill="#dfc9a2"/><rect x="17" y="45" width="27" height="1" fill="#f2e3c8"/><rect x="7" y="46" width="8" height="1" fill="#dfc9a2"/><rect x="18" y="46" width="19" height="1" fill="#f2e3c8"/><rect x="37" y="46" width="2" height="1" fill="#2b2320"/><rect x="6" y="47" width="9" height="1" fill="#dfc9a2"/><rect x="19" y="47" width="8" height="1" fill="#f2e3c8"/><rect x="27" y="47" width="2" height="1" fill="#2b2320"/><rect x="29" y="47" width="5" height="1" fill="#f2e3c8"/><rect x="37" y="47" width="2" height="1" fill="#2b2320"/><rect x="5" y="48" width="10" height="1" fill="#dfc9a2"/><rect x="20" y="48" width="7" height="1" fill="#f2e3c8"/><rect x="27" y="48" width="2" height="1" fill="#2b2320"/><rect x="37" y="48" width="2" height="1" fill="#2b2320"/><rect x="4" y="49" width="12" height="1" fill="#dfc9a2"/><rect x="21" y="49" width="3" height="1" fill="#f2e3c8"/><rect x="27" y="49" width="2" height="1" fill="#2b2320"/><rect x="37" y="49" width="2" height="1" fill="#2b2320"/><rect x="3" y="50" width="10" height="1" fill="#dfc9a2"/><rect x="27" y="50" width="2" height="1" fill="#2b2320"/><rect x="37" y="50" width="2" height="1" fill="#2b2320"/><rect x="2" y="51" width="6" height="1" fill="#dfc9a2"/><rect x="27" y="51" width="2" height="1" fill="#2b2320"/><rect x="37" y="51" width="2" height="1" fill="#2b2320"/><rect x="1" y="52" width="2" height="1" fill="#dfc9a2"/><rect x="27" y="52" width="2" height="1" fill="#2b2320"/><rect x="37" y="52" width="2" height="1" fill="#2b2320"/><rect x="27" y="53" width="2" height="1" fill="#2b2320"/><rect x="37" y="53" width="2" height="1" fill="#2b2320"/><rect x="27" y="54" width="2" height="1" fill="#2b2320"/><rect x="37" y="54" width="2" height="1" fill="#2b2320"/><rect x="27" y="55" width="2" height="1" fill="#2b2320"/><rect x="27" y="56" width="2" height="1" fill="#2b2320"/></svg>
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
-<span class="tip-who">tsuru</span>
-<p>profile before you tune. the profile of a kanso binary names <em>your</em> functions, monomorphized—if the hot symbol is yours, the algorithm is the problem; if it's <code>memmove</code>, you are already at the metal and should go do something else with your afternoon.</p>
+<span class="tip-who">ensō-neko</span>
+<p>types first, then the rest by name—one drawer per file, always sorted. split files by <em>topic</em>, the way a real library does, and the ordering inside each one stops being a rule you obey and starts being the table of contents you rely on.</p>
 </div>
 </div>
+
+<h2>private by default</h2>
+
+<p>look again at <code>menu.kso</code>: three of its four declarations are bare, and one wears <code>pub</code>. that single keyword is the entire visibility system. a top-level name is module-private unless marked—<code>base_price</code> is the module's own business, and nothing spells that out but its absence of ceremony. there is no export list to maintain and no visibility matrix to memorize. <code>pub</code> sits on the declaration, so every reader sees the surface exactly where the thing is defined: <code>price</code> and <code>checkout</code> are api; <code>base_price</code>, <code>line</code>, and <code>service</code> are interior.</p>
+
+<p>today <code>pub</code> parses on every kind of declaration—<code>pub fn</code>, <code>pub type</code>, and <code>pub</code> on a constant—and it documents the contract. the boundary it describes bites once cross-module <code>import</code> ships: an importer will see only <code>pub</code> names, and everything else becomes invisible outside its own directory. until then the keyword is you telling future readers, and the toolchain, where the module's edge is—writing down the decision now so enforcement has nothing to infer later.</p>
+
+<h2>tests are constants</h2>
+
+<p>chapter 01 promised that tests are just <code>test_</code> constants. drop a test file into the module. it shares the one namespace, so it can call the public <code>price</code> and reach straight past it to the private <code>base_price</code>—which is occasionally exactly what a test wants:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teahouse/menu_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">is_err</span> (<span class="t">err</span> <span class="o">_</span>)
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">is_err</span> <span class="o">_</span>
+  <span class="t">false</span>
+
+<span class="f">test_base_price_raw</span> <span class="o">=</span> (<span class="f">base_price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">350</span>
+
+<span class="f">test_dango_price</span> <span class="o">=</span> (<span class="f">price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">400</span>
+
+<span class="f">test_unknown_item_fails</span> <span class="o">=</span> <span class="f">is_err</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test teahouse</div>
+    <pre><code>test_base_price_raw ... ok
+test_dango_price ... ok
+test_unknown_item_fails ... ok
+3 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>a test is a boolean constant. the runner evaluates each <code>test_</code> name and reports. there is no assertion library, no matcher dsl, no lifecycle—<code>test_dango_price</code> is a name bound to <code>(price "dango") == 400</code>, and that is the whole framework. when a test fails, the report says only what the value was, because a failure is nothing more than a constant that came out <code>false</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">double_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">double</span> n
+  n <span class="o">*</span> <span class="n">2</span>
+
+<span class="f">test_double</span> <span class="o">=</span> (<span class="f">double</span> <span class="n">4</span>) <span class="o">==</span> <span class="n">9</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test double_test.kso</div>
+    <pre><code>test_double ... FAILED (returned false)
+0 passed, 1 failed</code></pre>
+  </div>
+</div>
+
+<p>name a boolean <code>test_something</code>—that's the entire testing story. it scales further than it looks: the same three characters of ceremony pin a teahouse's prices and, in the next chapter, a full json parser's escapes, unicode, and error positions.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">mugi</span>
-<p>her binary and my evaluation must agree byte for byte on every example, every ci run—including the whole json suite. when the compiler rewrites everything and not one output bit moves, you may trust the folding.</p>
+<p>a test is a value, so everything you know about values applies: no setup, no teardown, no ordering, no shared state to leak between examples. a suite of constants cannot flake—there is nothing in it that time can touch. i have checked.</p>
 </div>
 </div>
+
+<h2>what arrives with import</h2>
+
+<p>one thing is still missing from this picture: a module can talk to its own files freely, but it can't yet reach another module. cross-module <code>import</code> is designed and gaveled—it just hasn't shipped—and it lands together with the two changes it implies. that is worth stating plainly rather than pretending the present tense is the whole language.</p>
+
+<p>today a program's entrypoint is a file whose <code>main</code> constant the toolchain runs. <code>main</code> is an ordinary constant—the program's description of what to do—and nothing else at the top level is allowed to <em>do</em> anything. a bare statement outside a declaration is a syntax error right now:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">entry_check.kso</div>
+  <pre><code><span class="f">print</span> <span class="s">"hello from the top level"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check entry_check.kso</div>
+    <pre><code>error[syntax]: a top-level line must begin with `fn`, `type`, or a constant binding
+  --&gt; entry_check.kso:1:1
+   1 | print "hello from the top level"
+       ^</code></pre>
+  </div>
+</div>
+
+<p>the settled future is the opposite: an entry file is <em>statements only</em>—<code>import "std/json"</code> lines at the top, alphabetized, then the program's descriptions written directly, no wrapping constant. at that point <code>main</code> dissolves; the file itself is the description the toolchain runs. and the same release that gives <code>import</code> a name to resolve gives <code>pub</code> its teeth: an importer sees your public surface and nothing behind it. the keyword you're already writing is the contract that boundary will enforce. this book teaches the language you can run today; where the road is drawn but not yet paved, it says so.</p>
+
+<h2>what you can do now</h2>
+
+<p>you can lay a program out as a directory of files that read like a table of contents, trusting one namespace to knit them together with no imports or exports between them. you know that types come first and everything else is alphabetical, enforced, so there is never a placement decision to make or relitigate. you can mark your public surface with <code>pub</code> and leave everything else private by omission. and you can test any of it—public or private—by naming a boolean <code>test_</code> and running <code>kanso test</code>, with no framework underneath and nothing in a suite of constants that can flake. that is enough machinery to build a real library, which is exactly where the next chapter goes.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>split the teahouse further. add a third file <code>service.kso</code> holding a <code>pub fn total</code> that takes a list of item names, prices each through <code>price</code>, and sums them—calling into <code>menu.kso</code> across the file boundary. add a <code>test_</code> constant for a two-item order and run <code>kanso test teahouse</code>.</li>
+  <li>trigger the canonical-order error on purpose in three ways: two functions out of alphabetical order, a <code>type</code> placed below a <code>fn</code>, and <code>main</code> after a constant that sorts before it. read each <code>error[formatting]</code> and predict the fix before you make it.</li>
+  <li>write a test that must fail—assert something you know is wrong—and read the runner's report. then make it pass by fixing the <em>assertion</em>, not the code, and watch the count flip.</li>
+  <li>take <code>base_price</code> and mark it <code>pub</code>. nothing breaks today, because import enforcement hasn't shipped. write a sentence describing what <em>will</em> change the day it does, and which callers outside the module gain access.</li>
+</ol>
 
 <nav class="chapter-nav">
   <a href="index.html">contents</a>
   <span class="nav-spacer"></span>
-  <a href="ch06.html">← modules and tests</a>
-  <a href="index.html">back to contents →</a>
+  <a href="ch06.html">← flow and concurrency</a>
+  <a href="ch08.html">next: a json library →</a>
 </nav>
 
 </article>

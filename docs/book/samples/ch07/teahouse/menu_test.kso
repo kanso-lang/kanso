@@ -1,0 +1,11 @@
+fn is_err (err _)
+  true
+
+fn is_err _
+  false
+
+test_base_price_raw = (base_price "dango") == 350
+
+test_dango_price = (price "dango") == 400
+
+test_unknown_item_fails = is_err (price "pocky")

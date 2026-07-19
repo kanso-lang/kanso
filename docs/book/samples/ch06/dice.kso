@@ -1,0 +1,7 @@
+main =
+  roll 1
+  roll 2
+  >> print "both dice have landed"
+
+fn roll i
+  random 6 . (n -> print "roll {i}: a {n + 1}")

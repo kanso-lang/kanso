@@ -1,0 +1,4 @@
+test_base_price_raw ... ok
+test_dango_price ... ok
+test_unknown_item_fails ... ok
+3 passed, 0 failed

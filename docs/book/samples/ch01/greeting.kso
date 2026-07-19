@@ -1,0 +1,3 @@
+main =
+  name = "clay"
+  print "hello, {name}"

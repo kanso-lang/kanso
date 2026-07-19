@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>chapter 06—modules and tests</title>
-<meta name="description" content="a directory is a module, private is the default, tests are constants—and a tour of kanso-json, the standard library's first citizen.">
+<title>chapter 06—flow and concurrency</title>
+<meta name="description" content="two axes kept apart: data crosses at names and the dot, order crosses at the wall. bare lines are green threads, the scheduler is deterministic, and go's channels-and-waitgroups collapse into plain lines.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,6 +12,48 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../style.css">
 <link rel="stylesheet" href="book.css">
+<style>
+  .fl-pull {
+    border-left: 2px solid var(--accent);
+    font-family: var(--font-display);
+    font-size: clamp(1.25rem, 2.8vw, 1.6rem);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    margin: 2.4rem 0;
+    max-width: 44rem;
+    padding-left: 1.4rem;
+  }
+  .fl-rules {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    margin: 2rem 0;
+    padding: 1.4rem 1.6rem;
+  }
+  .fl-rules ul { margin: 0; padding-left: 1.2rem; }
+  .fl-rules li { margin: 0.55rem 0; }
+  .fl-crossing {
+    border-collapse: collapse;
+    margin: 1.6rem 0;
+    width: 100%;
+  }
+  .fl-crossing th, .fl-crossing td {
+    border-bottom: 1px solid var(--line);
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .fl-crossing th {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .fl-diagram { margin: 2rem 0; overflow-x: auto; }
+  .fl-diagram svg { display: block; max-width: 100%; }
+</style>
 </head>
 <body>
 
@@ -35,204 +77,354 @@
 
 <nav class="book-side" aria-label="book chapters">
   <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
   <ol>
     <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
     <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
     <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
     <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
     <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html" aria-current="page"><span class="bs-num">06</span><span class="bs-title">modules and tests</span></a></li>
-    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">fast by construction</span></a></li>
+    <li><a href="ch06.html" aria-current="page"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
   </ol>
 </nav>
 
 <article class="spec-doc prose essay">
 
 <span class="eyebrow">chapter 06</span>
-<h1>modules and tests</h1>
+<h1>flow and concurrency</h1>
 
-<p>a kanso module is a directory. that's the whole definition. the files inside share one namespace—no import statements between them, no export lists, no manifest declaring what's where. split a module across files for the reader's benefit, and the compiler treats the result as one program:</p>
+<p>every program answers two questions that most languages braid into one: <em>where does data go</em>, and <em>what order do things happen in</em>? kanso keeps them apart, one construct each. once you see the split, groups, walls, and green threads stop being rules to memorize and become the only way it could work. and because the two axes are separate, the one about order has a surprising default: things run at the same time unless you say otherwise.</p>
 
-<div class="code-panel">
-  <div class="code-panel-title">teahouse/menu.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">base_price</span> <span class="s">"dango"</span>
-  <span class="n">350</span>
+<h2>data moves through names</h2>
 
-<span class="k">fn</span> <span class="f">base_price</span> <span class="s">"taiyaki"</span>
-  <span class="n">500</span>
-
-<span class="k">fn</span> <span class="f">base_price</span> item
-  <span class="t">err</span> <span class="s">"we do not serve <span class="i">{item}</span>"</span>
-
-<span class="k">pub fn</span> <span class="f">price</span> item
-  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span></code></pre>
-</div>
+<p>a binding hands a value forward; the dot hands a value into the next call. if step two needs step one's result, that need <em>is</em> the ordering—no operator required, and the compiler is free to run everything else alongside it. here two bindings share nothing, so nothing sequences them; the function that reads both is the barrier.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">teahouse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
-  <span class="s">"gomen: <span class="i">{reason}</span>"</span>
-
-<span class="k">fn</span> <span class="f">describe</span> n
-  <span class="s">"<span class="i">{n}</span> yen, service included"</span>
+  <div class="code-panel-title">dataflow.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">cheapest</span> prices
+  <span class="f">sort</span> prices <span class="o">.</span> <span class="f">at</span> <span class="n">1</span>
 
 <span class="f">main</span> <span class="o">=</span>
-  dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
-  pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
-  <span class="f">print</span> (<span class="f">describe</span> dango) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> pocky)</code></pre>
+  prices <span class="o">=</span> [<span class="n">520</span> <span class="n">380</span> <span class="n">450</span> <span class="n">610</span> <span class="n">290</span>]
+  low <span class="o">=</span> <span class="f">cheapest</span> prices   <span class="c"># these two share nothing:</span>
+  total <span class="o">=</span> <span class="f">sum</span> prices      <span class="c"># the compiler may run them together</span>
+  <span class="f">report</span> low total          <span class="c"># reads both, so it waits for both</span>
+
+<span class="k">fn</span> <span class="f">report</span> low total
+  <span class="f">print</span> <span class="s">"cheapest: <span class="i">{low}</span> yen / total: <span class="i">{total}</span> yen"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run teahouse</div>
-    <pre><code>400 yen, service included
-gomen: we do not serve pocky</code></pre>
+    <div class="code-panel-title">kanso run dataflow.kso</div>
+    <pre><code>cheapest: 290 yen / total: 2250 yen</code></pre>
   </div>
 </div>
 
-<p>point the toolchain at the directory and it runs the module. <code>main.kso</code> calls <code>price</code> from <code>menu.kso</code> as if it were next door, because it is. notice also three chapters shaking hands in twelve lines: string-literal dispatch is the menu, an <code>err</code> is the missing item, and the railway carries it from <code>base_price</code> through <code>price</code>—whose <code>+ 50</code> never runs on the sad track—to the arm in <code>describe</code>.</p>
+<p>you never wrote an ordering between <code>low</code> and <code>total</code>, because there isn't one to write. the dependency graph is the schedule: <code>report</code> depends on both, so both finish before it starts, and nothing forces the two of them into a line. this is the whole trick—the absence of a dependency <em>is</em> the license to overlap.</p>
 
-<h2>private by default</h2>
+<h2>order without data moves through the wall</h2>
 
-<p>look again at <code>menu.kso</code>: one declaration wears <code>pub</code>, and that single keyword is the entire visibility system. a top-level name is module-private unless marked—<code>base_price</code> is the module's own business, invisible as api, with nothing to spell it but its absence of ceremony. there is no export list to maintain, no visibility matrix to memorize: <code>pub</code> on the declaration tells every reader exactly where the surface is, and everything else is interior. enforcement bites at the module boundary, which arrives with cross-module <code>import</code>—today <code>pub</code> documents the contract the toolchain is growing into.</p>
-
-<h2>tests are constants</h2>
-
-<p>chapter 01 promised that tests are just <code>test_</code> constants. drop a test file into the module—it shares the namespace, so it can see private names too, which is occasionally exactly what a test wants:</p>
+<p>sometimes two effects share nothing, but you still care when they happen: pour the tea only after it steeped <em>and</em> the cups warmed. that ordering carries no value—it is pure sequence, and it gets its own symbol, <code>&gt;&gt;</code>, the wall. above it, bare lines with no order between them; the wall runs only once everything above has settled.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">teahouse/menu_test.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">is_err</span> (<span class="t">err</span> <span class="o">_</span>)
-  <span class="t">true</span>
-
-<span class="k">fn</span> <span class="f">is_err</span> <span class="o">_</span>
-  <span class="t">false</span>
-
-<span class="f">test_dango_price</span> <span class="o">=</span> (<span class="f">price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">400</span>
-
-<span class="f">test_unknown_item_fails</span> <span class="o">=</span> <span class="f">is_err</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+  <div class="code-panel-title">join.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"steeping the sencha"</span>   <span class="c"># two bare lines: no order between them,</span>
+  <span class="f">print</span> <span class="s">"warming the cups"</span>      <span class="c"># each runs as if on its own thread</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span>            <span class="c"># the wall: runs after both settle</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso test teahouse</div>
-    <pre><code>test_dango_price ... ok
-test_unknown_item_fails ... ok
-2 passed, 0 failed</code></pre>
+    <div class="code-panel-title">kanso run join.kso</div>
+    <pre><code>steeping the sencha
+warming the cups
+serving</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run join.kso --plan</div>
+    <pre><code>plan:
+  join {
+  print "steeping the sencha"    <span class="c"># from line 2</span>
+  print "warming the cups"    <span class="c"># from line 3</span>
+  } <span class="c"># unordered; both run</span>
+  print "serving"    <span class="c"># from line 4</span></code></pre>
   </div>
 </div>
 
-<p>a test is a boolean constant; the runner evaluates each one and reports. when a test fails, the report says what the value was, because that's all a failure is:</p>
+<p>the plan says it plainly. the two bare lines land inside a <code>join</code> block the runtime marks <em>unordered; both run</em>, and <code>serving</code> sits after the closing brace—past the wall. <code>--plan</code> isn't guessing; the group and the wall are structure in the value, and the flag just renders that structure instead of performing it. this is the chapter 05 idea seen sideways: a program is a description, and its concurrency is part of the description.</p>
+
+<h2>bare lines are green threads</h2>
+
+<p>the bare lines above aren't a notational convenience for "do these in some order i don't care about." they are independent green threads, and the runtime overlaps them. you feel the difference the moment one of them blocks. <code>sleep</code> pauses a thread; while it waits, the scheduler runs whatever else is ready. here is the repository's set-piece: a slow steep runs beside a handful of dice.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">double_test.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">double</span> n
-  n <span class="o">*</span> <span class="n">2</span>
+  <div class="code-panel-title">concurrency.kso</div>
+  <pre><code>brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
 
-<span class="f">test_double</span> <span class="o">=</span> (<span class="f">double</span> <span class="n">4</span>) <span class="o">==</span> <span class="n">9</span></code></pre>
+<span class="f">main</span> <span class="o">=</span> <span class="f">play</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">brew</span>
+  <span class="f">roll</span> <span class="n">1</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">4</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span>
+
+<span class="k">fn</span> <span class="f">roll</span> i
+  <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso test double_test.kso</div>
-    <pre><code>test_double ... FAILED (returned false)
-0 passed, 1 failed</code></pre>
+    <div class="code-panel-title">kanso run concurrency.kso</div>
+    <pre><code>brew: steeping
+roll 1: a 3
+brew: poured
+roll 2: a 1
+roll 3: a 4
+roll 4: a 1
+roll 5: a 1</code></pre>
   </div>
 </div>
 
-<p>no assertion library, no matcher dsl, no test lifecycle. the entire testing framework is: name a boolean <code>test_something</code>. it turns out that's enough to test a json parser.</p>
-
-<h2>a real module: kanso-json in six files</h2>
-
-<p>the repository ships <code>lib/json</code>—a complete json decoder and encoder, escapes and <code>\uXXXX</code> and failure positions included, written to prove the language can earn a living. it's six files, four hundred and change lines, and it reads like a table of contents:</p>
-
-<ul>
-  <li><code>json.kso</code>—the public api: <code>decode</code>, <code>encode</code>, the failure types</li>
-  <li><code>value.kso</code>—parsing values: objects, arrays, literals</li>
-  <li><code>text.kso</code>—strings and escapes</li>
-  <li><code>number.kso</code>—ints, floats, and which bytes may start them</li>
-  <li><code>scan.kso</code>—whitespace and low-level cursor work</li>
-  <li><code>json_test.kso</code>—the suite</li>
-</ul>
-
-<p>one namespace, so <code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony; the public surface is exactly <code>decode</code>, <code>encode</code>, and the types. (the underscored helper names you'll see in the panels below are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) and the heart of the parser is the chapter-03 move at industrial scale—the next byte <em>is</em> the dispatch:</p>
+<p>read the transcript against the structure. <code>brew</code> and <code>roll 1</code> are the two bare lines—the green threads. <code>brew</code> prints <code>steeping</code> and hits its <code>sleep</code>, so it parks. the scheduler turns to <code>roll 1</code>, which prints <code>a 3</code>. that first roll landed <em>during</em> the steep. then the wall: <code>&gt;&gt; roll 2</code> waits for everything above it to settle, and <code>brew</code> hasn't—so the scheduler lets the steep finish, <code>brew: poured</code> prints, and only then do rolls two through five run in sequence. the <code>--plan</code> makes the seam explicit:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">lib/json/value.kso</div>
-  <pre><code><span class="c"># value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace</span>
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">34</span> cs p
-  <span class="f">_parse_string</span> cs (p <span class="o">+</span> <span class="n">1</span>)
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">91</span> cs p
-  <span class="f">_parse_array</span> cs (p <span class="o">+</span> <span class="n">1</span>)
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">102</span> cs p
-  <span class="f">_word</span> cs p _bytes_false <span class="t">false</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">110</span> cs p
-  <span class="f">_word</span> cs p _bytes_null <span class="t">json_null</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">116</span> cs p
-  <span class="f">_word</span> cs p _bytes_true <span class="t">true</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">123</span> cs p
-  <span class="f">_parse_object</span> cs (p <span class="o">+</span> <span class="n">1</span>)
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="t">none</span> <span class="o">_</span> p
-  <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> c cs p
-  numeric <span class="o">=</span> <span class="f">_is_number_start</span> c
-  <span class="f">if</span> numeric (<span class="f">_parse_number</span> cs p) (<span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>)</code></pre>
+  <div class="code-panel-title">kanso run concurrency.kso --plan</div>
+  <pre><code>plan:
+  join {
+  print "brew: steeping"    <span class="c"># from line 1</span>
+  sleep 60
+  print "brew: poured"    <span class="c"># from line 1</span>
+  random 6
+  . &lt;continuation&gt;
+  } <span class="c"># unordered; both run</span>
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;</code></pre>
 </div>
 
-<p>eight arms, one per way a json value can begin—including the <code>none</code> arm, because running off the end of the input is just an absent byte, dispatched like everything else. no scanner state machine, no switch statement, no lookahead abstraction. and the parser contains not one line of "check if the last step failed": a bad escape or truncated input becomes an err deep inside, and the railway carries it out of <code>decode</code> with its position intact.</p>
-
-<p>the suite pins all of it—decoding, encoding, escapes, unicode, error positions, a round trip:</p>
+<p>only <code>brew</code> and <code>roll 1</code> live inside the <code>join</code>; rolls two through five hang below it, past the wall. the leading <code>&gt;&gt;</code> doesn't attach to the line just above it—it walls off the whole group. that is why exactly one roll overlaps the steep and the rest queue up behind the barrier. move the wall and you move the overlap.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">lib/json/json_test.kso</div>
-  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> (<span class="f">decode</span> <span class="s">"\"\\u00e9\""</span>) <span class="o">==</span> <span class="s">"é"</span>
-
-<span class="f">test_roundtrip</span> <span class="o">=</span>
-  text <span class="o">=</span> <span class="s">"\{\"a\":[1,2.5,\"x\"],\"b\":null}"</span>
-  (<span class="f">encode</span> (<span class="f">decode</span> text)) <span class="o">==</span> text</code></pre>
+  <div class="code-panel-title">walled.kso — a wall in front of every roll</div>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">brew</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">1</span>          <span class="c"># the wall is now above roll 1 too --</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span>          <span class="c"># brew alone is the group, so every roll</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span>          <span class="c"># waits for the steep to finish</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">4</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso test lib/json</div>
-    <pre><code>test_decode_array ... ok
-test_decode_bool ... ok
-test_decode_escapes ... ok
-test_decode_float ... ok
-test_decode_int ... ok
-test_decode_nested ... ok
-test_decode_object ... ok
-test_decode_string ... ok
-test_decode_unicode ... ok
-test_decode_whitespace ... ok
-test_encode_escapes ... ok
-test_encode_nested ... ok
-test_error_position ... ok
-test_error_trailing ... ok
-test_must_wraps_defect ... ok
-test_roundtrip ... ok
-16 passed, 0 failed</code></pre>
+    <div class="code-panel-title">kanso run walled.kso</div>
+    <pre><code>brew: steeping
+brew: poured
+roll 1: a 3
+roll 2: a 1
+roll 3: a 4
+roll 4: a 1
+roll 5: a 1</code></pre>
   </div>
 </div>
 
-<p>sixteen booleans, one command, and a decoder about to line up against serde_json. that's the last chapter.</p>
-
-<div class="tip">
-<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
-<div class="tip-bubble">
-<span class="tip-who">ensō-neko</span>
-<p>within each file, declarations stay alphabetical—types first, then everything else. split files by <em>topic</em>, the way kanso-json does, and alphabetical order inside each one stops being a constraint and starts being an index.</p>
-</div>
-</div>
+<p>now every roll waits for <code>poured</code>. same five rolls, same five values—only the barrier moved, and with it the overlap. the rolls still come out <code>3, 1, 4, 1, 1</code> because randomness here is deterministic, which is the next thing worth pinning down.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">mugi</span>
-<p>a test is a value, so everything you know about values applies: no setup, no teardown, no ordering, no shared state to leak between examples. sixteen constants cannot flake. i have checked.</p>
+<p>when an interleaving surprises you, run it with <code>--plan</code> and look for the <code>join</code> braces. what's inside runs together; what's below a wall waits. most "why did that print first?" questions are answered by where the brace closes, not by timing.</p>
 </div>
 </div>
+
+<h2>a scheduler you can predict</h2>
+
+<p>overlap would be a menace if it were nondeterministic. it isn't. the scheduler decides who runs next by the numbers <em>you</em> wrote—sleep durations and spawn order—never by the machine's clock. so the transcript is a function of the source, and every run is byte-for-byte identical. watch two dishes cook at once:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">race.kso</div>
+  <pre><code>gyoza <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"gyoza: in the pan"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">20</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"gyoza: flip"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">20</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"gyoza: plated"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">gyoza</span>
+  <span class="f">ramen</span>
+
+ramen <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"ramen: boiling"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">30</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"ramen: noodles in"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">30</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"ramen: bowled"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run race.kso</div>
+    <pre><code>gyoza: in the pan
+ramen: boiling
+gyoza: flip
+ramen: noodles in
+gyoza: plated
+ramen: bowled</code></pre>
+  </div>
+</div>
+
+<p>both threads start, print their opening line, and park on a sleep. the gyoza wakes at 20, the ramen at 30, the gyoza again at 40, the ramen again at 60—so the lines interleave in exactly that order. run it a thousand times and it never wavers, because "who is due next" is settled by <code>20 &lt; 30 &lt; 40 &lt; 60</code>, not by which thread the operating system happened to favor this millisecond. the delays are real time—<code>sleep 30</code> genuinely pauses that thread—but the <em>order</em> they impose is fixed by the numbers, so the output is reproducible to the byte.</p>
+
+<p>randomness rides the same rails. <code>random n</code> is an effect, seeded deterministically, so the sequence of rolls is fixed for a given program. that is why <code>concurrency.kso</code> and <code>walled.kso</code> both roll <code>3, 1, 4, 1, 1</code>: same program, same seed, same dice. concurrency that replays identically is a debugging superpower—there is no "heisenbug that only happens under load," because there is no load-dependent behavior to have one.</p>
+
+<div class="fl-pull">the scheduler reads the numbers you wrote, not the clock on the wall. concurrency in kanso is a value you can print, replay, and pin in a test.</div>
+
+<h2>the same program in go</h2>
+
+<p>it is worth naming what you did <em>not</em> write. in go, running two things at once and waiting for both is a goroutine, a channel or a <code>WaitGroup</code>, and often a <code>select</code> to fan the results back in. the machinery is the shape of the code; the work hides behind it. in kanso the bare lines already are the goroutines, the wall already is the <code>WaitGroup</code>, and there is no channel because <em>the data flow is the channel</em>—a value crosses at a binding or a dot, and the function that reads it is the join. go's <code>select</code>-over-message-types, likewise, is kanso's dispatch-over-message-types from chapter 03: one function arm per message, no <code>select</code> statement. the concurrency isn't bolted onto the language; it falls out of keeping data and order apart.</p>
+
+<h2>what actually crosses a wall</h2>
+
+<p>here is the question that keeps coming back, answered once: <strong>nothing crosses a wall except permission.</strong> the members of a group are bare lines. nobody binds their results, so their results are discarded where they stand—the compiler even refuses a bare line whose value could never be an effect, because a value nobody can read is a bug, not a statement. when every member settles, the group carries no value at all. the wall asks exactly one thing: did anything above me fail?</p>
+
+<table class="fl-crossing">
+  <tr><th>what</th><th>crosses the wall?</th></tr>
+  <tr><td>a member's value</td><td>no—discarded at the member's own line, never collected</td></tr>
+  <tr><td>timing</td><td>yes—everything above has fully settled before anything below starts</td></tr>
+  <tr><td>failure</td><td>yes—and it is the <em>only</em> survivor: every member still runs to completion, then all errs merge into one, and that one err gates the wall</td></tr>
+</table>
+
+<div class="fl-diagram">
+<svg viewBox="0 0 640 300" role="img" aria-label="two parallel effects discard their values at a join; only settled-or-failed crosses the wall to the next step">
+  <defs>
+    <marker id="fl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="var(--muted, #888)"/>
+    </marker>
+  </defs>
+  <g font-family="JetBrains Mono, monospace" font-size="13" fill="var(--ink, #222)">
+    <rect x="20" y="30" width="240" height="44" rx="8" fill="none" stroke="var(--line, #ccc)"/>
+    <text x="36" y="57">print "steeping the sencha"</text>
+    <rect x="20" y="110" width="240" height="44" rx="8" fill="none" stroke="var(--line, #ccc)"/>
+    <text x="36" y="137">print "warming the cups"</text>
+    <line x1="260" y1="52" x2="360" y2="90" stroke="var(--muted, #888)" marker-end="url(#fl-arrow)"/>
+    <line x1="260" y1="132" x2="360" y2="98" stroke="var(--muted, #888)" marker-end="url(#fl-arrow)"/>
+    <text x="150" y="90" font-size="11" fill="var(--muted, #888)">value discarded here</text>
+    <text x="150" y="170" font-size="11" fill="var(--muted, #888)">value discarded here</text>
+    <line x1="392" y1="30" x2="392" y2="160" stroke="var(--accent, #f03a00)" stroke-width="3"/>
+    <text x="384" y="182" font-size="12" fill="var(--accent, #f03a00)">&gt;&gt;</text>
+    <text x="408" y="46" font-size="11" fill="var(--muted, #888)">crosses: settled or failed.</text>
+    <text x="408" y="62" font-size="11" fill="var(--muted, #888)">nothing else.</text>
+    <rect x="420" y="88" width="196" height="44" rx="8" fill="none" stroke="var(--line, #ccc)"/>
+    <text x="436" y="115">print "serving"</text>
+    <line x1="392" y1="94" x2="418" y2="94" stroke="var(--muted, #888)" marker-end="url(#fl-arrow)"/>
+    <text x="20" y="230" font-size="12" fill="var(--muted, #888)">if steeping errs AND warming errs: both still run, the two reasons merge into</text>
+    <text x="20" y="248" font-size="12" fill="var(--muted, #888)">one err, serving never runs, and the merged err short-circuits to the top.</text>
+  </g>
+</svg>
+</div>
+
+<p>that last row is worth seeing run. a group joins failures the way a validation form joins them: it does not stop at the first bad field. both members run to completion, and if both fail, you get both reasons—merged into one err that carries the pair.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">accumulate.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <span class="f">err</span> <span class="s">"the steep went cold"</span>
+  <span class="f">err</span> <span class="s">"the cups cracked"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run accumulate.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ["the steep went cold" "the cups cracked"]</code></pre>
+  </div>
+</div>
+
+<p>neither err was rescued, so both rode up to the endpoint exactly as chapter 04 described—but they arrived <em>together</em>, as a list, because the join collected them before the wall could gate. <code>serving</code> never ran; the merged err short-circuits from the wall onward. this is the one place an err pauses on its way out: at the join, to wait for its siblings. the <code>.</code> bind stays short-circuiting as always—it is only the parallel group that accumulates.</p>
+
+<p>and the bare-line rule the table mentioned is real. a group member exists for its effect; a line that computes a plain value and binds nothing has thrown that value away, and the compiler says so rather than letting it rot:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">bare_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
+  <span class="f">print</span> <span class="s">"the sum above went nowhere"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check bare_check.kso</div>
+    <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
+  --&gt; bare_check.kso:2:5
+   2 |   1 + 1
+           ^</code></pre>
+  </div>
+</div>
+
+<p>if you meant to keep that value, name it (<code>sum = 1 + 1</code>) and the data dependency carries it forward. if you meant an effect, it already would have been one. there is no third thing a bare line could be, so there is no silently-discarded value.</p>
+
+<h2>values, not descriptions</h2>
+
+<p>one snag catches everyone once. <code>random n</code> is a description—an effect—just like <code>read_file</code> in chapter 05. bind it with <code>=</code> and you have named the <em>description</em>, not a number; interpolate that name and you get <code>&lt;description&gt;</code>, not a roll. to get the value, pipe the effect into what needs it with the dot, and the value arrives once it exists:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">dice.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <span class="f">roll</span> <span class="n">1</span>
+  <span class="f">roll</span> <span class="n">2</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"both dice have landed"</span>
+
+<span class="k">fn</span> <span class="f">roll</span> i
+  <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run dice.kso</div>
+    <pre><code>roll 1: a 3
+roll 2: a 1
+both dice have landed</code></pre>
+  </div>
+</div>
+
+<p>inside <code>roll</code>, <code>random 6 . (n -&gt; ...)</code> pipes the effect into a lambda whose parameter <code>n</code> <em>is</em> the resolved value—a number in the range 0 to 5, which is why the die adds one. the two rolls are a group; the dot is the join that turns each effect into a value the print can read. want a member's value on the far side of the wall? then it was never a group member—it is a binding, and naming it replaces the wall with the dependency.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">err</span>
+<p>a group is the one place i wait. everywhere else i leave the instant i'm raised. but siblings running beside me might fail too, so at the join i pause to gather them, and we ride up together as one reason with many parts. the wall above you never opens on a failure.</p>
+</div>
+</div>
+
+<h2>the whole model in five lines</h2>
+
+<div class="fl-rules">
+<ul>
+  <li><strong>data crosses only at bindings and <code>.</code></strong>—if downstream needs a value, name it or pipe it; the dependency is the order.</li>
+  <li><strong><code>&gt;&gt;</code> carries no data</strong>—it carries one bit: nothing above me failed. it walls off the whole group above it, not just the line before it.</li>
+  <li><strong>a group discards every member's value</strong>—bare lines exist for their effects; all of them always run, as independent green threads.</li>
+  <li><strong>only failure survives a group</strong>—errs merge into one and short-circuit from the wall onward; the join is the one place an err pauses to collect its siblings.</li>
+  <li><strong>parallel is the default because nothing can depend on anything</strong>—the group's syntax has no way to express a dependency, so the runtime doesn't have to prove independence; it is unrepresentable to violate.</li>
+</ul>
+</div>
+
+<p>you can now read any kanso program as two questions at once and answer each on sight: follow the names and dots to see where data goes, follow the walls to see what waits. you can put two slow effects side by side and let them overlap without a single primitive named "thread." you can predict an interleaving from the source, replay it byte-for-byte, and pin it in a test. and when something fails mid-flight, you know exactly where it pauses and what it carries. concurrency stopped being a subsystem and became a consequence of keeping two ideas apart.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>write a program with three bare-line effects and one <code>&gt;&gt;</code> wall after them. run it with <code>--plan</code> and confirm all three land inside one <code>join</code> block with the wall's step below the closing brace.</li>
+  <li>take <code>race.kso</code> and change the ramen's two sleeps from 30 to 15. predict the new interleaving from the numbers before you run it, then run it and check. explain why the order changed.</li>
+  <li>bind <code>a = random 6</code> and print <code>"rolled {a}"</code>. observe what prints, then fix it so a real number appears—without adding a wall. name the operator that does the work.</li>
+  <li>write a group of two members where both raise an <code>err</code>, walled before a <code>print</code>. run it and confirm the print never happens and both reasons reach the endpoint together. then change one member to succeed and describe what now crosses the wall.</li>
+</ol>
 
 <nav class="chapter-nav">
   <a href="index.html">contents</a>
   <span class="nav-spacer"></span>
   <a href="ch05.html">← effects are descriptions</a>
-  <a href="ch07.html">next: fast by construction →</a>
+  <a href="ch07.html">next: modules and tests →</a>
 </nav>
 
 </article>

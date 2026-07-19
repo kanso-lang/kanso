@@ -1,0 +1,7 @@
+fn alpha x
+  x
+
+type bravo
+  n: int
+
+main = print "{alpha 1}"

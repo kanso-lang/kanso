@@ -1,0 +1,16 @@
+fn kind 43
+  "plus"
+
+fn kind 45
+  "minus"
+
+fn kind 46
+  "dot"
+
+fn kind 101
+  "exponent"
+
+fn kind _
+  "other"
+
+main = print (kind 46)

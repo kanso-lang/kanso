@@ -1,0 +1,4 @@
+error[formatting]: a line holds at most 80 characters — this one has 90
+  --> width_check.kso:1:81
+   1 | main = print "this string pads the line out well past the canonical width limit of eighty"
+                                                                                       ^

@@ -1,0 +1,8 @@
+kanso repl — expressions evaluate, declarations persist, ctrl-d exits
+» tau = 6.28318
+defined tau
+» tau * 2
+12.56636
+» print "tau is {tau}"
+tau is 6.28318
+» 
