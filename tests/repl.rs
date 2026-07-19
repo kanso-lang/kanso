@@ -5,7 +5,7 @@ fn value(session: &mut Session, input: &str) -> String {
     let mut executor = ScriptedExecutor::default();
     match session.eval(input, &mut executor) {
         Ok(Outcome::Value(rendered)) => rendered,
-        Ok(Outcome::Defined(names)) => format!("defined {names}"),
+        Ok(Outcome::Defined(echo)) => echo,
         Ok(Outcome::Executed(rendered)) => format!("executed {rendered}"),
         Err(message) => format!("error {message}"),
     }
@@ -76,4 +76,54 @@ fn multi_arm_input_keeps_all_arms() {
     let _ = value(&mut session, "fn sign 0\n  \"zero\"\n\nfn sign n\n  \"other\"");
 
     assert_eq!(value(&mut session, "sign 0"), "\"zero\"");
+}
+
+#[test]
+fn redefinition_echoes_redefined() {
+    let mut session = Session::new();
+    let _ = value(&mut session, "fn greet name\n  \"hi {name}\"");
+
+    assert_eq!(value(&mut session, "fn greet name\n  \"yo {name}\""), "redefined greet");
+}
+
+#[test]
+fn delete_removes_an_unused_declaration() {
+    let mut session = Session::new();
+    let _ = value(&mut session, "x = 10");
+
+    assert_eq!(session.delete("x"), Ok("deleted x".to_string()));
+    assert_eq!(value(&mut session, "x = 7"), "defined x");
+}
+
+#[test]
+fn delete_refuses_while_something_depends_on_it() {
+    let mut session = Session::new();
+    let _ = value(&mut session, "x = 10");
+    let _ = value(&mut session, "fn double_x _\n  x * 2");
+
+    let refusal = session.delete("x").unwrap_err();
+
+    assert!(refusal.starts_with("cannot delete `x`"), "got: {refusal}");
+    assert_eq!(value(&mut session, "double_x 0"), "20");
+}
+
+#[test]
+fn show_renders_one_declaration_without_running_it() {
+    let mut session = Session::new();
+    let _ = value(&mut session, "fn shout word\n  \"{word}!\"");
+
+    assert_eq!(session.show(Some("shout")), Ok("fn shout word\n  \"{word}!\"".to_string()));
+}
+
+#[test]
+fn show_renders_the_session_as_a_canonical_file() {
+    let mut session = Session::new();
+    let _ = value(&mut session, "fn ada _\n  1");
+    let _ = value(&mut session, "type user\n  name: string");
+
+    let file = session.show(None).unwrap();
+
+    let user_at = file.find("type user").unwrap();
+    let ada_at = file.find("fn ada").unwrap();
+    assert!(user_at < ada_at, "types come before functions:\n{file}");
 }

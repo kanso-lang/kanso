@@ -114,8 +114,8 @@ fn run_interpreted(program: &ast::Program) -> ExitCode {
 fn repl() -> ExitCode {
     use rustyline::error::ReadlineError;
     println!(
-        "kanso repl — expressions evaluate, declarations persist, blank line \
-         ends a block, ctrl-d exits"
+        "kanso repl — expressions evaluate, declarations persist, :help for \
+         directives, ctrl-d exits"
     );
     let mut editor = match rustyline::DefaultEditor::new() {
         Ok(editor) => editor,
@@ -136,7 +136,13 @@ fn repl() -> ExitCode {
             true => "» ",
             false => "… ",
         };
-        let line = match editor.readline(prompt) {
+        // inside a block, the next line almost always sits at indent 2 —
+        // pre-fill it so the user never types the indentation
+        let read = match buffer.is_empty() {
+            true => editor.readline(prompt),
+            false => editor.readline_with_initial(prompt, ("  ", "")),
+        };
+        let line = match read {
             Ok(line) => line.trim_end().to_string(),
             // ctrl-c abandons the block in progress (or the empty prompt)
             Err(ReadlineError::Interrupted) => {
@@ -145,6 +151,11 @@ fn repl() -> ExitCode {
             }
             Err(_) => break,
         };
+        if buffer.is_empty() && line.starts_with(':') {
+            let _ = editor.add_history_entry(&line);
+            directive(&line, &mut session);
+            continue;
+        }
         let submit = match buffer.is_empty() {
             true if opens_block(&line) => {
                 buffer = line;
@@ -174,6 +185,32 @@ fn repl() -> ExitCode {
 fn opens_block(line: &str) -> bool {
     let head = line.strip_prefix("pub ").unwrap_or(line);
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
+}
+
+/// `:`-directives talk to the session itself, outside the language's grammar.
+fn directive(line: &str, session: &mut kanso::repl::Session) {
+    let mut words = line.split_whitespace();
+    let verb = words.next().unwrap_or("");
+    let arg = words.next();
+    match (verb, arg) {
+        (":show", name) => match session.show(name) {
+            Ok(text) => println!("{text}"),
+            Err(message) => eprint!("{}", diag::paint(&message)),
+        },
+        (":delete", Some(name)) => match session.delete(name) {
+            Ok(echo) => println!("{echo}"),
+            Err(message) => eprint!("{}", diag::paint(&message)),
+        },
+        (":delete", None) => eprintln!("usage: :delete name"),
+        (":help", _) => {
+            println!(":show          the whole session, as the file it is");
+            println!(":show foo      foo's definition, without running it");
+            println!(":delete foo    remove foo (refused while something still uses it)");
+            println!(":help          this list");
+            println!("repeating a declaration replaces it; ctrl-c abandons a block");
+        }
+        _ => eprintln!("unknown directive {verb} — try :help"),
+    }
 }
 
 fn report(outcome: Result<kanso::repl::Outcome, String>) {
