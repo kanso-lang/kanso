@@ -5,6 +5,12 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#elif defined(__x86_64__)
+#include <emmintrin.h>
+#endif
+
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
@@ -1366,7 +1372,28 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     unsigned char ca = (unsigned char)(a.payload & 0xff);
     unsigned char cb = (unsigned char)(b.payload & 0xff);
     const unsigned char* d = by->data;
-    for (long long i = p; i < by->len; i++) {
+    long long i = p;
+#if defined(__aarch64__)
+    /* 16 bytes per step; the shrn-by-4 narrow turns the match vector into a
+       64-bit mask (4 bits per byte), so ctz/4 names the first hit. */
+    uint8x16_t va = vdupq_n_u8(ca), vb = vdupq_n_u8(cb);
+    for (; i + 16 <= by->len; i += 16) {
+        uint8x16_t chunk = vld1q_u8(d + i);
+        uint8x16_t m = vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb));
+        uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+        uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+        if (mask) return k_int(i + (__builtin_ctzll(mask) >> 2) + 1);
+    }
+#elif defined(__x86_64__)
+    __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
+    for (; i + 16 <= by->len; i += 16) {
+        __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
+        __m128i m = _mm_or_si128(_mm_cmpeq_epi8(chunk, va), _mm_cmpeq_epi8(chunk, vb));
+        int mask = _mm_movemask_epi8(m);
+        if (mask) return k_int(i + __builtin_ctz(mask) + 1);
+    }
+#endif
+    for (; i < by->len; i++) {
         if (d[i] == ca || d[i] == cb) return k_int(i + 1);
     }
     return k_int(by->len + 1);
