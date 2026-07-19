@@ -62,6 +62,24 @@ static KBlock* k_spare = NULL;
 static char* k_arena = NULL;
 static size_t k_arena_left = 0;
 
+/* Cost counters: every value is an exact, machine-independent constant for a
+   deterministic program, so they golden like output does. KANSO_COUNTERS=1
+   dumps them to stderr at exit; CI diffs the dump against a committed cost
+   golden — a performance ratchet with no clock in it. */
+static long long k_stat_allocs = 0;
+static long long k_stat_alloc_bytes = 0;
+static long long k_stat_blocks = 0;
+static long long k_stat_perm_allocs = 0;
+static long long k_stat_beat_iters = 0;
+
+static void k_stats_dump(void) {
+    fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
+    fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
+    fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
+    fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
+    fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
+}
+
 static void k_arena_push(size_t need) {
     KBlock** link = &k_spare;
     while (*link && (*link)->cap < need) link = &(*link)->next;
@@ -72,6 +90,7 @@ static void k_arena_push(size_t need) {
         b = malloc(sizeof(KBlock) + need);
         if (!b) { fputs("out of memory\n", stderr); exit(1); }
         b->cap = need;
+        k_stat_blocks++;
     }
     b->next = k_blocks;
     k_blocks = b;
@@ -81,6 +100,8 @@ static void k_arena_push(size_t need) {
 
 static void* k_alloc(size_t n) {
     n = (n + 15) & ~(size_t)15;
+    k_stat_allocs++;
+    k_stat_alloc_bytes += (long long)n;
     if (n > k_arena_left) {
         k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
     }
@@ -129,6 +150,7 @@ void k_beat_push(void) {
 }
 
 void k_beat_iter(void) {
+    k_stat_beat_iters++;
     if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
         k_beat_rewind(&k_beat_stack[k_beat_depth - 1]);
     }
@@ -167,6 +189,7 @@ static void* k_alloc_obj(size_t n) {
    storage and reusing it after a pop hands back reclaimed, since-reused
    memory. Permanent storage is the only cache that is sound across beats. */
 static void* k_alloc_perm(size_t n) {
+    k_stat_perm_allocs++;
     KHeader* h = malloc(sizeof(KHeader) + n);
     if (!h) { fputs("out of memory\n", stderr); exit(1); }
     h->rc = K_IMMORTAL;
@@ -1620,6 +1643,7 @@ static void k_report_err(KValue e, const char* reached) {
 int main(int argc, char** argv) {
     k_argc_global = argc;
     k_argv_global = argv;
+    if (getenv("KANSO_COUNTERS")) atexit(k_stats_dump);
     KValue v = k_user_main();
     if (v.tag == K_DESC) {
         KValue y = k_exec(k_as_desc(v));
