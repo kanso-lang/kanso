@@ -1,6 +1,6 @@
 # kanso
 
-[![ci](https://github.com/ClayShentrup/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/ClayShentrup/kanso/actions/workflows/ci.yml)
+[![ci](https://github.com/kanso-lang/kanso/actions/workflows/ci.yml/badge.svg)](https://github.com/kanso-lang/kanso/actions/workflows/ci.yml)
 
 *kanso* (簡素): simplicity through the elimination of clutter.
 
@@ -35,7 +35,7 @@ No exceptions were thrown: division by zero returns `err`, which propagates as a
 ## quickstart
 
 ```
-git clone https://github.com/ClayShentrup/kanso
+git clone https://github.com/kanso-lang/kanso
 cd kanso
 cargo build --release
 ./target/release/kanso run examples/hello.kso
