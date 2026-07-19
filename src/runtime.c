@@ -5,6 +5,12 @@
 #include <stdint.h>
 #include <unistd.h>
 
+#if defined(__aarch64__)
+#include <arm_neon.h>
+#elif defined(__x86_64__)
+#include <emmintrin.h>
+#endif
+
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
@@ -921,15 +927,18 @@ static KValue k_schedule(KDesc* join) {
     return k_beat_pop(result);
 }
 
-static long long k_truthy_bad(void) {
+/* Exported (not static): the codegen prelude's inline k_truthy calls this on
+   its cold path, so the die message lives in exactly one place. */
+long long k_truthy_bad(void) {
     k_die("an if condition is true or false");
     return 0;
 }
 
-/* Fires on every `if` condition. Keeping the cold k_die path out of line
-   leaves this body small enough that LTO inlines it into the hot loops,
-   instead of leaving a real call+return the size estimate would otherwise
-   force. */
+/* Fires on every `if` condition. The codegen prelude carries an
+   alwaysinline IR twin of this body (internal linkage, so the symbols never
+   collide) — LTO declined to inline across the .ll/.o boundary, leaving a
+   real call on the hottest path; the IR twin makes the inline deterministic.
+   This copy remains for the runtime's own internal callers. */
 long long k_truthy(KValue v) {
     if (v.tag == K_TRUE) return 1;
     if (v.tag == K_FALSE) return 0;
@@ -1363,7 +1372,28 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     unsigned char ca = (unsigned char)(a.payload & 0xff);
     unsigned char cb = (unsigned char)(b.payload & 0xff);
     const unsigned char* d = by->data;
-    for (long long i = p; i < by->len; i++) {
+    long long i = p;
+#if defined(__aarch64__)
+    /* 16 bytes per step; the shrn-by-4 narrow turns the match vector into a
+       64-bit mask (4 bits per byte), so ctz/4 names the first hit. */
+    uint8x16_t va = vdupq_n_u8(ca), vb = vdupq_n_u8(cb);
+    for (; i + 16 <= by->len; i += 16) {
+        uint8x16_t chunk = vld1q_u8(d + i);
+        uint8x16_t m = vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb));
+        uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+        uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+        if (mask) return k_int(i + (__builtin_ctzll(mask) >> 2) + 1);
+    }
+#elif defined(__x86_64__)
+    __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
+    for (; i + 16 <= by->len; i += 16) {
+        __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
+        __m128i m = _mm_or_si128(_mm_cmpeq_epi8(chunk, va), _mm_cmpeq_epi8(chunk, vb));
+        int mask = _mm_movemask_epi8(m);
+        if (mask) return k_int(i + __builtin_ctz(mask) + 1);
+    }
+#endif
+    for (; i < by->len; i++) {
         if (d[i] == ca || d[i] == cb) return k_int(i + 1);
     }
     return k_int(by->len + 1);
@@ -1528,6 +1558,19 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
+    /* Strict [-]?digits{1,18} parses in a bare loop (18 digits cannot
+       overflow i64); every other shape — longer runs, leading space or '+',
+       junk — falls through to strtoll so behavior stays exactly libc's. */
+    long long start = (len > 0 && data[0] == '-') ? 1 : 0;
+    if (start < len && len - start <= 18) {
+        long long acc = 0, j = start;
+        for (; j < len; j++) {
+            unsigned char c = (unsigned char)data[j] - '0';
+            if (c > 9) break;
+            acc = acc * 10 + c;
+        }
+        if (j == len) return k_int(start ? -acc : acc);
+    }
     char* end = NULL;
     long long n = strtoll(data, &end, 10);
     if (len == 0 || end != data + len) {
