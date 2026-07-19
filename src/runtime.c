@@ -1558,6 +1558,19 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     long long len;
     if (sv.tag == K_STR) { KStr* s = k_as_str(sv); data = s->data; len = s->len; }
     else { KBytes* b = k_as_bytes(sv); data = (const char*)b->data; len = b->len; }
+    /* Strict [-]?digits{1,18} parses in a bare loop (18 digits cannot
+       overflow i64); every other shape — longer runs, leading space or '+',
+       junk — falls through to strtoll so behavior stays exactly libc's. */
+    long long start = (len > 0 && data[0] == '-') ? 1 : 0;
+    if (start < len && len - start <= 18) {
+        long long acc = 0, j = start;
+        for (; j < len; j++) {
+            unsigned char c = (unsigned char)data[j] - '0';
+            if (c > 9) break;
+            acc = acc * 10 + c;
+        }
+        if (j == len) return k_int(start ? -acc : acc);
+    }
     char* end = NULL;
     long long n = strtoll(data, &end, 10);
     if (len == 0 || end != data + len) {
