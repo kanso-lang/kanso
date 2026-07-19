@@ -1,0 +1,4 @@
+error[name]: `tau` is already a declaration; rename the binding
+  --> shadow_check.kso:2:3
+   2 |   tau = 5
+         ^

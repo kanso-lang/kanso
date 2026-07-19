@@ -1,0 +1,9 @@
+main =
+  cs = chars "café"
+  print "chars {cs}"
+    >> print "length {length "café"}"
+    >> print "char_code {char_code "A"}"
+    >> print "from_code {from_code 233}"
+    >> print "join {join ["a" "b" "c"] "-"}"
+    >> print "slice {slice "kanso" 2 4}"
+    >> print "concat {concat [1 2] [3 4]}"

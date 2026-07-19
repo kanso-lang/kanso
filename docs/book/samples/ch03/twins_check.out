@@ -1,0 +1,4 @@
+error[dispatch]: overlapping overloads of `same` are illegal
+  --> twins_check.kso:4:4
+   4 | fn same y
+          ^

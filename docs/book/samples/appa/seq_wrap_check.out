@@ -1,0 +1,4 @@
+error[formatting]: needless continuation: this statement fits on one line (42 characters)
+  --> seq_wrap_check.kso:2:3
+   2 |   >> print "serving"
+         ^

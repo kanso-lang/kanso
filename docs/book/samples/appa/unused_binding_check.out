@@ -1,0 +1,4 @@
+error[unused]: unused binding `x`
+  --> unused_binding_check.kso:2:3
+   2 |   x = 1
+         ^

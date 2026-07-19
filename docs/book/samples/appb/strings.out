@@ -1,0 +1,7 @@
+chars ["c" "a" "f" "é"]
+length 4
+char_code 65
+from_code é
+join a-b-c
+slice ans
+concat [1 2 3 4]

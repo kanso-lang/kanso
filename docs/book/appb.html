@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>appendix b—builtin reference</title>
+<meta name="description" content="every kanso builtin: signature shape, behavior, and failure behavior, each with a worked example run through the real interpreter—numbers, text, lists, maps, bytes, control, and the effect descriptions.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+<style>
+  .builtin-index {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.9rem;
+    margin: 2rem 0;
+    padding: 1.2rem 1.4rem;
+  }
+  .builtin-index a { text-decoration: none; }
+  .builtin-index code { font-size: 0.82rem; }
+  .builtin-sig {
+    border-left: 2px solid var(--accent);
+    color: var(--ink);
+    margin: 0.6rem 0 0.8rem;
+    padding-left: 0.9rem;
+  }
+  .builtin-sig code { font-size: 0.92rem; }
+  .desc-tag {
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    padding: 0.1rem 0.55rem;
+    text-transform: uppercase;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../playground.html">playground</a>
+    <a href="index.html">book</a>
+    <a href="../about.html">about</a>
+    <a href="../compiler.html">compiler</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
+  </nav>
+</header>
+
+<div class="book-layout">
+
+<nav class="book-side" aria-label="book chapters">
+  <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
+  <ol>
+    <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
+    <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
+    <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
+    <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
+    <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html" aria-current="page"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
+  </ol>
+</nav>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">appendix b</span>
+<h1>builtin reference</h1>
+
+<p>kanso keeps its standard library small enough to hold in your head. there are thirty builtins, and they come in two shapes. most are ordinary pure functions—<code>sort</code> takes a list and returns a sorted one, <code>sqrt</code> takes a number and returns its root, with no trace left behind. seven are <em>descriptions</em>: <code>print</code>, <code>read_file</code>, <code>write_file</code>, <code>args</code>, <code>stdin</code>, <code>sleep</code>, and <code>random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
+
+<p>every builtin follows the same failure convention. an <code>err</code> or <code>none</code> handed to a builtin passes straight through, unlooked-at, so failures ride the railway from chapter 04 without special cases. a genuine type mismatch—<code>sum</code> on a list containing a string, <code>sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the builtin does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
+
+<div class="builtin-index" aria-label="alphabetical index">
+<a href="#b-args"><code>args</code></a>
+<a href="#b-at"><code>at</code></a>
+<a href="#b-bytes"><code>bytes</code></a>
+<a href="#b-char_code"><code>char_code</code></a>
+<a href="#b-chars"><code>chars</code></a>
+<a href="#b-concat"><code>concat</code></a>
+<a href="#b-entries"><code>entries</code></a>
+<a href="#b-filter"><code>filter</code></a>
+<a href="#b-find2"><code>find2</code></a>
+<a href="#b-from_code"><code>from_code</code></a>
+<a href="#b-if"><code>if</code></a>
+<a href="#b-join"><code>join</code></a>
+<a href="#b-length"><code>length</code></a>
+<a href="#b-map"><code>map</code></a>
+<a href="#b-print"><code>print</code></a>
+<a href="#b-push"><code>push</code></a>
+<a href="#b-put"><code>put</code></a>
+<a href="#b-random"><code>random</code></a>
+<a href="#b-read_file"><code>read_file</code></a>
+<a href="#b-round"><code>round</code></a>
+<a href="#b-slice"><code>slice</code></a>
+<a href="#b-sleep"><code>sleep</code></a>
+<a href="#b-sort"><code>sort</code></a>
+<a href="#b-sqrt"><code>sqrt</code></a>
+<a href="#b-stdin"><code>stdin</code></a>
+<a href="#b-sum"><code>sum</code></a>
+<a href="#b-to_float"><code>to_float</code></a>
+<a href="#b-to_int"><code>to_int</code></a>
+<a href="#b-utf8"><code>utf8</code></a>
+<a href="#b-write_file"><code>write_file</code></a>
+</div>
+
+<p>the sections that follow group the builtins by what they operate on—numbers, text, lists, maps, bytes, choosing, and effects—and end each group with one program that exercises the lot. within a group the entries are alphabetical; the index above is the fast path when you know the name.</p>
+
+<h2>numbers</h2>
+
+<h3 id="b-round"><code>round</code></h3>
+<p class="builtin-sig"><code>round number → int</code></p>
+<p>rounds a float to the nearest integer, ties away from zero (<code>2.5</code> becomes <code>3</code>). an <code>int</code> passes through unchanged, so <code>round</code> is safe to call on a value you already believe is whole. a non-number argument is a runtime error.</p>
+
+<h3 id="b-sqrt"><code>sqrt</code></h3>
+<p class="builtin-sig"><code>sqrt number → float64</code></p>
+<p>the square root, always a float—an <code>int</code> argument widens before the root is taken, so <code>sqrt 9</code> is <code>3.0</code>, not <code>3</code>. a non-number argument is a runtime error.</p>
+
+<h3 id="b-to_float"><code>to_float</code></h3>
+<p class="builtin-sig"><code>to_float (string | int | float) → float64 | err</code></p>
+<p>parses text into a float. an <code>int</code> widens and a <code>float</code> passes through, so the one function covers both parsing and numeric widening. text that isn't a number returns an <code>err</code> value carrying the offending string—a failure you can dispatch on, not a crash.</p>
+
+<h3 id="b-to_int"><code>to_int</code></h3>
+<p class="builtin-sig"><code>to_int (string | int) → int | err</code></p>
+<p>parses text into an integer; an <code>int</code> passes through unchanged. unparseable text returns an <code>err</code>. because that <code>err</code> is a value, it rides the railway: interpolate it, or pipe it, and it propagates to the endpoint rather than being silently swallowed.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">numbers.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  root <span class="o">=</span> <span class="f">sqrt</span> <span class="n">2</span>
+  <span class="f">print</span> <span class="s">"sqrt <span class="i">{root}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sqrt-int <span class="i">{sqrt 9}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"round <span class="i">{round 2.6}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"round-half <span class="i">{round 2.5}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_int <span class="i">{to_int "42"}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_float <span class="i">{to_float "3.14"}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_float-int <span class="i">{to_float 5}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run numbers.kso</div>
+    <pre><code>sqrt 1.4142135623730951
+sqrt-int 3.0
+round 3
+round-half 3
+to_int 42
+to_float 3.14
+to_float-int 5.0</code></pre>
+  </div>
+</div>
+
+<p>the failure arm is worth seeing on its own. feed <code>to_int</code> a word and the <code>err</code> it returns is interpolated into the string, which propagates it—so the print never happens and the failure surfaces at <code>main</code>, its birthplace named:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">parse_fail.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"parsed <span class="i">{to_int "seven"}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run parse_fail.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ""seven" is not an integer"
+  born in main at parse_fail.kso:1</code></pre>
+  </div>
+</div>
+
+<h2>text and characters</h2>
+
+<h3 id="b-char_code"><code>char_code</code></h3>
+<p class="builtin-sig"><code>char_code string → int</code></p>
+<p>the unicode code point of a one-character string—<code>char_code "A"</code> is <code>65</code>. the argument must be exactly one character; anything longer or shorter is a runtime error. its inverse is <code>from_code</code>.</p>
+
+<h3 id="b-chars"><code>chars</code></h3>
+<p class="builtin-sig"><code>chars string → string[]</code></p>
+<p>splits a string into its characters, each a one-character string, one per unicode scalar. accented letters count once—<code>chars "café"</code> has four elements, not five. a non-string argument is a runtime error.</p>
+
+<h3 id="b-from_code"><code>from_code</code></h3>
+<p class="builtin-sig"><code>from_code int → string | err</code></p>
+<p>the one-character string for a code point—<code>from_code 233</code> is <code>"é"</code>. an integer that is not a unicode scalar value returns an <code>err</code>, so surrogate halves and out-of-range numbers fail as values rather than producing garbage.</p>
+
+<h3 id="b-join"><code>join</code></h3>
+<p class="builtin-sig"><code>join string[] string → string</code></p>
+<p>joins a list of strings with a separator between them—the counterpart to splitting. a failure inside the list propagates; a non-string element is a runtime error.</p>
+
+<h3 id="b-length"><code>length</code></h3>
+<p class="builtin-sig"><code>length (string | list | map) → int</code></p>
+<p>a count: characters of a string, elements of a list, entries of a map. one function serves all three because "how many" means the same thing across them. anything else is a runtime error.</p>
+
+<h3 id="b-slice"><code>slice</code></h3>
+<p class="builtin-sig"><code>slice (string | list) int int → (string | list)</code></p>
+<p>a sub-range by 1-based inclusive positions—<code>slice "kanso" 2 4</code> is <code>"ans"</code>, and the same call shape works on lists. out-of-range or inverted bounds yield an empty result rather than a failure, so slicing never surprises you with a <code>none</code> to handle.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">strings.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  cs <span class="o">=</span> <span class="f">chars</span> <span class="s">"café"</span>
+  <span class="f">print</span> <span class="s">"chars <span class="i">{cs}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length "café"}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"char_code <span class="i">{char_code "A"}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"from_code <span class="i">{from_code 233}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"join <span class="i">{join ["a" "b" "c"] "-"}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{slice "kanso" 2 4}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{concat [1 2] [3 4]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run strings.kso</div>
+    <pre><code>chars ["c" "a" "f" "é"]
+length 4
+char_code 65
+from_code é
+join a-b-c
+slice ans
+concat [1 2 3 4]</code></pre>
+  </div>
+</div>
+
+<h2>lists</h2>
+
+<h3 id="b-at"><code>at</code></h3>
+<p class="builtin-sig"><code>at (list | string | map) index → value | none</code></p>
+<p>indexing. a list or string is indexed by a 1-based position; a map is indexed by its key. <code>at</code> is what the subscript form <code>xs[i]</code> desugars to. a missing position or absent key returns <code>none</code>—a dispatchable value, not an exception—so the caller decides what "not there" means. (an out-of-range subscript with <code>xs[i]</code> instead <em>raises</em>; <code>at</code> is the soft form.)</p>
+
+<h3 id="b-concat"><code>concat</code></h3>
+<p class="builtin-sig"><code>concat list list → list</code></p>
+<p>appends two lists into one. both arguments must be lists; the result is a new list and neither input is disturbed.</p>
+
+<h3 id="b-filter"><code>filter</code></h3>
+<p class="builtin-sig"><code>filter list (value → bool) → list</code></p>
+<p>keeps the elements for which the predicate returns <code>true</code>. the predicate must answer <code>true</code> or <code>false</code>; any other result is a runtime error, which catches a predicate that forgot to return a boolean.</p>
+
+<h3 id="b-map"><code>map</code></h3>
+<p class="builtin-sig"><code>map list (value → value) → list</code></p>
+<p>applies a function to every element and collects the results in order. the function is any callable—a named function, a lambda, a builtin.</p>
+
+<h3 id="b-push"><code>push</code></h3>
+<p class="builtin-sig"><code>push list value → list</code></p>
+<p>a new list with one value appended. it is functional: the original list is unchanged, and the value's type is unconstrained. under the hood the runtime reuses the buffer in place when the list is uniquely owned, so the value semantics cost nothing when nobody else is looking.</p>
+
+<h3 id="b-sort"><code>sort</code></h3>
+<p class="builtin-sig"><code>sort list → list</code></p>
+<p>ascending order. the elements must be mutually comparable—all ints, all strings—and a list mixing types is a runtime error, because there is no honest order across types. sorting is stable and returns a new list.</p>
+
+<h3 id="b-sum"><code>sum</code></h3>
+<p class="builtin-sig"><code>sum list → int</code></p>
+<p>adds up a list of integers, empty list summing to <code>0</code>. a failure in the list propagates; a non-integer element is a runtime error.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lists.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
+  <span class="f">print</span> <span class="s">"map <span class="i">{map xs (n -&gt; n * 10)}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"filter <span class="i">{filter xs (n -&gt; n &gt; 1)}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sort <span class="i">{sort xs}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum xs}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"push <span class="i">{push xs 4}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{at xs 2}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length xs}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{slice xs 1 2}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{concat xs [9]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run lists.kso</div>
+    <pre><code>map [30 10 20]
+filter [3 2]
+sort [1 2 3]
+sum 6
+push [3 1 2 4]
+at 1
+length 3
+slice [3 1]
+concat [3 1 2 9]</code></pre>
+  </div>
+</div>
+
+<p>note <code>at xs 2</code> is <code>1</code>—position two of <code>[3 1 2]</code>, one-based. when the position is absent, <code>at</code> hands back <code>none</code>, and because <code>none</code> is a value you dispatch on it. two overloads of <code>describe</code>—one that matches <code>none</code>, one that matches anything—turn "missing" into an ordinary branch:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">missing.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+  <span class="s">"index out of range"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> x
+  <span class="s">"value is <span class="i">{x}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  found <span class="o">=</span> <span class="f">describe</span> (<span class="f">at</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>] <span class="n">2</span>)
+  gone <span class="o">=</span> <span class="f">describe</span> (<span class="f">at</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>] <span class="n">9</span>)
+  <span class="f">print</span> <span class="s">"in-range: <span class="i">{found}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"missing: <span class="i">{gone}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run missing.kso</div>
+    <pre><code>in-range: value is 20
+missing: index out of range</code></pre>
+  </div>
+</div>
+
+<p>the direct call <code>describe (at …)</code> is deliberate. the pipe <code>.</code> short-circuits a failure before it reaches the function, so <code>at … . describe</code> would propagate the <code>none</code> untouched; to dispatch on <code>none</code> you hand it to the function as an argument, where the <code>none</code> overload can match it.</p>
+
+<h2>maps</h2>
+
+<h3 id="b-entries"><code>entries</code></h3>
+<p class="builtin-sig"><code>entries map → entry[]</code></p>
+<p>the key–value pairs of a map, each an <code>entry key value</code> record, returned in sorted key order. the order is deterministic, always—iteration over a map never depends on insertion history. to read a single value by key, use <code>at</code>.</p>
+
+<h3 id="b-put"><code>put</code></h3>
+<p class="builtin-sig"><code>put map key value → map</code></p>
+<p>a new map with <code>key</code> set to <code>value</code>, replacing any previous binding. keys are ints or strings. like <code>push</code> it is functional and made in-place by the runtime when the map is uniquely owned. building a map from nothing starts at the empty-map literal <code>[:]</code>; a literal with known keys is written <code>["a": 1 "b": 2]</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">maps.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  base <span class="o">=</span> [<span class="s">"a"</span><span class="o">:</span> <span class="n">1</span> <span class="s">"b"</span><span class="o">:</span> <span class="n">2</span>]
+  grown <span class="o">=</span> <span class="f">put</span> base <span class="s">"c"</span> <span class="n">3</span>
+  <span class="f">print</span> <span class="s">"literal <span class="i">{base}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"put <span class="i">{grown}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{at grown "b"}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"entries <span class="i">{entries grown}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length grown}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"empty <span class="i">{[:]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run maps.kso</div>
+    <pre><code>literal ["a": 1 "b": 2]
+put ["a": 1 "b": 2 "c": 3]
+at 2
+entries [entry "a" 1 entry "b" 2 entry "c" 3]
+length 3
+empty [:]</code></pre>
+  </div>
+</div>
+
+<h2>bytes and encoding</h2>
+
+<h3 id="b-bytes"><code>bytes</code></h3>
+<p class="builtin-sig"><code>bytes string → int[]</code></p>
+<p>the utf-8 encoding of a string as a list of byte values (0–255). an ascii string gives one byte per character; <code>"café"</code> gives five bytes, because <code>é</code> takes two. this is the entry point to byte-level work—scanning, chunking, decoding—used heavily by the json library in chapter 08.</p>
+
+<h3 id="b-find2"><code>find2</code></h3>
+<p class="builtin-sig"><code>find2 int[] int int int → int</code></p>
+<p>scans a byte list from a 1-based start index for the first byte equal to <em>either</em> of two targets—hence the <code>2</code>—and returns its 1-based position. when neither target is found it returns <code>length + 1</code>, one past the end, a sentinel you can compare against without a branch. it is the hot primitive behind tokenizers that stop at "the next comma or brace".</p>
+
+<h3 id="b-utf8"><code>utf8</code></h3>
+<p class="builtin-sig"><code>utf8 int[] → string | err</code></p>
+<p>the inverse of <code>bytes</code>: decodes a list of byte values back into a string. a value outside 0–255, or a byte sequence that isn't valid utf-8, returns an <code>err</code>—decoding untrusted bytes fails as a value you can handle, never as a crash.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">bytes.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  bs <span class="o">=</span> <span class="f">bytes</span> <span class="s">"café"</span>
+  <span class="f">print</span> <span class="s">"bytes <span class="i">{bs}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"utf8 <span class="i">{utf8 bs}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"find2 <span class="i">{find2 (bytes "a,b;c") 1 44 59}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run bytes.kso</div>
+    <pre><code>bytes [99 97 102 195 169]
+utf8 café
+find2 2</code></pre>
+  </div>
+</div>
+
+<p>the <code>find2</code> call searches the bytes of <code>"a,b;c"</code> from position 1 for a comma (<code>44</code>) or a semicolon (<code>59</code>). the comma sits at position 2, so that is the answer; had neither appeared, the result would have been <code>6</code>—one past the five bytes.</p>
+
+<h2>choosing</h2>
+
+<h3 id="b-if"><code>if</code></h3>
+<p class="builtin-sig"><code>if bool a b → value</code></p>
+<p>chooses between two values by a boolean condition, and it is the only builtin that does not evaluate all its arguments: the untaken branch never runs, so <code>if</code> is safe to guard an expensive or failing computation. the condition must be <code>true</code> or <code>false</code>; anything else is a runtime error. in most code the <em>dispatch</em> of chapter 03 replaces <code>if</code> entirely—<code>if</code> is for the small, local two-way choice that isn't worth a second overload.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">control.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">classify</span> n
+  <span class="f">if</span> (n <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"positive"</span> <span class="s">"non-positive"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run control.kso</div>
+    <pre><code>seven positive
+zero non-positive</code></pre>
+  </div>
+</div>
+
+<h2>effects</h2>
+
+<p>the seven builtins in this group return <em>descriptions</em>, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.</code> pipes the value a description will yield into a function.</p>
+
+<h3 id="b-args"><code>args</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>args → string[]</code></p>
+<p>yields the command-line arguments—everything after <code>--</code> on the invocation—as a list of strings. because the list exists only at execution time, indexing past its end fails then, at the executor, on the same railway as any other <code>err</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">argv.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">first</span> xs
+  xs[<span class="n">1</span>]
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run argv.kso -- clay</div>
+    <pre><code>clay</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run argv.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
+  born in first at argv.kso:2</code></pre>
+  </div>
+</div>
+
+<h3 id="b-print"><code>print</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>print string → description</code></p>
+<p>a description of writing one line to standard output. it takes a <em>string</em>, and only a string—to print a number or a list, interpolate it into one with <code>"{value}"</code>. handing <code>print</code> a bare non-string is a runtime error with exactly that advice. sequence prints with <code>&gt;&gt;</code>; render the sequence without running it with <code>--plan</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">print.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"first"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"second"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"third"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run print.kso</div>
+    <pre><code>first
+second
+third</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run print.kso --plan</div>
+    <pre><code>plan:
+  print "first"    <span class="c"># from line 1</span>
+  print "second"    <span class="c"># from line 1</span>
+  print "third"    <span class="c"># from line 1</span></code></pre>
+  </div>
+</div>
+
+<h3 id="b-random"><code>random</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>random int → int</code></p>
+<p>a description that yields an integer in the half-open range <code>[0, bound)</code>. the scheduler's generator is deterministic, so a program's rolls are reproducible run to run—random enough for a simulation, repeatable enough for a test. pipe the yielded value into a function with <code>.</code>.</p>
+
+<h3 id="b-sleep"><code>sleep</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>sleep int → description</code></p>
+<p>a description of pausing for a number of milliseconds. under the deterministic scheduler it advances virtual time rather than wall-clock time, so a program that "sleeps" is still instant to test. sequence it with <code>&gt;&gt;</code>.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">timing.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">sleep</span> <span class="n">10</span> <span class="o">&gt;&gt;</span> <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> <span class="f">show</span>
+
+<span class="k">fn</span> <span class="f">show</span> n
+  <span class="f">print</span> <span class="s">"rolled <span class="i">{n}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run timing.kso</div>
+    <pre><code>rolled 2</code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run timing.kso --plan</div>
+    <pre><code>plan:
+  sleep 10
+  random 6
+  . &lt;continuation&gt;</code></pre>
+  </div>
+</div>
+
+<p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." that is the visible seam between <code>&gt;&gt;</code>, which lists every step, and <code>.</code>, which threads a not-yet-known value forward.</p>
+
+<h3 id="b-read_file"><code>read_file</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>read_file string → string</code></p>
+<p>a description that yields the contents of a file as a string. a missing or unreadable path fails at execution time—at the executor, when the read is actually attempted—rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
+
+<h3 id="b-write_file"><code>write_file</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>write_file string string → description</code></p>
+<p>a description of writing a string to a path, replacing any existing contents. it yields nothing useful, so it is normally sequenced with <code>&gt;&gt;</code> before the next step. here one program writes a file and then reads it straight back:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">files.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">read_file</span> <span class="s">"note.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run files.kso</div>
+    <pre><code>one taiyaki</code></pre>
+  </div>
+</div>
+
+<h3 id="b-stdin"><code>stdin</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>stdin → string</code></p>
+<p>a description that yields all of standard input as a single string. pipe it into a function to process what was fed on the pipe:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">input.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">stdin</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">print</span>
+
+<span class="k">fn</span> <span class="f">shout</span> text
+  <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">printf 'hello from a pipe' | kanso run input.kso</div>
+    <pre><code>hello from a pipe!!</code></pre>
+  </div>
+</div>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">err</span>
+<p>hand me to a builtin and i pass straight through—<code>sort</code>, <code>map</code>, <code>sum</code>, none of them inspect me, they just return me. a <em>type</em> mistake is different: <code>sum</code> on a list with a string in it is a bug in your program, and that raises where it happens. failures flow; bugs stop.</p>
+</div>
+</div>
+
+<p>that is the whole surface. thirty names, two shapes, one failure convention. you now have the signature, the behavior, and the failure mode of every builtin kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right primitive instead of hand-rolling it. the chapters build real programs on exactly these thirty; the json library of chapter 08 is little more than <code>bytes</code>, <code>find2</code>, and <code>slice</code> worn smooth.</p>
+
+<h2>exercises</h2>
+<ol>
+<li>write a program that reads a file of numbers, one per line, and prints their sum. you will need <code>read_file</code>, <code>chars</code> or a split, <code>to_int</code>, and <code>sum</code>—decide how a non-numeric line should behave, and make that behavior visible in the output.</li>
+<li>using only <code>bytes</code>, <code>find2</code>, and <code>slice</code>, split a string on its first comma into a "before" and an "after". confirm with <code>--plan</code> that no i/o happens until you print the two halves.</li>
+<li><code>at</code> returns <code>none</code> for a missing index while the subscript <code>xs[i]</code> raises an <code>err</code>. write one small program that shows both on the same out-of-range access, and explain in a comment which you would choose for a lookup that is <em>expected</em> to miss.</li>
+<li>write a two-overload <code>label</code> function—one arm matching <code>none</code>, one matching a value—and drive it from a <code>random</code> roll that indexes into a short list. run it a few times and note that the roll is the same each run.</li>
+</ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="appa.html">← the diagnostics catalog</a>
+  <a href="appc.html">next: canonical form →</a>
+</nav>
+
+</article>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

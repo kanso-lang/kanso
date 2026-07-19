@@ -1,0 +1,4 @@
+fn first xs
+  xs[1]
+
+main = args . first . print

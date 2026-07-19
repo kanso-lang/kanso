@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached main: "division by zero"
+  born in main at divzero.kso:3

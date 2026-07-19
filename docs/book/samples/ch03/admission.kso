@@ -1,0 +1,4 @@
+fn admission age
+  if (age < 13) "child ticket" "regular ticket"
+
+main = print (admission 9) >> print (admission 30)

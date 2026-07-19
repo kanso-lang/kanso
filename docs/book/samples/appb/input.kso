@@ -1,0 +1,4 @@
+main = stdin . shout . print
+
+fn shout text
+  "{text}!!"

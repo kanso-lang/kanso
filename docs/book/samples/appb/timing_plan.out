@@ -1,0 +1,4 @@
+plan:
+  sleep 10
+  random 6
+  . <continuation>

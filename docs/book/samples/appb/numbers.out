@@ -1,0 +1,7 @@
+sqrt 1.4142135623730951
+sqrt-int 3.0
+round 3
+round-half 3
+to_int 42
+to_float 3.14
+to_float-int 5.0

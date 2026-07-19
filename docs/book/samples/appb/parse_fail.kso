@@ -1,0 +1,1 @@
+main = print "parsed {to_int "seven"}"

@@ -1,0 +1,3 @@
+main =
+  ages = ["clay": 47]
+  print "{ages["nobody"]}"

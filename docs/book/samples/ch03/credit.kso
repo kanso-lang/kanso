@@ -1,0 +1,11 @@
+type track
+  artist: string
+  minutes: int
+  title: string
+
+fn credit (track artist _ title)
+  "{title}—{artist}"
+
+main =
+  song = track "fishmans" 6 "long season"
+  print (credit song)

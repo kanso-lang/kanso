@@ -1,0 +1,7 @@
+type user
+  admin: bool
+  name: string
+
+main =
+  user _ name = user false "clay"
+  print "{name}"

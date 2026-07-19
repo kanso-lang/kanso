@@ -1,0 +1,4 @@
+error[dispatch]: overlapping overloads of `same` are illegal
+  --> overlap_check.kso:6:4
+   6 | fn same y
+          ^

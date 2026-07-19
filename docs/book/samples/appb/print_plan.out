@@ -1,0 +1,4 @@
+plan:
+  print "first"    # from line 1
+  print "second"    # from line 1
+  print "third"    # from line 1

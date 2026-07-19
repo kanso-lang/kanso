@@ -1,0 +1,3 @@
+main =
+  xs = [10 20 30]
+  print "{at xs 9}"
