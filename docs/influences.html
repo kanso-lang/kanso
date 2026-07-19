@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the influences—kanso</title>
+<meta name="description" content="the people whose work shaped kanso: the language committee's standing voices, from matz and hickey to metz and beck—and the engineer who changed how its designer thinks about software.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.influence { margin: 3.5rem 0; }
+.influence h2 { margin-bottom: 0.6rem; }
+.influence .role { color: var(--muted); display: block; font-size: 0.85rem; margin-bottom: 0.9rem; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="playground.html">playground</a>
+    <a href="book/index.html">book</a>
+    <a href="about.html">about</a>
+    <a href="compiler.html">compiler</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">influences</span>
+<h1>the committee</h1>
+
+<p>no language is designed alone, even one designed alone. every gavel in kanso fell after an argument, and the arguments were staffed: a standing committee of the people whose books, talks, and languages taught its designer what software is. some of them argued for kanso in absentia, through decades of published work. none of them have endorsed anything—the debt runs strictly one way. these are the voices in the room.</p>
+
+<div class="influence">
+<h2>yukihiro matsumoto</h2>
+<span class="role">creator of ruby</span>
+<p>matz built ruby on a premise the industry still hasn't fully absorbed: that a language should be optimized for the happiness of the person writing it, and that the machine's convenience is the wrong master. ruby's principle of least surprise, its insistence that beautiful code is a legitimate engineering goal, and its culture of designing for humans first made programming feel generous. kanso's bet that ergonomics and rigor are the same pursuit—not a tradeoff—is matz's bet, replayed with a compiler strict enough to keep the promise.</p>
+</div>
+
+<div class="influence">
+<h2>rich hickey</h2>
+<span class="role">creator of clojure</span>
+<p>hickey built clojure and datomic, and in a series of talks—<em>simple made easy</em> above all—gave the field its sharpest vocabulary for the difference between simple and merely familiar. his doctrine that simplicity means un-braided, one concern per construct; that state complects value with time; that new information should be new facts rather than overwrites—these are load-bearing walls in kanso. a language of pure values where effects are data and the source contains only decisions is, in large part, an attempt to build what those talks describe.</p>
+</div>
+
+<div class="influence">
+<h2>simon peyton jones</h2>
+<span class="role">principal architect of haskell's ghc</span>
+<p>peyton jones spent three decades proving that purity is not an academic indulgence—leading ghc, shepherding haskell's type system through research result after research result, and showing that a language can be lazy, pure, and industrial at once. haskell is the existence proof kanso leans on: that effects can be values, that the compiler can know everything, and that rigor scales. kanso departs from haskell everywhere it can afford to—fewer concepts, no monads homework—but it departs from a position haskell secured.</p>
+</div>
+
+<div class="influence">
+<h2>rob pike</h2>
+<span class="role">co-creator of go, plan 9, and utf-8</span>
+<p>pike's career is a long argument for subtraction: unix at bell labs, plan 9, utf-8 with ken thompson, and go—a language whose greatest features are the ones it refuses to have. gofmt ended a generation of style debates by making formatting a fact instead of an opinion; go's concurrency made "share memory by communicating" a mainstream sentence. kanso's canonical form is gofmt taken to its conclusion, and its concurrency model is an answer to pike's—dependence declared in the data, order earned rather than written.</p>
+</div>
+
+<div class="influence">
+<h2>_why the lucky stiff</h2>
+<span class="role">author of why's poignant guide to ruby</span>
+<p>_why wrote the strangest and most loved programming book ever printed, built shoes and hackety hack so children could feel the joy before the ceremony, and then vanished, leaving behind the proof that software culture can be art. from him kanso takes the conviction that a language is allowed to be delightful—that whimsy and rigor are not enemies—and that documentation which makes a stranger smile teaches more than documentation which merely informs. the cast on the <a href="lore.html">lore page</a> exists because _why existed.</p>
+</div>
+
+<div class="influence">
+<h2>kent beck</h2>
+<span class="role">creator of extreme programming and test-driven development</span>
+<p>beck rediscovered and canonized test-driven development, created extreme programming, co-wrote junit, and compressed a career of judgment into rules that fit on an index card: make it work, make it right; four rules of simple design; "make the change easy, then make the easy change." his deepest lesson is about feedback loops—that software quality is a function of how fast the truth reaches you. kanso's whole apparatus of golden tests, differential ci, and executed documentation is beck's feedback doctrine, mechanized.</p>
+</div>
+
+<div class="influence">
+<h2>martin fowler</h2>
+<span class="role">author of refactoring</span>
+<p>fowler gave the field its shared vocabulary for changing code safely: <em>refactoring</em> named the discipline, "code smell" (coined with beck) named the instinct, and his patterns catalogs named a thousand structures teams had been reinventing in the dark. his insistence that refactoring means behavior-preserving—that the word is a contract, not a vibe—runs through kanso's byte-identical engine lattice: the system stays green throughout, or it wasn't a refactoring.</p>
+</div>
+
+<div class="influence">
+<h2>sandi metz</h2>
+<span class="role">author of practical object-oriented design and 99 bottles of oop</span>
+<p>metz taught a generation that object-oriented design is about messages, not classes—ask "who should respond to this message," not "what classes do i have." <em>99 bottles of oop</em> made the case, one refactoring at a time, that duplication is far cheaper than the wrong abstraction and that the smallest possible step is the fastest route. kanso's dispatch-is-the-only-branch design is her polymorphism-over-conditionals principle promoted from discipline to grammar: the language simply removes the conditional you were supposed to resist.</p>
+</div>
+
+<div class="influence">
+<h2>avdi grimm</h2>
+<span class="role">author of confident ruby and exceptional ruby</span>
+<p>grimm named the disease and the cure: timid code, forever checking for nil and apologizing to its callers, versus confident code that states its narrative and trusts its objects. <em>exceptional ruby</em> worked out when raising is honest and when it's malpractice; <em>confident ruby</em> showed how to keep absence at the boundary so the core never handles it. kanso's failure model—err and none as values, no nil anywhere, the railway carrying failure past functions that never mention it—is grimm's confident narrative voice, enforced by a type system.</p>
+</div>
+
+<div class="influence">
+<h2>gary bernhardt</h2>
+<span class="role">creator of destroy all software</span>
+<p>bernhardt's <em>boundaries</em> talk gave the functional-core, imperative-shell architecture its name and its clearest argument: put the decisions in pure code with many paths and no dependencies, put the i/o in a thin shell with all the dependencies and no paths, and testing becomes almost embarrassingly easy. kanso is that talk as a language—the pure core is everything, the imperative shell is the executor, and the boundary between them is the type of a value. also he made <em>wat</em>, which is the shortest existing argument for canonical semantics.</p>
+</div>
+
+<div class="influence">
+<h2>abhi hiremagalur</h2>
+<span class="role">pivotal labs, cloud foundry, asana</span>
+<p>last, and the opposite of least. abhi was the pivotal labs of pivotal labs—the engineer other pairing engineers calibrated against, the person in the building whose laser focus and attention to detail set the local definition of done. he helped build cloud foundry at pivotal and went on to lead design-systems engineering at asana, and his writing carries the philosophy in miniature: <em>process is for people</em>; design partnerships, not job descriptions; to reduce the cost of change, compose—don't inherit; a software team's pit stop, like a racing team's, is where the discipline shows. kanso's designer says plainly that abhi changed everything about how he thinks about software: that rigor is a form of care, that the details are not beneath the work but the work itself. a language whose founding principle is that nothing enforceable by convention should be left to convention is, among other things, a monument to pairing with him.</p>
+</div>
+
+<p>this page will grow. a language that keeps a ledger of its decisions should keep a ledger of its debts.</p>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="index.html">home</a>
+      <a href="about.html">about</a>
+      <a href="lore.html">lore</a>
+      <a href="influences.html">influences</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

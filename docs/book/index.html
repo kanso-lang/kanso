@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>the kanso book</title>
-<meta name="description" content="a guided tour of kanso in seven chapters: values, dispatch, failure, effects, modules, and the compiler that keeps the receipts.">
+<meta name="description" content="the kanso book: the language taught in ten chapters and three appendices—values, dispatch, failure, effects, concurrency, modules, two real programs, the compiler that keeps receipts, and the full reference.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -36,14 +36,30 @@
 <div class="book-layout">
 <nav class="book-side" aria-label="book chapters">
   <a class="book-side-home" href="index.html" aria-current="page">the book</a>
+  <span class="bs-part">part i — the language</span>
   <ol>
     <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
     <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
     <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
     <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
     <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">modules and tests</span></a></li>
-    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">fast by construction</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
   </ol>
 </nav>
 
@@ -54,9 +70,43 @@
 
 <p>this book is the language: the canon, the tutorial, and the reference in one place. the <a href="../about.html">about page</a> carries the philosophy; here is where you sit down and actually write some kanso.</p>
 
-<p>a promise before we start: every program in this book was run before it was printed, and every output panel shows what actually came back—including the failures, especially the failures. half of kanso's value is its compile errors, so this book treats a red diagnostic as a feature demo, not an apology. when a chapter shows you something breaking, that's the product.</p>
+<h2>a promise</h2>
 
-<p>you don't need to have used a language like this before. you need a terminal, a rust toolchain, and about an evening. by the end you'll have written pure functions, dispatched on literals, watched an error ride the rails past three functions that never mentioned it, tested effects without a single mock, and compiled a program that decodes json faster than serde_json, rust's hand-tuned parser, on this machine and this fixture. we measured; chapter 07 keeps the receipts.</p>
+<p>every program in this book was run before it was printed, and every output panel shows what actually came back—including the failures, especially the failures. half of kanso's value is its compile errors, so this book treats a red diagnostic as a feature demo, not an apology. the samples live in the repository under <code>docs/book/samples/</code>, one file per panel, with the captured output beside each; a check script re-runs the whole corpus, so a panel whose output drifts from the language fails a build before it can lie on a page.</p>
+
+<h2>who this is for</h2>
+
+<p>a working programmer. you don't need to have used a pure language, a dispatch-based language, or anything academic—kanso is designed to be learned in an evening and idiomatic in a week, and the book is paced for that. you need a terminal and a rust toolchain to build the compiler; chapter 01 walks through it. if you'd rather not install anything, the <a href="../playground.html">playground</a> runs the real toolchain in your browser tab, and every part-i example fits in it.</p>
+
+<h2>how the book is organized</h2>
+
+<p><strong>part i—the language</strong> teaches kanso from nothing: values, bindings, and the canonical form; dispatch as the only branch; failure as a value; effects as descriptions; the flow model that makes concurrency a property of data dependence; and modules with tests. each chapter builds on the last and ends with exercises.</p>
+
+<p><strong>part ii—real programs</strong> reads two programs that earn their living: kanso-json, the standard library's json decoder—the one that outruns hand-tuned parsers in chapter 10—and a voting-theory simulator that reproduces the canonical results of the field, method by method.</p>
+
+<p><strong>part iii—under the hood</strong> is the performance story: how a pure language with no memory syntax decodes json faster than serde_json, rust's hand-tuned parser, on this machine and this fixture—and how those wins are held by cost goldens and structural specs instead of stopwatches. we measured; chapter 10 keeps the receipts.</p>
+
+<p>the <strong>appendices</strong> are the reference: every diagnostic the compiler can raise and what it protects, every builtin with its failure behavior, and the complete canonical-form law.</p>
+
+<ul class="book-toc">
+  <li><div class="toc-part">part i — the language</div></li>
+  <li><a href="ch01.html"><span class="ch-num">01</span><span class="ch-title">hello, kanso</span><span class="ch-blurb">the toolchain, the first program, and a compile error worth meeting</span></a></li>
+  <li><a href="ch02.html"><span class="ch-num">02</span><span class="ch-title">values and bindings</span><span class="ch-blurb">every value form, arbitrary-precision ints, widening, and the rebind rule</span></a></li>
+  <li><a href="ch03.html"><span class="ch-num">03</span><span class="ch-title">types and dispatch</span><span class="ch-blurb">overloads, typesets, markers, destructuring—the only branch you get</span></a></li>
+  <li><a href="ch04.html"><span class="ch-num">04</span><span class="ch-title">failure is a value</span><span class="ch-blurb">err, none, the railway, and the taxonomy of things going wrong</span></a></li>
+  <li><a href="ch05.html"><span class="ch-num">05</span><span class="ch-title">effects are descriptions</span><span class="ch-blurb">programs that describe their side effects and tests that need no mocks</span></a></li>
+  <li><a href="ch06.html"><span class="ch-num">06</span><span class="ch-title">flow and concurrency</span><span class="ch-blurb">groups, walls, and green threads—dependence declared, order earned</span></a></li>
+  <li><a href="ch07.html"><span class="ch-num">07</span><span class="ch-title">modules and tests</span><span class="ch-blurb">a directory is a module, private is the default, tests are constants</span></a></li>
+  <li><div class="toc-part">part ii — real programs</div></li>
+  <li><a href="ch08.html"><span class="ch-num">08</span><span class="ch-title">a json library</span><span class="ch-blurb">kanso-json read closely: dispatch at byte level, failure with positions</span></a></li>
+  <li><a href="ch09.html"><span class="ch-num">09</span><span class="ch-title">a voting simulator</span><span class="ch-blurb">monte carlo in a pure language; six voting methods, honestly compared</span></a></li>
+  <li><div class="toc-part">part iii — under the hood</div></li>
+  <li><a href="ch10.html"><span class="ch-num">10</span><span class="ch-title">fast by construction</span><span class="ch-blurb">past serde_json without memory syntax, and the ratchet that holds it</span></a></li>
+  <li><div class="toc-part">appendices</div></li>
+  <li><a href="appa.html"><span class="ch-num">a</span><span class="ch-title">the diagnostics catalog</span><span class="ch-blurb">every error kind, what it protects, and the exact message</span></a></li>
+  <li><a href="appb.html"><span class="ch-num">b</span><span class="ch-title">builtin reference</span><span class="ch-blurb">all thirty builtins: signature, behavior, failure semantics</span></a></li>
+  <li><a href="appc.html"><span class="ch-num">c</span><span class="ch-title">canonical form</span><span class="ch-blurb">the formatting law: one rendering per program, enforced</span></a></li>
+</ul>
 
 <p class="book-start"><a href="ch01.html">start with chapter 01—hello, kanso →</a></p>
 
