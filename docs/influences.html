@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>the influences—kanso</title>
+<meta name="description" content="the people whose work shaped kanso: rob mee, kent beck, sandi metz, avdi grimm, rich hickey, simon peyton jones, and abhi hiremagalur.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+.influence { margin: 3.5rem 0; }
+.influence h2 { margin-bottom: 0.6rem; }
+.influence .role { color: var(--muted); display: block; font-size: 0.85rem; margin-bottom: 0.9rem; }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="playground.html">playground</a>
+    <a href="book/index.html">book</a>
+    <a href="about.html">about</a>
+    <a href="compiler.html">compiler</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
+  </nav>
+</header>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">influences</span>
+<h1>the committee</h1>
+
+<p>no language is designed alone, even one designed alone. every gavel in kanso fell after an argument, and the arguments were staffed: a standing committee of the people whose books, talks, languages, and pairing sessions taught its designer what software is. some of them argued for kanso in absentia, through decades of published work; some argued in person, one keyboard between two chairs. none of them have endorsed anything—the debt runs strictly one way. these are the voices in the room.</p>
+
+<div class="influence">
+<h2>rob mee</h2>
+<span class="role">founder of pivotal labs</span>
+<p>mee founded pivotal labs in 1989 and spent three decades proving that the way software is built matters as much as what gets built. under him, labs ran pair programming on one hundred percent of projects with daily rotation—not as an experiment but as the operating system of the company—alongside test-driven development, sustainable pace, and a standup you could set a watch by. the technical interview was literally named after him: the rob mee pairing interview, an hour of writing real code together, because how you think beside another person is the job. as ceo of pivotal he carried that culture to industrial scale with cloud foundry. kanso's conviction that discipline is a gift to the next person—that the practices are the product—is the labs conviction, learned firsthand.</p>
+</div>
+
+<div class="influence">
+<h2>kent beck</h2>
+<span class="role">creator of extreme programming and test-driven development</span>
+<p>beck rediscovered and canonized test-driven development, created extreme programming, co-wrote junit, and compressed a career of judgment into rules that fit on an index card: four rules of simple design; "make it work, make it right"; "make the change easy, then make the easy change." his deepest lesson is about feedback loops—that software quality is a function of how fast the truth reaches you. kanso's whole apparatus of golden tests, differential ci, and executed documentation is beck's feedback doctrine, mechanized.</p>
+</div>
+
+<div class="influence">
+<h2>sandi metz</h2>
+<span class="role">author of practical object-oriented design and 99 bottles of oop</span>
+<p>metz taught a generation that object-oriented design is about messages, not classes—ask "who should respond to this message," not "what classes do i have." <em>99 bottles of oop</em> made the case, one refactoring at a time, that duplication is far cheaper than the wrong abstraction and that the smallest possible step is the fastest route. kanso's dispatch-is-the-only-branch design is her polymorphism-over-conditionals principle promoted from discipline to grammar: the language simply removes the conditional you were supposed to resist.</p>
+</div>
+
+<div class="influence">
+<h2>avdi grimm</h2>
+<span class="role">author of confident ruby and exceptional ruby</span>
+<p>grimm named the disease and the cure: timid code, forever checking for nil and apologizing to its callers, versus confident code that states its narrative and trusts its objects. <em>exceptional ruby</em> worked out when raising is honest and when it's malpractice; <em>confident ruby</em> showed how to keep absence at the boundary so the core never handles it. kanso's failure model—err and none as values, no nil anywhere, the railway carrying failure past functions that never mention it—is grimm's confident narrative voice, enforced by a type system.</p>
+</div>
+
+<div class="influence">
+<h2>rich hickey</h2>
+<span class="role">creator of clojure</span>
+<p>hickey built clojure and datomic, and in a series of talks—<em>simple made easy</em> above all—gave the field its sharpest vocabulary for the difference between simple and merely familiar. his doctrine that simplicity means un-braided, one concern per construct; that state complects value with time; that new information should be new facts rather than overwrites—these are load-bearing walls in kanso. a language of pure values where effects are data and the source contains only decisions is, in large part, an attempt to build what those talks describe.</p>
+</div>
+
+<div class="influence">
+<h2>simon peyton jones</h2>
+<span class="role">principal architect of haskell's ghc</span>
+<p>peyton jones spent three decades proving that purity is not an academic indulgence—leading ghc, shepherding haskell's type system through research result after research result, and showing that a language can be lazy, pure, and industrial at once. haskell is the existence proof kanso leans on: that effects can be values, that the compiler can know everything, and that rigor scales. kanso departs from haskell everywhere it can afford to—fewer concepts, no monads homework—but it departs from a position haskell secured.</p>
+</div>
+
+<div class="influence">
+<h2>abhi hiremagalur</h2>
+<span class="role">pivotal labs, cloud foundry, asana</span>
+<p>last, and the opposite of least. abhi was the pivotal labs of pivotal labs—the engineer other pairing engineers calibrated against, the person in the building whose laser focus and attention to detail set the local definition of done. he helped build cloud foundry at pivotal and went on to lead design-systems engineering at asana, and his writing carries the philosophy in miniature: <em>process is for people</em>; design partnerships, not job descriptions; to reduce the cost of change, compose—don't inherit; a software team's pit stop, like a racing team's, is where the discipline shows. kanso's designer says plainly that abhi changed everything about how he thinks about software: that rigor is a form of care, that the details are not beneath the work but the work itself. a language whose founding principle is that nothing enforceable by convention should be left to convention is, among other things, a monument to pairing with him.</p>
+</div>
+
+<div class="influence">
+<h2>honorable mention: andy hunt &amp; dave thomas</h2>
+<span class="role">authors of the pragmatic programmer</span>
+<p>hunt and thomas wrote <em>the pragmatic programmer</em>, coined dry—don't repeat yourself, a principle about knowledge having one authoritative home, not about deduplicating text—and signed the agile manifesto. thomas's pickaxe book carried ruby out of japan and into the hands of the people above. kanso's rule that every derivable fact lives in tooling while the source keeps only decisions is dry with a compiler behind it.</p>
+</div>
+
+<p>this page will grow. a language that keeps a ledger of its decisions should keep a ledger of its debts.</p>
+
+</article>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="index.html">home</a>
+      <a href="about.html">about</a>
+      <a href="lore.html">lore</a>
+      <a href="influences.html">influences</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
