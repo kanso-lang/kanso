@@ -1,4 +1,67 @@
 # number bytes: + - . E e, then the ascii digits
+fn _fs_exp cs p q
+  if ((at cs p) == 43) (_fs_exp_digit cs (p + 1) q) (_fs_exp_minus cs p q)
+
+fn _fs_exp_digit cs p q
+  if (p > q) false (_fs_exp_step cs p q)
+
+fn _fs_exp_minus cs p q
+  if ((at cs p) == 45) (_fs_exp_digit cs (p + 1) q) (_fs_exp_digit cs p q)
+
+fn _fs_exp_step cs p q
+  if (_is_digit (at cs p)) (_fs_exp_tail cs (p + 1) q) false
+
+fn _fs_exp_tail cs p q
+  if (p > q) true (_fs_exp_step cs p q)
+
+fn _fs_frac cs p q seen
+  if (p > q) seen (_fs_frac_at cs (at cs p) p q seen)
+
+fn _fs_frac_at cs 69 p q seen
+  _both seen (_fs_exp cs (p + 1) q)
+
+fn _fs_frac_at cs 101 p q seen
+  _both seen (_fs_exp cs (p + 1) q)
+
+fn _fs_frac_at cs c p q _
+  if (_is_digit c) (_fs_frac cs (p + 1) q true) false
+
+fn _fs_main cs p q seen
+  if (p > q) seen (_fs_main_at cs (at cs p) p q seen)
+
+fn _fs_main_at cs 46 p q seen
+  _fs_frac cs (p + 1) q seen
+
+fn _fs_main_at cs 69 p q seen
+  _both seen (_fs_exp cs (p + 1) q)
+
+fn _fs_main_at cs 101 p q seen
+  _both seen (_fs_exp cs (p + 1) q)
+
+fn _fs_main_at cs c p q _
+  if (_is_digit c) (_fs_main cs (p + 1) q true) false
+
+fn _fs_start cs p q
+  if ((at cs p) == 45) (_fs_main cs (p + 1) q false) (_fs_main cs p q false)
+
+fn _int_digits cs p q
+  if (p > q) false (_int_step cs p q)
+
+fn _int_shape cs p q
+  if ((at cs p) == 45) (_int_digits cs (p + 1) q) (_int_digits cs p q)
+
+fn _int_step cs p q
+  if (_is_digit (at cs p)) (_int_tail cs (p + 1) q) false
+
+fn _int_tail cs p q
+  if (p > q) true (_int_step cs p q)
+
+fn _is_digit none
+  false
+
+fn _is_digit c
+  _both (47 < c) (c < 58)
+
 fn _is_number_char 43
   true
 
@@ -32,7 +95,6 @@ fn _is_number_start c
 fn _mark_from cs p q
   if (p > q) false (_mark_step cs (at cs p) p q)
 
-# float marks: . E e
 fn _mark_step _ 46 _ _
   true
 
@@ -48,13 +110,10 @@ fn _mark_step cs _ p q
 fn _number_end cs p
   if (_is_number_char (at cs p)) (_number_end cs (p + 1)) p
 
-fn _number_ok p (err _)
-  _fail p "invalid number"
-
-fn _number_ok _ n
-  n
+fn _number_shape cs p q
+  if (_mark_from cs p q) (_fs_start cs p q) (_int_shape cs p q)
 
 fn _number_value cs p q
   digits = slice cs p q
-  raw = if (_mark_from cs p q) (to_float digits) (to_int digits)
-  _number_ok p raw
+  good = if (_mark_from cs p q) (to_float digits) (to_int digits)
+  if (_number_shape cs p q) good (_fail p "invalid number")

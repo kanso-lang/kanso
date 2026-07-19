@@ -1,9 +1,3 @@
-fn _is_defect (err (defect _))
-  true
-
-fn _is_defect _
-  false
-
 test_decode_array = (decode "[1, 2, 3]") == [1 2 3]
 
 test_decode_bool = (decode "true") == true
@@ -36,7 +30,7 @@ test_error_position = (_failure_position (decode "[1, nope]")) == 5
 
 test_error_trailing = (_failure_position (decode "1 x")) == 3
 
-test_must_wraps_defect = _is_defect (must (decode "nope"))
+test_must_wraps_defect = (decode "nope") == (parse_failure 1 "invalid literal")
 
 test_roundtrip =
   text = "\{\"a\":[1,2.5,\"x\"],\"b\":null}"

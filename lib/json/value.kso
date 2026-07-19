@@ -23,6 +23,9 @@ fn _array_open _ none p
 fn _array_open cs _ p
   _array_items cs p []
 
+fn _array_step _ f:parse_failure _
+  f
+
 fn _array_step cs (_parsed p v) acc
   acc2 = push acc v
   p2 = _skip_ws cs p
@@ -33,6 +36,9 @@ _bytes_false = [102 97 108 115 101]
 _bytes_null = [110 117 108 108]
 
 _bytes_true = [116 114 117 101]
+
+fn _obj_colon _ f:parse_failure _ _
+  f
 
 fn _obj_colon cs p k acc
   _obj_value cs (_parse_value cs p) k acc
@@ -52,6 +58,9 @@ fn _obj_delim _ c p _
 fn _obj_items cs p acc
   p2 = _skip_ws cs p
   _obj_key_start cs (at cs p2) p2 acc
+
+fn _obj_key _ f:parse_failure _
+  f
 
 fn _obj_key cs (_parsed p k) acc
   p2 = _skip_ws cs p
@@ -74,6 +83,9 @@ fn _obj_open _ none p
 
 fn _obj_open cs _ p
   _obj_items cs p [:]
+
+fn _obj_value _ f:parse_failure _ _
+  f
 
 fn _obj_value cs (_parsed p v) k acc
   acc2 = put acc k v

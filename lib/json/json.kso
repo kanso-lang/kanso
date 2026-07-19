@@ -14,14 +14,17 @@ type parse_failure
 fn _encode_entry (entry k v)
   "{encode k}:{encode v}"
 
-fn _failure_position (err (parse_failure p _))
+fn _failure_position (parse_failure p _)
   p
 
 fn _failure_position _
   0
 
 fn _finish _ none
-  err (parse_failure 0 "unexpected end of input")
+  parse_failure 0 "unexpected end of input"
+
+fn _finish _ f:parse_failure
+  f
 
 fn _finish cs (_parsed p v)
   p2 = _skip_ws cs p
@@ -56,9 +59,3 @@ fn encode xs:json[]
 fn encode m:json[string]
   inner = join (map (entries m) (e -> _encode_entry e)) ","
   "\{{inner}}"
-
-fn must (err reason)
-  err (defect "{reason}")
-
-fn must v
-  v

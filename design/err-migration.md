@@ -117,3 +117,24 @@ auto-propagate, so every consumer of a maybe-failed value dispatches:
   then book ch05 fallback (becomes a rejection _check sample) + ch07
   teahouse (off_menu type) with panels re-executed; book_check + cost
   golden + full suite gate the PR.
+
+## BLOCKED ON CLAY (2026-07-19): the typed railway needs union register-return
+
+lib/json is functionally green on the typed railway (16/16), but the COST
+GOLDEN caught a +115% allocation regression (14.8M -> 31.9M allocs, 6 -> 10
+arena blocks): `parse_failure` records now share `_parsed`'s return slots, so
+the escape analysis conservatively drops BOTH from register-return and every
+scanned token heap-allocates again.
+
+The fix is a real codegen extension: **union register-return** — allow a
+closed set of 2-field record shapes ({_parsed, parse_failure}, both
+16-byte-packable) to share the {i64,i64} return convention with a shape
+discriminant. This is musttail/ABI territory (the x86-risk zone ruled
+Clay-watching), so the branch stops here. Alternatives if the union is
+unwanted: (a) accept the regression until the extension lands (kq/serde wins
+evaporate — not acceptable for launch-adjacent code); (b) restructure so
+failures never share the hot return path (sentinel smuggling — anti-kanso).
+Branch err-unhandleable holds: checker rejection, valid_utf8, the full
+lib/json migration, updated tests. Remaining after unblock: 4 rust fixture
+tests (analysis-fact pins), kq mirror, examples/homepage/playground, book
+ch05/ch07 samples, goldens.

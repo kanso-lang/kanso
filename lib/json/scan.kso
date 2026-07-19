@@ -11,7 +11,7 @@ fn _expect_check found p c
   if (found == c) (p + 1) (_fail p "expected `{utf8 [c]}`")
 
 fn _fail p reason
-  err (parse_failure p reason)
+  parse_failure p reason
 
 # json whitespace bytes: tab, newline, carriage return, space
 fn _is_ws 9

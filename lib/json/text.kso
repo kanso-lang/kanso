@@ -45,7 +45,8 @@ fn _parse_string cs p
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn _str_char _ 34 p acc
-  _parsed (p + 1) (_string_ok p (utf8 acc))
+  bad = _fail p "invalid utf-8 in string"
+  if (valid_utf8 acc) (_parsed (p + 1) (utf8 acc)) bad
 
 fn _str_char cs 92 p acc
   _str_escape cs (at cs (p + 1)) p acc
@@ -101,7 +102,9 @@ fn _str_unicode cs p acc
   _str_chars cs (p + 6) (concat acc (bytes (from_code code)))
 
 fn _string_at cs 34 start p
-  _parsed (p + 1) (_string_ok p (utf8 (slice cs start (p - 1))))
+  seg = slice cs start (p - 1)
+  bad = _fail p "invalid utf-8 in string"
+  if (valid_utf8 seg) (_parsed (p + 1) (utf8 seg)) bad
 
 fn _string_at cs 92 start p
   _str_chars cs p (concat [] (slice cs start (p - 1)))
@@ -111,12 +114,6 @@ fn _string_at _ none _ p
 
 fn _string_at cs _ start p
   _string_scan cs start (p + 1)
-
-fn _string_ok p (err _)
-  err (parse_failure p "invalid utf-8 in string")
-
-fn _string_ok _ v
-  v
 
 fn _string_scan cs start p
   n = find2 cs p 34 92
