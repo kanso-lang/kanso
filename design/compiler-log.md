@@ -140,3 +140,33 @@ Re-profiled the current JSON decode (main, 3000×, macOS `sample`). VERIFIED:
   no-failure (169 samples pure guard overhead); (b) deeper KValue unboxing across
   the dispatch boundary. NEXT CEILING EXPERIMENT: strip the failure-bit/truthy
   checks in the hot dispatch path, measure recovery vs the ~13%.
+
+---
+
+## 2026-07-18 (experiment RESULT) — serde gap is SIMD, NOT representation; kanso beats naive Rust
+
+Fresh baseline (this machine, best-of-10 ms/decode; kanso timed as a 3000× binary
+so startup is negligible; naive/serde self-report decode-only mean):
+
+| decoder | ms/decode |
+|---|---|
+| kanso | 0.932 |
+| naive Rust (recursive descent, std String/Vec/HashMap) | 0.988 |
+| serde_json | 0.846 |
+
+- **kanso BEATS naive Rust by 5.6%.** The reframed campaign goal (beat reasonable
+  native Rust, not serde) is ACHIEVED.
+- **The ~10% serde gap is SIMD/zero-copy, NOT representation.** naive Rust — native
+  types, zero tags, zero dispatch-boxing — is **16.7% behind serde**, MORE behind
+  than kanso. A tag-free decoder does NOT close the serde gap ⇒ representation is
+  not the serde gap.
+- **This REFUTES the memo §11 premise AND the step-0 "tag is the serde gap"
+  conclusion.** The profile's 53% dispatch/representation is kanso's INTERNAL
+  self-time; cutting it widens kanso's lead over naive, but serde's SIMD lead is
+  untouched. The two earlier claims were reasoning from an internal profile to an
+  external gap — invalid; the cross-decoder comparison is the correct instrument.
+- **CONSEQUENCE — tag-hoist DOWNGRADED:** do NOT build it expecting to crush serde;
+  measured, the win isn't there. It would extend a naive-Rust lead we already hold.
+  Beating serde specifically needs simdjson-class SIMD byte-classification — a
+  separate, harder frontier — and per Clay's 2026-07-14 reframe serde was never the
+  right north star. The tag-hoist OPEN thread above is superseded by this entry.
