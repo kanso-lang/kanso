@@ -1672,6 +1672,22 @@ KValue k_b_to_int(KValue sv, const char* origin) {
     return k_int(n);
 }
 
+KValue k_b_sqrt(KValue v) {
+    if (!k_not_failure(v)) return v;
+    if (v.tag == K_INT) return k_float(sqrt((double)v.payload));
+    if (v.tag == K_FLOAT) return k_float(sqrt(k_as_f(v)));
+    k_die("sqrt takes a number");
+    return k_none();
+}
+
+KValue k_b_round(KValue v) {
+    if (!k_not_failure(v)) return v;
+    if (v.tag == K_INT) return v;
+    if (v.tag == K_FLOAT) return k_int((long long)llround(k_as_f(v)));
+    k_die("round takes a number");
+    return k_none();
+}
+
 KValue k_b_to_float(KValue v, const char* origin) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_FLOAT) return v;

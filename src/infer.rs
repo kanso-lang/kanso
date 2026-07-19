@@ -419,6 +419,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => INT | fails,
+        "sqrt" => FLOAT | fails,
+        "round" => INT | fails,
         "read_file" | "write_file" | "sleep" | "random" => DESC | fails,
         _ => TOP,
     }

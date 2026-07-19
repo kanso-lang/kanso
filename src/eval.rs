@@ -1030,6 +1030,30 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
+            "sqrt" => {
+                let [x] = arity(args, name, span)?;
+                match x {
+                    Value::Float(v) => Ok(Value::Float(v.sqrt())),
+                    Value::Int(n) => Ok(Value::Float(int_f(&n).sqrt())),
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        message: format!("sqrt takes a number, got {}", render(&other, false)),
+                        span,
+                    }),
+                }
+            }
+            "round" => {
+                let [x] = arity(args, name, span)?;
+                match x {
+                    Value::Int(n) => Ok(Value::Int(n)),
+                    Value::Float(v) => Ok(Value::Int(BigInt::from(v.round() as i64))),
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        message: format!("round takes a number, got {}", render(&other, false)),
+                        span,
+                    }),
+                }
+            }
             "to_int" => {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
