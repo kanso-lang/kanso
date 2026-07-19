@@ -23,6 +23,15 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "checksum 24000" \
             || { echo "::error::native json decoder produced the wrong checksum"; exit 1; }
+      - name: cost golden (deterministic performance ratchet, no clocks)
+        run: |
+          KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null
+          diff bench/cost_golden.txt counters.txt || {
+            echo "::error::cost counters diverged from bench/cost_golden.txt — a"
+            echo "::error::performance-relevant change (allocs, arena blocks, beat"
+            echo "::error::iterations). If intentional, update the golden in this PR."
+            exit 1
+          }
 
   # Non-blocking: reports the kanso-vs-serde decode ratio (the optimization
   # campaign's headline metric) to the run summary. CI runners are noisy, so
@@ -60,5 +69,5 @@ jobs:
             echo "| kanso (native) | ${kanso_ms} ms |"
             echo "| serde_json | ${serde_line#serde mean over 150 decodes: } |"
             echo ""
-            echo "serde is the target; the gap closes as the reference-counting tier ships."
+            echo "kanso passed serde on 2026-07-18 (25/25 interleaved rounds locally); runners are noisy, so this table informs rather than gates — the gating perf spec is the cost golden in the test job."
           } >> "$GITHUB_STEP_SUMMARY"
