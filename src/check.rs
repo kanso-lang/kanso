@@ -451,19 +451,33 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
     })
 }
 
+/// The runnable entry: `main` when defined, else `play` — a library whose
+/// `play` a hidden entrypoint runs (the playground's model).
+pub fn entry_name(program: &Program) -> Option<&'static str> {
+    let has = |name: &str| program.fns.iter().any(|d| d.name == name);
+    match () {
+        _ if has("main") => Some("main"),
+        _ if has("play") => Some("play"),
+        _ => None,
+    }
+}
+
 fn check_main(program: &Program, diags: &mut Vec<Diagnostic>) {
-    match program.fns.iter().find(|d| d.name == "main") {
-        Some(main) if !main.params.is_empty() => diags.push(Diagnostic::new(
-            "signature",
-            "`main` takes no parameters".to_string(),
-            main.span,
-        )),
-        Some(_) => {}
-        None => diags.push(Diagnostic::new(
+    let Some(entry) = entry_name(program) else {
+        diags.push(Diagnostic::new(
             "name",
-            "a program defines `main`".to_string(),
+            "a program defines `main` (a library may offer `play` instead)".to_string(),
             Span { line: 1, col: 1 },
-        )),
+        ));
+        return;
+    };
+    let decl = program.fns.iter().find(|d| d.name == entry).expect("entry_name found it");
+    if !decl.params.is_empty() {
+        diags.push(Diagnostic::new(
+            "signature",
+            format!("`{entry}` takes no parameters"),
+            decl.span,
+        ));
     }
 }
 

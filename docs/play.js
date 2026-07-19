@@ -353,14 +353,16 @@ main =
 # is instant, but the interleaved ORDER is the same as running it live.)
 brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
 
-main =
+pub play =
   brew
-  rolls
+  roll 1
+  >> roll 2
+  >> roll 3
+  >> roll 4
+  >> roll 5
 
 fn roll i
   random 6 . (n -> print "roll {i}: a {n + 1}")
-
-rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
 `,
   redux: `type deposit
   amount: int

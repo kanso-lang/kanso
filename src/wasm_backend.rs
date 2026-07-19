@@ -146,7 +146,12 @@ impl<'a> WasmBackend<'a> {
             let idx = self.module.declare(*arity as u32);
             self.dispatchers.insert((name.clone(), *arity), idx);
         }
-        let Some(main_idx) = self.dispatchers.get(&("main".to_string(), 0)).copied() else {
+        let main_idx = self
+            .dispatchers
+            .get(&("main".to_string(), 0))
+            .or_else(|| self.dispatchers.get(&("play".to_string(), 0)))
+            .copied();
+        let Some(main_idx) = main_idx else {
             return Err("no main".to_string());
         };
         self.module.set_main(main_idx);
