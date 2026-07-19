@@ -1,0 +1,26 @@
+- part: "part i — the language"
+  start: 1
+  chapters:
+    - { num: "01", slug: "ch01", title: "hello, kanso" }
+    - { num: "02", slug: "ch02", title: "values and bindings" }
+    - { num: "03", slug: "ch03", title: "types and dispatch" }
+    - { num: "04", slug: "ch04", title: "failure is a value" }
+    - { num: "05", slug: "ch05", title: "effects are descriptions" }
+    - { num: "06", slug: "ch06", title: "flow and concurrency" }
+    - { num: "07", slug: "ch07", title: "modules and tests" }
+- part: "part ii — real programs"
+  start: 8
+  chapters:
+    - { num: "08", slug: "ch08", title: "a json library" }
+    - { num: "09", slug: "ch09", title: "a voting simulator" }
+- part: "part iii — under the hood"
+  start: 10
+  chapters:
+    - { num: "10", slug: "ch10", title: "fast by construction" }
+- part: "appendices"
+  start: 1
+  appendix: true
+  chapters:
+    - { num: "a", slug: "appa", title: "the diagnostics catalog" }
+    - { num: "b", slug: "appb", title: "builtin reference" }
+    - { num: "c", slug: "appc", title: "canonical form" }

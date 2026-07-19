@@ -1,0 +1,12 @@
+<nav class="book-side" aria-label="book chapters">
+  <a class="book-side-home" href="/book/index.html"{% if page.url == "/book/index.html" or page.url == "/book/" %} aria-current="page"{% endif %}>the book</a>
+  {% for section in site.data.book %}
+  <span class="bs-part">{{ section.part }}</span>
+  <ol{% if section.appendix %} class="bs-appendix"{% elsif section.start != 1 %} start="{{ section.start }}"{% endif %}>
+    {% for ch in section.chapters %}
+    {% assign churl = "/book/" | append: ch.slug | append: ".html" %}
+    <li><a href="{{ churl }}"{% if page.url == churl %} aria-current="page"{% endif %}><span class="bs-num">{{ ch.num }}</span><span class="bs-title">{{ ch.title }}</span></a></li>
+    {% endfor %}
+  </ol>
+  {% endfor %}
+</nav>
