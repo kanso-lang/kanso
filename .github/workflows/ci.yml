@@ -23,6 +23,8 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "checksum 24000" \
             || { echo "::error::native json decoder produced the wrong checksum"; exit 1; }
+      - name: book samples (every panel executed, outputs verified)
+        run: sh scripts/book_check.sh
       - name: cost golden (deterministic performance ratchet, no clocks)
         run: |
           KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null

@@ -255,7 +255,7 @@ coming soon</code></pre>
   </div>
 </div>
 
-<p>look at what did <em>not</em> happen. <code>headline</code> pulls <code>title</code> out of the post and hands it straight to <code>show</code>, with no test for which kind of title it holds. the two <code>show</code> arms sort that out by dispatch, so absence is a polymorphic call, never a conditional. this is the whole idea: a nullable field is not a special case you branch on, it is one more type in the set, handled by one more arm. the absence member is always a marker of your own—never <code>none</code>, which belongs to the failure story in chapter 04.</p>
+<p><code>headline</code> pulls <code>title</code> out of the post and hands it straight to <code>show</code>, with no test for which kind of title it holds—the two <code>show</code> arms sort that out by dispatch, so absence becomes a polymorphic call, never a conditional. a nullable field isn't a special case you branch on; it's one more type in the set, handled by one more arm. the absence member is always a marker of your own—never <code>none</code>, which belongs to the failure story in chapter 04.</p>
 
 <p>a typeset is also a promise the constructor keeps. hand a field a value that matches none of its members and the program has a defect—reported when the bad value reaches the endpoint, the same way overflow and lookup misses surface as values rather than crashes:</p>
 

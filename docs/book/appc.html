@@ -259,7 +259,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>the crucial thing to understand is what width is <em>not</em>. width is rendering only—it never changes how many statements a body has. an over-wide statement does not get split into two statements; it stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
+<p>width is rendering only—it never changes how many statements a body has. an over-wide statement doesn't split into two statements; it stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
 
 <p>here is a sequence too wide for one line. its first step stays on the <code>main =</code> line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
 
@@ -345,11 +345,11 @@ serving</code></pre>
   </div>
 </div>
 
-<p>one convention you may have expected is absent: there is no leading-underscore rule for privacy. visibility is not a spelling trick—a top-level name is module-private by default, and the leading keyword <code>pub</code> marks the ones that are API surface. the underscore <code>_</code> means exactly one thing, a discard in a pattern, and nothing about it says "private."</p>
+<p>one convention you may have expected is absent: there is no leading-underscore rule for privacy. a top-level name is module-private by default, and the leading keyword <code>pub</code> marks the ones that are api surface—visibility runs on that keyword, not on how you spell the name. the underscore <code>_</code> means exactly one thing, a discard in a pattern, and nothing about it says "private."</p>
 
 <h2>strings are double-quoted</h2>
 
-<p>string literals use double quotes. single quotes are not an alternate string syntax—they are simply not a character the lexer expects, and it says so:</p>
+<p>string literals use double quotes. the lexer doesn't recognize a single quote as a string delimiter at all, so it just names the character it choked on:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">quote_check.kso</div>
