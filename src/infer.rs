@@ -208,26 +208,10 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
             let b = eval_expr(ctx, rhs, env);
             let fails = (a & FAIL) | (b & FAIL);
             match *op {
-                "+" | "-" | "*" => {
-                    let mut out = fails;
-                    if a & INT != 0 && b & INT != 0 {
-                        out |= INT;
-                    }
-                    if a & FLOAT != 0 && b & FLOAT != 0 {
-                        out |= FLOAT;
-                    }
-                    out
-                }
-                "/" => {
-                    let mut out = fails | ERR;
-                    if a & INT != 0 && b & INT != 0 {
-                        out |= INT;
-                    }
-                    if a & FLOAT != 0 && b & FLOAT != 0 {
-                        out |= FLOAT;
-                    }
-                    out
-                }
+                // int op int stays int; any float operand widens the other,
+                // so the result is float
+                "+" | "-" | "*" => fails | numeric_result(a, b),
+                "/" => fails | ERR | numeric_result(a, b),
                 _ => BOOL | fails,
             }
         }
@@ -240,6 +224,21 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
         }
         Expr::App { head, args, piped, .. } => eval_call(ctx, head, args, env, *piped),
     }
+}
+
+/// The numeric result of `+`/`-`/`*`/`/`: int only when both are int; float
+/// whenever a float meets any number (the int widens).
+fn numeric_result(a: Set, b: Set) -> Set {
+    let mut out = 0;
+    if a & INT != 0 && b & INT != 0 {
+        out |= INT;
+    }
+    let anum = a & (INT | FLOAT);
+    let bnum = b & (INT | FLOAT);
+    if (a & FLOAT != 0 && bnum != 0) || (b & FLOAT != 0 && anum != 0) {
+        out |= FLOAT;
+    }
+    out
 }
 
 fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Set>) -> Set {
@@ -420,6 +419,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => INT | fails,
+        "sqrt" => FLOAT | fails,
+        "round" => INT | fails,
         "read_file" | "write_file" | "sleep" | "random" => DESC | fails,
         _ => TOP,
     }

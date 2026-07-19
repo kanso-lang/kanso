@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::HashSet;
 
-pub const BUILTINS: [&str; 28] = [
+pub const BUILTINS: [&str; 30] = [
     "args",
     "at",
     "bytes",
@@ -22,10 +22,12 @@ pub const BUILTINS: [&str; 28] = [
     "put",
     "random",
     "read_file",
+    "round",
     "slice",
     "sleep",
     "stdin",
     "sort",
+    "sqrt",
     "sum",
     "to_float",
     "to_int",

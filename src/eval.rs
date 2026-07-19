@@ -1030,6 +1030,30 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
+            "sqrt" => {
+                let [x] = arity(args, name, span)?;
+                match x {
+                    Value::Float(v) => Ok(Value::Float(v.sqrt())),
+                    Value::Int(n) => Ok(Value::Float(int_f(&n).sqrt())),
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        message: format!("sqrt takes a number, got {}", render(&other, false)),
+                        span,
+                    }),
+                }
+            }
+            "round" => {
+                let [x] = arity(args, name, span)?;
+                match x {
+                    Value::Int(n) => Ok(Value::Int(n)),
+                    Value::Float(v) => Ok(Value::Int(BigInt::from(v.round() as i64))),
+                    other if is_failure(&other) => Ok(other),
+                    other => Err(RuntimeError {
+                        message: format!("round takes a number, got {}", render(&other, false)),
+                        span,
+                    }),
+                }
+            }
             "to_int" => {
                 let [value] = arity(args, name, span)?;
                 let text = match &value {
@@ -1362,8 +1386,25 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => Some(x.cmp(y)),
         (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),
+        (Value::Int(x), Value::Float(y)) => Some(int_f(x).total_cmp(y)),
+        (Value::Float(x), Value::Int(y)) => Some(x.total_cmp(&int_f(y))),
         (Value::Str(x), Value::Str(y)) => Some(x.cmp(y)),
         _ => None,
+    }
+}
+
+/// A BigInt widened to f64 — the `x:float` cast at the value level.
+fn int_f(n: &BigInt) -> f64 {
+    n.to_f64().unwrap_or(f64::INFINITY)
+}
+
+fn div_float(a: f64, b: f64, frame: &Frame, span: Span) -> EvalResult {
+    match b == 0.0 {
+        true => Ok(err_value(
+            Value::Str("division by zero".to_string()),
+            origin_at(frame, span),
+        )),
+        false => Ok(Value::Float(a / b)),
     }
 }
 
@@ -1444,12 +1485,15 @@ pub fn eval_binop(
             )),
             false => Ok(Value::Float(a / b)),
         },
-        ("+" | "-" | "*" | "/", Value::Int(_), Value::Float(_))
-        | ("+" | "-" | "*" | "/", Value::Float(_), Value::Int(_)) => Err(RuntimeError {
-            message: "no implicit numeric coercion; convert explicitly with `to_float`"
-                .to_string(),
-            span,
-        }),
+        // int meets float: the int widens (as if cast `x:float`), result float
+        ("+", Value::Int(a), Value::Float(b)) => Ok(Value::Float(int_f(a) + b)),
+        ("+", Value::Float(a), Value::Int(b)) => Ok(Value::Float(a + int_f(b))),
+        ("-", Value::Int(a), Value::Float(b)) => Ok(Value::Float(int_f(a) - b)),
+        ("-", Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - int_f(b))),
+        ("*", Value::Int(a), Value::Float(b)) => Ok(Value::Float(int_f(a) * b)),
+        ("*", Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * int_f(b))),
+        ("/", Value::Int(a), Value::Float(b)) => div_float(int_f(a), *b, frame, span),
+        ("/", Value::Float(a), Value::Int(b)) => div_float(*a, int_f(b), frame, span),
         ("<" | "<=" | ">" | ">=", _, _) => match compare(&left, &right) {
             Some(ord) => Ok(bool_value(match op {
                 "<" => ord.is_lt(),

@@ -130,6 +130,9 @@ declare void @k_beat_push()
 declare void @k_beat_iter()
 declare %KValue @k_beat_pop(%KValue)
 declare %KValue @k_call1(%KValue, %KValue)
+declare %KValue @k_call2(%KValue, %KValue, %KValue)
+declare %KValue @k_call3(%KValue, %KValue, %KValue, %KValue)
+declare %KValue @k_call4(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_char_code(%KValue)
 declare %KValue @k_b_entries(%KValue)
 declare %KValue @k_b_filter(%KValue, %KValue)
@@ -145,11 +148,13 @@ declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
+declare %KValue @k_b_sqrt(%KValue)
+declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 22] = [
+const BUILTIN_CALLS: [(&str, usize); 24] = [
     ("at", 2),
     ("find2", 4),
     ("bytes", 1),
@@ -169,6 +174,8 @@ const BUILTIN_CALLS: [(&str, usize); 22] = [
     ("put", 3),
     ("slice", 3),
     ("sort", 1),
+    ("sqrt", 1),
+    ("round", 1),
     ("sum", 1),
     ("to_float", 1),
     ("to_int", 1),
@@ -1418,20 +1425,24 @@ impl<'a> Backend<'a> {
                 self.emit_binop(f, op, &a, &b, *span)
             }
             Expr::Lambda { params, body, .. } => {
-                if params.len() != 1 {
-                    return Err("native backend: multi-parameter lambdas need arity 1".to_string());
+                if params.is_empty() || params.len() > 4 {
+                    return Err("native backend: a lambda takes 1 to 4 parameters".to_string());
                 }
+                let param_names: Vec<String> = params.iter().map(|(n, _)| n.clone()).collect();
                 let mut idents = Vec::new();
                 collect_idents(body, &mut idents);
                 let mut captures: Vec<String> = Vec::new();
                 for name in idents {
-                    if f.lookup(&name).is_some() && !captures.contains(&name) && name != params[0].0 {
+                    if f.lookup(&name).is_some()
+                        && !captures.contains(&name)
+                        && !param_names.contains(&name)
+                    {
                         captures.push(name);
                     }
                 }
                 let lifted = format!("klam{}", self.lift_counter);
                 self.lift_counter += 1;
-                self.emit_lifted(&lifted, &params[0].0, &captures, body, f)?;
+                self.emit_lifted(&lifted, &param_names, &captures, body, f)?;
                 let n = captures.len().max(1);
                 let arr = f.tmp();
                 f.line(&format!("{arr} = alloca [{n} x %KValue]"));
@@ -1948,24 +1959,26 @@ impl<'a> Backend<'a> {
         };
         if computed_head {
             // The callee is a value (a lambda, a parameter, a bound function),
-            // not a declared group: emit the head as a value and dispatch at
-            // runtime. Unary only — kanso lambdas take one parameter.
-            let total = first.iter().len() + args.len() - usize::from(first.is_some());
-            if total != 1 {
-                return Err(
-                    "native backend: multi-argument calls on function values are slice 2"
-                        .to_string(),
-                );
-            }
+            // not a declared group: emit the head and all arguments as values
+            // and dispatch at runtime via the arity-matched k_callN.
             let callee = self.emit_expr(f, head)?;
-            let arg = match first {
-                Some(v) => v,
-                None => self.emit_expr(f, &args[0])?,
-            };
+            let mut arg_vals: Vec<String> = Vec::new();
+            if let Some(v) = first {
+                arg_vals.push(v);
+            }
+            for a in args {
+                arg_vals.push(self.emit_expr(f, a)?);
+            }
+            let n = arg_vals.len();
+            if n == 0 || n > 4 {
+                return Err(format!(
+                    "native backend: a function value takes 1 to 4 arguments, got {n}"
+                ));
+            }
+            let arg_ir: String =
+                arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();
             let t = f.tmp();
-            f.line(&format!(
-                "{t} = call %KValue @k_call1(%KValue {callee}, %KValue {arg})"
-            ));
+            f.line(&format!("{t} = call %KValue @k_call{n}(%KValue {callee}{arg_ir})"));
             f.record(&t, TOP);
             return Ok(t);
         }
@@ -2124,7 +2137,7 @@ impl<'a> Backend<'a> {
     fn emit_lifted(
         &mut self,
         lifted: &str,
-        param: &str,
+        params: &[String],
         captures: &[String],
         body: &Expr,
         outer: &FnEmit,
@@ -2137,17 +2150,21 @@ impl<'a> Backend<'a> {
             f.line(&format!("{t} = call %KValue @k_env_get(ptr %env, i64 {i})"));
             f.bind(cap, &t);
         }
-        f.bind(param, "%a0");
+        for (i, p) in params.iter().enumerate() {
+            f.bind(p, &format!("%a{i}"));
+        }
         self.emit_tail(&mut f, body)?;
+        let sig: String =
+            (0..params.len()).map(|i| format!(", %KValue %a{i}")).collect();
         let _ = writeln!(
             self.body,
-            "define tailcc %KValue @{lifted}(ptr %env, %KValue %a0) {{\n{}}}\n",
+            "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n",
             f.out
         );
         let _ = writeln!(
             self.body,
-            "define %KValue @w_{lifted}(ptr %env, %KValue %a0) {{\nentry:\n  %r = call \
-             tailcc %KValue @{lifted}(ptr %env, %KValue %a0)\n  ret %KValue %r\n}}\n"
+            "define %KValue @w_{lifted}(ptr %env{sig}) {{\nentry:\n  %r = call \
+             tailcc %KValue @{lifted}(ptr %env{sig})\n  ret %KValue %r\n}}\n"
         );
         Ok(())
     }
