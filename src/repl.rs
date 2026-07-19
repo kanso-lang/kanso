@@ -8,6 +8,7 @@ use crate::{check, diag, lexer, parser};
 struct Unit {
     name: String,
     source: String,
+    is_type: bool,
 }
 
 pub struct Session {
@@ -58,9 +59,10 @@ impl Session {
         for chunk in split_declarations(input) {
             let program = parse_fragment(&chunk)?;
             let name = first_declared_name(&program);
+            let is_type = !program.types.is_empty();
             match incoming.iter_mut().find(|u| u.name == name) {
                 Some(unit) => unit.source = format!("{}\n\n{chunk}", unit.source),
-                None => incoming.push(Unit { name, source: chunk }),
+                None => incoming.push(Unit { name, source: chunk, is_type }),
             }
         }
         let names: Vec<String> = incoming.iter().map(|u| u.name.clone()).collect();
@@ -83,7 +85,7 @@ impl Session {
         }
         let source = wrap_expression(&name, input);
         let mut candidate = self.units.clone();
-        candidate.push(Unit { name: name.clone(), source });
+        candidate.push(Unit { name: name.clone(), source, is_type: false });
         let program = compile_units(&candidate)?;
         let interp = Interp::new(&program);
         let result = interp.run_named(&name).expect("just-committed constant resolves");
@@ -134,9 +136,12 @@ fn compile_units(units: &[Unit]) -> Result<Program, String> {
     }
 }
 
+/// The session rendered as its canonical file: types first, then values,
+/// each alphabetical — the repl canonicalizes on the user's behalf, so
+/// declaration order at the prompt is exploration order, never an error.
 fn assemble(units: &[Unit]) -> String {
     let mut sorted: Vec<&Unit> = units.iter().collect();
-    sorted.sort_by_key(|u| u.name.as_str());
+    sorted.sort_by_key(|u| (!u.is_type, u.name.as_str()));
     let sources: Vec<&str> = sorted.iter().map(|u| u.source.as_str()).collect();
     format!("{}\n", sources.join("\n\n"))
 }
