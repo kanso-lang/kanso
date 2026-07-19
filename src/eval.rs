@@ -328,8 +328,12 @@ impl<'a> Interp<'a> {
     }
 
     pub fn run_main(&self) -> EvalResult {
-        let main = self.fns.get("main").expect("checked: main exists")[0];
-        self.eval_body(&main.body, None, &frame_of(main))
+        let entry = self
+            .fns
+            .get("main")
+            .or_else(|| self.fns.get("play"))
+            .expect("checked: an entry exists")[0];
+        self.eval_body(&entry.body, None, &frame_of(entry))
     }
 
     pub fn run_named(&self, name: &str) -> Option<EvalResult> {
