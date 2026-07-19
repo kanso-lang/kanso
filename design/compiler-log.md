@@ -216,3 +216,34 @@ fusion, proportionally bigger now), mklist 66, utf8 61, put 57 + k_eq 46 (map-ke
 compares), strtoll residue 39→less. Next candidates: bytes-view/slice fusion
 re-test (musttail-adjacent codegen — x86-risk zone, Clay watching), k_cmp int
 fast path inline, dispatch-chain depth reduction (architectural).
+
+---
+
+## 2026-07-18 (later) — Clock-free performance ratchet (Clay's directive, PR #37)
+
+Clay: make the perf wins a RATCHET via specs that read a representation, not
+wall time. Built two halves, both gating in CI:
+
+1. **Cost goldens** — runtime counters (allocs / alloc_bytes / arena_blocks /
+   perm_allocs / beat_iters), dumped to stderr under `KANSO_COUNTERS=1` only
+   (stdout goldens untouched), atexit-registered in main. Deterministic program
+   ⇒ exact constants; CI diffs the gauntlet dump vs `bench/cost_golden.txt`.
+   Baseline: **allocs=14799465, alloc_bytes=790444432, arena_blocks=6,
+   perm_allocs=1, beat_iters=150** — arena_blocks=6 IS the flat-memory claim as
+   a constant; beat_iters=150 is one heartbeat per decode. Updating the golden
+   is a deliberate, diff-visible act.
+2. **Structural IR specs** (`tests/perf_ratchet.rs`) — reads emit_ir output:
+   (a) each alwaysinline twin exists AND carries the attribute on its define
+   line; (b) recursion emits `musttail` (constant-stack as a testable fact);
+   (c) a linear accumulator lowers to `k_b_push_mut` (in-place reuse wired).
+   **Test-the-test done:** first version had a hole (prelude COMMENT contains
+   the word "alwaysinline", inflating a count; per-name check didn't inspect
+   the attribute) — a doctored prelude PASSED. Rewrote to per-define-line
+   asserts; verified fail-for-the-right-reason, then green on restore.
+   LESSON: always run the see-it-fail step; the first draft of a spec often
+   specs nothing.
+
+**[OPEN — answered by PR #37 CI] cross-arch counter determinism:** all sizes are
+explicit i64 structs, so x86 counters should be bit-identical to arm64. If
+ubuntu CI diffs, split per-arch goldens and investigate the divergence (that
+would be a differential-lattice-class finding in its own right).
