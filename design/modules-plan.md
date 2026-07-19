@@ -105,3 +105,32 @@ entries (no dispensation), no thin-entry enforcement beyond the grammar (an
 entry cannot declare, so it cannot hide logic), directory-stem binary naming,
 no go.mod-style manifest. Build rides with cross-module import as one keystone
 commit.
+
+## RATIFIED BY CONSENSUS (2026-07-19, Clay: "go with the committee's consensus so we can make progress")
+
+- **Import resolution:** `std/` prefix reserved for the shipped stdlib; every
+  other path resolves relative to the importing file's directory. No manifest,
+  no config; cycles are a compile error. `hako` extends resolution to fetched
+  packages without changing either rule.
+- **Enumerable opens:** `range` is the statistic (max − min); the integer
+  generator is spelled `naturals . take n` (no `upto` until demanded). Map key
+  collisions (`transform_keys`, `index_by`) are last-write-wins, exactly `put`'s
+  semantics, documented not hidden. No `first coll n` — the spelling is
+  `take n . to_list`; `first coll` (the element) stays.
+- **Observation clause:** the language committee watches how these rules land
+  on the real libraries — kq, kanso-json, vse — during the keystone migration,
+  and files friction as amendments rather than pre-litigating.
+
+## GAVELED (2026-07-19, third ruling): `kanso play`
+
+The toolchain gains a third verb: `kanso play <file-or-module>` synthesizes an
+in-memory entry — `import <target>` plus the bare statement `play` — and runs
+it. It is the playground's hidden mechanism made available at the terminal;
+the playground becomes "kanso play in a browser tab", one mechanism, two
+surfaces. The language grammar still never contains the word play (same
+toolchain-convention layer as the main.kso filename). Errors teach: a target
+with no pub play gets "nothing to play — define pub play, or point kanso run
+at a main.kso." The verbs carry the model: run is for programs, play is for
+libraries. Migration consequence: the examples corpus STAYS single-file
+play-libraries (no per-example entry directories); only real programs grow
+main.kso entries.
