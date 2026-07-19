@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>appendix c—canonical form</title>
+<meta name="description" content="the formatting law: one rendering per program. indentation, spacing, ordering, blank lines, the 80-column cap and continuation lines, snake_case, and strings—each rule with the diagnostic that enforces it.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../playground.html">playground</a>
+    <a href="index.html">book</a>
+    <a href="../about.html">about</a>
+    <a href="../compiler.html">compiler</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
+  </nav>
+</header>
+
+<div class="book-layout">
+
+<nav class="book-side" aria-label="book chapters">
+  <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
+  <ol>
+    <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
+    <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
+    <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
+    <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
+    <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html" aria-current="page"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
+  </ol>
+</nav>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">appendix c</span>
+<h1>canonical form</h1>
+
+<p>most languages ship a formatter—a second program that rewrites your source into the house style. kanso ships none, because it would have nothing to do. canonical form is not a convention layered on top of the grammar; it <em>is</em> the grammar. a program has exactly one legal rendering, and every deviation is a compile error with a caret under it. this appendix is the reference for that law: each rule stated plainly, the reason it exists, and the diagnostic you get when you break it. every broken sample here was run through <code>kanso check</code>; every error text is copied from the machine, not typed from memory.</p>
+
+<p>the founding principle is one sentence: <em>anything a style guide, linter, or code review would enforce by convention, kanso enforces by making the alternative a compile error.</em> the payoff is concrete. there is no style debate, because there is no style to debate. there is no formatter to configure, run, or argue about. and every diff you will ever review is purely semantic—no reflowed lines, no whitespace churn, no "nit: spacing" comments. the source contains only decisions.</p>
+
+<p>here is a whole, legal file. read it, then spend the rest of the appendix learning why each character sits where it does:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">ordered.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">circle</span>
+  r: <span class="t">float64</span>
+
+<span class="k">fn</span> <span class="f">area</span> (<span class="t">circle</span> r)
+  r <span class="o">*</span> r <span class="o">*</span> <span class="n">3.14159</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"area of r=2: <span class="i">{area (circle 2.0)}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run ordered.kso</div>
+    <pre><code>area of r=2: 12.56636</code></pre>
+  </div>
+</div>
+
+<h2>whitespace, two at a time</h2>
+
+<p>indentation is spaces, and the only legal depths are zero and two-per-level. a body indents its lines by two more spaces than the header that owns them. three spaces, four spaces, one—all rejected, with the exact count named back to you:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">indent_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+   x <span class="o">=</span> <span class="n">1</span>
+   <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check indent_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 3
+<span class="c">  --&gt; indent_check.kso:2:1</span>
+   2 |    x = 1
+       <span class="k">^</span>
+<span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 3
+<span class="c">  --&gt; indent_check.kso:3:1</span>
+   3 |    print "{x}"
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>a tab is not two spaces, not four, not anything—it is simply not part of the grammar. the width of a tab depends on whose editor renders it, and a language with one rendering per program cannot admit a character whose meaning is a display setting:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">tabs_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+<span class="c">→</span>   <span class="f">print</span> <span class="s">"hi"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check tabs_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: tabs are not part of the canonical grammar; indent with spaces
+<span class="c">  --&gt; tabs_check.kso:2:1</span>
+   2 | 	print "hi"
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>within a line, spacing is fixed too. exactly one space sits on each side of <code>=</code>, and one space separates a call from its argument. no more, no fewer, and none glued away entirely. cram a binding and the compiler points at both the missing space before and the missing space after:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">spacing_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  answer<span class="o">=</span><span class="n">42</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check spacing_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
+<span class="c">  --&gt; spacing_check.kso:2:9</span>
+   2 |   answer=42
+               <span class="k">^</span>
+<span class="k">error[formatting]</span>: canonical form requires exactly one space here
+<span class="c">  --&gt; spacing_check.kso:2:10</span>
+   2 |   answer=42
+                <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>and space you cannot even see is still a decision the file records, so it is still forbidden. trailing whitespace at the end of a line—the classic invisible diff—has no meaning and no place:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">trailing_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hi"</span>&nbsp;</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check trailing_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
+<span class="c">  --&gt; trailing_check.kso:1:18</span>
+   1 | main = print "hi"
+                        <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>no commas, no call parentheses</h2>
+
+<p>application is juxtaposition. <code>f a b</code> is a call to <code>f</code> with two arguments, and the separator is a single space. there are no commas—not in argument lists, not in list literals, not in patterns. bring the comma from another language and kanso names the habit:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">commas_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
+  <span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check commas_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: kanso has no commas; enumerations are space-separated
+<span class="c">  --&gt; commas_check.kso:2:17</span>
+   2 |   total = sum [1, 2]
+                       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>likewise there are no parentheses wrapping a call's arguments. <code>print("hi")</code> is not a tighter <code>print "hi"</code>; it is a missing space where the grammar demands one. parentheses group sub-expressions—<code>f (g x) y</code>—and do nothing else:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">call_paren_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check call_paren_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
+<span class="c">  --&gt; call_paren_check.kso:1:13</span>
+   1 | main = print("hi")
+                   <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>one order per file</h2>
+
+<p>wherever order carries no meaning, canonical order is mandatory, so that two programs that differ only in shuffle are impossible. within a file, type declarations come first, then functions and constants; and within each of those two groups, names run in alphabetical order. put a type below a function and the compiler tells you which one to move and where:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">order_types_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">alpha</span> x
+  x
+
+<span class="k">type</span> <span class="t">bravo</span>
+  n: <span class="t">int</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{alpha 1}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check order_types_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `bravo` up
+<span class="c">  --&gt; order_types_check.kso:4:6</span>
+   4 | type bravo
+            <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>functions and constants share one alphabetical group—<code>main</code> is a constant, and it sorts by name like everything else. it is not special-cased to the top or bottom; it lands wherever <code>m</code> falls:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">order_alpha_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
+  x
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check order_alpha_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
+<span class="c">  --&gt; order_alpha_check.kso:4:1</span>
+   4 | main = print "{zeta 1}"
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the same principle reaches inside a type. fields are declared in alphabetical order, because a record's field <em>set</em> is what matters, never the sequence you happened to type them in:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">field_order_check.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">user</span>
+  name: <span class="t">string</span>
+  admin: <span class="t">bool</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check field_order_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: fields appear in alphabetical order: `admin` before `name`
+<span class="c">  --&gt; field_order_check.kso:3:3</span>
+   3 |   admin: bool
+         <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>and it reaches into a keyed destructuring read, where you name a subset of fields to pull out. the names you list are a set, so they are alphabetized like any other:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">keyed_order_check.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">user</span>
+  admin: <span class="t">bool</span>
+  name: <span class="t">string</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  { name admin } <span class="o">=</span> <span class="t">user</span> <span class="k">false</span> <span class="s">"clay"</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> <span class="i">{admin}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check keyed_order_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: keyed reads list fields in alphabetical order: `admin` before `name`
+<span class="c">  --&gt; keyed_order_check.kso:6:10</span>
+   6 |   { name admin } = user false "clay"
+                <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>blank lines carry meaning</h2>
+
+<p>a blank line is punctuation, not decoration, so its use is exact. top-level declarations are separated by exactly one blank line—not zero, not two. run two declarations together and the compiler asks for the separator:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">blank_between_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> name
+  <span class="s">"hi, <span class="i">{name}</span>"</span>
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">greet</span> <span class="s">"kanso"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check blank_between_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: exactly one blank line separates top-level declarations
+<span class="c">  --&gt; blank_between_check.kso:3:1</span>
+   3 | main = print (greet "kanso")
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>inside a body, blank lines are banned entirely. a body is one uninterrupted run of statements; the moment you want to group some of them apart with a blank line, you are describing structure the grammar already has words for—<code>&gt;&gt;</code> walls and bindings—and it wants those words, not a gap:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">blank_body_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  x <span class="o">=</span> <span class="n">1</span>
+
+  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check blank_body_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: blank lines may not appear inside a body
+<span class="c">  --&gt; blank_body_check.kso:4:1</span>
+   4 |   print "{x}"
+       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>eighty columns, and the continuation line</h2>
+
+<p>a line holds at most eighty characters. the diagnostic even counts them for you:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">width_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check width_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 90
+<span class="c">  --&gt; width_check.kso:1:81</span>
+   1 | main = print "this string pads the line out well past the canonical width limit of eighty"
+                                                                                       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the crucial thing to understand is what width is <em>not</em>. width is rendering only—it never changes how many statements a body has. an over-wide statement does not get split into two statements; it stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
+
+<p>here is a sequence too wide for one line. its first step stays on the <code>main =</code> line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wrap_wall.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping the sencha"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the water"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run wrap_wall.kso</div>
+    <pre><code>steeping the sencha
+pouring the water
+serving</code></pre>
+  </div>
+</div>
+
+<p>and here is a pipe too wide for one line, wrapped onto <code>.</code> continuation lines. the whole thing is still a single binding of <code>ranked</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wrap_pipe.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</span> <span class="n">8</span> <span class="n">23</span> <span class="n">42</span> <span class="n">16</span> <span class="n">4</span> <span class="n">108</span> <span class="n">71</span> <span class="n">55</span> <span class="n">90</span> <span class="n">33</span> <span class="n">27</span> <span class="n">61</span> <span class="n">19</span> <span class="n">77</span> <span class="n">88</span> <span class="n">100</span> <span class="n">200</span>]
+    <span class="o">.</span> <span class="f">sort</span>
+    <span class="o">.</span> <span class="f">sum</span>
+  <span class="f">print</span> <span class="s">"sum of the sorted roster: <span class="i">{ranked}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run wrap_pipe.kso</div>
+    <pre><code>sum of the sorted roster: 1077</code></pre>
+  </div>
+</div>
+
+<p>because there is one rendering, the wrap is not optional. if a statement fits on one line, it must be on one line—wrapping something that fits is "needless continuation," and the compiler tells you the width it would occupy unwrapped:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">needless_wrap_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
+    <span class="o">.</span> <span class="f">sum</span>
+  <span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check needless_wrap_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (34 characters)
+<span class="c">  --&gt; needless_wrap_check.kso:3:5</span>
+   3 |     . sum
+           <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>and the wrap is all-or-nothing. once a statement wraps, <em>every</em> step gets its own continuation line—you cannot leave two steps sharing the first line and drop the rest. partial chaining has no canonical form, so it has none at all:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">partial_chain_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving it in the warmed cups with seasonal wagashi"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check partial_chain_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: no partial chaining: a chain fits on one line, or each step gets its own `&gt;&gt;` continuation line
+<span class="c">  --&gt; partial_chain_check.kso:1:47</span>
+   1 | main = print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
+                                                     <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>names: snake_case, lowercase, always</h2>
+
+<p>identifiers are lowercase snake_case, with no exceptions and no second convention to remember. no camelCase, no PascalCase, no SCREAMING_CONSTANTS. a single naming scheme means a name looks identical everywhere it appears, and a reader never wonders whether case carries meaning—it does not:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">case_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  myName <span class="o">=</span> <span class="n">1</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check case_check.kso</div>
+    <pre><code><span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
+<span class="c">  --&gt; case_check.kso:2:5</span>
+   2 |   myName = 1
+           <span class="k">^</span>
+<span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
+<span class="c">  --&gt; case_check.kso:3:13</span>
+   3 |   print "{myName}"
+                   <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>one convention you may have expected is absent: there is no leading-underscore rule for privacy. visibility is not a spelling trick—a top-level name is module-private by default, and the leading keyword <code>pub</code> marks the ones that are API surface. the underscore <code>_</code> means exactly one thing, a discard in a pattern, and nothing about it says "private."</p>
+
+<h2>strings are double-quoted</h2>
+
+<p>string literals use double quotes. single quotes are not an alternate string syntax—they are simply not a character the lexer expects, and it says so:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">quote_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">'hi'</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check quote_check.kso</div>
+    <pre><code><span class="k">error[syntax]</span>: unexpected character `'`
+<span class="c">  --&gt; quote_check.kso:1:14</span>
+   1 | main = print 'hi'
+                    <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>inside a double-quoted string, <code>{braces}</code> interpolate, and the braces take any expression—a name, arithmetic, a call. you have seen this throughout the appendix: <code>"sum of the sorted roster: {ranked}"</code>, <code>"area of r=2: {area (circle 2.0)}"</code>. there is one string syntax, one interpolation syntax, and no format-string mini-language bolted on beside it.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>the whole appendix reduces to one habit: type the mistake once, read the caret, learn the rule for good. two-space indents, one space around <code>=</code>, alphabetical order, nothing trailing, eighty columns. it isn't a style i prefer; it's the only rendering that parses. i sleep well because there is nothing left to decide.</p>
+</div>
+</div>
+
+<p>that is the whole law. you can now read any diagnostic in the <code>error[formatting]</code> family and know it names a rule with exactly one legal answer, and you can write a file that <code>kanso check</code> passes on the first try: two-space indents, one space around every <code>=</code> and operator, no commas and no call parentheses, types before functions and both alphabetical, one blank line between declarations and none inside a body, eighty columns with <code>.</code> and <code>&gt;&gt;</code> continuation lines when a statement runs long, snake_case names, and double-quoted strings. nothing here is a preference. it is the grammar, and the grammar is the reason every kanso diff you read contains only decisions.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>take <code>wrap_pipe.kso</code> and remove enough elements from the list that the <code>ranked</code> binding would fit on one line unwrapped. predict which diagnostic <code>kanso check</code> produces before you run it, then confirm.</li>
+  <li>write a file with a type named <code>widget</code>, a function named <code>build</code>, and <code>main</code>—deliberately in the wrong order. run <code>kanso check</code> and note how many separate ordering errors you can provoke, and in what sequence you must fix them to reach <code>ok</code>.</li>
+  <li>a body has a binding you want to set visually apart from the effects below it. you reach for a blank line and the compiler rejects it. what does the grammar offer instead, and what does that say about when a blank line would ever have been the right tool?</li>
+  <li>construct a single statement that is exactly 80 characters and one that is exactly 81. verify the boundary is where the diagnostic claims it is, and read the character count it reports back.</li>
+</ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="appb.html">← the builtin reference</a>
+  <a href="index.html">contents →</a>
+</nav>
+
+</article>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="../influences.html">influences</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,19 @@
+type active
+
+type archived
+
+type pending
+
+fn label active
+  "live"
+
+fn label archived
+  "in the vault"
+
+fn label pending
+  "coming soon"
+
+main =
+  print (label active)
+  >> print (label archived)
+  >> print (label pending)

@@ -1,0 +1,57 @@
+fn _both true true
+  true
+
+fn _both _ _
+  false
+
+fn _is_number_char 43
+  true
+
+fn _is_number_char 45
+  true
+
+fn _is_number_char 46
+  true
+
+fn _is_number_char 69
+  true
+
+fn _is_number_char 101
+  true
+
+fn _is_number_char none
+  false
+
+fn _is_number_char c
+  _both (47 < c) (c < 58)
+
+fn _mark_from cs p q
+  if (p > q) false (_mark_step cs (at cs p) p q)
+
+fn _mark_step _ 46 _ _
+  true
+
+fn _mark_step _ 69 _ _
+  true
+
+fn _mark_step _ 101 _ _
+  true
+
+fn _mark_step cs _ p q
+  _mark_from cs (p + 1) q
+
+fn _number_end cs p
+  if (_is_number_char (at cs p)) (_number_end cs (p + 1)) p
+
+fn classify s
+  cs = bytes s
+  q = _number_end cs 1
+  digits = slice cs 1 (q - 1)
+  floaty = _mark_from cs 1 (q - 1)
+  if floaty "float64 {to_float digits}" "int {to_int digits}"
+
+main =
+  print (classify "42")
+  >> print (classify "-17")
+  >> print (classify "3.25")
+  >> print (classify "6e3")

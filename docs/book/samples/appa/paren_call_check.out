@@ -1,0 +1,4 @@
+error[formatting]: canonical form requires exactly one space here
+  --> paren_call_check.kso:1:13
+   1 | main = print("hi")
+                   ^

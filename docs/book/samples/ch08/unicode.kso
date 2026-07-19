@@ -1,0 +1,27 @@
+fn _both true true
+  true
+
+fn _both _ _
+  false
+
+fn _hex_alpha c
+  if (_both (96 < c) (c < 103)) (c - 87) (_hex_upper c)
+
+fn _hex_digit c
+  if (_both (47 < c) (c < 58)) (c - 48) (_hex_alpha c)
+
+fn _hex_upper c
+  if (_both (64 < c) (c < 71)) (c - 55) (err "invalid hex digit")
+
+fn decode_u s
+  cs = bytes s
+  h1 = _hex_digit (at cs 1)
+  h2 = _hex_digit (at cs 2)
+  h3 = _hex_digit (at cs 3)
+  h4 = _hex_digit (at cs 4)
+  from_code (h1 * 4096 + h2 * 256 + h3 * 16 + h4)
+
+main =
+  print (decode_u "00e9")
+  >> print (decode_u "305f")
+  >> print (decode_u "7b80")

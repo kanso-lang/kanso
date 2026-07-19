@@ -1,0 +1,6 @@
+main = print "{size 1}"
+
+size = 9
+
+fn size x
+  x

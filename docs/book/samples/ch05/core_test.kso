@@ -1,0 +1,7 @@
+fn count_lines text
+  newlines = filter (chars text) (c -> c == "\n")
+  length newlines
+
+test_counts_lines = (count_lines "matcha\nube\nhojicha\n") == 3
+
+test_empty_text_has_no_lines = (count_lines "") == 0

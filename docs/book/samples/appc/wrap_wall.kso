@@ -1,0 +1,3 @@
+main = print "steeping the sencha"
+  >> print "pouring the water"
+  >> print "serving"

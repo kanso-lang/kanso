@@ -1,0 +1,3 @@
+main =
+  guests = 4
+  print "table for {guests + 1}, please"

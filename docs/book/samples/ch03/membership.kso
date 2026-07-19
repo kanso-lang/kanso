@@ -1,0 +1,9 @@
+type missing
+
+type post
+  title: missing string
+
+main =
+  p = post 42
+  { title } = p
+  print "{title}"

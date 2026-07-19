@@ -1,0 +1,19 @@
+type missing
+
+type post
+  body: string
+  title: missing string
+
+fn headline (post _ title)
+  show title
+
+main =
+  a = post "..." "long season"
+  b = post "..." missing
+  print (headline a) >> print (headline b)
+
+fn show missing
+  "(untitled)"
+
+fn show s:string
+  s

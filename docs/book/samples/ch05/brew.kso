@@ -1,0 +1,1 @@
+main = print "brewing" >> print "steeping" >> print "pouring"

@@ -1,0 +1,23 @@
+type joined
+  who: string
+
+type left
+  who: string
+
+type renamed
+  after: string
+  before: string
+
+main =
+  print (render (joined "clay"))
+  >> print (render (renamed "kanso" "kai"))
+  >> print (render (left "mugi"))
+
+fn render (joined who)
+  "{who} joined"
+
+fn render (left who)
+  "{who} left"
+
+fn render (renamed after before)
+  "{before} is now {after}"

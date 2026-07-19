@@ -1,0 +1,84 @@
+fn _approval_col voters c
+  total (map voters (v -> _approves v c))
+
+fn _approves v c
+  if (mean v < at v c) 1 0
+
+fn _argmax_except list skip
+  first = if (skip == 1) 2 1
+  fold (range (length list)) first (b i -> _better list skip b i)
+
+fn _better list skip b i
+  if (i == skip) b (if (at list b < at list i) i b)
+
+fn _first_is v elim c
+  if (_rank_first v elim == c) 1 0
+
+fn _in list x
+  if (count list x == 0) false true
+
+fn _irv_counts voters elim
+  map (range ncand) (c -> total (map voters (v -> _first_is v elim c)))
+
+fn _irv_go voters elim
+  counts = _irv_counts voters elim
+  top = argmax counts
+  if (nvot < 2 * (at counts top)) top (_irv_next voters elim counts)
+
+fn _irv_next voters elim counts
+  _irv_go voters (push elim (_min_alive counts elim))
+
+fn _keep_min counts elim b c
+  if (_in elim c) b (if (b == 0) c (if (at counts c < at counts b) c b))
+
+fn _keep_top v elim b c
+  if (_in elim c) b (if (b == 0) c (if (at v b < at v c) c b))
+
+fn _margin_or_high voters a b
+  if (a == b) nvot (_pair voters a b - _pair voters b a)
+
+fn _min_alive counts elim
+  fold (range ncand) 0 (b c -> _keep_min counts elim b c)
+
+fn _pair voters a b
+  total (map voters (v -> if (at v b < at v a) 1 0))
+
+fn _prefer_count voters a b
+  total (map voters (v -> if (_score_ballot v b < _score_ballot v a) 1 0))
+
+fn _rank_first v elim
+  fold (range ncand) 0 (b c -> _keep_top v elim b c)
+
+fn _score_ballot v c
+  lo = minimum v
+  hi = maximum v
+  round (5.0 * (at v c - lo) / (hi - lo))
+
+fn _score_col voters c
+  total (map voters (v -> _score_ballot v c))
+
+fn _worst_margin voters a
+  minimum (map (range ncand) (b -> _margin_or_high voters a b))
+
+fn approval_winner voters
+  argmax (map (range ncand) (c -> _approval_col voters c))
+
+fn irv_winner voters
+  _irv_go voters []
+
+fn minimax_winner voters
+  argmax (map (range ncand) (c -> _worst_margin voters c))
+
+fn plurality_winner voters
+  argmax (map (range ncand) (c -> count (map voters (v -> argmax v)) c))
+
+fn score_winner voters
+  argmax (map (range ncand) (c -> _score_col voters c))
+
+fn star_winner voters
+  totals = map (range ncand) (c -> _score_col voters c)
+  a = argmax totals
+  b = _argmax_except totals a
+  pa = _prefer_count voters a b
+  pb = _prefer_count voters b a
+  if (pb < pa) a (if (pa < pb) b a)

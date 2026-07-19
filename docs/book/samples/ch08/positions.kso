@@ -1,0 +1,63 @@
+type parse_failure
+  position: int
+  reason: string
+
+fn _both true true
+  true
+
+fn _both _ _
+  false
+
+fn _digits_end cs p
+  if (_is_digit (at cs p)) (_digits_end cs (p + 1)) p
+
+fn _fail p reason
+  err (parse_failure p reason)
+
+fn _is_digit none
+  false
+
+fn _is_digit c
+  _both (47 < c) (c < 58)
+
+fn _is_ws 9
+  true
+
+fn _is_ws 10
+  true
+
+fn _is_ws 13
+  true
+
+fn _is_ws 32
+  true
+
+fn _is_ws none
+  false
+
+fn _is_ws _
+  false
+
+fn _skip_ws cs p
+  if (_is_ws (at cs p)) (_skip_ws cs (p + 1)) p
+
+fn _trailing cs p v
+  if (p > (length cs)) v (_fail p "unexpected trailing characters")
+
+fn decode_int s
+  cs = bytes s
+  p = _skip_ws cs 1
+  q = _digits_end cs p
+  v = to_int (slice cs p (q - 1))
+  _trailing cs (_skip_ws cs q) v
+
+main =
+  print (show (decode_int "  42  "))
+  >> print (show (decode_int "1 x"))
+  >> print (show (decode_int "  7 ;"))
+
+fn show (err (parse_failure p reason))
+  "err at {p}: {reason}"
+
+fn show v
+  "ok: {v}"

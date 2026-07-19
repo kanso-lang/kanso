@@ -1,0 +1,16 @@
+fn describe 0
+  "zero"
+
+fn describe n:int
+  "the int {n}"
+
+fn describe s:string
+  "the string {s}"
+
+fn describe x
+  "something else: {x}"
+
+main = print (describe 0)
+  >> print (describe 7)
+  >> print (describe "seven")
+  >> print (describe 1.5)

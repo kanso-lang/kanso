@@ -1,0 +1,4 @@
+error[signature]: `null` takes no fields; its bare mention is its value
+  --> markerarg_check.kso:4:7
+   4 |   x = null 5
+             ^

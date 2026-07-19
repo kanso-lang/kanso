@@ -1,0 +1,9 @@
+fn describe none
+  "nothing"
+
+fn describe x
+  "got {x}"
+
+main =
+  bad = 10 / 0
+  print (describe bad)

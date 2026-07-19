@@ -1,0 +1,4 @@
+error[syntax]: unexpected character `'`
+  --> quote_check.kso:1:14
+   1 | main = print 'hi'
+                    ^

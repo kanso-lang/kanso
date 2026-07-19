@@ -1,0 +1,4 @@
+error[unused]: unused binding `greeting`
+  --> unused_check.kso:3:3
+   3 |   greeting = "hello"
+         ^

@@ -1,0 +1,20 @@
+type malformed
+
+fn describe malformed
+  "not a flag"
+
+fn describe b
+  "flag: {b}"
+
+main =
+  print (describe (parse_flag "on"))
+  >> print (describe (parse_flag "banana"))
+
+fn parse_flag "off"
+  false
+
+fn parse_flag "on"
+  true
+
+fn parse_flag _
+  malformed

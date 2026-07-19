@@ -1,0 +1,5 @@
+fn same x
+  x
+
+fn same y
+  y

@@ -1,0 +1,16 @@
+plan:
+  join {
+  print "brew: steeping"    # from line 1
+  sleep 60
+  print "brew: poured"    # from line 1
+  random 6
+  . <continuation>
+  } # unordered; both run
+  random 6
+  . <continuation>
+  random 6
+  . <continuation>
+  random 6
+  . <continuation>
+  random 6
+  . <continuation>

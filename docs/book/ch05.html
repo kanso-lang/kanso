@@ -35,14 +35,30 @@
 
 <nav class="book-side" aria-label="book chapters">
   <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
   <ol>
     <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
     <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
     <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
     <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
     <li><a href="ch05.html" aria-current="page"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">modules and tests</span></a></li>
-    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">fast by construction</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
   </ol>
 </nav>
 
@@ -53,7 +69,7 @@
 
 <p>time to confess what <code>print</code> has been doing all book: nothing. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns a <em>description</em> of printing, a value like any other. your entire program is one big pure computation whose final answer is <code>main</code>: a description of everything the program intends to do. the runtime receives that description and walks it. evaluation decides; the runtime performs.</p>
 
-<p>you can see the seam directly, because a description is data and data can be rendered instead of executed. <code>&gt;&gt;</code> glues descriptions into bigger descriptions—"this, then that"—and <code>--plan</code> shows the glued-up value without running it:</p>
+<p>you can see the seam directly, because a description is data, and data can be rendered instead of executed. <code>&gt;&gt;</code>—the wall—glues descriptions into bigger descriptions, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">brew.kso</div>
@@ -73,11 +89,81 @@ pouring</code></pre>
   </div>
 </div>
 
-<p><code>--plan</code> isn't a debugger bolted on afterwards; it falls out of the design. the plan already exists as a value—the flag just prints it instead of handing it to the executor. each step carries the source span it came from, which is where the provenance comments come from.</p>
+<p><code>--plan</code> isn't a debugger bolted on afterwards; it falls out of the design. the plan already exists as a value—the flag just prints it instead of handing it to the executor. each print step carries the source span it came from, which is where the provenance comments come from. nothing else in this chapter is new machinery either. everything is a consequence of one sentence: an effect is a value.</p>
+
+<h2>a description is a value</h2>
+
+<p>take that sentence literally and follow it around. first: if <code>main</code> is just a constant, a program whose <code>main</code> is a plain number should be legal. it is. it computes the number, tells no one, and exits cleanly—there is no description to walk, so the runtime has nothing to do:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">quiet.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run quiet.kso --plan</div>
+    <pre><code><span class="k">error</span>: main is not a description; there is no plan to show</code></pre>
+  </div>
+</div>
+
+<p><code>kanso run quiet.kso</code> prints nothing and exits zero. the answer 42 was computed and discarded, because printing is not a thing that happens to values—it is a value, and this program never built one. ask for the plan and the toolchain says so in as many words.</p>
+
+<p>second: a value can be bound to a name, and a name can be used more than once. a description doesn't remember having run, because it hasn't—splice it in three times and the program means three prints:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">knock.kso</div>
+  <pre><code>knock <span class="o">=</span> <span class="f">print</span> <span class="s">"kon kon"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run knock.kso --plan</div>
+    <pre><code>plan:
+  print "kon kon"    <span class="c"># from line 1</span>
+  print "kon kon"    <span class="c"># from line 1</span>
+  print "kon kon"    <span class="c"># from line 1</span></code></pre>
+  </div>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run knock.kso</div>
+    <pre><code>kon kon
+kon kon
+kon kon</code></pre>
+  </div>
+</div>
+
+<p>in a language where <code>print</code> fires on evaluation, <code>knock</code> would print once, at definition, and the reuse would be a mystery. here the constant is a description, the three uses are three copies in the final value, and the plan shows all three—each pointing back at the one line that built it.</p>
+
+<p>third: interpolate a description into a string and you get its face, not its result. there is no result yet; nothing has run:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">render.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"a description renders as <span class="i">{step}</span>"</span>
+
+step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run render.kso</div>
+    <pre><code>a description renders as &lt;description&gt;</code></pre>
+  </div>
+</div>
+
+<p>and fourth: because intent is a value, dropping intent on the floor is visible—and refused. bind a description and never use it, and the program has written down a thing it will never do. kanso treats that as a bug at compile time, the same way chapter 04 treated an unreceived err:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">dropped_check.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  goodbye <span class="o">=</span> <span class="f">print</span> <span class="s">"sayonara"</span>
+  <span class="f">print</span> <span class="s">"the goodbye never ran"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check dropped_check.kso</div>
+    <pre><code><span class="k">error[unused]</span>: unused binding `goodbye`
+  --&gt; dropped_check.kso:2:3
+   2 |   goodbye = print "sayonara"
+         ^</code></pre>
+  </div>
+</div>
+
+<p>four small programs, one lesson: nothing about <code>print</code> is special. it obeys binding, reuse, interpolation, and the unused-binding check like every other value in chapter 02, because it <em>is</em> one.</p>
 
 <h2>pipes, and pipes into effects</h2>
 
-<p>the other operator you've been glimpsing is <code>.</code>—the pipe. <code>x . f</code> is <code>f x</code>, read left to right, so data flows the way your eye does:</p>
+<p>the other operator you've been glimpsing is <code>.</code>—the dot. <code>x . f</code> is <code>f x</code>, read left to right, so data flows the way your eye does:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pipes.kso</div>
@@ -120,30 +206,35 @@ hojicha</code></pre>
   </div>
 </div>
 
-<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between <code>&gt;&gt;</code> and <code>.</code> in one screenshot: <code>&gt;&gt;</code> sequences descriptions that don't pass data (the plan lists every step up front), while <code>.</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime.</p>
+<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the dot in one screenshot: <code>&gt;&gt;</code> sequences descriptions that don't pass data (the plan lists every step up front), while <code>.</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
-<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist. purity isn't quarantined into special syntax—there's no <code>async</code>, no coloring, no effect annotations on your functions. effect sets are inferred and ride up the call graph on their own.</p>
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code>, no function coloring, no effect annotation to spread through the call graph—effectfulness travels in the value itself. a function that returns a description is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
 
 <h2>the rest of the i/o vocabulary</h2>
 
-<p>writing is a description too—sequence it with <code>&gt;&gt;</code> like anything else:</p>
+<p>writing is a description too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here a wall sequences a write before a read of the same file, and a dot hands the read's contents onward:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">save.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
   order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
-  <span class="f">write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"order saved"</span></code></pre>
+  <span class="f">write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run save.kso</div>
-    <pre><code>order saved</code></pre>
+    <div class="code-panel-title">kanso run save.kso --plan</div>
+    <pre><code>plan:
+  write_file "order.txt"
+  read_file "order.txt"
+  . &lt;continuation&gt;</code></pre>
   </div>
   <div class="code-output">
-    <div class="code-panel-title">cat order.txt</div>
+    <div class="code-panel-title">kanso run save.kso</div>
     <pre><code>one taiyaki, extra custard</code></pre>
   </div>
 </div>
 
-<p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input, both descriptions, both piping like everything else:</p>
+<p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.</code> moves the read's result into <code>print</code>.</p>
+
+<p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are descriptions—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso</div>
@@ -158,13 +249,7 @@ hojicha</code></pre>
     <div class="code-panel-title">kanso run welcome.kso -- clay</div>
     <pre><code>irasshaimase, clay</code></pre>
   </div>
-  <div class="code-output">
-    <div class="code-panel-title">kanso run welcome.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"</code></pre>
-  </div>
 </div>
-
-<p>run it with no argument and the strict index inside <code>first</code> fails—at execution time, because that's when the argument list exists. the err rides the same railway as chapter 04, and the endpoint rule catches it at the executor instead of <code>main</code>. failure during effects isn't a special kind of failure; it's the same value on the same rails.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">shout.kso</div>
@@ -178,11 +263,116 @@ hojicha</code></pre>
   </div>
 </div>
 
+<p>that is the whole i/o vocabulary of part i: <code>print</code>, <code>read_file</code>, <code>write_file</code>, <code>args</code>, <code>stdin</code>. five builtins, zero new syntax, because the composition operators don't care what they compose.</p>
+
+<h2>failure at the edge</h2>
+
+<p>run <code>welcome.kso</code> with no argument and the strict index inside <code>first</code> fails—at execution time, because that's when the argument list exists:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">welcome.kso, run bare</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run welcome.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
+  born in first at welcome.kso:2</code></pre>
+  </div>
+</div>
+
+<p>read the wording against chapter 04. there the message ended "reached main," because main was the endpoint of evaluation. here it ends "reached the executor": evaluation finished long ago, <code>main</code> was a perfectly healthy description, and the failure happened while the runtime was walking it. the err rides the same railway, and the diagnostic still names where it was born. failure during effects isn't a special kind of failure; it's the same value on the same rails, with the endpoint moved one stop later.</p>
+
+<p>a file that isn't there fails the same way:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">missing.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run missing.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
+  </div>
+</div>
+
+<p>one distinction is worth pinning before you reach for a chapter 04 arm. an arm receives an err <em>during evaluation</em>, when the err is a value flowing through your functions. an err born at the edge—the missing file, the absent argument—arrives after evaluation is over, and it does not knock at the continuations waiting downstream, even ones with an arm ready:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fallback.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span>
+
+<span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
+  <span class="s">"no orders yet"</span>
+
+<span class="k">fn</span> <span class="f">orders</span> text
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run fallback.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
+  </div>
+</div>
+
+<p>the <code>err</code> arm on <code>orders</code> is real, and it would fire on any err that flowed to it as a value during evaluation—chapter 04's pattern, unchanged. but the read's failure is the executor reporting that the world refused the program's contract, and the executor does not resume your pipeline to ask how you feel about it. the failure goes straight to the endpoint, message addressed to whoever ran the program—the one party who can actually put the file back. an execution failure is operational, not logical, and kanso declines to blur the two.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">err</span>
+<p>i work execution time too. a file that isn't there, an argument that wasn't passed—same me, same railway, but i board past the last arm. at the edge nobody dispatches on me, so i ride straight to the endpoint and name the line that bore me. you do not need a second error model for i/o, and kanso declines to sell you one.</p>
+</div>
+</div>
+
+<h2>the executor at the edge</h2>
+
+<p>so who actually performs? at the very edge of the toolchain sits the executor—the one component allowed to touch the world. in the interpreter it is a rust trait with one method per effect, and the shape of that trait is the shape of everything kanso can do to your machine:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">src/eval.rs</div>
+  <pre><code><span class="k">pub trait</span> <span class="t">Executor</span> {
+    <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>);
+    <span class="k">fn</span> <span class="f">args</span>(&amp;<span class="k">mut</span> self) -&gt; <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;;
+    <span class="k">fn</span> <span class="f">stdin</span>(&amp;<span class="k">mut</span> self) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt;;
+    <span class="k">fn</span> <span class="f">read_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt;;
+    <span class="k">fn</span> <span class="f">write_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>, content: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;(), <span class="t">String</span>&gt;;
+}
+
+<span class="k">impl</span> <span class="t">Executor</span> <span class="k">for</span> <span class="t">RealExecutor</span> {
+    <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>) {
+        println!(<span class="s">"{text}"</span>);
+    }
+
+    <span class="k">fn</span> <span class="f">read_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; {
+        std::fs::read_to_string(path).map_err(|e| format!(<span class="s">"cannot read {path}: {e}"</span>))
+    }
+    <span class="c">// ...</span>
+}</code></pre>
+</div>
+
+<p>this is the classic functional-core, imperative-shell split, enforced by construction rather than discipline. your program—every function you write, every module you'll build in chapter 07—lives in the pure core. the shell is a short loop that walks the description and calls these trait methods. chapter 01 promised "two engines, one meaning," and this seam is why the promise is cheap to keep: <code>kanso run</code> compiles your program to a native binary while <code>--plan</code> and <code>kanso test</code> stay on the interpreter, and they can't disagree about what your program <em>means</em>, because the meaning is a value fixed before any executor gets involved.</p>
+
 <h2>testing without mocks</h2>
 
-<p>here is what this architecture buys, and it's the reason the whole design exists. in most languages, testing effectful code means interception: monkey-patch the i/o call, record what would have happened, hope the patch is faithful to the real thing. in kanso there is nothing to intercept, because evaluation never does i/o. a test evaluates <code>main</code>—pure, fast, no side effects—and gets the program's <em>entire intent</em> as a value.</p>
+<p>here is what the architecture buys, and it's the reason the whole design exists. in most languages, testing effectful code means interception: monkey-patch the i/o call, record what would have happened, hope the patch is faithful to the real thing. in kanso there is nothing to intercept, because evaluation never does i/o. the testing story has two floors, both mock-free.</p>
 
-<p>the interpreter makes this concrete. its runtime is a trait with two implementations—the real executor performs effects, and a scripted one appends each effect to a transcript:</p>
+<p>the ground floor you already have. the logic in an effectful pipeline lives in pure functions—<code>count_lines</code>, <code>shout</code>, <code>greet</code>—and pure functions are tested by calling them, with the <code>test_</code> constants from chapter 01:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">core_test.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">count_lines</span> text
+  newlines <span class="o">=</span> <span class="f">filter</span> (<span class="f">chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <span class="f">length</span> newlines
+
+<span class="f">test_counts_lines</span> <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span>) <span class="o">==</span> <span class="n">3</span>
+
+<span class="f">test_empty_text_has_no_lines</span> <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">""</span>) <span class="o">==</span> <span class="n">0</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test core_test.kso</div>
+    <pre><code>test_counts_lines ... ok
+test_empty_text_has_no_lines ... ok
+2 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>no file was faked, because no file was involved: the function under test takes a string, and the fact that <code>main</code> pipes it from <code>read_file</code> is not the function's business. the design pushed the file dependency to the edge, and the test simply doesn't follow it there.</p>
+
+<p>the second floor is the effects themselves. a test evaluates <code>main</code>—pure, fast, no side effects—and gets the program's <em>entire intent</em> as a value. the interpreter makes this concrete: <code>Executor</code> is a trait, so alongside the real executor there is a scripted one that performs nothing and appends each effect to a transcript, feeding the program canned args, canned stdin, and an in-memory map of files:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">src/eval.rs</div>
@@ -191,12 +381,30 @@ hojicha</code></pre>
     <span class="k">pub</span> script_args: <span class="t">Vec</span>&lt;<span class="t">String</span>&gt;,
     <span class="k">pub</span> script_stdin: <span class="t">String</span>,
     <span class="k">pub</span> files: std::collections::<span class="t">HashMap</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt;,
+}
+
+<span class="k">impl</span> <span class="t">Executor</span> <span class="k">for</span> <span class="t">ScriptedExecutor</span> {
+    <span class="k">fn</span> <span class="f">print</span>(&amp;<span class="k">mut</span> self, text: &amp;<span class="t">str</span>) {
+        self.transcript.push(format!(<span class="s">"print {text:?}"</span>));
+    }
+
+    <span class="k">fn</span> <span class="f">read_file</span>(&amp;<span class="k">mut</span> self, path: &amp;<span class="t">str</span>) -&gt; <span class="t">Result</span>&lt;<span class="t">String</span>, <span class="t">String</span>&gt; {
+        self.transcript.push(format!(<span class="s">"read_file {path:?}"</span>));
+        self.files.get(path).cloned().ok_or_else(|| format!(<span class="s">"cannot read {path}"</span>))
+    }
+    <span class="c">// ...</span>
 }</code></pre>
 </div>
 
-<p>a test hands <code>main</code>'s description to the scripted executor—feeding it canned args, canned stdin, an in-memory map of files—and then asserts on the transcript with plain data equality: <code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no stubbing framework, no argument matchers, no "verify this was called once." the program <em>said</em> what it would do, and the test reads the saying.</p>
+<p>a test hands <code>main</code>'s description to the scripted executor and asserts on the transcript with plain data equality—<code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no stubbing framework, no argument matchers, no "verify this was called once." the program <em>said</em> what it would do, and the test reads the saying:</p>
 
-<p>the chapter is one idea seen from four sides: <code>--plan</code> renders intent, <code>&gt;&gt;</code> and <code>.</code> compose it, <code>read_file</code> and <code>args</code> feed it, and a transcript tests it—all because an effect is a value and evaluation never performs one. chapter 06 gathers programs like these into modules, where a test turns out to be nothing more exotic than a boolean constant.</p>
+<div class="code-panel">
+  <div class="code-panel-title">cargo test scripted_executor</div>
+  <pre><code>running 1 test
+test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
+</div>
+
+<p>and this book eats the same cooking. every output panel in every chapter is a golden file that a harness re-runs against the real toolchain, and the goldens hold because a kanso program's transcript is a function of its source—even, as chapter 06 will show, when the program is concurrent and rolling dice.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
@@ -206,19 +414,22 @@ hojicha</code></pre>
 </div>
 </div>
 
-<div class="tip">
-<svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
-<div class="tip-bubble">
-<span class="tip-who">err</span>
-<p>i work execution time too. a file that isn't there, an argument that wasn't passed—same me, same railway, caught at the executor instead of main. you do not need a second error model for i/o, and kanso declines to sell you one.</p>
-</div>
-</div>
+<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: descriptions on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two descriptions <em>don't</em> need an order—and turns it into concurrency for free.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>write a program that binds one <code>print</code> description to a name and splices it into <code>main</code> twice, separated by a different print. predict the full <code>--plan</code> output on paper, then run it and compare.</li>
+  <li>write a file copier: pipe <code>read_file "flavors.txt"</code> into a lambda that returns <code>write_file "copy.txt" text</code>. run it with <code>--plan</code> first and explain why the write step doesn't appear in the plan, then run it for real and confirm the copy exists.</li>
+  <li>change <code>first</code> in <code>welcome.kso</code> to index <code>xs[2]</code> and run it with one argument, then with two. for each run, say whether the failure (if any) happened during evaluation or during execution, and quote the part of the message that told you.</li>
+  <li>extract the pure function from <code>shout.kso</code> into a file of its own with two <code>test_</code> constants—one for ordinary text, one for the empty string. decide what the empty-string result <em>should</em> be before you run <code>kanso test</code>, and reconcile if the toolchain disagrees.</li>
+</ol>
 
 <nav class="chapter-nav">
   <a href="index.html">contents</a>
   <span class="nav-spacer"></span>
   <a href="ch04.html">← failure is a value</a>
-  <a href="ch06.html">next: modules and tests →</a>
+  <a href="ch06.html">next: flow and concurrency →</a>
 </nav>
 
 </article>
@@ -232,6 +443,7 @@ hojicha</code></pre>
       <a href="../index.html">home</a>
       <a href="../about.html">about</a>
       <a href="../lore.html">lore</a>
+      <a href="../influences.html">influences</a>
       <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>

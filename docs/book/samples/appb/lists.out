@@ -1,0 +1,9 @@
+map [30 10 20]
+filter [3 2]
+sort [1 2 3]
+sum 6
+push [3 1 2 4]
+at 1
+length 3
+slice [3 1]
+concat [3 1 2 9]

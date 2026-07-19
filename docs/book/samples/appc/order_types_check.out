@@ -1,0 +1,4 @@
+error[formatting]: canonical order places type declarations before functions; move `bravo` up
+  --> order_types_check.kso:4:6
+   4 | type bravo
+            ^

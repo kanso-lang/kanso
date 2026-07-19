@@ -64,3 +64,15 @@ Item 1 (imports + pub enforcement) is the keystone and the real gap. Item 3
 (`play`) is small and unblocks `concurrency.kso`. Item 4 (underscores) rides with
 1/2. Suggested order: 3 (quick win) → 1+2 (the core) → 4 (migration) → update
 `spec.html` §231 + the corpus.
+
+## GAVELED (2026-07-19): entrypoint files are statements-only
+
+Clay ruled option 1: **a file is a library (definitions only) or an entrypoint
+(statements only) — never mixed.** No magic names anywhere: the language runs
+the entrypoint file's body; `main` is a relic that dissolves when this lands.
+Bindings in an entry file are body bindings (sequential); there are no
+constants/fn/type declarations in an entry file. The playground's hidden
+entrypoint becomes literally `import <library>` + `play`. Single-file programs:
+a statements-only file runs as-is (hello is one line); anything defining
+functions is a library and needs an entry. Build WITH cross-module import
+(the entry file imports the library) — they are one feature.

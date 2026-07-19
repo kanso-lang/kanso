@@ -1,0 +1,4 @@
+error[formatting]: needless continuation: this statement fits on one line (34 characters)
+  --> needless_continuation_check.kso:3:5
+   3 |     . sum
+           ^

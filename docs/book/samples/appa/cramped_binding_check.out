@@ -1,0 +1,8 @@
+error[formatting]: canonical form requires exactly one space here
+  --> cramped_binding_check.kso:2:9
+   2 |   answer=42
+               ^
+error[formatting]: canonical form requires exactly one space here
+  --> cramped_binding_check.kso:2:10
+   2 |   answer=42
+                ^

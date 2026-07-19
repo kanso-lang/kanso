@@ -1,0 +1,4 @@
+error[syntax]: `_` does not appear in binding patterns; omit fields with a keyed read
+  --> peek_check.kso:8:16
+   8 |   track artist _ title = song
+                      ^

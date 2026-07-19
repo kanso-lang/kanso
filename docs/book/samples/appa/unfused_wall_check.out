@@ -1,0 +1,4 @@
+error[formatting]: a one-step stage fuses with its wall: write `>> step` on one line
+  --> unfused_wall_check.kso:4:3
+   4 |   >>
+         ^

@@ -1,0 +1,670 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chapter 08—a json library</title>
+<meta name="description" content="a close reading of kanso-json: six files, parsing by byte dispatch, the escape path, numbers, failure positions, the sixteen-test suite, encode and a pretty-printer.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../playground.html">playground</a>
+    <a href="index.html">book</a>
+    <a href="../about.html">about</a>
+    <a href="../compiler.html">compiler</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
+  </nav>
+</header>
+
+<div class="book-layout">
+
+<nav class="book-side" aria-label="book chapters">
+  <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
+  <ol>
+    <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
+    <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
+    <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
+    <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
+    <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html" aria-current="page"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
+  </ol>
+</nav>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">chapter 08</span>
+<h1>a json library</h1>
+
+<p>part i taught the pieces. part ii spends them. the repository ships <code>lib/json</code>—a complete json decoder and encoder, escapes and <code>\uXXXX</code> and int-versus-float and failure positions included—written to prove the language can earn a living. it is six files and four hundred and change lines, and this chapter reads it closely: not a tour past the window, but the whole shop, byte by byte. every panel below quotes the real files, and the executed samples either run the library itself or replay one of its moves small enough to fit on a page. first, what it feels like to use:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">using/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> (<span class="t">parse_failure</span> p reason))
+  <span class="s">"parse failed at byte <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> v
+  <span class="s">"decoded: <span class="i">{v}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  ok <span class="o">=</span> <span class="f">decode</span> <span class="s">"\{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}"</span>
+  bad <span class="o">=</span> <span class="f">decode</span> <span class="s">"\{\"name\": nope}"</span>
+  <span class="f">print</span> (<span class="f">describe</span> ok)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"recoded: <span class="i">{encode ok}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run using</div>
+    <pre><code>decoded: ["name": "kanso" "tags": ["fast" "simple"]]
+recoded: {"name":"kanso","tags":["fast","simple"]}
+parse failed at byte 10: invalid literal</code></pre>
+  </div>
+</div>
+
+<p>the module behind this panel is the library itself—the sample directory links the real <code>lib/json</code> files next to that <code>main</code>. three chapters shake hands in twelve lines: <code>decode</code> returns a value or an <code>err</code>, dispatch pulls the failure apart in <code>describe</code>, and the happy path never checks anything. note what the failure says: byte 10, <code>invalid literal</code>—the parser saw <code>n</code>, committed to <code>null</code>, and reported exactly where the input betrayed it.</p>
+
+<h2>six files, one namespace</h2>
+
+<p>the library is a directory, so chapter 07 already told you its shape: one namespace, files split by topic, alphabetical inside. the split reads like a table of contents:</p>
+
+<ul>
+  <li><code>json.kso</code>—the public api: <code>decode</code>, <code>encode</code>, <code>must</code>, the failure types</li>
+  <li><code>value.kso</code>—parsing values: objects, arrays, literals</li>
+  <li><code>text.kso</code>—strings, escapes, hex digits</li>
+  <li><code>number.kso</code>—ints, floats, and which bytes may start them</li>
+  <li><code>scan.kso</code>—whitespace and low-level cursor work</li>
+  <li><code>json_test.kso</code>—the suite</li>
+</ul>
+
+<p><code>value.kso</code> calls <code>scan.kso</code>'s helpers without ceremony, and the test file reaches private helpers when it wants to. (the underscored names you'll see are house style from before <code>pub</code> arrived—the sweep that retires them rides with import enforcement.) the api file is where every read should start:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/json.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">_parsed</span>
+  pos: <span class="t">int</span>
+  value: <span class="t">json</span>
+
+<span class="k">type</span> <span class="t">parse_failure</span>
+  position: <span class="t">int</span>
+  reason: <span class="t">string</span>
+
+<span class="k">fn</span> <span class="f">_finish</span> <span class="o">_</span> <span class="t">none</span>
+  <span class="t">err</span> (<span class="t">parse_failure</span> <span class="n">0</span> <span class="s">"unexpected end of input"</span>)
+
+<span class="k">fn</span> <span class="f">_finish</span> cs (<span class="t">_parsed</span> p v)
+  p2 <span class="o">=</span> <span class="f">_skip_ws</span> cs p
+  <span class="f">if</span> (p2 <span class="o">&gt;</span> (<span class="f">length</span> cs)) v (<span class="f">_fail</span> p2 <span class="s">"unexpected trailing characters"</span>)
+
+<span class="k">fn</span> <span class="f">decode</span> s
+  cs <span class="o">=</span> <span class="f">bytes</span> s
+  <span class="f">_finish</span> cs (<span class="f">_parse_value</span> cs <span class="n">1</span>)</code></pre>
+</div>
+
+<p><code>decode</code> is three lines because the whole design lives in its two collaborators. every internal step returns a <code>_parsed</code>—a cursor position paired with the value parsed so far—because a parser's real product is not just a value but <em>how far it got</em>. and <code>_finish</code> is dispatch doing the last two checks: an absent result is the empty-input failure, and a present one is accepted only if nothing but whitespace remains. <code>decode "1 x"</code> fails at byte 3, and you will meet that exact assertion in the suite.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>four hundred lines is small for a json library and it is not an accident of golfing. there is no error-propagation code to write, no visitor plumbing, no token type—the language's defaults absorb whole categories of a parser's usual weight. read the files with that question in mind: what <em>isn't</em> here?</p>
+</div>
+</div>
+
+<h2>the next byte is the dispatch</h2>
+
+<p>most hand-written parsers begin with a lexer, a token enum, and a loop with a switch in it. kanso-json has none of those, because it doesn't need a value to branch on—it needs a value to <em>dispatch</em> on, and the next byte already is one. the heart of the parser is the chapter-03 move at industrial scale:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/value.kso</div>
+  <pre><code><span class="c"># value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace</span>
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">34</span> cs p
+  <span class="f">_parse_string</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">91</span> cs p
+  <span class="f">_parse_array</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">102</span> cs p
+  <span class="f">_word</span> cs p _bytes_false <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">110</span> cs p
+  <span class="f">_word</span> cs p _bytes_null <span class="t">json_null</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">116</span> cs p
+  <span class="f">_word</span> cs p _bytes_true <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">123</span> cs p
+  <span class="f">_parse_object</span> cs (p <span class="o">+</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="t">none</span> <span class="o">_</span> p
+  <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> c cs p
+  numeric <span class="o">=</span> <span class="f">_is_number_start</span> c
+  <span class="f">if</span> numeric (<span class="f">_parse_number</span> cs p) (<span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>)</code></pre>
+</div>
+
+<p>eight arms, one per way a json value can begin—including the <code>none</code> arm, because <code>at</code> past the end of the byte array returns <code>none</code>, and running off the end of input is just an absent byte, dispatched like everything else. the three keyword literals share one checker: <code>_word</code> slices the next few bytes and compares them against the expected spelling as a plain value equality. here is that whole path, small enough to re-run on its own:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">literal.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">parse_failure</span>
+  position: <span class="t">int</span>
+  reason: <span class="t">string</span>
+
+_bytes_false <span class="o">=</span> [<span class="n">102</span> <span class="n">97</span> <span class="n">108</span> <span class="n">115</span> <span class="n">101</span>]
+
+_bytes_null <span class="o">=</span> [<span class="n">110</span> <span class="n">117</span> <span class="n">108</span> <span class="n">108</span>]
+
+_bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">114</span> <span class="n">117</span> <span class="n">101</span>]
+
+<span class="k">fn</span> <span class="f">_fail</span> p reason
+  <span class="t">err</span> (<span class="t">parse_failure</span> p reason)
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">102</span> cs p
+  <span class="f">_word</span> cs p _bytes_false <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">110</span> cs p
+  <span class="f">_word</span> cs p _bytes_null <span class="s">"null"</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">116</span> cs p
+  <span class="f">_word</span> cs p _bytes_true <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> <span class="t">none</span> <span class="o">_</span> p
+  <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
+
+<span class="k">fn</span> <span class="f">_value_for</span> c <span class="o">_</span> p
+  <span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>
+
+<span class="k">fn</span> <span class="f">_word</span> cs p expected v
+  n <span class="o">=</span> <span class="f">length</span> expected
+  seg <span class="o">=</span> <span class="f">slice</span> cs p (p <span class="o">+</span> n <span class="o">-</span> <span class="n">1</span>)
+  <span class="f">if</span> (seg <span class="o">==</span> expected) v (<span class="f">_fail</span> p <span class="s">"invalid literal"</span>)
+
+<span class="k">fn</span> <span class="f">decode_literal</span> s
+  cs <span class="o">=</span> <span class="f">bytes</span> s
+  <span class="f">_value_for</span> (<span class="f">at</span> cs <span class="n">1</span>) cs <span class="n">1</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"true"</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>))
+
+<span class="k">fn</span> <span class="f">show</span> (<span class="t">err</span> (<span class="t">parse_failure</span> p reason))
+  <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">show</span> v
+  <span class="s">"ok: <span class="i">{v}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run literal.kso</div>
+    <pre><code>ok: true
+ok: null
+err at 1: invalid literal
+err at 1: unexpected character `?`</code></pre>
+  </div>
+</div>
+
+<p>the constants are the spellings—<code>[116 114 117 101]</code> is <code>true</code> in utf-8—and comparing byte arrays is just <code>==</code>, because arrays are values. <code>nope</code> starts with <code>n</code>, so the parser commits to <code>null</code> and <code>_word</code> reports the mismatch; <code>?</code> starts nothing, so the catch-all arm names the offending byte. and notice what the parser never writes: not one line of "check if the last step failed." a bad literal becomes an <code>err</code> deep inside, and the railway from chapter 04 carries it out through every caller with its position intact.</p>
+
+<p>arrays and objects follow the same discipline one level up. <code>_array_delim</code> dispatches on the byte after an element—comma means more items, <code>93</code> (a closing bracket) means done, <code>none</code> means the input ended mid-array—and the object path adds only a key: <code>_obj_key_start</code> insists on a quote, <code>_expect_char</code> demands the colon, and <code>_obj_value</code> folds each pair into a map with <code>put</code>. there is no recursion <em>limit</em> to manage and no parser state to restore, because every step passes its whole world—the bytes and a position—forward as arguments.</p>
+
+<h2>strings and the escape path</h2>
+
+<p>strings are where json parsers earn or lose their keep, and <code>text.kso</code> is the library's biggest file. the design is a two-speed scanner. the fast path bets that most strings contain no escapes: <code>find2</code> hunts for the next quote <em>or</em> backslash byte, and dispatch on what it found decides which world you're in:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/text.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_string_at</span> cs <span class="n">34</span> start p
+  <span class="t">_parsed</span> (p <span class="o">+</span> <span class="n">1</span>) (<span class="f">_string_ok</span> p (<span class="f">utf8</span> (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>))))
+
+<span class="k">fn</span> <span class="f">_string_at</span> cs <span class="n">92</span> start p
+  <span class="f">_str_chars</span> cs p (<span class="f">concat</span> [] (<span class="f">slice</span> cs start (p <span class="o">-</span> <span class="n">1</span>)))
+
+<span class="k">fn</span> <span class="f">_string_at</span> <span class="o">_</span> <span class="t">none</span> <span class="o">_</span> p
+  <span class="f">_fail</span> p <span class="s">"unterminated string"</span>
+
+<span class="k">fn</span> <span class="f">_string_at</span> cs <span class="o">_</span> start p
+  <span class="f">_string_scan</span> cs start (p <span class="o">+</span> <span class="n">1</span>)
+
+<span class="k">fn</span> <span class="f">_string_scan</span> cs start p
+  n <span class="o">=</span> <span class="f">find2</span> cs p <span class="n">34</span> <span class="n">92</span>
+  <span class="f">_string_at</span> cs (<span class="f">at</span> cs n) start n</code></pre>
+</div>
+
+<p>read from the bottom. a quote (<code>34</code>) ends the string, and the value is one slice of the original input—no copying, no character loop. a backslash (<code>92</code>) abandons the bet: the bytes so far are moved into an accumulator and the slow path takes over, appending decoded bytes one escape at a time. <code>none</code> means the input ended inside the string. the slow path is another dispatch table—one arm per legal escape character, each pushing the byte it names:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/text.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_str_escape</span> cs <span class="n">110</span> p acc
+  <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">2</span>) (<span class="f">push</span> acc <span class="n">10</span>)
+
+<span class="k">fn</span> <span class="f">_str_escape</span> cs <span class="n">117</span> p acc
+  <span class="f">_str_unicode</span> cs p acc
+
+<span class="k">fn</span> <span class="f">_str_escape</span> <span class="o">_</span> c p <span class="o">_</span>
+  <span class="f">_fail</span> p <span class="s">"invalid escape `\\<span class="i">{utf8 [c]}</span>`"</span>
+
+<span class="k">fn</span> <span class="f">_str_unicode</span> cs p acc
+  h1 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">2</span>))
+  h2 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">3</span>))
+  h3 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">4</span>))
+  h4 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs (p <span class="o">+</span> <span class="n">5</span>))
+  code <span class="o">=</span> h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4
+  <span class="f">_str_chars</span> cs (p <span class="o">+</span> <span class="n">6</span>) (<span class="f">concat</span> acc (<span class="f">bytes</span> (<span class="f">from_code</span> code)))</code></pre>
+</div>
+
+<p>the file has eight arms for the named escapes—<code>110</code> is <code>\n</code>, and its siblings for <code>\"</code>, <code>\\</code>, <code>\/</code>, <code>\b</code>, <code>\f</code>, <code>\r</code>, <code>\t</code> read identically—plus an end-of-input arm and the two shown here. <code>\uXXXX</code> is the interesting one: four hex digits become a code point, <code>from_code</code> turns the code point into a character, and its utf-8 bytes join the accumulator. the digit math is worth running with your own eyes:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">unicode.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_both</span> <span class="t">true</span> <span class="t">true</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_both</span> <span class="o">_</span> <span class="o">_</span>
+  <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">_hex_alpha</span> c
+  <span class="f">if</span> (<span class="f">_both</span> (<span class="n">96</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">103</span>)) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">_hex_upper</span> c)
+
+<span class="k">fn</span> <span class="f">_hex_digit</span> c
+  <span class="f">if</span> (<span class="f">_both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)) (c <span class="o">-</span> <span class="n">48</span>) (<span class="f">_hex_alpha</span> c)
+
+<span class="k">fn</span> <span class="f">_hex_upper</span> c
+  <span class="f">if</span> (<span class="f">_both</span> (<span class="n">64</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">71</span>)) (c <span class="o">-</span> <span class="n">55</span>) (<span class="t">err</span> <span class="s">"invalid hex digit"</span>)
+
+<span class="k">fn</span> <span class="f">decode_u</span> s
+  cs <span class="o">=</span> <span class="f">bytes</span> s
+  h1 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">1</span>)
+  h2 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">2</span>)
+  h3 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">3</span>)
+  h4 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">4</span>)
+  <span class="f">from_code</span> (h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4)
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"305f"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run unicode.kso</div>
+    <pre><code>é
+た
+简</code></pre>
+  </div>
+</div>
+
+<p>those are the library's own hex functions, verbatim—the three-way relay <code>_hex_digit</code> → <code>_hex_alpha</code> → <code>_hex_upper</code> tries digits, then lowercase, then uppercase, and a byte that is none of them raises the one genuinely unhandleable failure in the file. that last character is <code>7b80</code>—<code>简</code>, the first half of 簡素. the library can spell its own name.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">mugi</span>
+<p><code>at</code> is 1-indexed and returns <code>none</code> past the end—that pair of facts is the parser's entire end-of-input story. no length checks before reads, no sentinel value, no eof token: read the byte, and if the input is over, <code>none</code> flows into the same dispatch as everything else. count the <code>none</code> arms across the six files. each one is a bounds check somebody else's parser had to remember to write.</p>
+</div>
+</div>
+
+<h2>numbers without a lexer</h2>
+
+<p>numbers get the same treatment: find where the number ends, then decide what kind it is. <code>_number_end</code> walks forward while the byte could belong to a number; <code>_mark_from</code> re-scans the span asking one question—is there a <code>.</code>, <code>e</code>, or <code>E</code> anywhere in it?—and that answer picks the conversion:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/number.kso</div>
+  <pre><code><span class="c"># float marks: . E e</span>
+<span class="k">fn</span> <span class="f">_mark_step</span> <span class="o">_</span> <span class="n">46</span> <span class="o">_</span> <span class="o">_</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_mark_step</span> <span class="o">_</span> <span class="n">69</span> <span class="o">_</span> <span class="o">_</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_mark_step</span> <span class="o">_</span> <span class="n">101</span> <span class="o">_</span> <span class="o">_</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_mark_step</span> cs <span class="o">_</span> p q
+  <span class="f">_mark_from</span> cs (p <span class="o">+</span> <span class="n">1</span>) q
+
+<span class="k">fn</span> <span class="f">_number_end</span> cs p
+  <span class="f">if</span> (<span class="f">_is_number_char</span> (<span class="f">at</span> cs p)) (<span class="f">_number_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+
+<span class="k">fn</span> <span class="f">_number_value</span> cs p q
+  digits <span class="o">=</span> <span class="f">slice</span> cs p q
+  raw <span class="o">=</span> <span class="f">if</span> (<span class="f">_mark_from</span> cs p q) (<span class="f">to_float</span> digits) (<span class="f">to_int</span> digits)
+  <span class="f">_number_ok</span> p raw</code></pre>
+</div>
+
+<p>replay the decision on its own inputs—the sample carries the number file's scanning functions wholesale and prints which converter would fire:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">numbers.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">classify</span> s
+  cs <span class="o">=</span> <span class="f">bytes</span> s
+  q <span class="o">=</span> <span class="f">_number_end</span> cs <span class="n">1</span>
+  digits <span class="o">=</span> <span class="f">slice</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
+  floaty <span class="o">=</span> <span class="f">_mark_from</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
+  <span class="f">if</span> floaty <span class="s">"float64 <span class="i">{to_float digits}</span>"</span> <span class="s">"int <span class="i">{to_int digits}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"6e3"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run numbers.kso</div>
+    <pre><code>int 42
+int -17
+float64 3.25
+float64 6000.0</code></pre>
+  </div>
+</div>
+
+<p>(the panel shows <code>classify</code> and <code>main</code>; the sample file also carries <code>_both</code>, <code>_is_number_char</code>, <code>_mark_from</code>, <code>_mark_step</code>, and <code>_number_end</code> verbatim from <code>number.kso</code>.) an integer stays an integer—<code>42</code> decodes to <code>int 42</code>, not <code>42.0</code>—and anything marked with a dot or an exponent becomes a <code>float64</code>, so <code>6e3</code> is <code>6000.0</code>. the greedy scan is deliberately looser than the json grammar: <code>_is_number_char</code> accepts any plausible number byte, and <code>to_int</code> or <code>to_float</code> is the real judge. if the conversion fails, <code>_number_ok</code> converts that refusal into a <code>parse_failure</code> pinned to where the number began. let the builtin own the hard part; the parser only needs to know where the number stops and whether a float mark appeared.</p>
+
+<h2>failure carries its position</h2>
+
+<p>every failure in the library flows through one two-line function:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/scan.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_fail</span> p reason
+  <span class="t">err</span> (<span class="t">parse_failure</span> p reason)
+
+<span class="c"># json whitespace bytes: tab, newline, carriage return, space</span>
+<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">9</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">10</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">13</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_is_ws</span> <span class="n">32</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">_is_ws</span> <span class="t">none</span>
+  <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">_is_ws</span> <span class="o">_</span>
+  <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">_skip_ws</span> cs p
+  <span class="f">if</span> (<span class="f">_is_ws</span> (<span class="f">at</span> cs p)) (<span class="f">_skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p</code></pre>
+</div>
+
+<p>a <code>parse_failure</code> is an <code>err</code> wrapping a record: the byte position and a human reason. because the cursor is always an argument, the position is always at hand when something goes wrong—there is no "current location" to reconstruct from a lexer's state. the mini-decoder below is <code>_finish</code>'s trailing-characters check in miniature: skip whitespace, read a value, skip whitespace again, and demand the input be over. the sample keeps the library's <code>_is_ws</code> and <code>_skip_ws</code> byte for byte:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">positions.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_trailing</span> cs p v
+  <span class="f">if</span> (p <span class="o">&gt;</span> (<span class="f">length</span> cs)) v (<span class="f">_fail</span> p <span class="s">"unexpected trailing characters"</span>)
+
+<span class="k">fn</span> <span class="f">decode_int</span> s
+  cs <span class="o">=</span> <span class="f">bytes</span> s
+  p <span class="o">=</span> <span class="f">_skip_ws</span> cs <span class="n">1</span>
+  q <span class="o">=</span> <span class="f">_digits_end</span> cs p
+  v <span class="o">=</span> <span class="f">to_int</span> (<span class="f">slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
+  <span class="f">_trailing</span> cs (<span class="f">_skip_ws</span> cs q) v
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run positions.kso</div>
+    <pre><code>ok: 42
+err at 3: unexpected trailing characters
+err at 5: unexpected trailing characters</code></pre>
+  </div>
+</div>
+
+<p>positions point at the first byte the parser could not accept: the <code>x</code> in <code>1 x</code> sits at byte 3, the <code>;</code> at byte 5. the api file rounds the failure story out with a policy choice—two of them, actually:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/json.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">defect</span>
+  reason: <span class="t">string</span>
+
+<span class="k">fn</span> <span class="f">_failure_position</span> (<span class="t">err</span> (<span class="t">parse_failure</span> p <span class="o">_</span>))
+  p
+
+<span class="k">fn</span> <span class="f">_failure_position</span> <span class="o">_</span>
+  <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">must</span> (<span class="t">err</span> reason)
+  <span class="t">err</span> (<span class="t">defect</span> <span class="s">"<span class="i">{reason}</span>"</span>)
+
+<span class="k">fn</span> <span class="f">must</span> v
+  v</code></pre>
+</div>
+
+<p>chapter 04 drew the line: an <code>err</code> a caller might reasonably handle is a value to dispatch on; an <code>err</code> nobody should handle rises to the endpoint. <code>decode</code> hands back the first kind, because malformed input is the caller's business—maybe it retries, maybe it reports byte 10 to a user. <code>must</code> converts to the second: wrap a decode of input you <em>control</em>—a config file baked into the program, a fixture—and a failure stops being data and becomes a <code>defect</code>, a bug with your name on it. same railway, different destination, chosen by the caller in one word. and <code>_failure_position</code> is nothing but a projection—dispatch reaching through <code>err</code> into the record to pull the position out, which is exactly how the suite pins error locations.</p>
+
+<h2>the suite</h2>
+
+<p>sixteen booleans pin the whole library—decoding every value kind, both escape directions, unicode, whitespace, error positions, <code>must</code>, and a round trip:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/json_test.kso</div>
+  <pre><code><span class="f">test_decode_unicode</span> <span class="o">=</span> (<span class="f">decode</span> <span class="s">"\"\\u00e9\""</span>) <span class="o">==</span> <span class="s">"é"</span>
+
+<span class="f">test_error_position</span> <span class="o">=</span> (<span class="f">_failure_position</span> (<span class="f">decode</span> <span class="s">"[1, nope]"</span>)) <span class="o">==</span> <span class="n">5</span>
+
+<span class="f">test_error_trailing</span> <span class="o">=</span> (<span class="f">_failure_position</span> (<span class="f">decode</span> <span class="s">"1 x"</span>)) <span class="o">==</span> <span class="n">3</span>
+
+<span class="f">test_must_wraps_defect</span> <span class="o">=</span> <span class="f">_is_defect</span> (<span class="f">must</span> (<span class="f">decode</span> <span class="s">"nope"</span>))
+
+<span class="f">test_roundtrip</span> <span class="o">=</span>
+  text <span class="o">=</span> <span class="s">"\{\"a\":[1,2.5,\"x\"],\"b\":null}"</span>
+  (<span class="f">encode</span> (<span class="f">decode</span> text)) <span class="o">==</span> text</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso test lib/json</div>
+    <pre><code>test_decode_array ... ok
+test_decode_bool ... ok
+test_decode_escapes ... ok
+test_decode_float ... ok
+test_decode_int ... ok
+test_decode_nested ... ok
+test_decode_object ... ok
+test_decode_string ... ok
+test_decode_unicode ... ok
+test_decode_whitespace ... ok
+test_encode_escapes ... ok
+test_encode_nested ... ok
+test_error_position ... ok
+test_error_trailing ... ok
+test_must_wraps_defect ... ok
+test_roundtrip ... ok
+16 passed, 0 failed</code></pre>
+  </div>
+</div>
+
+<p>look at what each test costs. <code>test_error_position</code> asserts that decoding <code>[1, nope]</code> fails at byte 5—the whole failure model in one comparison, using the private <code>_failure_position</code> because one namespace means the suite reaches wherever it needs. <code>test_roundtrip</code> is the deepest assertion in the file: decode a document, encode the result, and demand the original text back. it holds because <code>encode</code> is canonical—no spaces, keys in map order—so a canonically-written input survives the loop byte for byte. and every one of them is a plain equality between values, which chapter 07 promised would be enough.</p>
+
+<h2>encode and pretty-printing</h2>
+
+<p>the decoder is a search; the encoder is a fold. one arm per value kind, and the compound arms recurse by calling <code>encode</code> on whatever they hold:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">lib/json/json.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">encode</span> <span class="t">true</span>
+  <span class="s">"true"</span>
+
+<span class="k">fn</span> <span class="f">encode</span> <span class="t">json_null</span>
+  <span class="s">"null"</span>
+
+<span class="k">fn</span> <span class="f">encode</span> n:<span class="t">int</span>
+  <span class="s">"<span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">encode</span> s:<span class="t">string</span>
+  <span class="s">"\"<span class="i">{_escape_str s}</span>\""</span>
+
+<span class="k">fn</span> <span class="f">encode</span> xs:<span class="t">json[]</span>
+  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> xs (v <span class="o">-&gt;</span> <span class="f">encode</span> v)) <span class="s">","</span>
+  <span class="s">"[<span class="i">{inner}</span>]"</span>
+
+<span class="k">fn</span> <span class="f">encode</span> m:<span class="t">json[string]</span>
+  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">_encode_entry</span> e)) <span class="s">","</span>
+  <span class="s">"\{<span class="i">{inner}</span>}"</span></code></pre>
+</div>
+
+<p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:json[]</code>—which is the other half of chapter 03. the one arm with real work is strings, and the work is <code>_escape_str</code>: decode's escape path run in reverse, mapping each character to its escaped spelling, with a <code>\uXXXX</code> fallback for control characters. the sample carries the library's escape functions verbatim (the panel elides three sibling arms and the hex helpers) and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">escapes.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_escape_char</span> <span class="s">"\""</span>
+  <span class="s">"\\\""</span>
+
+<span class="k">fn</span> <span class="f">_escape_char</span> <span class="s">"\n"</span>
+  <span class="s">"\\n"</span>
+
+<span class="k">fn</span> <span class="f">_escape_char</span> c
+  <span class="f">if</span> ((<span class="f">char_code</span> c) <span class="o">&lt;</span> <span class="n">32</span>) (<span class="f">_u_escape</span> c) c
+
+<span class="k">fn</span> <span class="f">_escape_str</span> s
+  <span class="f">join</span> (<span class="f">map</span> (<span class="f">chars</span> s) (c <span class="o">-&gt;</span> <span class="f">_escape_char</span> c)) <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">_u_escape</span> c
+  <span class="s">"\\u<span class="i">{_hex4 (char_code c)}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  bell <span class="o">=</span> <span class="f">from_code</span> <span class="n">7</span>
+  <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"a\"b\nc"</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"ring<span class="i">{bell}</span>ring"</span>)
+
+<span class="k">fn</span> <span class="f">quote_str</span> s
+  <span class="s">"\"<span class="i">{_escape_str s}</span>\""</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run escapes.kso</div>
+    <pre><code>"a\"b\nc"
+"ring\u0007ring"</code></pre>
+  </div>
+</div>
+
+<p><code>encode</code> is deliberately compact—machine-to-machine json wants no whitespace. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write here in full. this is the chapter's one extension beyond the library, built in its exact style:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pretty.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">json_null</span>
+
+<span class="k">fn</span> <span class="f">_entry_block</span> (<span class="t">entry</span> k v) d
+  <span class="s">"<span class="i">{_pad d}</span>\"<span class="i">{k}</span>\": <span class="i">{pretty v d}</span>"</span>
+
+<span class="k">fn</span> <span class="f">_pad</span> <span class="n">0</span>
+  <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">_pad</span> n
+  <span class="s">"  <span class="i">{_pad (n - 1)}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  doc <span class="o">=</span> [<span class="s">"name"</span>: <span class="s">"kanso"</span> <span class="s">"port"</span>: <span class="n">8080</span> <span class="s">"tags"</span>: [<span class="s">"fast"</span> <span class="s">"simple"</span>]]
+  <span class="f">print</span> (<span class="f">pretty</span> doc <span class="n">0</span>)
+
+<span class="k">fn</span> <span class="f">pretty</span> <span class="t">true</span> <span class="o">_</span>
+  <span class="s">"true"</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> <span class="t">false</span> <span class="o">_</span>
+  <span class="s">"false"</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> <span class="t">json_null</span> <span class="o">_</span>
+  <span class="s">"null"</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> n:<span class="t">int</span> <span class="o">_</span>
+  <span class="s">"<span class="i">{n}</span>"</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> x:<span class="t">float64</span> <span class="o">_</span>
+  <span class="s">"<span class="i">{x}</span>"</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> s:<span class="t">string</span> <span class="o">_</span>
+  <span class="s">"\"<span class="i">{s}</span>\""</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> xs:<span class="t">json[]</span> d
+  d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
+  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{_pad d2}</span><span class="i">{pretty v d2}</span>"</span>)) <span class="s">",\n"</span>
+  <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{_pad d}</span>]"</span>
+
+<span class="k">fn</span> <span class="f">pretty</span> m:<span class="t">json[string]</span> d
+  d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
+  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">_entry_block</span> e d2)) <span class="s">",\n"</span>
+  <span class="s">"\{\n<span class="i">{inner}</span>\n<span class="i">{_pad d}</span>}"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run pretty.kso</div>
+    <pre><code>{
+  "name": "kanso",
+  "port": 8080,
+  "tags": [
+    "fast",
+    "simple"
+  ]
+}</code></pre>
+  </div>
+</div>
+
+<p>same eight-arm shape as <code>encode</code>, one extra argument. the scalar arms ignore the depth with <code>_</code>; the compound arms deepen it and lay each element on its own indented line. <code>_pad</code> is recursion instead of a loop—dispatch on <code>0</code> is the base case—and the whole printer is under forty lines. drop it into <code>lib/json</code> as <code>pretty.kso</code> (with <code>_escape_str</code> in place of the naive string arm) and it would be the module's seventh file, sharing the namespace like everything else.</p>
+
+<h2>what you can do now</h2>
+
+<p>you have now read a real library end to end, and nothing in it was new: byte dispatch is chapter 03, the <code>err</code> railway is chapter 04, the module layout is chapter 07, and the rest is arithmetic. that is the point of part ii—the language does not grow a special mode for serious programs. you can navigate kanso-json by name, extend it in its own style, and—the sharper skill—recognize its shapes elsewhere: a two-speed scanner betting on the common case, a cursor threaded as an argument so failures always know where they are, a caller choosing between handleable failure and defect in one word. next chapter, the same language simulates elections.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>make <code>pretty</code> the module's seventh file. add <code>pretty.kso</code> to a copy of <code>lib/json</code>, swap its naive string arm for one that uses <code>_escape_str</code>, and add <code>test_pretty_roundtrip</code>: decoding a pretty-printed document must equal decoding the compact original.</li>
+  <li>json forbids leading zeros—<code>007</code> is not a number—but <code>to_int</code> happily accepts it. add the rejection to <code>_parse_number</code> with a positioned failure, and a test pinning where <code>decode "[1, 007]"</code> fails.</li>
+  <li><code>_str_unicode</code> reads exactly one <code>\uXXXX</code>. characters outside the basic plane arrive as surrogate pairs—<code>"😀"</code> is one emoji, not two characters. extend the escape path to spot a high surrogate, demand its partner, and combine them; pin it with a test.</li>
+  <li>the suite pins positions for a bad literal and trailing characters, but not for an unterminated string. write <code>test_error_unterminated</code> asserting the position <code>decode "\"abc"</code> fails at, predicting the number before you run it.</li>
+</ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch07.html">← modules and tests</a>
+  <a href="ch09.html">next: a voting simulator →</a>
+</nav>
+
+</article>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="../influences.html">influences</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,9 @@
+type user
+  age: int
+  name: string
+
+main =
+  clay = user 47 "clay"
+  user years who = clay
+  { name: alias } = clay
+  print "{who} is {years}, also known as {alias}"

@@ -1,0 +1,7 @@
+$ grep -A5 "switch i64 %t3" classify.ll
+  switch i64 %t3, label %arm4 [
+    i64 43, label %arm0
+    i64 45, label %arm1
+    i64 46, label %arm2
+    i64 101, label %arm3
+  ]

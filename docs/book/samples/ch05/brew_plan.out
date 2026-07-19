@@ -1,0 +1,4 @@
+plan:
+  print "brewing"    # from line 1
+  print "steeping"    # from line 1
+  print "pouring"    # from line 1

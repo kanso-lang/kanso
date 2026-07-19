@@ -1,0 +1,9 @@
+type track
+  artist: string
+  minutes: int
+  title: string
+
+main =
+  song = track "fishmans" 6 "long season"
+  { artist: who title } = song
+  print "{title}, by {who}"

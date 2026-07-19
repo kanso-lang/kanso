@@ -1,0 +1,11 @@
+fn base_price "dango"
+  350
+
+fn base_price "taiyaki"
+  500
+
+fn base_price item
+  err "we do not serve {item}"
+
+pub fn price item
+  base_price item + 50

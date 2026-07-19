@@ -1,0 +1,17 @@
+test_decode_array ... ok
+test_decode_bool ... ok
+test_decode_escapes ... ok
+test_decode_float ... ok
+test_decode_int ... ok
+test_decode_nested ... ok
+test_decode_object ... ok
+test_decode_string ... ok
+test_decode_unicode ... ok
+test_decode_whitespace ... ok
+test_encode_escapes ... ok
+test_encode_nested ... ok
+test_error_position ... ok
+test_error_trailing ... ok
+test_must_wraps_defect ... ok
+test_roundtrip ... ok
+16 passed, 0 failed

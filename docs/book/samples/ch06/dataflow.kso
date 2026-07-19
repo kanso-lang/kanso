@@ -1,0 +1,11 @@
+fn cheapest prices
+  sort prices . at 1
+
+main =
+  prices = [520 380 450 610 290]
+  low = cheapest prices
+  total = sum prices
+  report low total
+
+fn report low total
+  print "cheapest: {low} yen / total: {total} yen"

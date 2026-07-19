@@ -1,0 +1,3 @@
+main =
+  total = sum [1, 2]
+  print "{total}"

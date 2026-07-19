@@ -1,0 +1,2 @@
+$ grep -c "musttail call" pingpong.ll
+2

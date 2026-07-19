@@ -39,8 +39,19 @@
 
 .book-side ol {
   list-style: none;
-  margin: 0;
+  margin: 0 0 0.9rem;
   padding: 0;
+}
+
+.bs-part {
+  color: var(--muted);
+  display: block;
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  margin: 0 0 0.45rem;
+  text-transform: uppercase;
 }
 
 .book-side li {
@@ -108,6 +119,11 @@
   .book-side ol {
     display: flex;
     gap: 1.25rem;
+    margin: 0;
+  }
+
+  .bs-part {
+    display: none;
   }
 
   .book-side .bs-title {
@@ -221,6 +237,20 @@
   display: flex;
   gap: 1.5rem;
   padding: 1.35rem 0.25rem;
+}
+
+.book-toc .toc-part {
+  color: var(--accent);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.36em;
+  margin: 2.4rem 0 0.7rem;
+  text-transform: uppercase;
+}
+
+.book-toc li:first-child .toc-part {
+  margin-top: 0;
 }
 
 .book-toc a:hover {

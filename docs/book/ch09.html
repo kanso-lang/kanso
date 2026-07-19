@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chapter 09—a voting simulator</title>
+<meta name="description" content="a real program read end to end: a monte-carlo voting simulator in three files—spatial voters, six election methods, and a measured voter-satisfaction-efficiency table.">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
+<link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="book.css">
+</head>
+<body>
+
+<header class="site-header">
+  <a class="brand" href="../index.html">
+    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
+      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
+    </svg>
+    kanso <span class="brand-kanji">簡素</span>
+  </a>
+  <nav class="site-nav">
+    <a href="../playground.html">playground</a>
+    <a href="index.html">book</a>
+    <a href="../about.html">about</a>
+    <a href="../compiler.html">compiler</a>
+    <a href="https://github.com/kanso-lang/kanso">github</a>
+  </nav>
+</header>
+
+<div class="book-layout">
+
+<nav class="book-side" aria-label="book chapters">
+  <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
+  <ol>
+    <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
+    <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
+    <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
+    <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
+    <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html" aria-current="page"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
+  </ol>
+</nav>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">chapter 09</span>
+<h1>a voting simulator</h1>
+
+<p>the last chapter built a library. this one reads a whole program—a monte-carlo simulator that measures how well six election methods choose winners, modeled on jameson quinn's vse-sim. it is a three-file directory-module of about a hundred and eighty lines: <code>enumerable.kso</code> holds the collection helpers, <code>methods.kso</code> the voting methods, <code>main.kso</code> the electorate model and the simulation driver. from inside the directory, <code>kanso run .</code> runs it.</p>
+
+<p>the measure is <em>voter satisfaction efficiency</em>. each simulated election has a utilitarian-best candidate—the one whose victory would leave voters, in total, most satisfied. a method's vse is how much of that best-possible satisfaction its actual winner captures, normalized so that 1.0 means the ideal candidate won every time and 0.0 means the method did no better than drawing a candidate from a hat. average over many random elections and you get one number per method.</p>
+
+<p>the framing matters, so here it is up front: each method is implemented faithfully, from its own rules, and nothing downstream treats any of them specially. the driver hands all six the same electorate and records what happens. the ordering you will see at the end of the chapter—including the famous failure mode called the center squeeze—emerges from the simulation. it is not assumed anywhere in the code, and this chapter presents it the same way the program does: as a measurement.</p>
+
+<h2>the shape of the program</h2>
+
+<p>chapter 07 said a module is a directory whose files share one namespace, and this program leans on that: <code>main.kso</code> calls <code>plurality_winner</code> from <code>methods.kso</code>, which calls <code>argmax</code> from <code>enumerable.kso</code>, with no imports anywhere. the files are chapters of one book. <code>enumerable.kso</code> is the vocabulary layer—the builtins give it <code>map</code>, <code>at</code>, <code>push</code>, and <code>length</code>, and it derives the rest from a single recursive fold:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/enumerable.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_fold_at</span> list acc f i
+  <span class="f">if</span> (<span class="f">length</span> list <span class="o">&lt;</span> i) acc (<span class="f">_fold_at</span> list (<span class="f">f</span> acc (<span class="f">at</span> list i)) f (i <span class="o">+</span> <span class="n">1</span>))
+
+<span class="k">fn</span> <span class="f">argmax</span> list
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) <span class="n">1</span> (b i <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">at</span> list b <span class="o">&lt;</span> <span class="f">at</span> list i) i b)
+
+<span class="k">fn</span> <span class="f">fold</span> list init f
+  <span class="f">_fold_at</span> list init f <span class="n">1</span>
+
+<span class="k">fn</span> <span class="f">total</span> list
+  <span class="f">fold</span> list <span class="n">0</span> (a x <span class="o">-&gt;</span> a <span class="o">+</span> x)</code></pre>
+</div>
+
+<p><code>fold</code> walks the list from index 1—kanso lists are 1-indexed—threading an accumulator through a two-argument lambda. everything else in the file is a fold wearing a costume: <code>total</code> folds with <code>+</code>, <code>maximum</code> and <code>minimum</code> fold with a comparison, <code>count</code> folds with an equality test, and <code>argmax</code> folds over the <em>indexes</em>, keeping whichever position holds the larger value. note the tiebreak that falls out of <code>argmax</code> for free: the comparison is strict, so an equal later value never displaces an earlier one, and ties go to the lowest index. the methods file inherits that rule everywhere it picks a winner.</p>
+
+<p>one spelling note before we go on: names like <code>_fold_at</code> carry a leading underscore. that means nothing to the compiler—it is house style for helpers, from before <code>pub</code> existed. visibility in kanso is <code>pub</code>'s job, and underscore is just a character that sorts first.</p>
+
+<h2>a spatial electorate</h2>
+
+<p>the electorate model is spatial: voters and candidates are points on a plane, and a voter likes a candidate more the nearer the candidate stands. the two axes are whatever you want them to be—tax policy and foreign policy, tradition and novelty—the model only cares about distance. a point is a list of coordinates, each drawn by <code>random</code>, and a population is a list of points:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">cloud</span> <span class="n">0</span> <span class="o">_</span> acc
+  acc
+
+<span class="k">fn</span> <span class="f">cloud</span> n d acc
+  <span class="f">point</span> d [] <span class="o">.</span> (p <span class="o">-&gt;</span> <span class="f">cloud</span> (n <span class="o">-</span> <span class="n">1</span>) d (<span class="f">push</span> acc p))
+
+dims <span class="o">=</span> <span class="n">2</span>
+
+<span class="k">fn</span> <span class="f">point</span> <span class="n">0</span> acc
+  acc
+
+<span class="k">fn</span> <span class="f">point</span> d acc
+  <span class="f">random</span> <span class="n">1000</span> <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
+</div>
+
+<p>this is chapter 05's machinery doing real work. <code>random 1000</code> is a description of a draw, not a number, so the coordinate has to be received through bind—<code>. (c -&gt; ...)</code>—and the recursion continues inside the lambda, carrying the accumulator forward. <code>point</code> binds one coordinate per step until the dimension count hits the literal-0 clause; <code>cloud</code> binds one whole point per step until the population count does. here is the same shape standing alone, small enough to watch:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">cloud.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">cloud</span> <span class="n">0</span> acc
+  acc
+
+<span class="k">fn</span> <span class="f">cloud</span> n acc
+  <span class="f">point</span> <span class="n">2</span> [] <span class="o">.</span> (p <span class="o">-&gt;</span> <span class="f">cloud</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc p))
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">cloud</span> <span class="n">3</span> [] <span class="o">.</span> (voters <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"three voters: <span class="i">{voters}</span>"</span>)
+
+<span class="k">fn</span> <span class="f">point</span> <span class="n">0</span> acc
+  acc
+
+<span class="k">fn</span> <span class="f">point</span> d acc
+  <span class="f">random</span> <span class="n">1000</span> <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run cloud.kso</div>
+    <pre><code>three voters: [[876 612] [601 850] [662 624]]</code></pre>
+  </div>
+</div>
+
+<p>run it again and you get the same three voters. kanso's <code>random</code> is deterministic—chapter 06's scheduler argument, applied to dice—which is exactly what a simulation wants: every number in this chapter is reproducible by running the program.</p>
+
+<p>utility is negative distance. a candidate standing on top of you is worth 0, and every step away costs. <code>utilities</code> turns a voter cloud and a candidate cloud into the matrix the whole rest of the program consumes—one row per voter, one column per candidate:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_sq</span> x
+  x <span class="o">*</span> x
+
+<span class="k">fn</span> <span class="f">dist2</span> p q
+  <span class="f">total</span> (<span class="f">map</span> (<span class="f">range</span> (<span class="f">length</span> p)) (d <span class="o">-&gt;</span> <span class="f">_sq</span> (<span class="f">at</span> p d <span class="o">-</span> <span class="f">at</span> q d)))
+
+<span class="k">fn</span> <span class="f">util</span> vpos cpos
+  <span class="n">0</span> <span class="o">-</span> <span class="f">sqrt</span> (<span class="f">dist2</span> vpos cpos)
+
+<span class="k">fn</span> <span class="f">utilities</span> voters cands
+  <span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">map</span> cands (c <span class="o">-&gt;</span> <span class="f">util</span> v c))</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">util.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  voter <span class="o">=</span> [<span class="n">3</span> <span class="n">4</span>]
+  <span class="f">print</span> <span class="s">"candidate at the origin: <span class="i">{util voter [0 0]}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"candidate next door: <span class="i">{util voter [3 3]}</span>"</span>
+
+<span class="k">fn</span> <span class="f">sq</span> x
+  x <span class="o">*</span> x
+
+<span class="k">fn</span> <span class="f">util</span> v c
+  <span class="n">0</span> <span class="o">-</span> <span class="f">sqrt</span> (<span class="f">sq</span> (<span class="f">at</span> v <span class="n">1</span> <span class="o">-</span> <span class="f">at</span> c <span class="n">1</span>) <span class="o">+</span> <span class="f">sq</span> (<span class="f">at</span> v <span class="n">2</span> <span class="o">-</span> <span class="f">at</span> c <span class="n">2</span>))</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run util.kso</div>
+    <pre><code>candidate at the origin: -5.0
+candidate next door: -1.0</code></pre>
+  </div>
+</div>
+
+<p>a voter at (3, 4) rates a candidate at the origin −5.0—the 3-4-5 triangle—and a neighbor one step away −1.0. higher is better; the best possible score is zero. that utility matrix is the honest inner life of the electorate. what each method gets to see of it is the next question.</p>
+
+<h2>honest ballots</h2>
+
+<p>a ballot is a lossy projection of a utility row, and each method defines its own projection. this simulation models honest voters: every ballot is derived straight from the voter's true utilities, with no strategy layered on. plurality sees the least—just <code>argmax v</code>, the single favorite. approval sees one bit per candidate: a voter approves everyone strictly above their own mean utility across the field. score sees the most structure, a 0–5 integer rating of each candidate:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/methods.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_approves</span> v c
+  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> <span class="f">at</span> v c) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">_score_ballot</span> v c
+  lo <span class="o">=</span> <span class="f">minimum</span> v
+  hi <span class="o">=</span> <span class="f">maximum</span> v
+  <span class="f">round</span> (<span class="n">5.0</span> <span class="o">*</span> (<span class="f">at</span> v c <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))</code></pre>
+</div>
+
+<p><code>_score_ballot</code> stretches the voter's utility row so their favorite sits at the top of the scale and their least favorite at the bottom, scales by 5.0, and rounds. the <code>round</code> is not a modeling shortcut—it is the point. real score ballots hold integers, so the simulated ones do too: a candidate 63% of the way up a voter's range gets a 3, and whatever that costs the method is part of the measurement rather than an error smoothed away. irv and minimax skip ballots entirely and read rankings straight off the utility row: voter <code>v</code> ranks <code>a</code> over <code>b</code> exactly when <code>at v b &lt; at v a</code>.</p>
+
+<h2>counting: plurality, approval, score</h2>
+
+<p>three of the six methods are a column sum followed by <code>argmax</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/methods.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_approval_col</span> voters c
+  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">_approves</span> v c))
+
+<span class="k">fn</span> <span class="f">_score_col</span> voters c
+  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">_score_ballot</span> v c))
+
+<span class="k">fn</span> <span class="f">approval_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_approval_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">plurality_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)) c))
+
+<span class="k">fn</span> <span class="f">score_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_score_col</span> voters c))</code></pre>
+</div>
+
+<p>read <code>plurality_winner</code> inside out: map each voter to their favorite, count how many favorites landed on candidate <code>c</code>, do that for every candidate, take the argmax. <code>approval_winner</code> and <code>score_winner</code> are the same pipeline with a different column function. all three share one signature—a list of utility rows in, a candidate index out—and that shared signature is what lets the driver treat six methods as six interchangeable values.</p>
+
+<h2>star: the runoff is part of the method</h2>
+
+<p>star is score plus an automatic runoff. total the score ballots, take the top two, then hold an instant head-to-head between them: each ballot goes to whichever finalist it scored higher, and ballots scoring them equal count for neither.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/methods.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_argmax_except</span> list skip
+  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (b i <span class="o">-&gt;</span> <span class="f">_better</span> list skip b i)
+
+<span class="k">fn</span> <span class="f">_prefer_count</span> voters a b
+  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">_score_ballot</span> v b <span class="o">&lt;</span> <span class="f">_score_ballot</span> v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">star_winner</span> voters
+  totals <span class="o">=</span> <span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_score_col</span> voters c)
+  a <span class="o">=</span> <span class="f">argmax</span> totals
+  b <span class="o">=</span> <span class="f">_argmax_except</span> totals a
+  pa <span class="o">=</span> <span class="f">_prefer_count</span> voters a b
+  pb <span class="o">=</span> <span class="f">_prefer_count</span> voters b a
+  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)</code></pre>
+</div>
+
+<p>two details reward a close read. <code>_argmax_except</code> finds the runner-up by folding with a seed that dodges the skipped index—if the leader is candidate 1, start the scan at 2. and <code>_prefer_count</code> compares <em>score ballots</em>, not raw utilities: the runoff counts the ballots voters actually cast, so a voter who scored both finalists 4 genuinely abstains from the runoff. the last line settles a tied runoff in favor of the score leader.</p>
+
+<h2>irv: elimination, one round at a time</h2>
+
+<p>instant-runoff voting repeats rounds: count first choices among the candidates still standing, stop if the leader holds a strict majority of all voters, otherwise eliminate the weakest and count again. the rounds are recursion; the per-round scans are folds:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/methods.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_irv_counts</span> voters elim
+  <span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">_first_is</span> v elim c)))
+
+<span class="k">fn</span> <span class="f">_irv_go</span> voters elim
+  counts <span class="o">=</span> <span class="f">_irv_counts</span> voters elim
+  top <span class="o">=</span> <span class="f">argmax</span> counts
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (<span class="f">at</span> counts top)) top (<span class="f">_irv_next</span> voters elim counts)
+
+<span class="k">fn</span> <span class="f">_irv_next</span> voters elim counts
+  <span class="f">_irv_go</span> voters (<span class="f">push</span> elim (<span class="f">_min_alive</span> counts elim))
+
+<span class="k">fn</span> <span class="f">_min_alive</span> counts elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (b c <span class="o">-&gt;</span> <span class="f">_keep_min</span> counts elim b c)
+
+<span class="k">fn</span> <span class="f">irv_winner</span> voters
+  <span class="f">_irv_go</span> voters []</code></pre>
+</div>
+
+<p>the state of an irv count is nothing but the elimination list. <code>irv_winner</code> starts it empty; each round either returns a winner or recurses with one more name pushed onto <code>elim</code>. the majority test is integer arithmetic—<code>nvot &lt; 2 * top</code> is "top holds strictly more than half"—with no division to introduce a float. vote transfer costs no code at all: <code>_rank_first</code> (behind <code>_first_is</code>) folds over the candidates keeping the voter's best <em>alive</em> option, so when a candidate joins <code>elim</code>, every ballot that ranked them first simply resolves to its next surviving preference on the following count.</p>
+
+<h2>minimax: the least-bad worst defeat</h2>
+
+<p>minimax is a condorcet method: it looks at every head-to-head pairing. a candidate's margin against a rival is the number of voters preferring them minus the number preferring the rival; a candidate's <em>worst margin</em> is their most damaging pairing; the winner is the candidate whose worst is least bad.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/methods.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_margin_or_high</span> voters a b
+  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">_pair</span> voters a b <span class="o">-</span> <span class="f">_pair</span> voters b a)
+
+<span class="k">fn</span> <span class="f">_pair</span> voters a b
+  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">at</span> v b <span class="o">&lt;</span> <span class="f">at</span> v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">_worst_margin</span> voters a
+  <span class="f">minimum</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">_margin_or_high</span> voters a b))
+
+<span class="k">fn</span> <span class="f">minimax_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_worst_margin</span> voters c))</code></pre>
+</div>
+
+<p>the one wrinkle is the diagonal: a candidate has no margin against themselves, so <code>_margin_or_high</code> reports <code>nvot</code> there—at least as large as any real margin can be, which keeps the self-pairing from ever registering as anyone's worst. the structure buys a guarantee: when some candidate beats every rival head-to-head—a condorcet winner—all their margins are positive while every rival carries at least one negative, so minimax elects them.</p>
+
+<h2>the center squeeze, in miniature</h2>
+
+<p>before running four hundred random elections, it is worth watching the six methods disagree on one election you can hold in your head. the module makes this easy: because <code>methods.kso</code> and <code>enumerable.kso</code> only assume the constants <code>ncand</code> and <code>nvot</code> and a list of utility rows, you can drop them into a directory next to a different <code>main.kso</code> and hand-build the electorate. nine voters, three candidates—lopez on the left, chen in the center, reed on the right:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">squeeze/main.kso</div>
+  <pre><code>electorate <span class="o">=</span>
+  left <span class="o">=</span> [<span class="n">5</span> <span class="n">4</span> <span class="n">0</span>]
+  right <span class="o">=</span> [<span class="n">0</span> <span class="n">4</span> <span class="n">5</span>]
+  center <span class="o">=</span> [<span class="n">0</span> <span class="n">5</span> <span class="n">4</span>]
+  [left left left left right right right center center]
+
+<span class="k">fn</span> <span class="f">label</span> <span class="n">1</span>
+  <span class="s">"lopez"</span>
+
+<span class="k">fn</span> <span class="f">label</span> <span class="n">2</span>
+  <span class="s">"chen"</span>
+
+<span class="k">fn</span> <span class="f">label</span> <span class="n">3</span>
+  <span class="s">"reed"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"plurality: <span class="i">{label (plurality_winner electorate)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"irv:       <span class="i">{label (irv_winner electorate)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"approval:  <span class="i">{label (approval_winner electorate)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"score:     <span class="i">{label (score_winner electorate)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"star:      <span class="i">{label (star_winner electorate)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"minimax:   <span class="i">{label (minimax_winner electorate)}</span>"</span>
+
+ncand <span class="o">=</span> <span class="n">3</span>
+
+nvot <span class="o">=</span> <span class="n">9</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run squeeze</div>
+    <pre><code>plurality: lopez
+irv:       reed
+approval:  chen
+score:     chen
+star:      chen
+minimax:   chen</code></pre>
+  </div>
+</div>
+
+<p>the other two files in <code>squeeze/</code> are the simulator's own <code>enumerable.kso</code> and <code>methods.kso</code>, unchanged. four voters love lopez, three love reed, two love chen—and every single voter rates chen a 4 or a 5. chen is the consensus candidate, and beats either rival head-to-head. six faithful implementations, three different winners: plurality sees only first choices, so lopez's larger base wins. irv eliminates chen first—fewest first choices—and the transfers hand the final round to reed. the four methods that can see intensity or full pairings all elect chen. that is the center squeeze: the compromise candidate everyone can live with is the first one eliminated. keep this nine-voter election in mind—you are about to watch the same geometry play out across four hundred random electorates.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">ensō-neko</span>
+<p>notice what the squeeze demo cost: one new <code>main.kso</code> next to two files copied unchanged. a module whose files assume only a shared namespace is a library the moment you hand it a different main. when cross-module <code>import</code> lands, the copy step disappears and the shape stays the same.</p>
+</div>
+</div>
+
+<h2>the vse metric</h2>
+
+<p>to score a winner you need a yardstick, and the yardstick is social utility: the sum of a candidate's column in the utility matrix—everyone's satisfaction with that candidate, added up. vse locates the winner on the line between two anchors, the average candidate and the best one:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">socutil</span> voters c
+  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">at</span> v c))
+
+<span class="k">fn</span> <span class="f">socutils</span> voters
+  <span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">socutil</span> voters c)
+
+<span class="k">fn</span> <span class="f">vse</span> socs winner
+  m <span class="o">=</span> <span class="f">mean</span> socs
+  (<span class="f">at</span> socs winner <span class="o">-</span> m) <span class="o">/</span> (<span class="f">maximum</span> socs <span class="o">-</span> m)</code></pre>
+</div>
+
+<p>if the method elected the utility-maximizing candidate, numerator equals denominator and the election scores 1.0. if it elected a candidate exactly as good as the field's average—what a random draw achieves in expectation—it scores 0.0. a method can score below zero in a given election by electing someone worse than average. average the per-election scores over many elections and the number becomes stable enough to compare methods.</p>
+
+<h2>the monte carlo driver</h2>
+
+<p>one trial is: draw a voter cloud, draw a candidate cloud, build the utility matrix, run all six methods on it, and add each method's vse for this election to a running sum. the driver is the same recursion-through-bind shape as <code>cloud</code>, one level up:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">_tally</span> acc elec
+  socs <span class="o">=</span> <span class="f">socutils</span> elec
+  p <span class="o">=</span> (<span class="f">at</span> acc <span class="n">1</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">plurality_winner</span> elec)
+  a <span class="o">=</span> (<span class="f">at</span> acc <span class="n">2</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">approval_winner</span> elec)
+  s <span class="o">=</span> (<span class="f">at</span> acc <span class="n">3</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">score_winner</span> elec)
+  st <span class="o">=</span> (<span class="f">at</span> acc <span class="n">4</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">star_winner</span> elec)
+  i <span class="o">=</span> (<span class="f">at</span> acc <span class="n">5</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">irv_winner</span> elec)
+  m <span class="o">=</span> (<span class="f">at</span> acc <span class="n">6</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">minimax_winner</span> elec)
+  [p a s st i m]
+
+<span class="k">fn</span> <span class="f">_with_voters</span> k acc vp
+  <span class="f">cloud</span> ncand dims [] <span class="o">.</span> (cp <span class="o">-&gt;</span> <span class="f">trials</span> (k <span class="o">-</span> <span class="n">1</span>) (<span class="f">_tally</span> acc (<span class="f">utilities</span> vp cp)))
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> means
+
+ncand <span class="o">=</span> <span class="n">5</span>
+
+nvot <span class="o">=</span> <span class="n">20</span>
+
+runs <span class="o">=</span> <span class="n">400</span>
+
+<span class="k">fn</span> <span class="f">trials</span> <span class="n">0</span> acc
+  acc
+
+<span class="k">fn</span> <span class="f">trials</span> k acc
+  <span class="f">cloud</span> nvot dims [] <span class="o">.</span> (vp <span class="o">-&gt;</span> <span class="f">_with_voters</span> k acc vp)</code></pre>
+</div>
+
+<p>the accumulator is a six-slot list of running sums, one per method, seeded with floats and threaded through every trial. <code>trials</code> binds a voter cloud, <code>_with_voters</code> binds a candidate cloud, <code>_tally</code>—pure, no effects—runs all six methods against the resulting matrix and returns the updated sums. there are no channels and no mutable counters; the monte carlo loop is a recursion whose state rides in its arguments, and the only effects in the entire program are the coordinate draws and the final prints. note <code>main</code>'s ending: <code>. means</code> binds the final sums straight into the reporting function, point-free, the same shape as chapter 06's <code>sort prices . at 1</code>.</p>
+
+<h2>the measured result</h2>
+
+<p>the reporting function divides each sum by the number of runs and prints. twenty voters, five candidates, two dimensions, four hundred elections:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">vse/main.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">means</span> sums
+  <span class="f">print</span> <span class="s">"plurality VSE <span class="i">{(at sums 1) / runs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"approval  VSE <span class="i">{(at sums 2) / runs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"score     VSE <span class="i">{(at sums 3) / runs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"star      VSE <span class="i">{(at sums 4) / runs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"irv       VSE <span class="i">{(at sums 5) / runs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"minimax   VSE <span class="i">{(at sums 6) / runs}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run vse</div>
+    <pre><code>plurality VSE 0.6861199412466163
+approval  VSE 0.9143288760508763
+score     VSE 0.979229551350013
+star      VSE 0.9750463456028904
+irv       VSE 0.8538681725012696
+minimax   VSE 0.9696873187267149</code></pre>
+  </div>
+</div>
+
+<p>sorted, the measurement reads: score 0.979, star 0.975, minimax 0.970, approval 0.914, irv 0.854, plurality 0.686. the top three cluster within a percentage point of each other—the rated methods and the condorcet method all electing near-ideal winners under honest voting. approval gives up about six points of efficiency to its one-bit ballot: a threshold keeps the shape of a voter's preferences but discards their intensities. irv lands below approval despite collecting full rankings—the squeeze from the previous section, happening at statistical scale: in electorates where the compromise candidate lacks a first-choice base, irv eliminates them early, exactly as it eliminated chen. plurality, seeing only first choices, captures about two-thirds of the available satisfaction.</p>
+
+<p>these numbers are a measurement of <em>this model</em>: honest voters, a uniform two-dimensional electorate, twenty voters, five candidates. change the model and the numbers move—that is what the exercises are for. what does not move is the method: implement the rules faithfully, define the yardstick before the race, and report whatever comes out. the ordering above was not designed into the program anywhere you can point to; it fell out of four hundred elections that anyone can re-run.</p>
+
+<div class="tip">
+<svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
+<div class="tip-bubble">
+<span class="tip-who">mugi</span>
+<p><code>random</code> is deterministic, so this table is not a screenshot of a lucky run—it is a fact about the program. run <code>kanso run .</code> in the vse directory and you get these exact digits, every time—and <code>kanso build</code> produces a native binary that prints them byte for byte. a benchmark you cannot reproduce is an anecdote. i deal only in facts and boba.</p>
+</div>
+</div>
+
+<h2>what you can do now</h2>
+
+<p>you have read a complete kanso program—not a curated fragment, every declaration—and the parts were all familiar: literal-clause dispatch for base cases, folds for aggregation, bind for randomness, <code>&gt;&gt;</code> for the report, a directory for the module. more usefully, you have seen the shape of a simulation study: model the world as data, define the projection each method sees, implement the rules faithfully, fix the yardstick before running, and let the answer be whatever the run says. the ordering in the table is not this book's opinion; it is the program's output, and the program is yours to interrogate—which is what the exercises are about.</p>
+
+<h2>exercises</h2>
+
+<ol>
+  <li>add borda count. a candidate's borda score is the number of (voter, rival) pairs where the voter ranks the candidate above the rival—which means <code>_pair</code> already does the hard part. write <code>borda_winner</code>, give it a slot in <code>_tally</code> and a line in <code>means</code>, and see where it lands in the table.</li>
+  <li>the electorate is a square. set <code>dims</code> to 1, then to 4, and re-run. which methods' numbers move most, and does the ordering itself change?</li>
+  <li>in <code>squeeze/main.kso</code>, add center voters one at a time. how many does chen need before irv stops eliminating them first? does plurality come around at the same point, or a different one?</li>
+  <li>pin the squeeze results: add a <code>squeeze/methods_test.kso</code> with six <code>test_</code> constants asserting each method's winner, and run <code>kanso test squeeze</code>. now exercise 3 has a regression suite.</li>
+</ol>
+
+<nav class="chapter-nav">
+  <a href="index.html">contents</a>
+  <span class="nav-spacer"></span>
+  <a href="ch08.html">← a json library</a>
+  <a href="ch10.html">next: fast by construction →</a>
+</nav>
+
+</article>
+
+</div>
+
+<footer class="site-footer">
+  <div class="container site-footer-inner">
+    <span>kanso 簡素—simplicity through elimination of clutter · v0.1 design freeze, july 2026</span>
+    <nav>
+      <a href="../index.html">home</a>
+      <a href="../about.html">about</a>
+      <a href="../lore.html">lore</a>
+      <a href="../influences.html">influences</a>
+      <a href="https://github.com/kanso-lang/kanso">github</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

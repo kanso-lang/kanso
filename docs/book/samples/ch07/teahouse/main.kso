@@ -1,0 +1,10 @@
+fn describe (err reason)
+  "gomen: {reason}"
+
+fn describe n
+  "{n} yen, service included"
+
+main =
+  dango = price "dango"
+  pocky = price "pocky"
+  print (describe dango) >> print (describe pocky)

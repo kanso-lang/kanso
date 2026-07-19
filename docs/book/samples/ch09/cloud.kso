@@ -1,0 +1,13 @@
+fn cloud 0 acc
+  acc
+
+fn cloud n acc
+  point 2 [] . (p -> cloud (n - 1) (push acc p))
+
+main = cloud 3 [] . (voters -> print "three voters: {voters}")
+
+fn point 0 acc
+  acc
+
+fn point d acc
+  random 1000 . (c -> point (d - 1) (push acc c))

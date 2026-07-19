@@ -1,0 +1,10 @@
+fn describe none
+  "index out of range"
+
+fn describe x
+  "value is {x}"
+
+main =
+  found = describe (at [10 20 30] 2)
+  gone = describe (at [10 20 30] 9)
+  print "in-range: {found}" >> print "missing: {gone}"

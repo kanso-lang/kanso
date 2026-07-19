@@ -1,0 +1,10 @@
+main =
+  voter = [3 4]
+  print "candidate at the origin: {util voter [0 0]}"
+  >> print "candidate next door: {util voter [3 3]}"
+
+fn sq x
+  x * x
+
+fn util v c
+  0 - sqrt (sq (at v 1 - at c 1) + sq (at v 2 - at c 2))

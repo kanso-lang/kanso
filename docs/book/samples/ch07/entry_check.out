@@ -1,0 +1,4 @@
+error[syntax]: a top-level line must begin with `fn`, `type`, or a constant binding
+  --> entry_check.kso:1:1
+   1 | print "hello from the top level"
+       ^

@@ -1,0 +1,48 @@
+type parse_failure
+  position: int
+  reason: string
+
+_bytes_false = [102 97 108 115 101]
+
+_bytes_null = [110 117 108 108]
+
+_bytes_true = [116 114 117 101]
+
+fn _fail p reason
+  err (parse_failure p reason)
+
+fn _value_for 102 cs p
+  _word cs p _bytes_false false
+
+fn _value_for 110 cs p
+  _word cs p _bytes_null "null"
+
+fn _value_for 116 cs p
+  _word cs p _bytes_true true
+
+fn _value_for none _ p
+  _fail p "unexpected end of input"
+
+fn _value_for c _ p
+  _fail p "unexpected character `{utf8 [c]}`"
+
+fn _word cs p expected v
+  n = length expected
+  seg = slice cs p (p + n - 1)
+  if (seg == expected) v (_fail p "invalid literal")
+
+fn decode_literal s
+  cs = bytes s
+  _value_for (at cs 1) cs 1
+
+main =
+  print (show (decode_literal "true"))
+  >> print (show (decode_literal "null"))
+  >> print (show (decode_literal "nope"))
+  >> print (show (decode_literal "?"))
+
+fn show (err (parse_failure p reason))
+  "err at {p}: {reason}"
+
+fn show v
+  "ok: {v}"

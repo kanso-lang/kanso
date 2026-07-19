@@ -1,0 +1,4 @@
+error[formatting]: overloads of `fact` appear most-specific first: literal, then concrete type, then generic
+  --> overload_order_check.kso:4:4
+   4 | fn fact 0
+          ^

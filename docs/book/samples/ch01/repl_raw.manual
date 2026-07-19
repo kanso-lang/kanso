@@ -1,0 +1,1 @@
+repl transcript: interactive prompts do not replay through piped stdin

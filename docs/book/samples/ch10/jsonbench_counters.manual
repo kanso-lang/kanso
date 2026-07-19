@@ -1,0 +1,1 @@
+runs the bench/jsonbench module with KANSO_COUNTERS; covered by the cost golden in ci

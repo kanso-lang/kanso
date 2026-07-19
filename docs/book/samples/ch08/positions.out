@@ -1,0 +1,3 @@
+ok: 42
+err at 3: unexpected trailing characters
+err at 5: unexpected trailing characters

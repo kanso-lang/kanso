@@ -1,0 +1,3 @@
+main =
+  order = "one taiyaki, extra custard"
+  write_file "order.txt" order >> read_file "order.txt" . print

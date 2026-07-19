@@ -1,0 +1,9 @@
+type null
+
+fn describe null
+  "nothing here"
+
+fn describe x
+  "got {x}"
+
+main = print (describe null) >> print (describe 5)

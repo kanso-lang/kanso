@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chapter 02—values and bindings</title>
-<meta name="description" content="ints, floats, strings, interpolation, constants, rebinding—and the compile errors that keep a kanso program free of clutter.">
+<meta name="description" content="exact ints, floats and widening, strings and interpolation, lists, maps, records, equality and comparison, and the binding rules—rebinding and no-shadowing—that keep a kanso program honest.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,14 +35,30 @@
 
 <nav class="book-side" aria-label="book chapters">
   <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
   <ol>
     <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
     <li><a href="ch02.html" aria-current="page"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
     <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
     <li><a href="ch04.html"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
     <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">modules and tests</span></a></li>
-    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">fast by construction</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
   </ol>
 </nav>
 
@@ -54,7 +70,7 @@
 <p>chapter 01 closed on a small subversion: <code>main</code> is a constant, not a function—a name bound to a value. take that literally and the rest of the language follows. a binding is a name, one space, <code>=</code>, one space, a value. a block-form <code>main</code> indents its body by two spaces and each line binds a name—except the last, which is the value of the whole thing. that's the complete ceremony:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">order.kso</div>
+  <div class="code-panel-title">binding.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
   age <span class="o">=</span> <span class="n">47</span>
   price <span class="o">=</span> <span class="n">19.99</span>
@@ -66,7 +82,7 @@
   </div>
 </div>
 
-<p>three kinds of value so far. <code>int</code> is arbitrary-precision—it does not overflow, ever, and chapter 03 will compute <code>20!</code> to prove it. <code>float64</code> is the ieee double you know. strings interpolate with <code>{braces}</code>, and the braces take any expression, not just a name:</p>
+<p>the braces in a string are not a template mini-language; they hold any expression, evaluated in place. put arithmetic between them and it runs:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">interp.kso</div>
@@ -79,56 +95,206 @@
   </div>
 </div>
 
-<h2>numbers don't blur</h2>
+<p>that is the whole shape of the language: names bound to values, values built from a small set of kinds. this chapter is a tour of those kinds—numbers, strings, lists, maps, records—and the two rules that govern the names you bind them to. every kind is a value, and every value is immutable. nothing in kanso mutates; a name may be pointed at a new value, but the old value is never edited in place.</p>
 
-<p>ints and floats are different types, and kanso will not quietly promote one into the other. mixed arithmetic is an error:</p>
+<h2>numbers are exact</h2>
+
+<p>an <code>int</code> is a whole number, and its arithmetic is exact. multiply two large counts and you get the exact product—no silent wraparound into a small, wrong number the way a fixed-width <code>int</code> gives you in C:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">mixed.kso</div>
+  <div class="code-panel-title">ints.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="n">3</span> <span class="o">+</span> <span class="n">0.5</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
+  per_day <span class="o">=</span> <span class="n">86400</span>
+  days <span class="o">=</span> <span class="n">365000000</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{per_day * days}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run mixed.kso</div>
-    <pre><code><span class="k">error[runtime]</span>: `+` is not defined for these values</code></pre>
+    <div class="code-panel-title">output</div>
+    <pre><code>31536000000000</code></pre>
   </div>
 </div>
 
-<p>the fix is an explicit conversion—<code>to_float</code>—and everything is fine. notice the float renders as <code>3.5</code>, never a bare <code>3</code> pretending to be an int. floats always show their point:</p>
+<p>exactness is a promise kanso keeps even when it cannot fit the answer. the language's design specifies arbitrary-precision integers—no ceiling at all—and the bignum backing that delivers it is on the way. the build you have today backs <code>int</code> with 64 bits, and when a result would not fit, it refuses to lie about it. instead of wrapping, it hands you a diagnostic:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">conv.kso</div>
+  <div class="code-panel-title">overflow.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
+  billion <span class="o">=</span> <span class="n">1000000000</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{billion * billion * 100}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run overflow.kso</div>
+    <pre><code><span class="k">error[runtime]</span>: integer overflow (int64 native build; spec int is arbitrary precision)</code></pre>
+  </div>
+</div>
+
+<p>a wrong answer that looks right is the most expensive kind of bug. kanso will not produce one. the same instinct governs division by zero—there is no answer, so there is no fiction; the failure becomes a value that rides straight to the program's endpoint (chapter 04 is entirely about this rail):</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">divzero.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  n <span class="o">=</span> <span class="n">10</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{n / 0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run divzero.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
+<span class="c">  born in main at divzero.kso:3</span></code></pre>
+  </div>
+</div>
+
+<h2>floats, and how they meet ints</h2>
+
+<p>a <code>float</code> is the ieee double you already know—written with a decimal point, and it always renders with one, so a float is never mistaken for an int on the page. the interesting question is what happens when the two meet. an int divided by an int stays in integer arithmetic and discards the fractional part—<code>7 / 2</code> is <code>3</code>, not <code>3.5</code>. but the moment a float enters the expression, the int widens to meet it, and the result is a float:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">widen.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  exact <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2</span>
+  widened <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2.0</span>
+  mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span> <span class="n">0.5</span>
+  <span class="f">print</span> <span class="s">"int/int: <span class="i">{exact}</span>, int/float: <span class="i">{widened}</span>, mixed: <span class="i">{mixed}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>int/int: 3, int/float: 3.5, mixed: 3.5</code></pre>
+  </div>
+</div>
+
+<p>two rules, both visible in one line. <code>7 / 2</code> keeps whole-number arithmetic and drops the remainder to give <code>3</code>. <code>7 / 2.0</code> and <code>3 + 0.5</code> each mix the two types, so the int widens and the answer is a float, printed with its point. widening only ever runs one direction—int to float, never a float quietly rounded to an int—because that direction loses nothing. when you want the reverse, you ask for it by name: <code>to_int</code>, <code>to_float</code>, <code>round</code>, and <code>sqrt</code> are the conversions, and each states exactly what it does to the value.</p>
+
+<h2>strings interpolate</h2>
+
+<p>strings are utf-8 text in double quotes. the one piece of machinery they carry is interpolation—<code>{expression}</code>—and because the braces take a full expression, you rarely need to concatenate anything. build the sentence you want directly:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">strings.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  name <span class="o">=</span> <span class="s">"clay"</span>
   scoops <span class="o">=</span> <span class="n">3</span>
-  total <span class="o">=</span> <span class="f">to_float</span> scoops <span class="o">+</span> <span class="n">0.5</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{scoops}</span> scoops plus a taster: <span class="i">{total}</span>"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> ordered <span class="i">{scoops}</span> scoops, <span class="i">{scoops * 2}</span> on the house"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
-    <pre><code>3 scoops plus a taster: 3.5</code></pre>
+    <pre><code>clay ordered 3 scoops, 6 on the house</code></pre>
   </div>
 </div>
 
-<h2>constants</h2>
+<h2>lists</h2>
 
-<p>a top-level binding is a constant, and <code>main</code> is simply the constant the runtime asks for. constants sit in alphabetical order with everything else in the file—yes, enforced; we'll get to that:</p>
+<p>a list is an ordered sequence, written with brackets and—like everything in kanso—no commas between the elements. the workhorse verbs come with the language: <code>map</code> transforms every element, <code>filter</code> keeps the ones that pass, <code>sort</code> orders them, <code>sum</code> and <code>length</code> reduce them to a number. indexing is a tight <code>[i]</code>, and it is <strong>1-based</strong>: <code>xs[1]</code> is the first element.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">tau.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"tau is <span class="i">{tau}</span>"</span>
-
-<span class="f">tau</span> <span class="o">=</span> <span class="n">6.28318</span></code></pre>
+  <div class="code-panel-title">lists.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
+  doubled <span class="o">=</span> <span class="f">map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+  small <span class="o">=</span> <span class="f">filter</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>)
+  first <span class="o">=</span> xs[<span class="n">1</span>]
+  <span class="f">print</span> <span class="s">"sorted <span class="i">{sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
+    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
-    <pre><code>tau is 6.28318</code></pre>
+    <pre><code>sorted [1 2 3] doubled [6 2 4] small [1 2]
+sum 6 len 3 first 3</code></pre>
   </div>
 </div>
+
+<p><code>xs[i]</code> is the strict form: it expects the index to be there, and a miss becomes an <code>err</code> that rides to the endpoint. when absence is a normal outcome you plan for, reach for <code>at</code> instead—it returns the value or <code>none</code> rather than failing. asking for the ninth element of a three-element list yields <code>none</code>, which here rides to the endpoint because nothing downstream handled it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">at_miss.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  xs <span class="o">=</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>]
+  <span class="f">print</span> <span class="s">"<span class="i">{at xs 9}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run at_miss.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
+  </div>
+</div>
+
+<p>two operations, two spellings, no overlap: <code>xs[i]</code> says "this is present," <code>at xs i</code> says "this might not be." the choice is a sentence about your data, and the compiler holds you to it.</p>
+
+<h2>maps</h2>
+
+<p>a map associates keys with values. the literal reuses the bracket form with a colon between each key and its value, and lookup is the same tight <code>[k]</code> you use on lists. <code>put</code> returns a new map with one more entry—the original is untouched, because values do not mutate—and <code>entries</code> hands back the pairs in <strong>sorted key order</strong>, so iteration is deterministic every single run:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">maps.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span>]
+  ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
+  <span class="f">print</span> <span class="s">"clay is <span class="i">{ages["clay"]}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>clay is 47
+all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
+  </div>
+</div>
+
+<p>the entries came back <code>clay</code>, <code>mai</code>, <code>sam</code>—alphabetical, though <code>mai</code> was inserted last. a map in kanso has no incidental order to accidentally depend on. and like a list, its lookup is strict: a key that is not there is an <code>err</code>, not a silent <code>none</code> pretending the miss never happened:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">map_miss.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span>]
+  <span class="f">print</span> <span class="s">"<span class="i">{ages["nobody"]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run map_miss.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "nobody""
+<span class="c">  born in main at map_miss.kso:3</span></code></pre>
+  </div>
+</div>
+
+<h2>records</h2>
+
+<p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in alphabetical order, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">records.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">user</span>
+  age: <span class="t">int</span>
+  name: <span class="t">string</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  clay <span class="o">=</span> <span class="t">user</span> <span class="n">47</span> <span class="s">"clay"</span>
+  <span class="t">user</span> years who <span class="o">=</span> clay
+  { name: alias } <span class="o">=</span> clay
+  <span class="f">print</span> <span class="s">"<span class="i">{who}</span> is <span class="i">{years}</span>, also known as <span class="i">{alias}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>clay is 47, also known as clay</code></pre>
+  </div>
+</div>
+
+<p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name: alias } = clay</code>, names just the field you want and binds it to a name of your choosing. there is no <code>clay.name</code> dotted access—the <code>.</code> is the pipe operator (chapter 06), so reaching into a record is always a destructure, stated plainly.</p>
+
+<h2>equality and comparison</h2>
+
+<p>equality in kanso is structural: two values are equal when they are built the same way, all the way down. two lists with the same elements are equal; two records with the same fields are equal—no notion of identity, no "same object" versus "equal object" distinction to trip over. comparison (<code>&lt;</code>, <code>&lt;=</code>, and their mirrors) works on numbers and orders strings lexicographically:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">equality.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">point</span>
+  x: <span class="t">int</span>
+  y: <span class="t">int</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  nums <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>] <span class="o">==</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
+  words <span class="o">=</span> <span class="s">"apple"</span> <span class="o">&lt;</span> <span class="s">"banana"</span>
+  order <span class="o">=</span> <span class="n">5</span> <span class="o">&lt;=</span> <span class="n">5</span>
+  here <span class="o">=</span> <span class="t">point</span> <span class="n">1</span> <span class="n">2</span>
+  there <span class="o">=</span> <span class="t">point</span> <span class="n">1</span> <span class="n">2</span>
+  <span class="f">print</span> <span class="s">"lists <span class="i">{nums}</span>, words <span class="i">{words}</span>, order <span class="i">{order}</span>, points <span class="i">{here == there}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>lists true, words true, order true, points true</code></pre>
+  </div>
+</div>
+
+<p><code>here</code> and <code>there</code> are two separate constructions of the same point, and they compare equal—because equality asks what a value <em>is</em>, never where it lives. immutable values make this the only sensible answer, and it is the answer that lets maps key on records and lists compare in a single <code>==</code>.</p>
 
 <h2>rebinding</h2>
 
-<p>values are immutable—nothing in kanso mutates, ever. but a <em>name</em> may be rebound to a new value, which reads naturally when a value evolves through steps:</p>
+<p>values are immutable, but a <em>name</em> may be rebound to a new value. this reads naturally when a value evolves through steps—each line is a fresh, exact value, and the name simply follows along:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">tab.kso</div>
+  <div class="code-panel-title">rebind.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
   total <span class="o">=</span> <span class="n">10</span>
   total <span class="o">=</span> total <span class="o">+</span> <span class="n">5</span>
@@ -142,94 +308,49 @@
 <p>with one condition: each version of the name must actually be used before the next one replaces it. rebind over a value nobody read, and kanso asks why the first line exists at all:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">rebind.kso</div>
+  <div class="code-panel-title">rebind_check.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
   x <span class="o">=</span> <span class="n">1</span>
   x <span class="o">=</span> <span class="n">2</span>
   <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso check rebind.kso</div>
+    <div class="code-panel-title">kanso check rebind_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding: each version of `x` is used before the next
-<span class="c">  --&gt; rebind.kso:2:3</span>
+<span class="c">  --&gt; rebind_check.kso:2:3</span>
    2 |   x = 1
          <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<h2>nothing wasted</h2>
+<p>the rule is not fussiness—it is what lets the compiler know exactly when each value dies, which in turn is what lets kanso free memory precisely with no garbage collector (chapter 10). a value that is written and never read is dead on arrival, and the compiler says so.</p>
 
-<p>that error is not an outlier; it is the personality of the language. kanso's founding principle says anything a style guide or code review would enforce by convention becomes a compile error—which means the compiler treats <em>waste</em> the way other compilers treat type mismatches. a binding nobody reads:</p>
+<h2>no name is ever shadowed</h2>
+
+<p>rebinding replaces a name within one scope. <em>shadowing</em>—quietly reusing a name that already means something else—is a different thing, and kanso does not allow it. a local binding may not take a name already claimed by a top-level declaration; the compiler tells you the name is spoken for and asks you to pick another:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">leftover.kso</div>
+  <div class="code-panel-title">shadow_check.kso</div>
   <pre><code><span class="f">main</span> <span class="o">=</span>
-  brand <span class="o">=</span> <span class="s">"kanso"</span>
-  <span class="f">print</span> <span class="s">"hello"</span></code></pre>
+  tau <span class="o">=</span> <span class="n">5</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{tau}</span>"</span>
+
+<span class="f">tau</span> <span class="o">=</span> <span class="n">3</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso check leftover.kso</div>
-    <pre><code><span class="k">error[unused]</span>: unused binding `brand`
-<span class="c">  --&gt; leftover.kso:2:3</span>
-   2 |   brand = "kanso"
+    <div class="code-panel-title">kanso check shadow_check.kso</div>
+    <pre><code><span class="k">error[name]</span>: `tau` is already a declaration; rename the binding
+<span class="c">  --&gt; shadow_check.kso:2:3</span>
+   2 |   tau = 5
          <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<p>an expression that computes something and drops it on the floor:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">drift.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"hello"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check drift.kso</div>
-    <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
-<span class="c">  --&gt; drift.kso:2:5</span>
-   2 |   1 + 1
-           <span class="k">^</span></code></pre>
-  </div>
-</div>
-
-<p>whitespace you can't even see:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">invisible.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hi"</span>&nbsp;</code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check invisible.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
-<span class="c">  --&gt; invisible.kso:1:18</span>
-   1 | main = print "hi"
-                        <span class="k">^</span></code></pre>
-  </div>
-</div>
-
-<p>and the muscle memory you brought from every other language:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">commas.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">add</span> a, b
-  a <span class="o">+</span> b
-
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{add 1 2}</span>"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check commas.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: kanso has no commas; enumerations are space-separated
-<span class="c">  --&gt; commas.kso:1:9</span>
-   1 | fn add a, b
-               <span class="k">^</span></code></pre>
-  </div>
-</div>
-
-<p>there are no commas. anywhere. arguments, list elements, record fields—everything is space-separated, and after a day it is hard to remember why other languages spend a keystroke between every pair of things.</p>
-
-<p>read those diagnostics again and notice their posture: each states the rule as if it had always been obvious, because in this grammar it has. none of this is a linter you can disable or a formatter you run before review. there is no formatter—canonical form <em>is</em> the grammar, so a second tool would have nothing to do. the practical consequence: every diff you ever review in kanso is purely semantic. no reflowed lines, no whitespace churn, no "style nit" comments. the source contains only decisions.</p>
+<p>the payoff is that a name means one thing in the place you read it. no reader ever has to ask which <code>tau</code> is in view, and—like the rebind rule—no-shadowing keeps each value's lifetime unambiguous, which is exactly what the memory model needs to elide reference counts at compile time.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">ensō-neko</span>
-<p>exactly one space around <code>=</code>, two-space indents, declarations in alphabetical order, nothing trailing. it isn't a style i prefer; it's the only rendering that parses. i sleep well because you cannot wake me.</p>
+<p>a value never changes under you; a name is just where you are looking. rebind all you like—each version must earn its keep first—but you cannot point two names at one meaning, or one name at two. i sleep soundly because nothing i saw a moment ago has quietly become something else.</p>
 </div>
 </div>
 
@@ -237,9 +358,21 @@
 <svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">mugi</span>
-<p>don't fear the red text—i deliver it in ten milliseconds, fix included. type the mistake on purpose once. cheapest lesson in the language.</p>
+<p>a lookup that misses, a sum that won't fit—i hand you the failure as a value, not a lie. type the mistake on purpose once and read what comes back. it is the cheapest way to learn what kanso refuses to fake.</p>
 </div>
 </div>
+
+<h2>what you can now do</h2>
+
+<p>you have the whole value vocabulary: exact ints and honest overflow, floats and the one-way widening that joins them, strings that interpolate any expression, lists and maps with strict lookup and a planned-for miss, records you construct positionally and take apart by destructuring, and structural equality that reaches all the way down. you have the two rules that govern names—rebind, but use each version; and never shadow a name already spoken for. with these you can model most of the data a real program touches, and you have met the failure rail—<code>err</code> and <code>none</code> riding to the endpoint—that chapter 04 makes the center of the story. next, chapter 03 turns the <code>type</code> you just met into the language's dispatch mechanism.</p>
+
+<h2>exercises</h2>
+<ol class="exercises">
+  <li>build a map from three product names to their prices, then print the price of one product and the full list of entries. add a fourth product with <code>put</code> and print the entries again—note where it lands in the order.</li>
+  <li>declare a <code>type rectangle</code> with <code>height</code> and <code>width</code> fields. construct one, destructure it positionally, and print its area. remember the fields construct in alphabetical order.</li>
+  <li>start from a list of five numbers. in one program, print the list sorted, the list with every element doubled (<code>map</code>), the elements above a threshold (<code>filter</code>), and the total (<code>sum</code>).</li>
+  <li>reproduce the "unused binding" error on purpose: bind a name, rebind it without reading the first value, and run <code>kanso check</code>. then fix it two ways—once by using the first value, once by deleting the first line—and confirm both check clean.</li>
+</ol>
 
 <nav class="chapter-nav">
   <a href="index.html">contents</a>
@@ -259,6 +392,7 @@
       <a href="../index.html">home</a>
       <a href="../about.html">about</a>
       <a href="../lore.html">lore</a>
+      <a href="../influences.html">influences</a>
       <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>

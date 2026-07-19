@@ -1,0 +1,4 @@
+error[unused]: unused binding `goodbye`
+  --> dropped_check.kso:2:3
+   2 |   goodbye = print "sayonara"
+         ^

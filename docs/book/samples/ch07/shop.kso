@@ -1,0 +1,18 @@
+pub type receipt
+  total: int
+
+pub fn checkout item qty
+  receipt (line item qty)
+
+fn line item qty
+  qty * (price item) + service
+
+main = print "{checkout "matcha" 2}"
+
+fn price "matcha"
+  600
+
+fn price "mochi"
+  300
+
+service = 50

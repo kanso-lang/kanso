@@ -1,0 +1,4 @@
+main =
+  print "steeping"
+  cups = 4
+  >> print "serving {cups}"

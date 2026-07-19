@@ -1,0 +1,4 @@
+error[formatting]: a single-type ascription is written tight: `w:type` (parenthesized guards return with typesets)
+  --> paren_ascription_check.kso:1:11
+   1 | fn area (w: int)
+                 ^

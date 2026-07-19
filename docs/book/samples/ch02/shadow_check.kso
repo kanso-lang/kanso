@@ -1,0 +1,5 @@
+main =
+  tau = 5
+  print "{tau}"
+
+tau = 3

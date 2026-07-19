@@ -1,0 +1,5 @@
+main =
+  bs = bytes "café"
+  print "bytes {bs}"
+    >> print "utf8 {utf8 bs}"
+    >> print "find2 {find2 (bytes "a,b;c") 1 44 59}"

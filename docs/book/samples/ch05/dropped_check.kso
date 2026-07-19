@@ -1,0 +1,3 @@
+main =
+  goodbye = print "sayonara"
+  print "the goodbye never ran"

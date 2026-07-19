@@ -1,0 +1,4 @@
+main =
+  total = [9 1 8 2 7] . sort
+    . sum
+  print "sum: {total}"

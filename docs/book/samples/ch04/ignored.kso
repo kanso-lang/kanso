@@ -1,0 +1,4 @@
+main =
+  flavors = ["matcha" "ube"]
+  third = at flavors 3
+  print "third: {third}"

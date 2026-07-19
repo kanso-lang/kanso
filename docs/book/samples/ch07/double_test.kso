@@ -1,0 +1,4 @@
+fn double n
+  n * 2
+
+test_double = (double 4) == 9

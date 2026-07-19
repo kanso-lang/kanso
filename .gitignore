@@ -12,3 +12,4 @@ __pycache__/
 /bench/serde_bench/Cargo.lock
 *.ll
 /chain
+docs/book/samples/ch05/order.txt

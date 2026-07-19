@@ -1,0 +1,7 @@
+fn first xs
+  xs[1]
+
+fn greet name
+  "irasshaimase, {name}"
+
+main = args . first . greet . print

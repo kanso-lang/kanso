@@ -1,0 +1,8 @@
+error[formatting]: identifiers are snake_case, all lowercase, always
+  --> case_check.kso:2:5
+   2 |   myName = 1
+           ^
+error[formatting]: identifiers are snake_case, all lowercase, always
+  --> case_check.kso:3:13
+   3 |   print "{myName}"
+                   ^

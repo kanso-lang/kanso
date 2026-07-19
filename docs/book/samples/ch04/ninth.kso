@@ -1,0 +1,3 @@
+main =
+  flavors = ["matcha" "ube" "hojicha"]
+  print "ninth: {flavors[9]}"
