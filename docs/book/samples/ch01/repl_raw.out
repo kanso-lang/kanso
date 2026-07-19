@@ -1,4 +1,4 @@
-kanso repl — expressions evaluate, declarations persist, ctrl-d exits
+kanso repl — expressions evaluate, declarations persist, :help for directives, ctrl-d exits
 » defined tau
 » 12.56636
 » tau is 6.28318
