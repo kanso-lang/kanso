@@ -112,25 +112,39 @@ fn run_interpreted(program: &ast::Program) -> ExitCode {
 }
 
 fn repl() -> ExitCode {
-    use std::io::{BufRead, Write};
-    println!("kanso repl — expressions evaluate, declarations persist, ctrl-d exits");
+    use rustyline::error::ReadlineError;
+    println!(
+        "kanso repl — expressions evaluate, declarations persist, blank line \
+         ends a block, ctrl-d exits"
+    );
+    let mut editor = match rustyline::DefaultEditor::new() {
+        Ok(editor) => editor,
+        Err(e) => {
+            eprintln!("error: cannot open the terminal: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let history = std::env::home_dir().map(|h| h.join(".kanso_repl_history"));
+    if let Some(path) = &history {
+        let _ = editor.load_history(path);
+    }
     let mut session = kanso::repl::Session::new();
     let mut executor = eval::RealExecutor { program_args: Vec::new(), rng: eval::Rng::seeded() };
-    let stdin = std::io::stdin();
     let mut buffer = String::new();
     loop {
         let prompt = match buffer.is_empty() {
             true => "» ",
             false => "… ",
         };
-        print!("{prompt}");
-        let _ = std::io::stdout().flush();
-        let mut line = String::new();
-        match stdin.lock().read_line(&mut line) {
-            Ok(0) | Err(_) => return ExitCode::SUCCESS,
-            Ok(_) => {}
-        }
-        let line = line.trim_end().to_string();
+        let line = match editor.readline(prompt) {
+            Ok(line) => line.trim_end().to_string(),
+            // ctrl-c abandons the block in progress (or the empty prompt)
+            Err(ReadlineError::Interrupted) => {
+                buffer.clear();
+                continue;
+            }
+            Err(_) => break,
+        };
         let submit = match buffer.is_empty() {
             true if opens_block(&line) => {
                 buffer = line;
@@ -144,14 +158,22 @@ fn repl() -> ExitCode {
                 continue;
             }
         };
+        if !submit.trim().is_empty() {
+            let _ = editor.add_history_entry(&submit);
+        }
         report(session.eval(&submit, &mut executor));
     }
+    if let Some(path) = &history {
+        let _ = editor.save_history(path);
+    }
+    ExitCode::SUCCESS
 }
 
 /// Multi-line input: fn/type declarations and block-form constants read
 /// until a blank line.
 fn opens_block(line: &str) -> bool {
-    line.starts_with("fn ") || line.starts_with("type ") || line.ends_with('=')
+    let head = line.strip_prefix("pub ").unwrap_or(line);
+    head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
 }
 
 fn report(outcome: Result<kanso::repl::Outcome, String>) {

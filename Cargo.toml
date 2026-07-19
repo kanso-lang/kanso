@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 num-bigint = "0.4"
 num-traits = "0.2"
+rustyline = "18.0.1"
 
 [[bin]]
 name = "kanso"
