@@ -148,7 +148,7 @@ hojicha</code></pre>
 
 <p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the dot in one screenshot: <code>&gt;&gt;</code> sequences descriptions that don't pass data (the plan lists every step up front), while <code>.</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
-<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code>, no function coloring, no effect annotation to spread through the call graph—effectfulness travels in the value itself. a function that returns a description is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller, no effect type to declare—effectfulness travels in the value itself. a function that returns a description is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
 
 <h2>the rest of the i/o vocabulary</h2>
 

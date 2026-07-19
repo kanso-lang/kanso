@@ -11,7 +11,7 @@ extra_css: /book/book.css
 
 <p>the measure is <em>voter satisfaction efficiency</em>. each simulated election has a utilitarian-best candidate—the one whose victory would leave voters, in total, most satisfied. a method's vse is how much of that best-possible satisfaction its actual winner captures, normalized so that 1.0 means the ideal candidate won every time and 0.0 means the method did no better than drawing a candidate from a hat. average over many random elections and you get one number per method.</p>
 
-<p>the framing matters, so here it is up front: each method is implemented faithfully, from its own rules, and nothing downstream treats any of them specially. the driver hands all six the same electorate and records what happens. the ordering you will see at the end of the chapter—including the famous failure mode called the center squeeze—emerges from the simulation. it is not assumed anywhere in the code, and this chapter presents it the same way the program does: as a measurement.</p>
+<p>each method is implemented faithfully, from its own rules, and nothing downstream treats any of them specially. the driver hands all six the same electorate and records what happens. the ordering you will see at the end of the chapter—including the famous failure mode called the center squeeze—emerges from the simulation. it is not assumed anywhere in the code, and this chapter presents it the same way the program does: as a measurement.</p>
 
 <h2>the shape of the program</h2>
 

@@ -23,7 +23,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>read that carefully, because it is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, and we will read longer versions of that receipt shortly.</p>
+<p>this is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, and we will read longer versions of that receipt shortly.</p>
 
 <h2>the railway</h2>
 

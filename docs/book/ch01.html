@@ -79,7 +79,7 @@ kanso run hello.kso  0.00s user 0.00s system  0.005 total</code></pre>
   </div>
 </div>
 
-<p><code>kanso build</code> is the other engine entirely: it lowers your program to llvm ir and hands it to clang for a standalone native binary. the default build is tuned for the loop—your program compiles unoptimized against a cached, already-optimized runtime, so warm builds land in tens of milliseconds. <code>--release</code> is the full-fat version: whole-program lto, the slowest build, the fastest binary, and the mode every number in chapter 10 was measured under.</p>
+<p><code>kanso build</code> is the other engine entirely. it turns your program into llvm ir—the portable, lower-level code that compilers like rustc and swift also target—then hands that to clang, a c compiler, to produce a standalone native binary. the default build is tuned for the loop—your program compiles unoptimized against a cached, already-optimized runtime, so warm builds land in tens of milliseconds. <code>--release</code> is the full-fat version: one optimization pass over the entire program at once, the slowest build, the fastest binary, and the mode every number in chapter 10 was measured under.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">shell</div>
