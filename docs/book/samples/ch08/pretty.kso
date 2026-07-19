@@ -1,0 +1,42 @@
+type json_null
+
+fn _entry_block (entry k v) d
+  "{_pad d}\"{k}\": {pretty v d}"
+
+fn _pad 0
+  ""
+
+fn _pad n
+  "  {_pad (n - 1)}"
+
+main =
+  doc = ["name": "kanso" "port": 8080 "tags": ["fast" "simple"]]
+  print (pretty doc 0)
+
+fn pretty true _
+  "true"
+
+fn pretty false _
+  "false"
+
+fn pretty json_null _
+  "null"
+
+fn pretty n:int _
+  "{n}"
+
+fn pretty x:float64 _
+  "{x}"
+
+fn pretty s:string _
+  "\"{s}\""
+
+fn pretty xs:json[] d
+  d2 = d + 1
+  inner = join (map xs (v -> "{_pad d2}{pretty v d2}")) ",\n"
+  "[\n{inner}\n{_pad d}]"
+
+fn pretty m:json[string] d
+  d2 = d + 1
+  inner = join (map (entries m) (e -> _entry_block e d2)) ",\n"
+  "\{\n{inner}\n{_pad d}}"

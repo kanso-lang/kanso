@@ -1,0 +1,3 @@
+main =
+  print "sencha: {3 / 0} steeps left"
+  >> print "hojicha: {to_int "two"} steeps left"

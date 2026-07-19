@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the executor: "missing index 1"
+  born in first at welcome.kso:2

@@ -1,0 +1,29 @@
+fn _fold_at list acc f i
+  if (length list < i) acc (_fold_at list (f acc (at list i)) f (i + 1))
+
+fn _range_to n i acc
+  if (n < i) acc (_range_to n (i + 1) (push acc i))
+
+fn argmax list
+  fold (range (length list)) 1 (b i -> if (at list b < at list i) i b)
+
+fn count list x
+  fold list 0 (c e -> if (e == x) (c + 1) c)
+
+fn fold list init f
+  _fold_at list init f 1
+
+fn maximum list
+  fold list (at list 1) (m x -> if (m < x) x m)
+
+fn mean list
+  (0.0 + total list) / (length list)
+
+fn minimum list
+  fold list (at list 1) (m x -> if (x < m) x m)
+
+fn range n
+  _range_to n 1 []
+
+fn total list
+  fold list 0 (a x -> a + x)

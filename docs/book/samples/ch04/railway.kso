@@ -1,0 +1,13 @@
+main =
+  total = subtotal 120 0
+  print (receipt total)
+
+fn receipt total
+  "order total: {total}"
+
+fn subtotal cents people
+  share = cents / people
+  with_tip share
+
+fn with_tip share
+  share + (share / 10)

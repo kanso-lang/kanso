@@ -1,0 +1,10 @@
+fn first_major lines
+  major_of (at lines 1)
+
+main = print "major: {first_major []}"
+
+fn major_of none
+  err "no version line"
+
+fn major_of line
+  to_int line

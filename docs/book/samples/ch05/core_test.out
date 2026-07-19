@@ -1,0 +1,3 @@
+test_counts_lines ... ok
+test_empty_text_has_no_lines ... ok
+2 passed, 0 failed

@@ -1,0 +1,3 @@
+decoded: ["name": "kanso" "tags": ["fast" "simple"]]
+recoded: {"name":"kanso","tags":["fast","simple"]}
+parse failed at byte 10: invalid literal

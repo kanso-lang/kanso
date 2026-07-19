@@ -1,0 +1,8 @@
+{
+  "name": "kanso",
+  "port": 8080,
+  "tags": [
+    "fast",
+    "simple"
+  ]
+}

@@ -1,0 +1,11 @@
+fn describe none
+  "no fourth flavor"
+
+fn describe x
+  "fourth flavor: {x}"
+
+main =
+  flavors = ["matcha" "ube" "hojicha"]
+  first = flavors[1]
+  fourth = at flavors 4
+  print "first: {first}" >> print (describe fourth)

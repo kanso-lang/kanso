@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>chapter 04—failure is a value</title>
-<meta name="description" content="err and none, automatic propagation, strict indexing versus at, and the endpoint rule that makes ignoring failure a compile error.">
+<meta name="description" content="err and none, the propagation railway and its traces, strict access versus at, designing the sad path, and the wrong/not-yet taxonomy that decides what retry can ever mean.">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=2">
 <link rel="icon" type="image/x-icon" href="../favicon.ico?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,14 +35,30 @@
 
 <nav class="book-side" aria-label="book chapters">
   <a class="book-side-home" href="index.html">the book</a>
+  <span class="bs-part">part i — the language</span>
   <ol>
     <li><a href="ch01.html"><span class="bs-num">01</span><span class="bs-title">hello, kanso</span></a></li>
     <li><a href="ch02.html"><span class="bs-num">02</span><span class="bs-title">values and bindings</span></a></li>
     <li><a href="ch03.html"><span class="bs-num">03</span><span class="bs-title">types and dispatch</span></a></li>
     <li><a href="ch04.html" aria-current="page"><span class="bs-num">04</span><span class="bs-title">failure is a value</span></a></li>
     <li><a href="ch05.html"><span class="bs-num">05</span><span class="bs-title">effects are descriptions</span></a></li>
-    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">modules and tests</span></a></li>
-    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">fast by construction</span></a></li>
+    <li><a href="ch06.html"><span class="bs-num">06</span><span class="bs-title">flow and concurrency</span></a></li>
+    <li><a href="ch07.html"><span class="bs-num">07</span><span class="bs-title">modules and tests</span></a></li>
+  </ol>
+  <span class="bs-part">part ii — real programs</span>
+  <ol start="8">
+    <li><a href="ch08.html"><span class="bs-num">08</span><span class="bs-title">a json library</span></a></li>
+    <li><a href="ch09.html"><span class="bs-num">09</span><span class="bs-title">a voting simulator</span></a></li>
+  </ol>
+  <span class="bs-part">part iii — under the hood</span>
+  <ol start="10">
+    <li><a href="ch10.html"><span class="bs-num">10</span><span class="bs-title">fast by construction</span></a></li>
+  </ol>
+  <span class="bs-part">appendices</span>
+  <ol class="bs-appendix">
+    <li><a href="appa.html"><span class="bs-num">a</span><span class="bs-title">the diagnostics catalog</span></a></li>
+    <li><a href="appb.html"><span class="bs-num">b</span><span class="bs-title">builtin reference</span></a></li>
+    <li><a href="appc.html"><span class="bs-num">c</span><span class="bs-title">canonical form</span></a></li>
   </ol>
 </nav>
 
@@ -51,7 +67,7 @@
 <span class="eyebrow">chapter 04</span>
 <h1>failure is a value</h1>
 
-<p>kanso has no exceptions and no panics. it also has no <code>Ok</code>, no <code>Some</code>, no <code>.unwrap()</code>—none of the wrapper ceremony that result types usually charge. success is the bare value. failure is <code>err reason</code>, an ordinary value of an ordinary type. absence is <code>none</code>, a different ordinary value. that's the entire error model, and this chapter is about how far it goes.</p>
+<p>kanso has no exceptions and no panics. it also has no <code>Ok</code>, no <code>Some</code>, no <code>.unwrap()</code>—none of the wrapper ceremony that result types usually charge. success is the bare value. failure is <code>err</code>, an ordinary value carrying a reason. absence is <code>none</code>, a different ordinary value. the two are not interchangeable, and most of this chapter is about the line between them: <code>none</code> is the failure you handle, <code>err</code> is the failure you don't—can't, in fact, and that inability turns out to be the design.</p>
 
 <p>start by breaking something:</p>
 
@@ -62,70 +78,74 @@
   <span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
+<span class="c">  born in main at ratio.kso:2</span></code></pre>
   </div>
 </div>
 
-<p>read that carefully, because it is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and <em>the endpoint rule</em> fired: an err reaching the top of the program with no arm to receive it is an error in its own right. nothing was thrown; a value arrived somewhere that had no plan for it, and kanso considers having no plan the bug.</p>
-
-<h2>an arm for the err</h2>
-
-<p>the plan is dispatch—the only switch, doing its second job. <code>err reason</code> is a constructor pattern like any other, so handling failure is just one more overload:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">handle.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
-  <span class="s">"failed: <span class="i">{reason}</span>"</span>
-
-<span class="k">fn</span> <span class="f">describe</span> n
-  <span class="s">"got <span class="i">{n}</span>"</span>
-
-<span class="f">main</span> <span class="o">=</span>
-  ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
-  <span class="f">print</span> (<span class="f">describe</span> ratio)</code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">output</div>
-    <pre><code>failed: division by zero</code></pre>
-  </div>
-</div>
-
-<p>no <code>try</code>, no <code>catch</code>, no <code>rescue</code> block changing the shape of the code. the happy path and the sad path are two arms of the same function, sitting at the same indentation, both just returning strings.</p>
+<p>read that carefully, because it is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, and we will read longer versions of that receipt shortly.</p>
 
 <h2>the railway</h2>
 
-<p>here is the part that deletes real code from real programs. when an <code>err</code> flows into a function with no arm for it, the function doesn't run—the err passes through, untouched, automatically. watch a failure born three calls deep ride past every function on the way up:</p>
+<p>here is the part that deletes real code from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the err passes by, untouched, and keeps moving. watch a failure born two calls deep ride all the way out:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">railway.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
-  <span class="s">"could not price the order: <span class="i">{reason}</span>"</span>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="n">0</span>
+  <span class="f">print</span> (<span class="f">receipt</span> total)
 
-<span class="k">fn</span> <span class="f">describe</span> total
+<span class="k">fn</span> <span class="f">receipt</span> total
   <span class="s">"order total: <span class="i">{total}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  good <span class="o">=</span> <span class="f">total_price</span> <span class="n">120</span> <span class="n">4</span>
-  bad <span class="o">=</span> <span class="f">total_price</span> <span class="n">120</span> <span class="n">0</span>
-  <span class="f">print</span> (<span class="f">describe</span> good) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)
-
-<span class="k">fn</span> <span class="f">total_price</span> cents people
+<span class="k">fn</span> <span class="f">subtotal</span> cents people
   share <span class="o">=</span> cents <span class="o">/</span> people
   <span class="f">with_tip</span> share
 
 <span class="k">fn</span> <span class="f">with_tip</span> share
   share <span class="o">+</span> (share <span class="o">/</span> <span class="n">10</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">output</div>
-    <pre><code>order total: 33
-could not price the order: division by zero</code></pre>
+    <div class="code-panel-title">kanso run railway.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
+<span class="c">  born in subtotal at railway.kso:9</span>
+<span class="c">  passed through receipt ← with_tip</span></code></pre>
   </div>
 </div>
 
-<p>count the lines of error handling in <code>total_price</code> and <code>with_tip</code>: zero. the division by zero happens inside <code>total_price</code>, the resulting err flows into <code>with_tip</code>—whose arms don't match it, so it flows through—back out to <code>main</code>, and finally into <code>describe</code>, the first function that declared an arm for it. this is the railway: the sad track runs parallel to the happy one, and only stations with an err platform can receive the train. functions in the middle state their happy-path logic and nothing else, ever.</p>
+<p>count the lines of error handling in this program: zero. the division by zero happens inside <code>subtotal</code>; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and no station on the line can flag the train down. functions state their happy-path logic and nothing else, ever.</p>
 
-<h2>none is not err</h2>
+<p>the report deserves a slow read, because the err built it as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
 
-<p>absence gets its own value, and the standard library is opinionated about which one you should meet. indexing with <code>xs[i]</code> is <em>strict</em>: it means "i know this element exists," and a miss is an err—a broken promise:</p>
+<h2>no arm can catch it</h2>
+
+<p>chapter 03 taught you that dispatch is the only switch, so your first instinct is to write an arm for the err. that instinct is exactly what kanso refuses. an err is not one more shape for dispatch to consider—it rides past the entire overload group, including the catch-all arm that answers for everything else in the language:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">unhandled.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+  <span class="s">"nothing"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> x
+  <span class="s">"got <span class="i">{x}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+  <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run unhandled.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
+<span class="c">  born in main at unhandled.kso:8</span>
+<span class="c">  passed through describe</span></code></pre>
+  </div>
+</div>
+
+<p><code>describe x</code> answers for ints, strings, records, markers—anything. it still never sees the err: <code>passed through describe</code>, says the trace. an err is a true exception, and kanso's position is that a true exception is by definition the case you did not plan for—so no function gets to turn one back into a value. not a helper, not a library, not <code>main</code>. there is no rescue block to write and none to import, which means there is also no dependency that can quietly eat your failures on the way up. an err rises, carrying its receipts, until the endpoint reports it.</p>
+
+<p>this sounds strict until you see what it buys. in languages with catchable exceptions, every failure is implicitly addressed to whoever catches it first, and you find out who that is at runtime. in kanso the addressing is decided in the kind of value you ship: if a failure is something callers should cope with, it must travel as a value—<code>none</code>, or a marker, or a record that names the verdict—because a value is the only thing an arm can claim. the language makes "handleable" and "value" the same word. if you want something that can be handled, don't use an exception.</p>
+
+<h2>none is for asking</h2>
+
+<p>so meet the handleable one. the standard library is opinionated about where you meet it. indexing with <code>xs[i]</code> is <em>strict</em>: it means "i know this element exists," and a miss is a broken promise—an err:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">ninth.kso</div>
@@ -134,13 +154,14 @@ could not price the order: division by zero</code></pre>
   <span class="f">print</span> <span class="s">"ninth: <span class="i">{flavors[9]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ninth.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index 9"</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index 9"
+<span class="c">  born in main at ninth.kso:3</span></code></pre>
   </div>
 </div>
 
 <p>(indexing is 1-based, everywhere, no exceptions. the first flavor is <code>flavors[1]</code>. we are at peace with this.)</p>
 
-<p>when absence is <em>expected</em>—you're asking, not promising—use <code>at</code>, which returns <code>none</code> on a miss. and <code>none</code>, like <code>err</code>, is dispatched on, not checked for:</p>
+<p>when absence is <em>expected</em>—you're asking, not promising—use <code>at</code>, which returns <code>none</code> on a miss. and <code>none</code>, unlike <code>err</code>, is a shape dispatch fully understands. it sits on the marker rung of the specificity ladder, so handling absence is one more arm, written like any other:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">fourth.kso</div>
@@ -181,15 +202,199 @@ no fourth flavor</code></pre>
   </div>
 </div>
 
-<p>choosing between them is a design act, and the language makes you commit: brackets document an invariant ("this key exists, and if it doesn't, that's a bug—fail here"), <code>at</code> documents a question ("this may be absent, and absence is a case my code handles"). the distinction other languages leave to comments and code review, kanso puts in the call site.</p>
+<p>handleable does not mean ignorable. a <code>none</code> that no arm ever claims rides the same railway an err does, and the endpoint rule is waiting for it too:</p>
 
-<p>you've now seen how far the model goes: <code>err</code> for what broke, <code>none</code> for what was merely absent, the railway carrying both past every function with no arm to receive them, and the endpoint rule turning "ignore it" into a compile error—no <code>try</code>, no wrappers, no ceremony. chapter 05 turns the same instinct outward: if failure is just a value, so is talking to the world.</p>
+<div class="code-panel">
+  <div class="code-panel-title">ignored.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span>]
+  third <span class="o">=</span> <span class="f">at</span> flavors <span class="n">3</span>
+  <span class="f">print</span> <span class="s">"third: <span class="i">{third}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run ignored.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
+  </div>
+</div>
+
+<p>you asked a question with <code>at</code> and then wrote code that only works if the answer was yes—the interpolation has no way to render an absence you never resolved. so the difference between the two values is not that one is policed and the other isn't. both refuse to be ignored. the difference is that <code>none</code> <em>can</em> be claimed by an arm and <code>err</code> cannot. asking for something you might not get obligates you to write the arm for not getting it.</p>
+
+<h2>access is a decision</h2>
+
+<p>step back and look at what the last section actually handed you. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by which function you reach for. brackets document an invariant: this key exists, and if it doesn't, that's a bug, fail here. <code>at</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pocky.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  menu <span class="o">=</span> [<span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span>]
+  <span class="f">print</span> <span class="s">"pocky: <span class="i">{menu["pocky"]}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run pocky.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "pocky""
+<span class="c">  born in main at pocky.kso:3</span></code></pre>
+  </div>
+</div>
+
+<p>same map, same missing key as <code>menu.kso</code>—but this call site claimed pocky was on the menu, so the miss is a broken promise and the report says so. the distinction other languages leave to comments and code review, kanso puts in the call itself.</p>
+
+<p>there is a yagni argument hiding in here, and it is the honest heart of the error model. not-handling is the correct default. a handler for a failure that never recurs is speculative complexity—defensive code pays that tax on every line, up front, to guard against things that mostly never happen. kanso inverts it: assume by default, let the err rise with its receipts, and add coping <em>reactively</em>, one call site at a time, when a real failure has earned it. the happy path stays happy not because failures can't occur, but because you refused to complicate it for failures too rare to warrant it—and the endpoint rule guarantees that refusing to plan stays loudly visible the day the rare thing happens.</p>
+
+<h2>designing the sad path</h2>
+
+<p>the same line—handle, or rise—runs through every function you design, because you now have two different tools to fail with. the question that picks between them: did the function <em>accomplish its goal</em>, or not?</p>
+
+<p>a parser that reads <code>"banana"</code> and decides it is not a flag has not failed. it was asked a question about some text and it produced the answer: no. that verdict is an accomplishment—a value—and it should ship as one, because callers will want to dispatch on it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">flag.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">malformed</span>
+
+<span class="k">fn</span> <span class="f">describe</span> <span class="t">malformed</span>
+  <span class="s">"not a flag"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> b
+  <span class="s">"flag: <span class="i">{b}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"on"</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>))
+
+<span class="k">fn</span> <span class="f">parse_flag</span> <span class="s">"off"</span>
+  <span class="t">false</span>
+
+<span class="k">fn</span> <span class="f">parse_flag</span> <span class="s">"on"</span>
+  <span class="t">true</span>
+
+<span class="k">fn</span> <span class="f">parse_flag</span> <span class="o">_</span>
+  <span class="t">malformed</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>flag: true
+not a flag</code></pre>
+  </div>
+</div>
+
+<p><code>malformed</code> is a marker from chapter 03 doing failure work: it names the verdict, it dispatches like anything else, and no caller can forget it exists—an unclaimed marker rides to the endpoint just like an unclaimed none. this is the shape to reach for whenever bad input is an <em>answer</em> your callers care about.</p>
+
+<p>minting an err is the opposite declaration: my goal is unmet and i decline to make that my caller's chore. <code>err</code> takes a reason and builds the value by hand, and the natural place to write one is an arm that recognizes a state you refuse to continue from. here a none arrives where absence means the input itself is broken, and the function escalates it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">escalate.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">first_major</span> lines
+  <span class="f">major_of</span> (<span class="f">at</span> lines <span class="n">1</span>)
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"major: <span class="i">{first_major []}</span>"</span>
+
+<span class="k">fn</span> <span class="f">major_of</span> <span class="t">none</span>
+  <span class="t">err</span> <span class="s">"no version line"</span>
+
+<span class="k">fn</span> <span class="f">major_of</span> line
+  <span class="f">to_int</span> line</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run escalate.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "no version line"
+<span class="c">  born in major_of at escalate.kso:7</span></code></pre>
+  </div>
+</div>
+
+<p>notice the direction of that conversion. a none became an err—a question's answer became a broken contract—because <code>major_of</code> decided an absent version line is not a case anyone downstream should be coping with. the reverse direction does not exist: nothing turns an err back into a none, because that would be handling the unhandleable. escalation is a one-way door, so choose the floor you start on carefully: <code>none</code> and markers when callers should decide, <code>err</code> when there is nothing sensible for them to decide. and since no caller can catch your err, minting one is a real commitment—the failure will surface as <em>your</em> function's name in <em>their</em> report, with your reason attached. write the reason for the stranger who reads it at the endpoint.</p>
+
+<h2>the two failures</h2>
+
+<p>every failure so far was born in pure code, and that fact is visible right on the report: a birthplace, file and line. the taxonomy underneath deserves to be explicit, because it decides what fixing a failure even means. the next programs read a file, which makes them a small preview of chapter 05—<code>read_file</code> hands the executor a description of the read, and <code>.</code> feeds the result to a function. take the plumbing on credit for two pages; the failures are today's subject.</p>
+
+<p>a file named <code>version.txt</code> holds the text <code>7</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">version.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">announce</span> text
+  <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"version.txt"</span> <span class="o">.</span> <span class="f">announce</span>
+
+<span class="k">fn</span> <span class="f">major_of</span> text
+  <span class="f">to_int</span> text</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>major version 7</code></pre>
+  </div>
+</div>
+
+<p>now the same program pointed at <code>garbage.txt</code>, whose content is the text <code>seven point four</code>:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">garbage.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">announce</span> text
+  <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span>
+
+<span class="k">fn</span> <span class="f">major_of</span> text
+  <span class="f">to_int</span> text</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run garbage.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
+<span class="c">  born in major_of at garbage.kso:7</span></code></pre>
+  </div>
+</div>
+
+<p>and once more, pointed at a file that does not exist:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">missing.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">announce</span> text
+  <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
+
+<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"no-such-file.txt"</span> <span class="o">.</span> <span class="f">announce</span>
+
+<span class="k">fn</span> <span class="f">major_of</span> text
+  <span class="f">to_int</span> text</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run missing.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read no-such-file.txt: no such file or unreadable"</code></pre>
+  </div>
+</div>
+
+<p>two failures from the same program shape, and the reports differ in one telling way: the garbage run has a birthplace and the missing run does not. that absent line is the taxonomy, printed. the garbage failure is a <strong>wrong</strong>: born in <code>major_of</code>, in pure code, turning a value into a verdict. <code>to_int "seven point four"</code> does not <em>sometimes</em> fail—it <strong>equals</strong> that err the way <code>2 + 2</code> equals <code>4</code>, and running it again would compute the same err at the same line, forever. the missing-file failure is a <strong>not-yet</strong>: born at the executor, out in the world, at an io that couldn't complete. it has no line of your code to point at because no line of your code is wrong—and the world may have moved by the next attempt.</p>
+
+<p>the trap most people fall into: "but the garbage <em>came from a file</em>—files can change, so isn't that failure contingent too?" trace it carefully. the read <strong>succeeded</strong>; it delivered <code>seven point four</code> intact, which is why execution ever reached <code>major_of</code>. the parse then failed in code that never touched the disk. a failure's kind is fixed by where it is <em>born</em>, not by where its inputs came from. the changeability you feel lives one step upstream, at the read—and re-running the read is a different event, not a retry of the parse. this is also why retry logic belongs only at the shell: retrying a not-yet is a genuinely new question to a world that may answer differently; retrying a wrong is asking the same arithmetic to come out different, three times, at three times the latency. when kanso grows a retry vocabulary for effects, this born-at-the-executor distinction is the fact it will stand on—the runtime already stamps it on every err.</p>
+
+<h2>failures in company</h2>
+
+<p>one question remains: what happens when two failures happen at once? chapter 01 established that plain consecutive statements are unordered—parallel by default—and <code>&gt;&gt;</code> is the wall that sequences. an err arriving at a wall kills everything after it, exactly as the railway predicts. but between statements with no order there is no "after," so neither failure can preempt the other. both sides run, and both failures arrive:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">teas.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
+  <span class="f">print</span> <span class="s">"hojicha: <span class="i">{to_int "two"}</span> steeps left"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run teas.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ["division by zero" ""two" is not an integer"]</code></pre>
+  </div>
+</div>
+
+<p>the two errs merge into one whose reason is the list of both. a merged err trades the single birthplace line for that list—two failures, two birthplaces, one report—which is the honest accounting: neither failure caused the other, so neither deserves top billing. sequence the same two lines and the story collapses back to the railway—first failure wins, and the second print never runs:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">seq.kso</div>
+  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{to_int "two"}</span> steeps left"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run seq.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
+<span class="c">  born in main at seq.kso:2</span></code></pre>
+  </div>
+</div>
+
+<p>short-circuit where there is order, accumulate where there is none. you never choose between those policies, because they are not policies—each is the only behavior its structure permits. dependence decides.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">err</span>
-<p>people confuse me with my cousin none. none is what you get when you <em>asked</em>—a lookup that may miss. i am what you get when something <em>broke</em>. seat us at different tables and your program's intent reads itself.</p>
+<p>people confuse me with my cousin none. none is what you get when you <em>asked</em>—a lookup that may miss, a question whose answer can be no. i am what you get when something <em>broke</em>. seat us at different tables and your program's intent reads itself.</p>
 </div>
 </div>
 
@@ -197,9 +402,20 @@ no fourth flavor</code></pre>
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">err</span>
-<p>i never sneak. i knock at every function on the way up, and the endpoint rule guarantees somebody eventually opens the door—because pretending i'm not there refuses to compile. write the arm where the context to respond actually lives, and nowhere else.</p>
+<p>nobody catches me—no rescue block, no clever arm, and i walk straight past the catch-all. if you ever wish you could, you wished for the wrong value: ship a none, or a marker that names the verdict. i exist for the failures you refused to plan for, and i always file a full report on the way out.</p>
 </div>
 </div>
+
+<p>you now hold the whole failure model. <code>err</code> for what broke: unhandleable, rising past every arm with its birthplace and its passed-through receipts, reported at the endpoint. <code>none</code> for what was merely absent: one more shape, claimed by one more arm, and just as impossible to silently ignore. access as a per-call-site decision between promising and asking; your own apis choosing between verdicts shipped as values and contracts broken with a minted err; the wrong/not-yet line that tells you whether a failure lives in your code or in the world; and short-circuit versus accumulate falling out of dependence rather than policy. chapter 05 turns the same instinct outward: if failure is just a value, so is talking to the world.</p>
+
+<h2>exercises</h2>
+
+<ol class="exercises">
+  <li>add a fourth station to <code>railway.kso</code>—a function between <code>subtotal</code> and <code>with_tip</code>—and write down, before running, the exact report you expect: reason, birthplace, and the full passed-through chain in order. then run it and grade yourself.</li>
+  <li><code>escalate.kso</code> turns a none into an err. redesign it the other way: make <code>major_of</code> ship a marker (say <code>unversioned</code>) instead of minting an err, and dispatch on it at the print site. write one sentence on which caller the failure now belongs to, and whether that is an improvement here.</li>
+  <li>take <code>fourth.kso</code> and flip both access decisions—make the first lookup a question and the fourth a promise. predict what each run prints or reports before checking. for each of the two call sites, state in one sentence which meaning the original program actually wanted and why.</li>
+  <li>run <code>version.kso</code> against three worlds: the file holding <code>7</code>, the file holding garbage, and the file absent. before each run, name the failure kind you expect—wrong or not-yet—and say whether the report will carry a birthplace line. explain what retrying would mean, if anything, in each world.</li>
+</ol>
 
 <nav class="chapter-nav">
   <a href="index.html">contents</a>
@@ -219,6 +435,7 @@ no fourth flavor</code></pre>
       <a href="../index.html">home</a>
       <a href="../about.html">about</a>
       <a href="../lore.html">lore</a>
+      <a href="../influences.html">influences</a>
       <a href="https://github.com/kanso-lang/kanso">github</a>
     </nav>
   </div>
