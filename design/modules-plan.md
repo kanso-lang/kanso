@@ -76,3 +76,32 @@ entrypoint becomes literally `import <library>` + `play`. Single-file programs:
 a statements-only file runs as-is (hello is one line); anything defining
 functions is a library and needs an entry. Build WITH cross-module import
 (the entry file imports the library) — they are one feature.
+
+## GAVELED (2026-07-19, second ruling): the entry file is named main.kso
+
+Clay resolved the committee's one open split beyond either side: the entry file
+is **required** to be `main.kso` — "if there's only one entry file you might as
+well force it to be main.kso by convention. no reason to allow ambiguity."
+
+- `kanso run <dir>` runs `<dir>/main.kso`. Uniqueness needs no compile error:
+  the filesystem cannot hold two files of one name — the invalid state is
+  unrepresentable, not detected.
+- The file NAME selects the grammar: `main.kso` parses as an entry
+  (statements-only); every other `.kso` parses as a library (declarations
+  only). A bare expression in a library file is a compile error naming the fix
+  ("statements live in main.kso").
+- The LANGUAGE still has no magic names — no `main` identifier exists anywhere
+  in the grammar; the name lives in the toolchain's discovery rule, like Go's
+  main.go made honest (Go treats the filename as convention; kanso enforces it
+  and gets zero ambiguity in return).
+- Explicit single-file runs stay: `kanso run hello.kso` treats the named file
+  as the entry whatever it is called — pedagogy keeps one-file programs
+  (statements-only), and no ambiguity exists because the user pointed.
+- The playground's hidden entry becomes literally a synthetic `main.kso`:
+  `import` + `play`.
+
+All other committee rulings stand as synthesized: strict statements-only
+entries (no dispensation), no thin-entry enforcement beyond the grammar (an
+entry cannot declare, so it cannot hide logic), directory-stem binary naming,
+no go.mod-style manifest. Build rides with cross-module import as one keystone
+commit.
