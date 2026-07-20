@@ -94,13 +94,13 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
         k_b_put  (in jsonbench)        97</code></pre>
 </div>
 
-<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d__value_for_3</code>—and that is <em>your</em> function. it's the <code>_value_for</code> you wrote in chapter 08, the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
+<p>read it as a picture of where the afternoon went. the busiest thing in the whole program, by a wide margin, is <code>d_value_for_3</code>—and that is <em>your</em> function. it's the <code>value_for</code> you wrote in chapter 08, the little group of overloads that peeks at the next byte and decides whether a value is a string, a number, an object, or an array. below it sit the rest of the parser's own functions and a few runtime primitives for shuffling bytes around.</p>
 
 <p>now look at what's <em>missing</em>. there is no interpreter in this list. no dispatcher walking a table of function pointers. no tag-checking loop, no garbage collector. <code>memmove</code>—raw byte copying, the floor of any parser—has sunk to fifth. the overloads, the pattern matches, the railway you spent nine chapters learning: none of them appear, because by the time the compiler is done they aren't separate things in the program anymore.</p>
 
-<p>take the hottest function as the case study. in the source, <code>_value_for</code> is seven overloads—seven tiny functions, one per kind of byte. you might picture running it as walking into a room and asking, one at a time, "are you a string? a number? an object?" until someone says yes. that is not what the machine does. the compiler knows all seven arms ahead of time, so it builds the equivalent of a telephone switchboard: take the byte, jump straight to the one arm that handles it, no working down a line. seven overloads in the source, one indexed jump in the machine.</p>
+<p>take the hottest function as the case study. in the source, <code>value_for</code> is seven overloads—seven tiny functions, one per kind of byte. you might picture running it as walking into a room and asking, one at a time, "are you a string? a number? an object?" until someone says yes. that is not what the machine does. the compiler knows all seven arms ahead of time, so it builds the equivalent of a telephone switchboard: take the byte, jump straight to the one arm that handles it, no working down a line. seven overloads in the source, one indexed jump in the machine.</p>
 
-<p>the word for turning "one function that works for many types" into "a separate specialized copy for each concrete type actually used" is <strong>monomorphization</strong>. that's all it is—the compiler saw exactly which bytes flow through <code>_value_for</code> and stamped out the specialized switchboard, so dispatch, the "only switch" from chapter 03, costs nothing at runtime. you can watch it happen on a program small enough to hold in one hand.</p>
+<p>the word for turning "one function that works for many types" into "a separate specialized copy for each concrete type actually used" is <strong>monomorphization</strong>. that's all it is—the compiler saw exactly which bytes flow through <code>value_for</code> and stamped out the specialized switchboard, so dispatch, the "only switch" from chapter 03, costs nothing at runtime. you can watch it happen on a program small enough to hold in one hand.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">samples/ch10/classify.kso</div>
@@ -138,7 +138,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
   ]</code></pre>
 </div>
 
-<p>the catch-all <code>_</code> became the <code>default</code> label; each byte literal became one case. this is the exact shape the real json scanner is built from. here is <code>_is_number_char</code> from the benchmark module—its arms are the bytes <code>43 45 46 69 101</code>, which are <code>+ - . E e</code>—compiled the same way, one function deeper into a working parser:</p>
+<p>the catch-all <code>_</code> became the <code>default</code> label; each byte literal became one case. this is the exact shape the real json scanner is built from. here is <code>is_number_char</code> from the benchmark module—its arms are the bytes <code>43 45 46 69 101</code>, which are <code>+ - . E e</code>—compiled the same way, one function deeper into a working parser:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">jsonbench.ll</div>
@@ -301,7 +301,7 @@ beat_iters=151</code></pre>
 <ol class="exercises">
   <li>build <code>samples/ch10/counters.kso</code>, then change the loop count from <code>1000</code> to <code>2000</code> and rebuild. run it under <code>KANSO_COUNTERS=1</code> and write down the new <code>allocs</code> and <code>alloc_bytes</code>. from your two data points, work out the list's growth policy: does doubling the element count double the allocation count, or add a fixed few?</li>
   <li>write your own two-overload tail-recursive function—say, a countdown that prints as it goes—build it, and grep the <code>.ll</code> for <code>musttail call</code>. now rewrite one arm so its recursive call is <em>not</em> the last thing it does—wrap the call in a bit of arithmetic—rebuild, and grep again. say what happened to the count, and what that predicts about the stack at ten million frames.</li>
-  <li>take the <code>classify.kso</code> dispatch group and add five more byte-literal arms. rebuild and check that the emitted <code>switch</code> grew to match—one <code>label</code> per literal, one <code>default</code>. then swap one literal arm for a guard that ranges over bytes (<code>_both (47 &lt; c) (c &lt; 58)</code>) and see whether that arm stays inside the <code>switch</code> or moves out of it.</li>
+  <li>take the <code>classify.kso</code> dispatch group and add five more byte-literal arms. rebuild and check that the emitted <code>switch</code> grew to match—one <code>label</code> per literal, one <code>default</code>. then swap one literal arm for a guard that ranges over bytes (<code>both (47 &lt; c) (c &lt; 58)</code>) and see whether that arm stays inside the <code>switch</code> or moves out of it.</li>
   <li>the cost golden in <code>bench/cost_golden.txt</code> is committed. break it on purpose: edit one integer, run the counters, and diff the two. then describe what a real regression would have to change in the program to produce that same diff—and why a wall-clock benchmark would have waved it through.</li>
 </ol>
 

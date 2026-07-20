@@ -44,7 +44,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">with_tip</span> share
   share <span class="o">+</span> (share <span class="o">/</span> <span class="n">10</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run railway.kso</div>
+    <div class="code-panel-title">kanso play railway.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
 <span class="c">  born in subtotal at railway.kso:9</span>
 <span class="c">  passed through receipt ← with_tip</span></code></pre>
@@ -71,9 +71,9 @@ extra_css: /book/book.css
   bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
   <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run unhandled.kso</div>
+    <div class="code-panel-title">kanso play unhandled.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at unhandled.kso:8</span>
+<span class="c">  born in play at unhandled.kso:8</span>
 <span class="c">  passed through describe</span></code></pre>
   </div>
 </div>
@@ -93,7 +93,7 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso run ninth.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index 9"
-<span class="c">  born in main at ninth.kso:3</span></code></pre>
+<span class="c">  born in main at ninth.kso:2</span></code></pre>
   </div>
 </div>
 
@@ -166,7 +166,7 @@ third <span class="o">=</span> <span class="f">at</span> flavors <span class="n"
   <div class="code-output">
     <div class="code-panel-title">kanso run pocky.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "pocky""
-<span class="c">  born in main at pocky.kso:3</span></code></pre>
+<span class="c">  born in main at pocky.kso:2</span></code></pre>
   </div>
 </div>
 
@@ -190,10 +190,6 @@ third <span class="o">=</span> <span class="f">at</span> flavors <span class="n"
 <span class="k">fn</span> <span class="f">describe</span> b
   <span class="s">"flag: <span class="i">{b}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"on"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>))
-
 <span class="k">fn</span> <span class="f">parse_flag</span> <span class="s">"off"</span>
   <span class="t">false</span>
 
@@ -201,7 +197,11 @@ third <span class="o">=</span> <span class="f">at</span> flavors <span class="n"
   <span class="t">true</span>
 
 <span class="k">fn</span> <span class="f">parse_flag</span> <span class="o">_</span>
-  <span class="t">malformed</span></code></pre>
+  <span class="t">malformed</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"on"</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>flag: true
@@ -218,17 +218,17 @@ not a flag</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">first_major</span> lines
   <span class="f">major_of</span> (<span class="f">at</span> lines <span class="n">1</span>)
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"major: <span class="i">{first_major []}</span>"</span>
-
 <span class="k">fn</span> <span class="f">major_of</span> <span class="t">none</span>
   <span class="t">err</span> <span class="s">"no version line"</span>
 
 <span class="k">fn</span> <span class="f">major_of</span> line
-  <span class="f">to_int</span> line</code></pre>
+  <span class="f">to_int</span> line
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"major: <span class="i">{first_major []}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run escalate.kso</div>
+    <div class="code-panel-title">kanso play escalate.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "no version line"
-<span class="c">  born in major_of at escalate.kso:7</span></code></pre>
+<span class="c">  born in major_of at escalate.kso:5</span></code></pre>
   </div>
 </div>
 
@@ -245,10 +245,10 @@ not a flag</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">announce</span> text
   <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"version.txt"</span> <span class="o">.</span> <span class="f">announce</span>
-
 <span class="k">fn</span> <span class="f">major_of</span> text
-  <span class="f">to_int</span> text</code></pre>
+  <span class="f">to_int</span> text
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"version.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>major version 7</code></pre>
@@ -262,14 +262,14 @@ not a flag</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">announce</span> text
   <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span>
-
 <span class="k">fn</span> <span class="f">major_of</span> text
-  <span class="f">to_int</span> text</code></pre>
+  <span class="f">to_int</span> text
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run garbage.kso</div>
+    <div class="code-panel-title">kanso play garbage.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
-<span class="c">  born in major_of at garbage.kso:7</span></code></pre>
+<span class="c">  born in major_of at garbage.kso:5</span></code></pre>
   </div>
 </div>
 
@@ -280,12 +280,12 @@ not a flag</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">announce</span> text
   <span class="f">print</span> <span class="s">"major version <span class="i">{major_of text}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"no-such-file.txt"</span> <span class="o">.</span> <span class="f">announce</span>
-
 <span class="k">fn</span> <span class="f">major_of</span> text
-  <span class="f">to_int</span> text</code></pre>
+  <span class="f">to_int</span> text
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"no-such-file.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run missing.kso</div>
+    <div class="code-panel-title">kanso play missing.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read no-such-file.txt: no such file or unreadable"</code></pre>
   </div>
 </div>
@@ -318,7 +318,7 @@ not a flag</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at seq.kso:2</span></code></pre>
+<span class="c">  born in main at seq.kso:1</span></code></pre>
   </div>
 </div>
 

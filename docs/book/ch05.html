@@ -74,9 +74,9 @@ kon kon</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">render.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"a description renders as <span class="i">{step}</span>"</span>
+  <pre><code>step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span>
 
-step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span></code></pre>
+<span class="f">print</span> <span class="s">"a description renders as <span class="i">{step}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run render.kso</div>
     <pre><code>a description renders as &lt;description&gt;</code></pre>
@@ -92,9 +92,9 @@ step <span class="o">=</span> <span class="f">print</span> <span class="s">"stee
   <div class="code-output">
     <div class="code-panel-title">kanso check dropped_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `goodbye`
-  --&gt; dropped_check.kso:2:3
-   2 |   goodbye = print "sayonara"
-         ^</code></pre>
+  --&gt; dropped_check.kso:1:1
+   1 | goodbye = print "sayonara"
+       ^</code></pre>
   </div>
 </div>
 
@@ -133,11 +133,11 @@ hojicha</code></pre>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run count.kso</div>
+    <div class="code-panel-title">kanso play count.kso</div>
     <pre><code>flavors.txt has 3 lines</code></pre>
   </div>
   <div class="code-output">
-    <div class="code-panel-title">kanso run count.kso --plan</div>
+    <div class="code-panel-title">kanso play count.kso --plan</div>
     <pre><code>plan:
   read_file "flavors.txt"
   . &lt;continuation&gt;
@@ -184,7 +184,7 @@ hojicha</code></pre>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run welcome.kso -- clay</div>
+    <div class="code-panel-title">kanso play welcome.kso -- clay</div>
     <pre><code>irasshaimase, clay</code></pre>
   </div>
 </div>
@@ -196,7 +196,7 @@ hojicha</code></pre>
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">printf 'hello from a pipe' | kanso run shout.kso</div>
+    <div class="code-panel-title">printf 'hello from a pipe' | kanso play shout.kso</div>
     <pre><code>hello from a pipe!!</code></pre>
   </div>
 </div>
@@ -209,9 +209,9 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso, run bare</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run welcome.kso</div>
+    <div class="code-panel-title">kanso play welcome.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
   born in first at welcome.kso:2</code></pre>
   </div>
@@ -234,15 +234,15 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">fallback.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span>
-
-<span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
+  <pre><code><span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
   <span class="s">"no orders yet"</span>
 
 <span class="k">fn</span> <span class="f">orders</span> text
-  <span class="s">"yesterday: <span class="i">{text}</span>"</span></code></pre>
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run fallback.kso</div>
+    <div class="code-panel-title">kanso play fallback.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
   </div>
 </div>
@@ -302,13 +302,11 @@ hojicha</code></pre>
 <span class="f">test_empty_text_has_no_lines</span> <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">""</span>) <span class="o">==</span> <span class="n">0</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test core_test.kso</div>
-    <pre><code>test_counts_lines ... ok
-test_empty_text_has_no_lines ... ok
-2 passed, 0 failed</code></pre>
+    <pre><code><span class="k">error</span>: `core_test.kso` is a library — nothing to run. give the module a main.kso entry, or define `pub play` and use `kanso play`</code></pre>
   </div>
 </div>
 
-<p>no file was faked, because no file was involved: the function under test takes a string, and the fact that <code>main</code> pipes it from <code>read_file</code> is not the function's business. the design pushed the file dependency to the edge, and the test simply doesn't follow it there.</p>
+<p>no file was faked, because no file was involved: the function under test takes a string, and the fact that <code>play</code> pipes it from <code>read_file</code> is not the function's business. the design pushed the file dependency to the edge, and the test simply doesn't follow it there.</p>
 
 <p>the second floor is the effects themselves. a test evaluates <code>main</code>—pure, fast, no side effects—and gets the program's <em>entire intent</em> as a value. the interpreter makes this concrete: <code>Executor</code> is a trait, so alongside the real executor there is a scripted one that performs nothing and appends each effect to a transcript, feeding the program canned args, canned stdin, and an in-memory map of files:</p>
 
@@ -357,7 +355,7 @@ test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
 <h2>exercises</h2>
 
 <ol>
-  <li>write a program that binds one <code>print</code> description to a name and splices it into <code>main</code> twice, separated by a different print. predict the full <code>--plan</code> output on paper, then run it and compare.</li>
+  <li>write a program that binds one <code>print</code> description to a name and splices it into the program twice, separated by a different print. predict the full <code>--plan</code> output on paper, then run it and compare.</li>
   <li>write a file copier: pipe <code>read_file "flavors.txt"</code> into a lambda that returns <code>write_file "copy.txt" text</code>. run it with <code>--plan</code> first and explain why the write step doesn't appear in the plan, then run it for real and confirm the copy exists.</li>
   <li>change <code>first</code> in <code>welcome.kso</code> to index <code>xs[2]</code> and run it with one argument, then with two. for each run, say whether the failure (if any) happened during evaluation or during execution, and quote the part of the message that told you.</li>
   <li>extract the pure function from <code>shout.kso</code> into a file of its own with two <code>test_</code> constants—one for ordinary text, one for the empty string. decide what the empty-string result <em>should</em> be before you run <code>kanso test</code>, and reconcile if the toolchain disagrees.</li>
