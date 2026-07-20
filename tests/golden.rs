@@ -84,13 +84,21 @@ fn error_corpus_reports_each_golden_diagnostic() {
 #[test]
 fn runtime_corpus_reports_endpoint_violations() {
     for program in kso_files(&manifest_dir().join("tests/golden/runtime")) {
-        let output = run_kanso(&program, &[]);
+        // Both engines must report the endpoint violation identically: native
+        // (the compiled binary) and the interpreter oracle.
+        for extra in [&[][..], &["--interp"][..]] {
+            let output = run_kanso(&program, extra);
 
-        assert_eq!(
-            String::from_utf8_lossy(&output.stderr),
-            expected(&program, "stderr"),
-            "diagnostics mismatch for {program:?}"
-        );
-        assert_eq!(output.status.code(), Some(1), "endpoint violations exit 1 for {program:?}");
+            assert_eq!(
+                String::from_utf8_lossy(&output.stderr),
+                expected(&program, "stderr"),
+                "diagnostics mismatch for {program:?} (extra {extra:?})"
+            );
+            assert_eq!(
+                output.status.code(),
+                Some(1),
+                "endpoint violations exit 1 for {program:?} (extra {extra:?})"
+            );
+        }
     }
 }
