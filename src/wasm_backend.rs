@@ -444,6 +444,9 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(pairs.len() as i64);
                 ctx.body.call(RT_MKMAP);
             }
+            Expr::Field { .. } => {
+                return Err("field access (`.name`) is not yet in the browser backend".to_string());
+            }
             Expr::Index { base, index, span } => {
                 self.emit_expr(ctx, base, false)?;
                 self.emit_expr(ctx, index, false)?;
@@ -898,6 +901,7 @@ impl<'a> WasmBackend<'a> {
 fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
     match expr {
         Expr::Ident(name, _) => visit(name),
+        Expr::Field { base, .. } => free_idents(base, visit),
         Expr::Int(..) | Expr::Float(..) => {}
         Expr::Str(parts, _) => {
             for part in parts {

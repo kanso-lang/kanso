@@ -1,12 +1,12 @@
 type joined
-  who: string
+  who:string
 
 type left
-  who: string
+  who:string
 
 type renamed
-  after: string
-  before: string
+  after:string
+  before:string
 
 main =
   print (render (joined "clay"))

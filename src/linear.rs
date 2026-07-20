@@ -249,6 +249,7 @@ fn count_in_expr(var: &str, e: &Expr) -> usize {
 
 fn child_exprs(e: &Expr) -> Vec<&Expr> {
     match e {
+        Expr::Field { base, .. } => vec![base.as_ref()],
         Expr::App { head, args, .. } => {
             let mut v: Vec<&Expr> = vec![head.as_ref()];
             v.extend(args.iter());

@@ -187,10 +187,10 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
     let colon_span = p.span_here();
     p.expect_colon()?;
     let ty_span = p.span_here();
-    if ty_span.col != colon_span.col + 2 {
+    if ty_span.col != colon_span.col + 1 {
         return Err(Diagnostic::new(
             "formatting",
-            "a field is spaced: `name: type`".to_string(),
+            "a field annotation binds tight: `name:type`".to_string(),
             colon_span,
         ));
     }
@@ -372,6 +372,7 @@ fn parse_stmt_shape(line: &Line) -> StmtShape {
 fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
+        | Expr::Field { span: s, .. }
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)
@@ -785,6 +786,17 @@ impl<'a> P<'a> {
     fn parse_atom(&mut self) -> Result<Expr, Diagnostic> {
         let mut expr = self.parse_atom_base()?;
         loop {
+            if matches!(self.peek(), Some(Tok::Dot)) {
+                let span = self.span_here();
+                self.pos += 1;
+                let Some(Tok::Ident(name)) = self.toks.get(self.pos).map(|(t, _)| t.clone())
+                else {
+                    return Err(self.err("a field name follows the dot".to_string()));
+                };
+                self.pos += 1;
+                expr = Expr::Field { base: Box::new(expr), name, span };
+                continue;
+            }
             let tight = matches!(self.peek(), Some(Tok::LBracket))
                 && self.span_here().col == self.last_end();
             if !tight {

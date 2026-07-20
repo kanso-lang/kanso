@@ -387,12 +387,12 @@ fn roll i
   random 6 . (n -> print "roll {i}: a {n + 1}")
 `,
   redux: `type deposit
-  amount: int
+  amount:int
 
 type logger
 
 type withdraw
-  amount: int
+  amount:int
 
 main =
   moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]

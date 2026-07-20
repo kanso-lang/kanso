@@ -51,12 +51,12 @@ parse failed at byte 10: invalid literal</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>
   <pre><code><span class="k">type</span> <span class="t">_parsed</span>
-  pos: <span class="t">int</span>
-  value: <span class="t">json</span>
+  pos:<span class="t">int</span>
+  value:<span class="t">json</span>
 
 <span class="k">type</span> <span class="t">parse_failure</span>
-  position: <span class="t">int</span>
-  reason: <span class="t">string</span>
+  position:<span class="t">int</span>
+  reason:<span class="t">string</span>
 
 <span class="k">fn</span> <span class="f">_finish</span> <span class="o">_</span> <span class="t">none</span>
   <span class="t">err</span> (<span class="t">parse_failure</span> <span class="n">0</span> <span class="s">"unexpected end of input"</span>)
@@ -118,8 +118,8 @@ parse failed at byte 10: invalid literal</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">literal.kso</div>
   <pre><code><span class="k">type</span> <span class="t">parse_failure</span>
-  position: <span class="t">int</span>
-  reason: <span class="t">string</span>
+  position:<span class="t">int</span>
+  reason:<span class="t">string</span>
 
 _bytes_false <span class="o">=</span> [<span class="n">102</span> <span class="n">97</span> <span class="n">108</span> <span class="n">115</span> <span class="n">101</span>]
 
@@ -390,7 +390,7 @@ err at 5: unexpected trailing characters</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>
   <pre><code><span class="k">type</span> <span class="t">defect</span>
-  reason: <span class="t">string</span>
+  reason:<span class="t">string</span>
 
 <span class="k">fn</span> <span class="f">_failure_position</span> (<span class="t">err</span> (<span class="t">parse_failure</span> p <span class="o">_</span>))
   p

@@ -731,6 +731,7 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
             };
             head_allocates || args.iter().any(|a| expr_allocates(a, fn_names, allocating, seed_pass))
         }
+        Expr::Field { base, .. } => expr_allocates(base, fn_names, allocating, seed_pass),
         Expr::Index { base, index, .. } => {
             expr_allocates(base, fn_names, allocating, seed_pass)
                 || expr_allocates(index, fn_names, allocating, seed_pass)
@@ -846,6 +847,7 @@ fn value_use(e: &Expr, name: &str) -> bool {
             (!head_is_plain_name && value_use(head, name))
                 || args.iter().any(|a| value_use(a, name))
         }
+        Expr::Field { base, .. } => value_use(base, name),
         Expr::Index { base, index, .. } => value_use(base, name) || value_use(index, name),
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             value_use(lhs, name) || value_use(rhs, name)

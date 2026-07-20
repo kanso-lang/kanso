@@ -1,5 +1,5 @@
 type user
-  name: string
-  admin: bool
+  name:string
+  admin:bool
 
 main = print "x"

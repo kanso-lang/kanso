@@ -1,6 +1,6 @@
 type user
-  admin: bool
-  name: string
+  admin:bool
+  name:string
 
 main =
   { admin name } = user false "clay"
