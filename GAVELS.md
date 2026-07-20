@@ -19,6 +19,7 @@ thorough examples. Rule by letter: "T3, W2, B yes, C yield, …"
 | W fused walls | ✅ **fused closes**: `>> step` is a complete sequential step (Clay's space-saver for singleton stages); a bare line can't silently join it (teaching error); multi-member groups use the lone wall | **implemented** |
 | B gather / failure reification | ❌ "an err is a true exception, so you can't handle it. it should short circuit except where it can't because of parallelism. if you want something that can be handled, don't use an exception." No gather, no freeze point, no reified-failure records in user code. An err short-circuits to the top; a parallel join is the sole concession (every member still runs; errs accumulate into one, which then short-circuits). Handleable outcomes are ordinary VALUES — dispatch already covers them, zero new machinery | — |
 | X statement canon + width-as-rendering | ✅ v2 after Clay's correction: "width can break a line down into wrapped lines, but it doesn't turn one statement into multiple statements." STRUCTURE (width-free): a lone wall exists only for multi-member groups; a one-step stage ALWAYS fuses (`>> step`); fused closes; so `[a b] >> [c] >> d` renders `>> foo_c` / `>> foo_d`, never a lone wall over `foo_c`. WIDTH (rendering only): 80-col cap; an over-wide statement wraps onto `.`/`>>` continuation lines at indent+2, one step per line (no partial chaining); a wrap that would fit on one line is an error. Width never merges or splits statements. | **implemented** |
+| BB nullary application = unit application | ✅ Clay: "i love this convention. it's cute and clever, easy to remember." A bare `fn` name is the function value (passable); `now()` calls a nullary function as application to unit `()` (same as `now ()`; whitespace-insensitive). Constants stay values (mentioned, never called); one namespace + no constant shadowing makes reference-vs-call decidable at the declaration. No Haskell `<-`. Precedent: OCaml/SML/Scala. The dispatch-group-as-value half leans on **G** (open). Full note: `design/function-values.md`. | design'd, not built |
 
 The live semantics, in one example — **bare lines are two threads; no order
 exists unless you wrote one**:
@@ -191,6 +192,12 @@ slots . filter failed . map message                      # the one rendering
 A forwarding lambda is derivable clutter (annotation-doctrine logic). Bare
 names as function values already compile. Adopting sweeps the corpus
 (`fanout.kso`'s `map cities (c -> fetch_quote c)`).
+
+Gavel BB (nullary application, ruled) sits on top of this: once a bare name is
+uniformly the function value, `map encode` and `now()` are one rule at one
+argument and at none. What G still owes is canon (ban the forwarding lambda?)
+and the composition rules for a dispatch group held as a value — see
+`design/function-values.md`.
 
 **My rec: adopt.**
 
