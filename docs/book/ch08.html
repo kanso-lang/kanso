@@ -514,16 +514,16 @@ test_roundtrip ... ok
   <div class="code-panel-title">pretty.kso</div>
   <pre><code><span class="k">type</span> <span class="t">json_null</span>
 
-<span class="k">fn</span> <span class="f">_entry_block</span> (<span class="t">entry</span> k v) d
-  <span class="s">"<span class="i">{_pad d}</span>\"<span class="i">{k}</span>\": <span class="i">{pretty v d}</span>"</span>
+<span class="k">fn</span> <span class="f">entry_block</span> (<span class="t">entry</span> k v) d
+  <span class="s">"<span class="i">{pad d}</span>\"<span class="i">{k}</span>\": <span class="i">{pretty v d}</span>"</span>
 
-<span class="k">fn</span> <span class="f">_pad</span> <span class="n">0</span>
+<span class="k">fn</span> <span class="f">pad</span> <span class="n">0</span>
   <span class="s">""</span>
 
-<span class="k">fn</span> <span class="f">_pad</span> n
-  <span class="s">"  <span class="i">{_pad (n - 1)}</span>"</span>
+<span class="k">fn</span> <span class="f">pad</span> n
+  <span class="s">"  <span class="i">{pad (n - 1)}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   doc <span class="o">=</span> [<span class="s">"name"</span>: <span class="s">"kanso"</span> <span class="s">"port"</span>: <span class="n">8080</span> <span class="s">"tags"</span>: [<span class="s">"fast"</span> <span class="s">"simple"</span>]]
   <span class="f">print</span> (<span class="f">pretty</span> doc <span class="n">0</span>)
 
@@ -547,13 +547,13 @@ test_roundtrip ... ok
 
 <span class="k">fn</span> <span class="f">pretty</span> xs:<span class="t">json[]</span> d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
-  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{_pad d2}</span><span class="i">{pretty v d2}</span>"</span>)) <span class="s">",\n"</span>
-  <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{_pad d}</span>]"</span>
+  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{pad d2}</span><span class="i">{pretty v d2}</span>"</span>)) <span class="s">",\n"</span>
+  <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{pad d}</span>]"</span>
 
 <span class="k">fn</span> <span class="f">pretty</span> m:<span class="t">json[string]</span> d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
-  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">_entry_block</span> e d2)) <span class="s">",\n"</span>
-  <span class="s">"\{\n<span class="i">{inner}</span>\n<span class="i">{_pad d}</span>}"</span></code></pre>
+  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">entry_block</span> e d2)) <span class="s">",\n"</span>
+  <span class="s">"\{\n<span class="i">{inner}</span>\n<span class="i">{pad d}</span>}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pretty.kso</div>
     <pre><code>{

@@ -13,25 +13,24 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">ratio.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
-  <span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
+  <pre><code>ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+<span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at ratio.kso:2</span></code></pre>
+<span class="c">  born in main at ratio.kso:1</span></code></pre>
   </div>
 </div>
 
-<p>this is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, and we will read longer versions of that receipt shortly.</p>
+<p>this is not a crash. division by zero produced an <code>err</code> value, the value flowed off the end of the program, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. the <code>main</code> in the report is the entry the compiler wires around your statements—the report's name for that top. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, and we will read longer versions of that receipt shortly.</p>
 
 <h2>the railway</h2>
 
-<p>here is the part that deletes real code from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the err passes by, untouched, and keeps moving. watch a failure born two calls deep ride all the way out:</p>
+<p>here is the part that deletes real code from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the err passes by, untouched, and keeps moving. this file is a library of functions with a <code>pub play</code> demo, so <code>kanso play</code> runs it. watch a failure born two calls deep ride all the way out:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">railway.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="n">0</span>
   <span class="f">print</span> (<span class="f">receipt</span> total)
 
@@ -68,7 +67,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
   <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
@@ -89,9 +88,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">ninth.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
-  <span class="f">print</span> <span class="s">"ninth: <span class="i">{flavors[9]}</span>"</span></code></pre>
+  <pre><code>flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
+<span class="f">print</span> <span class="s">"ninth: <span class="i">{flavors[9]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ninth.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index 9"
@@ -111,7 +109,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"fourth flavor: <span class="i">{x}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
   first <span class="o">=</span> flavors[<span class="n">1</span>]
   fourth <span class="o">=</span> <span class="f">at</span> flavors <span class="n">4</span>
@@ -133,7 +131,7 @@ no fourth flavor</code></pre>
 <span class="k">fn</span> <span class="f">describe</span> price
   <span class="s">"<span class="i">{price}</span> yen"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   menu <span class="o">=</span> [<span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span>]
   <span class="f">print</span> (<span class="f">describe</span> (<span class="f">at</span> menu <span class="s">"pocky"</span>))</code></pre>
   <div class="code-output">
@@ -146,10 +144,9 @@ no fourth flavor</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">ignored.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span>]
-  third <span class="o">=</span> <span class="f">at</span> flavors <span class="n">3</span>
-  <span class="f">print</span> <span class="s">"third: <span class="i">{third}</span>"</span></code></pre>
+  <pre><code>flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span>]
+third <span class="o">=</span> <span class="f">at</span> flavors <span class="n">3</span>
+<span class="f">print</span> <span class="s">"third: <span class="i">{third}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ignored.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
@@ -164,9 +161,8 @@ no fourth flavor</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">pocky.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  menu <span class="o">=</span> [<span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span>]
-  <span class="f">print</span> <span class="s">"pocky: <span class="i">{menu["pocky"]}</span>"</span></code></pre>
+  <pre><code>menu <span class="o">=</span> [<span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span>]
+<span class="f">print</span> <span class="s">"pocky: <span class="i">{menu["pocky"]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pocky.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "pocky""
@@ -304,10 +300,9 @@ not a flag</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">teas.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
-  <span class="f">print</span> <span class="s">"hojicha: <span class="i">{to_int "two"}</span> steeps left"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
+<span class="f">print</span> <span class="s">"hojicha: <span class="i">{to_int "two"}</span> steeps left"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teas.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ["division by zero" ""two" is not an integer"]</code></pre>
@@ -318,9 +313,8 @@ not a flag</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">seq.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{to_int "two"}</span> steeps left"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{to_int "two"}</span> steeps left"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"

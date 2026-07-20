@@ -69,7 +69,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <span class="s">built ./jsonbench (llvm ir at jsonbench.ll)</span>
 <span class="prompt">$ </span>time ./jsonbench
 <span class="s">decoded 150 times, checksum 24000</span>
-./jsonbench  0.14s user 0.00s system 99% cpu 0.140 total</code></pre>
+./jsonbench  0.13s user 0.00s system 99% cpu 0.135 total</code></pre>
 </div>
 
 <p>0.14 seconds for the same 150 decodes, and the same <code>24000</code> falls out the bottom. the fixture is read at runtime, so the optimizer can't cheat by folding the answer in at compile time; the matching checksum proves each of the 150 decodes really happened. that <code>24000</code> is not decoration. the interpreter printed it, the binary prints it, and every future run on every machine has to print it too—or something is broken. that agreement is the first of this chapter's three safety nets, and we'll build on it later.</p>
@@ -83,13 +83,13 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <div class="code-panel">
   <div class="code-panel-title">sample jsonbench (top of stack)</div>
   <pre><code>Sort by top of stack, same collapsed (when >= 5):
-        d__value_for_3  (in jsonbench)        504
+        d_value_for_3  (in jsonbench)        504
         k_truthy  (in jsonbench)        180
         k_b_push_mut  (in jsonbench)        179
         k_utf8_bad  (in jsonbench)        132
         _platform_memmove  (in libsystem_platform.dylib)        126
-        d__str_char_4  (in jsonbench)        114
-        d__obj_key_start_4  (in jsonbench)        106
+        d_str_char_4  (in jsonbench)        114
+        d_obj_key_start_4  (in jsonbench)        106
         k_b_find2  (in jsonbench)        98
         k_b_put  (in jsonbench)        97</code></pre>
 </div>
@@ -119,9 +119,9 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <span class="k">fn</span> <span class="f">kind</span> _
   <span class="s">"other"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">kind</span> <span class="n">46</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run classify.kso</div>
+    <div class="code-panel-title">kanso play classify.kso</div>
     <pre><code>dot</code></pre>
   </div>
 </div>
@@ -175,15 +175,15 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <span class="k">fn</span> <span class="f">even</span> n
   <span class="f">odd</span> (n <span class="o">-</span> <span class="n">1</span>)
 
-<span class="f">main</span> <span class="o">=</span>
-  verdict <span class="o">=</span> <span class="f">even</span> <span class="n">10000000</span>
-  <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span>
-
 <span class="k">fn</span> <span class="f">odd</span> <span class="n">0</span>
   <span class="t">false</span>
 
 <span class="k">fn</span> <span class="f">odd</span> n
-  <span class="f">even</span> (n <span class="o">-</span> <span class="n">1</span>)</code></pre>
+  <span class="f">even</span> (n <span class="o">-</span> <span class="n">1</span>)
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  verdict <span class="o">=</span> <span class="f">even</span> <span class="n">10000000</span>
+  <span class="f">print</span> <span class="s">"10000000 even? <span class="i">{verdict}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso build pingpong.kso --release &amp;&amp; time ./pingpong</div>
     <pre><code>10000000 even? true
@@ -220,7 +220,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <span class="k">fn</span> <span class="f">build</span> n acc
   <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum (build 1000 [])}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum (build 1000 [])}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">KANSO_COUNTERS=1 ./counters</div>
     <pre><code>allocs=27
@@ -239,7 +239,7 @@ sum 500500</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 ./jsonbench</div>
   <pre><code>allocs=14799465
-alloc_bytes=640242688
+alloc_bytes=640242704
 arena_blocks=5
 perm_allocs=1
 beat_iters=151
@@ -251,7 +251,7 @@ decoded 150 times, checksum 24000</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">bench/cost_golden.txt</div>
   <pre><code>allocs=14799465
-alloc_bytes=640242688
+alloc_bytes=640242704
 arena_blocks=5
 perm_allocs=1
 beat_iters=151</code></pre>

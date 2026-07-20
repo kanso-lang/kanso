@@ -21,9 +21,9 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">area</span> (<span class="t">circle</span> r)
   r <span class="o">*</span> r <span class="o">*</span> <span class="n">3.14159</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"area of r=2: <span class="i">{area (circle 2.0)}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"area of r=2: <span class="i">{area (circle 2.0)}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run ordered.kso</div>
+    <div class="code-panel-title">kanso play ordered.kso</div>
     <pre><code>area of r=2: 12.56636</code></pre>
   </div>
 </div>
@@ -34,33 +34,31 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">indent_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-   x <span class="o">=</span> <span class="n">1</span>
-   <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <pre><code> x <span class="o">=</span> <span class="n">1</span>
+ <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check indent_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 3
-<span class="c">  --&gt; indent_check.kso:2:1</span>
-   2 |    x = 1
+    <pre><code><span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 1
+<span class="c">  --&gt; indent_check.kso:1:1</span>
+   1 |  x = 1
        <span class="k">^</span>
-<span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 3
-<span class="c">  --&gt; indent_check.kso:3:1</span>
-   3 |    print "{x}"
+<span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 1
+<span class="c">  --&gt; indent_check.kso:2:1</span>
+   2 |  print "{x}"
        <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<p>a tab is not two spaces, not four, not anything—it is simply not part of the grammar. the width of a tab depends on whose editor renders it, and a language with one rendering per program cannot admit a character whose meaning is a display setting:</p>
+<p>a tab is not two spaces, not four, not anything—it is simply not part of the grammar. the width of a tab depends on whose editor renders it, and a language with one rendering per program cannot admit a character whose meaning is a display setting. the one line below begins with a tab, which is exactly the problem—you cannot see how wide it is:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">tabs_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-<span class="c">→</span>   <span class="f">print</span> <span class="s">"hi"</span></code></pre>
+  <pre><code>	<span class="f">print</span> <span class="s">"hi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check tabs_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: tabs are not part of the canonical grammar; indent with spaces
-<span class="c">  --&gt; tabs_check.kso:2:1</span>
-   2 | 	print "hi"
+<span class="c">  --&gt; tabs_check.kso:1:1</span>
+   1 | 	print "hi"
        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -69,19 +67,18 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">spacing_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  answer<span class="o">=</span><span class="n">42</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
+  <pre><code>answer<span class="o">=</span><span class="n">42</span>
+<span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check spacing_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; spacing_check.kso:2:9</span>
-   2 |   answer=42
-               <span class="k">^</span>
+<span class="c">  --&gt; spacing_check.kso:1:7</span>
+   1 | answer=42
+             <span class="k">^</span>
 <span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; spacing_check.kso:2:10</span>
-   2 |   answer=42
-                <span class="k">^</span></code></pre>
+<span class="c">  --&gt; spacing_check.kso:1:8</span>
+   1 | answer=42
+              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -89,13 +86,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">trailing_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hi"</span>&nbsp;</code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"hi"</span> </code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check trailing_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
-<span class="c">  --&gt; trailing_check.kso:1:18</span>
-   1 | main = print "hi"
-                        <span class="k">^</span></code></pre>
+<span class="c">  --&gt; trailing_check.kso:1:11</span>
+   1 | print "hi" 
+                 <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -105,15 +102,14 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">commas_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check commas_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: kanso has no commas; enumerations are space-separated
-<span class="c">  --&gt; commas_check.kso:2:17</span>
-   2 |   total = sum [1, 2]
-                       <span class="k">^</span></code></pre>
+<span class="c">  --&gt; commas_check.kso:1:15</span>
+   1 | total = sum [1, 2]
+                     <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -121,52 +117,56 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">call_paren_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
+  <pre><code><span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check call_paren_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; call_paren_check.kso:1:13</span>
-   1 | main = print("hi")
-                   <span class="k">^</span></code></pre>
+<span class="c">  --&gt; call_paren_check.kso:1:6</span>
+   1 | print("hi")
+            <span class="k">^</span></code></pre>
   </div>
 </div>
 
 <h2>one order per file</h2>
 
-<p>wherever order carries no meaning, canonical order is mandatory, so that two programs that differ only in shuffle are impossible. within a file, type declarations come first, then functions and constants; and within each of those two groups, names run in alphabetical order. put a type below a function and the compiler tells you which one to move and where:</p>
+<p>wherever order carries no meaning, canonical order is mandatory, so that two programs that differ only in shuffle are impossible. within a file, type declarations come first, then functions and constants; and within each of those two groups, names run in alphabetical order. put a type below a function and the compiler tells you which one to move and where. the same run flags a second drift—<code>play</code> has landed after <code>use_it</code>, out of alphabetical order—which is the next rule:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">order_types_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">alpha</span> x
-  x
+  <pre><code><span class="k">fn</span> <span class="f">use_it</span> t
+  t
 
-<span class="k">type</span> <span class="t">bravo</span>
-  n:<span class="t">int</span>
+<span class="k">type</span> <span class="t">thing</span>
+  size:<span class="t">int</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{alpha 1}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check order_types_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `bravo` up
+    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `thing` up
 <span class="c">  --&gt; order_types_check.kso:4:6</span>
-   4 | type bravo
-            <span class="k">^</span></code></pre>
+   4 | type thing
+            <span class="k">^</span>
+<span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `play` before `use_it`
+<span class="c">  --&gt; order_types_check.kso:7:5</span>
+   7 | pub play = print "x"
+           <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<p>functions and constants share one alphabetical group—<code>main</code> is a constant, and it sorts by name like everything else. it is not special-cased to the top or bottom; it lands wherever <code>m</code> falls:</p>
+<p>functions and constants share one alphabetical group—<code>play</code> is a constant, and it sorts by name like everything else. it is not special-cased to the top or bottom; it lands wherever <code>p</code> falls:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">order_alpha_check.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
   x
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check order_alpha_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
-<span class="c">  --&gt; order_alpha_check.kso:4:1</span>
-   4 | main = print "{zeta 1}"
-       <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `play` before `zeta`
+<span class="c">  --&gt; order_alpha_check.kso:4:5</span>
+   4 | pub play = print "{zeta 1}"
+           <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -178,12 +178,12 @@ extra_css: /book/book.css
   name:<span class="t">string</span>
   admin:<span class="t">bool</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check field_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: fields appear in alphabetical order: `admin` before `name`
 <span class="c">  --&gt; field_order_check.kso:3:3</span>
-   3 |   admin: bool
+   3 |   admin:bool
          <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -196,7 +196,7 @@ extra_css: /book/book.css
   admin:<span class="t">bool</span>
   name:<span class="t">string</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   { name admin } <span class="o">=</span> <span class="t">user</span> <span class="k">false</span> <span class="s">"clay"</span>
   <span class="f">print</span> <span class="s">"<span class="i">{name}</span> <span class="i">{admin}</span>"</span></code></pre>
   <div class="code-output">
@@ -214,14 +214,17 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">blank_between_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">greet</span> name
-  <span class="s">"hi, <span class="i">{name}</span>"</span>
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">greet</span> <span class="s">"kanso"</span>)</code></pre>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> _
+  <span class="f">print</span> <span class="s">"hi"</span>
+<span class="k">fn</span> <span class="f">wave</span> _
+  <span class="f">print</span> <span class="s">"yo"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">greet</span> <span class="n">0</span> <span class="o">.</span> <span class="f">wave</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check blank_between_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: exactly one blank line separates top-level declarations
 <span class="c">  --&gt; blank_between_check.kso:3:1</span>
-   3 | main = print (greet "kanso")
+   3 | fn wave _
        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -230,10 +233,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">blank_body_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> _
   x <span class="o">=</span> <span class="n">1</span>
 
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">greet</span> <span class="n">0</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check blank_body_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: blank lines may not appear inside a body
@@ -249,30 +254,28 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">width_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check width_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 90
+    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 83
 <span class="c">  --&gt; width_check.kso:1:81</span>
-   1 | main = print "this string pads the line out well past the canonical width limit of eighty"
+   1 | print "this string pads the line out well past the canonical width limit of eighty"
                                                                                        <span class="k">^</span></code></pre>
   </div>
 </div>
 
 <p>width is rendering only—it never changes how many statements a body has. an over-wide statement doesn't split into two statements; it stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
 
-<p>here is a sequence too wide for one line. its first step stays on the <code>main =</code> line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
+<p>here is a sequence too wide for one line. its first step stays on the statement's opening line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">wrap_wall.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping the sencha"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the water"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"steeping the sencha in the small clay pot for exactly ninety seconds"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the water in a thin stream from well above the first cup"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run wrap_wall.kso</div>
-    <pre><code>steeping the sencha
-pouring the water
-serving</code></pre>
+    <pre><code>steeping the sencha in the small clay pot for exactly ninety seconds
+pouring the water in a thin stream from well above the first cup</code></pre>
   </div>
 </div>
 
@@ -280,11 +283,10 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">wrap_pipe.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</span> <span class="n">8</span> <span class="n">23</span> <span class="n">42</span> <span class="n">16</span> <span class="n">4</span> <span class="n">108</span> <span class="n">71</span> <span class="n">55</span> <span class="n">90</span> <span class="n">33</span> <span class="n">27</span> <span class="n">61</span> <span class="n">19</span> <span class="n">77</span> <span class="n">88</span> <span class="n">100</span> <span class="n">200</span>]
-    <span class="o">.</span> <span class="f">sort</span>
-    <span class="o">.</span> <span class="f">sum</span>
-  <span class="f">print</span> <span class="s">"sum of the sorted roster: <span class="i">{ranked}</span>"</span></code></pre>
+  <pre><code>ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</span> <span class="n">8</span> <span class="n">23</span> <span class="n">42</span> <span class="n">16</span> <span class="n">4</span> <span class="n">108</span> <span class="n">71</span> <span class="n">55</span> <span class="n">90</span> <span class="n">33</span> <span class="n">27</span> <span class="n">61</span> <span class="n">19</span> <span class="n">77</span> <span class="n">88</span> <span class="n">100</span> <span class="n">200</span>]
+  <span class="o">.</span> <span class="f">sort</span>
+  <span class="o">.</span> <span class="f">sum</span>
+<span class="f">print</span> <span class="s">"sum of the sorted roster: <span class="i">{ranked}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run wrap_pipe.kso</div>
     <pre><code>sum of the sorted roster: 1077</code></pre>
@@ -295,16 +297,15 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">needless_wrap_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
-    <span class="o">.</span> <span class="f">sum</span>
-  <span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
+  <span class="o">.</span> <span class="f">sum</span>
+<span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check needless_wrap_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (34 characters)
-<span class="c">  --&gt; needless_wrap_check.kso:3:5</span>
-   3 |     . sum
-           <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (32 characters)
+<span class="c">  --&gt; needless_wrap_check.kso:2:3</span>
+   2 |   . sum
+         <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -312,14 +313,14 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">partial_chain_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
+  <pre><code><span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving it in the warmed cups with seasonal wagashi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check partial_chain_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: no partial chaining: a chain fits on one line, or each step gets its own `&gt;&gt;` continuation line
-<span class="c">  --&gt; partial_chain_check.kso:1:47</span>
-   1 | main = print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
-                                                     <span class="k">^</span></code></pre>
+<span class="c">  --&gt; partial_chain_check.kso:1:40</span>
+   1 | print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
+                                              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -329,19 +330,18 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">case_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  myName <span class="o">=</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
+  <pre><code>myName <span class="o">=</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check case_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
-<span class="c">  --&gt; case_check.kso:2:5</span>
-   2 |   myName = 1
-           <span class="k">^</span>
+<span class="c">  --&gt; case_check.kso:1:3</span>
+   1 | myName = 1
+         <span class="k">^</span>
 <span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
-<span class="c">  --&gt; case_check.kso:3:13</span>
-   3 |   print "{myName}"
-                   <span class="k">^</span></code></pre>
+<span class="c">  --&gt; case_check.kso:2:11</span>
+   2 | print "{myName}"
+                 <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -353,13 +353,13 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">quote_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">'hi'</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">'hi'</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check quote_check.kso</div>
     <pre><code><span class="k">error[syntax]</span>: unexpected character `'`
-<span class="c">  --&gt; quote_check.kso:1:14</span>
-   1 | main = print 'hi'
-                    <span class="k">^</span></code></pre>
+<span class="c">  --&gt; quote_check.kso:1:7</span>
+   1 | print 'hi'
+             <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -379,7 +379,7 @@ serving</code></pre>
 
 <ol>
   <li>take <code>wrap_pipe.kso</code> and remove enough elements from the list that the <code>ranked</code> binding would fit on one line unwrapped. predict which diagnostic <code>kanso check</code> produces before you run it, then confirm.</li>
-  <li>write a file with a type named <code>widget</code>, a function named <code>build</code>, and <code>main</code>—deliberately in the wrong order. run <code>kanso check</code> and note how many separate ordering errors you can provoke, and in what sequence you must fix them to reach <code>ok</code>.</li>
+  <li>write a file with a type named <code>widget</code>, a function named <code>build</code>, and a <code>pub play</code>—deliberately in the wrong order. run <code>kanso check</code> and note how many separate ordering errors you can provoke, and in what sequence you must fix them to reach <code>ok</code>.</li>
   <li>a body has a binding you want to set visually apart from the effects below it. you reach for a blank line and the compiler rejects it. what does the grammar offer instead, and what does that say about when a blank line would ever have been the right tool?</li>
   <li>construct a single statement that is exactly 80 characters and one that is exactly 81. verify the boundary is where the diagnostic claims it is, and read the character count it reports back.</li>
 </ol>

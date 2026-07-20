@@ -30,18 +30,18 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">hello.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hello, world"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"hello, world"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run hello.kso</div>
     <pre><code>hello, world</code></pre>
   </div>
 </div>
 
-<p>one line, and it's a slightly subversive line. <code>main</code> is not a function—it's a <em>constant</em>, bound with plain <code>=</code>, and its value is a description of printing. nothing executes while <code>main</code> is evaluated; the runtime receives that description and performs it. this distinction carries an entire chapter later, when effects turn out to be ordinary data you can inspect and test. for now, notice only that the simplest possible program is a value with a name.</p>
+<p>one line, and it's a slightly subversive line. <code>print "hello, world"</code> is an expression, and its value is a <em>description</em> of printing. nothing executes while the expression is evaluated; the runtime receives that description and performs it. this distinction carries an entire chapter later, when effects turn out to be ordinary data you can inspect and test. for now, notice only that the simplest possible program is a value.</p>
 
-<p>notice also what isn't there. no parentheses around the argument—application is a space, <code>print "hello, world"</code>. no semicolon. no import for <code>print</code>. no <code>()</code> after <code>main</code>. and no room for stylistic debate: this program has exactly one legal rendering, and you just read it. the file you write is the file everyone writes.</p>
+<p>notice also what isn't there. no parentheses around the argument—application is a space, <code>print "hello, world"</code>. no semicolon. no import for <code>print</code>. no <code>main</code> to wrap it in. and no room for stylistic debate: this program has exactly one legal rendering, and you just read it. the file you write is the file everyone writes.</p>
 
-<p>the entrypoint today is exactly this: a file with a <code>main</code> constant, which the toolchain evaluates and runs. treat that as a convenience, not a monument—the settled direction is that an entry file will simply be a list of statements, and <code>main</code> will dissolve into the file itself. when that lands you'll change nothing you've learned here; you'll just stop writing the word <code>main</code>.</p>
+<p>the entrypoint is the file itself. an entry file is a list of statements at the top level, run in order from the first line; the compiler wires them into a program without any ceremony from you. larger programs add definitions and imports around their statements, and <a href="ch07.html">chapter 07</a> covers how; the statements stay the program.</p>
 
 <h2>five verbs</h2>
 
@@ -93,13 +93,14 @@ kanso run hello.kso  0.00s user 0.00s system  0.005 total</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">kanso repl</div>
-  <pre><code>kanso repl — expressions evaluate, declarations persist, :help for directives, ctrl-d exits
+  <pre><code>kanso repl — expressions evaluate, declarations persist, ctrl-d exits
 <span class="prompt">» </span>tau <span class="o">=</span> <span class="n">6.28318</span>
 defined tau
 <span class="prompt">» </span>tau <span class="o">*</span> <span class="n">2</span>
 12.56636
 <span class="prompt">» </span><span class="f">print</span> <span class="s">"tau is <span class="i">{tau}</span>"</span>
-tau is 6.28318</code></pre>
+tau is 6.28318
+<span class="prompt">» </span></code></pre>
 </div>
 
 <p>five verbs, and you have the whole cycle: write a value, ask if it's legal, test it, run it, ship it as a binary—and poke at it interactively when you're not sure. everything else in this book is what goes inside the file.</p>
@@ -112,16 +113,15 @@ tau is 6.28318</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">unused_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  greeting <span class="o">=</span> <span class="s">"hello"</span>
-  <span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
+  <pre><code>name <span class="o">=</span> <span class="s">"clay"</span>
+greeting <span class="o">=</span> <span class="s">"hello"</span>
+<span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unused_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `greeting`
-  --&gt; unused_check.kso:3:3
-   3 |   greeting = <span class="s">"hello"</span>
-         ^</code></pre>
+  --&gt; unused_check.kso:2:1
+   2 | greeting = <span class="s">"hello"</span>
+       ^</code></pre>
   </div>
 </div>
 
@@ -129,9 +129,8 @@ tau is 6.28318</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">greeting.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  <span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
+  <pre><code>name <span class="o">=</span> <span class="s">"clay"</span>
+<span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run greeting.kso</div>
     <pre><code>hello, clay</code></pre>
@@ -161,7 +160,7 @@ plan:
   print <span class="s">"hello, world"</span>    <span class="c"># from line 1</span></code></pre>
 </div>
 
-<p>that <code>main</code> is a value, not an action, stops being a slogan the moment you can print the value and read it. the plan is exactly what the runtime would perform, laid out for inspection. chapter 05 builds whole programs you test this way—by asserting on the plan instead of mocking the world.</p>
+<p>that a program is a value, not an action, stops being a slogan the moment you can print the value and read it. the plan is exactly what the runtime would perform, laid out for inspection. chapter 05 builds whole programs you test this way—by asserting on the plan instead of mocking the world.</p>
 
 <h2>two engines, one meaning</h2>
 
@@ -189,7 +188,7 @@ plan:
 
 <p>the three <strong>appendices</strong> are reference, not narrative: <a href="appa.html">the diagnostics catalog</a> is every error the compiler can hand you and how to read it, <a href="appb.html">the builtin reference</a> is every function you get for free, and <a href="appc.html">canonical form</a> is the exact set of formatting rules the compiler enforces—the ones that made your unused binding an error.</p>
 
-<p>you can now build the toolchain, run a program, check it, test it, compile it to a native binary, and talk to it in the repl—the whole cycle, five verbs. you've also met the compiler's temperament: it treats clutter as an error, not a preference, and it tells you exactly where. one loose thread remains from the very first program: <code>main</code> was a constant, not a function, and its value was a <em>description</em>. the next chapter pulls that thread. it starts where both engines start—with values and the names you bind them to, and with the errors kanso raises to keep those names honest.</p>
+<p>you can now build the toolchain, run a program, check it, test it, compile it to a native binary, and talk to it in the repl—the whole cycle, five verbs. you've also met the compiler's temperament: it treats clutter as an error, not a preference, and it tells you exactly where. one loose thread remains from the very first program: its one line was an expression, and its value was a <em>description</em>. the next chapter pulls that thread. it starts where both engines start—with values and the names you bind them to, and with the errors kanso raises to keep those names honest.</p>
 
 <h2>exercises</h2>
 
