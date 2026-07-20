@@ -574,3 +574,19 @@ universally — request loops, control loops, robot loops: the exact
 production shapes the strategy targets. Design care needed: what else
 survives a bind step (the continuation closure's captures; nested joins);
 adversarial tests first. This rung decides the RSS verdict for real.
+
+---
+
+## 2026-07-20 — BUG [OPEN, HIGH]: register-return ABI mismatch on the canonical destructure
+
+A five-line program — `type user` + `fn foo (user age name)` + `main = foo
+(user 44 "clay")` — fails the native build: the callee's parameter carries
+%parsed (escape analysis: construct-then-destructure, register-returnable)
+but the call site emits the construction as %KValue. The interpreter runs it
+fine; the REPL (interp) fine. This is the same register-return machinery the
+err-migration's union-return blocker lives in — fix them together. Repro
+saved in the session ledger entry; the shape is escape.rs's own
+construct_then_destructure_is_returnable test, which passes at the ANALYSIS
+level while codegen's call_arg/abi_params disagree about the construction
+site's type. Found live while answering a syntax question — the canonical
+teaching form crashes the compiler.
