@@ -427,3 +427,25 @@ Clay greenlit both rungs. The implementation spec, so execution is mechanical:
 **Order: A, measure VSE, then B, measure again.** Prediction on record: both
 landed → VSE beat_iters > 0 and peak RSS collapses 158 MB → single digits.
 Then acc becomes the live ArgCrosses case and the shelf work starts.
+
+---
+
+## 2026-07-19 — rung A (tail-entry demotion) built; VSE's true wall is the acc
+
+Demotion works: an acyclic tail entry into a self-loop is emitted as a plain
+call (one bounded frame) and the loop brackets — fixture proves it (native ==
+interp, beat fires), cyclic callers can never demote (test pins it),
+jsonbench golden holds. **VSE still 0 beats, and now we know the whole
+chain:** `_fold_at list acc f i` self-tails with a LIST param, a CLOSURE
+param, and `(f acc x)` — a freshly-computed heap accumulator. So:
+- the OutsideTailCall verdict MASKS ArgCrosses (classify priority) — report
+  should surface both; minor, note for the next pass;
+- rung B (closure/list threading) is necessary but NOT sufficient;
+- **the wall is the accumulator: the fold-state shelf.** The acc is born
+  above the mark each iteration and must survive the rewind. Design: at
+  k_beat_iter, copy the one surviving slot down to the mark (the survivor
+  double-write, scoped to the accumulator the analysis names) — the memo's
+  three-way split arriving exactly where the four-construct model said state
+  lives. THIS is the deep frontier's real build; spec it with adversarial
+  care (copy must be transitive over the acc's reachable graph — a list acc
+  reaches spine+elements; measure cost on VSE before committing).
