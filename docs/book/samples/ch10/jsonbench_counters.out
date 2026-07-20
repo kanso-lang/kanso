@@ -1,6 +1,6 @@
 allocs=14799465
-alloc_bytes=790444432
-arena_blocks=6
+alloc_bytes=640242688
+arena_blocks=5
 perm_allocs=1
 beat_iters=150
 decoded 150 times, checksum 24000

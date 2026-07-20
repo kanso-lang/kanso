@@ -142,7 +142,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
     <tr class="win">
       <td>kanso + heartbeat</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:47%"></span></span></td>
-      <td class="num">0.81</td><td class="num">0.89</td><td class="num">6.8 mb</td>
+      <td class="num">0.81</td><td class="num">0.89</td><td class="num">5.8 mb</td>
     </tr>
     <tr>
       <td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td>
@@ -288,13 +288,13 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
   <polyline points="50,168 620,28" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="5 4"/>
   <text x="360" y="46" fill="var(--muted)" font-size="12">before: never swept—0.76 gb at 150, 15 gb at 3000, climbing</text>
   <polyline points="50,168 90,152 90,168 130,152 130,168 170,152 170,168 210,152 210,168 250,152 250,168 290,152 290,168 330,152 330,168 370,152 370,168 410,152 410,168 450,152 450,168 490,152 490,168 530,152 530,168 570,152 570,168 610,152" fill="none" stroke="var(--accent)" stroke-width="1.8"/>
-  <text x="360" y="140" fill="var(--accent)" font-size="12">after: swept every beat—6.8 mb, flat at any count</text>
+  <text x="360" y="140" fill="var(--accent)" font-size="12">after: swept every beat—5.8 mb, flat at any count</text>
 </svg>
 </figure>
 
-<p>grow-only, the peak tracks the work: <strong>0.76&nbsp;gb</strong> at 150 decodes, <strong>15&nbsp;gb</strong> at 3000, because the program keeps every scrap it ever touched. swept every beat, the peak is <strong>6.8&nbsp;mb</strong> at 150 decodes and <strong>6.8&nbsp;mb</strong> at 3000 — flat, because a decode's scraps die with the decode. and the swept version ran <em>faster</em> too: instead of asking the operating system for fresh, cold pages, it reused the same warm ones, so the cache stayed hot for the whole run.</p>
+<p>grow-only, the peak tracks the work: <strong>0.76&nbsp;gb</strong> at 150 decodes, <strong>15&nbsp;gb</strong> at 3000, because the program keeps every scrap it ever touched. swept every beat, the peak is <strong>5.8&nbsp;mb</strong> at 150 decodes and <strong>5.8&nbsp;mb</strong> at 3000 — flat, because a decode's scraps die with the decode. and the swept version ran <em>faster</em> too: instead of asking the operating system for fresh, cold pages, it reused the same warm ones, so the cache stayed hot for the whole run.</p>
 
-<p><strong>the honesty tier.</strong> the compiler now emits the beat boundaries itself: an analysis proves that a loop's iterations keep nothing across the line, and the emitted version came in at <strong>7.1&nbsp;mb</strong> peak—byte-for-byte the footprint of serde and the reasonably-written rust. still <em>planned</em>, not yet built: the copy-or-pin split for survivors, and the static sweep points for long beats. and the number that will ultimately judge the whole design isn't on this page yet—write the kanso compiler in kanso, count the survivors per beat, and find out how rare "rare" really is.</p>
+<p><strong>the honesty tier.</strong> the compiler now emits the beat boundaries itself: an analysis proves that a loop's iterations keep nothing across the line. with the per-object header gone from the arena, the emitted version measures <strong>5.8&nbsp;mb</strong> peak—under serde's 6.7 and the reasonably-written rust's 6.8. still <em>planned</em>, not yet built: the copy-or-pin split for survivors, and the static sweep points for long beats. and the number that will ultimately judge the whole design isn't on this page yet—write the kanso compiler in kanso, count the survivors per beat, and find out how rare "rare" really is.</p>
 
 <h2 id="ladder"><span class="sec-num">04</span>the last stretch to serde<span class="status status-shipped">shipped</span></h2>
 
@@ -386,7 +386,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <div class="code-panel">
   <div class="code-panel-title">the scoreboard—best-of-25 per decode, and how to reproduce it</div>
-  <pre><code><span class="c"># kanso, shipped default    ~0.81 ms   6.8 mb rss, flat  (heartbeat, §03)</span>
+  <pre><code><span class="c"># kanso, shipped default    ~0.81 ms   5.8 mb rss, flat  (heartbeat, §03)</span>
 <span class="c"># serde_json (hand-tuned)   ~0.83 ms   6.7 mb rss</span>
 <span class="c"># reasonably-written rust   ~0.98 ms   6.8 mb rss</span>
 <span class="c"># go encoding/json          ~1.73 ms   10.2 mb rss</span>
@@ -403,7 +403,7 @@ time ./jsonbench                                  <span class="c"># divide by 15
 
 <h3>the ratchet</h3>
 
-<p>a benchmark that drifts from one machine or one afternoon to the next isn't evidence of much. so the wins are pinned to counts that can't drift, not to wall-clock time. the 150-decode gauntlet is a deterministic program, so it performs the exact same number of allocations every run, on every machine, on both architectures. ci commits those counts to a golden file and diffs against it: <strong>14,799,465</strong> allocations, <strong>6</strong> arena blocks, <strong>150</strong> beat iterations—bit-identical on arm64 and x86_64. six arena blocks across 150 decodes is the flat-memory guarantee written as a constant; 150 beat iterations is one heartbeat per decode, on the record. a change that nudges any of those numbers fails the build before anyone has to squint at a flaky stopwatch, which is how the three ladder rungs stay put and how the next regression announces itself as a failing diff in the pull request that caused it.</p>
+<p>a benchmark that drifts from one machine or one afternoon to the next isn't evidence of much. so the wins are pinned to counts that can't drift, not to wall-clock time. the 150-decode gauntlet is a deterministic program, so it performs the exact same number of allocations every run, on every machine, on both architectures. ci commits those counts to a golden file and diffs against it: <strong>14,799,465</strong> allocations, <strong>5</strong> arena blocks, <strong>150</strong> beat iterations—bit-identical on arm64 and x86_64. five arena blocks across 150 decodes is the flat-memory guarantee written as a constant; 150 beat iterations is one heartbeat per decode, on the record. a change that nudges any of those numbers fails the build before anyone has to squint at a flaky stopwatch, which is how the three ladder rungs stay put and how the next regression announces itself as a failing diff in the pull request that caused it.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
