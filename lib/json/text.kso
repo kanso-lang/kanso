@@ -1,126 +1,126 @@
-fn _escape_char "\""
+fn escape_char "\""
   "\\\""
 
-fn _escape_char "\\"
+fn escape_char "\\"
   "\\\\"
 
-fn _escape_char "\n"
+fn escape_char "\n"
   "\\n"
 
-fn _escape_char "\r"
+fn escape_char "\r"
   "\\r"
 
-fn _escape_char "\t"
+fn escape_char "\t"
   "\\t"
 
-fn _escape_char c
-  if ((char_code c) < 32) (_u_escape c) c
+fn escape_char c
+  if ((char_code c) < 32) (u_escape c) c
 
-fn _escape_str s
-  join (map (chars s) (c -> _escape_char c)) ""
+fn escape_str s
+  join (map (chars s) (c -> escape_char c)) ""
 
-fn _hex4 n
+fn hex4 n
   d1 = n / 4096
   r1 = n - (d1 * 4096)
   d2 = r1 / 256
   r2 = r1 - (d2 * 256)
   d3 = r2 / 16
   d4 = r2 - (d3 * 16)
-  join [(_hex_char d1) (_hex_char d2) (_hex_char d3) (_hex_char d4)] ""
+  join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
 
-fn _hex_alpha c
-  if (_both (96 < c) (c < 103)) (c - 87) (_hex_upper c)
+fn hex_alpha c
+  if (both (96 < c) (c < 103)) (c - 87) (hex_upper c)
 
-fn _hex_char n
+fn hex_char n
   at "0123456789abcdef" (n + 1)
 
-fn _hex_digit c
-  if (_both (47 < c) (c < 58)) (c - 48) (_hex_alpha c)
+fn hex_digit c
+  if (both (47 < c) (c < 58)) (c - 48) (hex_alpha c)
 
-fn _hex_upper c
-  if (_both (64 < c) (c < 71)) (c - 55) (err "invalid hex digit")
+fn hex_upper c
+  if (both (64 < c) (c < 71)) (c - 55) (err "invalid hex digit")
 
-fn _parse_string cs p
-  _string_scan cs p p
+fn parse_string cs p
+  string_scan cs p p
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
-fn _str_char _ 34 p acc
-  _parsed (p + 1) (_string_ok p (utf8 acc))
+fn str_char _ 34 p acc
+  parsed (p + 1) (string_ok p (utf8 acc))
 
-fn _str_char cs 92 p acc
-  _str_escape cs (at cs (p + 1)) p acc
+fn str_char cs 92 p acc
+  str_escape cs (at cs (p + 1)) p acc
 
-fn _str_char _ none p _
-  _fail p "unterminated string"
+fn str_char _ none p _
+  fail p "unterminated string"
 
-fn _str_char cs c p acc
-  _str_chars cs (p + 1) (push acc c)
+fn str_char cs c p acc
+  str_chars cs (p + 1) (push acc c)
 
-fn _str_chars cs p acc
-  _str_char cs (at cs p) p acc
+fn str_chars cs p acc
+  str_char cs (at cs p) p acc
 
-fn _str_escape cs 34 p acc
-  _str_chars cs (p + 2) (push acc 34)
+fn str_escape cs 34 p acc
+  str_chars cs (p + 2) (push acc 34)
 
-fn _str_escape cs 47 p acc
-  _str_chars cs (p + 2) (push acc 47)
+fn str_escape cs 47 p acc
+  str_chars cs (p + 2) (push acc 47)
 
-fn _str_escape cs 92 p acc
-  _str_chars cs (p + 2) (push acc 92)
+fn str_escape cs 92 p acc
+  str_chars cs (p + 2) (push acc 92)
 
-fn _str_escape cs 98 p acc
-  _str_chars cs (p + 2) (push acc 8)
+fn str_escape cs 98 p acc
+  str_chars cs (p + 2) (push acc 8)
 
-fn _str_escape cs 102 p acc
-  _str_chars cs (p + 2) (push acc 12)
+fn str_escape cs 102 p acc
+  str_chars cs (p + 2) (push acc 12)
 
-fn _str_escape cs 110 p acc
-  _str_chars cs (p + 2) (push acc 10)
+fn str_escape cs 110 p acc
+  str_chars cs (p + 2) (push acc 10)
 
-fn _str_escape cs 114 p acc
-  _str_chars cs (p + 2) (push acc 13)
+fn str_escape cs 114 p acc
+  str_chars cs (p + 2) (push acc 13)
 
-fn _str_escape cs 116 p acc
-  _str_chars cs (p + 2) (push acc 9)
+fn str_escape cs 116 p acc
+  str_chars cs (p + 2) (push acc 9)
 
-fn _str_escape cs 117 p acc
-  _str_unicode cs p acc
+fn str_escape cs 117 p acc
+  str_unicode cs p acc
 
-fn _str_escape _ none p _
-  _fail p "unterminated string"
+fn str_escape _ none p _
+  fail p "unterminated string"
 
-fn _str_escape _ c p _
-  _fail p "invalid escape `\\{utf8 [c]}`"
+fn str_escape _ c p _
+  fail p "invalid escape `\\{utf8 [c]}`"
 
-fn _str_unicode cs p acc
-  h1 = _hex_digit (at cs (p + 2))
-  h2 = _hex_digit (at cs (p + 3))
-  h3 = _hex_digit (at cs (p + 4))
-  h4 = _hex_digit (at cs (p + 5))
+fn str_unicode cs p acc
+  h1 = hex_digit (at cs (p + 2))
+  h2 = hex_digit (at cs (p + 3))
+  h3 = hex_digit (at cs (p + 4))
+  h4 = hex_digit (at cs (p + 5))
   code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
-  _str_chars cs (p + 6) (concat acc (bytes (from_code code)))
+  str_chars cs (p + 6) (concat acc (bytes (from_code code)))
 
-fn _string_at cs 34 start p
-  _parsed (p + 1) (_string_ok p (utf8 (slice cs start (p - 1))))
+fn string_at cs 34 start p
+  parsed (p + 1) (string_ok p (utf8 (slice cs start (p - 1))))
 
-fn _string_at cs 92 start p
-  _str_chars cs p (concat [] (slice cs start (p - 1)))
+fn string_at cs 92 start p
+  str_chars cs p (concat [] (slice cs start (p - 1)))
 
-fn _string_at _ none _ p
-  _fail p "unterminated string"
+fn string_at _ none _ p
+  fail p "unterminated string"
 
-fn _string_at cs _ start p
-  _string_scan cs start (p + 1)
+fn string_at cs _ start p
+  string_scan cs start (p + 1)
 
-fn _string_ok p (err _)
+fn string_ok p (err _)
   err (parse_failure p "invalid utf-8 in string")
 
-fn _string_ok _ v
+fn string_ok _ v
   v
 
-fn _string_scan cs start p
+fn string_scan cs start p
   n = find2 cs p 34 92
-  _string_at cs (at cs n) start n
+  string_at cs (at cs n) start n
 
-fn _u_escape c
-  "\\u{_hex4 (char_code c)}"
+fn u_escape c
+  "\\u{hex4 (char_code c)}"

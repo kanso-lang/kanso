@@ -1,17 +1,17 @@
-fn _dot_check "." _ i
+fn dot_check "." _ i
   i
 
-fn _dot_check none _ _
+fn dot_check none _ _
   err "no dot in version text"
 
-fn _dot_check _ cs i
-  _dot_hunt cs (i + 1)
+fn dot_check _ cs i
+  dot_hunt cs (i + 1)
 
-fn _dot_hunt cs i
-  _dot_check (at cs i) cs i
+fn dot_hunt cs i
+  dot_check (at cs i) cs i
 
 fn major_of text
   cs = chars text
-  dot = _dot_hunt cs 1
+  dot = dot_hunt cs 1
   digits = join (slice cs 1 (dot - 1)) ""
   to_int digits

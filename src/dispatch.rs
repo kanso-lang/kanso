@@ -166,7 +166,7 @@ mod tests {
         let program = crate::compile_module(Path::new("lib/json"), false).unwrap();
         let inference = crate::infer::infer(&program);
         let d = byte_dispatched(&program, &inference);
-        for expected in [("_value_for", 3, 0), ("_str_char", 4, 1), ("_array_delim", 4, 1)] {
+        for expected in [("value_for", 3, 0), ("str_char", 4, 1), ("array_delim", 4, 1)] {
             let key = (expected.0.to_string(), expected.1, expected.2);
             assert!(d.contains(&key), "{expected:?} should be byte-dispatched, got {d:?}");
         }

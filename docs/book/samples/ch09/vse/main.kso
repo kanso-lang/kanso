@@ -1,19 +1,3 @@
-fn _sq x
-  x * x
-
-fn _tally acc elec
-  socs = socutils elec
-  p = (at acc 1) + vse socs (plurality_winner elec)
-  a = (at acc 2) + vse socs (approval_winner elec)
-  s = (at acc 3) + vse socs (score_winner elec)
-  st = (at acc 4) + vse socs (star_winner elec)
-  i = (at acc 5) + vse socs (irv_winner elec)
-  m = (at acc 6) + vse socs (minimax_winner elec)
-  [p a s st i m]
-
-fn _with_voters k acc vp
-  cloud ncand dims [] . (cp -> trials (k - 1) (_tally acc (utilities vp cp)))
-
 fn cloud 0 _ acc
   acc
 
@@ -23,7 +7,7 @@ fn cloud n d acc
 dims = 2
 
 fn dist2 p q
-  total (map (range (length p)) (d -> _sq (at p d - at q d)))
+  total (map (range (length p)) (d -> sq (at p d - at q d)))
 
 main = trials runs [0.0 0.0 0.0 0.0 0.0 0.0] . means
 
@@ -53,11 +37,24 @@ fn socutil voters c
 fn socutils voters
   map (range ncand) (c -> socutil voters c)
 
+fn sq x
+  x * x
+
+fn tally acc elec
+  socs = socutils elec
+  p = (at acc 1) + vse socs (plurality_winner elec)
+  a = (at acc 2) + vse socs (approval_winner elec)
+  s = (at acc 3) + vse socs (score_winner elec)
+  st = (at acc 4) + vse socs (star_winner elec)
+  i = (at acc 5) + vse socs (irv_winner elec)
+  m = (at acc 6) + vse socs (minimax_winner elec)
+  [p a s st i m]
+
 fn trials 0 acc
   acc
 
 fn trials k acc
-  cloud nvot dims [] . (vp -> _with_voters k acc vp)
+  cloud nvot dims [] . (vp -> with_voters k acc vp)
 
 fn util vpos cpos
   0 - sqrt (dist2 vpos cpos)
@@ -68,3 +65,6 @@ fn utilities voters cands
 fn vse socs winner
   m = mean socs
   (at socs winner - m) / (maximum socs - m)
+
+fn with_voters k acc vp
+  cloud ncand dims [] . (cp -> trials (k - 1) (tally acc (utilities vp cp)))

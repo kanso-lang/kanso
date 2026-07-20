@@ -381,7 +381,7 @@ mod tests {
     fn json_parsed_returnable_error_types_not() {
         let program = crate::compile_module(Path::new("lib/json"), false).unwrap();
         let r = register_returnable(&program);
-        assert!(r.contains("_parsed"), "_parsed should be register-returnable, got {r:?}");
+        assert!(r.contains("parsed"), "_parsed should be register-returnable, got {r:?}");
         assert!(!r.contains("defect"), "defect escapes via err-wrapping, got {r:?}");
         assert!(!r.contains("parse_failure"), "parse_failure escapes via err-wrapping, got {r:?}");
     }

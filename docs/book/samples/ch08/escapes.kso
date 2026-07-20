@@ -1,38 +1,35 @@
-fn _escape_char "\""
+fn escape_char "\""
   "\\\""
 
-fn _escape_char "\\"
+fn escape_char "\\"
   "\\\\"
 
-fn _escape_char "\n"
+fn escape_char "\n"
   "\\n"
 
-fn _escape_char "\r"
+fn escape_char "\r"
   "\\r"
 
-fn _escape_char "\t"
+fn escape_char "\t"
   "\\t"
 
-fn _escape_char c
-  if ((char_code c) < 32) (_u_escape c) c
+fn escape_char c
+  if ((char_code c) < 32) (u_escape c) c
 
-fn _escape_str s
-  join (map (chars s) (c -> _escape_char c)) ""
+fn escape_str s
+  join (map (chars s) (c -> escape_char c)) ""
 
-fn _hex4 n
+fn hex4 n
   d1 = n / 4096
   r1 = n - (d1 * 4096)
   d2 = r1 / 256
   r2 = r1 - (d2 * 256)
   d3 = r2 / 16
   d4 = r2 - (d3 * 16)
-  join [(_hex_char d1) (_hex_char d2) (_hex_char d3) (_hex_char d4)] ""
+  join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
 
-fn _hex_char n
+fn hex_char n
   at "0123456789abcdef" (n + 1)
-
-fn _u_escape c
-  "\\u{_hex4 (char_code c)}"
 
 main =
   bell = from_code 7
@@ -40,4 +37,7 @@ main =
   >> print (quote_str "ring{bell}ring")
 
 fn quote_str s
-  "\"{_escape_str s}\""
+  "\"{escape_str s}\""
+
+fn u_escape c
+  "\\u{hex4 (char_code c)}"

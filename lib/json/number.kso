@@ -1,60 +1,60 @@
 # number bytes: + - . E e, then the ascii digits
-fn _is_number_char 43
+fn is_number_char 43
   true
 
-fn _is_number_char 45
+fn is_number_char 45
   true
 
-fn _is_number_char 46
+fn is_number_char 46
   true
 
-fn _is_number_char 69
+fn is_number_char 69
   true
 
-fn _is_number_char 101
+fn is_number_char 101
   true
 
-fn _is_number_char none
+fn is_number_char none
   false
 
-fn _is_number_char c
-  _both (47 < c) (c < 58)
+fn is_number_char c
+  both (47 < c) (c < 58)
 
-fn _is_number_start 45
+fn is_number_start 45
   true
 
-fn _is_number_start none
+fn is_number_start none
   false
 
-fn _is_number_start c
-  _both (47 < c) (c < 58)
+fn is_number_start c
+  both (47 < c) (c < 58)
 
-fn _mark_from cs p q
-  if (p > q) false (_mark_step cs (at cs p) p q)
+fn mark_from cs p q
+  if (p > q) false (mark_step cs (at cs p) p q)
 
 # float marks: . E e
-fn _mark_step _ 46 _ _
+fn mark_step _ 46 _ _
   true
 
-fn _mark_step _ 69 _ _
+fn mark_step _ 69 _ _
   true
 
-fn _mark_step _ 101 _ _
+fn mark_step _ 101 _ _
   true
 
-fn _mark_step cs _ p q
-  _mark_from cs (p + 1) q
+fn mark_step cs _ p q
+  mark_from cs (p + 1) q
 
-fn _number_end cs p
-  if (_is_number_char (at cs p)) (_number_end cs (p + 1)) p
+fn number_end cs p
+  if (is_number_char (at cs p)) (number_end cs (p + 1)) p
 
-fn _number_ok p (err _)
-  _fail p "invalid number"
+fn number_ok p (err _)
+  fail p "invalid number"
 
-fn _number_ok _ n
+fn number_ok _ n
   n
 
-fn _number_value cs p q
+fn number_value cs p q
   digits = slice cs p q
-  raw = if (_mark_from cs p q) (to_float digits) (to_int digits)
-  _number_ok p raw
+  raw = if (mark_from cs p q) (to_float digits) (to_int digits)
+  number_ok p raw

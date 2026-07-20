@@ -394,6 +394,15 @@ impl Scanner {
             }
         }
         let word: String = self.chars[start..self.pos].iter().collect();
+        if word.len() > 1 && word.starts_with('_') {
+            return Err(Diagnostic::new(
+                "naming",
+                "leading underscores are retired: privacy is `pub`'s absence, \
+                 and `_` alone is the wildcard"
+                    .to_string(),
+                self.span(),
+            ));
+        }
         Ok(match word.as_str() {
             "_" => Tok::Underscore,
             "fn" => Tok::KwFn,
