@@ -449,3 +449,32 @@ param, and `(f acc x)` — a freshly-computed heap accumulator. So:
   lives. THIS is the deep frontier's real build; spec it with adversarial
   care (copy must be transitive over the acc's reachable graph — a list acc
   reaches spine+elements; measure cost on VSE before committing).
+
+---
+
+## 2026-07-20 — rung B MERGED (#51); the LIST-threading draft and its landmine
+
+Entry-threaded closures/records/descriptions are on main, full x86 green.
+The mutation audit behind it: k_closure/k_rec/k_mkdesc write only at
+construction; the runtime's only post-construction writes are the map's
+cached sorted view and the list buffer's used count. Fixtures pin the
+closure-threaded beat firing and the map-threaded rejection.
+
+**LIST threading — draft soundness argument for the next hand:**
+- k_b_push on a below-mark list writes an integer (buffer used count) and an
+  element into below-mark spare capacity; the threaded KList header is never
+  mutated. An above-mark element in a below-mark slot is unreachable after
+  rewind (only above-mark headers had len covering it, and they died); a
+  stale used count merely degrades later pushes to the copy path. Safe —
+  unlike maps, which store an above-mark POINTER (the sorted view) into a
+  below-mark header: instant dangle.
+- **THE LANDMINE: k_b_push_mut.** The linear in-place push mutates the
+  existing header and, on capacity growth, reallocates items to a fresh
+  above-mark buffer — a below-mark threaded list that is also an in-place
+  target ends pointing above the mark. Rewind, dangle, corruption. LIST
+  threading may land only with an analysis-level guarantee that
+  in_place_pushes and beat-threaded params never intersect, plus an
+  adversarial test of exactly that overlap. Full care, x86 gate.
+- VSE after rung B: still 0 beats, as predicted — _fold_at waits on LIST
+  threading AND the computed accumulator. **The fold-state shelf is the
+  frontier's next build.**
