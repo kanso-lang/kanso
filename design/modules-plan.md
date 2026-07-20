@@ -134,3 +134,40 @@ at a main.kso." The verbs carry the model: run is for programs, play is for
 libraries. Migration consequence: the examples corpus STAYS single-file
 play-libraries (no per-example entry directories); only real programs grow
 main.kso entries.
+
+## GAVELED (2026-07-20): the visibility model (committee-synthesized, Clay-ratified)
+
+One sentence: **pub is name-level surface; the only field-level access that
+crosses a boundary is a pub fn the author wrote on purpose.**
+
+- No transparency grades. Types are opaque outside their module, always.
+- Construction is module-private; importers build through pub factories.
+- Dispatch on a foreign type NAME is free (membership needs no structure);
+  destructuring a foreign type is banned (positional reads in a pattern).
+- Reflection surfaces (==, sort, "{x}", encode) stay structural for all
+  callers — no source names a field, so no leak; output shape is the
+  publisher's own contract.
+- Single-module world (repl, playground, one file): zero ceremony; the
+  boundary bites exactly at import.
+- Naming a type (annotation, arm, typeset) requires importing its module;
+  holding/passing unnamed values through intermediaries requires nothing.
+- Chains die at the first foreign dot: A can never open B's record to reach
+  a C value; whether A can OBTAIN it at all is B's choice (a pub getter).
+  Once held, a C value supports exactly: hold/pass (no import), plus
+  name-dispatch and C's pub fns (with import c). Provenance-strictness
+  (blocking C's own API on values that arrived through B) is REJECTED — it
+  forces total forwarding and breaks B-returns-c/timestamp patterns.
+- Re-export: functions re-export by ownership — `pub thing = c/thing` or an
+  explicit forwarder — making b/thing B's own promise. Type names do NOT
+  re-export (the import block stays a complete dependency inventory; Go's
+  precedent). Facade sugar, if migration demands it, expands to named
+  forwarders.
+- Getter one-liners are the defended pattern, not an apology: pub fn city
+  is B choosing which chain to promise while representations stay free —
+  load-bearing while the beat/carry machinery restructures layouts.
+
+**BOOK MANDATE (Clay):** the imports/visibility chapter treats this
+rigorously — the patterns catalog (getters, factories, name-dispatch,
+diamond naming, function re-export) and every gotcha with its diagnostic
+(first-foreign-dot, private construction, foreign destructure, naming
+without import), each panel executed per the book rule.
