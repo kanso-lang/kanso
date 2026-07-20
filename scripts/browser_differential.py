@@ -126,7 +126,16 @@ main()
 
 def corpus():
     dirs = [ROOT / "examples", ROOT / "tests/golden/runtime"]
-    return [path for d in dirs for path in sorted(d.glob("*.kso"))]
+    paths = [path for d in dirs for path in sorted(d.glob("*.kso"))]
+    # the browser has no filesystem, so `import` cannot resolve there — those
+    # programs are out of scope for the differential until the playground
+    # bundles the shipped library. skip them loudly rather than fail.
+    runnable, skipped = [], []
+    for path in paths:
+        (skipped if "import " in path.read_text() else runnable).append(path)
+    for path in skipped:
+        print(f"SKIP  {path.relative_to(ROOT)} (uses import — no filesystem in the browser)")
+    return runnable
 
 
 def native_outcome(path):

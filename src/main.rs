@@ -1,4 +1,4 @@
-use kanso::{ast, compile, diag, eval};
+use kanso::{ast, diag, eval};
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -34,23 +34,7 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
-            let has_play = source.contains("pub play");
-            let has_defs = source
-                .lines()
-                .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
-            let library_verb = command == "test";
-            match match (command.as_str(), has_play, has_defs) {
-                ("play", _, _) => kanso::compile_play(&file, &source),
-                (_, true, _) if !library_verb => kanso::compile_play(&file, &source),
-                ("check", false, true) => compile(&file, &source, false),
-                (_, false, true) if !library_verb => Err(format!(
-                    "error: `{file}` is a library — nothing to run. give the \
-                     module a main.kso entry, or define `pub play` and use \
-                     `kanso play`\n"
-                )),
-                _ if library_verb => compile(&file, &source, false),
-                _ => kanso::compile_entry(&file, &source),
-            } {
+            match kanso::compile_source(&command, &file, &source) {
                 Ok(program) => (program, source),
                 Err(rendered) => {
                     eprint!("{}", diag::paint(&rendered));

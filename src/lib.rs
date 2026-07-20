@@ -110,6 +110,31 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     Ok(program)
 }
 
+/// Route a single source file to the right compile for a verb, by content:
+/// `pub play` is a play library, bare statements are an entry, definitions
+/// alone are a library (runnable only under a library verb like `test`).
+/// The CLI and the browser share this so the engines never diverge on which
+/// compile a file gets.
+pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
+    let has_play = source.contains("pub play");
+    let has_defs = source
+        .lines()
+        .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
+    let library_verb = command == "test";
+    match (command, has_play, has_defs) {
+        ("play", _, _) => compile_play(file, source),
+        (_, true, _) if !library_verb => compile_play(file, source),
+        ("check", false, true) => compile(file, source, false),
+        (_, false, true) if !library_verb => Err(format!(
+            "error: `{file}` is a library — nothing to run. give the \
+             module a main.kso entry, or define `pub play` and use \
+             `kanso play`\n"
+        )),
+        _ if library_verb => compile(file, source, false),
+        _ => compile_entry(file, source),
+    }
+}
+
 /// Err origins name the function and the file it lives in; the file is
 /// per-declaration so it survives multi-file module merging.
 fn stamp_file(program: &mut ast::Program, file: &str) {
