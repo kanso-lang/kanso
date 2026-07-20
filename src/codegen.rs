@@ -1530,19 +1530,28 @@ impl<'a> Backend<'a> {
                 if let Expr::Lambda { params, body, .. } = head.as_ref() {
                     if params.len() == 1 && args.len() == 1 {
                         let value = self.emit_expr(f, &args[0])?;
-                        // on a description the pipe is the executor's bind,
-                        // not an application — inline only when inference
-                        // proves the value cannot be one
-                        if f.set_of(&value) & crate::infer::DESC != 0 {
-                            let t = f.tmp();
-                            let closure = self.emit_expr(f, head)?;
-                            f.line(&format!(
-                                "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
-                            ));
-                            f.record(&t, TOP);
-                            self.emit_ret(f, &t);
-                            return Ok(());
-                        }
+                        // a description takes the executor's bind at runtime;
+                        // anything else binds the parameter here and the
+                        // lambda body becomes this function's own tail — the
+                        // branch keeps both semantics exact with no reliance
+                        // on inference
+                        let tag = inline_tag(f, &value);
+                        let is_desc = f.tmp();
+                        f.line(&format!("{is_desc} = icmp eq i64 {tag}, 8"));
+                        let desc_path = f.label();
+                        let check = f.label();
+                        f.line(&format!(
+                            "br i1 {is_desc}, label %{desc_path}, label %{check}"
+                        ));
+                        f.start_block(&desc_path);
+                        let t = f.tmp();
+                        let closure = self.emit_expr(f, head)?;
+                        f.line(&format!(
+                            "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
+                        ));
+                        f.record(&t, TOP);
+                        self.emit_ret(f, &t);
+                        f.start_block(&check);
                         let ok = inline_not_failure(f, &value);
                         let bail = f.label();
                         let cont = f.label();

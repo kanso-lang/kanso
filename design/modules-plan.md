@@ -134,3 +134,69 @@ at a main.kso." The verbs carry the model: run is for programs, play is for
 libraries. Migration consequence: the examples corpus STAYS single-file
 play-libraries (no per-example entry directories); only real programs grow
 main.kso entries.
+
+## GAVELED (2026-07-20): the visibility model (committee-synthesized, Clay-ratified)
+
+One sentence: **pub is name-level surface; the only field-level access that
+crosses a boundary is a pub fn the author wrote on purpose.**
+
+- No transparency grades. Types are opaque outside their module, always.
+- Construction is module-private; importers build through pub factories.
+- Dispatch on a foreign type NAME is free (membership needs no structure);
+  destructuring a foreign type is banned (positional reads in a pattern).
+- Reflection surfaces (==, sort, "{x}", encode) stay structural for all
+  callers — no source names a field, so no leak; output shape is the
+  publisher's own contract.
+- Single-module world (repl, playground, one file): zero ceremony; the
+  boundary bites exactly at import.
+- Naming a type (annotation, arm, typeset) requires importing its module;
+  holding/passing unnamed values through intermediaries requires nothing.
+- Chains die at the first foreign dot: A can never open B's record to reach
+  a C value; whether A can OBTAIN it at all is B's choice (a pub getter).
+  Once held, a C value supports exactly: hold/pass (no import), plus
+  name-dispatch and C's pub fns (with import c). Provenance-strictness
+  (blocking C's own API on values that arrived through B) is REJECTED — it
+  forces total forwarding and breaks B-returns-c/timestamp patterns.
+- Re-export: functions re-export by ownership — `pub thing = c/thing` or an
+  explicit forwarder — making b/thing B's own promise. Type names do NOT
+  re-export (the import block stays a complete dependency inventory; Go's
+  precedent). Facade sugar, if migration demands it, expands to named
+  forwarders.
+- Getter one-liners are the defended pattern, not an apology: pub fn city
+  is B choosing which chain to promise while representations stay free —
+  load-bearing while the beat/carry machinery restructures layouts.
+
+**BOOK MANDATE (Clay):** the imports/visibility chapter treats this
+rigorously — the patterns catalog (getters, factories, name-dispatch,
+diamond naming, function re-export) and every gotcha with its diagnostic
+(first-foreign-dot, private construction, foreign destructure, naming
+without import), each panel executed per the book rule.
+
+**Blast-radius doctrine (Clay + session, same night):** B returning C's types
+from its pub surface exports B's dependency to every caller — A is forced to
+`import c` just to name what B hands back, and a C change then detonates
+through B and every A. The model keeps that legal (a real dependency,
+honestly declared — the forced import IS the leak made visible, pointing at
+the right author), but the doctrine names it: **a library's pub surface
+should be closed over its own names** — own your returns (wrappers) or
+re-export the needed functions, so C's changes stop at B. The memorable
+rule: *you import what you name; a good library lets you name only its own
+things.* Tooling follow-up for the keystone: an ADVISORY from `kanso check`
+when a pub fn's inferred return set includes a foreign type — the checker
+already sees it statically. That is Demeter's actual point — bounding the
+blast radius of change — enforced where the compiler can see it.
+
+**AMENDED (Clay, same night) — the door principle supersedes capability 3's
+framing:** type identity includes the package's major version (hako's
+aliasing implies it; Go's import-path-identity precedent) — cross-version
+mixing is a compile error, and within a unified build the "two doors" lead
+to one room, indistinguishable by value semantics. The ruling: **values are
+used through the door they came from.** A pub surface returning a type is
+responsible for the operations on it — re-exported or wrapped; a handle you
+can hold but not use is the exporting module's bug. A's direct import of C
+serves A's OWN use of C, never as a workaround for B's incomplete surface.
+The leak advisory upgrades accordingly: when a pub fn returns a foreign
+type and the module's surface offers no operation accepting it, kanso check
+says so — "re-export what callers need, or wrap it." Go comparison, for
+the book: kanso adopts Go's version-identity mechanics wholesale and adds
+the boundary discipline Go only approximates with internal/ and folklore.
