@@ -1118,15 +1118,32 @@ static KValue k_exec(KDesc* d) {
             return k_none();
         }
         default: {
-            /* a bind is a beat: the executed description's yield crosses into
-               the continuation, so a heap yield keeps its region; a scalar
-               yield frees the step's garbage before the continuation runs. */
+            /* a bind chain is the program's outer pulse, so it runs as one
+               bracketed loop: each step executes, hands its yield to the
+               continuation, and the returned description is evacuated
+               through the carry buffers before the step's garbage is swept.
+               memory stays flat across any chain length, and the chain
+               costs constant C stack. the final result goes through the
+               pop, which copies a heap survivor out of the buffers. */
             k_beat_push();
-            KValue yielded = k_exec(k_as_desc(d->x));
-            yielded = k_beat_pop(yielded);
-            KValue next = k_call1(d->y, yielded);
-            if (next.tag == K_DESC) return k_exec(k_as_desc(next));
-            return next;
+            KValue cur;
+            cur.tag = K_DESC;
+            cur.payload = k_ptr(d);
+            for (;;) {
+                KDesc* dd = k_as_desc(cur);
+                if (dd->dtag != 6) {
+                    return k_beat_pop(k_exec(dd));
+                }
+                KValue yielded = k_exec(k_as_desc(dd->x));
+                KValue next = k_call1(dd->y, yielded);
+                if (next.tag != K_DESC) {
+                    return k_beat_pop(next);
+                }
+                k_carry_reset();
+                k_carry_stage(next);
+                k_beat_iter_carry();
+                cur = k_carry_take(0);
+            }
         }
     }
 }

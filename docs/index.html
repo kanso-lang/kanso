@@ -94,7 +94,7 @@ description: "kanso (簡素): a pure language where effects are values, failure 
 <span class="c"># reasonably-written rust   0.98</span>
 <span class="c"># go encoding/json          1.73</span></code></pre>
     </div>
-    <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong>14,799,465</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. five arena blocks across 150 decodes is the flat-memory guarantee as a constant; 150 beat iterations is one heartbeat per decode, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">the scoreboard</a> and <a href="book/ch07.html">chapter 07</a>.</p>
+    <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong>14,799,465</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. five arena blocks across 150 decodes is the flat-memory guarantee as a constant; 151 beat iterations is one heartbeat per decode plus one for the program's own pulse, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">the scoreboard</a> and <a href="book/ch07.html">chapter 07</a>.</p>
   </div>
 </section>
 
