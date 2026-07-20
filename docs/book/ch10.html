@@ -242,11 +242,11 @@ sum 500500</code></pre>
 alloc_bytes=640242688
 arena_blocks=5
 perm_allocs=1
-beat_iters=150
+beat_iters=151
 decoded 150 times, checksum 24000</code></pre>
 </div>
 
-<p>two of those integers tell the memory story cleanly. <code>arena_blocks=5</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches five blocks of scratch space, a hundred and fifty decodes touch the same five, because each decode hands its arena back before the next begins. <code>beat_iters=150</code> is one heartbeat per decode, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
+<p>two of those integers tell the memory story cleanly. <code>arena_blocks=5</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches five blocks of scratch space, a hundred and fifty decodes touch the same five, because each decode hands its arena back before the next begins. <code>beat_iters=151</code> is one heartbeat per decode plus one for the program's own pulse, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">bench/cost_golden.txt</div>
@@ -254,7 +254,7 @@ decoded 150 times, checksum 24000</code></pre>
 alloc_bytes=640242688
 arena_blocks=5
 perm_allocs=1
-beat_iters=150</code></pre>
+beat_iters=151</code></pre>
 </div>
 
 <p>a regression in the compiler's folding now shows up as a changed integer in a diff—the same way a broken behavior shows up as a failed assertion. if a future edit to <code>push</code> loses the in-place reuse, <code>allocs</code> jumps, the golden fails, and it fails on every machine, before anyone has to file a "feels slower lately." no clocks, no flaky thresholds, no "it was fine on ci but slow on mine." that −10.7% inlining win from a few pages back stopped being an anecdote the day <code>alloc_bytes</code> became a committed integer.</p>

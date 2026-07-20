@@ -549,3 +549,28 @@ rung that decides the RSS prediction] cluster-carry composition:** per-edge
 carried positions on in-cluster tail edges, same staging machinery,
 growing-accumulator gate per edge. cloud's push-acc loop is correctly
 gated as growing; the trials tally is bounded and should carry.
+
+---
+
+## 2026-07-20 — cluster-carry COMPLETE; and the true final rung: EXECUTOR BEATS
+
+Cluster-carry works end to end: the minimal cycle carries both directions
+(engines exact); the from-stub collection bug and the empty-set-is-scalar
+hazard are fixed (an EMPTY inferred slot set means "entered only through
+lambdas" — unknown, now carried, never assumed threadable — that hazard
+could have rewound over live values). VSE emits complete carries+musttails
+in both directions of the trials cluster, output exact.
+
+And the instrumented build revealed why the emitted path never runs:
+`point` uses random — an EFFECT — so VSE's whole driver is a lazy
+DESCRIPTION chain. The recursion executes inside the EXECUTOR's bind loop
+(runtime.c:832, next = k_call1(d->y, yielded)), which has no brackets. The
+pure folds beat; the effectful spine grow-onlys. **[OPEN — the real final
+rung] EXECUTOR BEATS:** bracket the executor's bind step directly in the
+runtime — push at chain start, per-step: carry the yielded value (deep
+copy machinery already shipped), rewind, continue. Runtime-only, no
+analysis, and it gives EVERY effectful kanso program flat memory
+universally — request loops, control loops, robot loops: the exact
+production shapes the strategy targets. Design care needed: what else
+survives a bind step (the continuation closure's captures; nested joins);
+adversarial tests first. This rung decides the RSS verdict for real.
