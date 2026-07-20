@@ -1,0 +1,4 @@
+error[unused]: unused import "std/json"
+  --> unused_import.kso:1:8
+   1 | import "std/json"
+              ^

@@ -45,7 +45,11 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
             private_uses(stmt, &exports, &mut diags);
         }
     }
+    let mut quals = std::collections::HashSet::new();
+    used_quals(&program, &mut quals);
+    diags.extend(unused_imports(&program.imports, &quals));
     if !diags.is_empty() {
+        diags.sort_by_key(|d| (d.span.line, d.span.col));
         return Err(diag::render(&diags, file, source));
     }
     // per-file rules for the entry against the dependency globals, then the
@@ -280,6 +284,75 @@ fn load_dependencies(
     Ok((dep_program, exports))
 }
 
+/// Every module qualifier the program references: `json/decode` marks
+/// `json` as used, in expressions, patterns, and typeset members alike.
+fn used_quals(program: &ast::Program, quals: &mut std::collections::HashSet<String>) {
+    fn mark(name: &str, quals: &mut std::collections::HashSet<String>) {
+        if let Some((qual, _)) = name.split_once('/') {
+            quals.insert(qual.to_string());
+        }
+    }
+    fn walk_pattern(p: &ast::Pattern, quals: &mut std::collections::HashSet<String>) {
+        match p {
+            ast::Pattern::Ctor { ty, fields } => {
+                mark(ty, quals);
+                for f in fields {
+                    walk_pattern(f, quals);
+                }
+            }
+            ast::Pattern::Annotated { ty, .. } => mark(ty, quals),
+            _ => {}
+        }
+    }
+    fn walk_expr(e: &ast::Expr, quals: &mut std::collections::HashSet<String>) {
+        if let ast::Expr::Ident(name, _) = e {
+            mark(name, quals);
+        }
+        for child in expr_children(e) {
+            walk_expr(child, quals);
+        }
+    }
+    for ty in &program.types {
+        for (_, members, _) in &ty.fields {
+            for member in members {
+                mark(member, quals);
+            }
+        }
+    }
+    for f in &program.fns {
+        for p in &f.params {
+            walk_pattern(p, quals);
+        }
+        for stmt in &f.body {
+            match stmt {
+                ast::Stmt::Bind { expr, pattern } => {
+                    walk_pattern(pattern, quals);
+                    walk_expr(expr, quals);
+                }
+                ast::Stmt::Expr(e) => walk_expr(e, quals),
+            }
+        }
+    }
+}
+
+/// An import no qualified name ever touches.
+fn unused_imports(
+    imports: &[ast::Import],
+    quals: &std::collections::HashSet<String>,
+) -> Vec<diag::Diagnostic> {
+    imports
+        .iter()
+        .filter(|i| !quals.contains(short_name(&i.path)))
+        .map(|i| {
+            diag::Diagnostic::new(
+                "unused",
+                format!("unused import \"{}\"", i.path),
+                i.span,
+            )
+        })
+        .collect()
+}
+
 /// A qualified reference to a name its module did not mark pub.
 fn private_uses(
     stmt: &ast::Stmt,
@@ -413,7 +486,13 @@ fn compile_module_inner(
             return Err(diag::render(&diags, file, source));
         }
     }
-    // pub bites at the boundary: a qualified reference to a non-pub name
+    // pub bites at the boundary: a qualified reference to a non-pub name.
+    // Imports are module-scoped, so use is counted across every file before
+    // any one file's import block is called unused.
+    let mut quals = std::collections::HashSet::new();
+    for (_, _, program) in &parsed {
+        used_quals(program, &mut quals);
+    }
     for (file, source, program) in &parsed {
         let mut diags = Vec::new();
         for decl in &program.fns {
@@ -421,7 +500,9 @@ fn compile_module_inner(
                 private_uses(stmt, &exports, &mut diags);
             }
         }
+        diags.extend(unused_imports(&program.imports, &quals));
         if !diags.is_empty() {
+            diags.sort_by_key(|d| (d.span.line, d.span.col));
             return Err(diag::render(&diags, file, source));
         }
     }
