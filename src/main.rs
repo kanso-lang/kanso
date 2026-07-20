@@ -43,7 +43,7 @@ fn main() -> ExitCode {
                 ("play", _, _) => kanso::compile_play(&file, &source),
                 (_, true, _) if !library_verb => kanso::compile_play(&file, &source),
                 ("check", false, true) => compile(&file, &source, false),
-                (_, false, true) => Err(format!(
+                (_, false, true) if !library_verb => Err(format!(
                     "error: `{file}` is a library — nothing to run. give the \
                      module a main.kso entry, or define `pub play` and use \
                      `kanso play`\n"

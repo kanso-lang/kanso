@@ -1,1 +1,2 @@
-error: `greet_test.kso` is a library — nothing to run. give the module a main.kso entry, or define `pub play` and use `kanso play`
+test_greet ... ok
+1 passed, 0 failed
