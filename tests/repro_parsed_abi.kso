@@ -1,8 +1,0 @@
-type user
-  age:int
-  name:string
-
-fn foo (user age name)
-  print "{name} is age {age}"
-
-main = foo (user 44 "clay")
