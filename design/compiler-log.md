@@ -392,3 +392,38 @@ report shows why, and it is not mutual recursion:
 - Prediction stands: with both, VSE collapses from 155 blocks / 158 MB
   grow-only to single-digit MB. Then the fold accumulator (acc) becomes the
   live ArgCrosses case and the shelf work begins on real data.
+
+---
+
+## 2026-07-19 — GAVELED: build tail-entry demotion + THREADED extension
+
+Clay greenlit both rungs. The implementation spec, so execution is mechanical:
+
+**Rung A — tail-entry demotion (beat.rs + codegen emit_tail):**
+1. beat.rs: find groups whose ONLY rejection is OutsideTailCall and whose
+   every outside tail-caller is acyclic (in no tail-call SCC). Emit a demote
+   set: (caller decl index, callee group). Callee joins the beat map.
+2. codegen emit_tail: a tail call matching a demote edge is emitted as a
+   PLAIN call — the existing beat_entry push/pop bracket then applies —
+   followed by ret of the result (mind ret_ty conversion and the %parsed
+   exclusion; record the fails set as plain calls do).
+3. Stack safety argument: demoted callers are acyclic, so each adds one
+   bounded frame; musttail everywhere else is untouched.
+4. Gates: unit fixture (acyclic entry + self-loop → beat); jsonbench
+   beat_iters=150 unchanged; goldens byte-identical; PR + x86 REQUIRED.
+
+**Rung B — entry-threaded closures/recs (NOT lists yet):**
+1. New ENTRY_THREADED = THREADED | CLOSURE | REC | DESC, used ONLY in the
+   bare-own-param rule (a); scalar rule (b) unchanged.
+2. Pre-req adversarial check: verify in runtime.c that closure/rec/desc have
+   ZERO lazy internal mutation (maps memoize a sorted view — that is the
+   hazard class; grep every write into an existing object). Captured/field
+   pointers are below the mark by construction when the value itself is.
+3. LIST stays excluded until a written soundness argument covers shared-
+   buffer growth (push into below-mark spare capacity) — litigate separately.
+4. Gates: closure-threaded loop fixture beats; map-threaded fixture still
+   rejects; full suite; PR + x86 REQUIRED.
+
+**Order: A, measure VSE, then B, measure again.** Prediction on record: both
+landed → VSE beat_iters > 0 and peak RSS collapses 158 MB → single digits.
+Then acc becomes the live ArgCrosses case and the shelf work starts.
