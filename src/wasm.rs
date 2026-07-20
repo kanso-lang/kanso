@@ -250,3 +250,23 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{kanso_set_seed, next_random};
+
+    fn stream(seed: u32) -> Vec<u64> {
+        kanso_set_seed(seed);
+        (0..8).map(|_| next_random(6)).collect()
+    }
+
+    #[test]
+    fn a_seed_reproduces_its_stream() {
+        assert_eq!(stream(111), stream(111));
+    }
+
+    #[test]
+    fn different_seeds_draw_different_streams() {
+        assert_ne!(stream(111), stream(222));
+    }
+}
