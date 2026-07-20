@@ -549,3 +549,25 @@ rung that decides the RSS prediction] cluster-carry composition:** per-edge
 carried positions on in-cluster tail edges, same staging machinery,
 growing-accumulator gate per edge. cloud's push-acc loop is correctly
 gated as growing; the trials tally is bounded and should carry.
+
+---
+
+## 2026-07-20 — pipe inlining hardened (runtime desc-branch); cluster-carry WIP
+
+Rung 7 hardened after the fact: the inference gate on the pipe inline left
+an analysis/emission mismatch (analysis pierced pipes unconditionally;
+codegen only when inference proved desc-free). Now the inline emits a
+RUNTIME branch — tag==DESC takes k_maybe_bind, everything else binds and
+tails — both semantics exact, no inference dependency. (On branch
+cluster-carry with the WIP; ships with the fix below.)
+
+Cluster-carry composition: BUILT and correct on the minimal two-group pipe
+cycle (100 evacuating iters, engines exact). On VSE the analysis accepts
+trials↔_with_voters but emission misfires — the probe (probe_vse_carried)
+shows _with_voters' carried list EMPTY (stray from-side entry stub in
+cluster_edges_ok) and trials' tail emitting neither carry nor iter; also
+_fold_at over-carries its threaded list ([0,1]), and one growing push-acc
+slipped the cluster gate in a fixture. Branch cluster-carry holds all of
+it with a precise WIP commit. Next hand: fix the collection loop, find why
+same-cluster emission skips in the inlined trials tail, pin with the
+fixture family, THEN the RSS verdict.
