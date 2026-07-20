@@ -110,6 +110,20 @@ struct Analysis<'a> {
 
 impl<'a> Analysis<'a> {
     fn returnable(mut self, ty: &str) -> bool {
+        // The packed convention shifts field 0's payload into the tag word,
+        // which is only sound for an int: a pointer payload would lose its
+        // tag and overflow the shift. The declared typeset makes this a
+        // static check.
+        let first_field_is_int = self
+            .program
+            .types
+            .iter()
+            .find(|t| t.name == ty)
+            .and_then(|t| t.fields.first())
+            .is_some_and(|(_, tys, _)| tys.len() == 1 && tys[0] == "int");
+        if !first_field_is_int {
+            return false;
+        }
         // A type stored inside another record escapes through that record.
         for decl in &self.program.types {
             for (_, members, _) in &decl.fields {
