@@ -381,6 +381,17 @@ impl Scanner {
                 || self.chars[self.pos] == '_')
         {
             self.pos += 1;
+            // a slash pressed tight between word characters qualifies a name
+            // (json/decode); division between named values breathes, like the
+            // pipe and unlike nothing else
+            if self.chars.get(self.pos) == Some(&'/')
+                && self
+                    .chars
+                    .get(self.pos + 1)
+                    .is_some_and(|n| n.is_ascii_lowercase() || *n == '_')
+            {
+                self.pos += 1;
+            }
         }
         let word: String = self.chars[start..self.pos].iter().collect();
         Ok(match word.as_str() {
