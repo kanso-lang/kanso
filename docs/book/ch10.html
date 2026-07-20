@@ -26,7 +26,7 @@ extra_css: /book/book.css
 
 <p>the tax is negative. a pure, values-only language—failure handled for you, no mutation, not one named buffer—decodes json a hair faster than <code>serde_json</code>, the parser a rust team hand-tunes for exactly this job. that is the whole chapter in one table. everything after it answers two questions: how, and how do we keep it true.</p>
 
-<p>the honest asterisks, up front. the margin is small. of the 25 interleaved pairs, 24 went to kanso; the medians were 0.89ms to serde's 0.93ms. this is one document on one machine—"faster than serde_json on this gauntlet," not "the fastest json parser alive." and the memory stays flat while it works: about 6.8mb whether you decode once or a hundred and fifty times, because each decode hands its scratch space back before the next one starts.</p>
+<p>the honest asterisks, up front. the margin is small. of the 25 interleaved pairs, 24 went to kanso; the medians were 0.89ms to serde's 0.93ms. this is one document on one machine—"faster than serde_json on this gauntlet," not "the fastest json parser alive." and the memory stays flat while it works: about 5.8mb whether you decode once or a hundred and fifty times, because each decode hands its scratch space back before the next one starts.</p>
 
 <h2>two other people's harnesses</h2>
 
@@ -224,7 +224,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
   <div class="code-output">
     <div class="code-panel-title">KANSO_COUNTERS=1 ./counters</div>
     <pre><code>allocs=27
-alloc_bytes=33408
+alloc_bytes=33184
 arena_blocks=1
 perm_allocs=0
 beat_iters=0
@@ -239,20 +239,20 @@ sum 500500</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 ./jsonbench</div>
   <pre><code>allocs=14799465
-alloc_bytes=790444432
-arena_blocks=6
+alloc_bytes=640242688
+arena_blocks=5
 perm_allocs=1
 beat_iters=150
 decoded 150 times, checksum 24000</code></pre>
 </div>
 
-<p>two of those integers tell the memory story cleanly. <code>arena_blocks=6</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches six blocks of scratch space, a hundred and fifty decodes touch the same six, because each decode hands its arena back before the next begins. <code>beat_iters=150</code> is one heartbeat per decode, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
+<p>two of those integers tell the memory story cleanly. <code>arena_blocks=5</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches five blocks of scratch space, a hundred and fifty decodes touch the same five, because each decode hands its arena back before the next begins. <code>beat_iters=150</code> is one heartbeat per decode, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">bench/cost_golden.txt</div>
   <pre><code>allocs=14799465
-alloc_bytes=790444432
-arena_blocks=6
+alloc_bytes=640242688
+arena_blocks=5
 perm_allocs=1
 beat_iters=150</code></pre>
 </div>

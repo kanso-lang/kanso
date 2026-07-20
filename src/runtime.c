@@ -167,38 +167,17 @@ KValue k_beat_pop(KValue r) {
     return r;
 }
 
-/* Reference counting (Perceus, native backend only). Every heap object —
-   the thing a KValue's payload points at — carries a 16-byte header with a
-   refcount immediately before it. codegen is opaque about object layout, so
-   this is entirely runtime-private. Commit 1: counts are maintained by
-   k_dup/k_drop but nothing frees yet and codegen emits no calls, so behavior
-   is unchanged. Immortal objects (interned strings, marker singletons) pin
-   their count so dup/drop are no-ops on them. */
-typedef struct { long long rc; long long pad; } KHeader;
-#define K_IMMORTAL (1LL << 60)
-
-static void* k_alloc_obj(size_t n) {
-    KHeader* h = k_alloc(sizeof(KHeader) + n);
-    h->rc = 1;
-    return (void*)(h + 1);
-}
-
-/* A permanent object: malloc'd with an immortal header, so it lives outside
-   the beat arena and survives every rewind. Interned single-char strings and
-   zero-field marker records are cached and reused across beats — an arena
-   rewind moves the bump pointer regardless of refcount, so caching arena
-   storage and reusing it after a pop hands back reclaimed, since-reused
-   memory. Permanent storage is the only cache that is sound across beats. */
+/* A permanent object: malloc'd, so it lives outside the beat arena and
+   survives every rewind. Interned single-char strings and zero-field marker
+   records are cached and reused across beats — an arena rewind moves the
+   bump pointer, so caching arena storage and reusing it after a pop hands
+   back reclaimed, since-reused memory. Permanent storage is the only cache
+   that is sound across beats. */
 static void* k_alloc_perm(size_t n) {
     k_stat_perm_allocs++;
-    KHeader* h = malloc(sizeof(KHeader) + n);
-    if (!h) { fputs("out of memory\n", stderr); exit(1); }
-    h->rc = K_IMMORTAL;
-    return (void*)(h + 1);
-}
-
-static KHeader* k_hdr(long long payload) {
-    return ((KHeader*)(intptr_t)payload) - 1;
+    void* p = malloc(n);
+    if (!p) { fputs("out of memory\n", stderr); exit(1); }
+    return p;
 }
 
 
@@ -209,23 +188,6 @@ static int k_is_heap(long long tag) {
             return 1;
         default:
             return 0;
-    }
-}
-
-KValue k_dup(KValue v) {
-    if (k_is_heap(v.tag)) {
-        KHeader* h = k_hdr(v.payload);
-        if (h->rc < K_IMMORTAL) h->rc++;
-    }
-    return v;
-}
-
-void k_drop(KValue v) {
-    if (k_is_heap(v.tag)) {
-        KHeader* h = k_hdr(v.payload);
-        if (h->rc < K_IMMORTAL && --h->rc == 0) {
-            /* commit 1: no freeing yet — counts only. */
-        }
     }
 }
 
@@ -295,7 +257,7 @@ KValue k_str_n(const char* data, long long len) {
             return k_ascii_cache[b];
         }
     }
-    KStr* s = k_alloc_obj(sizeof(KStr));
+    KStr* s = k_alloc(sizeof(KStr));
     s->len = (long)len;
     s->data = k_alloc(len + 1);
     memcpy(s->data, data, len);
@@ -311,7 +273,7 @@ static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
 KValue k_err(KValue reason, const char* origin) {
     if (!k_not_failure(reason)) return reason;
-    KErrBox* box = k_alloc_obj(sizeof(KErrBox));
+    KErrBox* box = k_alloc(sizeof(KErrBox));
     box->reason = reason;
     box->origin = origin;
     box->hops = NULL;
@@ -322,7 +284,7 @@ KValue k_err(KValue reason, const char* origin) {
 KValue k_err_hop(KValue v, const char* fn) {
     if (v.tag != K_ERR) return v;
     KErrBox* old = k_err_box(v);
-    KErrBox* box = k_alloc_obj(sizeof(KErrBox));
+    KErrBox* box = k_alloc(sizeof(KErrBox));
     KHop* hop = k_alloc(sizeof(KHop));
     hop->fn = fn;
     hop->prev = old->hops;
@@ -353,7 +315,7 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
         }
         return k_marker_cache[type_id];
     }
-    KRec* r = k_alloc_obj(sizeof(KRec));
+    KRec* r = k_alloc(sizeof(KRec));
     r->type_id = type_id;
     r->nfields = n;
     r->fields = k_alloc(sizeof(KValue) * n);
@@ -378,7 +340,7 @@ KValue k_concat(KValue a, KValue b) {
     if (!k_not_failure(b)) return b;
     KStr* sa = k_as_str(a);
     KStr* sb = k_as_str(b);
-    KStr* s = k_alloc_obj(sizeof(KStr));
+    KStr* s = k_alloc(sizeof(KStr));
     s->len = sa->len + sb->len;
     s->data = k_alloc(s->len + 1);
     memmove(s->data, sa->data, sa->len);
@@ -659,7 +621,7 @@ KValue k_cmp(KValue a, KValue b, long long op) {
 }
 
 static KValue k_mkdesc(long long dtag, KValue x, KValue y) {
-    KDesc* d = k_alloc_obj(sizeof(KDesc));
+    KDesc* d = k_alloc(sizeof(KDesc));
     d->dtag = dtag; d->x = x; d->y = y;
     KValue v; v.tag = K_DESC; v.payload = k_ptr(d); return v;
 }
@@ -1002,7 +964,7 @@ static KBuf* k_buf_of(KValue* items) { return ((KBuf*)items) - 1; }
    straight into a k_buf use this instead of k_mklist, whose job is to copy a
    caller's transient buffer into a fresh k_buf. */
 static KValue k_list_own(KValue* items, long long n) {
-    KList* l = k_alloc_obj(sizeof(KList));
+    KList* l = k_alloc(sizeof(KList));
     l->len = n;
     l->items = items;
     k_buf_of(items)->used = n;
@@ -1020,7 +982,7 @@ KValue k_list_lit(long long n, KValue* items) {
 }
 
 KValue k_closure(KValue (*fn)(void*, KValue), long long ncaps, KValue* caps) {
-    KClosure* c = k_alloc_obj(sizeof(KClosure));
+    KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
     memcpy(env, caps, sizeof(KValue) * ncaps);
     c->fn = fn; c->env = env;
@@ -1155,7 +1117,7 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
 KValue k_map_lit(long long n, KValue* flat_pairs) {
     /* literal keys arrive sorted and unique from the parser; k_map_sorted
        still recomputes on first read, cheaply (already sorted, no dups). */
-    KMap* m = k_alloc_obj(sizeof(KMap));
+    KMap* m = k_alloc(sizeof(KMap));
     m->pairs = k_buf(2 * (n ? n : 1));
     memcpy(m->pairs, flat_pairs, sizeof(KValue) * 2 * n);
     k_buf_of(m->pairs)->used = 2 * n;
@@ -1172,7 +1134,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     KMap* m = k_as_map(mv);
     KBuf* buf = k_buf_of(m->pairs);
-    KMap* out = k_alloc_obj(sizeof(KMap));
+    KMap* out = k_alloc(sizeof(KMap));
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     out->sorted = NULL;
     out->sorted_len = 0;
@@ -1223,7 +1185,7 @@ static long k_cp_len(unsigned char b) {
 }
 
 static KValue k_bytes_view(const unsigned char* data, long long len) {
-    KBytes* b = k_alloc_obj(sizeof(KBytes));
+    KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
     b->data = data;
     KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
@@ -1282,7 +1244,7 @@ KValue k_b_utf8(KValue lv, const char* origin) {
     KList* l = k_as_list(lv);
     /* build straight into the string's own buffer, then validate in place — the
        old path filled a scratch buffer and let k_str_n copy it a second time. */
-    KStr* s = k_alloc_obj(sizeof(KStr));
+    KStr* s = k_alloc(sizeof(KStr));
     s->len = (long)l->len;
     s->data = k_alloc(l->len + 1);
     for (long long i = 0; i < l->len; i++) {
@@ -1398,7 +1360,7 @@ KValue k_b_push(KValue lv, KValue item) {
         /* this list is the frontier of its buffer: claim the next slot */
         l->items[l->len] = item;
         buf->used++;
-        KList* out = k_alloc_obj(sizeof(KList));
+        KList* out = k_alloc(sizeof(KList));
         out->len = l->len + 1;
         out->items = l->items;
         KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
@@ -1408,7 +1370,7 @@ KValue k_b_push(KValue lv, KValue item) {
     memcpy(items, l->items, sizeof(KValue) * l->len);
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
-    KList* out = k_alloc_obj(sizeof(KList));
+    KList* out = k_alloc(sizeof(KList));
     out->len = l->len + 1;
     out->items = items;
     KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
