@@ -185,3 +185,18 @@ things.* Tooling follow-up for the keystone: an ADVISORY from `kanso check`
 when a pub fn's inferred return set includes a foreign type — the checker
 already sees it statically. That is Demeter's actual point — bounding the
 blast radius of change — enforced where the compiler can see it.
+
+**AMENDED (Clay, same night) — the door principle supersedes capability 3's
+framing:** type identity includes the package's major version (hako's
+aliasing implies it; Go's import-path-identity precedent) — cross-version
+mixing is a compile error, and within a unified build the "two doors" lead
+to one room, indistinguishable by value semantics. The ruling: **values are
+used through the door they came from.** A pub surface returning a type is
+responsible for the operations on it — re-exported or wrapped; a handle you
+can hold but not use is the exporting module's bug. A's direct import of C
+serves A's OWN use of C, never as a workaround for B's incomplete surface.
+The leak advisory upgrades accordingly: when a pub fn returns a foreign
+type and the module's surface offers no operation accepting it, kanso check
+says so — "re-export what callers need, or wrap it." Go comparison, for
+the book: kanso adopts Go's version-identity mechanics wholesale and adds
+the boundary discipline Go only approximates with internal/ and folklore.
