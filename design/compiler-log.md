@@ -287,3 +287,43 @@ it, revisit with the printer work.
 
 apps/kq removed from this repo — kanso-lang/kq is the sole home (the
 err-migration plan applies to it there).
+
+---
+
+## 2026-07-19 — GOAL: the memory-model deep frontier, ratified build order
+
+Clay ratified (build in sequence): **memory frontier → module system →
+lazy enumerable → build blocks → hako.** Strategic pivot alongside: stop
+chasing narrow microbenchmark wins (qj is simdjson-class; beating it means
+compiler-generated SIMD scanning — deferred, not urgent). Instead find
+complex, holistic real-world workloads — robot tooling, production
+utilities — where kanso earns its way into real use.
+
+The frontier campaign, from design/memory-frontier-research.md, ground-
+truthed against the tree today:
+
+- **[OPEN] delete the 16-byte KHeader** (runtime.c:177) — VERIFIED still
+  paid on every k_alloc_obj; codegen emits zero k_dup/k_drop calls, so the
+  rc is written and never consulted. Settled doctrine says delete; pure
+  win, cost-golden gated (alloc_bytes should drop materially).
+- **[OPEN] cohort-birthday ratchet test** — the memo's highest-value
+  verification target; does not exist yet. Write BEFORE regions/build-block
+  work: adversarial property test of "cycles cannot cross birthdays."
+- **[OPEN] free-the-top mini-rewind**; **[OPEN] generalized scalar rewind**
+  (runtime.c:134 rule, using beat.rs SCALAR set); **[OPEN] three-way escape
+  split** (dies-this-beat / MUST-survive born-in-shelf / MAY-survive
+  bench+copy) — measure survivor volume on VSE first.
+- **[OPEN] survivor machinery** (copy-or-pin split) + static sweep points
+  for long beats — the two loose ends §03 of the compiler page names as
+  planned-not-built.
+- **[NOTE] ownership-analysis branch** (borrow/consume signatures +
+  memory-model ratchet tests) is 3 commits but badly diverged from main
+  (~11k lines); cherry-pick ownership.rs + tests forward rather than merge.
+- **[STALE-CORRECTED] the memo's "k_b_push_mut is dead" claim**: it IS now
+  wired (one codegen site) — the memo predates the wiring.
+- Tag-hoist / auto-SoA / e-graph fusion stay queued behind the above; they
+  attack the representation gap, not the free schedule.
+
+(This goal was apparently stated last night and lost to a session usage
+limit before it landed anywhere durable — hence this entry. If it's ever
+unclear whether a directive got recorded: it goes here.)
