@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "appendix a—the diagnostics catalog"
-description: "every compile error kanso emits, grouped by kind—formatting, unused, name, dispatch, signature, syntax, endpoint—each with a minimal trigger and the exact diagnostic copied from the compiler."
+description: "every compile error kanso emits, grouped by kind—formatting, unused, name, dispatch, signature, syntax, runtime, endpoint—each with a minimal trigger and the exact diagnostic copied from the compiler."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">appendix a</span>
@@ -9,7 +9,7 @@ extra_css: /book/book.css
 
 <p>in most languages the error messages are an afterthought—the thing you see when something else went wrong. in kanso they are the product. the founding principle is that anything a style guide, a linter, or a code review would enforce by convention is instead a compile error with a caret under it, so the compiler treats waste and disorder the way other compilers treat type mismatches. that principle is only as good as the diagnostics that carry it, and this appendix is the complete list: every error the compiler emits, grouped by kind, each with the smallest program that triggers it and the exact text you get back.</p>
 
-<p>errors arrive under a tag in square brackets that names the family the rule belongs to—<code>formatting</code>, <code>unused</code>, <code>name</code>, <code>dispatch</code>, <code>signature</code>, <code>syntax</code>, and, at the far edge, <code>endpoint</code>. the first six are caught by <code>kanso check</code> before a single line runs. the last one names a failure that only a running program can produce. every sample below was fed to the real compiler, and every diagnostic on this page is copied from the machine, not typed from memory.</p>
+<p>errors arrive under a tag in square brackets that names the family the rule belongs to—<code>formatting</code>, <code>unused</code>, <code>name</code>, <code>dispatch</code>, <code>signature</code>, <code>syntax</code>, and, at the far edge, <code>runtime</code> and <code>endpoint</code>. the first six are caught by <code>kanso check</code> before a single line runs. the last two name failures that only a running program can produce. every sample below was fed to the real compiler, and every diagnostic on this page is copied from the machine, not typed from memory.</p>
 
 <h2>anatomy of a diagnostic</h2>
 
@@ -17,19 +17,18 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unused_binding_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  x <span class="o">=</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"hi"</span></code></pre>
+  <pre><code>x <span class="o">=</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"hi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unused_binding_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `x`
-<span class="c">  --&gt; unused_binding_check.kso:2:3</span>
-   2 |   x = 1
-         <span class="k">^</span></code></pre>
+<span class="c">  --&gt; unused_binding_check.kso:1:1</span>
+   1 | x = 1
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<p>four parts, always in this shape. the first line is the <em>tag</em>—<code>error[unused]</code>—followed by the rule stated as a fact about the language, not a suggestion. the second line, after <code>--&gt;</code>, is the <em>location</em>: file, line, column. then the offending source line is reprinted with its number. finally a <em>caret</em> points at the exact column named in the location. every diagnostic in this catalog is that same four-part object; once you can read one, you can read all of them.</p>
+<p>four parts, always in this shape. the first line is the <em>tag</em>—<code>error[unused]</code>—followed by the rule stated as a fact about the language, not a suggestion. the second line, after <code>--&gt;</code>, is the <em>location</em>: file, line, column. then the offending source line is reprinted with its number. finally a <em>caret</em> points at the exact column named in the location. every check-time diagnostic in this catalog is that same four-part object; once you can read one, you can read all of them.</p>
 
 <h2>error[formatting]—spacing and invisibles</h2>
 
@@ -37,13 +36,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">trailing_ws_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hi"</span> </code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"hi"</span> </code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check trailing_ws_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
-<span class="c">  --&gt; trailing_ws_check.kso:1:18</span>
-   1 | main = print "hi" 
-                        <span class="k">^</span></code></pre>
+<span class="c">  --&gt; trailing_ws_check.kso:1:11</span>
+   1 | print "hi" 
+                 <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -51,19 +50,18 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">cramped_binding_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  answer<span class="o">=</span><span class="n">42</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
+  <pre><code>answer<span class="o">=</span><span class="n">42</span>
+<span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check cramped_binding_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; cramped_binding_check.kso:2:9</span>
-   2 |   answer=42
-               <span class="k">^</span>
+<span class="c">  --&gt; cramped_binding_check.kso:1:7</span>
+   1 | answer=42
+             <span class="k">^</span>
 <span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; cramped_binding_check.kso:2:10</span>
-   2 |   answer=42
-                <span class="k">^</span></code></pre>
+<span class="c">  --&gt; cramped_binding_check.kso:1:8</span>
+   1 | answer=42
+              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -71,13 +69,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">paren_call_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
+  <pre><code><span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check paren_call_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; paren_call_check.kso:1:13</span>
-   1 | main = print("hi")
-                   <span class="k">^</span></code></pre>
+<span class="c">  --&gt; paren_call_check.kso:1:6</span>
+   1 | print("hi")
+            <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -85,15 +83,14 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">commas_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check commas_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: kanso has no commas; enumerations are space-separated
-<span class="c">  --&gt; commas_check.kso:2:17</span>
-   2 |   total = sum [1, 2]
-                       <span class="k">^</span></code></pre>
+<span class="c">  --&gt; commas_check.kso:1:15</span>
+   1 | total = sum [1, 2]
+                     <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -101,12 +98,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">line_length_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check line_length_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 90
+    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 83
 <span class="c">  --&gt; line_length_check.kso:1:81</span>
-   1 | main = print "this string pads the line out well past the canonical width limit of eighty"
+   1 | print "this string pads the line out well past the canonical width limit of eighty"
                                                                                        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -117,56 +114,61 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">snake_case_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  myName <span class="o">=</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
+  <pre><code>myName <span class="o">=</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check snake_case_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
-<span class="c">  --&gt; snake_case_check.kso:2:5</span>
-   2 |   myName = 1
-           <span class="k">^</span>
+<span class="c">  --&gt; snake_case_check.kso:1:3</span>
+   1 | myName = 1
+         <span class="k">^</span>
 <span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
-<span class="c">  --&gt; snake_case_check.kso:3:13</span>
-   3 |   print "{myName}"
-                   <span class="k">^</span></code></pre>
+<span class="c">  --&gt; snake_case_check.kso:2:11</span>
+   2 | print "{myName}"
+                 <span class="k">^</span></code></pre>
   </div>
 </div>
 
 <h2>error[formatting]—order and separation</h2>
 
-<p>a file has a fixed shape: types come first, then functions and constants, and inside each group the declarations are alphabetical. this protects the reader's ability to <em>find</em> things—a name is always where its spelling says it will be—and it protects the diff, because a new declaration lands in exactly one legal place. put a type after a function and the compiler tells you which way it must move:</p>
+<p>a file has a fixed shape: types come first, then functions and constants, and inside each group the declarations are alphabetical. this protects the reader's ability to <em>find</em> things—a name is always where its spelling says it will be—and it protects the diff, because a new declaration lands in exactly one legal place. put a type after a function and the compiler tells you which way it must move. the same run flags a second drift—<code>play</code> has landed after <code>use_it</code>, out of alphabetical order—which is the next rule:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">type_order_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span>
+  <pre><code><span class="k">fn</span> <span class="f">use_it</span> t
+  t
 
-<span class="k">type</span> <span class="t">user</span>
-  admin:<span class="t">bool</span>
-  name:<span class="t">string</span></code></pre>
+<span class="k">type</span> <span class="t">thing</span>
+  size:<span class="t">int</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check type_order_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `user` up
-<span class="c">  --&gt; type_order_check.kso:3:6</span>
-   3 | type user
-            <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `thing` up
+<span class="c">  --&gt; type_order_check.kso:4:6</span>
+   4 | type thing
+            <span class="k">^</span>
+<span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `play` before `use_it`
+<span class="c">  --&gt; type_order_check.kso:7:5</span>
+   7 | pub play = print "x"
+           <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<p>within the function group, alphabetical order is enforced by name. <code>main</code> sorts before <code>zeta</code>, so <code>main</code> must come first:</p>
+<p>within the function group, alphabetical order is enforced by name. <code>play</code> sorts before <code>zeta</code>, so <code>play</code> must come first:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">fn_order_check.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
   x
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check fn_order_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
-<span class="c">  --&gt; fn_order_check.kso:4:1</span>
-   4 | main = print "{zeta 1}"
-       <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `play` before `zeta`
+<span class="c">  --&gt; fn_order_check.kso:4:5</span>
+   4 | pub play = print "{zeta 1}"
+           <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -178,12 +180,12 @@ extra_css: /book/book.css
   name:<span class="t">string</span>
   admin:<span class="t">bool</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check field_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: fields appear in alphabetical order: `admin` before `name`
 <span class="c">  --&gt; field_order_check.kso:3:3</span>
-   3 |   admin: bool
+   3 |   admin:bool
          <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -192,14 +194,17 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">blank_between_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">greet</span> name
-  <span class="s">"hi, <span class="i">{name}</span>"</span>
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">greet</span> <span class="s">"kanso"</span>)</code></pre>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> _
+  <span class="f">print</span> <span class="s">"hi"</span>
+<span class="k">fn</span> <span class="f">wave</span> _
+  <span class="f">print</span> <span class="s">"yo"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">greet</span> <span class="n">0</span> <span class="o">.</span> <span class="f">wave</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check blank_between_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: exactly one blank line separates top-level declarations
 <span class="c">  --&gt; blank_between_check.kso:3:1</span>
-   3 | main = print (greet "kanso")
+   3 | fn wave _
        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -208,10 +213,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">blank_in_body_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> _
   x <span class="o">=</span> <span class="n">1</span>
 
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">greet</span> <span class="n">0</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check blank_in_body_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: blank lines may not appear inside a body
@@ -223,17 +230,17 @@ extra_css: /book/book.css
 
 <h2>error[formatting]—chains and sequencing</h2>
 
-<p>a chain of steps has two legal shapes and nothing between them: it fits on one line, or every step gets its own continuation line. this protects the diff again—there is no "reflow" a reviewer has to squint past—and it keeps the eye from having to guess where a statement really ends. the simplest violation is wrapping a chain that would have fit. the compiler measures it and tells you it fits in forty-two characters:</p>
+<p>a chain of steps has two legal shapes and nothing between them: it fits on one line, or every step gets its own continuation line. this protects the diff again—there is no "reflow" a reviewer has to squint past—and it keeps the eye from having to guess where a statement really ends. the simplest violation is wrapping a chain that would have fit. the compiler measures it and tells you it fits in thirty-five characters:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">seq_wrap_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping"</span>
+  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check seq_wrap_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (42 characters)
+    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (35 characters)
 <span class="c">  --&gt; seq_wrap_check.kso:2:3</span>
-   2 |   >> print "serving"
+   2 |   &gt;&gt; print "serving"
          <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -242,16 +249,15 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">needless_continuation_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
-    <span class="o">.</span> <span class="f">sum</span>
-  <span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
+  <span class="o">.</span> <span class="f">sum</span>
+<span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check needless_continuation_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (34 characters)
-<span class="c">  --&gt; needless_continuation_check.kso:3:5</span>
-   3 |     . sum
-           <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (32 characters)
+<span class="c">  --&gt; needless_continuation_check.kso:2:3</span>
+   2 |   . sum
+         <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -259,14 +265,14 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">partial_chain_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
+  <pre><code><span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving it in the warmed cups with seasonal wagashi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check partial_chain_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: no partial chaining: a chain fits on one line, or each step gets its own `&gt;&gt;` continuation line
-<span class="c">  --&gt; partial_chain_check.kso:1:47</span>
-   1 | main = print "steeping the finest uji sencha" >> print "pouring the hot water"
-                                                     <span class="k">^</span></code></pre>
+<span class="c">  --&gt; partial_chain_check.kso:1:40</span>
+   1 | print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
+                                              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -274,17 +280,16 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unfused_wall_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"steeping"</span>
-  <span class="f">print</span> <span class="s">"warming"</span>
-  <span class="o">&gt;&gt;</span>
-  <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
+<span class="f">print</span> <span class="s">"warming"</span>
+<span class="o">&gt;&gt;</span>
+<span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unfused_wall_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a one-step stage fuses with its wall: write `&gt;&gt; step` on one line
-<span class="c">  --&gt; unfused_wall_check.kso:4:3</span>
-   4 |   >>
-         <span class="k">^</span></code></pre>
+<span class="c">  --&gt; unfused_wall_check.kso:3:1</span>
+   3 | &gt;&gt;
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -292,16 +297,15 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">bare_after_fused_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"x"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"c"</span>
-  <span class="f">print</span> <span class="s">"d"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"x"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"c"</span>
+<span class="f">print</span> <span class="s">"d"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check bare_after_fused_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a fused `&gt;&gt; step` is a single sequential step — a line cannot silently join it. for a group, put the wall alone and list the members below it
-<span class="c">  --&gt; bare_after_fused_check.kso:4:3</span>
-   4 |   print "d"
-         <span class="k">^</span></code></pre>
+<span class="c">  --&gt; bare_after_fused_check.kso:3:1</span>
+   3 | print "d"
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -309,16 +313,15 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">binding_after_effect_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"steeping"</span>
-  cups <span class="o">=</span> <span class="n">4</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving <span class="i">{cups}</span>"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
+cups <span class="o">=</span> <span class="n">4</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving <span class="i">{cups}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check binding_after_effect_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: bindings precede the effects in a body: every binding runs before every bare effect line, so move it above the chain
-<span class="c">  --&gt; binding_after_effect_check.kso:3:10</span>
-   3 |   cups = 4
-                <span class="k">^</span></code></pre>
+<span class="c">  --&gt; binding_after_effect_check.kso:2:8</span>
+   2 | cups = 4
+              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -331,7 +334,7 @@ extra_css: /book/book.css
   <pre><code><span class="k">fn</span> <span class="f">area</span> (w: <span class="t">int</span>)
   w <span class="o">*</span> w
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{area 3}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{area 3}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check paren_ascription_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a single-type ascription is written tight: `w:type` (parenthesized guards return with typesets)
@@ -349,7 +352,7 @@ extra_css: /book/book.css
   admin:<span class="t">bool</span>
   name:<span class="t">string</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   { name admin } <span class="o">=</span> <span class="t">user</span> <span class="t">false</span> <span class="s">"clay"</span>
   <span class="f">print</span> <span class="s">"<span class="i">{name}</span> <span class="i">{admin}</span>"</span></code></pre>
   <div class="code-output">
@@ -371,7 +374,7 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">fact</span> <span class="n">0</span>
   <span class="n">1</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{fact 3}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{fact 3}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check overload_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: overloads of `fact` appear most-specific first: literal, then concrete type, then generic
@@ -387,15 +390,14 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unused_expr_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"hi"</span></code></pre>
+  <pre><code><span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"hi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unused_expr_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
-<span class="c">  --&gt; unused_expr_check.kso:2:5</span>
-   2 |   1 + 1
-           <span class="k">^</span></code></pre>
+<span class="c">  --&gt; unused_expr_check.kso:1:3</span>
+   1 | 1 + 1
+         <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -403,16 +405,15 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">rebind_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  x <span class="o">=</span> <span class="n">1</span>
-  x <span class="o">=</span> <span class="n">2</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <pre><code>x <span class="o">=</span> <span class="n">1</span>
+x <span class="o">=</span> <span class="n">2</span>
+<span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check rebind_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding: each version of `x` is used before the next
-<span class="c">  --&gt; rebind_check.kso:2:3</span>
-   2 |   x = 1
-         <span class="k">^</span></code></pre>
+<span class="c">  --&gt; rebind_check.kso:1:1</span>
+   1 | x = 1
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -422,13 +423,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unknown_name_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{mystery}</span>"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"<span class="i">{mystery}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unknown_name_check.kso</div>
     <pre><code><span class="k">error[name]</span>: unknown name `mystery`
-<span class="c">  --&gt; unknown_name_check.kso:1:16</span>
-   1 | main = print "{mystery}"
-                      <span class="k">^</span></code></pre>
+<span class="c">  --&gt; unknown_name_check.kso:1:9</span>
+   1 | print "{mystery}"
+               <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -439,7 +440,7 @@ extra_css: /book/book.css
   <pre><code><span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"hi, <span class="i">{name}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   greet <span class="o">=</span> <span class="n">1</span>
   <span class="f">print</span> <span class="s">"<span class="i">{greet}</span>"</span></code></pre>
   <div class="code-output">
@@ -451,7 +452,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>one name is required rather than merely resolved. a program that the toolchain will run must define <code>main</code>—the constant the runtime asks for. this is the one diagnostic in the family that <code>kanso check</code> lets pass, because a file with no <code>main</code> is a perfectly good library; it surfaces only when you ask to <em>run</em> the file as a program:</p>
+<p>one refusal sits at the boundary of this family. a file of definitions with no top-level statements is a library, and <code>kanso check</code> passes it clean. asking to <em>run</em> one is the mistake the toolchain declines without a tag or a caret, because no line of the source is wrong—the file is simply not a program. the refusal names both ways forward: give the module a <code>main.kso</code> entry, or define <code>pub play</code> and use <code>kanso play</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">no_main.kso</div>
@@ -459,10 +460,7 @@ extra_css: /book/book.css
   <span class="s">"hi, <span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run no_main.kso</div>
-    <pre><code><span class="k">error[name]</span>: a program defines `main`
-<span class="c">  --&gt; no_main.kso:1:1</span>
-   1 | fn greet name
-       <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error</span>: `no_main.kso` is a library — nothing to run. give the module a main.kso entry, or define `pub play` and use `kanso play`</code></pre>
   </div>
 </div>
 
@@ -472,7 +470,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">constant_overload_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{size 1}</span>"</span>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{size 1}</span>"</span>
 
 <span class="f">size</span> <span class="o">=</span> <span class="n">9</span>
 
@@ -491,7 +489,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">overlap_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{same 1}</span>"</span>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{same 1}</span>"</span>
 
 <span class="k">fn</span> <span class="f">same</span> x
   x
@@ -515,7 +513,7 @@ extra_css: /book/book.css
   <div class="code-panel-title">marker_args_check.kso</div>
   <pre><code><span class="k">type</span> <span class="t">null</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   bad <span class="o">=</span> <span class="t">null</span> <span class="t">true</span>
   <span class="f">print</span> <span class="s">"<span class="i">{bad}</span>"</span></code></pre>
   <div class="code-output">
@@ -537,7 +535,7 @@ extra_css: /book/book.css
   admin:<span class="t">bool</span>
   name:<span class="t">string</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="t">user</span> _ name <span class="o">=</span> <span class="t">user</span> <span class="t">false</span> <span class="s">"clay"</span>
   <span class="f">print</span> <span class="s">"<span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
@@ -551,36 +549,34 @@ extra_css: /book/book.css
 
 <p>the fix is the keyed read from the previous section: <code>{ name } = user false "clay"</code> takes the field you want and leaves the rest, no wildcard required.</p>
 
-<h2>error[endpoint]—the failures compilation can't catch</h2>
+<h2>error[endpoint], error[runtime]—the failures compilation can't catch</h2>
 
-<p>the six families above are all settled before the program runs. some failures cannot be: whether a divisor is zero, or a lookup finds nothing, is a fact about values that only exist at runtime. kanso represents those outcomes as ordinary values—<code>err</code> for a genuine failure, <code>none</code> for a legitimate absence—and lets them flow. chapter four is the full story; the catalog entry is what happens when such a value is never handled and reaches the edge of the program. a division by zero produces an <code>err</code>, and an unhandled <code>err</code> that reaches <code>main</code> ends the program with a report of where it was born:</p>
+<p>the six families above are all settled before the program runs. some failures cannot be: whether a divisor is zero, or a lookup finds nothing, is a fact about values that only exist at runtime. kanso represents those outcomes as ordinary values—<code>err</code> for a genuine failure, <code>none</code> for a legitimate absence—and lets them flow. chapter four is the full story; the catalog entry is what happens when such a value is never handled and reaches the edge of the program. a division by zero produces an <code>err</code>, and an unhandled <code>err</code> ends the program with a report of where it was born:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{n}</span>"</span></code></pre>
+  <pre><code>n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+<span class="f">print</span> <span class="s">"<span class="i">{n}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at divzero.kso:2</span></code></pre>
+<span class="c">  born in main at divzero.kso:1</span></code></pre>
   </div>
 </div>
 
-<p><code>none</code> rises the same way when nothing handles it. reading past the end of a list yields <code>none</code>—a real answer, not a crash—but let it reach <code>main</code> unhandled and the endpoint reports it, without the "born" line, because an absence has no failure site to point at:</p>
+<p>the <code>runtime</code> tag is the endpoint's close cousin, for the failures the machine meets mid-run. the tight dot is a field read—<code>u.name</code> pulls <code>name</code> out of the record <code>u</code>—so <code>xs.at 9</code> asks a list for a field called <code>at</code>, and a list has no fields to give. indexing is the plain call <code>at xs 9</code>, which yields <code>none</code> past the end—an absence you can handle, as chapter four shows:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">missing_index.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{xs.at 9}</span>"</span></code></pre>
+  <pre><code>xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{xs.at 9}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing_index.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
+    <pre><code><span class="k">error[runtime]</span>: `.` reads a field of a record</code></pre>
   </div>
 </div>
 
-<p>the lesson of the endpoint family is that it is short by design. everything a type system and a formatter can settle, kanso settles at <code>check</code> time; what remains at runtime is only the genuinely value-dependent, and even that arrives as a value you could have handled rather than an exception that unwinds your stack.</p>
+<p>the lesson of these last families is that they are short by design. everything a type system and a formatter can settle, kanso settles at <code>check</code> time; what remains at runtime is small, and the <code>err</code> and <code>none</code> of the endpoint family arrive as values you could have handled rather than exceptions that unwind your stack.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 62" role="img" aria-label="mugi the tanuki" shape-rendering="crispEdges"><title>mugi the tanuki - runs the interpreter; pays for everything in boba pearls</title><rect x="20" y="0" width="2" height="1" fill="#b07a4a"/><rect x="42" y="0" width="2" height="1" fill="#b07a4a"/><rect x="20" y="1" width="3" height="1" fill="#b07a4a"/><rect x="41" y="1" width="3" height="1" fill="#b07a4a"/><rect x="19" y="2" width="5" height="1" fill="#b07a4a"/><rect x="40" y="2" width="5" height="1" fill="#b07a4a"/><rect x="19" y="3" width="2" height="1" fill="#b07a4a"/><rect x="21" y="3" width="2" height="1" fill="#2b2320"/><rect x="23" y="3" width="2" height="1" fill="#b07a4a"/><rect x="39" y="3" width="2" height="1" fill="#b07a4a"/><rect x="41" y="3" width="2" height="1" fill="#2b2320"/><rect x="43" y="3" width="2" height="1" fill="#b07a4a"/><rect x="18" y="4" width="2" height="1" fill="#b07a4a"/><rect x="20" y="4" width="4" height="1" fill="#2b2320"/><rect x="24" y="4" width="2" height="1" fill="#b07a4a"/><rect x="38" y="4" width="2" height="1" fill="#b07a4a"/><rect x="40" y="4" width="4" height="1" fill="#2b2320"/><rect x="44" y="4" width="2" height="1" fill="#b07a4a"/><rect x="17" y="5" width="3" height="1" fill="#b07a4a"/><rect x="20" y="5" width="5" height="1" fill="#2b2320"/><rect x="25" y="5" width="14" height="1" fill="#b07a4a"/><rect x="39" y="5" width="5" height="1" fill="#2b2320"/><rect x="44" y="5" width="3" height="1" fill="#b07a4a"/><rect x="17" y="6" width="2" height="1" fill="#b07a4a"/><rect x="19" y="6" width="5" height="1" fill="#2b2320"/><rect x="24" y="6" width="16" height="1" fill="#b07a4a"/><rect x="40" y="6" width="5" height="1" fill="#2b2320"/><rect x="45" y="6" width="2" height="1" fill="#b07a4a"/><rect x="16" y="7" width="2" height="1" fill="#b07a4a"/><rect x="18" y="7" width="4" height="1" fill="#2b2320"/><rect x="22" y="7" width="20" height="1" fill="#b07a4a"/><rect x="42" y="7" width="4" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#b07a4a"/><rect x="16" y="8" width="32" height="1" fill="#b07a4a"/><rect x="15" y="9" width="3" height="1" fill="#b07a4a"/><rect x="20" y="9" width="24" height="1" fill="#b07a4a"/><rect x="45" y="9" width="4" height="1" fill="#b07a4a"/><rect x="19" y="10" width="26" height="1" fill="#b07a4a"/><rect x="19" y="11" width="26" height="1" fill="#b07a4a"/><rect x="18" y="12" width="4" height="1" fill="#b07a4a"/><rect x="22" y="12" width="6" height="1" fill="#8f5f36"/><rect x="28" y="12" width="8" height="1" fill="#b07a4a"/><rect x="36" y="12" width="6" height="1" fill="#8f5f36"/><rect x="42" y="12" width="4" height="1" fill="#b07a4a"/><rect x="18" y="13" width="2" height="1" fill="#b07a4a"/><rect x="20" y="13" width="10" height="1" fill="#8f5f36"/><rect x="30" y="13" width="4" height="1" fill="#b07a4a"/><rect x="34" y="13" width="10" height="1" fill="#8f5f36"/><rect x="44" y="13" width="2" height="1" fill="#b07a4a"/><rect x="17" y="14" width="2" height="1" fill="#b07a4a"/><rect x="19" y="14" width="12" height="1" fill="#8f5f36"/><rect x="31" y="14" width="2" height="1" fill="#b07a4a"/><rect x="33" y="14" width="12" height="1" fill="#8f5f36"/><rect x="45" y="14" width="2" height="1" fill="#b07a4a"/><rect x="17" y="15" width="2" height="1" fill="#b07a4a"/><rect x="19" y="15" width="4" height="1" fill="#8f5f36"/><rect x="23" y="15" width="3" height="1" fill="#2b2320"/><rect x="26" y="15" width="1" height="1" fill="#faf3e3"/><rect x="27" y="15" width="4" height="1" fill="#8f5f36"/><rect x="31" y="15" width="2" height="1" fill="#b07a4a"/><rect x="33" y="15" width="4" height="1" fill="#8f5f36"/><rect x="37" y="15" width="3" height="1" fill="#2b2320"/><rect x="40" y="15" width="1" height="1" fill="#faf3e3"/><rect x="41" y="15" width="4" height="1" fill="#8f5f36"/><rect x="45" y="15" width="2" height="1" fill="#b07a4a"/><rect x="17" y="16" width="2" height="1" fill="#b07a4a"/><rect x="19" y="16" width="4" height="1" fill="#8f5f36"/><rect x="23" y="16" width="4" height="1" fill="#2b2320"/><rect x="27" y="16" width="4" height="1" fill="#8f5f36"/><rect x="31" y="16" width="2" height="1" fill="#b07a4a"/><rect x="33" y="16" width="4" height="1" fill="#8f5f36"/><rect x="37" y="16" width="4" height="1" fill="#2b2320"/><rect x="41" y="16" width="4" height="1" fill="#8f5f36"/><rect x="45" y="16" width="2" height="1" fill="#b07a4a"/><rect x="17" y="17" width="2" height="1" fill="#b07a4a"/><rect x="19" y="17" width="4" height="1" fill="#8f5f36"/><rect x="23" y="17" width="4" height="1" fill="#2b2320"/><rect x="27" y="17" width="4" height="1" fill="#8f5f36"/><rect x="31" y="17" width="2" height="1" fill="#b07a4a"/><rect x="33" y="17" width="4" height="1" fill="#8f5f36"/><rect x="37" y="17" width="4" height="1" fill="#2b2320"/><rect x="41" y="17" width="4" height="1" fill="#8f5f36"/><rect x="45" y="17" width="2" height="1" fill="#b07a4a"/><rect x="17" y="18" width="2" height="1" fill="#b07a4a"/><rect x="19" y="18" width="4" height="1" fill="#8f5f36"/><rect x="23" y="18" width="4" height="1" fill="#2b2320"/><rect x="27" y="18" width="4" height="1" fill="#8f5f36"/><rect x="31" y="18" width="2" height="1" fill="#b07a4a"/><rect x="33" y="18" width="4" height="1" fill="#8f5f36"/><rect x="37" y="18" width="4" height="1" fill="#2b2320"/><rect x="41" y="18" width="4" height="1" fill="#8f5f36"/><rect x="45" y="18" width="2" height="1" fill="#b07a4a"/><rect x="17" y="19" width="3" height="1" fill="#b07a4a"/><rect x="20" y="19" width="10" height="1" fill="#8f5f36"/><rect x="30" y="19" width="4" height="1" fill="#f2e3c8"/><rect x="34" y="19" width="10" height="1" fill="#8f5f36"/><rect x="44" y="19" width="3" height="1" fill="#b07a4a"/><rect x="18" y="20" width="4" height="1" fill="#b07a4a"/><rect x="22" y="20" width="5" height="1" fill="#8f5f36"/><rect x="27" y="20" width="10" height="1" fill="#f2e3c8"/><rect x="37" y="20" width="5" height="1" fill="#8f5f36"/><rect x="42" y="20" width="4" height="1" fill="#b07a4a"/><rect x="18" y="21" width="8" height="1" fill="#b07a4a"/><rect x="26" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="21" width="4" height="1" fill="#2b2320"/><rect x="34" y="21" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="21" width="8" height="1" fill="#b07a4a"/><rect x="19" y="22" width="7" height="1" fill="#b07a4a"/><rect x="26" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="30" y="22" width="4" height="1" fill="#2b2320"/><rect x="34" y="22" width="4" height="1" fill="#f2e3c8"/><rect x="38" y="22" width="7" height="1" fill="#b07a4a"/><rect x="19" y="23" width="6" height="1" fill="#b07a4a"/><rect x="25" y="23" width="14" height="1" fill="#f2e3c8"/><rect x="39" y="23" width="6" height="1" fill="#b07a4a"/><rect x="20" y="24" width="6" height="1" fill="#b07a4a"/><rect x="26" y="24" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="24" width="6" height="1" fill="#b07a4a"/><rect x="56" y="24" width="2" height="1" fill="#f03a00"/><rect x="21" y="25" width="5" height="1" fill="#b07a4a"/><rect x="26" y="25" width="12" height="1" fill="#f2e3c8"/><rect x="38" y="25" width="5" height="1" fill="#b07a4a"/><rect x="56" y="25" width="2" height="1" fill="#f03a00"/><rect x="22" y="26" width="12" height="1" fill="#b07a4a"/><rect x="34" y="26" width="3" height="1" fill="#f2e3c8"/><rect x="37" y="26" width="5" height="1" fill="#b07a4a"/><rect x="56" y="26" width="2" height="1" fill="#f03a00"/><rect x="23" y="27" width="17" height="1" fill="#b07a4a"/><rect x="56" y="27" width="2" height="1" fill="#f03a00"/><rect x="21" y="28" width="18" height="1" fill="#b07a4a"/><rect x="56" y="28" width="2" height="1" fill="#f03a00"/><rect x="19" y="29" width="22" height="1" fill="#b07a4a"/><rect x="56" y="29" width="2" height="1" fill="#f03a00"/><rect x="18" y="30" width="24" height="1" fill="#b07a4a"/><rect x="56" y="30" width="2" height="1" fill="#f03a00"/><rect x="17" y="31" width="26" height="1" fill="#b07a4a"/><rect x="56" y="31" width="2" height="1" fill="#f03a00"/><rect x="16" y="32" width="28" height="1" fill="#b07a4a"/><rect x="56" y="32" width="2" height="1" fill="#f03a00"/><rect x="16" y="33" width="28" height="1" fill="#b07a4a"/><rect x="56" y="33" width="2" height="1" fill="#f03a00"/><rect x="15" y="34" width="11" height="1" fill="#b07a4a"/><rect x="26" y="34" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="34" width="11" height="1" fill="#b07a4a"/><rect x="48" y="34" width="13" height="1" fill="#faf3e3"/><rect x="14" y="35" width="10" height="1" fill="#b07a4a"/><rect x="24" y="35" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="35" width="10" height="1" fill="#b07a4a"/><rect x="48" y="35" width="13" height="1" fill="#faf3e3"/><rect x="10" y="36" width="13" height="1" fill="#b07a4a"/><rect x="23" y="36" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="36" width="9" height="1" fill="#b07a4a"/><rect x="48" y="36" width="13" height="1" fill="#faf3e3"/><rect x="9" y="37" width="13" height="1" fill="#b07a4a"/><rect x="22" y="37" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="37" width="8" height="1" fill="#b07a4a"/><rect x="48" y="37" width="13" height="1" fill="#faf3e3"/><rect x="8" y="38" width="13" height="1" fill="#b07a4a"/><rect x="21" y="38" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="38" width="8" height="1" fill="#b07a4a"/><rect x="48" y="38" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="39" width="13" height="1" fill="#b07a4a"/><rect x="20" y="39" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="39" width="7" height="1" fill="#b07a4a"/><rect x="48" y="39" width="13" height="1" fill="#dfc9a2"/><rect x="7" y="40" width="13" height="1" fill="#b07a4a"/><rect x="20" y="40" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="40" width="7" height="1" fill="#b07a4a"/><rect x="48" y="40" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="40" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="40" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="41" width="14" height="1" fill="#b07a4a"/><rect x="20" y="41" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="41" width="7" height="1" fill="#b07a4a"/><rect x="48" y="41" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="41" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="41" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="42" width="13" height="1" fill="#b07a4a"/><rect x="19" y="42" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="42" width="6" height="1" fill="#b07a4a"/><rect x="48" y="42" width="4" height="1" fill="#dfc9a2"/><rect x="52" y="42" width="4" height="1" fill="#3d2a1a"/><rect x="56" y="42" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="43" width="13" height="1" fill="#b07a4a"/><rect x="19" y="43" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="43" width="6" height="1" fill="#b07a4a"/><rect x="48" y="43" width="5" height="1" fill="#dfc9a2"/><rect x="53" y="43" width="2" height="1" fill="#3d2a1a"/><rect x="55" y="43" width="6" height="1" fill="#dfc9a2"/><rect x="6" y="44" width="13" height="1" fill="#b07a4a"/><rect x="19" y="44" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="44" width="6" height="1" fill="#b07a4a"/><rect x="48" y="44" width="8" height="1" fill="#dfc9a2"/><rect x="56" y="44" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="44" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="45" width="13" height="1" fill="#b07a4a"/><rect x="19" y="45" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="45" width="6" height="1" fill="#b07a4a"/><rect x="48" y="45" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="45" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="55" y="45" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="45" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="46" width="13" height="1" fill="#b07a4a"/><rect x="19" y="46" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="46" width="5" height="1" fill="#b07a4a"/><rect x="48" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="46" width="1" height="1" fill="#dfc9a2"/><rect x="55" y="46" width="4" height="1" fill="#3d2a1a"/><rect x="59" y="46" width="2" height="1" fill="#dfc9a2"/><rect x="6" y="47" width="4" height="1" fill="#b07a4a"/><rect x="10" y="47" width="4" height="1" fill="#8f5f36"/><rect x="14" y="47" width="5" height="1" fill="#b07a4a"/><rect x="19" y="47" width="22" height="1" fill="#f2e3c8"/><rect x="41" y="47" width="5" height="1" fill="#b07a4a"/><rect x="48" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="47" width="4" height="1" fill="#3d2a1a"/><rect x="54" y="47" width="2" height="1" fill="#dfc9a2"/><rect x="56" y="47" width="2" height="1" fill="#3d2a1a"/><rect x="58" y="47" width="3" height="1" fill="#dfc9a2"/><rect x="6" y="48" width="2" height="1" fill="#b07a4a"/><rect x="8" y="48" width="8" height="1" fill="#8f5f36"/><rect x="16" y="48" width="4" height="1" fill="#b07a4a"/><rect x="20" y="48" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="48" width="6" height="1" fill="#b07a4a"/><rect x="48" y="48" width="3" height="1" fill="#dfc9a2"/><rect x="51" y="48" width="2" height="1" fill="#3d2a1a"/><rect x="53" y="48" width="8" height="1" fill="#dfc9a2"/><rect x="6" y="49" width="1" height="1" fill="#b07a4a"/><rect x="7" y="49" width="10" height="1" fill="#8f5f36"/><rect x="17" y="49" width="3" height="1" fill="#b07a4a"/><rect x="20" y="49" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="49" width="5" height="1" fill="#b07a4a"/><rect x="48" y="49" width="6" height="1" fill="#dfc9a2"/><rect x="54" y="49" width="2" height="1" fill="#3d2a1a"/><rect x="56" y="49" width="5" height="1" fill="#dfc9a2"/><rect x="6" y="50" width="1" height="1" fill="#b07a4a"/><rect x="7" y="50" width="10" height="1" fill="#8f5f36"/><rect x="17" y="50" width="3" height="1" fill="#b07a4a"/><rect x="20" y="50" width="20" height="1" fill="#f2e3c8"/><rect x="40" y="50" width="4" height="1" fill="#b07a4a"/><rect x="48" y="50" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="50" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="50" width="1" height="1" fill="#dfc9a2"/><rect x="53" y="50" width="4" height="1" fill="#3d2a1a"/><rect x="57" y="50" width="4" height="1" fill="#dfc9a2"/><rect x="7" y="51" width="10" height="1" fill="#8f5f36"/><rect x="17" y="51" width="4" height="1" fill="#b07a4a"/><rect x="21" y="51" width="18" height="1" fill="#f2e3c8"/><rect x="39" y="51" width="5" height="1" fill="#b07a4a"/><rect x="48" y="51" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="51" width="10" height="1" fill="#3d2a1a"/><rect x="59" y="51" width="2" height="1" fill="#dfc9a2"/><rect x="7" y="52" width="10" height="1" fill="#8f5f36"/><rect x="17" y="52" width="5" height="1" fill="#b07a4a"/><rect x="22" y="52" width="16" height="1" fill="#f2e3c8"/><rect x="38" y="52" width="5" height="1" fill="#b07a4a"/><rect x="48" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="49" y="52" width="4" height="1" fill="#3d2a1a"/><rect x="53" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="54" y="52" width="6" height="1" fill="#3d2a1a"/><rect x="60" y="52" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="53" width="10" height="1" fill="#8f5f36"/><rect x="18" y="53" width="5" height="1" fill="#b07a4a"/><rect x="23" y="53" width="14" height="1" fill="#f2e3c8"/><rect x="37" y="53" width="5" height="1" fill="#b07a4a"/><rect x="48" y="53" width="2" height="1" fill="#dfc9a2"/><rect x="50" y="53" width="2" height="1" fill="#3d2a1a"/><rect x="52" y="53" width="4" height="1" fill="#dfc9a2"/><rect x="56" y="53" width="4" height="1" fill="#3d2a1a"/><rect x="60" y="53" width="1" height="1" fill="#dfc9a2"/><rect x="7" y="54" width="10" height="1" fill="#8f5f36"/><rect x="19" y="54" width="5" height="1" fill="#b07a4a"/><rect x="24" y="54" width="12" height="1" fill="#f2e3c8"/><rect x="36" y="54" width="5" height="1" fill="#b07a4a"/><rect x="48" y="54" width="9" height="1" fill="#dfc9a2"/><rect x="57" y="54" width="2" height="1" fill="#3d2a1a"/><rect x="59" y="54" width="2" height="1" fill="#dfc9a2"/><rect x="8" y="55" width="8" height="1" fill="#8f5f36"/><rect x="21" y="55" width="5" height="1" fill="#b07a4a"/><rect x="26" y="55" width="8" height="1" fill="#f2e3c8"/><rect x="34" y="55" width="5" height="1" fill="#b07a4a"/><rect x="48" y="55" width="13" height="1" fill="#dfc9a2"/><rect x="10" y="56" width="4" height="1" fill="#8f5f36"/><rect x="18" y="56" width="8" height="1" fill="#8f5f36"/><rect x="26" y="56" width="8" height="1" fill="#b07a4a"/><rect x="34" y="56" width="8" height="1" fill="#8f5f36"/><rect x="17" y="57" width="10" height="1" fill="#8f5f36"/><rect x="27" y="57" width="6" height="1" fill="#b07a4a"/><rect x="33" y="57" width="10" height="1" fill="#8f5f36"/><rect x="16" y="58" width="12" height="1" fill="#8f5f36"/><rect x="32" y="58" width="12" height="1" fill="#8f5f36"/><rect x="17" y="59" width="10" height="1" fill="#8f5f36"/><rect x="33" y="59" width="10" height="1" fill="#8f5f36"/><rect x="18" y="60" width="8" height="1" fill="#8f5f36"/><rect x="34" y="60" width="8" height="1" fill="#8f5f36"/></svg>
@@ -590,14 +586,14 @@ extra_css: /book/book.css
 </div>
 </div>
 
-<p>read the tags again as a set—<code>formatting</code>, <code>unused</code>, <code>name</code>, <code>dispatch</code>, <code>signature</code>, <code>syntax</code>, <code>endpoint</code>—and you have the whole surface on which a kanso program can be wrong. six of the seven never survive <code>check</code>; the seventh is the small, honest residue that only running can reveal. there is no separate linter, no formatter, no style argument to have, because every one of those disputes has already been answered by a diagnostic on this page. you can now recognize any error kanso will hand you, name the family it belongs to, and know before you run whether it will greet you at <code>check</code> or at the endpoint.</p>
+<p>read the tags again as a set—<code>formatting</code>, <code>unused</code>, <code>name</code>, <code>dispatch</code>, <code>signature</code>, <code>syntax</code>, <code>runtime</code>, <code>endpoint</code>—and you have the whole surface on which a kanso program can be wrong. six of the eight never survive <code>check</code>; the last two are the small, honest residue that only running can reveal. there is no separate linter, no formatter, no style argument to have, because every one of those disputes has already been answered by a diagnostic on this page. you can now recognize any error kanso will hand you, name the family it belongs to, and know before you run whether it will greet you at <code>check</code> or at the endpoint.</p>
 
 <h2>exercises</h2>
 
 <ol>
   <li>write the shortest program you can that produces two diagnostics from two <em>different</em> families in a single run. (a cramped binding whose name is also miscased is a place to start.)</li>
   <li>take the <code>overload_order_check.kso</code> sample and, without changing what it computes, make it compile. then break it a second way so it reports an <code>error[dispatch]</code> instead of an <code>error[formatting]</code>.</li>
-  <li>for each of the five samples in "chains and sequencing", predict the exact line and column the caret will land on before you run it, then check yourself against the compiler.</li>
+  <li>for each of the six samples in "chains and sequencing", predict the exact line and column the caret will land on before you run it, then check yourself against the compiler.</li>
   <li>find a program that passes <code>kanso check</code> cleanly but fails at the endpoint. explain why no earlier family could have caught it.</li>
 </ol>
 

@@ -7,15 +7,14 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 02</span>
 <h1>values and bindings</h1>
 
-<p>chapter 01 closed on a small subversion: <code>main</code> is a constant, not a function—a name bound to a value. take that literally and the rest of the language follows. a binding is a name, one space, <code>=</code>, one space, a value. a block-form <code>main</code> indents its body by two spaces and each line binds a name—except the last, which is the value of the whole thing. that's the complete ceremony:</p>
+<p>chapter 01's whole program was a single statement at the top of a file. every program has that shape: statements, one after another, at column 0, and the toolchain wires up the rest. most statements are bindings. a binding is a name, one space, <code>=</code>, one space, a value. that's the complete ceremony:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">binding.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  age <span class="o">=</span> <span class="n">47</span>
-  price <span class="o">=</span> <span class="n">19.99</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> is <span class="i">{age}</span>, owes <span class="i">{price}</span>"</span></code></pre>
+  <pre><code>age <span class="o">=</span> <span class="n">47</span>
+price <span class="o">=</span> <span class="n">19.99</span>
+name <span class="o">=</span> <span class="s">"clay"</span>
+<span class="f">print</span> <span class="s">"<span class="i">{name}</span> is <span class="i">{age}</span>, owes <span class="i">{price}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay is 47, owes 19.99</code></pre>
@@ -26,9 +25,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">interp.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  guests <span class="o">=</span> <span class="n">4</span>
-  <span class="f">print</span> <span class="s">"table for <span class="i">{guests + 1}</span>, please"</span></code></pre>
+  <pre><code>guests <span class="o">=</span> <span class="n">4</span>
+<span class="f">print</span> <span class="s">"table for <span class="i">{guests + 1}</span>, please"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>table for 5, please</code></pre>
@@ -43,10 +41,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">ints.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  per_day <span class="o">=</span> <span class="n">86400</span>
-  days <span class="o">=</span> <span class="n">365000000</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{per_day * days}</span>"</span></code></pre>
+  <pre><code>per_day <span class="o">=</span> <span class="n">86400</span>
+days <span class="o">=</span> <span class="n">365000000</span>
+<span class="f">print</span> <span class="s">"<span class="i">{per_day * days}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>31536000000000</code></pre>
@@ -57,9 +54,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">overflow.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  billion <span class="o">=</span> <span class="n">1000000000</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{billion * billion * 100}</span>"</span></code></pre>
+  <pre><code>billion <span class="o">=</span> <span class="n">1000000000</span>
+<span class="f">print</span> <span class="s">"<span class="i">{billion * billion * 100}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run overflow.kso</div>
     <pre><code><span class="k">error[runtime]</span>: integer overflow (int64 native build; spec int is arbitrary precision)</code></pre>
@@ -70,13 +66,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  n <span class="o">=</span> <span class="n">10</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{n / 0}</span>"</span></code></pre>
+  <pre><code>n <span class="o">=</span> <span class="n">10</span>
+<span class="f">print</span> <span class="s">"<span class="i">{n / 0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at divzero.kso:3</span></code></pre>
+<span class="c">  born in main at divzero.kso:2</span></code></pre>
   </div>
 </div>
 
@@ -86,11 +81,10 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">widen.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  exact <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2</span>
-  widened <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2.0</span>
-  mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span> <span class="n">0.5</span>
-  <span class="f">print</span> <span class="s">"int/int: <span class="i">{exact}</span>, int/float: <span class="i">{widened}</span>, mixed: <span class="i">{mixed}</span>"</span></code></pre>
+  <pre><code>exact <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2</span>
+widened <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2.0</span>
+mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span> <span class="n">0.5</span>
+<span class="f">print</span> <span class="s">"int/int: <span class="i">{exact}</span>, int/float: <span class="i">{widened}</span>, mixed: <span class="i">{mixed}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>int/int: 3, int/float: 3.5, mixed: 3.5</code></pre>
@@ -105,10 +99,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">strings.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  scoops <span class="o">=</span> <span class="n">3</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> ordered <span class="i">{scoops}</span> scoops, <span class="i">{scoops * 2}</span> on the house"</span></code></pre>
+  <pre><code>name <span class="o">=</span> <span class="s">"clay"</span>
+scoops <span class="o">=</span> <span class="n">3</span>
+<span class="f">print</span> <span class="s">"<span class="i">{name}</span> ordered <span class="i">{scoops}</span> scoops, <span class="i">{scoops * 2}</span> on the house"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay ordered 3 scoops, 6 on the house</code></pre>
@@ -121,13 +114,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">lists.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
-  doubled <span class="o">=</span> <span class="f">map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
-  small <span class="o">=</span> <span class="f">filter</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>)
-  first <span class="o">=</span> xs[<span class="n">1</span>]
-  <span class="f">print</span> <span class="s">"sorted <span class="i">{sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>
+  <pre><code>xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
+doubled <span class="o">=</span> <span class="f">map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+small <span class="o">=</span> <span class="f">filter</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>)
+first <span class="o">=</span> xs[<span class="n">1</span>]
+<span class="f">print</span> <span class="s">"sorted <span class="i">{sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>sorted [1 2 3] doubled [6 2 4] small [1 2]
@@ -139,9 +131,8 @@ sum 6 len 3 first 3</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">at_miss.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{at xs 9}</span>"</span></code></pre>
+  <pre><code>xs <span class="o">=</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{at xs 9}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run at_miss.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
@@ -156,10 +147,9 @@ sum 6 len 3 first 3</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">maps.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span>]
-  ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
-  <span class="f">print</span> <span class="s">"clay is <span class="i">{ages["clay"]}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
+  <pre><code>ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span>]
+ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
+<span class="f">print</span> <span class="s">"clay is <span class="i">{ages["clay"]}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay is 47
@@ -171,19 +161,18 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">map_miss.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{ages["nobody"]}</span>"</span></code></pre>
+  <pre><code>ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{ages["nobody"]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run map_miss.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "nobody""
-<span class="c">  born in main at map_miss.kso:3</span></code></pre>
+<span class="c">  born in main at map_miss.kso:2</span></code></pre>
   </div>
 </div>
 
 <h2>records</h2>
 
-<p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in alphabetical order, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared:</p>
+<p>when a value has named parts, give it a <code>type</code>. a type declaration lists its fields—each with a name and a type—in alphabetical order, and that order becomes the shape you construct with. <code>user 47 "clay"</code> fills <code>age</code> then <code>name</code>, positionally, in the order the fields were declared. the example carries one new piece of syntax: a file that declares a type is a library, and a library's runnable statements live in a <code>pub play</code> block, run with <code>kanso play</code> (chapter 07 tells the whole story). read the indented body the way you've read every program so far:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">records.kso</div>
@@ -191,7 +180,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   age:<span class="t">int</span>
   name:<span class="t">string</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   clay <span class="o">=</span> <span class="t">user</span> <span class="n">47</span> <span class="s">"clay"</span>
   <span class="t">user</span> years who <span class="o">=</span> clay
   { name: alias } <span class="o">=</span> clay
@@ -202,7 +191,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   </div>
 </div>
 
-<p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name: alias } = clay</code>, names just the field you want and binds it to a name of your choosing. there is no <code>clay.name</code> dotted access—the <code>.</code> is the pipe operator (chapter 06), so reaching into a record is always a destructure, stated plainly.</p>
+<p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name: alias } = clay</code>, names just the field you want and binds it to a name of your choosing. when one field is all an expression needs, dot access reaches in directly—<code>clay.name</code>, written tight with no spaces. a spaced <code>.</code> is the pipe operator (chapter 06), so the spacing decides which one you wrote.</p>
 
 <h2>equality and comparison</h2>
 
@@ -214,7 +203,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   x:<span class="t">int</span>
   y:<span class="t">int</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   nums <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>] <span class="o">==</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
   words <span class="o">=</span> <span class="s">"apple"</span> <span class="o">&lt;</span> <span class="s">"banana"</span>
   order <span class="o">=</span> <span class="n">5</span> <span class="o">&lt;=</span> <span class="n">5</span>
@@ -235,10 +224,9 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">rebind.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="n">10</span>
-  total <span class="o">=</span> total <span class="o">+</span> <span class="n">5</span>
-  <span class="f">print</span> <span class="s">"total: <span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> <span class="n">10</span>
+total <span class="o">=</span> total <span class="o">+</span> <span class="n">5</span>
+<span class="f">print</span> <span class="s">"total: <span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>total: 15</code></pre>
@@ -249,16 +237,15 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">rebind_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  x <span class="o">=</span> <span class="n">1</span>
-  x <span class="o">=</span> <span class="n">2</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <pre><code>x <span class="o">=</span> <span class="n">1</span>
+x <span class="o">=</span> <span class="n">2</span>
+<span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check rebind_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding: each version of `x` is used before the next
-<span class="c">  --&gt; rebind_check.kso:2:3</span>
-   2 |   x = 1
-         <span class="k">^</span></code></pre>
+<span class="c">  --&gt; rebind_check.kso:1:1</span>
+   1 | x = 1
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -266,25 +253,24 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <h2>no name is ever shadowed</h2>
 
-<p>rebinding replaces a name within one scope. <em>shadowing</em>—quietly reusing a name that already means something else—is a different thing, and kanso does not allow it. a local binding may not take a name already claimed by a top-level declaration; the compiler tells you the name is spoken for and asks you to pick another:</p>
+<p>rebinding replaces a name within one scope. <em>shadowing</em>—introducing a second binding that hides a live one—is a different thing, and kanso does not allow it. a file is one scope, so a second <code>tau</code> is a rebind of the first, never a fresh name concealing it. the blank line below groups the statements on the page, but it opens no new scope; the rebind rule still applies, and the unread first value is flagged:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">shadow_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  tau <span class="o">=</span> <span class="n">5</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{tau}</span>"</span>
+  <pre><code>tau <span class="o">=</span> <span class="n">5</span>
+tau <span class="o">=</span> <span class="n">3</span>
 
-<span class="f">tau</span> <span class="o">=</span> <span class="n">3</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{tau}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check shadow_check.kso</div>
-    <pre><code><span class="k">error[name]</span>: `tau` is already a declaration; rename the binding
-<span class="c">  --&gt; shadow_check.kso:2:3</span>
-   2 |   tau = 5
-         <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[unused]</span>: unused binding: each version of `tau` is used before the next
+<span class="c">  --&gt; shadow_check.kso:1:1</span>
+   1 | tau = 5
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
-<p>the payoff is that a name means one thing in the place you read it. no reader ever has to ask which <code>tau</code> is in view, and—like the rebind rule—no-shadowing keeps each value's lifetime unambiguous, which is exactly what the memory model needs to elide reference counts at compile time.</p>
+<p>the same instinct guards function bodies: a local binding may not take a name already claimed by a top-level declaration—the compiler tells you the name is spoken for and asks you to pick another. the payoff is that a name means one thing in the place you read it. no reader ever has to ask which <code>tau</code> is in view, and—like the rebind rule—no-shadowing keeps each value's lifetime unambiguous, which is exactly what the memory model needs to elide reference counts at compile time.</p>
 
 <div class="tip">
 <svg class="sprite" viewBox="0 0 64 58" role="img" aria-label="enso-neko" shape-rendering="crispEdges"><title>enso-neko - sleeps in a circle she never quite closes</title><rect x="29" y="0" width="2" height="1" fill="#f03a00"/><rect x="42" y="0" width="3" height="1" fill="#f03a00"/><rect x="28" y="1" width="4" height="1" fill="#f03a00"/><rect x="42" y="1" width="3" height="1" fill="#f03a00"/><rect x="28" y="2" width="2" height="1" fill="#f03a00"/><rect x="30" y="2" width="1" height="1" fill="#2b2320"/><rect x="31" y="2" width="2" height="1" fill="#f03a00"/><rect x="41" y="2" width="2" height="1" fill="#f03a00"/><rect x="43" y="2" width="1" height="1" fill="#2b2320"/><rect x="44" y="2" width="2" height="1" fill="#f03a00"/><rect x="27" y="3" width="3" height="1" fill="#f03a00"/><rect x="30" y="3" width="2" height="1" fill="#2b2320"/><rect x="32" y="3" width="1" height="1" fill="#f03a00"/><rect x="41" y="3" width="1" height="1" fill="#f03a00"/><rect x="42" y="3" width="2" height="1" fill="#2b2320"/><rect x="44" y="3" width="2" height="1" fill="#f03a00"/><rect x="27" y="4" width="2" height="1" fill="#f03a00"/><rect x="29" y="4" width="3" height="1" fill="#2b2320"/><rect x="32" y="4" width="9" height="1" fill="#f03a00"/><rect x="41" y="4" width="4" height="1" fill="#2b2320"/><rect x="45" y="4" width="2" height="1" fill="#f03a00"/><rect x="27" y="5" width="1" height="1" fill="#f03a00"/><rect x="28" y="5" width="3" height="1" fill="#2b2320"/><rect x="31" y="5" width="12" height="1" fill="#f03a00"/><rect x="43" y="5" width="2" height="1" fill="#2b2320"/><rect x="45" y="5" width="2" height="1" fill="#f03a00"/><rect x="26" y="6" width="2" height="1" fill="#f03a00"/><rect x="28" y="6" width="2" height="1" fill="#2b2320"/><rect x="30" y="6" width="14" height="1" fill="#f03a00"/><rect x="44" y="6" width="2" height="1" fill="#2b2320"/><rect x="46" y="6" width="2" height="1" fill="#f03a00"/><rect x="26" y="7" width="19" height="1" fill="#f03a00"/><rect x="45" y="7" width="1" height="1" fill="#2b2320"/><rect x="46" y="7" width="2" height="1" fill="#f03a00"/><rect x="25" y="8" width="23" height="1" fill="#f03a00"/><rect x="28" y="9" width="21" height="1" fill="#f03a00"/><rect x="27" y="10" width="20" height="1" fill="#f03a00"/><rect x="27" y="11" width="20" height="1" fill="#f03a00"/><rect x="27" y="12" width="20" height="1" fill="#f03a00"/><rect x="27" y="13" width="3" height="1" fill="#f03a00"/><rect x="30" y="13" width="5" height="1" fill="#2b2320"/><rect x="35" y="13" width="6" height="1" fill="#f03a00"/><rect x="41" y="13" width="5" height="1" fill="#2b2320"/><rect x="46" y="13" width="1" height="1" fill="#f03a00"/><rect x="10" y="14" width="4" height="1" fill="#faf3e3"/><rect x="27" y="14" width="3" height="1" fill="#f03a00"/><rect x="30" y="14" width="5" height="1" fill="#2b2320"/><rect x="35" y="14" width="6" height="1" fill="#f03a00"/><rect x="41" y="14" width="5" height="1" fill="#2b2320"/><rect x="46" y="14" width="2" height="1" fill="#f03a00"/><rect x="9" y="15" width="7" height="1" fill="#faf3e3"/><rect x="27" y="15" width="22" height="1" fill="#f03a00"/><rect x="8" y="16" width="8" height="1" fill="#faf3e3"/><rect x="27" y="16" width="7" height="1" fill="#f03a00"/><rect x="34" y="16" width="6" height="1" fill="#faf3e3"/><rect x="40" y="16" width="10" height="1" fill="#f03a00"/><rect x="8" y="17" width="9" height="1" fill="#faf3e3"/><rect x="27" y="17" width="5" height="1" fill="#f03a00"/><rect x="32" y="17" width="10" height="1" fill="#faf3e3"/><rect x="42" y="17" width="8" height="1" fill="#f03a00"/><rect x="8" y="18" width="9" height="1" fill="#faf3e3"/><rect x="28" y="18" width="4" height="1" fill="#f03a00"/><rect x="32" y="18" width="10" height="1" fill="#faf3e3"/><rect x="42" y="18" width="9" height="1" fill="#f03a00"/><rect x="8" y="19" width="9" height="1" fill="#faf3e3"/><rect x="28" y="19" width="3" height="1" fill="#f03a00"/><rect x="31" y="19" width="12" height="1" fill="#faf3e3"/><rect x="43" y="19" width="9" height="1" fill="#f03a00"/><rect x="8" y="20" width="8" height="1" fill="#faf3e3"/><rect x="29" y="20" width="3" height="1" fill="#f03a00"/><rect x="32" y="20" width="10" height="1" fill="#faf3e3"/><rect x="42" y="20" width="10" height="1" fill="#f03a00"/><rect x="7" y="21" width="2" height="1" fill="#f03a00"/><rect x="9" y="21" width="7" height="1" fill="#faf3e3"/><rect x="30" y="21" width="2" height="1" fill="#f03a00"/><rect x="32" y="21" width="10" height="1" fill="#faf3e3"/><rect x="42" y="21" width="11" height="1" fill="#f03a00"/><rect x="7" y="22" width="3" height="1" fill="#f03a00"/><rect x="10" y="22" width="4" height="1" fill="#faf3e3"/><rect x="14" y="22" width="2" height="1" fill="#f03a00"/><rect x="31" y="22" width="3" height="1" fill="#f03a00"/><rect x="34" y="22" width="6" height="1" fill="#faf3e3"/><rect x="40" y="22" width="3" height="1" fill="#f03a00"/><rect x="44" y="22" width="9" height="1" fill="#f03a00"/><rect x="6" y="23" width="9" height="1" fill="#f03a00"/><rect x="33" y="23" width="8" height="1" fill="#f03a00"/><rect x="45" y="23" width="9" height="1" fill="#f03a00"/><rect x="6" y="24" width="9" height="1" fill="#f03a00"/><rect x="45" y="24" width="9" height="1" fill="#f03a00"/><rect x="6" y="25" width="8" height="1" fill="#f03a00"/><rect x="46" y="25" width="8" height="1" fill="#f03a00"/><rect x="6" y="26" width="8" height="1" fill="#f03a00"/><rect x="46" y="26" width="8" height="1" fill="#f03a00"/><rect x="5" y="27" width="9" height="1" fill="#f03a00"/><rect x="46" y="27" width="9" height="1" fill="#f03a00"/><rect x="5" y="28" width="8" height="1" fill="#f03a00"/><rect x="47" y="28" width="8" height="1" fill="#f03a00"/><rect x="5" y="29" width="8" height="1" fill="#f03a00"/><rect x="47" y="29" width="8" height="1" fill="#f03a00"/><rect x="5" y="30" width="8" height="1" fill="#f03a00"/><rect x="47" y="30" width="8" height="1" fill="#f03a00"/><rect x="5" y="31" width="8" height="1" fill="#f03a00"/><rect x="47" y="31" width="8" height="1" fill="#f03a00"/><rect x="5" y="32" width="8" height="1" fill="#f03a00"/><rect x="47" y="32" width="8" height="1" fill="#f03a00"/><rect x="5" y="33" width="6" height="1" fill="#f03a00"/><rect x="11" y="33" width="2" height="1" fill="#c33206"/><rect x="47" y="33" width="2" height="1" fill="#c33206"/><rect x="49" y="33" width="6" height="1" fill="#f03a00"/><rect x="5" y="34" width="6" height="1" fill="#f03a00"/><rect x="11" y="34" width="2" height="1" fill="#c33206"/><rect x="47" y="34" width="2" height="1" fill="#c33206"/><rect x="49" y="34" width="6" height="1" fill="#f03a00"/><rect x="5" y="35" width="6" height="1" fill="#f03a00"/><rect x="11" y="35" width="2" height="1" fill="#c33206"/><rect x="47" y="35" width="2" height="1" fill="#c33206"/><rect x="49" y="35" width="6" height="1" fill="#f03a00"/><rect x="5" y="36" width="6" height="1" fill="#f03a00"/><rect x="11" y="36" width="3" height="1" fill="#c33206"/><rect x="46" y="36" width="3" height="1" fill="#c33206"/><rect x="49" y="36" width="6" height="1" fill="#f03a00"/><rect x="6" y="37" width="5" height="1" fill="#f03a00"/><rect x="11" y="37" width="3" height="1" fill="#c33206"/><rect x="46" y="37" width="3" height="1" fill="#c33206"/><rect x="49" y="37" width="5" height="1" fill="#f03a00"/><rect x="6" y="38" width="6" height="1" fill="#f03a00"/><rect x="12" y="38" width="2" height="1" fill="#c33206"/><rect x="46" y="38" width="2" height="1" fill="#c33206"/><rect x="48" y="38" width="6" height="1" fill="#f03a00"/><rect x="6" y="39" width="6" height="1" fill="#f03a00"/><rect x="12" y="39" width="3" height="1" fill="#c33206"/><rect x="45" y="39" width="3" height="1" fill="#c33206"/><rect x="48" y="39" width="6" height="1" fill="#f03a00"/><rect x="6" y="40" width="6" height="1" fill="#f03a00"/><rect x="12" y="40" width="3" height="1" fill="#c33206"/><rect x="45" y="40" width="3" height="1" fill="#c33206"/><rect x="48" y="40" width="6" height="1" fill="#f03a00"/><rect x="7" y="41" width="6" height="1" fill="#f03a00"/><rect x="13" y="41" width="3" height="1" fill="#c33206"/><rect x="44" y="41" width="3" height="1" fill="#c33206"/><rect x="47" y="41" width="6" height="1" fill="#f03a00"/><rect x="7" y="42" width="7" height="1" fill="#f03a00"/><rect x="14" y="42" width="3" height="1" fill="#c33206"/><rect x="43" y="42" width="3" height="1" fill="#c33206"/><rect x="46" y="42" width="7" height="1" fill="#f03a00"/><rect x="8" y="43" width="6" height="1" fill="#f03a00"/><rect x="14" y="43" width="3" height="1" fill="#c33206"/><rect x="43" y="43" width="3" height="1" fill="#c33206"/><rect x="46" y="43" width="6" height="1" fill="#f03a00"/><rect x="8" y="44" width="7" height="1" fill="#f03a00"/><rect x="15" y="44" width="3" height="1" fill="#c33206"/><rect x="42" y="44" width="3" height="1" fill="#c33206"/><rect x="45" y="44" width="7" height="1" fill="#f03a00"/><rect x="9" y="45" width="7" height="1" fill="#f03a00"/><rect x="16" y="45" width="4" height="1" fill="#c33206"/><rect x="40" y="45" width="4" height="1" fill="#c33206"/><rect x="44" y="45" width="7" height="1" fill="#f03a00"/><rect x="10" y="46" width="7" height="1" fill="#f03a00"/><rect x="17" y="46" width="4" height="1" fill="#c33206"/><rect x="39" y="46" width="4" height="1" fill="#c33206"/><rect x="43" y="46" width="7" height="1" fill="#f03a00"/><rect x="10" y="47" width="8" height="1" fill="#f03a00"/><rect x="18" y="47" width="5" height="1" fill="#c33206"/><rect x="37" y="47" width="5" height="1" fill="#c33206"/><rect x="42" y="47" width="8" height="1" fill="#f03a00"/><rect x="11" y="48" width="9" height="1" fill="#f03a00"/><rect x="20" y="48" width="6" height="1" fill="#c33206"/><rect x="34" y="48" width="6" height="1" fill="#c33206"/><rect x="40" y="48" width="9" height="1" fill="#f03a00"/><rect x="12" y="49" width="9" height="1" fill="#f03a00"/><rect x="21" y="49" width="18" height="1" fill="#c33206"/><rect x="39" y="49" width="9" height="1" fill="#f03a00"/><rect x="13" y="50" width="11" height="1" fill="#f03a00"/><rect x="24" y="50" width="12" height="1" fill="#c33206"/><rect x="36" y="50" width="11" height="1" fill="#f03a00"/><rect x="14" y="51" width="32" height="1" fill="#f03a00"/><rect x="16" y="52" width="28" height="1" fill="#f03a00"/><rect x="17" y="53" width="26" height="1" fill="#f03a00"/><rect x="19" y="54" width="22" height="1" fill="#f03a00"/><rect x="21" y="55" width="18" height="1" fill="#f03a00"/><rect x="25" y="56" width="10" height="1" fill="#f03a00"/></svg>

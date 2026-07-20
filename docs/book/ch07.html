@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "chapter 07—modules and tests"
-description: "a directory is a module, one namespace across its files, canonical order per file, pub and private-by-default, and tests that are nothing but test_ constants."
+description: "a directory is a module, one namespace across its files, canonical order per file, pub and private-by-default, import across modules, and tests that are nothing but test_ constants."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">chapter 07</span>
@@ -66,7 +66,7 @@ gomen: we do not serve pocky</code></pre>
 <span class="k">fn</span> <span class="f">line</span> item qty
   qty <span class="o">*</span> (<span class="f">price</span> item) <span class="o">+</span> service
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout "matcha" 2}</span>"</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout "matcha" 2}</span>"</span>
 
 <span class="k">fn</span> <span class="f">price</span> <span class="s">"matcha"</span>
   <span class="n">600</span>

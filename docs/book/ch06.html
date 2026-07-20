@@ -61,16 +61,16 @@ extra_css: /book/book.css
   <pre><code><span class="k">fn</span> <span class="f">cheapest</span> prices
   <span class="f">sort</span> prices <span class="o">.</span> <span class="f">at</span> <span class="n">1</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   prices <span class="o">=</span> [<span class="n">520</span> <span class="n">380</span> <span class="n">450</span> <span class="n">610</span> <span class="n">290</span>]
-  low <span class="o">=</span> <span class="f">cheapest</span> prices   <span class="c"># these two share nothing:</span>
-  total <span class="o">=</span> <span class="f">sum</span> prices      <span class="c"># the compiler may run them together</span>
-  <span class="f">report</span> low total          <span class="c"># reads both, so it waits for both</span>
+  low <span class="o">=</span> <span class="f">cheapest</span> prices
+  total <span class="o">=</span> <span class="f">sum</span> prices
+  <span class="f">report</span> low total
 
 <span class="k">fn</span> <span class="f">report</span> low total
   <span class="f">print</span> <span class="s">"cheapest: <span class="i">{low}</span> yen / total: <span class="i">{total}</span> yen"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run dataflow.kso</div>
+    <div class="code-panel-title">kanso play dataflow.kso</div>
     <pre><code>cheapest: 290 yen / total: 2250 yen</code></pre>
   </div>
 </div>
@@ -83,10 +83,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">join.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"steeping the sencha"</span>   <span class="c"># two bare lines: no order between them,</span>
-  <span class="f">print</span> <span class="s">"warming the cups"</span>      <span class="c"># each runs as if on its own thread</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span>            <span class="c"># the wall: runs after both settle</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"steeping the sencha"</span>
+<span class="f">print</span> <span class="s">"warming the cups"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run join.kso</div>
     <pre><code>steeping the sencha
@@ -97,10 +96,10 @@ serving</code></pre>
     <div class="code-panel-title">kanso run join.kso --plan</div>
     <pre><code>plan:
   join {
-  print "steeping the sencha"    <span class="c"># from line 2</span>
-  print "warming the cups"    <span class="c"># from line 3</span>
+  print "steeping the sencha"    <span class="c"># from line 1</span>
+  print "warming the cups"    <span class="c"># from line 2</span>
   } <span class="c"># unordered; both run</span>
-  print "serving"    <span class="c"># from line 4</span></code></pre>
+  print "serving"    <span class="c"># from line 3</span></code></pre>
   </div>
 </div>
 
@@ -114,8 +113,6 @@ serving</code></pre>
   <div class="code-panel-title">concurrency.kso</div>
   <pre><code>brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">play</span>
-
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">brew</span>
   <span class="f">roll</span> <span class="n">1</span>
@@ -127,7 +124,7 @@ serving</code></pre>
 <span class="k">fn</span> <span class="f">roll</span> i
   <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run concurrency.kso</div>
+    <div class="code-panel-title">kanso play concurrency.kso</div>
     <pre><code>brew: steeping
 roll 1: a 3
 brew: poured
@@ -141,7 +138,7 @@ roll 5: a 1</code></pre>
 <p>read the transcript against the structure. <code>brew</code> and <code>roll 1</code> are the two bare lines—the green threads. <code>brew</code> prints <code>steeping</code> and hits its <code>sleep</code>, so it parks. the scheduler turns to <code>roll 1</code>, which prints <code>a 3</code>. that first roll landed <em>during</em> the steep. then the wall: <code>&gt;&gt; roll 2</code> waits for everything above it to settle, and <code>brew</code> hasn't—so the scheduler lets the steep finish, <code>brew: poured</code> prints, and only then do rolls two through five run in sequence. the <code>--plan</code> makes the seam explicit:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">kanso run concurrency.kso --plan</div>
+  <div class="code-panel-title">kanso play concurrency.kso --plan</div>
   <pre><code>plan:
   join {
   print "brew: steeping"    <span class="c"># from line 1</span>
@@ -164,15 +161,20 @@ roll 5: a 1</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">walled.kso — a wall in front of every roll</div>
-  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <pre><code>brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">brew</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">1</span>          <span class="c"># the wall is now above roll 1 too --</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span>          <span class="c"># brew alone is the group, so every roll</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span>          <span class="c"># waits for the steep to finish</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">1</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span>
   <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">4</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span></code></pre>
+  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span>
+
+<span class="k">fn</span> <span class="f">roll</span> i
+  <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run walled.kso</div>
+    <div class="code-panel-title">kanso play walled.kso</div>
     <pre><code>brew: steeping
 brew: poured
 roll 1: a 3
@@ -204,7 +206,7 @@ roll 5: a 1</code></pre>
   <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">20</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"gyoza: flip"</span>
   <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">20</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"gyoza: plated"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">gyoza</span>
   <span class="f">ramen</span>
 
@@ -213,7 +215,7 @@ ramen <span class="o">=</span>
   <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">30</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"ramen: noodles in"</span>
   <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">30</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"ramen: bowled"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run race.kso</div>
+    <div class="code-panel-title">kanso play race.kso</div>
     <pre><code>gyoza: in the pan
 ramen: boiling
 gyoza: flip
@@ -277,10 +279,9 @@ ramen: bowled</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">accumulate.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">err</span> <span class="s">"the steep went cold"</span>
-  <span class="f">err</span> <span class="s">"the cups cracked"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <pre><code><span class="f">err</span> <span class="s">"the steep went cold"</span>
+<span class="f">err</span> <span class="s">"the cups cracked"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run accumulate.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ["the steep went cold" "the cups cracked"]</code></pre>
@@ -293,15 +294,14 @@ ramen: bowled</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">bare_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"the sum above went nowhere"</span></code></pre>
+  <pre><code><span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"the sum above went nowhere"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check bare_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
-  --&gt; bare_check.kso:2:5
-   2 |   1 + 1
-           ^</code></pre>
+  --&gt; bare_check.kso:1:3
+   1 | 1 + 1
+         ^</code></pre>
   </div>
 </div>
 
@@ -313,7 +313,7 @@ ramen: bowled</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">dice.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">roll</span> <span class="n">1</span>
   <span class="f">roll</span> <span class="n">2</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"both dice have landed"</span>
@@ -321,7 +321,7 @@ ramen: bowled</code></pre>
 <span class="k">fn</span> <span class="f">roll</span> i
   <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run dice.kso</div>
+    <div class="code-panel-title">kanso play dice.kso</div>
     <pre><code>roll 1: a 3
 roll 2: a 1
 both dice have landed</code></pre>
