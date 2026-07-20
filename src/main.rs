@@ -34,7 +34,10 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
-            match compile(&file, &source, require_main) {
+            match match require_main {
+                true => kanso::compile_entry(&file, &source),
+                false => compile(&file, &source, require_main),
+            } {
                 Ok(program) => (program, source),
                 Err(rendered) => {
                     eprint!("{}", diag::paint(&rendered));

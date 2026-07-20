@@ -2,6 +2,91 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use crate::lexer::{Lexed, Line, StrPart, Tok};
 
+/// An entry file: imports, then statements — the body IS the program. The
+/// statements synthesize an internal `main` constant so every later stage
+/// works unchanged; no user writes the name.
+pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
+    let mut diags = Vec::new();
+    let mut imports: Vec<Import> = Vec::new();
+    let mut first_stmt = None;
+    for (idx, line) in lexed.lines.iter().enumerate() {
+        if line.indent != 0 {
+            continue;
+        }
+        match line.tokens.first() {
+            Some((Tok::KwImport, _)) => {
+                if first_stmt.is_some() {
+                    diags.push(Diagnostic::new(
+                        "formatting",
+                        "imports open the file, before any statement".to_string(),
+                        head_span(line),
+                    ));
+                }
+                match parse_import(line, &[]) {
+                    Ok(import) => {
+                        if let Some(prev) = imports.last() {
+                            if prev.path >= import.path {
+                                let msg = match prev.path == import.path {
+                                    true => format!("duplicate import \"{}\"", import.path),
+                                    false => "imports appear in alphabetical order".to_string(),
+                                };
+                                diags.push(Diagnostic::new("formatting", msg, import.span));
+                            }
+                        }
+                        imports.push(import);
+                    }
+                    Err(d) => diags.push(d),
+                }
+            }
+            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _)) => {
+                diags.push(Diagnostic::new(
+                    "syntax",
+                    "an entry file holds statements only; definitions live in \
+                     library files"
+                        .to_string(),
+                    head_span(line),
+                ));
+            }
+            _ => {
+                if first_stmt.is_none() {
+                    first_stmt = Some(idx);
+                }
+            }
+        }
+    }
+    let stmt_lines: &[Line] = match first_stmt {
+        Some(start) => &lexed.lines[start..],
+        None => &[],
+    };
+    if stmt_lines.is_empty() {
+        diags.push(Diagnostic::new(
+            "syntax",
+            "an entry file needs at least one statement".to_string(),
+            Span { line: 1, col: 1 },
+        ));
+    }
+    let body = match parse_body(stmt_lines) {
+        Ok(body) => body,
+        Err(d) => {
+            diags.push(d);
+            Vec::new()
+        }
+    };
+    if !diags.is_empty() {
+        return Err(diags);
+    }
+    let span = stmt_lines.first().map(head_span).unwrap_or(Span { line: 1, col: 1 });
+    let main = FnDecl {
+        name: "main".to_string(),
+        params: Vec::new(),
+        body,
+        span,
+        is_pub: false,
+        file: String::new(),
+    };
+    Ok(Program { fns: vec![main], types: Vec::new(), imports })
+}
+
 pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut fns = Vec::new();

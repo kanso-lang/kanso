@@ -27,6 +27,60 @@ pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Prog
     }
 }
 
+/// Compile a single file as an entry: its statements are the program.
+pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
+    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    let mut program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    stamp_file(&mut program, file);
+    let base = std::path::Path::new(file)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
+    let import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
+    let mut visited = std::collections::HashSet::new();
+    let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
+    let mut diags = Vec::new();
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            private_uses(stmt, &exports, &mut diags);
+        }
+    }
+    if !diags.is_empty() {
+        return Err(diag::render(&diags, file, source));
+    }
+    // per-file rules for the entry against the dependency globals, then the
+    // merged checks — never file-order rules across module boundaries
+    let mut all_markers = check::marker_names(&program);
+    all_markers.extend(check::marker_names(&dep_program));
+    let mut all_type_names: std::collections::HashSet<String> =
+        program.types.iter().map(|t| t.name.clone()).collect();
+    all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
+    let extern_globals = check::declared_names(&dep_program);
+    let mut used = std::collections::HashSet::new();
+    let mut diags = check::resolve_markers(&mut program, &all_markers);
+    diags.extend(check::check_typesets(&program, &all_type_names));
+    diags.extend(check::check_file(&program, &extern_globals, &mut used));
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    if !diags.is_empty() {
+        return Err(diag::render(&diags, file, source));
+    }
+    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
+    merged.types.extend(dep_program.types);
+    merged.fns.extend(dep_program.fns);
+    merged.types.extend(program.types);
+    merged.fns.extend(program.fns);
+    let mut merged_diags = check::check_merged(&merged, true);
+    check::check_unused_private(&merged, &used, &mut merged_diags);
+    let merged_diags: Vec<_> = merged_diags
+        .into_iter()
+        .filter(|d| d.kind != "unused")
+        .collect();
+    match merged_diags.is_empty() {
+        true => Ok(merged),
+        false => Err(diag::render(&merged_diags, file, source)),
+    }
+}
+
 /// Err origins name the function and the file it lives in; the file is
 /// per-declaration so it survives multi-file module merging.
 fn stamp_file(program: &mut ast::Program, file: &str) {
@@ -187,6 +241,24 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet
     }
 }
 
+/// Load and qualify every imported module, recursively.
+fn load_dependencies(
+    base: &std::path::Path,
+    import_paths: &[String],
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+) -> Result<(ast::Program, std::collections::HashMap<String, bool>), String> {
+    let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
+    let mut exports = std::collections::HashMap::new();
+    for path in import_paths {
+        let dep_dir = resolve_import(base, path)?;
+        let mut dep = compile_module_inner(&dep_dir, false, visited)?;
+        qualify(&mut dep, short_name(path), &mut exports);
+        dep_program.types.extend(dep.types);
+        dep_program.fns.extend(dep.fns);
+    }
+    Ok((dep_program, exports))
+}
+
 /// A qualified reference to a name its module did not mark pub.
 fn private_uses(
     stmt: &ast::Stmt,
@@ -276,14 +348,16 @@ fn compile_module_inner(
         let source = std::fs::read_to_string(path)
             .map_err(|io| format!("error: cannot read {file}: {io}\n"))?;
         let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, &file, &source))?;
-        let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, &file, &source))?;
+        let is_entry = path.file_name().is_some_and(|n| n == "main.kso");
+        let mut program = match is_entry {
+            true => parser::parse_entry(&lexed).map_err(|d| diag::render(&d, &file, &source))?,
+            false => parser::parse(&lexed).map_err(|d| diag::render(&d, &file, &source))?,
+        };
         stamp_file(&mut program, &file);
         parsed.push((file, source, program));
     }
     // the module's imports: the union across files, resolved and loaded
     // recursively, each dependency's names qualified by its short name
-    let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
-    let mut exports: std::collections::HashMap<String, bool> = std::collections::HashMap::new();
     let mut import_paths: Vec<String> = Vec::new();
     for (_, _, program) in &parsed {
         for import in &program.imports {
@@ -292,13 +366,7 @@ fn compile_module_inner(
             }
         }
     }
-    for path in &import_paths {
-        let dep_dir = resolve_import(dir, path)?;
-        let mut dep = compile_module_inner(&dep_dir, false, visited)?;
-        qualify(&mut dep, short_name(path), &mut exports);
-        dep_program.types.extend(dep.types);
-        dep_program.fns.extend(dep.fns);
-    }
+    let (dep_program, exports) = load_dependencies(dir, &import_paths, visited)?;
     let mut all_names = std::collections::HashSet::new();
     let mut all_markers = std::collections::HashSet::new();
     let mut all_type_names = std::collections::HashSet::new();
