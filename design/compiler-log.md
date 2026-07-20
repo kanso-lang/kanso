@@ -327,3 +327,39 @@ truthed against the tree today:
 (This goal was apparently stated last night and lost to a session usage
 limit before it landed anywhere durable — hence this entry. If it's ever
 unclear whether a directive got recorded: it goes here.)
+
+---
+
+## 2026-07-19 — KHeader deleted (merged); beat report built; THE VSE FINDING
+
+**Merged (#48):** per-object header deleted. allocs unchanged 14,799,465;
+alloc_bytes −19.0% (790,444,432 → 640,242,688); arena_blocks 6 → 5; peak RSS
+6.8 → 5.8&nbsp;mb — kanso now under serde_json (6.7) on the memory column too.
+Speed unchanged. Docs + book samples track the new numbers.
+
+**Built:** KANSO_BEAT_REPORT=1 — beat.rs refactored around one classifier
+(Verdict: Beat / PureLoop / ArgCrosses / OutsideTailCall / UsedAsValue);
+`report` prints every self-loop's fate. jsonbench sanity: _bench/3 beats,
+scanners are pure loops. The analysis is unchanged; all suites green.
+
+**THE FINDING (measure-first paid off):** on VSE — the real workload —
+**beat_iters=0. The heartbeat never fires.** 155 arena blocks, 158&nbsp;MB
+peak RSS, pure grow-only: all 1000 trials' scratch retained to exit. Both
+VSE loops reject as OutsideTailCall: they are mutual-recursion plumbing
+(fold → step → fold). The memo's assumption that survivors were next is
+WRONG for real code; the blocker is **loop-cluster coverage**:
+
+- **[OPEN — next rung, slice 3] cluster beats**: bracket a tail-call SCC
+  with a single plain-call entry, not just self-loops. Soundness: at every
+  in-cluster tail edge, each arg must be scalar or transitively
+  entry-threaded (a threaded-slot fixpoint over the SCC's edges — a bare
+  param allocated mid-cycle is NOT entry-threaded; rewind would free it
+  under a live register). Extend the report first, then codegen.
+- **[OPEN — slice 4] the fold-state shelf**: expect VSE's fold accumulator
+  to then reject as ArgCrosses — the acc IS the four-construct model's
+  "state is a fold" case. Give the one threaded accumulator slot survivor
+  treatment (shelf/copy-across) and the cluster rewinds around it. This is
+  the memo's three-way split, scoped to the slot that matters on real code.
+- Prediction to verify when both land: VSE peak RSS collapses ~158 MB →
+  single-digit MB (one trial's scratch), the same flat-line the json
+  gauntlet shows. That is the memory-frontier demo on a real program.
