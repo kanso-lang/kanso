@@ -35,50 +35,131 @@ use std::collections::HashSet;
 const SCALAR: Set = INT | FLOAT | BOOL;
 const THREADED: Set = SCALAR | STR | BYTES;
 
+/// One self-recursive group's fate under the analysis. `Beat` is the only
+/// verdict codegen acts on; the others exist so `report` can say why a loop
+/// keeps the grow-only arena — the data that decides what the survivor
+/// machinery is worth on a real program.
+#[derive(PartialEq)]
+pub enum Verdict {
+    /// Rewinds between iterations.
+    Beat,
+    /// Eligible, but no iteration allocates — bracketing would tax a hot
+    /// loop for nothing.
+    PureLoop,
+    /// Argument `position` may carry a heap value across the iteration
+    /// boundary — the case the three-way escape split would reclaim.
+    ArgCrosses { position: usize },
+    /// Another group tail-calls it: an entry the bracketing cannot see.
+    OutsideTailCall,
+    /// Its name is used as a function value: an unbracketed entry.
+    UsedAsValue,
+}
+
 pub fn beat_loops(program: &Program, inference: &infer::Inference) -> HashSet<(String, usize)> {
-    let mut out = HashSet::new();
-    let mut groups: HashSet<(String, usize)> = HashSet::new();
-    for d in &program.fns {
-        groups.insert((d.name.clone(), d.params.len()));
-    }
-    'group: for (name, arity) in &groups {
-        let mut has_self_tail = false;
-        for (di, decl) in program.fns.iter().enumerate() {
-            let in_group = decl.name == *name && decl.params.len() == *arity;
-            for tail in tail_exprs(decl.body.last()) {
-                let Expr::App { head, args, piped: false, .. } = tail else { continue };
-                let Expr::Ident(callee, _) = head.as_ref() else { continue };
-                if callee != name || args.len() != *arity {
-                    continue;
+    classify_all(program, inference)
+        .into_iter()
+        .filter(|(_, _, v)| *v == Verdict::Beat)
+        .map(|(name, arity, _)| (name, arity))
+        .collect()
+}
+
+/// Every self-recursive group's verdict, one line each, sorted — printed by
+/// the toolchain under KANSO_BEAT_REPORT so a real workload can be measured
+/// before the next rung is built.
+pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
+    let mut rows: Vec<(String, usize, Verdict)> = classify_all(program, inference);
+    rows.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
+    rows.iter()
+        .map(|(name, arity, v)| {
+            let fate = match v {
+                Verdict::Beat => "beat: rewinds every iteration".to_string(),
+                Verdict::PureLoop => "pure loop: no iteration allocates, nothing to rewind".to_string(),
+                Verdict::ArgCrosses { position } => format!(
+                    "grow-only: argument {} may carry heap across the iteration",
+                    position + 1
+                ),
+                Verdict::OutsideTailCall => {
+                    "grow-only: another group tail-calls it (unbracketed entry)".to_string()
                 }
-                if !in_group {
-                    // an outside group tail-calls this one: entry without a push
-                    continue 'group;
+                Verdict::UsedAsValue => {
+                    "grow-only: used as a function value (unbracketed entry)".to_string()
                 }
-                has_self_tail = true;
-                for (i, arg) in args.iter().enumerate() {
-                    if !arg_ok(program, inference, decl, di, name, *arity, i, arg) {
-                        continue 'group;
-                    }
+            };
+            format!("{name}/{arity}: {fate}")
+        })
+        .collect()
+}
+
+fn classify_all(program: &Program, inference: &infer::Inference) -> Vec<(String, usize, Verdict)> {
+    let allocating = alloc_groups(program);
+    let mut groups: Vec<(String, usize)> = {
+        let set: HashSet<(String, usize)> = program
+            .fns
+            .iter()
+            .map(|d| (d.name.clone(), d.params.len()))
+            .collect();
+        set.into_iter().collect()
+    };
+    groups.sort();
+    groups
+        .into_iter()
+        .filter_map(|(name, arity)| {
+            classify(program, inference, &allocating, &name, arity)
+                .map(|v| (name, arity, v))
+        })
+        .collect()
+}
+
+/// The verdict for one group, or None when it has no self-tail-call (not a
+/// loop, nothing to say).
+fn classify(
+    program: &Program,
+    inference: &infer::Inference,
+    allocating: &HashSet<&str>,
+    name: &str,
+    arity: usize,
+) -> Option<Verdict> {
+    let mut has_self_tail = false;
+    let mut outside_tail = false;
+    let mut arg_crosses: Option<usize> = None;
+    for (di, decl) in program.fns.iter().enumerate() {
+        let in_group = decl.name == name && decl.params.len() == arity;
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            if !in_group {
+                outside_tail = true;
+                continue;
+            }
+            has_self_tail = true;
+            for (i, arg) in args.iter().enumerate() {
+                if arg_crosses.is_none()
+                    && !arg_ok(program, inference, decl, di, name, arity, i, arg)
+                {
+                    arg_crosses = Some(i);
                 }
             }
         }
-        if !has_self_tail {
-            continue;
-        }
-        if used_as_value(program, name) {
-            continue;
-        }
-        // Profitability: rewinding is worth the push/iter/pop bracketing only
-        // when an iteration actually allocates. A pure byte scanner (compare,
-        // add, recurse through pure helpers) is eligible but pointless —
-        // bracketing it would tax the hottest loops for nothing.
-        if !alloc_groups(program).contains(name.as_str()) {
-            continue;
-        }
-        out.insert((name.clone(), *arity));
     }
-    out
+    if !has_self_tail {
+        return None;
+    }
+    if outside_tail {
+        return Some(Verdict::OutsideTailCall);
+    }
+    if let Some(position) = arg_crosses {
+        return Some(Verdict::ArgCrosses { position });
+    }
+    if used_as_value(program, name) {
+        return Some(Verdict::UsedAsValue);
+    }
+    if !allocating.contains(name) {
+        return Some(Verdict::PureLoop);
+    }
+    Some(Verdict::Beat)
 }
 
 /// Names of groups whose evaluation may allocate, transitively: seeded by
