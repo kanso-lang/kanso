@@ -196,10 +196,8 @@ fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &std::collections::H
                 rewrite_pattern(f, qual, owned);
             }
         }
-        ast::Pattern::Annotated { ty, .. } => {
-            if owned.contains(ty.as_str()) {
-                *ty = format!("{qual}/{ty}");
-            }
+        ast::Pattern::Annotated { ty, .. } if owned.contains(ty.as_str()) => {
+            *ty = format!("{qual}/{ty}");
         }
         _ => {}
     }
