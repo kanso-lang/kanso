@@ -1530,6 +1530,19 @@ impl<'a> Backend<'a> {
                 if let Expr::Lambda { params, body, .. } = head.as_ref() {
                     if params.len() == 1 && args.len() == 1 {
                         let value = self.emit_expr(f, &args[0])?;
+                        // on a description the pipe is the executor's bind,
+                        // not an application — inline only when inference
+                        // proves the value cannot be one
+                        if f.set_of(&value) & crate::infer::DESC != 0 {
+                            let t = f.tmp();
+                            let closure = self.emit_expr(f, head)?;
+                            f.line(&format!(
+                                "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
+                            ));
+                            f.record(&t, TOP);
+                            self.emit_ret(f, &t);
+                            return Ok(());
+                        }
                         let ok = inline_not_failure(f, &value);
                         let bail = f.label();
                         let cont = f.label();
