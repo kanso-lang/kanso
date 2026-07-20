@@ -1522,6 +1522,38 @@ impl<'a> Backend<'a> {
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
         if let Expr::App { head, args, piped, .. } = expr {
             if *piped && !args.is_empty() {
+                // a tail pipe into a literal lambda is the bind, inlined:
+                // guard the failure exactly as k_maybe_bind would, bind the
+                // parameter, and the lambda body becomes this function's own
+                // tail — a self-call there is a real musttail, so beats and
+                // the carry apply through the ordinary machinery
+                if let Expr::Lambda { params, body, .. } = head.as_ref() {
+                    if params.len() == 1 && args.len() == 1 {
+                        let value = self.emit_expr(f, &args[0])?;
+                        // on a description the pipe is the executor's bind,
+                        // not an application — inline only when inference
+                        // proves the value cannot be one
+                        if f.set_of(&value) & crate::infer::DESC != 0 {
+                            let t = f.tmp();
+                            let closure = self.emit_expr(f, head)?;
+                            f.line(&format!(
+                                "{t} = call %KValue @k_maybe_bind(%KValue {value}, %KValue {closure})"
+                            ));
+                            f.record(&t, TOP);
+                            self.emit_ret(f, &t);
+                            return Ok(());
+                        }
+                        let ok = inline_not_failure(f, &value);
+                        let bail = f.label();
+                        let cont = f.label();
+                        f.line(&format!("br i1 {ok}, label %{cont}, label %{bail}"));
+                        f.start_block(&bail);
+                        self.emit_ret(f, &value);
+                        f.start_block(&cont);
+                        f.bind(&params[0].0, &value);
+                        return self.emit_tail(f, body);
+                    }
+                }
                 let value = self.emit_expr(f, expr)?;
                 self.emit_ret(f, &value);
                 return Ok(());

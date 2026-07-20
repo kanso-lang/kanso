@@ -529,3 +529,23 @@ Session verdict: every gate fired correctly today — x86 CI caught clippy
 drift, branch protection refused a premature merge, the book rule caught
 the quadratic carry, the cost golden held throughout. Measure first, let
 real code pick the rung, write the soundness argument before the code.
+
+---
+
+## 2026-07-20 — pipe inlining SHIPS (desc-gated); the final rung is cluster-carry
+
+The inline broke effects on first cut — concurrency.kso went silent, because
+on a DESCRIPTION the pipe is the executor's bind, not an application. The
+fix: inline only when inference proves the piped value cannot be a desc
+(set & DESC == 0); otherwise the k_maybe_bind path stands. All suites,
+goldens, book samples green; VSE output exact.
+
+What it bought: tail pipes into literal lambdas are now real musttails
+(constant stack where pipe recursion was O(depth)) and visible to the beat
+analysis. What it revealed: VSE's outer loop is a TWO-GROUP CYCLE
+(trials ↔ _with_voters via pipe-lambdas) whose accumulator crosses on
+cluster edges — and the carry only exists for self-loops. **[OPEN — the
+rung that decides the RSS prediction] cluster-carry composition:** per-edge
+carried positions on in-cluster tail edges, same staging machinery,
+growing-accumulator gate per edge. cloud's push-acc loop is correctly
+gated as growing; the trials tally is bounded and should carry.

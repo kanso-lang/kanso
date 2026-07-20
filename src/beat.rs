@@ -712,11 +712,21 @@ fn tail_exprs(last: Option<&Stmt>) -> Vec<&Expr> {
 }
 
 fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
-    if let Expr::App { head, args, piped: false, .. } = e {
-        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 {
+    if let Expr::App { head, args, piped, .. } = e {
+        if !piped && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 {
             expand_tail(&args[1], out);
             expand_tail(&args[2], out);
             return;
+        }
+        // a tail pipe into a literal lambda inlines (codegen emits the
+        // lambda body as the caller's own tail), so its tails are ours
+        if *piped && args.len() == 1 {
+            if let Expr::Lambda { params, body, .. } = head.as_ref() {
+                if params.len() == 1 {
+                    expand_tail(body, out);
+                    return;
+                }
+            }
         }
     }
     out.push(e);
