@@ -1443,10 +1443,13 @@ impl<'a> Backend<'a> {
                     return Ok(t);
                 }
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
+                    let callee_ret = self.ret_ty(name, 0);
                     let t = f.tmp();
-                    f.line(&format!("{t} = call tailcc %KValue @{}()", dsym(name, 0)));
-                    let ret = self.group_return_set(name, 0);
-                    f.record(&t, ret);
+                    f.line(&format!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
+                    if callee_ret == "%parsed" {
+                        f.record_parsed(&t);
+                    }
+                    f.record(&t, self.group_return_set(name, 0));
                     return Ok(t);
                 }
                 let arities: Vec<usize> = {

@@ -1,0 +1,10 @@
+type user
+  age:int
+  name:string
+
+fn age_of (user age _)
+  age
+
+clay = user 44 "clay"
+
+pub play = print "{age_of clay}"
