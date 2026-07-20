@@ -1,0 +1,1 @@
+pub play = print "{utf8 (bytes "mochi")} has {length (chars "héllo")} chars"
