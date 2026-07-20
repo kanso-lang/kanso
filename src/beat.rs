@@ -30,7 +30,7 @@
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
 use crate::infer::{self, Set, BOOL, BYTES, FAIL, FLOAT, INT, STR};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const SCALAR: Set = INT | FLOAT | BOOL;
 const THREADED: Set = SCALAR | STR | BYTES;
@@ -55,19 +55,221 @@ pub enum Verdict {
     UsedAsValue,
 }
 
-pub fn beat_loops(program: &Program, inference: &infer::Inference) -> HashSet<(String, usize)> {
-    classify_all(program, inference)
-        .into_iter()
-        .filter(|(_, _, v)| *v == Verdict::Beat)
-        .map(|(name, arity, _)| (name, arity))
-        .collect()
+/// Every beat group, mapped to its cluster id. A self-loop is a cluster of
+/// one; a mutual-recursion cluster shares one id across its members, and
+/// codegen rewinds only on tail calls that stay inside one cluster.
+pub fn beat_loops(program: &Program, inference: &infer::Inference) -> HashMap<(String, usize), usize> {
+    let mut out = HashMap::new();
+    let mut next = 0;
+    for (name, arity, v) in classify_all(program, inference) {
+        if v == Verdict::Beat {
+            out.insert((name, arity), next);
+            next += 1;
+        }
+    }
+    for cluster in eligible_clusters(program, inference) {
+        for member in cluster {
+            out.insert(member, next);
+        }
+        next += 1;
+    }
+    out
+}
+
+/// Multi-group tail-call cycles that may rewind: every entry from outside is
+/// a plain call, no member is used as a value, some member allocates, and at
+/// every tail edge inside the cluster each argument is a pure scalar in the
+/// callee's slot or a bare parameter threaded hand-to-hand from the cluster's
+/// entry. A parameter allocated mid-cycle is not entry-threaded — rewinding
+/// would free it under a live register — so threading is a fixpoint: a slot
+/// keeps its threaded standing only while every edge feeding it passes a
+/// bare parameter from a slot that kept its own.
+fn eligible_clusters(
+    program: &Program,
+    inference: &infer::Inference,
+) -> Vec<Vec<(String, usize)>> {
+    let groups: Vec<(String, usize)> = {
+        let set: HashSet<(String, usize)> = program
+            .fns
+            .iter()
+            .map(|d| (d.name.clone(), d.params.len()))
+            .collect();
+        let mut v: Vec<_> = set.into_iter().collect();
+        v.sort();
+        v
+    };
+    let index: HashMap<&(String, usize), usize> =
+        groups.iter().enumerate().map(|(i, g)| (g, i)).collect();
+    // tail edges: (caller group, callee group, decl index, args)
+    let mut edges: Vec<(usize, usize, usize, &Vec<Expr>)> = Vec::new();
+    for (di, decl) in program.fns.iter().enumerate() {
+        let from = index[&(decl.name.clone(), decl.params.len())];
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            if let Some(&to) = index.get(&(callee.clone(), args.len())) {
+                edges.push((from, to, di, args));
+            }
+        }
+    }
+    let sccs = tail_sccs(groups.len(), &edges);
+    let allocating = alloc_groups(program);
+    let mut out = Vec::new();
+    for scc in sccs {
+        if scc.len() < 2 {
+            continue; // self-loops stay on the proven path
+        }
+        let members: HashSet<usize> = scc.iter().copied().collect();
+        let tail_entry = edges
+            .iter()
+            .any(|(from, to, _, _)| members.contains(to) && !members.contains(from));
+        if tail_entry {
+            continue;
+        }
+        if scc.iter().any(|&g| used_as_value(program, &groups[g].0)) {
+            continue;
+        }
+        if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
+            continue;
+        }
+        if cluster_edges_ok(program, inference, &groups, &members, &edges) {
+            out.push(scc.iter().map(|&g| groups[g].clone()).collect());
+        }
+    }
+    out
+}
+
+/// The threaded-slot fixpoint plus the per-edge argument check.
+fn cluster_edges_ok(
+    program: &Program,
+    inference: &infer::Inference,
+    groups: &[(String, usize)],
+    members: &HashSet<usize>,
+    edges: &[(usize, usize, usize, &Vec<Expr>)],
+) -> bool {
+    let inner: Vec<&(usize, usize, usize, &Vec<Expr>)> = edges
+        .iter()
+        .filter(|(from, to, _, _)| members.contains(from) && members.contains(to))
+        .collect();
+    let slot_set = |g: usize, i: usize| {
+        let (name, arity) = &groups[g];
+        group_param_set(program, inference, name, *arity, i)
+    };
+    // start: every slot whose values are all immutable-payload is a candidate
+    let mut threaded: HashSet<(usize, usize)> = HashSet::new();
+    for &g in members {
+        for i in 0..groups[g].1 {
+            if slot_set(g, i) & !FAIL & !THREADED == 0 {
+                threaded.insert((g, i));
+            }
+        }
+    }
+    // knock out any slot fed by something other than a still-threaded bare param
+    loop {
+        let mut changed = false;
+        for &&(from, to, di, args) in &inner {
+            let decl = &program.fns[di];
+            for (i, arg) in args.iter().enumerate() {
+                if !threaded.contains(&(to, i)) {
+                    continue;
+                }
+                let fed_by_threaded = match arg {
+                    Expr::Ident(p, _) => decl
+                        .params
+                        .iter()
+                        .position(|pat| matches!(pat, Pattern::Var(n, _) if n == p))
+                        .is_some_and(|j| threaded.contains(&(from, j))),
+                    _ => false,
+                };
+                if !fed_by_threaded && threaded.remove(&(to, i)) {
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    // every edge argument lands in a scalar slot or a surviving threaded slot
+    inner.iter().all(|(_, to, _, args)| {
+        (0..args.len()).all(|i| {
+            slot_set(*to, i) & !FAIL & !SCALAR == 0 || threaded.contains(&(*to, i))
+        })
+    })
+}
+
+/// Strongly connected components of the tail-call graph (iterative Tarjan),
+/// returned only for real cycles of two or more groups.
+fn tail_sccs(n: usize, edges: &[(usize, usize, usize, &Vec<Expr>)]) -> Vec<Vec<usize>> {
+    let mut adj = vec![Vec::new(); n];
+    for &(from, to, _, _) in edges {
+        adj[from].push(to);
+    }
+    let mut index = vec![usize::MAX; n];
+    let mut low = vec![0usize; n];
+    let mut on_stack = vec![false; n];
+    let mut stack = Vec::new();
+    let mut counter = 0;
+    let mut out = Vec::new();
+    for root in 0..n {
+        if index[root] != usize::MAX {
+            continue;
+        }
+        // (node, next child position)
+        let mut work = vec![(root, 0usize)];
+        while let Some(&mut (v, ref mut ci)) = work.last_mut() {
+            if *ci == 0 {
+                index[v] = counter;
+                low[v] = counter;
+                counter += 1;
+                stack.push(v);
+                on_stack[v] = true;
+            }
+            if *ci < adj[v].len() {
+                let w = adj[v][*ci];
+                *ci += 1;
+                if index[w] == usize::MAX {
+                    work.push((w, 0));
+                } else if on_stack[w] {
+                    low[v] = low[v].min(index[w]);
+                }
+            } else {
+                work.pop();
+                if let Some(&(parent, _)) = work.last() {
+                    low[parent] = low[parent].min(low[v]);
+                }
+                if low[v] == index[v] {
+                    let mut scc = Vec::new();
+                    loop {
+                        let w = stack.pop().expect("tarjan stack");
+                        on_stack[w] = false;
+                        scc.push(w);
+                        if w == v {
+                            break;
+                        }
+                    }
+                    out.push(scc);
+                }
+            }
+        }
+    }
+    out.retain(|scc| scc.len() >= 2);
+    out
 }
 
 /// Every self-recursive group's verdict, one line each, sorted — printed by
 /// the toolchain under KANSO_BEAT_REPORT so a real workload can be measured
 /// before the next rung is built.
 pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
-    let mut rows: Vec<(String, usize, Verdict)> = classify_all(program, inference);
+    let clustered: HashSet<(String, usize)> =
+        eligible_clusters(program, inference).into_iter().flatten().collect();
+    let mut rows: Vec<(String, usize, Verdict)> = classify_all(program, inference)
+        .into_iter()
+        .filter(|(name, arity, _)| !clustered.contains(&(name.clone(), *arity)))
+        .collect();
+    for (name, arity) in &clustered {
+        rows.push((name.clone(), *arity, Verdict::Beat));
+    }
     rows.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
     rows.iter()
         .map(|(name, arity, v)| {
@@ -352,9 +554,10 @@ mod tests {
     use crate::infer;
 
     fn loops_of(src: &str) -> std::collections::HashSet<(String, usize)> {
+        // the tests assert membership; the cluster ids are irrelevant here
         let program = crate::compile("test.kso", src, true).unwrap();
         let inference = infer::infer(&program);
-        beat_loops(&program, &inference)
+        beat_loops(&program, &inference).into_keys().collect()
     }
 
     #[test]

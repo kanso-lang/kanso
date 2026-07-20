@@ -363,3 +363,32 @@ WRONG for real code; the blocker is **loop-cluster coverage**:
 - Prediction to verify when both land: VSE peak RSS collapses ~158 MB →
   single-digit MB (one trial's scratch), the same flat-line the json
   gauntlet shows. That is the memory-frontier demo on a real program.
+
+---
+
+## 2026-07-19 — cluster beats built; VSE still grow-only; the REAL two blockers
+
+Cluster analysis landed (tail-call SCCs via Tarjan; threaded-slot fixpoint so
+a param allocated mid-cycle can never thread; entries must be plain calls;
+codegen keys iter on cluster identity). All suites green; jsonbench golden
+unchanged (self-loop path untouched). **But VSE: still beat_iters=0** — the
+report shows why, and it is not mutual recursion:
+
+- **Blocker 1 — tail ENTRY, not cycle:** `fold` (acyclic) tail-calls into
+  `_fold_at`'s self-loop. An SCC never forms; the loop rejects as
+  OutsideTailCall. **[OPEN — next] entry demotion:** when every tail-entry
+  edge A→B comes from a group A in no tail cycle, demote those calls to
+  plain calls (one bounded frame each; stack safety intact because A is
+  acyclic) and B brackets normally. This unlocks the whole enumerable
+  plumbing shape.
+- **Blocker 2 — THREADED excludes list/closure:** `_fold_at coll f acc i`
+  threads a list and a closure hand-to-hand; both are excluded today (the
+  map memoization hazard generalized). A bare, never-rebound entry-threaded
+  CLOSURE or REC is sound (no lazy internal mutation; captured pointers are
+  below the mark by construction). LIST needs litigation (shared-buffer
+  growth is about push, not threading — but prove it). **[OPEN] extend the
+  entry-threaded rule to closure/rec after an adversarial review; list only
+  with a written soundness argument.**
+- Prediction stands: with both, VSE collapses from 155 blocks / 158 MB
+  grow-only to single-digit MB. Then the fold accumulator (acc) becomes the
+  live ArgCrosses case and the shelf work begins on real data.

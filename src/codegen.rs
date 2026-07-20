@@ -216,7 +216,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.
     let mut beat = crate::beat::beat_loops(program, &inference);
-    beat.retain(|(n, a)| escape.returns_ty(n, *a).is_none());
+    beat.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
     let mut backend = Backend {
         program,
         inference,
@@ -240,7 +240,7 @@ struct Backend<'a> {
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
-    beat: std::collections::HashSet<(String, usize)>,
+    beat: std::collections::HashMap<(String, usize), usize>,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -1570,7 +1570,11 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, n);
                     let t = f.tmp();
                     if callee_ret == f.ret_ty {
-                        if *name == f.group && n == f.arity && self.beat.contains(&(name.clone(), n)) {
+                        if self
+                            .beat
+                            .get(&(name.clone(), n))
+                            .is_some_and(|id| Some(id) == self.beat.get(&(f.group.clone(), f.arity)))
+                        {
                             // a proven beat loop: everything this iteration
                             // allocated is dead; rewind to the entry mark
                             f.line("call void @k_beat_iter()");
@@ -2077,7 +2081,7 @@ impl<'a> Backend<'a> {
                 .map(|(i, e)| self.call_arg(f, name, n, i, e))
                 .collect();
             let callee_ret = self.ret_ty(name, n);
-            let beat_entry = self.beat.contains(&(name.clone(), n));
+            let beat_entry = self.beat.contains_key(&(name.clone(), n));
             if beat_entry {
                 // entering a beat loop: mark the frontier; args are already
                 // evaluated, so they live below the mark
