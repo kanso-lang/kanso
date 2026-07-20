@@ -252,7 +252,7 @@ struct Backend<'a> {
     interned: HashMap<Vec<u8>, String>,
     body: String,
     lift_counter: usize,
-    fn_value_wrappers: Vec<String>,
+    fn_value_wrappers: Vec<(String, usize)>,
 }
 
 struct FnEmit {
@@ -522,6 +522,17 @@ impl<'a> Backend<'a> {
         }
     }
 
+    /// A group we can hand out as a first-class value through a `w_` wrapper: a
+    /// `%KValue` return and no by-value or byte-discriminated parameters, which
+    /// the generic wrapper does not know how to convert.
+    fn simple_fn_value(&self, name: &str, arity: usize) -> bool {
+        self.ret_ty(name, arity) == "%KValue"
+            && (0..arity).all(|i| {
+                !self.is_byte_disc(name, arity, i)
+                    && self.escape.carries_ty(name, arity, i).is_none()
+            })
+    }
+
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
         self.emit_type_fields();
@@ -546,19 +557,26 @@ impl<'a> Backend<'a> {
         self.fn_value_wrappers.sort();
         self.fn_value_wrappers.dedup();
         let wrappers = self.fn_value_wrappers.clone();
-        for name in &wrappers {
-            let sym1 = dsym(name, 1);
-            let call = if self.unboxed_param(name, 1, 0) {
-                format!(
-                    "  %p = extractvalue %KValue %a0, 1\n  %r = call tailcc %KValue \
-                     @{sym1}(i64 %p)\n"
-                )
-            } else {
-                format!("  %r = call tailcc %KValue @{sym1}(%KValue %a0)\n")
-            };
+        for (name, arity) in &wrappers {
+            let arity = *arity;
+            let params: Vec<String> = (0..arity).map(|i| format!("%KValue %a{i}")).collect();
+            let mut conv = String::new();
+            let call_args: Vec<String> = (0..arity)
+                .map(|i| {
+                    if self.unboxed_param(name, arity, i) {
+                        let _ = writeln!(conv, "  %p{i} = extractvalue %KValue %a{i}, 1");
+                        format!("i64 %p{i}")
+                    } else {
+                        format!("%KValue %a{i}")
+                    }
+                })
+                .collect();
+            let sym = dsym(name, arity);
+            let _ = writeln!(conv, "  %r = call tailcc %KValue @{sym}({})", call_args.join(", "));
             let _ = writeln!(
                 self.body,
-                "define %KValue @w_{name}_1(%KValue %a0) {{\nentry:\n{call}  ret %KValue %r\n}}\n"
+                "define %KValue @w_{name}_{arity}({}) {{\nentry:\n{conv}  ret %KValue %r\n}}\n",
+                params.join(", ")
             );
         }
         self.body.push_str(
@@ -1461,15 +1479,20 @@ impl<'a> Backend<'a> {
                     }
                     seen
                 };
-                if arities == [1] {
-                    self.fn_value_wrappers.push(name.clone());
+                if arities.len() == 1
+                    && (1..=4).contains(&arities[0])
+                    && self.simple_fn_value(name, arities[0])
+                {
+                    let arity = arities[0];
+                    self.fn_value_wrappers.push((name.clone(), arity));
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @w_{name}_1)"));
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @w_{name}_{arity})"));
                     return Ok(t);
                 }
                 if !arities.is_empty() {
                     return Err(format!(
-                        "native backend: `{name}` as a function value needs arity 1"
+                        "native backend: `{name}` cannot be used as a function value \
+                         (only 1-4 argument functions over plain values are supported)"
                     ));
                 }
                 match name.as_str() {
