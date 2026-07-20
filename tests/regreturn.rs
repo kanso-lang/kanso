@@ -6,8 +6,9 @@
 
 use std::process::Command;
 
-fn run(source: &str) -> String {
-    let dir = std::env::temp_dir().join(format!("kanso_regreturn_{}", std::process::id()));
+fn run(name: &str, source: &str) -> String {
+    let dir =
+        std::env::temp_dir().join(format!("kanso_regreturn_{}_{name}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let path = dir.join("prog.kso");
     std::fs::write(&path, source).expect("write fixture");
@@ -28,6 +29,7 @@ fn run(source: &str) -> String {
 #[test]
 fn construction_in_tail_call_argument_reaches_the_destructuring_callee() {
     let out = run(
+        "tail",
         "type user\n  age:int\n  name:string\n\nfn foo (user age name)\n  \
          print \"{name} is age {age}\"\n\nmain = foo (user 44 \"clay\")\n",
     );
@@ -38,6 +40,7 @@ fn construction_in_tail_call_argument_reaches_the_destructuring_callee() {
 #[test]
 fn construction_bound_then_passed_reaches_the_destructuring_callee() {
     let out = run(
+        "bound",
         "type user\n  age:int\n  name:string\n\nfn foo (user age name)\n  \
          \"{name}/{age}\"\n\nmain =\n  a = foo (user 1 \"x\")\n  b = foo (user 2 \"y\")\n  \
          print \"{a} {b}\"\n",
@@ -49,6 +52,7 @@ fn construction_bound_then_passed_reaches_the_destructuring_callee() {
 #[test]
 fn string_first_type_stays_boxed_and_correct() {
     let out = run(
+        "boxed",
         "type tag\n  label:string\n  weight:int\n\nmain = show (tag \"hot\" 9)\n\n\
          fn show (tag label weight)\n  print \"{label}:{weight}\"\n",
     );
