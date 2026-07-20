@@ -1,4 +1,4 @@
-main = stdin . shout . print
+pub play = stdin . shout . print
 
 fn shout text
   "{text}!!"

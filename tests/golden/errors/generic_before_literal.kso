@@ -4,4 +4,4 @@ fn fact n
 fn fact 0
   1
 
-main = print "{fact 3}"
+pub play = print "{fact 3}"

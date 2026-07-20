@@ -1,4 +1,3 @@
-main =
-  print "steeping the sencha"
-  print "warming the cups"
-  >> print "serving"
+print "steeping the sencha"
+print "warming the cups"
+>> print "serving"

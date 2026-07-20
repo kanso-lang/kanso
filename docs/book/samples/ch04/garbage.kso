@@ -1,7 +1,7 @@
 fn announce text
   print "major version {major_of text}"
 
-main = read_file "garbage.txt" . announce
-
 fn major_of text
   to_int text
+
+pub play = read_file "garbage.txt" . announce

@@ -16,7 +16,7 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let require_main = command == "run";
+    let require_main = command == "run" || command == "play";
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
         true => match kanso::compile_module(path, require_main) {
@@ -34,9 +34,22 @@ fn main() -> ExitCode {
                     return ExitCode::from(2);
                 }
             };
-            match match require_main {
-                true => kanso::compile_entry(&file, &source),
-                false => compile(&file, &source, require_main),
+            let has_play = source.contains("pub play");
+            let has_defs = source
+                .lines()
+                .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
+            let library_verb = command == "test";
+            match match (command.as_str(), has_play, has_defs) {
+                ("play", _, _) => kanso::compile_play(&file, &source),
+                (_, true, _) if !library_verb => kanso::compile_play(&file, &source),
+                ("check", false, true) => compile(&file, &source, false),
+                (_, false, true) => Err(format!(
+                    "error: `{file}` is a library — nothing to run. give the \
+                     module a main.kso entry, or define `pub play` and use \
+                     `kanso play`\n"
+                )),
+                _ if library_verb => compile(&file, &source, false),
+                _ => kanso::compile_entry(&file, &source),
             } {
                 Ok(program) => (program, source),
                 Err(rendered) => {
@@ -70,7 +83,7 @@ fn main() -> ExitCode {
 
 fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let command = args.first()?.clone();
-    if command != "run" && command != "check" && command != "test" && command != "build" {
+    if command != "run" && command != "check" && command != "test" && command != "build" && command != "play" {
         return None;
     }
     let file = args.get(1)?.clone();

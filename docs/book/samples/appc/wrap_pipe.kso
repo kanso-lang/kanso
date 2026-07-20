@@ -1,5 +1,4 @@
-main =
-  ranked = [40 15 8 23 42 16 4 108 71 55 90 33 27 61 19 77 88 100 200]
-    . sort
-    . sum
-  print "sum of the sorted roster: {ranked}"
+ranked = [40 15 8 23 42 16 4 108 71 55 90 33 27 61 19 77 88 100 200]
+  . sort
+  . sum
+print "sum of the sorted roster: {ranked}"

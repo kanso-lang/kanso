@@ -1,3 +1,3 @@
-main = print "hi"
+print "hi"
 
 import "std/json"

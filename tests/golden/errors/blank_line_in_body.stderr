@@ -1,8 +1,4 @@
 error[formatting]: blank lines may not appear inside a body
-  --> blank_line_in_body.kso:3:1
-   3 |   print "{x}"
+  --> blank_line_in_body.kso:4:1
+   4 |   print "{x}"
        ^
-error[formatting]: an inline constant has no indented block
-  --> blank_line_in_body.kso:3:3
-   3 |   print "{x}"
-         ^

@@ -1,4 +1,8 @@
-error[formatting]: imports open the file, before any declaration
+error[formatting]: imports open the file, before any statement
+  --> import_placement.kso:3:1
+   3 | import "std/json"
+       ^
+error[syntax]: expected an expression
   --> import_placement.kso:3:1
    3 | import "std/json"
        ^

@@ -1,4 +1,4 @@
-main = print "{same 1}"
+pub play = print "{same 1}"
 
 fn same x
   x

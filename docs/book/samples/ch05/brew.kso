@@ -1,1 +1,1 @@
-main = print "brewing" >> print "steeping" >> print "pouring"
+print "brewing" >> print "steeping" >> print "pouring"

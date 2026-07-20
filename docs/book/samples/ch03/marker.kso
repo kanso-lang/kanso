@@ -6,4 +6,4 @@ fn describe null
 fn describe x
   "got {x}"
 
-main = print (describe null) >> print (describe 5)
+pub play = print (describe null) >> print (describe 5)

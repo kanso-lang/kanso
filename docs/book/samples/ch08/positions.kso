@@ -45,7 +45,7 @@ fn is_ws none
 fn is_ws _
   false
 
-main =
+pub play =
   print (show (decode_int "  42  "))
   >> print (show (decode_int "1 x"))
   >> print (show (decode_int "  7 ;"))

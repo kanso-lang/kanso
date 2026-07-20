@@ -1,4 +1,1 @@
-error[name]: a program defines `main`
-  --> no_main.kso:1:1
-   1 | fn greet name
-       ^
+error: `no_main.kso` is a library — nothing to run. give the module a main.kso entry, or define `pub play` and use `kanso play`

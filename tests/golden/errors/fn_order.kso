@@ -1,4 +1,4 @@
 fn zeta x
   x
 
-main = print "{zeta 1}"
+pub play = print "{zeta 1}"

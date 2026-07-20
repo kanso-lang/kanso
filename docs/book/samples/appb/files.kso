@@ -1,1 +1,1 @@
-main = write_file "note.txt" "one taiyaki" >> read_file "note.txt" . print
+write_file "note.txt" "one taiyaki" >> read_file "note.txt" . print

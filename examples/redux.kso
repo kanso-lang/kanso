@@ -6,9 +6,8 @@ type logger
 type withdraw
   amount:int
 
-main =
-  moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
-  play 0 moves 1 logger (print "the till opens at 0 yen")
+fn drive store actions i sub out
+  step store actions i sub out (at actions i)
 
 fn notify logger (deposit n) balance
   print "[logger] +{n} yen in -> the till holds {balance}"
@@ -16,15 +15,16 @@ fn notify logger (deposit n) balance
 fn notify logger (withdraw n) balance
   print "[logger] -{n} yen out -> the till holds {balance}"
 
-fn play store actions i sub out
-  step store actions i sub out (at actions i)
+pub play =
+  moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
+  drive 0 moves 1 logger (print "the till opens at 0 yen")
 
 fn step _ _ _ _ out none
   out >> print "the till closes"
 
 fn step store actions i sub out action
   next = update store action
-  play next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
+  drive next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
 
 fn update balance (deposit n)
   balance + n

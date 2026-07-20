@@ -4,4 +4,4 @@ type circle
 fn area (circle r)
   r * r * 3.14159
 
-main = print "area of r=2: {area (circle 2.0)}"
+pub play = print "area of r=2: {area (circle 2.0)}"

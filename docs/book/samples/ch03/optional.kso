@@ -7,7 +7,7 @@ type post
 fn headline (post _ title)
   show title
 
-main =
+pub play =
   a = post "..." "long season"
   b = post "..." missing
   print (headline a) >> print (headline b)

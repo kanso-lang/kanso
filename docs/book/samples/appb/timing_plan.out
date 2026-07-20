@@ -1,4 +1,1 @@
-plan:
-  sleep 10
-  random 6
-  . <continuation>
+usage: kanso run <file.kso> [--plan|--interp] | kanso check <file.kso> | kanso test <file.kso> | kanso build <file.kso> [--release] | kanso repl

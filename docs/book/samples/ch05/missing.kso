@@ -1,1 +1,1 @@
-main = read_file "yesterday.txt" . print
+read_file "yesterday.txt" . print

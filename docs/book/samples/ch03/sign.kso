@@ -1,4 +1,4 @@
-main =
+pub play =
   print (sign (0 - 4))
   >> print (sign 0)
   >> print (sign 9)

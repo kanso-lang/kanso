@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached main: "missing index 9"
-  born in main at index_missing.kso:3
+  born in main at index_missing.kso:2

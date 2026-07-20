@@ -1,8 +1,4 @@
-error[formatting]: blank lines may not appear inside a body
-  --> orphan_continuation.kso:3:1
-   3 |   >> print "two"
-       ^
-error[formatting]: an inline constant has no indented block
+error[formatting]: a continuation may not follow a blank line — the statement it would splice into has closed
   --> orphan_continuation.kso:3:3
    3 |   >> print "two"
          ^

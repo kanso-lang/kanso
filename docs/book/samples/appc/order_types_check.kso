@@ -1,7 +1,7 @@
-fn alpha x
-  x
-
 type bravo
   n:int
 
-main = print "{alpha 1}"
+fn alpha x
+  x
+
+pub play = print "{alpha 1}"

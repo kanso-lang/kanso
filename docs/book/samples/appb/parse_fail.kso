@@ -1,1 +1,1 @@
-main = print "parsed {to_int "seven"}"
+print "parsed {to_int "seven"}"

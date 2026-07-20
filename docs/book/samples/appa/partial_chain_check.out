@@ -1,4 +1,4 @@
 error[formatting]: no partial chaining: a chain fits on one line, or each step gets its own `>>` continuation line
-  --> partial_chain_check.kso:1:47
-   1 | main = print "steeping the finest uji sencha" >> print "pouring the hot water"
-                                                     ^
+  --> partial_chain_check.kso:1:40
+   1 | print "steeping the finest uji sencha" >> print "pouring the hot water"
+                                              ^

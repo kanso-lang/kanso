@@ -21,7 +21,7 @@ fn hex_digit c
 fn hex_upper c
   if (both (64 < c) (c < 71)) (c - 55) (err "invalid hex digit")
 
-main =
+pub play =
   print (decode_u "00e9")
   >> print (decode_u "305f")
   >> print (decode_u "7b80")

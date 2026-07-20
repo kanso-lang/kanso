@@ -1,4 +1,4 @@
 error[formatting]: bindings precede the effects in a body: every binding runs before every bare effect line, so move it above the chain
-  --> binding_after_effect_check.kso:3:10
-   3 |   cups = 4
-                ^
+  --> binding_after_effect_check.kso:2:8
+   2 | cups = 4
+              ^

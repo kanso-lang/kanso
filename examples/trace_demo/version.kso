@@ -1,3 +1,17 @@
+fn banner line
+  "== {line} =="
+
+fn check text
+  version = major_of text
+  summary = describe version
+  print (banner summary)
+
+fn chosen argv
+  if (length argv == 0) "examples/trace_demo/VERSION" (at argv 1)
+
+fn describe v
+  "major version {v} detected"
+
 fn dot_check "." _ i
   i
 
@@ -15,3 +29,6 @@ fn major_of text
   dot = dot_hunt cs 1
   digits = join (slice cs 1 (dot - 1)) ""
   to_int digits
+
+fn start argv
+  read_file (chosen argv) . check

@@ -7,8 +7,6 @@
 # swap `main` to `brew >> rolls` and the wall makes the dice wait.
 brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
 
-main = play
-
 pub play =
   brew
   roll 1

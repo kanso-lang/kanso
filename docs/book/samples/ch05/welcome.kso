@@ -4,4 +4,4 @@ fn first xs
 fn greet name
   "irasshaimase, {name}"
 
-main = args . first . greet . print
+pub play = args . first . greet . print

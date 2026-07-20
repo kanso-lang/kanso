@@ -4,7 +4,7 @@ fn describe none
 fn describe x
   "fourth flavor: {x}"
 
-main =
+pub play =
   flavors = ["matcha" "ube" "hojicha"]
   first = flavors[1]
   fourth = at flavors 4

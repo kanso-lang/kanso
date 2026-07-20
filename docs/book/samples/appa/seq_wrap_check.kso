@@ -1,2 +1,2 @@
-main = print "steeping"
+print "steeping"
   >> print "serving"

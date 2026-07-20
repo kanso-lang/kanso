@@ -8,7 +8,7 @@ type renamed
   after:string
   before:string
 
-main =
+pub play =
   print (render (joined "clay"))
   >> print (render (renamed "kanso" "kai"))
   >> print (render (left "mugi"))

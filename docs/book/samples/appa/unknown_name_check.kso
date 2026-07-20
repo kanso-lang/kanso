@@ -1,1 +1,1 @@
-main = print "{mystery}"
+print "{mystery}"

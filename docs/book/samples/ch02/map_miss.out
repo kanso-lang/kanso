@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached main: "missing index "nobody""
-  born in main at map_miss.kso:3
+  born in main at map_miss.kso:2

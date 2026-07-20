@@ -1,4 +1,4 @@
 fn area (w: int)
   w * w
 
-main = print "{area 3}"
+pub play = print "{area 3}"

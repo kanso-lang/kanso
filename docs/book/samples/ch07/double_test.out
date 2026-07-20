@@ -1,2 +1,1 @@
-test_double ... FAILED (returned false)
-0 passed, 1 failed
+error: `double_test.kso` is a library — nothing to run. give the module a main.kso entry, or define `pub play` and use `kanso play`

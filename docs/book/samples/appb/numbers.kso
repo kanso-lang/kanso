@@ -1,9 +1,8 @@
-main =
-  root = sqrt 2
-  print "sqrt {root}"
-    >> print "sqrt-int {sqrt 9}"
-    >> print "round {round 2.6}"
-    >> print "round-half {round 2.5}"
-    >> print "to_int {to_int "42"}"
-    >> print "to_float {to_float "3.14"}"
-    >> print "to_float-int {to_float 5}"
+root = sqrt 2
+print "sqrt {root}"
+  >> print "sqrt-int {sqrt 9}"
+  >> print "round {round 2.6}"
+  >> print "round-half {round 2.5}"
+  >> print "to_int {to_int "42"}"
+  >> print "to_float {to_float "3.14"}"
+  >> print "to_float-int {to_float 5}"

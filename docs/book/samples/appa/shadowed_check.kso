@@ -1,6 +1,6 @@
 fn greet name
   "hi, {name}"
 
-main =
+pub play =
   greet = 1
   print "{greet}"

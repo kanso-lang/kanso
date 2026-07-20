@@ -1,4 +1,4 @@
 error[name]: unknown name `mystery`
-  --> unknown_name_check.kso:1:16
-   1 | main = print "{mystery}"
-                      ^
+  --> unknown_name_check.kso:1:9
+   1 | print "{mystery}"
+               ^

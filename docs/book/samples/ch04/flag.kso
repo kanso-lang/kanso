@@ -6,10 +6,6 @@ fn describe malformed
 fn describe b
   "flag: {b}"
 
-main =
-  print (describe (parse_flag "on"))
-  >> print (describe (parse_flag "banana"))
-
 fn parse_flag "off"
   false
 
@@ -18,3 +14,7 @@ fn parse_flag "on"
 
 fn parse_flag _
   malformed
+
+pub play =
+  print (describe (parse_flag "on"))
+  >> print (describe (parse_flag "banana"))

@@ -31,7 +31,7 @@ fn hex4 n
 fn hex_char n
   at "0123456789abcdef" (n + 1)
 
-main =
+pub play =
   bell = from_code 7
   print (quote_str "a\"b\nc")
   >> print (quote_str "ring{bell}ring")

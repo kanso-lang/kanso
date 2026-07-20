@@ -7,7 +7,7 @@ type user
   age:int
   name:string
 
-main =
+pub play =
   clay = user 47 "clay"
   user age name = clay
   worker = employee age name 90000

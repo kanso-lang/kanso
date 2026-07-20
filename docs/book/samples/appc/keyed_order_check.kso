@@ -2,6 +2,6 @@ type user
   admin:bool
   name:string
 
-main =
+pub play =
   { name admin } = user false "clay"
   print "{name} {admin}"

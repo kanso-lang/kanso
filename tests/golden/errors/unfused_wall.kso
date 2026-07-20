@@ -1,5 +1,4 @@
-main =
-  print "steeping"
-  print "warming"
-  >>
-  print "serving"
+print "steeping"
+print "warming"
+>>
+print "serving"

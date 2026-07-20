@@ -1,5 +1,4 @@
-main =
-  age = 47
-  price = 19.99
-  name = "clay"
-  print "{name} is {age}, owes {price}"
+age = 47
+price = 19.99
+name = "clay"
+print "{name} is {age}, owes {price}"

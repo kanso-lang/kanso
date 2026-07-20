@@ -1,3 +1,2 @@
-main =
-  ratio = 10 / 0
-  print "ratio: {ratio}"
+ratio = 10 / 0
+print "ratio: {ratio}"

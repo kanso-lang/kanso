@@ -81,6 +81,29 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     }
 }
 
+/// `kanso play`: the playground's convention at the terminal. The file is a
+/// library defining `pub play`; the synthesized entry runs it.
+pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
+    let mut program = compile(file, source, false)?;
+    let has_play = program.fns.iter().any(|d| d.name == "play" && d.is_pub);
+    if !has_play {
+        return Err(format!(
+            "error: nothing to play — define `pub play`, or point `kanso run` \
+             at an entry file\n  --> {file}\n"
+        ));
+    }
+    let span = diag::Span { line: 1, col: 1 };
+    program.fns.push(ast::FnDecl {
+        name: "main".to_string(),
+        params: Vec::new(),
+        body: vec![ast::Stmt::Expr(ast::Expr::Ident("play".to_string(), span))],
+        span,
+        is_pub: false,
+        file: file.to_string(),
+    });
+    Ok(program)
+}
+
 /// Err origins name the function and the file it lives in; the file is
 /// per-declaration so it survives multi-file module merging.
 fn stamp_file(program: &mut ast::Program, file: &str) {

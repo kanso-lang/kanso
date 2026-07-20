@@ -4,7 +4,7 @@ fn cloud 0 acc
 fn cloud n acc
   point 2 [] . (p -> cloud (n - 1) (push acc p))
 
-main = cloud 3 [] . (voters -> print "three voters: {voters}")
+pub play = cloud 3 [] . (voters -> print "three voters: {voters}")
 
 fn point 0 acc
   acc

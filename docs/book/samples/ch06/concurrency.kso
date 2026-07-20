@@ -1,7 +1,5 @@
 brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
 
-main = play
-
 pub play =
   brew
   roll 1

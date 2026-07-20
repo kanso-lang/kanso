@@ -1,3 +1,2 @@
-main =
-  answer=42
-  print "{answer}"
+answer=42
+print "{answer}"

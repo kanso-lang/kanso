@@ -1,5 +1,5 @@
-main = print "x"
-
 type user
   admin:bool
   name:string
+
+pub play = print "x"

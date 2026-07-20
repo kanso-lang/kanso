@@ -1,4 +1,4 @@
 error[unused]: unused binding `goodbye`
-  --> dropped_check.kso:2:3
-   2 |   goodbye = print "sayonara"
-         ^
+  --> dropped_check.kso:1:1
+   1 | goodbye = print "sayonara"
+       ^

@@ -32,12 +32,6 @@ fn is_number_char none
 fn is_number_char c
   both (47 < c) (c < 58)
 
-main =
-  print (classify "42")
-  >> print (classify "-17")
-  >> print (classify "3.25")
-  >> print (classify "6e3")
-
 fn mark_from cs p q
   if (p > q) false (mark_step cs (at cs p) p q)
 
@@ -55,3 +49,9 @@ fn mark_step cs _ p q
 
 fn number_end cs p
   if (is_number_char (at cs p)) (number_end cs (p + 1)) p
+
+pub play =
+  print (classify "42")
+  >> print (classify "-17")
+  >> print (classify "3.25")
+  >> print (classify "6e3")

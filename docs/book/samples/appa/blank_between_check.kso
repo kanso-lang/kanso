@@ -1,3 +1,4 @@
 fn greet name
   "hi, {name}"
-main = print (greet "kanso")
+
+pub play = print (greet "kanso")

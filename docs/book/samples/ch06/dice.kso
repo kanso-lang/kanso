@@ -1,4 +1,4 @@
-main =
+pub play =
   roll 1
   roll 2
   >> print "both dice have landed"

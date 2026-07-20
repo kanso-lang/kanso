@@ -1,3 +1,2 @@
-main =
-  x = 1
-  print "hi"
+x = 1
+print "hi"
