@@ -35,6 +35,9 @@ use std::collections::{HashMap, HashSet};
 /// A function group: its name and arity.
 pub type Group = (String, usize);
 
+/// A cluster's members plus each member's carried argument positions.
+type ClusterCarry = (Vec<Group>, HashMap<Group, Vec<usize>>);
+
 const SCALAR: Set = INT | FLOAT | BOOL;
 /// Sets an entry-threaded bare parameter may carry across a rewind. A value
 /// that arrived at entry lives wholly below the mark — transitively, since
@@ -317,7 +320,7 @@ fn tail_cycles(
 fn eligible_clusters(
     program: &Program,
     inference: &infer::Inference,
-) -> Vec<(Vec<Group>, HashMap<Group, Vec<usize>>)> {
+) -> Vec<ClusterCarry> {
     let groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> = program
             .fns
