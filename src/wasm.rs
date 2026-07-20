@@ -117,7 +117,7 @@ thread_local! {
 #[no_mangle]
 pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
     let source = take_input(ptr, len);
-    let program = match crate::compile(&current_file(), &source, true) {
+    let program = match crate::compile_source("run", &current_file(), &source) {
         Ok(program) => program,
         Err(rendered) => {
             set_out(&rendered);
@@ -201,7 +201,7 @@ pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
 #[no_mangle]
 pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
     let source = take_input(ptr, len);
-    let program = match crate::compile(&current_file(), &source, true) {
+    let program = match crate::compile_source("run", &current_file(), &source) {
         Ok(program) => program,
         Err(rendered) => {
             set_out(&rendered);
