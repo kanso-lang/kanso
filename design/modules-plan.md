@@ -171,3 +171,17 @@ rigorously — the patterns catalog (getters, factories, name-dispatch,
 diamond naming, function re-export) and every gotcha with its diagnostic
 (first-foreign-dot, private construction, foreign destructure, naming
 without import), each panel executed per the book rule.
+
+**Blast-radius doctrine (Clay + session, same night):** B returning C's types
+from its pub surface exports B's dependency to every caller — A is forced to
+`import c` just to name what B hands back, and a C change then detonates
+through B and every A. The model keeps that legal (a real dependency,
+honestly declared — the forced import IS the leak made visible, pointing at
+the right author), but the doctrine names it: **a library's pub surface
+should be closed over its own names** — own your returns (wrappers) or
+re-export the needed functions, so C's changes stop at B. The memorable
+rule: *you import what you name; a good library lets you name only its own
+things.* Tooling follow-up for the keystone: an ADVISORY from `kanso check`
+when a pub fn's inferred return set includes a foreign type — the checker
+already sees it statically. That is Demeter's actual point — bounding the
+blast radius of change — enforced where the compiler can see it.
