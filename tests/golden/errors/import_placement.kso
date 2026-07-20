@@ -1,0 +1,3 @@
+main = print "hi"
+
+import "std/json"

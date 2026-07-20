@@ -24,6 +24,7 @@ pub enum Tok {
     KwFn,
     KwType,
     KwPub,
+    KwImport,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -387,6 +388,7 @@ impl Scanner {
             "fn" => Tok::KwFn,
             "type" => Tok::KwType,
             "pub" => Tok::KwPub,
+            "import" => Tok::KwImport,
             _ => Tok::Ident(word),
         })
     }

@@ -6,6 +6,8 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut fns = Vec::new();
     let mut types = Vec::new();
+    let mut imports: Vec<Import> = Vec::new();
+    let mut past_imports = false;
     check_blank_policy(lexed, &mut diags);
     let mut i = 0;
     while i < lexed.lines.len() {
@@ -25,6 +27,9 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             body_end += 1;
         }
         let body = &lexed.lines[body_start..body_end];
+        if !matches!(line.tokens.first(), Some((Tok::KwImport, _))) {
+            past_imports = true;
+        }
         let head_idx = match line.tokens.first() {
             Some((Tok::KwPub, _)) => 1,
             _ => 0,
@@ -42,6 +47,32 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 Ok(decl) => types.push(decl),
                 Err(d) => diags.push(d),
             },
+            Some((Tok::KwImport, _)) => {
+                match parse_import(line, body) {
+                    Ok(import) => {
+                        if past_imports {
+                            diags.push(Diagnostic::new(
+                                "formatting",
+                                "imports open the file, before any declaration".to_string(),
+                                head_span(line),
+                            ));
+                        }
+                        if let Some(prev) = imports.last() {
+                            if prev.path >= import.path {
+                                let msg = match prev.path == import.path {
+                                    true => format!("duplicate import \"{}\"", import.path),
+                                    false => "imports appear in alphabetical order".to_string(),
+                                };
+                                diags.push(Diagnostic::new("formatting", msg, import.span));
+                            }
+                        }
+                        imports.push(import);
+                    }
+                    Err(d) => diags.push(d),
+                }
+                i = body_end;
+                continue;
+            }
             Some((Tok::Ident(_), _)) if is_constant => match parse_constant(line, body) {
                 Ok(decl) => fns.push(decl),
                 Err(d) => diags.push(d),
@@ -55,7 +86,38 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         }
         i = body_end;
     }
-    if diags.is_empty() { Ok(Program { fns, types }) } else { Err(diags) }
+    if diags.is_empty() { Ok(Program { fns, types, imports }) } else { Err(diags) }
+}
+
+/// `import "path"` — one string, nothing else, no body.
+fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
+    if !body.is_empty() {
+        return Err(Diagnostic::new(
+            "syntax",
+            "an import has no body".to_string(),
+            head_span(&body[0]),
+        ));
+    }
+    match line.tokens.as_slice() {
+        [(Tok::KwImport, _), (Tok::Str(parts), span)] => {
+            let path = match parts.as_slice() {
+                [crate::lexer::StrPart::Lit(text)] => text.clone(),
+                _ => {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "an import path is a plain string".to_string(),
+                        *span,
+                    ))
+                }
+            };
+            Ok(Import { path, span: *span })
+        }
+        _ => Err(Diagnostic::new(
+            "syntax",
+            "an import is `import \"path\"`".to_string(),
+            head_span(line),
+        )),
+    }
 }
 
 fn head_span(line: &Line) -> Span {
@@ -87,7 +149,11 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
     for pair in lexed.lines.windows(2) {
         let blanks =
             lexed.blank_lines.iter().filter(|b| **b > pair[0].number && **b < pair[1].number).count();
+        let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _)))
+            && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
         let required = match pair[1].indent {
+            // the import block stacks; one blank closes it
+            0 if both_imports => 0,
             0 => 1,
             _ => 0,
         };

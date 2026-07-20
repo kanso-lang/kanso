@@ -1,0 +1,4 @@
+import "std/json"
+import "kanso-lang/vse"
+
+main = print "hi"

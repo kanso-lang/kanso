@@ -80,7 +80,7 @@ pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::
             return Err(diag::render(&diags, file, source));
         }
     }
-    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new() };
+    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
     for (_, _, program) in parsed {
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
