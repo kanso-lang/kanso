@@ -590,3 +590,20 @@ construct_then_destructure_is_returnable test, which passes at the ANALYSIS
 level while codegen's call_arg/abi_params disagree about the construction
 site's type. Found live while answering a syntax question — the canonical
 teaching form crashes the compiler.
+
+---
+
+## 2026-07-20 — DONE: register-return ABI mismatch on a nullary record constant
+
+The construct-then-destructure crash (logged HIGH above) was still live for a
+nullary case: a constant like `clay = user 44 "clay"` compiles to a
+register-returnable `d_clay_0` returning `%parsed`, but the identifier-reference
+call site in codegen.rs hardcoded `call tailcc %KValue @d_clay_0()`. The
+`{i64,i64}` register struct was then read as a `%KValue`, and the consumer
+(`age_of clay`, destructuring the record) segfaulted — native exit 139 while the
+interpreter printed 44, an engine divergence the lattice never caught (no
+golden exercised a nullary record constant). Fix: the nullary reference path now
+uses `ret_ty(name, 0)` for the call's return type and `record_parsed` on a
+`%parsed` result, mirroring the n-ary call paths. Regression: `examples/
+register_return.kso` (native + differential). The n-ary call sites already
+consulted `ret_ty`; this was the one gap.
