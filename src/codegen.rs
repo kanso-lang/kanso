@@ -128,6 +128,10 @@ declare %KValue @k_desc_sleep(%KValue)
 declare %KValue @k_desc_random(%KValue)
 declare void @k_beat_push()
 declare void @k_beat_iter()
+declare void @k_carry_reset()
+declare void @k_carry_stage(%KValue)
+declare %KValue @k_carry_take(i64)
+declare void @k_beat_iter_carry()
 declare %KValue @k_beat_pop(%KValue)
 declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_call2(%KValue, %KValue, %KValue)
@@ -1575,22 +1579,49 @@ impl<'a> Backend<'a> {
                         emitted.push(self.emit_expr(f, arg)?);
                     }
                     let n = emitted.len();
+                    let callee_ret = self.ret_ty(name, n);
+                    let same_ret = callee_ret == f.ret_ty;
+                    if same_ret
+                        && self
+                            .beat
+                            .same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
+                    {
+                        match self.beat.carried.get(&(name.clone(), n)) {
+                            Some(positions) => {
+                                // evacuate the loop-varying arguments through
+                                // the carry buffers, then rewind — before the
+                                // ABI conversion below, so the call passes
+                                // the evacuated values
+                                f.line("call void @k_carry_reset()");
+                                for &j in positions {
+                                    let a = &emitted[j];
+                                    f.line(&format!(
+                                        "call void @k_carry_stage(%KValue {a})"
+                                    ));
+                                }
+                                f.line("call void @k_beat_iter_carry()");
+                                for (slot, &j) in positions.iter().enumerate() {
+                                    let t = f.tmp();
+                                    f.line(&format!(
+                                        "{t} = call %KValue @k_carry_take(i64 {slot})"
+                                    ));
+                                    emitted[j] = t;
+                                }
+                            }
+                            None => {
+                                // everything this iteration allocated is
+                                // dead; rewind to the entry mark
+                                f.line("call void @k_beat_iter()");
+                            }
+                        }
+                    }
                     let args_ir: Vec<String> = emitted
                         .iter()
                         .enumerate()
                         .map(|(i, e)| self.call_arg(f, name, n, i, e))
                         .collect();
-                    let callee_ret = self.ret_ty(name, n);
                     let t = f.tmp();
-                    if callee_ret == f.ret_ty {
-                        if self
-                            .beat
-                            .same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
-                        {
-                            // a proven beat loop: everything this iteration
-                            // allocated is dead; rewind to the entry mark
-                            f.line("call void @k_beat_iter()");
-                        }
+                    if same_ret {
                         f.line(&format!(
                             "{t} = musttail call tailcc {callee_ret} @d_{name}_{n}({})",
                             args_ir.join(", ")

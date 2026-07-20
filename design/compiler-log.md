@@ -478,3 +478,34 @@ closure-threaded beat firing and the map-threaded rejection.
 - VSE after rung B: still 0 beats, as predicted — _fold_at waits on LIST
   threading AND the computed accumulator. **The fold-state shelf is the
   frontier's next build.**
+
+---
+
+## 2026-07-20 — THE FOLD CARRY SHIPS; the last wall is pipe-loop recursion
+
+The fold-state shelf is built and firing. Design: per-beat ping-pong malloc
+buffers; staged args are deep-copied (measure pass first, so the buffer
+never grows mid-copy) strictly BEFORE the rewind — source and destination
+cannot overlap, no pointer rebasing. The survives-rewind test doubles as
+the sharing preserver: below-mark data inside a carried value is shared,
+not copied, so a threaded list inside a carried record costs nothing. At
+the pop, a heap result is copied out to the caller's arena. KClosure gained
+its capture count (deep copy needed it) — the cost golden moved +16 bytes,
+one closure allocation in the gauntlet, defended here.
+
+Analysis: ArgCrosses is now CarryBeat (≤8 positions); demotion composes
+(crossing args ride as carried); a call through a closure VALUE counts as
+may-allocate (the profitability gate was hiding _fold_at).
+
+**VSE, measured:** beat_iters 0 → 5,303,200 (every fold iteration in the
+simulation); arena blocks 155 → 104; peak RSS 158 → 112 MB; wall time
+2.25s → 1.63s — the carry made VSE 27% FASTER (warm-cache rewinds).
+
+**The remaining wall, named:** VSE's outer loops recurse through
+pipe-bound lambdas — `cloud ... . (cp -> trials (k - 1) ...)` — the
+idiomatic bind style. tail_exprs never sees a lambda body, so the trial
+loop is invisible to the analysis (and pipes don't musttail either: pipe
+recursion is O(depth) stack today). **[OPEN — next rung] pipe-loop beats:**
+recognize `x . (p -> ... self ...)` tail-recursion-through-bind, bracket
+it, and let captured accumulators ride the carry. That is where the
+158→single-digit prediction gets its verdict.
