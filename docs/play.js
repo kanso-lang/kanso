@@ -249,6 +249,7 @@ function withEntry(source) {
 
 async function run() {
   if (!wasm) return;
+  wasm.kanso_set_seed(Date.now() >>> 0);
   const program = withEntry(editor.value);
   let result = await runCompiled(program);
   let engine = result ? result.engine : null;

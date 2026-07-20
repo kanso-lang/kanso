@@ -139,6 +139,10 @@ impl Rng {
         Rng(seed)
     }
 
+    pub fn from_seed(seed: u64) -> Self {
+        Rng(seed)
+    }
+
     fn next_u64(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
         let mut z = self.0;

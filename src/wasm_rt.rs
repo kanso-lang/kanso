@@ -540,6 +540,10 @@ impl Executor for RtExecutor {
         });
     }
 
+    fn random(&mut self, n: u64) -> u64 {
+        crate::wasm::next_random(n)
+    }
+
     fn args(&mut self) -> Vec<String> {
         Vec::new()
     }
