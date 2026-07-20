@@ -3,7 +3,7 @@ gyoza =
   >> sleep 20 >> print "gyoza: flip"
   >> sleep 20 >> print "gyoza: plated"
 
-main =
+pub play =
   gyoza
   ramen
 

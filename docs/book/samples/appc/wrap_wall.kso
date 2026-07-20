@@ -1,3 +1,2 @@
-main = print "steeping the sencha"
-  >> print "pouring the water"
-  >> print "serving"
+print "steeping the sencha in the small clay pot for exactly ninety seconds"
+  >> print "pouring the water in a thin stream from well above the first cup"

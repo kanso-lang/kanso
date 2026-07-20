@@ -1,3 +1,2 @@
-main =
-  myName = 1
-  print "{myName}"
+myName = 1
+print "{myName}"

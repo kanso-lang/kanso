@@ -346,6 +346,15 @@ impl FnEmit {
     }
 }
 
+/// LLVM symbol for a dispatcher: quoted when the kanso name carries a
+/// module qualifier's slash.
+fn dsym(name: &str, arity: usize) -> String {
+    match name.contains('/') {
+        true => format!("\"d_{name}_{arity}\""),
+        false => format!("d_{name}_{arity}"),
+    }
+}
+
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
     let t = f.tmp();
     f.line(&format!("{t} = extractvalue %KValue {value}, 0"));
@@ -538,13 +547,14 @@ impl<'a> Backend<'a> {
         self.fn_value_wrappers.dedup();
         let wrappers = self.fn_value_wrappers.clone();
         for name in &wrappers {
+            let sym1 = dsym(name, 1);
             let call = if self.unboxed_param(name, 1, 0) {
                 format!(
                     "  %p = extractvalue %KValue %a0, 1\n  %r = call tailcc %KValue \
-                     @d_{name}_1(i64 %p)\n"
+                     @{sym1}(i64 %p)\n"
                 )
             } else {
-                format!("  %r = call tailcc %KValue @d_{name}_1(%KValue %a0)\n")
+                format!("  %r = call tailcc %KValue @{sym1}(%KValue %a0)\n")
             };
             let _ = writeln!(
                 self.body,
@@ -702,7 +712,8 @@ impl<'a> Backend<'a> {
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
-        let header = format!("define tailcc {ret} @d_{name}_{arity}({}) {{", params.join(", "));
+        let sym_hdr = dsym(name, arity);
+        let header = format!("define tailcc {ret} @{sym_hdr}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
@@ -856,7 +867,8 @@ impl<'a> Backend<'a> {
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
-        let header = format!("define tailcc {ret} @d_{name}_{arity}({}) {{", params.join(", "));
+        let sym_hdr = dsym(name, arity);
+        let header = format!("define tailcc {ret} @{sym_hdr}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
         self.rebox_params(&mut f, name, arity);
@@ -1432,7 +1444,7 @@ impl<'a> Backend<'a> {
                 }
                 if self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty()) {
                     let t = f.tmp();
-                    f.line(&format!("{t} = call tailcc %KValue @d_{name}_0()"));
+                    f.line(&format!("{t} = call tailcc %KValue @{}()", dsym(name, 0)));
                     let ret = self.group_return_set(name, 0);
                     f.record(&t, ret);
                     return Ok(t);
@@ -1769,7 +1781,8 @@ impl<'a> Backend<'a> {
                     let t = f.tmp();
                     if same_ret {
                         f.line(&format!(
-                            "{t} = musttail call tailcc {callee_ret} @d_{name}_{n}({})",
+                            "{t} = musttail call tailcc {callee_ret} @{}({})",
+                            dsym(name, n),
                             args_ir.join(", ")
                         ));
                         f.line(&format!("ret {callee_ret} {t}"));
@@ -1777,7 +1790,8 @@ impl<'a> Backend<'a> {
                         // A %parsed function tail-calling a KValue failure helper:
                         // can't musttail across the type change, so call and wrap.
                         f.line(&format!(
-                            "{t} = call tailcc {callee_ret} @d_{name}_{n}({})",
+                            "{t} = call tailcc {callee_ret} @{}({})",
+                dsym(name, n),
                             args_ir.join(", ")
                         ));
                         self.emit_ret(f, &t);
@@ -2278,7 +2292,8 @@ impl<'a> Backend<'a> {
             }
             let t = f.tmp();
             f.line(&format!(
-                "{t} = call tailcc {callee_ret} @d_{name}_{n}({})",
+                "{t} = call tailcc {callee_ret} @{}({})",
+                dsym(name, n),
                 args_ir.join(", ")
             ));
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));

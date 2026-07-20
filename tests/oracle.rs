@@ -118,8 +118,13 @@ fn compile_case(program: &Path) -> kanso::ast::Program {
         .and_then(|name| name.to_str())
         .expect("kso files have utf-8 names");
     let source = std::fs::read_to_string(program).expect("case source reads");
-    kanso::compile(file, &source, true)
-        .unwrap_or_else(|rendered| panic!("compile failed for {program:?}:\n{rendered}"))
+    // the corpora hold all three program shapes: play-libraries, entry files,
+    // and (never here) pure libraries — route exactly as the cli does
+    let compiled = match source.contains("pub play") {
+        true => kanso::compile_play(file, &source),
+        false => kanso::compile_entry(file, &source),
+    };
+    compiled.unwrap_or_else(|rendered| panic!("compile failed for {program:?}:\n{rendered}"))
 }
 
 #[test]

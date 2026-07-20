@@ -6,6 +6,6 @@ type track
 fn credit (track artist _ title)
   "{title}—{artist}"
 
-main =
+pub play =
   song = track "fishmans" 6 "long season"
   print (credit song)

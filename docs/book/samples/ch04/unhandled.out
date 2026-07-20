@@ -1,3 +1,3 @@
 error[endpoint]: unhandled err reached main: "division by zero"
-  born in main at unhandled.kso:8
+  born in play at unhandled.kso:8
   passed through describe

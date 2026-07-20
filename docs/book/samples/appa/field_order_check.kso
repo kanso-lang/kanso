@@ -2,4 +2,4 @@ type user
   name:string
   admin:bool
 
-main = print "x"
+pub play = print "x"

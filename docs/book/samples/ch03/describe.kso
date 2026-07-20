@@ -10,7 +10,8 @@ fn describe s:string
 fn describe x
   "something else: {x}"
 
-main = print (describe 0)
+pub play =
+  print (describe 0)
   >> print (describe 7)
   >> print (describe "seven")
   >> print (describe 1.5)

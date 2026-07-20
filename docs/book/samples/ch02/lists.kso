@@ -1,7 +1,6 @@
-main =
-  xs = [3 1 2]
-  doubled = map xs (x -> x * 2)
-  small = filter xs (x -> x < 3)
-  first = xs[1]
-  print "sorted {sort xs} doubled {doubled} small {small}"
-    >> print "sum {sum xs} len {length xs} first {first}"
+xs = [3 1 2]
+doubled = map xs (x -> x * 2)
+small = filter xs (x -> x < 3)
+first = xs[1]
+print "sorted {sort xs} doubled {doubled} small {small}"
+  >> print "sum {sum xs} len {length xs} first {first}"

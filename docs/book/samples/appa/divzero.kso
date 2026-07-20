@@ -1,3 +1,2 @@
-main =
-  n = 10 / 0
-  print "{n}"
+n = 10 / 0
+print "{n}"

@@ -1,4 +1,4 @@
-main = print "x"
+pub play = print "x"
 
 type user
   admin:bool

@@ -1,26 +1,6 @@
-electorate =
-  left = [5 4 0]
-  right = [0 4 5]
-  center = [0 5 4]
-  [left left left left right right right center center]
-
-fn label 1
-  "lopez"
-
-fn label 2
-  "chen"
-
-fn label 3
-  "reed"
-
-main =
-  print "plurality: {label (plurality_winner electorate)}"
-  >> print "irv:       {label (irv_winner electorate)}"
-  >> print "approval:  {label (approval_winner electorate)}"
-  >> print "score:     {label (score_winner electorate)}"
-  >> print "star:      {label (star_winner electorate)}"
-  >> print "minimax:   {label (minimax_winner electorate)}"
-
-ncand = 3
-
-nvot = 9
+print "plurality: {label (plurality_winner electorate)}"
+>> print "irv:       {label (irv_winner electorate)}"
+>> print "approval:  {label (approval_winner electorate)}"
+>> print "score:     {label (score_winner electorate)}"
+>> print "star:      {label (star_winner electorate)}"
+>> print "minimax:   {label (minimax_winner electorate)}"

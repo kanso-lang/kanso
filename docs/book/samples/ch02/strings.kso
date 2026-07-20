@@ -1,4 +1,3 @@
-main =
-  name = "clay"
-  scoops = 3
-  print "{name} ordered {scoops} scoops, {scoops * 2} on the house"
+name = "clay"
+scoops = 3
+print "{name} ordered {scoops} scoops, {scoops * 2} on the house"

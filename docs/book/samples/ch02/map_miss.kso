@@ -1,3 +1,2 @@
-main =
-  ages = ["clay": 47]
-  print "{ages["nobody"]}"
+ages = ["clay": 47]
+print "{ages["nobody"]}"

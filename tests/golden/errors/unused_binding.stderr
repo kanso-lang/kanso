@@ -1,4 +1,4 @@
 error[unused]: unused binding `x`
-  --> unused_binding.kso:2:3
-   2 |   x = 1
-         ^
+  --> unused_binding.kso:1:1
+   1 | x = 1
+       ^

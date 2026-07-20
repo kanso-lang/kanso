@@ -1,3 +1,2 @@
-main =
-  menu = ["dango": 350 "taiyaki": 500]
-  print "pocky: {menu["pocky"]}"
+menu = ["dango": 350 "taiyaki": 500]
+print "pocky: {menu["pocky"]}"

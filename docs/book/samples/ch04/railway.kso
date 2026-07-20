@@ -1,4 +1,4 @@
-main =
+pub play =
   total = subtotal 120 0
   print (receipt total)
 

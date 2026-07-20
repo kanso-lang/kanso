@@ -103,6 +103,13 @@ pub struct TypeDecl {
 pub struct Program {
     pub fns: Vec<FnDecl>,
     pub types: Vec<TypeDecl>,
+    pub imports: Vec<Import>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Import {
+    pub path: String,
+    pub span: Span,
 }
 
 pub const NULLARY: [&str; 3] = ["false", "none", "true"];

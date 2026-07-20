@@ -1,4 +1,3 @@
-main =
-  print "x"
-  >> print "c"
-  print "d"
+print "x"
+>> print "c"
+print "d"

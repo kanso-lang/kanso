@@ -1,3 +1,2 @@
-main =
-  prices = [30 10 20]
-  print "ninth: {prices[9]}"
+prices = [30 10 20]
+print "ninth: {prices[9]}"

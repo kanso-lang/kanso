@@ -4,7 +4,7 @@ fn describe none
 fn describe x
   "value is {x}"
 
-main =
+pub play =
   found = describe (at [10 20 30] 2)
   gone = describe (at [10 20 30] 9)
   print "in-range: {found}" >> print "missing: {gone}"

@@ -10,17 +10,17 @@ mkdir -p bench/jsonbench
 cp lib/json/json.kso lib/json/number.kso lib/json/scan.kso lib/json/text.kso lib/json/value.kso bench/jsonbench/
 python3 - <<'PY'
 s = open('bench/jsonbench/json.kso').read()
-blocks = [b for b in s.strip().split('\n\n') if not b.startswith('fn _failure_position')]
+blocks = [b for b in s.strip().split('\n\n') if not b.startswith('fn failure_position')]
 open('bench/jsonbench/json.kso', 'w').write('\n\n'.join(blocks) + '\n')
-main = (
-    'fn _bench _ 0 acc\n'
+lib = (
+    'fn go cs\n'
+    '  print "decoded 150 times, checksum {loop cs 150 0}"\n\n'
+    'fn loop _ 0 acc\n'
     '  acc\n\n'
-    'fn _bench cs n acc\n'
-    '  _bench cs (n - 1) (acc + (length (decode cs)))\n\n'
-    'fn _run cs\n'
-    '  print "decoded 150 times, checksum {_bench cs 150 0}"\n\n'
-    'main = read_file "bench/large.json" . _run\n'
+    'fn loop cs n acc\n'
+    '  loop cs (n - 1) (acc + (length (decode cs)))\n'
 )
-open('bench/jsonbench/main.kso', 'w').write(main)
+open('bench/jsonbench/bench.kso', 'w').write(lib)
+open('bench/jsonbench/main.kso', 'w').write('read_file "bench/large.json" . go\n')
 PY
 echo "bench/jsonbench ready (150x runtime-read; run ./jsonbench from repo root)"

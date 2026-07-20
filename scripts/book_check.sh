@@ -45,7 +45,9 @@ for out in docs/book/samples/*/*.out; do
     actual=$( (cd "$tmp" && "$KANSO" build "$name" 2>&1) ) || true
     rm -rf "$tmp"
   else
-    actual=$( (cd "$dir" && env $env_prefix "$KANSO" "$mode" "$name" $extra 2>&1) ) || true
+    verb="$mode"
+    if [ "$mode" = run ] && grep -q "pub play" "$dir/$name" 2>/dev/null; then verb=play; fi
+    actual=$( (cd "$dir" && env $env_prefix "$KANSO" "$verb" "$name" $extra 2>&1) ) || true
   fi
   if [ "$actual" != "$(cat "$out")" ]; then
     echo "MISMATCH: $out (mode $mode)"

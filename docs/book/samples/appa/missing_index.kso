@@ -1,3 +1,2 @@
-main =
-  xs = [1 2 3]
-  print "{xs.at 9}"
+xs = [1 2 3]
+print "{xs.at 9}"

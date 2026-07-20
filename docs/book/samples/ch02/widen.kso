@@ -1,5 +1,4 @@
-main =
-  exact = 7 / 2
-  widened = 7 / 2.0
-  mixed = 3 + 0.5
-  print "int/int: {exact}, int/float: {widened}, mixed: {mixed}"
+exact = 7 / 2
+widened = 7 / 2.0
+mixed = 3 + 0.5
+print "int/int: {exact}, int/float: {widened}, mixed: {mixed}"

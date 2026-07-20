@@ -3,7 +3,7 @@ type track
   minutes:int
   title:string
 
-main =
+pub play =
   song = track "fishmans" 6 "long season"
   track artist _ title = song
   print "{title}, by {artist}"

@@ -1,4 +1,4 @@
 error[formatting]: tabs are not part of the canonical grammar; indent with spaces
-  --> tabs_check.kso:2:1
-   2 | 	print "hi"
+  --> tabs_check.kso:1:1
+   1 | 	print "hi"
        ^

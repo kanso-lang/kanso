@@ -2,4 +2,4 @@ fn count_lines text
   newlines = filter (chars text) (c -> c == "\n")
   "flavors.txt has {length newlines} lines"
 
-main = read_file "flavors.txt" . count_lines . print
+pub play = read_file "flavors.txt" . count_lines . print

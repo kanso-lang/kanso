@@ -1,5 +1,7 @@
-main = print "x"
+fn use_it t
+  t
 
-type user
-  admin:bool
-  name:string
+type thing
+  size:int
+
+pub play = print "x"

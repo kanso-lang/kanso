@@ -19,7 +19,7 @@ fn label archived
 fn label pending
   "pending"
 
-main =
+pub play =
   a = task active "write the spec"
   b = task pending null
   task s1 t1 = a

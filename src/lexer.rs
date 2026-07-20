@@ -24,6 +24,7 @@ pub enum Tok {
     KwFn,
     KwType,
     KwPub,
+    KwImport,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -380,13 +381,34 @@ impl Scanner {
                 || self.chars[self.pos] == '_')
         {
             self.pos += 1;
+            // a slash pressed tight between word characters qualifies a name
+            // (json/decode); division between named values breathes, like the
+            // pipe and unlike nothing else
+            if self.chars.get(self.pos) == Some(&'/')
+                && self
+                    .chars
+                    .get(self.pos + 1)
+                    .is_some_and(|n| n.is_ascii_lowercase() || *n == '_')
+            {
+                self.pos += 1;
+            }
         }
         let word: String = self.chars[start..self.pos].iter().collect();
+        if word.len() > 1 && word.starts_with('_') {
+            return Err(Diagnostic::new(
+                "naming",
+                "leading underscores are retired: privacy is `pub`'s absence, \
+                 and `_` alone is the wildcard"
+                    .to_string(),
+                self.span(),
+            ));
+        }
         Ok(match word.as_str() {
             "_" => Tok::Underscore,
             "fn" => Tok::KwFn,
             "type" => Tok::KwType,
             "pub" => Tok::KwPub,
+            "import" => Tok::KwImport,
             _ => Tok::Ident(word),
         })
     }

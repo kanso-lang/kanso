@@ -3,4 +3,4 @@ type null
 type post
   title:null string
 
-main = print "{post 42}"
+pub play = print "{post 42}"

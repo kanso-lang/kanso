@@ -1,0 +1,18 @@
+electorate =
+  left = [5 4 0]
+  right = [0 4 5]
+  center = [0 5 4]
+  [left left left left right right right center center]
+
+fn label 1
+  "lopez"
+
+fn label 2
+  "chen"
+
+fn label 3
+  "reed"
+
+ncand = 3
+
+nvot = 9

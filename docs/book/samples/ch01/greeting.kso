@@ -1,3 +1,2 @@
-main =
-  name = "clay"
-  print "hello, {name}"
+name = "clay"
+print "hello, {name}"

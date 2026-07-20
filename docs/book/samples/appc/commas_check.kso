@@ -1,3 +1,2 @@
-main =
-  total = sum [1, 2]
-  print "{total}"
+total = sum [1, 2]
+print "{total}"

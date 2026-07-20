@@ -1,4 +1,3 @@
-main =
-  print "steeping"
-  cups = 4
-  >> print "serving {cups}"
+print "steeping"
+cups = 4
+>> print "serving {cups}"

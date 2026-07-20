@@ -1,3 +1,6 @@
-fn greet name
-  "hi, {name}"
-main = print (greet "kanso")
+fn greet _
+  print "hi"
+fn wave _
+  print "yo"
+
+pub play = greet 0 . wave

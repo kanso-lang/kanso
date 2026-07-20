@@ -3,7 +3,7 @@ type missing
 type post
   title:missing string
 
-main =
+pub play =
   p = post 42
   { title } = p
   print "{title}"

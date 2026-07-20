@@ -1,1 +1,1 @@
-main = print 'hi'
+print 'hi'

@@ -1,3 +1,2 @@
-main =
-  billion = 1000000000
-  print "{billion * billion * 100}"
+billion = 1000000000
+print "{billion * billion * 100}"

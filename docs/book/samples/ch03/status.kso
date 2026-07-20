@@ -13,7 +13,7 @@ fn label archived
 fn label pending
   "coming soon"
 
-main =
+pub play =
   print (label active)
   >> print (label archived)
   >> print (label pending)

@@ -17,8 +17,13 @@ fn kso_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn run_kanso(program: &Path, extra: &[&str]) -> Output {
+    let source = std::fs::read_to_string(program).unwrap_or_default();
+    let verb = match source.contains("pub play") {
+        true => "play",
+        false => "run",
+    };
     Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg(verb)
         .arg(program.file_name().expect("kso files have names"))
         .args(extra)
         .current_dir(program.parent().expect("programs live in a directory"))

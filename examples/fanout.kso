@@ -8,7 +8,7 @@
 fn fetch_quote city
   length city * 130
 
-main =
+pub play =
   cities = ["tokyo" "kyoto" "osaka" "sapporo"]
   quotes = map cities (c -> fetch_quote c)
   cheapest = sort quotes . at 1

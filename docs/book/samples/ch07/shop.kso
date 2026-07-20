@@ -7,7 +7,7 @@ pub fn checkout item qty
 fn line item qty
   qty * (price item) + service
 
-main = print "{checkout "matcha" 2}"
+pub play = print "{checkout "matcha" 2}"
 
 fn price "matcha"
   600

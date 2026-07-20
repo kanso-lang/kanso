@@ -1,4 +1,4 @@
 error[unused]: unused binding: each version of `x` is used before the next
-  --> rebind_check.kso:2:3
-   2 |   x = 1
-         ^
+  --> rebind_check.kso:1:1
+   1 | x = 1
+       ^

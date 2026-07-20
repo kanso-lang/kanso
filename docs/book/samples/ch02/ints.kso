@@ -1,4 +1,3 @@
-main =
-  per_day = 86400
-  days = 365000000
-  print "{per_day * days}"
+per_day = 86400
+days = 365000000
+print "{per_day * days}"

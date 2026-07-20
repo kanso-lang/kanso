@@ -1,4 +1,4 @@
-main =
+pub play =
   voter = [3 4]
   print "candidate at the origin: {util voter [0 0]}"
   >> print "candidate next door: {util voter [3 3]}"

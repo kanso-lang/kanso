@@ -1,4 +1,4 @@
-error[formatting]: needless continuation: this statement fits on one line (34 characters)
-  --> needless_wrap_check.kso:3:5
-   3 |     . sum
-           ^
+error[formatting]: needless continuation: this statement fits on one line (32 characters)
+  --> needless_wrap_check.kso:2:3
+   2 |   . sum
+         ^

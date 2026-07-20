@@ -1,4 +1,4 @@
-main =
+pub play =
   risky 1
   risky 2
   >> print "never served"

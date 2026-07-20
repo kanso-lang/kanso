@@ -1,3 +1,2 @@
-main =
-  1 + 1
-  print "the sum above went nowhere"
+1 + 1
+print "the sum above went nowhere"

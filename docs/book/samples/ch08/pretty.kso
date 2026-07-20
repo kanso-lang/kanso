@@ -1,15 +1,15 @@
 type json_null
 
-fn _entry_block (entry k v) d
-  "{_pad d}\"{k}\": {pretty v d}"
+fn entry_block (entry k v) d
+  "{pad d}\"{k}\": {pretty v d}"
 
-fn _pad 0
+fn pad 0
   ""
 
-fn _pad n
-  "  {_pad (n - 1)}"
+fn pad n
+  "  {pad (n - 1)}"
 
-main =
+pub play =
   doc = ["name": "kanso" "port": 8080 "tags": ["fast" "simple"]]
   print (pretty doc 0)
 
@@ -33,10 +33,10 @@ fn pretty s:string _
 
 fn pretty xs:json[] d
   d2 = d + 1
-  inner = join (map xs (v -> "{_pad d2}{pretty v d2}")) ",\n"
-  "[\n{inner}\n{_pad d}]"
+  inner = join (map xs (v -> "{pad d2}{pretty v d2}")) ",\n"
+  "[\n{inner}\n{pad d}]"
 
 fn pretty m:json[string] d
   d2 = d + 1
-  inner = join (map (entries m) (e -> _entry_block e d2)) ",\n"
-  "\{\n{inner}\n{_pad d}}"
+  inner = join (map (entries m) (e -> entry_block e d2)) ",\n"
+  "\{\n{inner}\n{pad d}}"

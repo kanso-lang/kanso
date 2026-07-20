@@ -4,7 +4,7 @@ fn describe none
 fn describe x
   "ninth price: {x}"
 
-main =
+pub play =
   prices = [30 10 20]
   doubled = map prices (x -> x * 2)
   ninth = at prices 9

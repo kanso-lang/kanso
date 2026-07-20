@@ -1,0 +1,4 @@
+error[formatting]: imports appear in alphabetical order
+  --> import_order.kso:2:8
+   2 | import "kanso-lang/vse"
+              ^

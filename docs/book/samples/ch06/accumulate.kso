@@ -1,4 +1,3 @@
-main =
-  err "the steep went cold"
-  err "the cups cracked"
-  >> print "serving"
+err "the steep went cold"
+err "the cups cracked"
+>> print "serving"

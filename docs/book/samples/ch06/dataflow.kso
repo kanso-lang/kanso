@@ -1,7 +1,7 @@
 fn cheapest prices
   sort prices . at 1
 
-main =
+pub play =
   prices = [520 380 450 610 290]
   low = cheapest prices
   total = sum prices

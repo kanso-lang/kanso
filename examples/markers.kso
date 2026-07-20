@@ -6,6 +6,6 @@ fn describe null
 fn describe n:int
   "the number {n}"
 
-main =
+pub play =
   missing = null
   print "{missing}" >> print (describe null) >> print (describe 7)

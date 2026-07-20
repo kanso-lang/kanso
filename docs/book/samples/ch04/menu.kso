@@ -4,6 +4,6 @@ fn describe none
 fn describe price
   "{price} yen"
 
-main =
+pub play =
   menu = ["dango": 350 "taiyaki": 500]
   print (describe (at menu "pocky"))

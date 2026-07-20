@@ -1,5 +1,4 @@
-main =
-  tau = 5
-  print "{tau}"
-
+tau = 5
 tau = 3
+
+print "{tau}"

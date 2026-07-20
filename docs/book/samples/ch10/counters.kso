@@ -4,4 +4,4 @@ fn build 0 acc
 fn build n acc
   build (n - 1) (push acc n)
 
-main = print "sum {sum (build 1000 [])}"
+pub play = print "sum {sum (build 1000 [])}"

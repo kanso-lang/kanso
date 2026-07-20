@@ -2,10 +2,115 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use crate::lexer::{Lexed, Line, StrPart, Tok};
 
+/// An entry file: imports, then statements — the body IS the program. The
+/// statements synthesize an internal `main` constant so every later stage
+/// works unchanged; no user writes the name.
+pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
+    let mut diags = Vec::new();
+    let mut imports: Vec<Import> = Vec::new();
+    let mut first_stmt = None;
+    for (idx, line) in lexed.lines.iter().enumerate() {
+        if line.indent != 0 {
+            continue;
+        }
+        match line.tokens.first() {
+            Some((Tok::KwImport, _)) => {
+                if first_stmt.is_some() {
+                    diags.push(Diagnostic::new(
+                        "formatting",
+                        "imports open the file, before any statement".to_string(),
+                        head_span(line),
+                    ));
+                }
+                match parse_import(line, &[]) {
+                    Ok(import) => {
+                        if let Some(prev) = imports.last() {
+                            if prev.path >= import.path {
+                                let msg = match prev.path == import.path {
+                                    true => format!("duplicate import \"{}\"", import.path),
+                                    false => "imports appear in alphabetical order".to_string(),
+                                };
+                                diags.push(Diagnostic::new("formatting", msg, import.span));
+                            }
+                        }
+                        imports.push(import);
+                    }
+                    Err(d) => diags.push(d),
+                }
+            }
+            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _)) => {
+                diags.push(Diagnostic::new(
+                    "syntax",
+                    "an entry file holds statements only; definitions live in \
+                     library files"
+                        .to_string(),
+                    head_span(line),
+                ));
+            }
+            _ => {
+                if first_stmt.is_none() {
+                    first_stmt = Some(idx);
+                }
+            }
+        }
+    }
+    let stmt_lines: &[Line] = match first_stmt {
+        Some(start) => &lexed.lines[start..],
+        None => &[],
+    };
+    if stmt_lines.is_empty() {
+        diags.push(Diagnostic::new(
+            "syntax",
+            "an entry file needs at least one statement".to_string(),
+            Span { line: 1, col: 1 },
+        ));
+    }
+    // a continuation line may not restart after a blank: the chain it would
+    // splice into has already closed
+    if let Some(start) = first_stmt {
+        for line in &lexed.lines[start..] {
+            if line.indent != 0
+                && lexed.blank_lines.contains(&(line.number - 1))
+                && matches!(line.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _)))
+            {
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    "a continuation may not follow a blank line — the statement \
+                     it would splice into has closed"
+                        .to_string(),
+                    head_span(line),
+                ));
+            }
+        }
+    }
+    let body = match parse_body(stmt_lines) {
+        Ok(body) => body,
+        Err(d) => {
+            diags.push(d);
+            Vec::new()
+        }
+    };
+    if !diags.is_empty() {
+        return Err(diags);
+    }
+    let span = stmt_lines.first().map(head_span).unwrap_or(Span { line: 1, col: 1 });
+    let main = FnDecl {
+        name: "main".to_string(),
+        params: Vec::new(),
+        body,
+        span,
+        is_pub: false,
+        file: String::new(),
+    };
+    Ok(Program { fns: vec![main], types: Vec::new(), imports })
+}
+
 pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
     let mut fns = Vec::new();
     let mut types = Vec::new();
+    let mut imports: Vec<Import> = Vec::new();
+    let mut past_imports = false;
     check_blank_policy(lexed, &mut diags);
     let mut i = 0;
     while i < lexed.lines.len() {
@@ -25,6 +130,9 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             body_end += 1;
         }
         let body = &lexed.lines[body_start..body_end];
+        if !matches!(line.tokens.first(), Some((Tok::KwImport, _))) {
+            past_imports = true;
+        }
         let head_idx = match line.tokens.first() {
             Some((Tok::KwPub, _)) => 1,
             _ => 0,
@@ -42,6 +150,32 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 Ok(decl) => types.push(decl),
                 Err(d) => diags.push(d),
             },
+            Some((Tok::KwImport, _)) => {
+                match parse_import(line, body) {
+                    Ok(import) => {
+                        if past_imports {
+                            diags.push(Diagnostic::new(
+                                "formatting",
+                                "imports open the file, before any declaration".to_string(),
+                                head_span(line),
+                            ));
+                        }
+                        if let Some(prev) = imports.last() {
+                            if prev.path >= import.path {
+                                let msg = match prev.path == import.path {
+                                    true => format!("duplicate import \"{}\"", import.path),
+                                    false => "imports appear in alphabetical order".to_string(),
+                                };
+                                diags.push(Diagnostic::new("formatting", msg, import.span));
+                            }
+                        }
+                        imports.push(import);
+                    }
+                    Err(d) => diags.push(d),
+                }
+                i = body_end;
+                continue;
+            }
             Some((Tok::Ident(_), _)) if is_constant => match parse_constant(line, body) {
                 Ok(decl) => fns.push(decl),
                 Err(d) => diags.push(d),
@@ -55,7 +189,38 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         }
         i = body_end;
     }
-    if diags.is_empty() { Ok(Program { fns, types }) } else { Err(diags) }
+    if diags.is_empty() { Ok(Program { fns, types, imports }) } else { Err(diags) }
+}
+
+/// `import "path"` — one string, nothing else, no body.
+fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
+    if !body.is_empty() {
+        return Err(Diagnostic::new(
+            "syntax",
+            "an import has no body".to_string(),
+            head_span(&body[0]),
+        ));
+    }
+    match line.tokens.as_slice() {
+        [(Tok::KwImport, _), (Tok::Str(parts), span)] => {
+            let path = match parts.as_slice() {
+                [crate::lexer::StrPart::Lit(text)] => text.clone(),
+                _ => {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "an import path is a plain string".to_string(),
+                        *span,
+                    ))
+                }
+            };
+            Ok(Import { path, span: *span })
+        }
+        _ => Err(Diagnostic::new(
+            "syntax",
+            "an import is `import \"path\"`".to_string(),
+            head_span(line),
+        )),
+    }
 }
 
 fn head_span(line: &Line) -> Span {
@@ -87,8 +252,21 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
     for pair in lexed.lines.windows(2) {
         let blanks =
             lexed.blank_lines.iter().filter(|b| **b > pair[0].number && **b < pair[1].number).count();
+        let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _)))
+            && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
+        let decl_start = matches!(
+            pair[1].tokens.first(),
+            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _))
+        ) || matches!(
+            (pair[1].tokens.first(), pair[1].tokens.get(1)),
+            (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
+        );
         let required = match pair[1].indent {
-            0 => 1,
+            // the import block stacks; one blank closes it
+            0 if both_imports => 0,
+            // a declaration takes its separating blank; statement lines may
+            // pack — adjacency is the group grammar
+            0 if decl_start => 1,
             _ => 0,
         };
         if blanks != required {
