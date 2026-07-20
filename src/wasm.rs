@@ -9,10 +9,26 @@ thread_local! {
     static SESSION: RefCell<Session> = RefCell::new(Session::new());
     static OUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static FILE: RefCell<String> = RefCell::new("playground".to_string());
+    static RNG: RefCell<crate::eval::Rng> = RefCell::new(crate::eval::Rng::seeded());
 }
 
 fn current_file() -> String {
     FILE.with(|f| f.borrow().clone())
+}
+
+/// A pseudo-random int in `[0, n)` off the playground's generator, shared by
+/// the interpreter and compiled execution paths so a program draws the same
+/// stream whichever backend runs it.
+pub(crate) fn next_random(n: u64) -> u64 {
+    RNG.with(|r| r.borrow_mut().below(n))
+}
+
+/// Reseed the playground's generator. The CLI and the differential lattice
+/// stay deterministic on a fixed seed; the browser hands in the clock so a
+/// program that uses `random` differs from one run to the next.
+#[no_mangle]
+pub extern "C" fn kanso_set_seed(seed: u32) {
+    RNG.with(|r| *r.borrow_mut() = crate::eval::Rng::from_seed(seed as u64));
 }
 
 /// Names the source for err origins and diagnostics; the differential
@@ -27,7 +43,6 @@ pub extern "C" fn kanso_set_file(ptr: *const u8, len: usize) {
 /// filesystem, argv, or stdin in the browser.
 struct BrowserExecutor {
     stdout: String,
-    rng: crate::eval::Rng,
 }
 
 impl Executor for BrowserExecutor {
@@ -37,7 +52,7 @@ impl Executor for BrowserExecutor {
     }
 
     fn random(&mut self, n: u64) -> u64 {
-        self.rng.below(n)
+        next_random(n)
     }
 
     fn args(&mut self) -> Vec<String> {
@@ -157,7 +172,7 @@ pub extern "C" fn kanso_take_rt_error() {
 #[no_mangle]
 pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
     let input = take_input(ptr, len);
-    let mut executor = BrowserExecutor { stdout: String::new(), rng: crate::eval::Rng::seeded() };
+    let mut executor = BrowserExecutor { stdout: String::new() };
     let result =
         SESSION.with(|session| session.borrow_mut().eval(&input, &mut executor));
     match result {
@@ -201,7 +216,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
             return 1;
         }
     };
-    let mut executor = BrowserExecutor { stdout: String::new(), rng: crate::eval::Rng::seeded() };
+    let mut executor = BrowserExecutor { stdout: String::new() };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),

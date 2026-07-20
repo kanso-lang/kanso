@@ -136,6 +136,12 @@ fn run_interpreted(program: &ast::Program) -> ExitCode {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+fn repl() -> ExitCode {
+    ExitCode::FAILURE
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn repl() -> ExitCode {
     use rustyline::error::ReadlineError;
     println!(
@@ -207,12 +213,14 @@ fn repl() -> ExitCode {
 
 /// Multi-line input: fn/type declarations and block-form constants read
 /// until a blank line.
+#[cfg(not(target_arch = "wasm32"))]
 fn opens_block(line: &str) -> bool {
     let head = line.strip_prefix("pub ").unwrap_or(line);
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
 }
 
 /// `:`-directives talk to the session itself, outside the language's grammar.
+#[cfg(not(target_arch = "wasm32"))]
 fn directive(line: &str, session: &mut kanso::repl::Session) {
     let mut words = line.split_whitespace();
     let verb = words.next().unwrap_or("");
@@ -238,6 +246,7 @@ fn directive(line: &str, session: &mut kanso::repl::Session) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn report(outcome: Result<kanso::repl::Outcome, String>) {
     match outcome {
         Ok(kanso::repl::Outcome::Defined(echo)) => println!("{echo}"),
