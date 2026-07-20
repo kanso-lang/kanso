@@ -32,6 +32,9 @@ use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
 use crate::infer::{self, Set, BOOL, BYTES, FAIL, FLOAT, INT, STR};
 use std::collections::{HashMap, HashSet};
 
+/// A function group: its name and arity.
+pub type Group = (String, usize);
+
 const SCALAR: Set = INT | FLOAT | BOOL;
 const THREADED: Set = SCALAR | STR | BYTES;
 
@@ -59,12 +62,12 @@ pub enum Verdict {
 /// cluster id (a self-loop is a cluster of one), plus the tail-entry edges
 /// that must be emitted as plain calls so the loop they enter can bracket.
 pub struct Beats {
-    pub ids: HashMap<(String, usize), usize>,
-    pub demoted: HashSet<((String, usize), (String, usize))>,
+    pub ids: HashMap<Group, usize>,
+    pub demoted: HashSet<(Group, Group)>,
 }
 
 impl Beats {
-    pub fn same_cluster(&self, a: &(String, usize), b: &(String, usize)) -> bool {
+    pub fn same_cluster(&self, a: &Group, b: &Group) -> bool {
         match (self.ids.get(a), self.ids.get(b)) {
             (Some(x), Some(y)) => x == y,
             _ => false,
@@ -104,11 +107,11 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
 fn demotable_entries(
     program: &Program,
     inference: &infer::Inference,
-) -> Vec<((String, usize), Vec<(String, usize)>)> {
+) -> Vec<(Group, Vec<Group>)> {
     let allocating = alloc_groups(program);
-    let mut cyclic: HashSet<(String, usize)> = HashSet::new();
+    let mut cyclic: HashSet<Group> = HashSet::new();
     // a group is cyclic when any tail path returns to it (self-edge or SCC)
-    let mut tail_edges: Vec<((String, usize), (String, usize))> = Vec::new();
+    let mut tail_edges: Vec<(Group, Group)> = Vec::new();
     for decl in &program.fns {
         let from = (decl.name.clone(), decl.params.len());
         for tail in tail_exprs(decl.body.last()) {
@@ -137,7 +140,7 @@ fn demotable_entries(
         {
             continue;
         }
-        let callers: HashSet<(String, usize)> = tail_edges
+        let callers: HashSet<Group> = tail_edges
             .iter()
             .filter(|(from, to)| *to == group && *from != group)
             .map(|(from, _)| from.clone())
@@ -182,9 +185,9 @@ fn self_args_cross(
 
 /// Groups belonging to any multi-group tail cycle.
 fn tail_cycles(
-    edges: &[((String, usize), (String, usize))],
-) -> Vec<Vec<(String, usize)>> {
-    let nodes: Vec<(String, usize)> = {
+    edges: &[(Group, Group)],
+) -> Vec<Vec<Group>> {
+    let nodes: Vec<Group> = {
         let mut set = HashSet::new();
         for (a, b) in edges {
             set.insert(a.clone());
@@ -194,7 +197,7 @@ fn tail_cycles(
         v.sort();
         v
     };
-    let index: HashMap<&(String, usize), usize> =
+    let index: HashMap<&Group, usize> =
         nodes.iter().enumerate().map(|(i, n)| (n, i)).collect();
     let mut adj = vec![Vec::new(); nodes.len()];
     for (a, b) in edges {
