@@ -108,6 +108,7 @@ impl Beats {
 
 pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
     let mut ids = HashMap::new();
+    let mut carried = HashMap::new();
     let mut next = 0;
     for (name, arity, v) in classify_all(program, inference) {
         if v == Verdict::Beat {
@@ -115,14 +116,16 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
             next += 1;
         }
     }
-    for cluster in eligible_clusters(program, inference) {
+    for (cluster, cluster_carried) in eligible_clusters(program, inference) {
         for member in cluster {
             ids.insert(member, next);
         }
         next += 1;
+        for (group, positions) in cluster_carried {
+            carried.insert(group, positions);
+        }
     }
     let mut demoted = HashSet::new();
-    let mut carried = HashMap::new();
     for (callee, callers, positions) in demotable_entries(program, inference) {
         ids.insert(callee.clone(), next);
         next += 1;
@@ -314,7 +317,7 @@ fn tail_cycles(
 fn eligible_clusters(
     program: &Program,
     inference: &infer::Inference,
-) -> Vec<Vec<(String, usize)>> {
+) -> Vec<(Vec<Group>, HashMap<Group, Vec<usize>>)> {
     let groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> = program
             .fns
@@ -359,21 +362,24 @@ fn eligible_clusters(
         if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
             continue;
         }
-        if cluster_edges_ok(program, inference, &groups, &members, &edges) {
-            out.push(scc.iter().map(|&g| groups[g].clone()).collect());
+        if let Some(carried) =
+            cluster_edges_ok(program, inference, &groups, &members, &edges)
+        {
+            out.push((scc.iter().map(|&g| groups[g].clone()).collect(), carried));
         }
     }
     out
 }
 
-/// The threaded-slot fixpoint plus the per-edge argument check.
+/// The threaded-slot fixpoint plus the per-edge argument check. Crossing
+/// slots become carried; growth in a carried slot disqualifies the cluster.
 fn cluster_edges_ok(
     program: &Program,
     inference: &infer::Inference,
     groups: &[(String, usize)],
     members: &HashSet<usize>,
     edges: &[(usize, usize, usize, &Vec<Expr>)],
-) -> bool {
+) -> Option<HashMap<Group, Vec<usize>>> {
     let inner: Vec<&(usize, usize, usize, &Vec<Expr>)> = edges
         .iter()
         .filter(|(from, to, _, _)| members.contains(from) && members.contains(to))
@@ -383,10 +389,13 @@ fn cluster_edges_ok(
         group_param_set(program, inference, name, *arity, i)
     };
     // start: every slot whose values are all immutable-payload is a candidate
+    // an EMPTY slot set means inference saw no direct call site (the group
+    // is only ever entered through a lambda) — unknown, never assumed safe
     let mut threaded: HashSet<(usize, usize)> = HashSet::new();
     for &g in members {
         for i in 0..groups[g].1 {
-            if slot_set(g, i) & !FAIL & !THREADED == 0 {
+            let s = slot_set(g, i);
+            if s != 0 && s & !FAIL & !THREADED == 0 {
                 threaded.insert((g, i));
             }
         }
@@ -417,12 +426,44 @@ fn cluster_edges_ok(
             break;
         }
     }
-    // every edge argument lands in a scalar slot or a surviving threaded slot
-    inner.iter().all(|(_, to, _, args)| {
-        (0..args.len()).all(|i| {
-            slot_set(*to, i) & !FAIL & !SCALAR == 0 || threaded.contains(&(*to, i))
-        })
-    })
+    // every remaining edge argument becomes a carried slot on its callee;
+    // growth in a carried slot disqualifies the cluster
+    let mut carried: HashMap<Group, Vec<usize>> = HashMap::new();
+    for (_, to, di, args) in &inner {
+        let decl = &program.fns[*di];
+        for (i, arg) in args.iter().enumerate() {
+            let s = slot_set(*to, i);
+            if (s != 0 && s & !FAIL & !SCALAR == 0) || threaded.contains(&(*to, i)) {
+                continue;
+            }
+            if let Expr::App { head: ah, args: aargs, .. } = arg {
+                if let Expr::Ident(op, _) = ah.as_ref() {
+                    let own = decl.params.get(i).and_then(|p| match p {
+                        Pattern::Var(n, _) => Some(n.as_str()),
+                        _ => None,
+                    });
+                    let extends_self = ["concat", "push", "put"].contains(&op.as_str())
+                        && aargs.first().is_some_and(|a| {
+                            matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own)
+                        });
+                    if extends_self {
+                        return None;
+                    }
+                }
+            }
+            let slots = carried.entry(groups[*to].clone()).or_default();
+            if !slots.contains(&i) {
+                slots.push(i);
+            }
+        }
+    }
+    for slots in carried.values_mut() {
+        slots.sort_unstable();
+        if slots.len() > K_CARRY_MAX {
+            return None;
+        }
+    }
+    Some(carried)
 }
 
 /// Strongly connected components of the tail-call graph, returned only for
@@ -499,8 +540,10 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
         .into_iter()
         .map(|(callee, _, _)| callee)
         .collect();
-    let clustered: HashSet<Group> =
-        eligible_clusters(program, inference).into_iter().flatten().collect();
+    let clustered: HashSet<Group> = eligible_clusters(program, inference)
+        .into_iter()
+        .flat_map(|(members, _)| members)
+        .collect();
     let mut rows: Vec<(String, usize, Verdict)> = classify_all(program, inference)
         .into_iter()
         .filter(|(name, arity, _)| {
