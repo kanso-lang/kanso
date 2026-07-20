@@ -1,7 +1,7 @@
 type post
-  author: string
-  body: string
-  title: string
+  author:string
+  body:string
+  title:string
 
 main =
   hello = post "clay" "a language of only decisions" "hello kanso"

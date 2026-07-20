@@ -16,9 +16,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">records.kso</div>
   <pre><code><span class="k">type</span> <span class="t">track</span>
-  artist: <span class="t">string</span>
-  minutes: <span class="t">int</span>
-  title: <span class="t">string</span>
+  artist:<span class="t">string</span>
+  minutes:<span class="t">int</span>
+  title:<span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
@@ -39,9 +39,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">keyed.kso</div>
   <pre><code><span class="k">type</span> <span class="t">track</span>
-  artist: <span class="t">string</span>
-  minutes: <span class="t">int</span>
-  title: <span class="t">string</span>
+  artist:<span class="t">string</span>
+  minutes:<span class="t">int</span>
+  title:<span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
@@ -58,9 +58,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">peek_check.kso</div>
   <pre><code><span class="k">type</span> <span class="t">track</span>
-  artist: <span class="t">string</span>
-  minutes: <span class="t">int</span>
-  title: <span class="t">string</span>
+  artist:<span class="t">string</span>
+  minutes:<span class="t">int</span>
+  title:<span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="t">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
@@ -80,9 +80,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">credit.kso</div>
   <pre><code><span class="k">type</span> <span class="t">track</span>
-  artist: <span class="t">string</span>
-  minutes: <span class="t">int</span>
-  title: <span class="t">string</span>
+  artist:<span class="t">string</span>
+  minutes:<span class="t">int</span>
+  title:<span class="t">string</span>
 
 <span class="k">fn</span> <span class="f">credit</span> (<span class="t">track</span> artist <span class="o">_</span> title)
   <span class="s">"<span class="i">{title}</span>—<span class="i">{artist}</span>"</span>
@@ -232,8 +232,8 @@ coming soon</code></pre>
   <pre><code><span class="k">type</span> <span class="t">missing</span>
 
 <span class="k">type</span> <span class="t">post</span>
-  body: <span class="t">string</span>
-  title: <span class="t">missing</span> <span class="t">string</span>
+  body:<span class="t">string</span>
+  title:<span class="t">missing</span> <span class="t">string</span>
 
 <span class="k">fn</span> <span class="f">headline</span> (<span class="t">post</span> <span class="o">_</span> title)
   <span class="f">show</span> title
@@ -264,7 +264,7 @@ coming soon</code></pre>
   <pre><code><span class="k">type</span> <span class="t">missing</span>
 
 <span class="k">type</span> <span class="t">post</span>
-  title: <span class="t">missing</span> <span class="t">string</span>
+  title:<span class="t">missing</span> <span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   p <span class="o">=</span> <span class="t">post</span> <span class="n">42</span>
@@ -359,14 +359,14 @@ positive</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">events.kso</div>
   <pre><code><span class="k">type</span> <span class="t">joined</span>
-  who: <span class="t">string</span>
+  who:<span class="t">string</span>
 
 <span class="k">type</span> <span class="t">left</span>
-  who: <span class="t">string</span>
+  who:<span class="t">string</span>
 
 <span class="k">type</span> <span class="t">renamed</span>
-  after: <span class="t">string</span>
-  before: <span class="t">string</span>
+  after:<span class="t">string</span>
+  before:<span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">render</span> (<span class="t">joined</span> <span class="s">"clay"</span>))

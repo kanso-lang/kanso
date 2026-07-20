@@ -141,6 +141,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
                 check_marker_calls(arg, markers, diags);
             }
         }
+        Expr::Field { base, .. } => check_marker_calls(base, markers, diags),
         Expr::Index { base, index, .. } => {
             check_marker_calls(base, markers, diags);
             check_marker_calls(index, markers, diags);
@@ -644,6 +645,7 @@ impl Resolver<'_> {
     fn resolve_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Int(..) | Expr::Float(..) => {}
+            Expr::Field { base, .. } => self.resolve_expr(base),
             Expr::MapLit(pairs, _) => {
                 for (key, value) in pairs {
                     self.resolve_expr(key);

@@ -1,6 +1,6 @@
 type parse_failure
-  position: int
-  reason: string
+  position:int
+  reason:string
 
 _bytes_false = [102 97 108 115 101]
 

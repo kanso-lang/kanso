@@ -2,6 +2,6 @@ fn alpha x
   x
 
 type bravo
-  n: int
+  n:int
 
 main = print "{alpha 1}"

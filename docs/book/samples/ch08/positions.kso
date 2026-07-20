@@ -1,6 +1,6 @@
 type parse_failure
-  position: int
-  reason: string
+  position:int
+  reason:string
 
 fn _both true true
   true

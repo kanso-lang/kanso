@@ -1,15 +1,15 @@
 type _parsed
-  pos: int
-  value: json
+  pos:int
+  value:json
 
 type defect
-  reason: string
+  reason:string
 
 type json_null
 
 type parse_failure
-  position: int
-  reason: string
+  position:int
+  reason:string
 
 fn _encode_entry (entry k v)
   "{encode k}:{encode v}"

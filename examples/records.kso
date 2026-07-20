@@ -1,11 +1,11 @@
 type employee
-  age: int
-  name: string
-  salary: int
+  age:int
+  name:string
+  salary:int
 
 type user
-  age: int
-  name: string
+  age:int
+  name:string
 
 main =
   clay = user 47 "clay"

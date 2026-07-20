@@ -7,8 +7,8 @@ type null
 type pending
 
 type task
-  status: active archived pending
-  title: null string
+  status:active archived pending
+  title:null string
 
 fn label active
   "active"
