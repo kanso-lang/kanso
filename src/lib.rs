@@ -1,3 +1,4 @@
+pub mod advisory;
 pub mod ast;
 pub mod beat;
 pub mod check;
@@ -48,6 +49,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
+    foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         return Err(diag::render(&diags, file, source));
@@ -353,6 +355,57 @@ fn unused_imports(
         .collect()
 }
 
+/// A positional read into a foreign type. Naming a foreign type (annotation,
+/// nullary arm) is free; opening its structure is the owner's privilege.
+fn foreign_destructures(program: &ast::Program, diags: &mut Vec<diag::Diagnostic>) {
+    fn walk(p: &ast::Pattern, diags: &mut Vec<diag::Diagnostic>, span: diag::Span) {
+        if let ast::Pattern::Ctor { ty, fields } = p {
+            if ty.contains('/') && !fields.is_empty() {
+                diags.push(diag::Diagnostic::new(
+                    "opacity",
+                    format!(
+                        "`{ty}` is foreign — its structure does not cross an \
+                         import; use its module's pub operations"
+                    ),
+                    span,
+                ));
+                return;
+            }
+            for f in fields {
+                walk(f, diags, span);
+            }
+        }
+    }
+    for decl in &program.fns {
+        for p in &decl.params {
+            walk(p, diags, decl.span);
+        }
+        for stmt in &decl.body {
+            if let ast::Stmt::Bind { pattern, expr } = stmt {
+                walk(pattern, diags, *expr_span(expr));
+            }
+        }
+    }
+}
+
+fn expr_span(e: &ast::Expr) -> &diag::Span {
+    match e {
+        ast::Expr::Ident(_, s)
+        | ast::Expr::App { span: s, .. }
+        | ast::Expr::Index { span: s, .. }
+        | ast::Expr::BinOp { span: s, .. }
+        | ast::Expr::Join { span: s, .. }
+        | ast::Expr::Seq(_, _, s)
+        | ast::Expr::Lambda { span: s, .. }
+        | ast::Expr::List(_, s)
+        | ast::Expr::MapLit(_, s)
+        | ast::Expr::Str(_, s)
+        | ast::Expr::Int(_, s)
+        | ast::Expr::Float(_, s) => s,
+        ast::Expr::Field { span: s, .. } => s,
+    }
+}
+
 /// A qualified reference to a name its module did not mark pub.
 fn private_uses(
     stmt: &ast::Stmt,
@@ -501,6 +554,7 @@ fn compile_module_inner(
             }
         }
         diags.extend(unused_imports(&program.imports, &quals));
+        foreign_destructures(program, &mut diags);
         if !diags.is_empty() {
             diags.sort_by_key(|d| (d.span.line, d.span.col));
             return Err(diag::render(&diags, file, source));

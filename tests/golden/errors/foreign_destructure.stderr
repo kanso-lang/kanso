@@ -1,0 +1,4 @@
+error[opacity]: `json/parse_failure` is foreign — its structure does not cross an import; use its module's pub operations
+  --> foreign_destructure.kso:3:31
+   3 | json/parse_failure p reason = json/parse_failure 3 "boom"
+                                     ^

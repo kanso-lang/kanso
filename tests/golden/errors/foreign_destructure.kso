@@ -1,0 +1,4 @@
+import "std/json"
+
+json/parse_failure p reason = json/parse_failure 3 "boom"
+print "{p} {reason}"

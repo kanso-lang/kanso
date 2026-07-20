@@ -66,6 +66,9 @@ fn main() -> ExitCode {
         }
     }
     if command == "check" {
+        for advisory in kanso::advisory::door_advisories(&program) {
+            eprintln!("{advisory}");
+        }
         println!("{file}: ok");
         return ExitCode::SUCCESS;
     }

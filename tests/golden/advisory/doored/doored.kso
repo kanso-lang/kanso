@@ -1,0 +1,7 @@
+import "std/json"
+
+pub fn describe f:json/parse_failure
+  "{f}"
+
+pub fn parse text
+  json/decode text
