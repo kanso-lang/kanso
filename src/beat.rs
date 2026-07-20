@@ -181,6 +181,9 @@ fn demotable_entries(
         // beat-worthy apart from the entry? crossing args become carried
         let crossing = crossing_positions(program, inference, &name, arity);
         if crossing.len() > K_CARRY_MAX
+            || crossing
+                .iter()
+                .any(|&p| accumulator_grows(program, &name, arity, p))
             || used_as_value(program, &name)
             || !allocating.contains(name.as_str())
         {
@@ -204,6 +207,44 @@ fn demotable_entries(
 /// Mirrors the runtime's K_CARRY_MAX: how many crossing positions a carry
 /// beat may evacuate per iteration.
 const K_CARRY_MAX: usize = 8;
+
+/// A carried position whose next value extends its own previous value —
+/// `push acc x`, `concat acc more`, `put acc k v` feeding the same slot —
+/// grows with the iteration count, and copying it every rewind costs
+/// quadratic bytes where grow-only costs linear. Those accumulators stay on
+/// the grow-only path. Growth hidden behind a closure call is not detected;
+/// the cost-bound frontier owns that case.
+fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usize) -> bool {
+    const EXTENDING: [&str; 3] = ["concat", "push", "put"];
+    for decl in program.fns.iter() {
+        if decl.name != name || decl.params.len() != arity {
+            continue;
+        }
+        let own = decl.params.get(position).and_then(|p| match p {
+            Pattern::Var(n, _) => Some(n.as_str()),
+            _ => None,
+        });
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            if let Expr::App { head: ah, args: aargs, .. } = &args[position] {
+                if let Expr::Ident(op, _) = ah.as_ref() {
+                    let extends_self = EXTENDING.contains(&op.as_str())
+                        && aargs.first().is_some_and(|a| {
+                            matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own)
+                        });
+                    if extends_self {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
 
 /// The self-tail argument positions the boundary rule rejects — the ones a
 /// carry beat must evacuate. Sorted and deduplicated.
@@ -560,6 +601,12 @@ fn classify(
     }
     let crossing = crossing_positions(program, inference, name, arity);
     if !crossing.is_empty() {
+        if let Some(&position) = crossing
+            .iter()
+            .find(|&&p| accumulator_grows(program, name, arity, p))
+        {
+            return Some(Verdict::ArgCrosses { position });
+        }
         if crossing.len() <= K_CARRY_MAX {
             return Some(Verdict::CarryBeat { positions: crossing });
         }
@@ -785,17 +832,26 @@ mod tests {
     }
 
     #[test]
-    fn list_accumulator_loop_is_a_carry_beat() {
-        // the freshly-built accumulator is evacuated through the carry
-        // buffers each iteration instead of blocking the rewind.
+    fn growing_accumulator_stays_grow_only() {
+        // push acc n extends its own previous value: carrying it would copy
+        // quadratic bytes where grow-only allocates linear. The gate keeps
+        // it off the carry path.
         let src = "fn collect 0 acc\n  sum acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 
-        assert_eq!(
-            beats.carried.get(&("collect".to_string(), 2)),
-            Some(&vec![1])
-        );
+        assert!(!beats.ids.contains_key(&("collect".to_string(), 2)));
+    }
+
+    #[test]
+    fn bounded_accumulator_carries() {
+        // a fixed-shape rebuild does not grow with the iteration count; the
+        // carry evacuates it each rewind.
+        let src = "main = print \"{spin 10 [0 1]}\"\n\nfn spin 0 acc\n  sum acc\n\nfn spin n acc\n  a = at acc 1\n  b = at acc 2\n  spin (n - 1) [b (a + b)]\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert_eq!(beats.carried.get(&("spin".to_string(), 2)), Some(&vec![1]));
     }#[test]
     fn tail_entry_from_acyclic_caller_is_demoted() {
         // go tail-calls into spin's loop, but go is acyclic: the entry is
