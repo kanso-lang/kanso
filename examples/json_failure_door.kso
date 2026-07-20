@@ -1,0 +1,4 @@
+import "std/json"
+
+bad = json/decode "[1, 2"
+print "failed at {json/failure_position bad}: {json/failure_reason bad}"

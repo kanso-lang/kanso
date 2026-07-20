@@ -44,11 +44,17 @@ pub fn encode m:json[string]
 fn encode_entry (entry k v)
   "{encode k}:{encode v}"
 
-fn failure_position (err (parse_failure p _))
+pub fn failure_position (err (parse_failure p _))
   p
 
-fn failure_position _
+pub fn failure_position _
   0
+
+pub fn failure_reason (err (parse_failure _ reason))
+  reason
+
+pub fn failure_reason _
+  ""
 
 fn finish _ none
   err (parse_failure 0 "unexpected end of input")
