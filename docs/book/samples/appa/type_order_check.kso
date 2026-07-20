@@ -1,5 +1,7 @@
-type user
-  admin:bool
-  name:string
+fn use_it t
+  t
+
+type thing
+  size:int
 
 pub play = print "x"

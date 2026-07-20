@@ -1,6 +1,6 @@
 plan:
   join {
-  print "steeping the sencha"    # from line 2
-  print "warming the cups"    # from line 3
+  print "steeping the sencha"    # from line 1
+  print "warming the cups"    # from line 2
   } # unordered; both run
-  print "serving"    # from line 4
+  print "serving"    # from line 3

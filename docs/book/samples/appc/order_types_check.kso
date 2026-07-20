@@ -1,7 +1,7 @@
-type bravo
-  n:int
+fn use_it t
+  t
 
-fn alpha x
-  x
+type thing
+  size:int
 
-pub play = print "{alpha 1}"
+pub play = print "x"

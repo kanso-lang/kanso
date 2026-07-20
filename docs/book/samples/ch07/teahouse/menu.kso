@@ -7,5 +7,11 @@ fn base_price "taiyaki"
 fn base_price item
   err "we do not serve {item}"
 
+fn describe (err reason)
+  "gomen: {reason}"
+
+fn describe n
+  "{n} yen, service included"
+
 pub fn price item
   base_price item + 50

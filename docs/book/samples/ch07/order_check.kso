@@ -1,7 +1,4 @@
-fn dango n
-  n + 50
+fn zeta x
+  x
 
-pub play = print "{dango 350} {taiyaki 500}"
-
-fn taiyaki n
-  n + 50
+pub play = print "{zeta 1}"

@@ -254,10 +254,19 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
             lexed.blank_lines.iter().filter(|b| **b > pair[0].number && **b < pair[1].number).count();
         let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _)))
             && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
+        let decl_start = matches!(
+            pair[1].tokens.first(),
+            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _))
+        ) || matches!(
+            (pair[1].tokens.first(), pair[1].tokens.get(1)),
+            (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
+        );
         let required = match pair[1].indent {
             // the import block stacks; one blank closes it
             0 if both_imports => 0,
-            0 => 1,
+            // a declaration takes its separating blank; statement lines may
+            // pack — adjacency is the group grammar
+            0 if decl_start => 1,
             _ => 0,
         };
         if blanks != required {

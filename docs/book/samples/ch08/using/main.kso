@@ -1,12 +1,5 @@
-fn describe (err (parse_failure p reason))
-  "parse failed at byte {p}: {reason}"
-
-fn describe v
-  "decoded: {v}"
-
-main =
-  ok = decode "\{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}"
-  bad = decode "\{\"name\": nope}"
-  print (describe ok)
-  >> print "recoded: {encode ok}"
-  >> print (describe bad)
+ok = decode "\{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}"
+bad = decode "\{\"name\": nope}"
+print (describe ok)
+>> print "recoded: {encode ok}"
+>> print (describe bad)

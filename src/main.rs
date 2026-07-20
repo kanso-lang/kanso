@@ -100,7 +100,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             _ => return None,
         }
     }
-    if (plan || interp) && command != "run" {
+    if (plan || interp) && command != "run" && command != "play" {
         return None;
     }
     if release && command != "build" {

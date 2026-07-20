@@ -3,10 +3,11 @@ gyoza =
   >> sleep 20 >> print "gyoza: flip"
   >> sleep 20 >> print "gyoza: plated"
 
-gyoza
-ramen
+pub play =
+  gyoza
+  ramen
 
 ramen =
-print "ramen: boiling"
->> sleep 30 >> print "ramen: noodles in"
->> sleep 30 >> print "ramen: bowled"
+  print "ramen: boiling"
+  >> sleep 30 >> print "ramen: noodles in"
+  >> sleep 30 >> print "ramen: bowled"

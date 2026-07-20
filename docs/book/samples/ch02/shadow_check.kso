@@ -1,4 +1,4 @@
 tau = 5
-print "{tau}"
-
 tau = 3
+
+print "{tau}"

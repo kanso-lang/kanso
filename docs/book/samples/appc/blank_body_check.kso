@@ -1,3 +1,6 @@
-x = 1
+fn greet _
+  x = 1
 
-print "{x}"
+  print "{x}"
+
+pub play = greet 0
