@@ -529,3 +529,33 @@ Session verdict: every gate fired correctly today — x86 CI caught clippy
 drift, branch protection refused a premature merge, the book rule caught
 the quadratic carry, the cost golden held throughout. Measure first, let
 real code pick the rung, write the soundness argument before the code.
+
+---
+
+## 2026-07-20 — pipe-loop beats: the design is pipe INLINING (spec for the build)
+
+Recon: a tail-position pipe emits `k_maybe_bind(value, closure)` — a plain
+call through C (k_call1), so pipe recursion retains 2-3 frames per cycle
+(O(depth) stack) and is invisible to tail_exprs. The fix is not a bracket
+hack. When the pipe's function is a LITERAL lambda in tail position,
+
+    x . (p -> body)   ≡   v = x; if failure(v) ret v; bind p := v;
+                          emit body in TAIL position
+
+— the bind's exact semantics, inlined. The lambda body's self-call becomes a
+real musttail: beats, the carry, and constant stack all apply through
+machinery already shipped, with zero new runtime.
+
+Build plan (next session's opener):
+1. codegen emit_tail: App{piped, head: literal Lambda} → guard + bind + 
+   emit_tail(lambda body). Mind: multi-pipe chains recurse naturally; the
+   failure guard mirrors k_maybe_bind exactly (byte-identical outputs).
+2. beat.rs tail_exprs/expand_tail: expand through tail pipes into literal
+   lambda bodies so classification sees the self-call; lambda params are
+   locals (not entry-threaded) → crossing → carried, all existing rules.
+3. Gates: differential corpus byte-identical; jsonbench cost golden;
+   pingpong musttail structural specs; VSE — the prediction's verdict
+   (outer trials + cloud loops become carry beats; expect RSS 112MB →
+   single digits, and possibly another time win).
+4. Interp parity: the interpreter's pipe semantics are already bind-exact;
+   only native emission changes.
