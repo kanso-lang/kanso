@@ -216,7 +216,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.
     let mut beat = crate::beat::beat_loops(program, &inference);
-    beat.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
+    beat.ids.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
+    beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
     let mut backend = Backend {
         program,
         inference,
@@ -240,7 +241,7 @@ struct Backend<'a> {
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
-    beat: std::collections::HashMap<(String, usize), usize>,
+    beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
     interned: HashMap<Vec<u8>, String>,
@@ -1551,6 +1552,18 @@ impl<'a> Backend<'a> {
                         return self.emit_parsed_construction(f, args);
                     }
                 }
+                // A demoted tail entry: emitted as a plain call so the
+                // beat loop it enters gets its push/pop bracket. The caller
+                // is acyclic, so the one retained frame is bounded.
+                if self
+                    .beat
+                    .demoted
+                    .contains(&((f.group.clone(), f.arity), (name.clone(), args.len())))
+                {
+                    let value = self.emit_expr(f, expr)?;
+                    self.emit_ret(f, &value);
+                    return Ok(());
+                }
                 let is_program_fn = f.lookup(name).is_none()
                     && !self.type_ids.contains_key(name.as_str())
                     && name != "err"
@@ -1572,8 +1585,7 @@ impl<'a> Backend<'a> {
                     if callee_ret == f.ret_ty {
                         if self
                             .beat
-                            .get(&(name.clone(), n))
-                            .is_some_and(|id| Some(id) == self.beat.get(&(f.group.clone(), f.arity)))
+                            .same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
                         {
                             // a proven beat loop: everything this iteration
                             // allocated is dead; rewind to the entry mark
@@ -2081,7 +2093,7 @@ impl<'a> Backend<'a> {
                 .map(|(i, e)| self.call_arg(f, name, n, i, e))
                 .collect();
             let callee_ret = self.ret_ty(name, n);
-            let beat_entry = self.beat.contains_key(&(name.clone(), n));
+            let beat_entry = self.beat.ids.contains_key(&(name.clone(), n));
             if beat_entry {
                 // entering a beat loop: mark the frontier; args are already
                 // evaluated, so they live below the mark

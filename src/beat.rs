@@ -55,25 +55,156 @@ pub enum Verdict {
     UsedAsValue,
 }
 
-/// Every beat group, mapped to its cluster id. A self-loop is a cluster of
-/// one; a mutual-recursion cluster shares one id across its members, and
-/// codegen rewinds only on tail calls that stay inside one cluster.
-pub fn beat_loops(program: &Program, inference: &infer::Inference) -> HashMap<(String, usize), usize> {
-    let mut out = HashMap::new();
+/// The analysis result codegen consumes: every beat group mapped to its
+/// cluster id (a self-loop is a cluster of one), plus the tail-entry edges
+/// that must be emitted as plain calls so the loop they enter can bracket.
+pub struct Beats {
+    pub ids: HashMap<(String, usize), usize>,
+    pub demoted: HashSet<((String, usize), (String, usize))>,
+}
+
+impl Beats {
+    pub fn same_cluster(&self, a: &(String, usize), b: &(String, usize)) -> bool {
+        match (self.ids.get(a), self.ids.get(b)) {
+            (Some(x), Some(y)) => x == y,
+            _ => false,
+        }
+    }
+}
+
+pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
+    let mut ids = HashMap::new();
     let mut next = 0;
     for (name, arity, v) in classify_all(program, inference) {
         if v == Verdict::Beat {
-            out.insert((name, arity), next);
+            ids.insert((name, arity), next);
             next += 1;
         }
     }
     for cluster in eligible_clusters(program, inference) {
         for member in cluster {
-            out.insert(member, next);
+            ids.insert(member, next);
         }
         next += 1;
     }
+    let mut demoted = HashSet::new();
+    for (callee, callers) in demotable_entries(program, inference) {
+        ids.insert(callee.clone(), next);
+        next += 1;
+        for caller in callers {
+            demoted.insert((caller, callee.clone()));
+        }
+    }
+    Beats { ids, demoted }
+}
+
+/// Self-loops whose only defect is a tail entry, where every entering group
+/// is acyclic in the tail-call graph. Demoting those entries to plain calls
+/// costs each caller one bounded stack frame and lets the loop bracket.
+fn demotable_entries(
+    program: &Program,
+    inference: &infer::Inference,
+) -> Vec<((String, usize), Vec<(String, usize)>)> {
+    let allocating = alloc_groups(program);
+    let mut cyclic: HashSet<(String, usize)> = HashSet::new();
+    // a group is cyclic when any tail path returns to it (self-edge or SCC)
+    let mut tail_edges: Vec<((String, usize), (String, usize))> = Vec::new();
+    for decl in &program.fns {
+        let from = (decl.name.clone(), decl.params.len());
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            let to = (callee.clone(), args.len());
+            if from == to {
+                cyclic.insert(from.clone());
+            }
+            tail_edges.push((from.clone(), to));
+        }
+    }
+    for cluster in tail_cycles(&tail_edges) {
+        cyclic.extend(cluster);
+    }
+    let mut out = Vec::new();
+    for (name, arity, v) in classify_all(program, inference) {
+        if v != Verdict::OutsideTailCall {
+            continue;
+        }
+        let group = (name.clone(), arity);
+        // beat-worthy apart from the entry? re-check the self-tail arguments
+        if self_args_cross(program, inference, &name, arity)
+            || used_as_value(program, &name)
+            || !allocating.contains(name.as_str())
+        {
+            continue;
+        }
+        let callers: HashSet<(String, usize)> = tail_edges
+            .iter()
+            .filter(|(from, to)| *to == group && *from != group)
+            .map(|(from, _)| from.clone())
+            .collect();
+        if !callers.is_empty() && callers.iter().all(|c| !cyclic.contains(c)) {
+            let mut list: Vec<_> = callers.into_iter().collect();
+            list.sort();
+            out.push((group, list));
+        }
+    }
+    out.sort();
     out
+}
+
+/// Does any self-tail-call of the group pass an argument the boundary rule
+/// rejects? The same test the self-loop path applies.
+fn self_args_cross(
+    program: &Program,
+    inference: &infer::Inference,
+    name: &str,
+    arity: usize,
+) -> bool {
+    for (di, decl) in program.fns.iter().enumerate() {
+        if decl.name != name || decl.params.len() != arity {
+            continue;
+        }
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            for (i, arg) in args.iter().enumerate() {
+                if !arg_ok(program, inference, decl, di, name, arity, i, arg) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Groups belonging to any multi-group tail cycle.
+fn tail_cycles(
+    edges: &[((String, usize), (String, usize))],
+) -> Vec<Vec<(String, usize)>> {
+    let nodes: Vec<(String, usize)> = {
+        let mut set = HashSet::new();
+        for (a, b) in edges {
+            set.insert(a.clone());
+            set.insert(b.clone());
+        }
+        let mut v: Vec<_> = set.into_iter().collect();
+        v.sort();
+        v
+    };
+    let index: HashMap<&(String, usize), usize> =
+        nodes.iter().enumerate().map(|(i, n)| (n, i)).collect();
+    let mut adj = vec![Vec::new(); nodes.len()];
+    for (a, b) in edges {
+        adj[index[a]].push(index[b]);
+    }
+    sccs_of(&adj)
+        .into_iter()
+        .filter(|scc| scc.len() >= 2)
+        .map(|scc| scc.into_iter().map(|i| nodes[i].clone()).collect())
+        .collect()
 }
 
 /// Multi-group tail-call cycles that may rewind: every entry from outside is
@@ -198,13 +329,21 @@ fn cluster_edges_ok(
     })
 }
 
-/// Strongly connected components of the tail-call graph (iterative Tarjan),
-/// returned only for real cycles of two or more groups.
+/// Strongly connected components of the tail-call graph, returned only for
+/// real cycles of two or more groups.
 fn tail_sccs(n: usize, edges: &[(usize, usize, usize, &Vec<Expr>)]) -> Vec<Vec<usize>> {
     let mut adj = vec![Vec::new(); n];
     for &(from, to, _, _) in edges {
         adj[from].push(to);
     }
+    let mut out = sccs_of(&adj);
+    out.retain(|scc| scc.len() >= 2);
+    out
+}
+
+/// Iterative Tarjan over an adjacency list.
+fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
+    let n = adj.len();
     let mut index = vec![usize::MAX; n];
     let mut low = vec![0usize; n];
     let mut on_stack = vec![false; n];
@@ -253,7 +392,6 @@ fn tail_sccs(n: usize, edges: &[(usize, usize, usize, &Vec<Expr>)]) -> Vec<Vec<u
             }
         }
     }
-    out.retain(|scc| scc.len() >= 2);
     out
 }
 
@@ -553,11 +691,17 @@ mod tests {
     use super::beat_loops;
     use crate::infer;
 
+    fn compiled(src: &str) -> (crate::ast::Program, infer::Inference) {
+        let program = crate::compile("test.kso", src, true).unwrap();
+        let inference = infer::infer(&program);
+        (program, inference)
+    }
+
     fn loops_of(src: &str) -> std::collections::HashSet<(String, usize)> {
         // the tests assert membership; the cluster ids are irrelevant here
         let program = crate::compile("test.kso", src, true).unwrap();
         let inference = infer::infer(&program);
-        beat_loops(&program, &inference).into_keys().collect()
+        beat_loops(&program, &inference).ids.into_keys().collect()
     }
 
     #[test]
@@ -576,11 +720,30 @@ mod tests {
     }
 
     #[test]
-    fn tail_called_from_outside_is_not_eligible() {
-        // go's tail call enters the loop without a push; the loop's iter
-        // would rewind to some unrelated outer mark.
+    fn tail_entry_from_acyclic_caller_is_demoted() {
+        // go tail-calls into spin's loop, but go is acyclic: the entry is
+        // demoted to a plain call (one bounded frame) and spin brackets.
         let src = "fn go n\n  spin n 0\n\nmain = print \"{go 3}\"\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
-        assert!(!loops_of(src).contains(&("spin".to_string(), 2)));
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert!(beats.ids.contains_key(&("spin".to_string(), 2)));
+        assert!(beats
+            .demoted
+            .contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
+    }
+
+    #[test]
+    fn tail_entry_from_cyclic_caller_stays_ineligible() {
+        // ping and pong form a tail cycle; pong's entry into spin can never
+        // be demoted — a plain call inside a musttail cycle would grow the
+        // stack without bound.
+        let src = "main = print \"{ping 3}\"\n\nfn ping n\n  pong n\n\nfn pong 0\n  spin 2 0\n\nfn pong n\n  ping (n - 1)\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert!(!beats.ids.contains_key(&("spin".to_string(), 2)));
+        assert!(beats.demoted.is_empty());
     }
 
     #[test]
@@ -598,8 +761,8 @@ mod tests {
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference);
         assert!(
-            loops.is_empty(),
-            "json's folds thread lists/maps and must stay ineligible, got {loops:?}"
+            loops.ids.is_empty() && loops.demoted.is_empty(),
+            "json's folds thread lists/maps and must stay ineligible, got {:?}", loops.ids
         );
     }
 }
