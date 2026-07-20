@@ -1,0 +1,6 @@
+fn double n
+  n * 2
+
+pub play = print "{twice 7}"
+
+twice = double
