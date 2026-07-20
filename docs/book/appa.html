@@ -142,8 +142,8 @@ extra_css: /book/book.css
   <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span>
 
 <span class="k">type</span> <span class="t">user</span>
-  admin: <span class="t">bool</span>
-  name: <span class="t">string</span></code></pre>
+  admin:<span class="t">bool</span>
+  name:<span class="t">string</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check type_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `user` up
@@ -175,8 +175,8 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">field_order_check.kso</div>
   <pre><code><span class="k">type</span> <span class="t">user</span>
-  name: <span class="t">string</span>
-  admin: <span class="t">bool</span>
+  name:<span class="t">string</span>
+  admin:<span class="t">bool</span>
 
 <span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
@@ -346,8 +346,8 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">keyed_order_check.kso</div>
   <pre><code><span class="k">type</span> <span class="t">user</span>
-  admin: <span class="t">bool</span>
-  name: <span class="t">string</span>
+  admin:<span class="t">bool</span>
+  name:<span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   { name admin } <span class="o">=</span> <span class="t">user</span> <span class="t">false</span> <span class="s">"clay"</span>
@@ -534,8 +534,8 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">underscore_check.kso</div>
   <pre><code><span class="k">type</span> <span class="t">user</span>
-  admin: <span class="t">bool</span>
-  name: <span class="t">string</span>
+  admin:<span class="t">bool</span>
+  name:<span class="t">string</span>
 
 <span class="f">main</span> <span class="o">=</span>
   <span class="t">user</span> _ name <span class="o">=</span> <span class="t">user</span> <span class="t">false</span> <span class="s">"clay"</span>

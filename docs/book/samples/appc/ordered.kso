@@ -1,5 +1,5 @@
 type circle
-  r: float64
+  r:float64
 
 fn area (circle r)
   r * r * 3.14159

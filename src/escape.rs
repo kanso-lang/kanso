@@ -230,6 +230,9 @@ impl<'a> Analysis<'a> {
     fn expr_safe_calls(&self, ty: &str, e: &Expr) -> bool {
         match e {
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
+            Expr::Field { base, .. } => {
+                !self.produces_ty(ty, base) && self.expr_safe_calls(ty, base)
+            }
             Expr::Str(parts, _) => parts.iter().all(|p| match p {
                 crate::ast::TemplatePart::Lit(_) => true,
                 crate::ast::TemplatePart::Interp(x) => !self.produces_ty(ty, x) && self.expr_safe_calls(ty, x)
@@ -344,6 +347,7 @@ impl<'a> Analysis<'a> {
         // Conservative: ty appears anywhere in this (non-tail) expression.
         match e {
             Expr::Ident(name, _) => name == ty,
+            Expr::Field { base, .. } => self.expr_mentions_ty(ty, base),
             Expr::App { head, args, .. } => {
                 self.expr_mentions_ty(ty, head) || args.iter().any(|a| self.expr_mentions_ty(ty, a))
             }
@@ -384,14 +388,14 @@ mod tests {
 
     #[test]
     fn record_in_a_list_escapes() {
-        let src = "type pt\n  x: int\n  y: int\n\nmain = print \"{length [(mk 1 2) (mk 3 4)]}\"\n\nfn mk a b\n  pt a b\n";
+        let src = "type pt\n  x:int\n  y:int\n\nmain = print \"{length [(mk 1 2) (mk 3 4)]}\"\n\nfn mk a b\n  pt a b\n";
         let program = crate::compile("test.kso", src, true).unwrap();
         assert!(!register_returnable(&program).contains("pt"), "pt escapes into a list");
     }
 
     #[test]
     fn construct_then_destructure_is_returnable() {
-        let src = "type pair\n  a: int\n  b: int\n\nfn add (pair x y)\n  x + y\n\nmain = print \"{add (mk 5)}\"\n\nfn mk n\n  pair n n\n";
+        let src = "type pair\n  a:int\n  b:int\n\nfn add (pair x y)\n  x + y\n\nmain = print \"{add (mk 5)}\"\n\nfn mk n\n  pair n n\n";
         let program = crate::compile("test.kso", src, true).unwrap();
         assert!(register_returnable(&program).contains("pair"), "pair is construct-then-destructure");
     }

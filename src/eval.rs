@@ -451,6 +451,30 @@ impl<'a> Interp<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Value::List(Rc::new(values)))
             }
+            Expr::Field { base, name, span } => {
+                let value = self.eval(base, env, frame)?;
+                if is_failure(&value) {
+                    return Ok(value);
+                }
+                let Value::Record { ty, fields } = &value else {
+                    return Err(RuntimeError {
+                        message: format!(
+                            "`.` reads a field of a record, not {}",
+                            render(&value, true)
+                        ),
+                        span: *span,
+                    });
+                };
+                let decl = self.type_decl(ty).expect("constructed types are declared");
+                let position = decl.fields.iter().position(|(f, _, _)| f == name);
+                match position {
+                    Some(position) => Ok(fields[position].clone()),
+                    None => Err(RuntimeError {
+                        message: format!("`{ty}` has no field `{name}`"),
+                        span: *span,
+                    }),
+                }
+            }
             Expr::Index { base, index, span } => {
                 let container = self.eval(base, env, frame)?;
                 let key = self.eval(index, env, frame)?;

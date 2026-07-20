@@ -1,6 +1,6 @@
 type user
-  age: int
-  name: string
+  age:int
+  name:string
 
 main =
   clay = user 47 "clay"

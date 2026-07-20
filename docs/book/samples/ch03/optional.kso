@@ -1,8 +1,8 @@
 type missing
 
 type post
-  body: string
-  title: missing string
+  body:string
+  title:missing string
 
 fn headline (post _ title)
   show title
