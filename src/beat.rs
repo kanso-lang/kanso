@@ -29,22 +29,39 @@
 //!    position) — a value call would be an unbracketed entry.
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
-use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, REC, STR};
+use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, REC, STR};
 use std::collections::{HashMap, HashSet};
 
 /// A function group: its name and arity.
 pub type Group = (String, usize);
 
 const SCALAR: Set = INT | FLOAT | BOOL;
-/// Sets an entry-threaded bare parameter may carry across a rewind: values
-/// with no post-construction mutation anywhere in the runtime, so a value
+/// Sets an entry-threaded bare parameter may carry across a rewind. A value
 /// that arrived at entry lives wholly below the mark — transitively, since
 /// purity means a value never contains pointers to anything newer than
-/// itself. Maps stay out (the sorted view is cached into an existing header
-/// on first read) and lists stay out (push writes the shared buffer's used
-/// count) — both are writes into below-the-mark storage that rewind would
-/// hand to the next allocation.
-const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC;
+/// itself — so the rewind cannot touch it, provided nothing ever writes an
+/// above-the-mark pointer into it afterward.
+///
+/// Closures, records, and descriptions qualify outright: the runtime writes
+/// them only at construction. Strings and bytes are immutable payloads.
+///
+/// Lists qualify by a narrower argument. Pushing onto a below-mark list
+/// writes only an integer (the shared buffer's used count) and an element
+/// into below-mark spare capacity; the threaded header itself is never
+/// mutated, and a pushed above-mark element is unreachable after the rewind
+/// because only above-mark headers had a length covering its slot. The one
+/// mutation that could re-point a below-mark header above the mark is the
+/// in-place push (k_b_push_mut reallocates the buffer on growth), and it
+/// cannot meet a threaded parameter inside the loop: a threaded slot accepts
+/// only a bare parameter handed onward every iteration, so within a looping
+/// arm the value has a second use and is never linear, and a push result is
+/// an expression, which a threaded slot rejects. An exit arm may push
+/// in-place — and no rewind follows it, because k_beat_pop keeps the region
+/// alive for a heap result. The adversarial tests below pin each case.
+///
+/// Maps stay out: the first read caches a freshly allocated sorted view —
+/// an above-the-mark pointer — into the below-mark header. Instant dangle.
+const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC | LIST;
 
 /// One self-recursive group's fate under the analysis. `Beat` is the only
 /// verdict codegen acts on; the others exist so `report` can say why a loop
@@ -756,6 +773,17 @@ mod tests {
         // f is a closure handed through unchanged: immutable internals,
         // wholly below the entry mark, safe to carry across the rewind.
         let src = "fn go f n\n  spin f n 0\n\nmain =\n  salt = (x -> x * 2)\n  print \"{go salt 5}\"\n\nfn spin f 0 acc\n  f acc\n\nfn spin f n acc\n  step = \"seen {n}\"\n  spin f (n - 1) (acc + length step)\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert!(beats.ids.contains_key(&("spin".to_string(), 3)));
+    }
+
+    #[test]
+    fn list_threaded_loop_is_a_beat() {
+        // the list is handed onward unchanged every iteration: below the
+        // mark, header never mutated, safe across the rewind.
+        let src = "fn go xs n\n  spin xs n 0\n\nmain =\n  base = [10 20 30]\n  print \"{go base 5}\"\n\nfn spin xs 0 acc\n  acc + sum xs\n\nfn spin xs n acc\n  garbage = \"iteration {n}\"\n  spin xs (n - 1) (acc + length garbage)\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 
