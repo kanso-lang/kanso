@@ -1,0 +1,4 @@
+pub play = print "{sum_to 0 1000}"
+
+fn sum_to acc n
+  if (n == 0) acc (sum_to (acc + n) (n - 1))

@@ -1,0 +1,7 @@
+fn even n
+  if (n == 0) true (odd (n - 1))
+
+fn odd n
+  if (n == 0) false (even (n - 1))
+
+pub play = print "{even 100} {odd 100}"
