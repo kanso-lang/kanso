@@ -509,3 +509,23 @@ recursion is O(depth) stack today). **[OPEN — next rung] pipe-loop beats:**
 recognize `x . (p -> ... self ...)` tail-recursion-through-bind, bracket
 it, and let captured accumulators ride the carry. That is where the
 158→single-digit prediction gets its verdict.
+
+---
+
+## 2026-07-20 — the carry MERGED (#53) with the growing-accumulator gate; VSE 15x
+
+The book gate caught what no unit test saw: carrying a growing accumulator
+(push acc x feeding its own slot) copies quadratic bytes — the ch10
+teaching program went 33KB → 16MB of traffic. The gate keeps growth on the
+grow-only path (bounded fixed-shape rebuilds still carry; closure-hidden
+growth is the cost-bound frontier's case). And gating _range_to's growing
+carry deleted most of VSE's runtime: **2.25s pre-campaign → 1.63s with the
+carry → 0.15s with the gate — 15x — output exact to the last digit.**
+beat_iters 4.2M; RSS ~112MB pending the pipe-loop rung (VSE's outer loops
+recurse through pipe-bound lambdas, invisible to tail_exprs, O(depth)
+stack — the open rung that decides the single-digit prediction).
+
+Session verdict: every gate fired correctly today — x86 CI caught clippy
+drift, branch protection refused a premature merge, the book rule caught
+the quadratic carry, the cost golden held throughout. Measure first, let
+real code pick the rung, write the soundness argument before the code.
