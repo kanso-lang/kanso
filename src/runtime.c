@@ -33,7 +33,7 @@ typedef struct {
     KValue* sorted;       /* cached sorted+deduped [k v k v...], or NULL */
     long long sorted_len; /* deduped entry count */
 } KMap;
-typedef struct { KValue (*fn)(void*, KValue); void* env; } KClosure;
+typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; } KClosure;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
@@ -140,12 +140,15 @@ static void k_beat_rewind(KMark* m) {
     k_arena_left = m->left;
 }
 
+void k_carry_clear(int depth);
+
 void k_beat_push(void) {
     if (k_beat_depth < K_BEAT_MAX) {
         KMark* m = &k_beat_stack[k_beat_depth];
         m->block = k_blocks;
         m->ptr = k_arena;
         m->left = k_arena_left;
+        k_carry_clear(k_beat_depth);
     }
     k_beat_depth++;
 }
@@ -157,14 +160,306 @@ void k_beat_iter(void) {
     }
 }
 
+KValue k_beat_pop(KValue r);
+
+/* The fold carry. A carry beat's loop-varying arguments (typically one
+   accumulator) are freshly built each iteration, so the plain rewind would
+   free them. Before rewinding, each staged value is deep-copied into a
+   malloc'd carry buffer — copying runs strictly before the rewind, so source
+   (arena) and destination (buffer) never overlap and no pointer needs
+   rebasing. Two buffers per beat depth alternate: the deep copy severs all
+   sharing with the previous carry, so the buffer it lived in retires the
+   moment the new copy completes. Values already below the mark (the arena
+   that survives the rewind) are shared, not copied — a threaded list inside
+   a carried record costs nothing per iteration. At the pop, a heap result is
+   copied out into the caller's arena and both buffers are freed. */
+static long long k_ptr(void* p);
+
+#define K_CARRY_MAX 8
+
+typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;
+typedef struct { KCarryBuf from; KCarryBuf to; int used_flag; } KCarry;
+static KCarry k_carries[K_BEAT_MAX];
+static KValue k_carry_slots[K_CARRY_MAX];
+static long long k_carry_n = 0;
+
+/* Does p survive the innermost rewind — is it inside the live chain at or
+   below the mark? mark == NULL means "the whole live chain", the test the
+   pop's copy-out wants. */
+static int k_survives(const void* p, KMark* m) {
+    const char* q = (const char*)p;
+    KBlock* b = m ? m->block : k_blocks;
+    const char* frontier = m ? m->ptr : k_arena;
+    for (; b; b = b->next) {
+        const char* start = (const char*)(b + 1);
+        const char* end = (b == (m ? m->block : k_blocks)) ? frontier : start + b->cap;
+        if (q >= start && q < end) return 1;
+        frontier = NULL;
+    }
+    return 0;
+}
+
+typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; } KCopy;
+
+static void* k_copy_alloc(KCopy* cp, size_t n) {
+    n = (n + 15) & ~(size_t)15;
+    if (cp->to_arena) return k_alloc(n);
+    void* p = cp->buf->data + cp->buf->used;
+    cp->buf->used += n;
+    return p;
+}
+
+static size_t k_copy_size(KValue v, KMark* m);
+
+static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
+    (void)p;
+    return (n + 15) & ~(size_t)15;
+}
+
+static size_t k_copy_size(KValue v, KMark* m) {
+    if (!k_is_heap(v.tag)) return 0;
+    const void* p = (const void*)(intptr_t)v.payload;
+    if (k_survives(p, m)) return 0;
+    size_t n = 0;
+    switch (v.tag) {
+        case K_STR: {
+            KStr* s = (KStr*)p;
+            n += k_copy_size_ptr(s, sizeof(KStr), m);
+            if (!k_survives(s->data, m)) n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
+            break;
+        }
+        case K_BYTES: {
+            KBytes* b = (KBytes*)p;
+            n += k_copy_size_ptr(b, sizeof(KBytes), m);
+            if (!k_survives(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
+            break;
+        }
+        case K_LIST: {
+            KList* l = (KList*)p;
+            n += k_copy_size_ptr(l, sizeof(KList), m);
+            n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
+            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            break;
+        }
+        case K_MAP: {
+            KMap* mp = (KMap*)p;
+            n += k_copy_size_ptr(mp, sizeof(KMap), m);
+            n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
+            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            break;
+        }
+        case K_REC: {
+            KRec* r = (KRec*)p;
+            n += k_copy_size_ptr(r, sizeof(KRec), m);
+            n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
+            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            break;
+        }
+        case K_CLOSURE: {
+            KClosure* cl = (KClosure*)p;
+            n += k_copy_size_ptr(cl, sizeof(KClosure), m);
+            n += k_copy_size_ptr(cl->env, sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1), m);
+            for (long long i = 0; i < cl->ncaps; i++) n += k_copy_size(((KValue*)cl->env)[i], m);
+            break;
+        }
+        case K_DESC: {
+            KDesc* d = (KDesc*)p;
+            n += k_copy_size_ptr(d, sizeof(KDesc), m);
+            n += k_copy_size(d->x, m);
+            n += k_copy_size(d->y, m);
+            break;
+        }
+        case K_ERR: {
+            KErrBox* e = (KErrBox*)p;
+            n += k_copy_size_ptr(e, sizeof(KErrBox), m);
+            n += k_copy_size(e->reason, m);
+            for (KHop* h = e->hops; h && !k_survives(h, m); h = h->prev)
+                n += k_copy_size_ptr(h, sizeof(KHop), m);
+            break;
+        }
+        default: break;
+    }
+    return n;
+}
+
+static KValue k_deep_copy(KValue v, KCopy* cp) {
+    if (!k_is_heap(v.tag)) return v;
+    void* p = (void*)(intptr_t)v.payload;
+    if (k_survives(p, cp->mark)) return v;
+    KValue out = v;
+    switch (v.tag) {
+        case K_STR: {
+            KStr* s = (KStr*)p;
+            KStr* ns = k_copy_alloc(cp, sizeof(KStr));
+            ns->len = s->len;
+            if (k_survives(s->data, cp->mark)) {
+                ns->data = s->data;
+            } else {
+                ns->data = k_copy_alloc(cp, (size_t)s->len + 1);
+                memcpy(ns->data, s->data, (size_t)s->len + 1);
+            }
+            out.payload = k_ptr(ns);
+            break;
+        }
+        case K_BYTES: {
+            KBytes* b = (KBytes*)p;
+            KBytes* nb = k_copy_alloc(cp, sizeof(KBytes));
+            nb->len = b->len;
+            if (k_survives(b->data, cp->mark)) {
+                nb->data = b->data;
+            } else {
+                unsigned char* d = k_copy_alloc(cp, (size_t)b->len);
+                memcpy(d, b->data, (size_t)b->len);
+                nb->data = d;
+            }
+            out.payload = k_ptr(nb);
+            break;
+        }
+        case K_LIST: {
+            KList* l = (KList*)p;
+            KList* nl = k_copy_alloc(cp, sizeof(KList));
+            KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1));
+            buf->cap = l->len ? l->len : 1;
+            buf->used = l->len;
+            KValue* items = (KValue*)(buf + 1);
+            for (long long i = 0; i < l->len; i++) items[i] = k_deep_copy(l->items[i], cp);
+            nl->len = l->len;
+            nl->items = items;
+            out.payload = k_ptr(nl);
+            break;
+        }
+        case K_MAP: {
+            KMap* mp = (KMap*)p;
+            KMap* nm = k_copy_alloc(cp, sizeof(KMap));
+            KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)));
+            buf->cap = 2 * (mp->len ? mp->len : 1);
+            buf->used = 2 * mp->len;
+            KValue* pairs = (KValue*)(buf + 1);
+            for (long long i = 0; i < 2 * mp->len; i++) pairs[i] = k_deep_copy(mp->pairs[i], cp);
+            nm->len = mp->len;
+            nm->pairs = pairs;
+            nm->sorted = NULL;
+            nm->sorted_len = 0;
+            out.payload = k_ptr(nm);
+            break;
+        }
+        case K_REC: {
+            KRec* r = (KRec*)p;
+            KRec* nr = k_copy_alloc(cp, sizeof(KRec));
+            KValue* fields = k_copy_alloc(cp, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1));
+            for (long long i = 0; i < r->nfields; i++) fields[i] = k_deep_copy(r->fields[i], cp);
+            nr->type_id = r->type_id;
+            nr->nfields = r->nfields;
+            nr->fields = fields;
+            out.payload = k_ptr(nr);
+            break;
+        }
+        case K_CLOSURE: {
+            KClosure* cl = (KClosure*)p;
+            KClosure* nc = k_copy_alloc(cp, sizeof(KClosure));
+            KValue* env = k_copy_alloc(cp, sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1));
+            for (long long i = 0; i < cl->ncaps; i++) env[i] = k_deep_copy(((KValue*)cl->env)[i], cp);
+            nc->fn = cl->fn;
+            nc->env = env;
+            nc->ncaps = cl->ncaps;
+            out.payload = k_ptr(nc);
+            break;
+        }
+        case K_DESC: {
+            KDesc* d = (KDesc*)p;
+            KDesc* nd = k_copy_alloc(cp, sizeof(KDesc));
+            nd->dtag = d->dtag;
+            nd->x = k_deep_copy(d->x, cp);
+            nd->y = k_deep_copy(d->y, cp);
+            out.payload = k_ptr(nd);
+            break;
+        }
+        case K_ERR: {
+            KErrBox* e = (KErrBox*)p;
+            KErrBox* ne = k_copy_alloc(cp, sizeof(KErrBox));
+            ne->reason = k_deep_copy(e->reason, cp);
+            ne->origin = e->origin;
+            KHop** tail = &ne->hops;
+            KHop* h = e->hops;
+            for (; h && !k_survives(h, cp->mark); h = h->prev) {
+                KHop* nh = k_copy_alloc(cp, sizeof(KHop));
+                nh->fn = h->fn;
+                *tail = nh;
+                tail = &nh->prev;
+            }
+            *tail = h;
+            out.payload = k_ptr(ne);
+            break;
+        }
+        default: break;
+    }
+    return out;
+}
+
+void k_carry_clear(int depth) {
+    /* buffers persist across entries at a depth for reuse; only the flag
+       and fill levels reset */
+    k_carries[depth].used_flag = 0;
+    k_carries[depth].from.used = 0;
+    k_carries[depth].to.used = 0;
+}
+
+/* Closing a beat entry. A non-heap result rewinds as always. A heap result
+   keeps the region alive — and if the loop carried, the result may live in
+   a carry buffer, so it is copied out into the caller's arena before the
+   buffers go idle. */
 KValue k_beat_pop(KValue r) {
     if (k_beat_depth > 0) {
         k_beat_depth--;
-        if (k_beat_depth < K_BEAT_MAX && !k_is_heap(r.tag)) {
-            k_beat_rewind(&k_beat_stack[k_beat_depth]);
+        if (k_beat_depth < K_BEAT_MAX) {
+            KCarry* c = &k_carries[k_beat_depth];
+            if (!k_is_heap(r.tag)) {
+                k_beat_rewind(&k_beat_stack[k_beat_depth]);
+            } else if (c->used_flag) {
+                KCopy cp = { NULL, NULL, 1 };
+                r = k_deep_copy(r, &cp);
+            }
+            c->used_flag = 0;
         }
     }
     return r;
+}
+
+void k_carry_reset(void) { k_carry_n = 0; }
+
+void k_carry_stage(KValue v) {
+    if (k_carry_n < K_CARRY_MAX) k_carry_slots[k_carry_n] = v;
+    k_carry_n++;
+}
+
+KValue k_carry_take(long long i) { return k_carry_slots[i]; }
+
+void k_beat_iter_carry(void) {
+    k_stat_beat_iters++;
+    if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
+    for (long long i = 0; i < k_carry_n; i++) {
+        long long tag = k_carry_slots[i].tag;
+        if (tag == 4 || tag == 5) return; /* failure: the callee propagates it */
+    }
+    KMark* m = &k_beat_stack[k_beat_depth - 1];
+    KCarry* c = &k_carries[k_beat_depth - 1];
+    size_t need = 0;
+    for (long long i = 0; i < k_carry_n; i++) need += k_copy_size(k_carry_slots[i], m);
+    if (c->to.cap < need) {
+        free(c->to.data);
+        c->to.data = malloc(need ? need : 16);
+        if (!c->to.data) { fputs("out of memory\n", stderr); exit(1); }
+        c->to.cap = need ? need : 16;
+    }
+    c->to.used = 0;
+    KCopy cp = { &c->to, m, 0 };
+    for (long long i = 0; i < k_carry_n; i++)
+        k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
+    k_beat_rewind(m);
+    KCarryBuf swap = c->from;
+    c->from = c->to;
+    c->to = swap;
+    c->used_flag = 1;
 }
 
 /* A permanent object: malloc'd, so it lives outside the beat arena and
@@ -985,7 +1280,7 @@ KValue k_closure(KValue (*fn)(void*, KValue), long long ncaps, KValue* caps) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
     memcpy(env, caps, sizeof(KValue) * ncaps);
-    c->fn = fn; c->env = env;
+    c->fn = fn; c->env = env; c->ncaps = ncaps;
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
 

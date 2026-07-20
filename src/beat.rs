@@ -77,6 +77,9 @@ pub enum Verdict {
     /// Argument `position` may carry a heap value across the iteration
     /// boundary — the case the three-way escape split would reclaim.
     ArgCrosses { position: usize },
+    /// The loop rewinds, and the named positions are evacuated through the
+    /// carry buffers each iteration — the fold accumulator's path.
+    CarryBeat { positions: Vec<usize> },
     /// Another group tail-calls it: an entry the bracketing cannot see.
     OutsideTailCall,
     /// Its name is used as a function value: an unbracketed entry.
@@ -89,6 +92,9 @@ pub enum Verdict {
 pub struct Beats {
     pub ids: HashMap<Group, usize>,
     pub demoted: HashSet<(Group, Group)>,
+    /// Carry-beat groups: the self-tail argument positions evacuated through
+    /// the carry buffers at each rewind.
+    pub carried: HashMap<Group, Vec<usize>>,
 }
 
 impl Beats {
@@ -116,14 +122,28 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
         next += 1;
     }
     let mut demoted = HashSet::new();
-    for (callee, callers) in demotable_entries(program, inference) {
+    let mut carried = HashMap::new();
+    for (callee, callers, positions) in demotable_entries(program, inference) {
         ids.insert(callee.clone(), next);
         next += 1;
         for caller in callers {
             demoted.insert((caller, callee.clone()));
         }
+        if !positions.is_empty() {
+            carried.insert(callee, positions);
+        }
     }
-    Beats { ids, demoted }
+    for (name, arity, v) in classify_all(program, inference) {
+        if let Verdict::CarryBeat { positions } = v {
+            let g = (name, arity);
+            if !ids.contains_key(&g) {
+                ids.insert(g.clone(), next);
+                next += 1;
+                carried.insert(g, positions);
+            }
+        }
+    }
+    Beats { ids, demoted, carried }
 }
 
 /// Self-loops whose only defect is a tail entry, where every entering group
@@ -132,7 +152,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
 fn demotable_entries(
     program: &Program,
     inference: &infer::Inference,
-) -> Vec<(Group, Vec<Group>)> {
+) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
     let allocating = alloc_groups(program);
     let mut cyclic: HashSet<Group> = HashSet::new();
     // a group is cyclic when any tail path returns to it (self-edge or SCC)
@@ -158,8 +178,12 @@ fn demotable_entries(
             continue;
         }
         let group = (name.clone(), arity);
-        // beat-worthy apart from the entry? re-check the self-tail arguments
-        if self_args_cross(program, inference, &name, arity)
+        // beat-worthy apart from the entry? crossing args become carried
+        let crossing = crossing_positions(program, inference, &name, arity);
+        if crossing.len() > K_CARRY_MAX
+            || crossing
+                .iter()
+                .any(|&p| accumulator_grows(program, &name, arity, p))
             || used_as_value(program, &name)
             || !allocating.contains(name.as_str())
         {
@@ -173,21 +197,64 @@ fn demotable_entries(
         if !callers.is_empty() && callers.iter().all(|c| !cyclic.contains(c)) {
             let mut list: Vec<_> = callers.into_iter().collect();
             list.sort();
-            out.push((group, list));
+            out.push((group, list, crossing));
         }
     }
     out.sort();
     out
 }
 
-/// Does any self-tail-call of the group pass an argument the boundary rule
-/// rejects? The same test the self-loop path applies.
-fn self_args_cross(
+/// Mirrors the runtime's K_CARRY_MAX: how many crossing positions a carry
+/// beat may evacuate per iteration.
+const K_CARRY_MAX: usize = 8;
+
+/// A carried position whose next value extends its own previous value —
+/// `push acc x`, `concat acc more`, `put acc k v` feeding the same slot —
+/// grows with the iteration count, and copying it every rewind costs
+/// quadratic bytes where grow-only costs linear. Those accumulators stay on
+/// the grow-only path. Growth hidden behind a closure call is not detected;
+/// the cost-bound frontier owns that case.
+fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usize) -> bool {
+    const EXTENDING: [&str; 3] = ["concat", "push", "put"];
+    for decl in program.fns.iter() {
+        if decl.name != name || decl.params.len() != arity {
+            continue;
+        }
+        let own = decl.params.get(position).and_then(|p| match p {
+            Pattern::Var(n, _) => Some(n.as_str()),
+            _ => None,
+        });
+        for tail in tail_exprs(decl.body.last()) {
+            let Expr::App { head, args, piped: false, .. } = tail else { continue };
+            let Expr::Ident(callee, _) = head.as_ref() else { continue };
+            if callee != name || args.len() != arity {
+                continue;
+            }
+            if let Expr::App { head: ah, args: aargs, .. } = &args[position] {
+                if let Expr::Ident(op, _) = ah.as_ref() {
+                    let extends_self = EXTENDING.contains(&op.as_str())
+                        && aargs.first().is_some_and(|a| {
+                            matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own)
+                        });
+                    if extends_self {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// The self-tail argument positions the boundary rule rejects — the ones a
+/// carry beat must evacuate. Sorted and deduplicated.
+fn crossing_positions(
     program: &Program,
     inference: &infer::Inference,
     name: &str,
     arity: usize,
-) -> bool {
+) -> Vec<usize> {
+    let mut out = Vec::new();
     for (di, decl) in program.fns.iter().enumerate() {
         if decl.name != name || decl.params.len() != arity {
             continue;
@@ -199,13 +266,14 @@ fn self_args_cross(
                 continue;
             }
             for (i, arg) in args.iter().enumerate() {
-                if !arg_ok(program, inference, decl, di, name, arity, i, arg) {
-                    return true;
+                if !arg_ok(program, inference, decl, di, name, arity, i, arg) && !out.contains(&i) {
+                    out.push(i);
                 }
             }
         }
     }
-    false
+    out.sort_unstable();
+    out
 }
 
 /// Groups belonging to any multi-group tail cycle.
@@ -429,7 +497,7 @@ fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
 pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
     let demoted: HashSet<Group> = demotable_entries(program, inference)
         .into_iter()
-        .map(|(callee, _)| callee)
+        .map(|(callee, _, _)| callee)
         .collect();
     let clustered: HashSet<Group> =
         eligible_clusters(program, inference).into_iter().flatten().collect();
@@ -453,6 +521,14 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
                     "grow-only: argument {} may carry heap across the iteration",
                     position + 1
                 ),
+                Verdict::CarryBeat { positions } => {
+                    let list: Vec<String> =
+                        positions.iter().map(|p| (p + 1).to_string()).collect();
+                    format!(
+                        "carry beat: rewinds every iteration, evacuating argument {}",
+                        list.join(", ")
+                    )
+                }
                 Verdict::OutsideTailCall => {
                     "grow-only: another group tail-calls it (unbracketed entry)".to_string()
                 }
@@ -496,8 +572,7 @@ fn classify(
 ) -> Option<Verdict> {
     let mut has_self_tail = false;
     let mut outside_tail = false;
-    let mut arg_crosses: Option<usize> = None;
-    for (di, decl) in program.fns.iter().enumerate() {
+    for decl in program.fns.iter() {
         let in_group = decl.name == name && decl.params.len() == arity;
         for tail in tail_exprs(decl.body.last()) {
             let Expr::App { head, args, piped: false, .. } = tail else { continue };
@@ -510,13 +585,6 @@ fn classify(
                 continue;
             }
             has_self_tail = true;
-            for (i, arg) in args.iter().enumerate() {
-                if arg_crosses.is_none()
-                    && !arg_ok(program, inference, decl, di, name, arity, i, arg)
-                {
-                    arg_crosses = Some(i);
-                }
-            }
         }
     }
     if !has_self_tail {
@@ -525,14 +593,24 @@ fn classify(
     if outside_tail {
         return Some(Verdict::OutsideTailCall);
     }
-    if let Some(position) = arg_crosses {
-        return Some(Verdict::ArgCrosses { position });
-    }
     if used_as_value(program, name) {
         return Some(Verdict::UsedAsValue);
     }
     if !allocating.contains(name) {
         return Some(Verdict::PureLoop);
+    }
+    let crossing = crossing_positions(program, inference, name, arity);
+    if !crossing.is_empty() {
+        if let Some(&position) = crossing
+            .iter()
+            .find(|&&p| accumulator_grows(program, name, arity, p))
+        {
+            return Some(Verdict::ArgCrosses { position });
+        }
+        if crossing.len() <= K_CARRY_MAX {
+            return Some(Verdict::CarryBeat { positions: crossing });
+        }
+        return Some(Verdict::ArgCrosses { position: crossing[0] });
     }
     Some(Verdict::Beat)
 }
@@ -542,9 +620,10 @@ fn classify(
 /// fixpoint. Purity through helpers is thus visible — a scanner that only
 /// compares, adds, and recurses through pure predicates stays out.
 fn alloc_groups(program: &Program) -> HashSet<&str> {
+    let fn_names: HashSet<&str> = program.fns.iter().map(|d| d.name.as_str()).collect();
     let mut allocating: HashSet<&str> = HashSet::new();
     for d in &program.fns {
-        if d.body.iter().any(|s| stmt_allocates(s, &allocating, true)) {
+        if d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, true)) {
             allocating.insert(d.name.as_str());
         }
     }
@@ -552,7 +631,7 @@ fn alloc_groups(program: &Program) -> HashSet<&str> {
         let mut changed = false;
         for d in &program.fns {
             if !allocating.contains(d.name.as_str())
-                && d.body.iter().any(|s| stmt_allocates(s, &allocating, false))
+                && d.body.iter().any(|s| stmt_allocates(s, &fn_names, &allocating, false))
             {
                 allocating.insert(d.name.as_str());
                 changed = true;
@@ -564,19 +643,19 @@ fn alloc_groups(program: &Program) -> HashSet<&str> {
     }
 }
 
-fn stmt_allocates(stmt: &Stmt, allocating: &HashSet<&str>, seed_pass: bool) -> bool {
+fn stmt_allocates(stmt: &Stmt, fn_names: &HashSet<&str>, allocating: &HashSet<&str>, seed_pass: bool) -> bool {
     let e = match stmt {
         Stmt::Bind { expr, .. } => expr,
         Stmt::Expr(e) => e,
     };
-    expr_allocates(e, allocating, seed_pass)
+    expr_allocates(e, fn_names, allocating, seed_pass)
 }
 
 /// Does evaluating `e` allocate? On the seed pass only primitive allocations
 /// count (builders, interpolation, allocating builtins, constructors — any
 /// call that is neither a known-pure builtin nor a user group). On fixpoint
 /// passes a call to an already-allocating group counts too.
-fn expr_allocates(e: &Expr, allocating: &HashSet<&str>, seed_pass: bool) -> bool {
+fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>, seed_pass: bool) -> bool {
     const ALLOCATING: &[&str] = &[
         "chars", "concat", "entries", "err", "filter", "from_code", "join", "map",
         "push", "put", "slice", "sort", "utf8",
@@ -591,26 +670,32 @@ fn expr_allocates(e: &Expr, allocating: &HashSet<&str>, seed_pass: bool) -> bool
         Expr::App { head, args, .. } => {
             let head_allocates = match head.as_ref() {
                 Expr::Ident(n, _) => {
+                    // a name that is neither a builtin nor a program function
+                    // is a closure value: its body is unknowable, so it may
+                    // allocate
                     ALLOCATING.contains(&n.as_str())
+                        || (!PURE.contains(&n.as_str())
+                            && !fn_names.contains(n.as_str())
+                            && n != "if")
                         || (!PURE.contains(&n.as_str())
                             && !seed_pass
                             && allocating.contains(n.as_str()))
                 }
-                other => expr_allocates(other, allocating, seed_pass),
+                other => expr_allocates(other, fn_names, allocating, seed_pass),
             };
-            head_allocates || args.iter().any(|a| expr_allocates(a, allocating, seed_pass))
+            head_allocates || args.iter().any(|a| expr_allocates(a, fn_names, allocating, seed_pass))
         }
         Expr::Index { base, index, .. } => {
-            expr_allocates(base, allocating, seed_pass)
-                || expr_allocates(index, allocating, seed_pass)
+            expr_allocates(base, fn_names, allocating, seed_pass)
+                || expr_allocates(index, fn_names, allocating, seed_pass)
         }
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
-            expr_allocates(lhs, allocating, seed_pass)
-                || expr_allocates(rhs, allocating, seed_pass)
+            expr_allocates(lhs, fn_names, allocating, seed_pass)
+                || expr_allocates(rhs, fn_names, allocating, seed_pass)
         }
         Expr::Seq(a, b, _) => {
-            expr_allocates(a, allocating, seed_pass)
-                || expr_allocates(b, allocating, seed_pass)
+            expr_allocates(a, fn_names, allocating, seed_pass)
+                || expr_allocates(b, fn_names, allocating, seed_pass)
         }
         Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
     }
@@ -747,14 +832,27 @@ mod tests {
     }
 
     #[test]
-    fn list_accumulator_loop_is_not_eligible() {
-        // the accumulator's storage is rebuilt every iteration — a rewind
-        // would free the list the next iteration receives.
-        let src = "fn collect _ 0 acc\n  acc\n\nfn collect cs n acc\n  collect cs (n - 1) (push acc n)\n\nmain =\n  s = \"x\"\n  print \"{length (collect s 3 [])}\"\n";
-        assert!(loops_of(src).is_empty());
+    fn growing_accumulator_stays_grow_only() {
+        // push acc n extends its own previous value: carrying it would copy
+        // quadratic bytes where grow-only allocates linear. The gate keeps
+        // it off the carry path.
+        let src = "fn collect 0 acc\n  sum acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert!(!beats.ids.contains_key(&("collect".to_string(), 2)));
     }
 
     #[test]
+    fn bounded_accumulator_carries() {
+        // a fixed-shape rebuild does not grow with the iteration count; the
+        // carry evacuates it each rewind.
+        let src = "main = print \"{spin 10 [0 1]}\"\n\nfn spin 0 acc\n  sum acc\n\nfn spin n acc\n  a = at acc 1\n  b = at acc 2\n  spin (n - 1) [b (a + b)]\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert_eq!(beats.carried.get(&("spin".to_string(), 2)), Some(&vec![1]));
+    }#[test]
     fn tail_entry_from_acyclic_caller_is_demoted() {
         // go tail-calls into spin's loop, but go is acyclic: the entry is
         // demoted to a plain call (one bounded frame) and spin brackets.
@@ -791,14 +889,15 @@ mod tests {
     }
 
     #[test]
-    fn map_threaded_loop_stays_ineligible() {
-        // a map memoizes its sorted view into an existing header on first
-        // read — a write below the mark that rewind would hand back.
+    fn map_threaded_loop_carries_the_map() {
+        // a map may never thread (its first read caches an above-mark sorted
+        // view into the below-mark header), so the carry evacuates it — the
+        // copy resets the cache, which keeps the rewind sound.
         let src = "fn go m n\n  spin m n 0\n\nmain =\n  prices = [\"a\": 1 \"b\": 2]\n  print \"{go prices 3}\"\n\nfn spin m 0 acc\n  acc + length m\n\nfn spin m n acc\n  step = \"seen {n}\"\n  spin m (n - 1) (acc + length step)\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 
-        assert!(!beats.ids.contains_key(&("spin".to_string(), 3)));
+        assert_eq!(beats.carried.get(&("spin".to_string(), 3)), Some(&vec![0]));
     }
 
     #[test]
