@@ -340,7 +340,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <h3>the data rulings, briefly</h3>
 
-<p>three smaller decisions each hand the compiler more structure while handing the reader less to remember. destructuring always wears braces (<code>{ artist minutes } = song</code>), so every field read is name-resolution against a known record and compiles to fixed offsets. a type may declare zero fields (<code>type null</code>), so a marker like json's null is ordinary library data, not a keyword. and a field may list several permitted types (<code>title: null string</code>), so reads dispatch on what the value is and the "is it null or a value?" conditional becomes unwritable—the compiler sees a closed set of tags it can enumerate and often erase.</p>
+<p>three smaller decisions each hand the compiler more structure while handing the reader less to remember. destructuring always wears braces (<code>{ artist minutes } = song</code>), so every field read is name-resolution against a known record and compiles to fixed offsets. a type may declare zero fields (<code>type null</code>), so a marker like json's null is ordinary library data, not a keyword. and a field may list several permitted types (<code>title:null string</code>), so reads dispatch on what the value is and the "is it null or a value?" conditional becomes unwritable—the compiler sees a closed set of tags it can enumerate and often erase.</p>
 
 <h3>the whole toolchain in a browser tab</h3>
 

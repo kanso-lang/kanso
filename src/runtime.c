@@ -663,6 +663,18 @@ KValue k_keyed_check(KValue v, long long entries) {
     return v;
 }
 
+/* `.` field access: failures ride through; a non-record dies loudly. */
+KValue k_b_field(KValue v, const char* name) {
+    if (!k_not_failure(v)) return v;
+    if (v.tag != K_REC) k_die("`.` reads a field of a record");
+    KRec* r = k_as_rec(v);
+    for (long long i = 0; i < r->nfields; i++) {
+        if (!strcmp(k_type_field_name(r->type_id, i), name)) return r->fields[i];
+    }
+    k_die("no such field");
+    KValue none; none.tag = K_NONE; none.payload = 0; return none;
+}
+
 KValue k_keyed_field(KValue v, const char* name) {
     KRec* r = k_as_rec(v);
     long long n = k_type_field_count(r->type_id);

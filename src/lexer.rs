@@ -14,6 +14,7 @@ pub enum Tok {
     LBrace,
     RBrace,
     Colon,
+    Dot,
     Bind,
     Arrow,
     Pipe,
@@ -290,7 +291,19 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             '{' => Some(Tok::LBrace),
             '}' => Some(Tok::RBrace),
             ':' => Some(Tok::Colon),
-            '.' => Some(Tok::Pipe),
+            '.' => {
+                // a dot pressed tight against both neighbors reads a field
+                // (u.name); with air around it, it is the pipe
+                let tight_left = s.pos > 0
+                    && s.chars
+                        .get(s.pos - 1)
+                        .is_some_and(|p| p.is_ascii_alphanumeric() || *p == '_' || *p == ')' || *p == ']');
+                let tight_right = s
+                    .chars
+                    .get(s.pos + 1)
+                    .is_some_and(|n| n.is_ascii_lowercase() || *n == '_');
+                Some(if tight_left && tight_right { Tok::Dot } else { Tok::Pipe })
+            }
             _ => None,
         };
         if let Some(tok) = tok {

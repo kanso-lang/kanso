@@ -154,6 +154,10 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
 fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, Set>) -> Set {
     match expr {
         Expr::Int(..) => INT,
+        Expr::Field { base, .. } => {
+            let _ = eval_expr(ctx, base, env);
+            TOP
+        }
         Expr::Float(..) => FLOAT,
         Expr::Str(parts, _) => {
             let mut fails: Set = 0;

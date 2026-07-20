@@ -1,7 +1,7 @@
 type missing
 
 type post
-  title: missing string
+  title:missing string
 
 main =
   p = post 42

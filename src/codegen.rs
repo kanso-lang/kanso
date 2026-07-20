@@ -91,6 +91,7 @@ declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
+declare %KValue @k_b_field(%KValue, ptr)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -1401,6 +1402,16 @@ impl<'a> Backend<'a> {
             Expr::App { head, args, piped, span } => {
                 self.emit_call_full(f, head, args, *piped, *span)
             }
+            Expr::Field { base, name, .. } => {
+                let b = self.emit_expr(f, base)?;
+                let (label, _) = self.intern(&format!("{name}\0"));
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"
+                ));
+                f.record(&t, TOP);
+                Ok(t)
+            }
             Expr::Index { base, index, span } => {
                 let container = self.emit_expr(f, base)?;
                 let key = self.emit_expr(f, index)?;
@@ -2261,6 +2272,7 @@ impl<'a> Backend<'a> {
 fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Field { base, .. } => collect_idents(base, out),
         Expr::Str(parts, _) => {
             for part in parts {
                 if let TemplatePart::Interp(inner) = part {

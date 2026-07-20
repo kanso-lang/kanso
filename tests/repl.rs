@@ -119,7 +119,7 @@ fn show_renders_one_declaration_without_running_it() {
 fn show_renders_the_session_as_a_canonical_file() {
     let mut session = Session::new();
     let _ = value(&mut session, "fn ada _\n  1");
-    let _ = value(&mut session, "type user\n  name: string");
+    let _ = value(&mut session, "type user\n  name:string");
 
     let file = session.show(None).unwrap();
 

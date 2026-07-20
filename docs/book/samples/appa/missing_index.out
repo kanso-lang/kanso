@@ -1,1 +1,1 @@
-error[endpoint]: unhandled none reached main
+error[runtime]: `.` reads a field of a record

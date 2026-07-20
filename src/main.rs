@@ -221,7 +221,7 @@ fn directive(line: &str, session: &mut kanso::repl::Session) {
 
 fn report(outcome: Result<kanso::repl::Outcome, String>) {
     match outcome {
-        Ok(kanso::repl::Outcome::Defined(names)) => println!("defined {names}"),
+        Ok(kanso::repl::Outcome::Defined(echo)) => println!("{echo}"),
         Ok(kanso::repl::Outcome::Value(rendered)) => match rendered.is_empty() {
             true => {}
             false => println!("{rendered}"),

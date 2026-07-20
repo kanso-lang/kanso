@@ -10,6 +10,7 @@ pub enum Expr {
     Ident(String, Span),
     List(Vec<Expr>, Span),
     App { head: Box<Expr>, args: Vec<Expr>, span: Span, piped: bool },
+    Field { base: Box<Expr>, name: String, span: Span },
     Index { base: Box<Expr>, index: Box<Expr>, span: Span },
     Seq(Box<Expr>, Box<Expr>, Span),
     Lambda { params: Vec<(String, Span)>, body: Box<Expr>, span: Span },
@@ -27,6 +28,7 @@ impl Expr {
     pub fn span(&self) -> Span {
         match self {
             Expr::Int(_, s)
+            | Expr::Field { span: s, .. }
             | Expr::Float(_, s)
             | Expr::MapLit(_, s)
             | Expr::Str(_, s)

@@ -1,6 +1,6 @@
 type null
 
 type post
-  title: null string
+  title:null string
 
 main = print "{post 42}"
