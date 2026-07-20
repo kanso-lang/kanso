@@ -102,21 +102,46 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
 /// can be seen before it is ported to the native and wasm engines.
 fn run_interpreted(program: &ast::Program) -> ExitCode {
     let interp = eval::Interp::new(program);
-    let desc = match interp.run_main() {
-        Ok(eval::Value::Desc(d)) => d,
-        Ok(_) => return ExitCode::SUCCESS,
+    let value = match interp.run_main() {
+        Ok(value) => value,
         Err(e) => {
-            eprintln!("error: {}", e.message);
+            eprintln!("error[runtime]: {}", e.message);
             return ExitCode::FAILURE;
         }
     };
-    let mut executor = eval::RealExecutor { program_args: program_args(), rng: eval::Rng::seeded() };
-    match interp.execute(&desc, &mut executor) {
-        Ok(_) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("error: {}", e.message);
+    match value {
+        eval::Value::Desc(desc) => {
+            let mut executor =
+                eval::RealExecutor { program_args: program_args(), rng: eval::Rng::seeded() };
+            match interp.execute(&desc, &mut executor) {
+                Ok(eval::Value::ErrV(info)) => {
+                    eprint!(
+                        "error[endpoint]: unhandled err reached the executor: {}\n{}",
+                        eval::render(&info.reason, true),
+                        eval::trace_lines(&info)
+                    );
+                    ExitCode::FAILURE
+                }
+                Ok(_) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("error[runtime]: {}", e.message);
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        eval::Value::ErrV(info) => {
+            eprint!(
+                "error[endpoint]: unhandled err reached main: {}\n{}",
+                eval::render(&info.reason, true),
+                eval::trace_lines(&info)
+            );
             ExitCode::FAILURE
         }
+        eval::Value::NoneV => {
+            eprintln!("error[endpoint]: unhandled none reached main");
+            ExitCode::FAILURE
+        }
+        _ => ExitCode::SUCCESS,
     }
 }
 
