@@ -29,14 +29,22 @@
 //!    position) — a value call would be an unbracketed entry.
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
-use crate::infer::{self, Set, BOOL, BYTES, FAIL, FLOAT, INT, STR};
+use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, REC, STR};
 use std::collections::{HashMap, HashSet};
 
 /// A function group: its name and arity.
 pub type Group = (String, usize);
 
 const SCALAR: Set = INT | FLOAT | BOOL;
-const THREADED: Set = SCALAR | STR | BYTES;
+/// Sets an entry-threaded bare parameter may carry across a rewind: values
+/// with no post-construction mutation anywhere in the runtime, so a value
+/// that arrived at entry lives wholly below the mark — transitively, since
+/// purity means a value never contains pointers to anything newer than
+/// itself. Maps stay out (the sorted view is cached into an existing header
+/// on first read) and lists stay out (push writes the shared buffer's used
+/// count) — both are writes into below-the-mark storage that rewind would
+/// hand to the next allocation.
+const THREADED: Set = SCALAR | STR | BYTES | FN | REC | DESC;
 
 /// One self-recursive group's fate under the analysis. `Beat` is the only
 /// verdict codegen acts on; the others exist so `report` can say why a loop
@@ -402,13 +410,20 @@ fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
 /// the toolchain under KANSO_BEAT_REPORT so a real workload can be measured
 /// before the next rung is built.
 pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
-    let clustered: HashSet<(String, usize)> =
+    let demoted: HashSet<Group> = demotable_entries(program, inference)
+        .into_iter()
+        .map(|(callee, _)| callee)
+        .collect();
+    let clustered: HashSet<Group> =
         eligible_clusters(program, inference).into_iter().flatten().collect();
     let mut rows: Vec<(String, usize, Verdict)> = classify_all(program, inference)
         .into_iter()
-        .filter(|(name, arity, _)| !clustered.contains(&(name.clone(), *arity)))
+        .filter(|(name, arity, _)| {
+            let g = (name.clone(), *arity);
+            !clustered.contains(&g) && !demoted.contains(&g)
+        })
         .collect();
-    for (name, arity) in &clustered {
+    for (name, arity) in clustered.iter().chain(demoted.iter()) {
         rows.push((name.clone(), *arity, Verdict::Beat));
     }
     rows.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
@@ -734,6 +749,28 @@ mod tests {
         assert!(beats
             .demoted
             .contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
+    }
+
+    #[test]
+    fn closure_threaded_loop_with_demoted_entry_is_a_beat() {
+        // f is a closure handed through unchanged: immutable internals,
+        // wholly below the entry mark, safe to carry across the rewind.
+        let src = "fn go f n\n  spin f n 0\n\nmain =\n  salt = (x -> x * 2)\n  print \"{go salt 5}\"\n\nfn spin f 0 acc\n  f acc\n\nfn spin f n acc\n  step = \"seen {n}\"\n  spin f (n - 1) (acc + length step)\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert!(beats.ids.contains_key(&("spin".to_string(), 3)));
+    }
+
+    #[test]
+    fn map_threaded_loop_stays_ineligible() {
+        // a map memoizes its sorted view into an existing header on first
+        // read — a write below the mark that rewind would hand back.
+        let src = "fn go m n\n  spin m n 0\n\nmain =\n  prices = [\"a\": 1 \"b\": 2]\n  print \"{go prices 3}\"\n\nfn spin m 0 acc\n  acc + length m\n\nfn spin m n acc\n  step = \"seen {n}\"\n  spin m (n - 1) (acc + length step)\n";
+        let (program, inference) = compiled(src);
+        let beats = super::beat_loops(&program, &inference);
+
+        assert!(!beats.ids.contains_key(&("spin".to_string(), 3)));
     }
 
     #[test]
