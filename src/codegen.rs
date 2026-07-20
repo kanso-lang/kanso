@@ -2163,8 +2163,21 @@ impl<'a> Backend<'a> {
         first: Option<String>,
         span: Span,
     ) -> Result<String, String> {
+        let call_arity = args.len() + first.is_some() as usize;
         let computed_head = match head {
-            Expr::Ident(name, _) => f.lookup(name).is_some(),
+            // A local binding is a value. So is a top-level constant (a nullary
+            // group) invoked with arguments and no arm at that arity: it holds a
+            // function value, and `f x` calls that value, not a group named `f`.
+            Expr::Ident(name, _) => {
+                f.lookup(name).is_some()
+                    || (call_arity >= 1
+                        && self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty())
+                        && !self
+                            .program
+                            .fns
+                            .iter()
+                            .any(|d| d.name == *name && d.params.len() == call_arity))
+            }
             _ => true,
         };
         if computed_head {
