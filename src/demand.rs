@@ -149,6 +149,12 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
 }
 
 pub fn analyze(program: &Program) -> DemandInfo {
+    // The worst-case measurement mode: force everything by thunking nothing.
+    // A measurement tool, not a semantics switch — forcing runs what laziness
+    // would skip (design/compiler-log.md, strict-mode thread).
+    if std::env::var_os("KANSO_STRICT").is_some() {
+        return DemandInfo { lazy_binds: HashSet::new() };
+    }
     let discard = discard_positions(program);
     let fn_names: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
     let mut lazy_binds = HashSet::new();
