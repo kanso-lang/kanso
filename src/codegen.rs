@@ -156,6 +156,7 @@ declare %KValue @k_b_to_float(%KValue, ptr)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
+declare %KValue @k_b_render_value(%KValue)
 declare %KValue @k_thunk_new(i64, i32, ...)
 declare %KValue @k_force(%KValue)
 

@@ -1,0 +1,5 @@
+pub fn to_string none
+  "<none>"
+
+pub fn to_string x
+  render_value x

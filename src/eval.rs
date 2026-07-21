@@ -1236,6 +1236,10 @@ impl<'a> Interp<'a> {
                     ),
                 })
             }
+            "render_value" => {
+                let [v] = arity(args, name, span)?;
+                Ok(Value::Str(render(&v, false)))
+            }
             "length" => {
                 let [list] = arity(args, name, span)?;
                 match list {
