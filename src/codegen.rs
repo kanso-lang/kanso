@@ -1574,7 +1574,7 @@ impl<'a> Backend<'a> {
                             // sets keep the direct call — coherence proves no
                             // arm can exist for them (design/render-plan.md).
                             let group = "render/to_string";
-                            let dispatchable = f.set_of(&value) & REC != 0
+                            let dispatchable = f.set_of(&value) & (REC | NONE | DESC) != 0
                                 && self.program.fns.iter().any(|d| d.name == group);
                             let t = f.tmp();
                             match dispatchable {

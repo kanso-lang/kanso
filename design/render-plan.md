@@ -42,6 +42,20 @@ through the dispatcher. Coherence is what licenses the optimization.
 - The hardwired `<none>`/`<io>` sentinels become ordinary stdlib arms.
 - The interp/native divergences catalogued in the r4 family.
 
+## Status (2026-07-21, PR #86)
+
+Shipped: the module, always-link (root-only), the set-gated desugar in
+both engines, local-arm merging (fn to_string joins the group with no
+import), r4 dissolved, none/desc routed through the group so the
+sentinels are ordinary arms. Remaining: orphan-rule ENFORCEMENT (a user
+`fn to_string none` today collides with the stdlib arm instead of being
+rejected at the definition site); single-file library verbs (`kanso
+test file.kso`) compile without the ambient link, so custom arms render
+structurally there — unify when the library-verb path gains dep
+loading; retire k_render's top-level none/desc constants (nested
+container rendering keeps them by design — the structural renderer owns
+nested spec).
+
 ## Order of work
 
 1. `lib/render/render.kso`: the group (none arm, catch-all arm on the

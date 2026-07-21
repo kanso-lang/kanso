@@ -342,6 +342,25 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>three smaller decisions each hand the compiler more structure while handing the reader less to remember. destructuring always wears braces (<code>{ artist minutes } = song</code>), so every field read is name-resolution against a known record and compiles to fixed offsets. a type may declare zero fields (<code>type null</code>), so a marker like json's null is ordinary library data, not a keyword. and a field may list several permitted types (<code>title:null string</code>), so reads dispatch on what the value is and the "is it null or a value?" conditional becomes unwritable—the compiler sees a closed set of tags it can enumerate and often erase.</p>
 
+<h3>rendering is dispatch</h3>
+
+<p>string interpolation looks like a language feature and compiles like a library. <code>"{x}"</code> is a call on an ordinary dispatch group named <code>to_string</code>, whose arms for the primitive types ship with the primitives themselves. so giving your own type a custom rendering is not an api to learn—it's the language's one mechanism, applied:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">custom_render.kso—in the differential corpus, both engines</div>
+  <pre><code><span class="k">type</span> <span class="t">money</span>
+  cents:<span class="t">int</span>
+
+<span class="k">pub</span> play =
+  price = <span class="f">money</span> <span class="n">350</span>
+  <span class="f">print</span> <span class="s">"that costs {price}"</span>
+
+<span class="k">fn</span> <span class="f">to_string</span> (<span class="t">money</span> cents)
+  <span class="s">"${cents / 100}.{cents - (cents / 100 * 100)}"</span></code></pre>
+</div>
+
+<p>that program prints <code>that costs $3.50</code>. no import, no interface declaration, no registration—an arm for a type you own joins the group, and dispatch does the rest. the ownership rule from the import model is what keeps this safe: nobody can re-arm <code>to_string</code> for <code>int</code>, because no module owns both the group and the primitive, so <code>"{42}"</code> renders identically in every program ever compiled. and that guarantee is also an optimization license: where the compiler can see a value is primitive-only, it skips the dispatch entirely and emits the direct renderer—custom rendering costs nothing on the paths that don't use it, which the cost golden pins as a constant.</p>
+
 <h3>the whole toolchain in a browser tab</h3>
 
 <p>a third engine emits wasm bytecode directly—hand-rolled, no llvm anywhere near it, because llvm is measured in hundreds of megabytes and a browser tab is not. the whole thing is about half a megabyte of wasm, and it's what lets the <a href="playground.html">playground</a> compile the program you type into machine code inside the page, tail calls and all. its value representation is deliberately odd today (every value is a small handle into a registry the toolchain owns), and that first cut is staged toward a self-contained module over time, every step of the migration pinned by the same corpus of byte-identical golden outputs the other two engines are held to.</p>

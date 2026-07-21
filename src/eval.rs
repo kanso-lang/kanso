@@ -689,7 +689,7 @@ impl<'a> Interp<'a> {
                     // group so user arms win; primitives keep the direct
                     // renderer (coherence licenses it — no arm can exist)
                     let rendered = match (&value, self.fns.get("render/to_string")) {
-                        (Value::Record { .. }, Some(overloads)) => {
+                        (Value::Record { .. } | Value::NoneV | Value::Desc(_), Some(overloads)) => {
                             let overloads = overloads.clone();
                             let result = self.dispatch(
                                 "render/to_string",
