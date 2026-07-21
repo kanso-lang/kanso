@@ -734,3 +734,15 @@ what laziness would skip, so skip-reliant programs may differ in output
 (skipped_err pins the case). Complement: thunk_allocs - thunk_evals in
 the .mem counters already reports the skip rate without a rebuild.
 Dev-tooling tier, with the LSP.
+
+---
+
+## 2026-07-21 — FUTURE THREAD: sync blocks — scoped strictness as a guarantee
+
+Companion to the strict-mode thread above (Clay): thunk mode can hold
+more PEAK memory (cells + captures live until forced), so beyond the
+whole-program measurement flag, a `sync`-style construct would mark a
+SCOPE as no-deferral — compute now, hold no cells, peak memory equals
+strict memory. Same single gate implements both (the demand pass skips
+marked scopes); the mode measures, the construct guarantees. Candidate
+gavel when the surface syntax conversation happens.
