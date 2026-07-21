@@ -156,6 +156,8 @@ declare %KValue @k_b_to_float(%KValue, ptr)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
+declare %KValue @k_thunk_new(i64, i32, ...)
+declare %KValue @k_force(%KValue)
 
 "#;
 
@@ -236,6 +238,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         body: String::new(),
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
+        demand: crate::demand::analyze(program),
+        thunk_sites: Vec::new(),
     };
     backend.emit()
 }
@@ -253,6 +257,9 @@ struct Backend<'a> {
     body: String,
     lift_counter: usize,
     fn_value_wrappers: Vec<(String, usize)>,
+    demand: crate::demand::DemandInfo,
+    /// (site evaluator symbol, captured-arg count), indexed by site id.
+    thunk_sites: Vec<(String, usize)>,
 }
 
 struct FnEmit {
@@ -533,6 +540,30 @@ impl<'a> Backend<'a> {
             })
     }
 
+    fn emit_thunk_dispatcher(&mut self) {
+        let mut arms = String::new();
+        let mut cases = String::new();
+        for (site, (sym, argc)) in self.thunk_sites.iter().enumerate() {
+            let _ = writeln!(cases, "    i64 {site}, label %s{site}");
+            let mut loads = String::new();
+            let mut args: Vec<String> = Vec::new();
+            for i in 0..*argc {
+                let _ = writeln!(loads, "  %s{site}a{i}p = getelementptr %KValue, ptr %args, i64 {i}");
+                let _ = writeln!(loads, "  %s{site}a{i} = load %KValue, ptr %s{site}a{i}p");
+                args.push(format!("%KValue %s{site}a{i}"));
+            }
+            let _ = writeln!(
+                arms,
+                "s{site}:\n{loads}  %s{site}r = call tailcc %KValue @{sym}({})\n  ret %KValue %s{site}r",
+                args.join(", ")
+            );
+        }
+        let _ = writeln!(
+            self.body,
+            "define %KValue @d_thunk_eval(i64 %site, ptr %args) {{\nentry:\n  switch i64 %site, label %bad [\n{cases}  ]\n{arms}bad:\n  unreachable\n}}\n"
+        );
+    }
+
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
         self.emit_type_fields();
@@ -579,6 +610,10 @@ impl<'a> Backend<'a> {
                 params.join(", ")
             );
         }
+        // Lazy v1: the thunk-site dispatcher the runtime's k_force calls.
+        // Sites are emitted as cases as lazy binds are compiled; a program
+        // with no lazy sites still defines the symbol so every binary links.
+        self.emit_thunk_dispatcher();
         self.body.push_str(
             "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
              @d_main_0()\n  ret %KValue %r\n}\n",
