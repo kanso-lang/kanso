@@ -685,29 +685,10 @@ impl<'a> Interp<'a> {
                     if matches!(value, Value::ErrV(_)) {
                         return Ok(value);
                     }
-                    // records route through the ambient render/to_string
-                    // group so user arms win; primitives keep the direct
-                    // renderer (coherence licenses it — no arm can exist)
-                    let rendered = match (&value, self.fns.get("render/to_string")) {
-                        (Value::Record { .. } | Value::NoneV | Value::Desc(_), Some(overloads)) => {
-                            let overloads = overloads.clone();
-                            let result = self.dispatch(
-                                "render/to_string",
-                                &overloads,
-                                vec![value],
-                                Span { line: 0, col: 0 },
-                            )?;
-                            if matches!(result, Value::ErrV(_)) {
-                                return Ok(result);
-                            }
-                            match result {
-                                Value::Str(s) => s,
-                                other => render(&other, false),
-                            }
-                        }
-                        _ => render(&value, false),
-                    };
-                    out.push_str(&rendered);
+                    match self.render_interpolated(value)? {
+                        Ok(rendered) => out.push_str(&rendered),
+                        Err(err) => return Ok(err),
+                    }
                 }
             }
         }
@@ -1369,6 +1350,34 @@ impl<'a> Interp<'a> {
                 span,
             }),
         }
+    }
+
+    /// One rendering rule for every engine's template path: records, none,
+    /// and io route through the ambient render/to_string group so user arms
+    /// win; primitives keep the direct renderer (coherence licenses it — no
+    /// arm can exist for them). The outer Err is a runtime fault; the inner
+    /// Err is an err value the whole template must return.
+    pub fn render_interpolated(&self, value: Value) -> Result<Result<String, Value>, RuntimeError> {
+        let rendered = match (&value, self.fns.get("render/to_string")) {
+            (Value::Record { .. } | Value::NoneV | Value::Desc(_), Some(overloads)) => {
+                let overloads = overloads.clone();
+                let result = self.dispatch(
+                    "render/to_string",
+                    &overloads,
+                    vec![value],
+                    Span { line: 0, col: 0 },
+                )?;
+                if matches!(result, Value::ErrV(_)) {
+                    return Ok(Err(result));
+                }
+                match result {
+                    Value::Str(s) => s,
+                    other => render(&other, false),
+                }
+            }
+            _ => render(&value, false),
+        };
+        Ok(Ok(rendered))
     }
 
     fn force(&self, value: Value) -> EvalResult {

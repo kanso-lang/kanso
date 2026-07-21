@@ -358,10 +358,17 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
     let mut out = String::new();
     for h in handles {
         let v = val(h);
-        if is_failure(&v) {
+        // only an err propagates; none renders its sentinel via the group —
+        // the same rule as the other engines, through the same helper
+        if matches!(v, Value::ErrV(_)) {
             return h;
         }
-        out.push_str(&render(&v, false));
+        let rendered = with_interp(|i| i.render_interpolated(v.clone()));
+        match rendered {
+            Ok(Ok(s)) => out.push_str(&s),
+            Ok(Err(err)) => return push(Slot::V(err)),
+            Err(fault) => die(fault.message),
+        }
     }
     push(Slot::V(Value::Str(out)))
 }
