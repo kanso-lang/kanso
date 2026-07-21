@@ -88,24 +88,19 @@ impl Session {
                     *existing = unit;
                 }
                 Some(existing) => {
-                    let mut replaced = false;
                     let mut added = false;
                     for (print, source) in unit.arms {
                         match existing.arms.iter_mut().find(|(p, _)| *p == print) {
-                            Some(arm) => {
-                                arm.1 = source;
-                                replaced = true;
-                            }
+                            Some(arm) => arm.1 = source,
                             None => {
                                 existing.arms.push((print, source));
                                 added = true;
                             }
                         }
                     }
-                    echo.push(match (replaced, added) {
-                        (true, false) => format!("redefined {}", existing.name),
-                        (false, true) => format!("added arm to {}", existing.name),
-                        _ => format!("redefined {}, added arm", existing.name),
+                    echo.push(match added {
+                        true => format!("overloaded {}", existing.name),
+                        false => format!("redefined {}", existing.name),
                     });
                 }
                 None => {
