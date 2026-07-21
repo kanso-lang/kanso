@@ -7,8 +7,19 @@ use crate::{check, diag, lexer, parser};
 #[derive(Clone)]
 struct Unit {
     name: String,
-    source: String,
+    /// One entry per arm: (signature fingerprint, source). Arms of one name
+    /// stay in a single unit so they compile adjacent, as the formatter
+    /// requires; replacement is keyed on the fingerprint, so a new signature
+    /// adds an arm and only an identical one replaces.
+    arms: Vec<(String, String)>,
     is_type: bool,
+}
+
+impl Unit {
+    fn source(&self) -> String {
+        let sources: Vec<&str> = self.arms.iter().map(|(_, s)| s.as_str()).collect();
+        sources.join("\n\n")
+    }
 }
 
 pub struct Session {
@@ -53,30 +64,51 @@ impl Session {
         }
     }
 
-    /// Redefining a name replaces its previous definition (all arms); arms
-    /// arriving within one input accumulate as overloads of that name.
+    /// Arms accumulate as overloads of a name — dispatch is open, so a new
+    /// signature adds an arm. Only an identical signature replaces its arm;
+    /// redefining a type replaces the type.
     fn eval_declarations(&mut self, input: &str) -> Result<Outcome, String> {
         let mut incoming: Vec<Unit> = Vec::new();
         for chunk in split_declarations(input) {
             let program = parse_fragment(&chunk)?;
             let name = first_declared_name(&program);
             let is_type = !program.types.is_empty();
+            let print = fingerprint(&program, is_type);
             match incoming.iter_mut().find(|u| u.name == name) {
-                Some(unit) => unit.source = format!("{}\n\n{chunk}", unit.source),
-                None => incoming.push(Unit { name, source: chunk, is_type }),
+                Some(unit) => merge_arm(unit, print, chunk),
+                None => incoming.push(Unit { name, arms: vec![(print, chunk)], is_type }),
             }
         }
-        let names: Vec<String> = incoming.iter().map(|u| u.name.clone()).collect();
-        let echo: Vec<String> = names
-            .iter()
-            .map(|n| match self.units.iter().any(|u| &u.name == n) {
-                true => format!("redefined {n}"),
-                false => format!("defined {n}"),
-            })
-            .collect();
+        let mut echo: Vec<String> = Vec::new();
         let mut candidate = self.units.clone();
-        candidate.retain(|u| !names.contains(&u.name));
-        candidate.extend(incoming);
+        for unit in incoming {
+            match candidate.iter_mut().find(|u| u.name == unit.name) {
+                Some(existing) if unit.is_type || existing.is_type => {
+                    echo.push(format!("redefined {}", unit.name));
+                    *existing = unit;
+                }
+                Some(existing) => {
+                    let mut added = false;
+                    for (print, source) in unit.arms {
+                        match existing.arms.iter_mut().find(|(p, _)| *p == print) {
+                            Some(arm) => arm.1 = source,
+                            None => {
+                                existing.arms.push((print, source));
+                                added = true;
+                            }
+                        }
+                    }
+                    echo.push(match added {
+                        true => format!("overloaded {}", existing.name),
+                        false => format!("redefined {}", existing.name),
+                    });
+                }
+                None => {
+                    echo.push(format!("defined {}", unit.name));
+                    candidate.push(unit);
+                }
+            }
+        }
         let _ = compile_units(&candidate)?;
         self.units = candidate;
         Ok(Outcome::Defined(echo.join(", ")))
@@ -111,7 +143,7 @@ impl Session {
                 .units
                 .iter()
                 .find(|u| u.name == n)
-                .map(|u| u.source.clone())
+                .map(|u| u.source())
                 .ok_or_else(|| format!("error[name]: nothing named `{n}` is defined\n")),
         }
     }
@@ -127,7 +159,7 @@ impl Session {
         }
         let source = wrap_expression(&name, input);
         let mut candidate = self.units.clone();
-        candidate.push(Unit { name: name.clone(), source, is_type: false });
+        candidate.push(Unit { name: name.clone(), arms: vec![(name.clone(), source)], is_type: false });
         let program = compile_units(&candidate)?;
         let interp = Interp::new(&program);
         let result = interp.run_named(&name).expect("just-committed constant resolves");
@@ -184,8 +216,49 @@ fn compile_units(units: &[Unit]) -> Result<Program, String> {
 fn assemble(units: &[Unit]) -> String {
     let mut sorted: Vec<&Unit> = units.iter().collect();
     sorted.sort_by_key(|u| (!u.is_type, u.name.as_str()));
-    let sources: Vec<&str> = sorted.iter().map(|u| u.source.as_str()).collect();
+    let sources: Vec<String> = sorted.iter().map(|u| u.source()).collect();
     format!("{}\n", sources.join("\n\n"))
+}
+
+/// An arm's dispatch signature, canonically rendered: name, arity, and the
+/// shape of each parameter pattern. Two arms with the same fingerprint match
+/// identically, so the later one replaces; different fingerprints coexist.
+fn fingerprint(program: &Program, is_type: bool) -> String {
+    if is_type {
+        return "type".to_string();
+    }
+    let mut parts: Vec<String> = Vec::new();
+    for f in &program.fns {
+        let shapes: Vec<String> = f.params.iter().map(pattern_shape).collect();
+        parts.push(format!("{}/{}({})", f.name, f.params.len(), shapes.join(" ")));
+    }
+    parts.join(";")
+}
+
+fn pattern_shape(p: &crate::ast::Pattern) -> String {
+    use crate::ast::Pattern;
+    match p {
+        Pattern::IntLit(n, _) => n.to_string(),
+        Pattern::StrLit(s, _) => format!("{s:?}"),
+        Pattern::Nullary(n, _) => n.clone(),
+        Pattern::Var(..) | Pattern::Wildcard(_) => "_".to_string(),
+        Pattern::Annotated { ty, .. } => format!("_:{ty}"),
+        Pattern::Ctor { ty, fields } => {
+            let inner: Vec<String> = fields.iter().map(pattern_shape).collect();
+            format!("{ty}({})", inner.join(" "))
+        }
+        Pattern::Keyed { entries, .. } => {
+            let keys: Vec<&str> = entries.iter().map(|e| e.field.as_str()).collect();
+            format!("{{{}}}", keys.join(" "))
+        }
+    }
+}
+
+fn merge_arm(unit: &mut Unit, print: String, source: String) {
+    match unit.arms.iter_mut().find(|(p, _)| *p == print) {
+        Some(arm) => arm.1 = source,
+        None => unit.arms.push((print, source)),
+    }
 }
 
 fn first_declared_name(program: &Program) -> String {
