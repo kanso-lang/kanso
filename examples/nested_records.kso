@@ -1,0 +1,15 @@
+type inner
+  v:int
+
+type outer
+  i:inner
+
+fn get (outer i)
+  peel i
+
+o = outer (inner 42)
+
+fn peel (inner v)
+  v
+
+pub play = print "{get o}"
