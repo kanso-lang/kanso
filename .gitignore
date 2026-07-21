@@ -14,3 +14,4 @@ __pycache__/
 /chain
 docs/book/samples/ch05/order.txt
 HN_DRAFT.md
+/lazybench
