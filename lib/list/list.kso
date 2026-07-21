@@ -7,6 +7,15 @@ pub fn all list pred
 pub fn any list pred
   fold list false (hit x -> if (pred x) true hit)
 
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+pub fn count list pred
+  fold list 0 (c x -> if (pred x) (c + 1) c)
+
 pub fn drop list n
   drop_from list (n + 1) []
 
@@ -24,6 +33,24 @@ pub fn fold list init f
 
 fn fold_at list acc f i
   if (length list < i) acc (fold_at list (f acc (list[i])) f (i + 1))
+
+pub fn last list
+  at list (length list)
+
+pub fn max list
+  unwrap_found (fold list (missing true) (m x -> outrank m x))
+
+pub fn mean list
+  (0.0 + fold list 0 (a x -> a + x)) / length list
+
+pub fn min list
+  unwrap_found (fold list (missing true) (m x -> underrank m x))
+
+fn outrank (missing _) x
+  x
+
+fn outrank m x
+  if (m < x) x m
 
 fn pick_found (missing _) true x
   x
@@ -57,6 +84,15 @@ fn take_more list n i acc
 
 fn take_to list n i acc
   if (take_done list n i) acc (take_more list n i acc)
+
+pub fn tally list
+  fold list [:] (m x -> put m x (bump (at m x)))
+
+fn underrank (missing _) x
+  x
+
+fn underrank m x
+  if (x < m) x m
 
 fn unwrap_found (missing _)
   none
