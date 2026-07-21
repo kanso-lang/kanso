@@ -1,0 +1,9 @@
+# one binding, two readers. today the value is computed strictly at the
+# bind; when the lazy fragment lands, the .mem golden pins that the shared
+# thunk evaluates exactly once no matter how many readers demand it.
+fn double n
+  n + n
+
+pub play =
+  shared = double 21
+  print "sum: {shared + shared}"

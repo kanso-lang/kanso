@@ -17,18 +17,25 @@ fn kso_files(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn run_kanso(program: &Path, extra: &[&str]) -> Output {
+    run_kanso_env(program, extra, &[])
+}
+
+fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
     let source = std::fs::read_to_string(program).unwrap_or_default();
     let verb = match source.contains("pub play") {
         true => "play",
         false => "run",
     };
-    Command::new(env!("CARGO_BIN_EXE_kanso"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_kanso"));
+    command
         .arg(verb)
         .arg(program.file_name().expect("kso files have names"))
         .args(extra)
-        .current_dir(program.parent().expect("programs live in a directory"))
-        .output()
-        .expect("kanso binary runs")
+        .current_dir(program.parent().expect("programs live in a directory"));
+    for (key, value) in envs {
+        command.env(key, value);
+    }
+    command.output().expect("kanso binary runs")
 }
 
 fn expected(path: &Path, extension: &str) -> String {
@@ -78,6 +85,30 @@ fn error_corpus_reports_each_golden_diagnostic() {
         );
         assert_eq!(output.status.code(), Some(2), "compile errors exit 2 for {program:?}");
         assert!(output.stdout.is_empty(), "no stdout on compile error for {program:?}");
+    }
+}
+
+#[test]
+fn mem_corpus_pins_native_allocator_counters() {
+    // The memory-goldens vein: each program's .mem file pins the native
+    // runtime's deterministic allocator counters, the same ratchet idea as
+    // bench/cost_golden.txt but per-program. The lazy fragment will extend
+    // these with engine-shared semantic counters (forces, evaluations,
+    // cells live at exit) asserted on both engines.
+    for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
+        let output = run_kanso_env(&program, &[], &[("KANSO_COUNTERS", "1")]);
+
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            expected(&program, "stdout"),
+            "stdout mismatch for {program:?}"
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stderr),
+            expected(&program, "mem"),
+            "allocator counters drifted for {program:?}"
+        );
+        assert!(output.status.success(), "expected success for {program:?}");
     }
 }
 
