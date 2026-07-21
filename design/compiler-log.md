@@ -607,3 +607,115 @@ uses `ret_ty(name, 0)` for the call's return type and `record_parsed` on a
 `%parsed` result, mirroring the n-ary call paths. Regression: `examples/
 register_return.kso` (native + differential). The n-ary call sites already
 consulted `ret_ty`; this was the one gap.
+
+---
+
+## 2026-07-21 — FINDING: laziness memory model — RC beats regions; thunk-graph experiment confirms
+
+Committee deep-dive (three research passes + two adversarial verifications)
+plus a working prototype settled the lazy memory-model question.
+
+**Regions lose under laziness.** A thunk's forcing point is a runtime fact,
+so a thunk can force a region to outlive static inference. Every prior
+system hit this seam: jhc (region-only Haskell) leaks by its own docs; GHC
+Compact Regions cannot hold a thunk; ML Kit needed a GC backstop even
+strict. Regions demote to a back-end optimization (bump-allocate clusters
+proven to share a lifetime); they are not the model.
+
+**RC wins because kanso's data graph is acyclic.** Immutability + no cyclic
+references means refcounting is COMPLETE — every cell freed exactly when
+its last reference drops, no tracing GC. The one cycle-maker is knot-tying
+corecursion (`ones = 1:ones`, a physically self-referential cell). Ruling
+(pending gavel): corecursion is generators/unfolds — fresh cell per step,
+no self-reference — so cycles never enter the heap. Verified prior art:
+Perceus (PLDI'21), Frame-Limited Reuse (ICFP'22), FP2 (ICFP'23) are all
+strict; "First-Order Laziness" (ICFP'25, Distinguished) grafts RC+reuse
+onto a first-order lazy fragment and names general lazy closures as open.
+Pervasive-arbitrary laziness + precise RC+reuse is unoccupied ground.
+
+**Experiment** (scratchpad/thunk-rc, instrumented Rust): refcounted
+self-updating thunks, no tracing GC. 21.1M thunks allocated; after all
+workloads exactly 1 cell live — the deliberately-leaked knot negative
+control. Numbers: conditional demand (100k items, 5% used) lazy beats
+eager-as-written 17.8x, only ~15% behind hand-restructured eager; thunk
+tax 23 ns/alloc+force (what strictness analysis erases for provably-
+demanded values); 1M-deep foldl chain builds visibly (peak 1M cells) and
+is fully reclaimed by RC alone after force; 10M-element infinite fib
+stream as generator runs at peak 2 live cells, memory flat; forcing drops
+the captured env (8MB buffer freed at force — retention bounded by
+demand). Perceus-style upgrade (defunctionalized first-order thunk states
++ free-list reuse of count-0 cells): same 10M stream in 10.9 ns/elem, 2.4x
+faster than Rc+closures, allocator traffic 2 mallocs + 9,999,999 reuses —
+steady-state zero malloc/free for an infinite stream.
+
+**Open threads:** (1) pervasive-arbitrary vs structured/first-order lazy
+forms — the risk gavel; (2) trampoline deep forces (1M chain needed a fat
+stack); (3) speculative forcing during executor IO stalls (purity makes
+mis-speculation free: no effects to undo; store err in the thunk, never
+raise early); (4) incrementality is NOT free from the thunk graph
+(Adapton-style dependency tracking is extra machinery, ~30ns/node — a
+future opt-in layer, not a default); (5) atomic vs biased counts for
+cross-thread sharing under the deterministic scheduler.
+
+---
+
+## 2026-07-21 — RULED: ship the proven lazy fragment; pervasive-arbitrary is a staged campaign
+
+Clay's ruling on the open thread above: v1 implements the experimentally
+verified fragment — compiler-defunctionalized RC thunks, generators-first
+corecursion (knot idiom banned), free-list reuse. The pervasive-arbitrary
+bet (arbitrary-closure thunks, the unoccupied research ground) is NOT
+abandoned: it's a later campaign, entered the same way — prototype
+experiments with instrumented counters first, engine work only after the
+numbers hold. As laziness lands, add MEMORY GOLDENS alongside the stdout
+goldens: golden files asserting structural/memory facts (exit_live=0,
+per-site evaluation counts, steady-state allocator traffic) so
+leak-freedom and lazy semantics are differentially PROVEN per program,
+not just believed. Sharing (evaluated once), skipping (evaluated zero
+times), and reclamation (exit_live=0) are semantics, so both engines must
+agree byte-identically — the differential lattice extends to memory.
+
+Note for the campaign: kanso compiles whole-program (no separate
+compilation, no dynamic loading), so EVERY thunk shape is statically
+enumerable — Reynolds-style total defunctionalization. ICFP'25's named
+obstacle (open/library-extensible lazy constructors) may not exist here
+at all: the "structured fragment" could grow to look pervasive without
+ever admitting arbitrary runtime closures. The gap Clay staged around may
+partially collapse in kanso's favor.
+
+---
+
+## 2026-07-21 — REFINEMENT: proven-demand thunks are risk-free out-of-order work
+
+Clay's point sharpens the speculation thread: for a PROVABLY-demanded
+value, computing during an IO stall isn't speculation — demand is proven,
+so the work is guaranteed useful; only its timing moves. Out-of-order
+execution at the language level, thunk pool as instruction window. So the
+per-site representation decision is demand x cost x slack, not demand
+alone: proven+cheap+no-slack compiles inline strict (cell costs more than
+the work); proven+expensive+slack materializes a thunk into the work pool
+(scheduler drains it during stalls — zero risk); unproven+expensive is
+speculation-eligible (spends free stall cycles); unproven+cheap stays a
+thunk for semantics (may err/diverge). Constraints: deterministic
+schedule (heartbeat logical time, both engines byte-identical) and a
+bounded pool depth (deferred envs hold memory until run). Fits the staged
+ruling: v1 representation unchanged; scheduler-drains-pool lands on top.
+
+---
+
+## 2026-07-21 — FUTURE THREAD: in-process plugins as shared-nothing units (weeks out, not now)
+
+Clay's sketch, noted for the future conversation: plugins as a performant
+in-process analog of RPC. Each plugin compiles as its OWN whole program
+(monomorphization, coherence, defunctionalization, RC-completeness all
+hold per unit); only FORCED, acyclic values cross the boundary
+(deep-copied — semantically invisible since values are immutable);
+separate memory graphs per plugin (unload = drop the graph, nothing can
+dangle); dispatch closed at the boundary (no arm injection — extension
+points are explicit interface functions); errs surface at the crossing.
+Streams cross as protocol (pull interface, forced chunk per call), not as
+cells. Prior art: Erlang per-process heaps, WASM component model. Same
+boundary contract can tier across in-process / WASM-sandboxed /
+subprocess. Tradeoffs accepted: monomorphic boundary, copy cost, no
+cross-boundary slack scheduling. NOT scheduled — revisit when plugins
+become real.
