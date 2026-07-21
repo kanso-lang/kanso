@@ -149,11 +149,11 @@ third <span class="o">=</span> <span class="f">at</span> flavors <span class="n"
 <span class="f">print</span> <span class="s">"third: <span class="i">{third}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ignored.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
+    <pre><code>third: &lt;none&gt;</code></pre>
   </div>
 </div>
 
-<p>you asked a question with <code>at</code> and then wrote code that only works if the answer was yes—the interpolation has no way to render an absence you never resolved. so the difference between the two values is not that one is policed and the other isn't. both refuse to be ignored. the difference is that <code>none</code> <em>can</em> be claimed by an arm and <code>err</code> cannot. asking for something you might not get obligates you to write the arm for not getting it.</p>
+<p>you asked a question with <code>at</code> and then printed the answer without resolving it—so the absence prints <em>as</em> absence, the loud sentinel <code>&lt;none&gt;</code>, never a silent blank. a <code>none</code> you ignore follows you into the output where anyone can see it. an <code>err</code> refuses even that: it rides past the interpolation and ends the program at the endpoint. the difference between the two values is that <code>none</code> <em>can</em> be claimed by an arm—or rendered, visibly—and <code>err</code> cannot. asking for something you might not get means the not-getting is yours to handle, and the language makes sure you can see whether you did.</p>
 
 <h2>access is a decision</h2>
 
