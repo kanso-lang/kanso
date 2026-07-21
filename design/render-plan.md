@@ -56,6 +56,14 @@ loading; retire k_render's top-level none/desc constants (nested
 container rendering keeps them by design — the structural renderer owns
 nested spec).
 
+Also remaining: the wasm BACKEND (wasm_backend.rs, the hand-rolled
+compile target) still renders templates structurally — its interpreted
+sibling (kanso_run -> Interp) inherits the group automatically, but
+compiled-in-browser programs with custom arms diverge until the backend
+mirrors the set-gated dispatch. The browser differential
+(scripts/browser_differential.py, not yet in CI) is the check that
+would catch it.
+
 ## Order of work
 
 1. `lib/render/render.kso`: the group (none arm, catch-all arm on the
