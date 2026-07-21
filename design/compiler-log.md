@@ -719,3 +719,18 @@ boundary contract can tier across in-process / WASM-sandboxed /
 subprocess. Tradeoffs accepted: monomorphic boundary, copy cost, no
 cross-boundary slack scheduling. NOT scheduled — revisit when plugins
 become real.
+
+---
+
+## 2026-07-21 — FUTURE THREAD: strict mode as a worst-case benchmark tool
+
+Clay's suggestion: a thunk-free diagnostic mode so performance-sensitive
+code can be timed at its worst case (every deferred computation forced).
+Nearly free to build — the demand pass is the single thunk gate, so
+`--strict` = demand returns empty and everything compiles today's strict
+paths (the KANSO_NO_LAZY debug hack during force-wiring was exactly
+this). It is a MEASUREMENT mode, not a semantics switch: forcing runs
+what laziness would skip, so skip-reliant programs may differ in output
+(skipped_err pins the case). Complement: thunk_allocs - thunk_evals in
+the .mem counters already reports the skip rate without a rebuild.
+Dev-tooling tier, with the LSP.
