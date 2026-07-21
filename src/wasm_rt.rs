@@ -592,7 +592,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                 _ => Ok(next),
             }
         }
-        _ => Err("main is not a description".to_string()),
+        _ => Err("main is not an io".to_string()),
     }
 }
 
