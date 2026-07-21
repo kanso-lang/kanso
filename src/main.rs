@@ -101,6 +101,20 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
 /// (the cooperative scheduler, `sleep`, `random`), so the concurrency model
 /// can be seen before it is ported to the native and wasm engines.
 fn run_interpreted(program: &ast::Program) -> ExitCode {
+    // Interp eval depth scales with program recursion (and force-time
+    // evaluation of deferred binds); pin a deep stack rather than lean on
+    // the main thread's default, mirroring the oracle harness.
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(256 << 20)
+            .spawn_scoped(scope, || run_interpreted_on_stack(program))
+            .expect("spawns")
+            .join()
+            .expect("interpreter thread completes")
+    })
+}
+
+fn run_interpreted_on_stack(program: &ast::Program) -> ExitCode {
     let interp = eval::Interp::new(program);
     // Mirror the native runtime's KANSO_COUNTERS convention: semantic thunk
     // counters print to stderr at exit, byte-identical across engines.

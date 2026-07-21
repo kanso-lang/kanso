@@ -119,8 +119,38 @@ fn collect_uses(
     }
 }
 
+/// The cost gate (demand x cost x slack): a thunk cell only pays for itself
+/// when the deferred work is real. A user-function call can recurse
+/// arbitrarily; a bare builtin chain (push, at, arithmetic) is cheaper than
+/// the cell, so it compiles strict.
+fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
+    match expr {
+        Expr::App { head, args, .. } => {
+            if let Expr::Ident(callee, _) = head.as_ref() {
+                if fns.contains(callee.as_str()) {
+                    return true;
+                }
+            }
+            args.iter().any(|a| expensive(a, fns))
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
+            expensive(lhs, fns) || expensive(rhs, fns)
+        }
+        Expr::List(items, _) => items.iter().any(|a| expensive(a, fns)),
+        Expr::MapLit(entries, _) => entries.iter().any(|(k, v)| expensive(k, fns) || expensive(v, fns)),
+        Expr::Str(parts, _) => parts.iter().any(|p| match p {
+            TemplatePart::Interp(e) => expensive(e, fns),
+            TemplatePart::Lit(_) => false,
+        }),
+        Expr::Field { base, .. } => expensive(base, fns),
+        Expr::Index { base, index, .. } => expensive(base, fns) || expensive(index, fns),
+        Expr::Lambda { .. } | Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
+    }
+}
+
 pub fn analyze(program: &Program) -> DemandInfo {
     let discard = discard_positions(program);
+    let fn_names: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
     let mut lazy_binds = HashSet::new();
     for f in &program.fns {
         for (i, stmt) in f.body.iter().enumerate() {
@@ -139,7 +169,8 @@ pub fn analyze(program: &Program) -> DemandInfo {
                 };
                 collect_uses(e, name, &discard, &mut uses);
             }
-            if !rebound && uses.deferrable > 0 && uses.demanding == 0 {
+            let Stmt::Bind { expr, .. } = stmt else { unreachable!() };
+            if !rebound && uses.deferrable > 0 && uses.demanding == 0 && expensive(expr, &fn_names) {
                 lazy_binds.insert((f.name.clone(), f.params.len(), i));
             }
         }

@@ -421,7 +421,25 @@ impl<'a> Backend<'a> {
 
     /// Render one call argument in the callee's ABI: raw i64 for an unboxed
     /// slot (extract the payload), boxed KValue otherwise.
+    /// Any arity-matching arm inspecting this position (anything but a bare
+    /// Var/Wildcard) means a thunk must force before dispatch can select.
+    fn scrutinizes(&self, callee: &str, arity: usize, i: usize) -> bool {
+        self.program.fns.iter().any(|d| {
+            d.name == callee
+                && d.params.len() == arity
+                && !matches!(d.params.get(i), Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_)))
+        })
+    }
+
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+        let forced;
+        let e = match f.set_of(e) & crate::infer::THUNK != 0 && self.scrutinizes(callee, arity, i) {
+            true => {
+                forced = self.maybe_force(f, e.to_string());
+                forced.as_str()
+            }
+            false => e,
+        };
         if self.is_byte_disc(callee, arity, i) {
             // `e` is an `at`-on-bytes KValue (byte or none); hand it over as a
             // raw i64 — the byte value, or 256 for none. The box `at` built and
@@ -552,6 +570,21 @@ impl<'a> Backend<'a> {
             }
         }
         captures.len() <= 8
+    }
+
+    /// Force a value that may be a thunk; no-op (no IR) when the set proves
+    /// it can't be one, so strict code pays nothing.
+    fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
+        if f.set_of(&value) & crate::infer::THUNK == 0 {
+            return value;
+        }
+        let post = f.set_of(&value) & !crate::infer::THUNK;
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_force(%KValue {value})"));
+        // A forced thunk can yield anything its expr could; the bind site
+        // recorded TOP, so widen conservatively past the removed bit.
+        f.record(&t, if post == 0 { crate::infer::TOP & !crate::infer::THUNK } else { post });
+        t
     }
 
     fn emit_thunk_site(
@@ -1526,6 +1559,7 @@ impl<'a> Backend<'a> {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
                             let value = self.emit_expr(f, inner)?;
+                            let value = self.maybe_force(f, value);
                             // only an err propagates out of interpolation; a none
                             // renders `<none>` via k_render, so it is not a fail
                             fails |= f.set_of(&value) & ERR;
@@ -2461,6 +2495,10 @@ impl<'a> Backend<'a> {
             if emitted.len() != *arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
             }
+            // builtins scrutinize every argument; a thunk forces here (the
+            // gated force emits nothing when the set proves it can't be one)
+            let emitted: Vec<String> =
+                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
             let mut args_ir: Vec<String> =
                 emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
