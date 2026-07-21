@@ -519,7 +519,7 @@ fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
             ExitCode::SUCCESS
         }
         _ => {
-            eprintln!("error: main is not a description; there is no plan to show");
+            eprintln!("error: main is not an io; there is no plan to show");
             ExitCode::FAILURE
         }
     }
