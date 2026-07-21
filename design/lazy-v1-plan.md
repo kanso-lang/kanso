@@ -77,6 +77,32 @@ the strict-era error no longer occurs.
 - Counters live on `Interp` as `Cell<u64>`: thunk_allocs, thunk_forces,
   thunk_evals, thunk_live_exit (allocs minus forced-or-dropped at exit).
 
+## Native contract (the interp slice is landed; mirror this exactly)
+
+- `runtime.c`: new `K_THUNK` tag; cell `{ rc, site, state, result, argc,
+  args[] }` allocated from a malloc-backed free list, never the beat
+  arenas. `k_thunk_force(v)`: forced → result; pending → call the
+  codegen-emitted site dispatcher (`@d_thunk_eval(site, args)` — one
+  switch over site ids, the total defunctionalization), store result,
+  release args. Counters `k_stat_thunk_allocs/forces/evals` printed by
+  `k_stats_dump` in EXACTLY the interp's four lines (thunk_allocs,
+  thunk_forces, thunk_evals, thunk_live_exit) so `.mem` goldens unify.
+- `codegen.rs`: thread `demand::analyze` beside `escape` at emit_ir; at a
+  marked `Stmt::Bind`, collect the bound expr's free variables, emit
+  `k_thunk_new(site_id, n, vars...)`; emit each site's evaluator fn
+  (params = the free vars, body = the expr's normal compilation). Force
+  sites mirror the interp's set one-for-one: dispatch positions any
+  arity-matching arm inspects (non-Var/Wildcard), BinOp/Seq/Join
+  operands, interpolation values, non-Var destructures,
+  builtin/constructor/err boundaries. `if`'s deferred branches are
+  UNTOUCHED (the interp bug to not repeat: blanket-forcing builtin args
+  eagerly ran both if branches and hung skip_ws — force thunks only).
+- Fail-mask: a thunk's abstract set is the set of its expr's possible
+  results (demand pass can carry it) — conservatively TOP in v1; thunk
+  is never itself a failure tag.
+- `skipped_err` golden: written only after native lands — until then the
+  engines legitimately diverge on it (that divergence is the point).
+
 ## Order of work
 
 1. Demand pass (`src/demand.rs`, sibling of `escape.rs`): mark
