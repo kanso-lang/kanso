@@ -1,0 +1,5 @@
+allocs=5
+alloc_bytes=112
+arena_blocks=1
+perm_allocs=1
+beat_iters=0
