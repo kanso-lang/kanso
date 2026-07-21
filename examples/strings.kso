@@ -1,0 +1,1 @@
+pub play = print "{slice "matcha" 1 3}|{char_code "A"}|{from_code 66}"

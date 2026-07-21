@@ -1,0 +1,10 @@
+fn checked n
+  if (n > 0) n (err "not positive")
+
+fn describe (err reason)
+  "bad: {reason}"
+
+fn describe n
+  "ok: {n}"
+
+pub play = print "{describe (checked 5)} {describe (checked (0 - 1))}"

@@ -1,0 +1,6 @@
+fn adder n
+  (x -> x + n)
+
+by10 = adder 10
+
+pub play = print "{by10 5} {by10 100}"
