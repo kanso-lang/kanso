@@ -620,7 +620,9 @@ impl<'a> Interp<'a> {
                 TemplatePart::Lit(s) => out.push_str(s),
                 TemplatePart::Interp(expr) => {
                     let value = self.eval(expr, env, frame)?;
-                    if is_failure(&value) {
+                    // an err propagates (the whole string returns the err); a
+                    // none is a value and renders its sentinel
+                    if matches!(value, Value::ErrV(_)) {
                         return Ok(value);
                     }
                     out.push_str(&render(&value, false));
@@ -1605,7 +1607,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
         },
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
-        Value::NoneV => "none".to_string(),
+        Value::NoneV => "<none>".to_string(),
         Value::ErrV(info) => format!("err {}", render(&info.reason, true)),
         Value::List(items) => {
             let inner: Vec<String> = items.iter().map(|i| render(i, true)).collect();

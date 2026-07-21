@@ -1423,7 +1423,9 @@ impl<'a> Backend<'a> {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
                             let value = self.emit_expr(f, inner)?;
-                            fails |= f.set_of(&value) & FAIL;
+                            // only an err propagates out of interpolation; a none
+                            // renders `<none>` via k_render, so it is not a fail
+                            fails |= f.set_of(&value) & ERR;
                             let t = f.tmp();
                             f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
                             t

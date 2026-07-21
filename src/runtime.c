@@ -686,7 +686,9 @@ KValue k_keyed_field(KValue v, const char* name) {
 }
 
 KValue k_render(KValue v, long long quote) {
-    if (!k_not_failure(v)) return v;
+    // an err propagates through rendering (it is an exception); a none is a
+    // value and renders its sentinel below
+    if (v.tag == K_ERR) return v;
     char buf[64];
     switch (v.tag) {
         case K_INT:
@@ -706,7 +708,7 @@ KValue k_render(KValue v, long long quote) {
         }
         case K_TRUE: return k_str("true");
         case K_FALSE: return k_str("false");
-        case K_NONE: return k_str("none");
+        case K_NONE: return k_str("<none>");
         case K_ERR: return k_concat(k_str("err "), k_render(k_err_inner(v), 1));
         case K_STR:
             if (!quote) return v;
