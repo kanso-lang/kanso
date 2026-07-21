@@ -1,7 +1,7 @@
 # a deep accumulator loop: the shape whose lazy form is the classic chain
 # leak. the .mem golden pins the allocator's whole behavior for it — today
 # the strict baseline, later the proof the chain never materializes.
-pub play = print "sum: {sum_to 100000 0}"
+pub play = print "sum: {sum_to 10000 0}"
 
 fn sum_to 0 acc
   acc

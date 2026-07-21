@@ -1,0 +1,9 @@
+allocs=5
+alloc_bytes=112
+arena_blocks=1
+perm_allocs=1
+beat_iters=0
+thunk_allocs=1
+thunk_forces=0
+thunk_evals=0
+thunk_live_exit=1

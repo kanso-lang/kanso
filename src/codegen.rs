@@ -1476,6 +1476,10 @@ impl<'a> Backend<'a> {
                 }
                 Stmt::Bind { pattern, expr } => {
                     let value = self.emit_expr(f, expr)?;
+                    let value = match pattern {
+                        Pattern::Var(..) => value,
+                        _ => self.maybe_force(f, value),
+                    };
                     match pattern {
                         Pattern::Var(name, _) => f.bind(name, &value),
                         Pattern::Ctor { ty, fields } => {
@@ -1675,7 +1679,9 @@ impl<'a> Backend<'a> {
             }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_seq(%KValue {a}, %KValue {b})"));
                 f.record(&t, DESC | (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL));
@@ -1683,7 +1689,9 @@ impl<'a> Backend<'a> {
             }
             Expr::Join { lhs, rhs, .. } => {
                 let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
                 let t = f.tmp();
                 f.line(&format!(
                     "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
@@ -1693,7 +1701,9 @@ impl<'a> Backend<'a> {
             }
             Expr::BinOp { op, lhs, rhs, span } => {
                 let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
                 self.emit_binop(f, op, &a, &b, *span)
             }
             Expr::Lambda { params, body, .. } => {
@@ -2437,6 +2447,9 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         if let Some(id) = self.type_ids.get(name.as_str()).copied() {
+            // constructors store fields; records never hold thunks in v1
+            let emitted: Vec<String> =
+                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
             self.emit_typeset_checks(f, name, &emitted)?;
             let n = emitted.len();
             let arr = f.tmp();
