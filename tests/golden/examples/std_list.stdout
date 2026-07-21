@@ -1,0 +1,4 @@
+evens: [2 4 6 8]
+first three: [9 8 7]
+found: 8
+all positive: true
