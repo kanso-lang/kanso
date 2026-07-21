@@ -38,7 +38,10 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
-    merge_ambient_arms(&mut program);
+    let ownership_diags = merge_ambient_arms(&mut program);
+    if !ownership_diags.is_empty() {
+        return Err(diag::render(&ownership_diags, file, source));
+    }
     let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
     ambient_imports(&mut import_paths);
     let mut visited = std::collections::HashSet::new();
@@ -94,7 +97,10 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 /// library defining `pub play`; the synthesized entry runs it.
 pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut program = compile(file, source, false)?;
-    merge_ambient_arms(&mut program);
+    let ownership_diags = merge_ambient_arms(&mut program);
+    if !ownership_diags.is_empty() {
+        return Err(diag::render(&ownership_diags, file, source));
+    }
     let base = std::path::Path::new(file)
         .parent()
         .map(|p| p.to_path_buf())
@@ -315,12 +321,34 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet
 /// A local arm named for an ambient group's export joins that group: a
 /// user's `fn to_string (money cents)` is an arm of render/to_string —
 /// arming your own types needs no import (the ratified Ruby-shaped rule).
-fn merge_ambient_arms(program: &mut ast::Program) {
+fn merge_ambient_arms(program: &mut ast::Program) -> Vec<diag::Diagnostic> {
+    let local_types: std::collections::HashSet<&str> =
+        program.types.iter().map(|t| t.name.as_str()).collect();
+    let mut diags = Vec::new();
     for decl in &mut program.fns {
         if decl.name == "to_string" {
+            // The ownership rule, enforced at the definition site: an arm
+            // joining a group this module doesn't own must involve a type it
+            // does own. Re-arming a primitive or the sentinels is reserved
+            // to the stdlib; wrap the value in your own type instead.
+            let owns_a_type = decl.params.iter().any(|p| match p {
+                ast::Pattern::Ctor { ty, .. } => local_types.contains(ty.as_str()),
+                ast::Pattern::Annotated { ty, .. } => local_types.contains(ty.as_str()),
+                _ => false,
+            });
+            if !owns_a_type {
+                diags.push(diag::Diagnostic {
+                    kind: "ownership",
+                    message: "an arm of `to_string` must match on a type this module defines — rendering of primitives and sentinels is fixed; wrap the value in your own type"
+                        .to_string(),
+                    span: decl.span,
+                });
+                continue;
+            }
             decl.name = "render/to_string".to_string();
         }
     }
+    diags
 }
 
 fn ambient_imports(import_paths: &mut Vec<String>) {
