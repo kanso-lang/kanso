@@ -620,7 +620,6 @@ fn compile_module_inner(
         }
     }
     let root = AMBIENT_ROOT.with(|c| c.replace(false));
-    let mut import_paths = import_paths;
     if root && !dir.ends_with("render") {
         ambient_imports(&mut import_paths);
     }
