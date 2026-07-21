@@ -59,6 +59,24 @@ show `thunk_evals=0` for the skipped site; `shared_twice.mem` shows
 `thunk_evals=1` under two reads; a new `skipped_err` program pins that
 the strict-era error no longer occurs.
 
+## Interp wiring notes (reconnaissance, 2026-07-21)
+
+- `Frame` is `Option<Rc<str>>` ("{name} at {file}") — no arity. The
+  demand lookup needs (fn name, arity, stmt index), so `Interp::new`
+  runs `demand::analyze` and `eval_body` must be handed the owning
+  decl's name+arity (thread through `run_main`/`run_named`/the dispatch
+  apply path) with stmt indices from enumeration.
+- Lazy hook site: `eval_body`'s `Stmt::Bind` arm (eval.rs ~:349) —
+  when demand marks the site and the pattern is `Var`, bind
+  `Value::Thunk(Rc<RefCell<ThunkState>>)` (`Pending { expr: Expr
+  (Clone), env, frame }` | `Forced(Value)`) instead of evaluating.
+- Force at scrutiny: a `force(&self, Value) -> EvalResult` helper,
+  called at dispatch selection, BinOp operands, interpolation render,
+  destructure of non-Var patterns, effect execution, and equality.
+  Passing to `App` args and `Var` binds must NOT force.
+- Counters live on `Interp` as `Cell<u64>`: thunk_allocs, thunk_forces,
+  thunk_evals, thunk_live_exit (allocs minus forced-or-dropped at exit).
+
 ## Order of work
 
 1. Demand pass (`src/demand.rs`, sibling of `escape.rs`): mark
