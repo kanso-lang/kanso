@@ -1,0 +1,9 @@
+type money
+  cents:int
+
+pub play =
+  price = money 350
+  print "that costs {price}"
+
+fn to_string (money cents)
+  "${cents / 100}.{cents - (cents / 100 * 100)}"

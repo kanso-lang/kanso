@@ -162,7 +162,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 24] = [
+const BUILTIN_CALLS: [(&str, usize); 25] = [
     ("at", 2),
     ("find2", 4),
     ("bytes", 1),
@@ -182,6 +182,7 @@ const BUILTIN_CALLS: [(&str, usize); 24] = [
     ("put", 3),
     ("slice", 3),
     ("sort", 1),
+    ("render_value", 1),
     ("sqrt", 1),
     ("round", 1),
     ("sum", 1),
@@ -1568,8 +1569,26 @@ impl<'a> Backend<'a> {
                             // only an err propagates out of interpolation; a none
                             // renders `<none>` via k_render, so it is not a fail
                             fails |= f.set_of(&value) & ERR;
+                            // a set carrying REC may hit a user to_string arm:
+                            // route through the ambient group. Primitive-only
+                            // sets keep the direct call — coherence proves no
+                            // arm can exist for them (design/render-plan.md).
+                            let group = "render/to_string";
+                            let dispatchable = f.set_of(&value) & REC != 0
+                                && self.program.fns.iter().any(|d| d.name == group);
                             let t = f.tmp();
-                            f.line(&format!("{t} = call %KValue @k_render(%KValue {value}, i64 0)"));
+                            match dispatchable {
+                                true => {
+                                    f.line(&format!(
+                                        "{t} = call tailcc %KValue @{}(%KValue {value})",
+                                        dsym(group, 1)
+                                    ));
+                                    fails |= ERR;
+                                }
+                                false => f.line(&format!(
+                                    "{t} = call %KValue @k_render(%KValue {value}, i64 0)"
+                                )),
+                            }
                             t
                         }
                     };

@@ -38,7 +38,9 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
-    let import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
+    merge_ambient_arms(&mut program);
+    let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
+    ambient_imports(&mut import_paths);
     let mut visited = std::collections::HashSet::new();
     let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
     let mut diags = Vec::new();
@@ -92,6 +94,18 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 /// library defining `pub play`; the synthesized entry runs it.
 pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut program = compile(file, source, false)?;
+    merge_ambient_arms(&mut program);
+    let base = std::path::Path::new(file)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
+    let mut ambient = Vec::new();
+    ambient_imports(&mut ambient);
+    let mut visited = std::collections::HashSet::new();
+    if let Ok((dep_program, _)) = load_dependencies(&base, &ambient, &mut visited) {
+        program.types.extend(dep_program.types);
+        program.fns.extend(dep_program.fns);
+    }
     let has_play = program.fns.iter().any(|d| d.name == "play" && d.is_pub);
     if !has_play {
         return Err(format!(
@@ -294,6 +308,27 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet
     }
 }
 
+/// Modules linked into every program without an import statement: groups
+/// that SYNTAX names (design/render-plan.md — "{x}" desugars to
+/// render/to_string). Ambient types bring their canonical arms; imports
+/// still govern bare-name spelling, so nothing here adds a visible name.
+/// A local arm named for an ambient group's export joins that group: a
+/// user's `fn to_string (money cents)` is an arm of render/to_string —
+/// arming your own types needs no import (the ratified Ruby-shaped rule).
+fn merge_ambient_arms(program: &mut ast::Program) {
+    for decl in &mut program.fns {
+        if decl.name == "to_string" {
+            decl.name = "render/to_string".to_string();
+        }
+    }
+}
+
+fn ambient_imports(import_paths: &mut Vec<String>) {
+    if !import_paths.iter().any(|p| p == "std/render") {
+        import_paths.push("std/render".to_string());
+    }
+}
+
 /// Load and qualify every imported module, recursively.
 fn load_dependencies(
     base: &std::path::Path,
@@ -490,7 +525,24 @@ fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
 /// Canonical ordering holds per file; an overload group lives in one file.
 pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::Program, String> {
     let mut visited = std::collections::HashSet::new();
-    compile_module_inner(dir, require_main, &mut visited)
+    compile_module_root(dir, require_main, &mut visited)
+}
+
+/// The root module gets the ambient imports (design/render-plan.md);
+/// dependencies never do — deps compile exactly as written.
+fn compile_module_root(
+    dir: &std::path::Path,
+    require_main: bool,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+) -> Result<ast::Program, String> {
+    AMBIENT_ROOT.with(|c| c.set(true));
+    let result = compile_module_inner(dir, require_main, visited);
+    AMBIENT_ROOT.with(|c| c.set(false));
+    result
+}
+
+thread_local! {
+    static AMBIENT_ROOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
 fn compile_module_inner(
@@ -538,6 +590,11 @@ fn compile_module_inner(
                 import_paths.push(import.path.clone());
             }
         }
+    }
+    let root = AMBIENT_ROOT.with(|c| c.replace(false));
+    let mut import_paths = import_paths;
+    if root && !dir.ends_with("render") {
+        ambient_imports(&mut import_paths);
     }
     let (dep_program, exports) = load_dependencies(dir, &import_paths, visited)?;
     let mut all_names = std::collections::HashSet::new();

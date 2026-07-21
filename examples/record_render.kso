@@ -1,0 +1,7 @@
+type point
+  x:int
+  y:int
+
+pub play =
+  p = point 3 4
+  print "the point is {p}"

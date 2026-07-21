@@ -685,7 +685,29 @@ impl<'a> Interp<'a> {
                     if matches!(value, Value::ErrV(_)) {
                         return Ok(value);
                     }
-                    out.push_str(&render(&value, false));
+                    // records route through the ambient render/to_string
+                    // group so user arms win; primitives keep the direct
+                    // renderer (coherence licenses it — no arm can exist)
+                    let rendered = match (&value, self.fns.get("render/to_string")) {
+                        (Value::Record { .. }, Some(overloads)) => {
+                            let overloads = overloads.clone();
+                            let result = self.dispatch(
+                                "render/to_string",
+                                &overloads,
+                                vec![value],
+                                Span { line: 0, col: 0 },
+                            )?;
+                            if matches!(result, Value::ErrV(_)) {
+                                return Ok(result);
+                            }
+                            match result {
+                                Value::Str(s) => s,
+                                other => render(&other, false),
+                            }
+                        }
+                        _ => render(&value, false),
+                    };
+                    out.push_str(&rendered);
                 }
             }
         }
