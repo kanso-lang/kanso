@@ -722,7 +722,7 @@ KValue k_render(KValue v, long long quote) {
             }
             return out;
         }
-        case K_DESC: return k_str("<description>");
+        case K_DESC: return k_str("<io>");
         case K_LIST: {
             KList* l = (KList*)(intptr_t)v.payload;
             KValue out = k_str("[");
@@ -944,7 +944,7 @@ KValue k_desc_print(KValue text) {
 KValue k_seq(KValue a, KValue b) {
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
-    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
+    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`>>` sequences two io values");
     return k_mkdesc(1, a, b);
 }
 
@@ -987,7 +987,7 @@ KValue k_desc_join(KValue a, KValue b) {
     if (lf && rf) return k_accumulate_failures(a, b);
     if (lf) return a;
     if (rf) return b;
-    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`&` joins two descriptions");
+    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`&` joins two io values");
     return k_mkdesc(7, a, b);
 }
 

@@ -550,7 +550,7 @@ impl<'a> Interp<'a> {
                         Ok(Value::Desc(Rc::new(Desc::Seq(a, b))))
                     }
                     _ => Err(RuntimeError {
-                        message: "`>>` sequences two effect descriptions".to_string(),
+                        message: "`>>` sequences two io values".to_string(),
                         span: *span,
                     }),
                 }
@@ -1454,7 +1454,7 @@ fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
                 Ok(Value::Desc(Rc::new(Desc::Join(a.clone(), b.clone()))))
             }
             _ => Err(RuntimeError {
-                message: "a group joins descriptions".to_string(),
+                message: "a group joins io values".to_string(),
                 span,
             }),
         },
@@ -1622,7 +1622,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
         },
         Value::FnRef(name) => format!("<fn {name}>"),
         Value::Closure(_) => "<fn>".to_string(),
-        Value::Desc(_) => "<description>".to_string(),
+        Value::Desc(_) => "<io>".to_string(),
     }
 }
 
@@ -1809,7 +1809,7 @@ mod tests {
     fn scripted_executor_records_the_transcript() {
         let value = run_main("main = print \"a\" >> print \"b\"\n");
 
-        let Value::Desc(desc) = value else { panic!("main yields a description") };
+        let Value::Desc(desc) = value else { panic!("main yields an io") };
         let lexed = crate::lexer::lex("main = print \"a\" >> print \"b\"\n").expect("lexes");
         let program = crate::parser::parse(&lexed).expect("parses");
         let interp = Interp::new(&program);

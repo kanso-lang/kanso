@@ -87,7 +87,7 @@ fn push(s: Slot) -> u32 {
 fn val(h: u32) -> Value {
     match slot(h) {
         Slot::V(v) => v,
-        _ => die("a closure or bound description cannot be used as data here".to_string()),
+        _ => die("a closure or bound io cannot be used as data here".to_string()),
     }
 }
 
@@ -474,7 +474,7 @@ pub extern "C" fn rt_seq(a: u32, b: u32) -> u32 {
             push(Slot::V(Value::Desc(Rc::new(Desc::Seq(da, db)))))
         }
         (sa, sb) if descish(&sa) && descish(&sb) => push(Slot::Seq(a, b)),
-        _ => die("`>>` sequences two effect descriptions".to_string()),
+        _ => die("`>>` sequences two io values".to_string()),
     }
 }
 
@@ -585,7 +585,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
                 _ => Ok(next),
             }
         }
-        _ => Err("main is not a description".to_string()),
+        _ => Err("main is not an io".to_string()),
     }
 }
 
