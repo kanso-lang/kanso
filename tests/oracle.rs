@@ -64,12 +64,26 @@ struct Evaluation {
     status: i32,
     stderr: String,
     stdout: String,
+    thunk_stats: String,
 }
 
 /// Mirrors `kanso_run` in src/wasm.rs — the canonical interpreter execution
 /// shape — with printed text and diagnostics kept on separate streams so
 /// each can be asserted against its golden file.
 fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluation {
+    // The interpreter's Rust stack grows with program recursion depth; pin a
+    // deep stack explicitly instead of leaning on the test thread's margin.
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(256 << 20)
+            .spawn_scoped(scope, || evaluate_on_stack(program, program_args))
+            .expect("spawns")
+            .join()
+            .expect("evaluation thread completes")
+    })
+}
+
+fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluation {
     let interp = Interp::new(program);
     let value = match interp.run_main() {
         Ok(value) => value,
@@ -78,6 +92,7 @@ fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluat
                 status: 1,
                 stderr: format!("error[runtime]: {}\n", runtime.message),
                 stdout: String::new(),
+                thunk_stats: interp.thunk_stats.render(),
             }
         }
     };
@@ -86,6 +101,7 @@ fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluat
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),
     };
+    let thunk_stats = interp.thunk_stats.render();
     match outcome {
         Ok(Value::ErrV(info)) => Evaluation {
             status: 1,
@@ -95,18 +111,46 @@ fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluat
                 trace_lines(&info)
             ),
             stdout: executor.stdout,
+            thunk_stats,
         },
         Ok(Value::NoneV) if reached == "main" => Evaluation {
             status: 1,
             stderr: "error[endpoint]: unhandled none reached main\n".to_string(),
             stdout: executor.stdout,
+            thunk_stats,
         },
-        Ok(_) => Evaluation { status: 0, stderr: String::new(), stdout: executor.stdout },
+        Ok(_) => Evaluation {
+            status: 0,
+            stderr: String::new(),
+            stdout: executor.stdout,
+            thunk_stats,
+        },
         Err(runtime) => Evaluation {
             status: 1,
             stderr: format!("error[runtime]: {}\n", runtime.message),
             stdout: executor.stdout,
+            thunk_stats,
         },
+    }
+}
+
+#[test]
+fn mem_corpus_interp_matches_the_semantic_counters() {
+    // Evaluation counts are semantics: the .mem goldens' thunk_* lines are
+    // produced by the native engine and asserted here against the interp,
+    // byte for byte — the differential lattice extended to memory facts.
+    for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
+        let compiled = compile_case(&program);
+        let run = evaluate(&compiled, Vec::new());
+        let semantic: String = expected(&program, "mem")
+            .lines()
+            .filter(|line| line.starts_with("thunk_"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+
+        assert_eq!(run.stdout, expected(&program, "stdout"), "stdout mismatch for {program:?}");
+        assert_eq!(run.thunk_stats, semantic, "semantic counters diverged for {program:?}");
+        assert_eq!(run.status, 0, "expected success for {program:?}");
     }
 }
 

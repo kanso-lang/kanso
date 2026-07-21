@@ -19,7 +19,10 @@ pub const LIST: Set = 1 << 9;
 pub const MAP: Set = 1 << 10;
 pub const FN: Set = 1 << 11;
 pub const BYTES: Set = 1 << 12;
-pub const TOP: Set = (1 << 13) - 1;
+/// Lazy v1: the value may be an unforced thunk; force sites are emitted
+/// only where this bit is present, so strict code pays nothing.
+pub const THUNK: Set = 1 << 13;
+pub const TOP: Set = (1 << 14) - 1;
 pub const FAIL: Set = NONE | ERR;
 pub const BOOL: Set = TRUE | FALSE;
 
@@ -34,6 +37,9 @@ pub struct Inference {
 
 struct Ctx<'a> {
     program: &'a Program,
+    demand: crate::demand::DemandInfo,
+    /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
+    current: (String, usize),
     groups: HashMap<(&'a str, usize), Vec<usize>>,
     type_names: HashMap<&'a str, usize>,
     params: Vec<Vec<Set>>,
@@ -50,6 +56,8 @@ pub fn infer(program: &Program) -> Inference {
     let type_names = program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
     let mut ctx = Ctx {
         program,
+        demand: crate::demand::analyze(program),
+        current: (String::new(), 0),
         groups,
         type_names,
         params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
@@ -65,6 +73,7 @@ pub fn infer(program: &Program) -> Inference {
         rounds += 1;
         for i in 0..ctx.program.fns.len() {
             let decl = &ctx.program.fns[i];
+            ctx.current = (decl.name.clone(), decl.params.len());
             let mut env: HashMap<&str, Set> = HashMap::new();
             let param_sets = ctx.params[i].clone();
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
@@ -134,10 +143,14 @@ fn pattern_catches(pat: &Pattern) -> Set {
 
 fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str, Set>) -> Set {
     let mut result = NONE;
-    for stmt in body {
+    for (index, stmt) in body.iter().enumerate() {
         match stmt {
             Stmt::Bind { pattern, expr } => {
-                let value = eval_expr(ctx, expr, env);
+                let mut value = eval_expr(ctx, expr, env);
+                if ctx.demand.is_lazy_bind(&ctx.current.0, ctx.current.1, index) {
+                    // The binding holds a thunk; forcing yields the expr's set.
+                    value |= THUNK;
+                }
                 match pattern {
                     Pattern::Var(name, _) => {
                         env.insert(name, value);

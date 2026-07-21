@@ -1,0 +1,17 @@
+# the demanded-thunk path: the same shape as skip_unused but the true arm
+# wins, so the thunk forces exactly once and live_exit returns to zero.
+fn burn 0 acc
+  acc
+
+fn burn n acc
+  burn (n - 1) (acc + n)
+
+fn pick false _
+  0
+
+fn pick true chosen
+  chosen
+
+pub play =
+  expensive = burn 2000 0
+  print "picked: {pick true expensive}"

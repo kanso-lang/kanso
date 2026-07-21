@@ -156,6 +156,8 @@ declare %KValue @k_b_to_float(%KValue, ptr)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
+declare %KValue @k_thunk_new(i64, i32, ...)
+declare %KValue @k_force(%KValue)
 
 "#;
 
@@ -236,6 +238,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         body: String::new(),
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
+        demand: crate::demand::analyze(program),
+        thunk_sites: Vec::new(),
     };
     backend.emit()
 }
@@ -253,6 +257,9 @@ struct Backend<'a> {
     body: String,
     lift_counter: usize,
     fn_value_wrappers: Vec<(String, usize)>,
+    demand: crate::demand::DemandInfo,
+    /// (site evaluator symbol, captured-arg count), indexed by site id.
+    thunk_sites: Vec<(String, usize)>,
 }
 
 struct FnEmit {
@@ -414,7 +421,25 @@ impl<'a> Backend<'a> {
 
     /// Render one call argument in the callee's ABI: raw i64 for an unboxed
     /// slot (extract the payload), boxed KValue otherwise.
+    /// Any arity-matching arm inspecting this position (anything but a bare
+    /// Var/Wildcard) means a thunk must force before dispatch can select.
+    fn scrutinizes(&self, callee: &str, arity: usize, i: usize) -> bool {
+        self.program.fns.iter().any(|d| {
+            d.name == callee
+                && d.params.len() == arity
+                && !matches!(d.params.get(i), Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_)))
+        })
+    }
+
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+        let forced;
+        let e = match f.set_of(e) & crate::infer::THUNK != 0 && self.scrutinizes(callee, arity, i) {
+            true => {
+                forced = self.maybe_force(f, e.to_string());
+                forced.as_str()
+            }
+            false => e,
+        };
         if self.is_byte_disc(callee, arity, i) {
             // `e` is an `at`-on-bytes KValue (byte or none); hand it over as a
             // raw i64 — the byte value, or 256 for none. The box `at` built and
@@ -533,6 +558,84 @@ impl<'a> Backend<'a> {
             })
     }
 
+    /// A bind is representable as a native thunk when its captures fit the
+    /// cell (args[8]).
+    fn thunkable(&self, f: &FnEmit, expr: &Expr) -> bool {
+        let mut idents = Vec::new();
+        collect_idents(expr, &mut idents);
+        let mut captures: Vec<&String> = Vec::new();
+        for id in &idents {
+            if f.lookup(id).is_some() && !captures.contains(&id) {
+                captures.push(id);
+            }
+        }
+        captures.len() <= 8
+    }
+
+    /// Force a value that may be a thunk; no-op (no IR) when the set proves
+    /// it can't be one, so strict code pays nothing.
+    fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
+        if f.set_of(&value) & crate::infer::THUNK == 0 {
+            return value;
+        }
+        let post = f.set_of(&value) & !crate::infer::THUNK;
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_force(%KValue {value})"));
+        // A forced thunk can yield anything its expr could; the bind site
+        // recorded TOP, so widen conservatively past the removed bit.
+        f.record(&t, if post == 0 { crate::infer::TOP & !crate::infer::THUNK } else { post });
+        t
+    }
+
+    fn emit_thunk_site(
+        &mut self,
+        sym: &str,
+        captures: &[String],
+        expr: &Expr,
+        outer: &FnEmit,
+    ) -> Result<(), String> {
+        let mut f = FnEmit::new();
+        f.origin_prefix = outer.origin_prefix.clone();
+        f.file = outer.file.clone();
+        f.start_block("entry");
+        for (i, cap) in captures.iter().enumerate() {
+            f.bind(cap, &format!("%a{i}"));
+        }
+        self.emit_tail(&mut f, expr)?;
+        let sig: Vec<String> = (0..captures.len()).map(|i| format!("%KValue %a{i}")).collect();
+        let _ = writeln!(
+            self.body,
+            "define tailcc %KValue @{sym}({}) {{\n{}}}\n",
+            sig.join(", "),
+            f.out
+        );
+        Ok(())
+    }
+
+    fn emit_thunk_dispatcher(&mut self) {
+        let mut arms = String::new();
+        let mut cases = String::new();
+        for (site, (sym, argc)) in self.thunk_sites.iter().enumerate() {
+            let _ = writeln!(cases, "    i64 {site}, label %s{site}");
+            let mut loads = String::new();
+            let mut args: Vec<String> = Vec::new();
+            for i in 0..*argc {
+                let _ = writeln!(loads, "  %s{site}a{i}p = getelementptr %KValue, ptr %args, i64 {i}");
+                let _ = writeln!(loads, "  %s{site}a{i} = load %KValue, ptr %s{site}a{i}p");
+                args.push(format!("%KValue %s{site}a{i}"));
+            }
+            let _ = writeln!(
+                arms,
+                "s{site}:\n{loads}  %s{site}r = call tailcc %KValue @{sym}({})\n  ret %KValue %s{site}r",
+                args.join(", ")
+            );
+        }
+        let _ = writeln!(
+            self.body,
+            "define %KValue @d_thunk_eval(i64 %site, ptr %args) {{\nentry:\n  switch i64 %site, label %bad [\n{cases}  ]\n{arms}bad:\n  unreachable\n}}\n"
+        );
+    }
+
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
         self.emit_type_fields();
@@ -579,6 +682,10 @@ impl<'a> Backend<'a> {
                 params.join(", ")
             );
         }
+        // Lazy v1: the thunk-site dispatcher the runtime's k_force calls.
+        // Sites are emitted as cases as lazy binds are compiled; a program
+        // with no lazy sites still defines the symbol so every binary links.
+        self.emit_thunk_dispatcher();
         self.body.push_str(
             "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
              @d_main_0()\n  ret %KValue %r\n}\n",
@@ -867,7 +974,7 @@ impl<'a> Backend<'a> {
                     f.bind(pname, &format!("%x{i}"));
                 }
             }
-            self.emit_fn_body(&mut f, &decl.body)?;
+            self.emit_fn_body(&mut f, decl, &decl.body)?;
         }
         let _ = writeln!(self.body, "{header}
 {}}}
@@ -920,7 +1027,7 @@ impl<'a> Backend<'a> {
                     }
                 }
             }
-            self.emit_fn_body(&mut f, &decl.body)?;
+            self.emit_fn_body(&mut f, decl, &decl.body)?;
             f.start_block(&fail);
         }
         for i in 0..arity {
@@ -1334,12 +1441,45 @@ impl<'a> Backend<'a> {
             .ok_or_else(|| format!("native backend: unknown type `{ty}`"))
     }
 
-    fn emit_fn_body(&mut self, f: &mut FnEmit, body: &[Stmt]) -> Result<(), String> {
+    fn emit_fn_body(&mut self, f: &mut FnEmit, decl: &FnDecl, body: &[Stmt]) -> Result<(), String> {
         let last = body.len() - 1;
         for (i, stmt) in body.iter().enumerate() {
             match stmt {
+                Stmt::Bind { pattern: Pattern::Var(name, _), expr }
+                    if self.demand.is_lazy_bind(&decl.name, decl.params.len(), i)
+                        && self.thunkable(f, expr) =>
+                {
+                    let mut idents = Vec::new();
+                    collect_idents(expr, &mut idents);
+                    let mut captures: Vec<String> = Vec::new();
+                    for id in idents {
+                        if f.lookup(&id).is_some() && !captures.contains(&id) {
+                            captures.push(id);
+                        }
+                    }
+                    let site = self.thunk_sites.len();
+                    let sym = format!("tsite{site}");
+                    self.thunk_sites.push((sym.clone(), captures.len()));
+                    self.emit_thunk_site(&sym, &captures, expr, f)?;
+                    let mut args = String::new();
+                    for cap in &captures {
+                        let temp = f.lookup(cap).expect("capture is bound");
+                        args.push_str(&format!(", %KValue {temp}"));
+                    }
+                    let t = f.tmp();
+                    f.line(&format!(
+                        "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 {}{args})",
+                        captures.len()
+                    ));
+                    f.record(&t, crate::infer::TOP);
+                    f.bind(name, &t);
+                }
                 Stmt::Bind { pattern, expr } => {
                     let value = self.emit_expr(f, expr)?;
+                    let value = match pattern {
+                        Pattern::Var(..) => value,
+                        _ => self.maybe_force(f, value),
+                    };
                     match pattern {
                         Pattern::Var(name, _) => f.bind(name, &value),
                         Pattern::Ctor { ty, fields } => {
@@ -1423,6 +1563,7 @@ impl<'a> Backend<'a> {
                         TemplatePart::Lit(s) => self.str_const(f, s),
                         TemplatePart::Interp(inner) => {
                             let value = self.emit_expr(f, inner)?;
+                            let value = self.maybe_force(f, value);
                             // only an err propagates out of interpolation; a none
                             // renders `<none>` via k_render, so it is not a fail
                             fails |= f.set_of(&value) & ERR;
@@ -1538,7 +1679,9 @@ impl<'a> Backend<'a> {
             }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_seq(%KValue {a}, %KValue {b})"));
                 f.record(&t, DESC | (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL));
@@ -1546,7 +1689,9 @@ impl<'a> Backend<'a> {
             }
             Expr::Join { lhs, rhs, .. } => {
                 let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
                 let t = f.tmp();
                 f.line(&format!(
                     "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
@@ -1556,7 +1701,9 @@ impl<'a> Backend<'a> {
             }
             Expr::BinOp { op, lhs, rhs, span } => {
                 let a = self.emit_expr(f, lhs)?;
+                let a = self.maybe_force(f, a);
                 let b = self.emit_expr(f, rhs)?;
+                let b = self.maybe_force(f, b);
                 self.emit_binop(f, op, &a, &b, *span)
             }
             Expr::Lambda { params, body, .. } => {
@@ -2300,6 +2447,9 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         if let Some(id) = self.type_ids.get(name.as_str()).copied() {
+            // constructors store fields; records never hold thunks in v1
+            let emitted: Vec<String> =
+                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
             self.emit_typeset_checks(f, name, &emitted)?;
             let n = emitted.len();
             let arr = f.tmp();
@@ -2358,6 +2508,10 @@ impl<'a> Backend<'a> {
             if emitted.len() != *arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
             }
+            // builtins scrutinize every argument; a thunk forces here (the
+            // gated force emits nothing when the set proves it can't be one)
+            let emitted: Vec<String> =
+                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
             let mut args_ir: Vec<String> =
                 emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin

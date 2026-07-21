@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::diag::Span;
 use num_bigint::BigInt;
 use num_traits::{ToPrimitive, Zero};
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
@@ -26,6 +27,17 @@ pub enum Value {
     FnRef(Rc<str>),
     Closure(Rc<ClosureData>),
     Desc(Rc<Desc>),
+    Thunk(Rc<RefCell<ThunkState>>),
+}
+
+/// A conditionally-demanded binding (demand.rs marks the sites): the
+/// computation and its captures, replaced by the value at first force.
+#[derive(Clone, Debug)]
+pub enum ThunkState {
+    Pending { expr: Expr, env: Option<Rc<Env>>, frame: Frame },
+    /// Under evaluation — a re-entrant force is a <<loop>>.
+    Blackhole,
+    Forced(Value),
 }
 
 /// An err value carries its propagation trace: the origin baked at the
@@ -302,6 +314,27 @@ pub struct Interp<'a> {
     fns: HashMap<&'a str, Vec<&'a FnDecl>>,
     types: HashMap<&'a str, &'a TypeDecl>,
     entry_decl: TypeDecl,
+    demand: crate::demand::DemandInfo,
+    pub thunk_stats: ThunkStats,
+}
+
+/// Engine-shared semantic counters: evaluation counts are semantics, so
+/// native must report byte-identical values (design/lazy-v1-plan.md).
+#[derive(Default)]
+pub struct ThunkStats {
+    pub allocs: Cell<u64>,
+    pub forces: Cell<u64>,
+    pub evals: Cell<u64>,
+}
+
+impl ThunkStats {
+    pub fn render(&self) -> String {
+        let (allocs, forces, evals) = (self.allocs.get(), self.forces.get(), self.evals.get());
+        format!(
+            "thunk_allocs={allocs}\nthunk_forces={forces}\nthunk_evals={evals}\nthunk_live_exit={}\n",
+            allocs - evals
+        )
+    }
 }
 
 impl<'a> Interp<'a> {
@@ -321,7 +354,13 @@ impl<'a> Interp<'a> {
                 ("value".to_string(), vec!["any".to_string()], origin),
             ],
         };
-        Interp { fns, types, entry_decl }
+        let demand = crate::demand::analyze(program);
+        Interp { fns, types, entry_decl, demand, thunk_stats: ThunkStats::default() }
+    }
+
+    /// Evaluate a declaration's body with its lazy bind sites in view.
+    fn eval_body_of(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> EvalResult {
+        self.eval_body_in(decl, &decl.body, env, &frame_of(decl))
     }
 
     fn type_decl(&self, name: &str) -> Option<&TypeDecl> {
@@ -333,20 +372,40 @@ impl<'a> Interp<'a> {
 
     pub fn run_main(&self) -> EvalResult {
         let main = self.fns.get("main").expect("checked: main exists")[0];
-        self.eval_body(&main.body, None, &frame_of(main))
+        self.eval_body_of(main, None)
     }
 
     pub fn run_named(&self, name: &str) -> Option<EvalResult> {
         let decl = self.fns.get(name)?.iter().find(|d| d.params.is_empty())?;
-        Some(self.eval_body(&decl.body, None, &frame_of(decl)))
+        Some(self.eval_body_of(decl, None))
     }
 
-    fn eval_body(&self, body: &[Stmt], mut env: Option<Rc<Env>>, frame: &Frame) -> EvalResult {
+    fn eval_body_in(
+        &self,
+        decl: &FnDecl,
+        body: &[Stmt],
+        mut env: Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> EvalResult {
         let mut result = Value::NoneV;
-        for stmt in body {
+        for (index, stmt) in body.iter().enumerate() {
             match stmt {
+                Stmt::Bind { pattern: Pattern::Var(name, _), expr }
+                    if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
+                {
+                    self.thunk_stats.allocs.set(self.thunk_stats.allocs.get() + 1);
+                    let cell = Rc::new(RefCell::new(ThunkState::Pending {
+                        expr: expr.clone(),
+                        env: env.clone(),
+                        frame: frame.clone(),
+                    }));
+                    env = bind(env, name, Value::Thunk(cell));
+                }
                 Stmt::Bind { pattern, expr } => {
-                    let value = self.eval(expr, &env, frame)?;
+                    let mut value = self.eval(expr, &env, frame)?;
+                    if !matches!(pattern, Pattern::Var(..)) {
+                        value = self.force_thunk(value)?;
+                    }
                     env = self.destructure(pattern, value, env, expr.span())?;
                 }
                 Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
@@ -354,6 +413,7 @@ impl<'a> Interp<'a> {
         }
         Ok(result)
     }
+
 
     fn destructure(
         &self,
@@ -537,8 +597,8 @@ impl<'a> Interp<'a> {
                 self.call(callee, values, *span, frame)
             }
             Expr::Seq(lhs, rhs, span) => {
-                let left = self.eval(lhs, env, frame)?;
-                let right = self.eval(rhs, env, frame)?;
+                let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
+                let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 if is_failure(&left) {
                     return Ok(left);
                 }
@@ -562,13 +622,13 @@ impl<'a> Interp<'a> {
                 frame: frame.clone(),
             }))),
             Expr::BinOp { op, lhs, rhs, span } => {
-                let left = self.eval(lhs, env, frame)?;
-                let right = self.eval(rhs, env, frame)?;
+                let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
+                let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 eval_binop(op, left, right, *span, frame)
             }
             Expr::Join { lhs, rhs, span } => {
-                let left = self.eval(lhs, env, frame)?;
-                let right = self.eval(rhs, env, frame)?;
+                let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
+                let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 join_values(left, right, *span)
             }
         }
@@ -580,7 +640,7 @@ impl<'a> Interp<'a> {
         }
         if let Some(decls) = self.fns.get(name) {
             if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
-                return self.eval_body(&constant.body, None, &frame_of(constant));
+                return self.eval_body_of(constant, None);
             }
         }
         match name {
@@ -619,7 +679,7 @@ impl<'a> Interp<'a> {
             match part {
                 TemplatePart::Lit(s) => out.push_str(s),
                 TemplatePart::Interp(expr) => {
-                    let value = self.eval(expr, env, frame)?;
+                    let value = self.force_thunk(self.eval(expr, env, frame)?)?;
                     // an err propagates (the whole string returns the err); a
                     // none is a value and renders its sentinel
                     if matches!(value, Value::ErrV(_)) {
@@ -668,17 +728,26 @@ impl<'a> Interp<'a> {
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
         if name == "err" {
             let [reason] = arity(args, name, span)?;
+            let reason = self.force_thunk(reason)?;
             if is_failure(&reason) {
                 return Ok(reason);
             }
             return Ok(err_value(reason, origin_at(frame, span)));
         }
         if let Some(ty) = self.type_decl(name) {
+            let args = args
+                .into_iter()
+                .map(|a| self.force_thunk(a))
+                .collect::<Result<Vec<_>, _>>()?;
             return self.construct(ty, args, span);
         }
         if let Some(overloads) = self.fns.get(name) {
             return self.dispatch(name, overloads, args, span);
         }
+        let args = args
+            .into_iter()
+            .map(|a| self.force_thunk(a))
+            .collect::<Result<Vec<_>, _>>()?;
         self.call_builtin(name, args, span, frame)
     }
 
@@ -720,6 +789,26 @@ impl<'a> Interp<'a> {
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
+        let args_len = args.len();
+        // A position is scrutinized when any arity-matching arm inspects it
+        // (anything but a bare Var/Wildcard); thunks force before matching.
+        let mut args = args;
+        for (i, arg) in args.iter_mut().enumerate() {
+            if !matches!(arg, Value::Thunk(_)) {
+                continue;
+            }
+            let scrutinized = overloads.iter().any(|decl| {
+                decl.params.len() == args_len
+                    && !matches!(
+                        decl.params.get(i),
+                        Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_))
+                    )
+            });
+            if scrutinized {
+                let taken = std::mem::replace(arg, Value::NoneV);
+                *arg = self.force_thunk(taken)?;
+            }
+        }
         let mut best: Option<(Score, &FnDecl, Bindings)> = None;
         for decl in overloads {
             if decl.params.len() != args.len() {
@@ -740,7 +829,7 @@ impl<'a> Interp<'a> {
                 for (bind_name, value) in binds {
                     env = bind(env, &bind_name, value);
                 }
-                self.eval_body(&decl.body, env, &frame_of(decl))
+                self.eval_body_of(decl, env)
             }
             None => match args.into_iter().find(is_failure) {
                 Some(bad) => Ok(hop(bad, name)),
@@ -1259,6 +1348,35 @@ impl<'a> Interp<'a> {
     fn force(&self, value: Value) -> EvalResult {
         match value {
             Value::Closure(c) if c.params.is_empty() => self.eval(&c.body, &c.env, &c.frame),
+            other => self.force_thunk(other),
+        }
+    }
+
+    /// Scrutiny reaches through a thunk: run the pending computation once,
+    /// overwrite the cell, drop the captures. Never touches nullary closures
+    /// — those are `if`'s deferred branches, forced only by `if` itself.
+    fn force_thunk(&self, value: Value) -> EvalResult {
+        match value {
+            Value::Thunk(cell) => {
+                self.thunk_stats.forces.set(self.thunk_stats.forces.get() + 1);
+                let state = std::mem::replace(&mut *cell.borrow_mut(), ThunkState::Blackhole);
+                match state {
+                    ThunkState::Forced(v) => {
+                        *cell.borrow_mut() = ThunkState::Forced(v.clone());
+                        Ok(v)
+                    }
+                    ThunkState::Pending { expr, env, frame } => {
+                        self.thunk_stats.evals.set(self.thunk_stats.evals.get() + 1);
+                        let v = self.eval(&expr, &env, &frame)?;
+                        *cell.borrow_mut() = ThunkState::Forced(v.clone());
+                        Ok(v)
+                    }
+                    ThunkState::Blackhole => Err(RuntimeError {
+                        message: "a lazy binding demands its own value".to_string(),
+                        span: Span { line: 0, col: 0 },
+                    }),
+                }
+            }
             other => Ok(other),
         }
     }
@@ -1583,6 +1701,12 @@ fn render_float(x: f64) -> String {
 
 pub fn render(value: &Value, quote_strings: bool) -> String {
     match value {
+        Value::Thunk(cell) => match &*cell.borrow() {
+            ThunkState::Forced(v) => render(v, quote_strings),
+            // A pending thunk reaching render is a missed force point; make
+            // it loud so the differential corpus catches it.
+            _ => "<thunk>".to_string(),
+        },
         Value::Int(n) => n.to_string(),
         Value::Float(x) => render_float(*x),
         Value::Map(entries) => match entries.is_empty() {

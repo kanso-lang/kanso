@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -15,11 +16,69 @@
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
-enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES };
+enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK };
 
 typedef struct { long len; char* data; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
 typedef struct { long long len; const unsigned char* data; } KBytes;
+
+/* Lazy v1 (design/lazy-v1-plan.md): a conditionally-demanded binding's
+   pending computation. RC'd, malloc-backed, recycled through a free list --
+   never the beat arenas, so a pending thunk can't pin a rewindable region.
+   Captured args are copied in at creation; the site dispatcher
+   (codegen-emitted d_thunk_eval) runs the computation at first force. */
+typedef struct KThunk {
+    long long rc;
+    long long site;
+    int forced;
+    int argc;
+    KValue result;
+    struct KThunk* next_free;
+    KValue args[8];
+} KThunk;
+
+static KThunk* k_thunk_free = 0;
+static long long k_stat_thunk_allocs = 0;
+static long long k_stat_thunk_forces = 0;
+static long long k_stat_thunk_evals = 0;
+
+extern KValue d_thunk_eval(long long site, KValue* args);
+
+KValue k_thunk_new(long long site, int argc, ...) {
+    KThunk* t = k_thunk_free;
+    if (t) {
+        k_thunk_free = t->next_free;
+    } else {
+        t = (KThunk*)malloc(sizeof(KThunk));
+    }
+    k_stat_thunk_allocs++;
+    t->rc = 1;
+    t->site = site;
+    t->forced = 0;
+    t->argc = argc;
+    t->next_free = 0;
+    va_list ap;
+    va_start(ap, argc);
+    for (int i = 0; i < argc; i++) t->args[i] = va_arg(ap, KValue);
+    va_end(ap);
+    KValue v;
+    v.tag = K_THUNK;
+    v.payload = (long long)t;
+    return v;
+}
+
+KValue k_force(KValue v) {
+    if (v.tag != K_THUNK) return v;
+    KThunk* t = (KThunk*)v.payload;
+    k_stat_thunk_forces++;
+    if (!t->forced) {
+        k_stat_thunk_evals++;
+        t->result = d_thunk_eval(t->site, t->args);
+        t->forced = 1;
+    }
+    return t->result;
+}
+
 typedef struct { long long len; KValue* items; } KList;
 /* A map is built by appending pairs to a frontier-shared buffer in O(1) (like
    lists), leaving them unsorted with possible duplicate keys. The canonical
@@ -79,6 +138,9 @@ static void k_stats_dump(void) {
     fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
+    fprintf(stderr, "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\nthunk_live_exit=%lld\n",
+        k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
+        k_stat_thunk_allocs - k_stat_thunk_evals);
 }
 
 static void k_arena_push(size_t need) {
