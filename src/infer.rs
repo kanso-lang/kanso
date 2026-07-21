@@ -426,6 +426,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "find2" => INT | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | fails,
         "utf8" => STR | ERR | fails,
+        "render_value" => STR | fails,
         "length" => INT | fails,
         "push" | "concat" | "chars" | "entries" | "sort" | "filter" => LIST | fails,
         "map" => LIST | fails,

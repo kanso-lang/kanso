@@ -342,6 +342,25 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>three smaller decisions each hand the compiler more structure while handing the reader less to remember. destructuring always wears braces (<code>{ artist minutes } = song</code>), so every field read is name-resolution against a known record and compiles to fixed offsets. a type may declare zero fields (<code>type null</code>), so a marker like json's null is ordinary library data, not a keyword. and a field may list several permitted types (<code>title:null string</code>), so reads dispatch on what the value is and the "is it null or a value?" conditional becomes unwritable—the compiler sees a closed set of tags it can enumerate and often erase.</p>
 
+<h3>rendering is dispatch</h3>
+
+<p>string interpolation looks like a language feature and compiles like a library. <code>"{x}"</code> is a call on an ordinary dispatch group named <code>to_string</code>, whose arms for the primitive types ship with the primitives themselves. so giving your own type a custom rendering is not an api to learn—it's the language's one mechanism, applied:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">custom_render.kso—in the differential corpus, both engines</div>
+  <pre><code><span class="k">type</span> <span class="t">money</span>
+  cents:<span class="t">int</span>
+
+<span class="k">pub</span> play =
+  price = <span class="f">money</span> <span class="n">350</span>
+  <span class="f">print</span> <span class="s">"that costs {price}"</span>
+
+<span class="k">fn</span> <span class="f">to_string</span> (<span class="t">money</span> cents)
+  <span class="s">"${cents / 100}.{cents - (cents / 100 * 100)}"</span></code></pre>
+</div>
+
+<p>that program prints <code>that costs $3.50</code>. no import, no interface declaration, no registration—an arm for a type you own joins the group, and dispatch does the rest. the ownership rule from the import model is what keeps this safe: nobody can re-arm <code>to_string</code> for <code>int</code>, because no module owns both the group and the primitive, so <code>"{42}"</code> renders identically in every program ever compiled. and that guarantee is also an optimization license: where the compiler can see a value is primitive-only, it skips the dispatch entirely and emits the direct renderer—custom rendering costs nothing on the paths that don't use it, which the cost golden pins as a constant.</p>
+
 <h3>the whole toolchain in a browser tab</h3>
 
 <p>a third engine emits wasm bytecode directly—hand-rolled, no llvm anywhere near it, because llvm is measured in hundreds of megabytes and a browser tab is not. the whole thing is about half a megabyte of wasm, and it's what lets the <a href="playground.html">playground</a> compile the program you type into machine code inside the page, tail calls and all. its value representation is deliberately odd today (every value is a small handle into a registry the toolchain owns), and that first cut is staged toward a self-contained module over time, every step of the migration pinned by the same corpus of byte-identical golden outputs the other two engines are held to.</p>
@@ -417,6 +436,8 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <p>a pool of pending thunks is a work queue. when a program blocks on io, the core it was using goes idle—and the scheduler can spend that idle time forcing thunks whose demand is already proven. the work is certainly needed; only its timing moves. an out-of-order cpu does the same with its instruction window during a memory stall, and this is that move, lifted to the language. the honest ancestors are optimistic evaluation (ennals &amp; peyton jones, ICFP 2003) and eager haskell (maessen, 2002): both showed real speedups from running lazy code early, and both stayed research prototypes, because in an impure language a wrong guess needs rollback machinery and the rollback tax ate the winnings. kanso's functions are pure and effects are inert values, so forcing a thunk early cannot do anything that needs undoing—a mis-timed forcing produces a value nobody reads yet, and an err discovered early is stored in the cell, surfacing only if the value is ever demanded. purity removes the problem those systems died on, and the deterministic scheduler keeps early forcing invisible: every engine produces the same bytes whatever got computed during the stalls.</p>
 
 <h3>what's real today</h3>
+
+<p>and the first engine receipts for the performance claim itself: a workload of 100,000 items where each carries a real computation (five thousand mixing steps) and one in twenty is actually used. rust, as naturally written—compute the value, use it in the branch—runs it in <strong>1.36&nbsp;s</strong>, because the language computes what you wrote. kanso, as naturally written, runs the same program with the same checksum in <strong>0.08–0.11&nbsp;s</strong>: the demand analysis thunks the binding, the branch discards nineteen of every twenty, and 95% of the work never happens. the rust programmer who hand-restructures the computation into the branch gets 0.07&nbsp;s—so kanso's <em>clear</em> form runs at the speed of rust's <em>tuned</em> form, fifteen times ahead of rust's clear one. the sources are in <code>bench/</code>; the checksums match.</p>
 
 <p>the honesty tier, in the house convention: <em>v1 shipped in both engines; the pervasive form staged behind the same experimental gate.</em> the fragment above—conditional-demand bindings, the cost gate, refcounted cells on a free list, forcing at scrutiny—runs in the native compiler and the interpreter today, held byte-identical by a new vein of golden tests. alongside every program's expected output, a <code>.mem</code> file pins its memory <em>facts</em>, and both engines must match it byte for byte, because evaluation counts are semantics, not implementation detail. the shipped receipts: the skipped computation evaluates <strong>zero</strong> times with unchanged output; the shared thunk evaluates <strong>once</strong> under two readers; the demanded thunk forces once and exits with zero cells live; and a skipped binding whose computation would have produced an <code>err</code> simply never births it—same output, because errs are values and effects are inert, so the classic lazy-versus-strict divergence has nothing to bite. the json gauntlet is untouched: its accumulators hit the cost gate and compile strict, and the §08 cost golden pins that at zero thunks and the same 14,799,465 allocations. leak-freedom stops being a property we believe and becomes a constant the build diffs.</p>
 

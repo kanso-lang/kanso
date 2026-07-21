@@ -67,6 +67,11 @@ KValue k_thunk_new(long long site, int argc, ...) {
     return v;
 }
 
+KValue k_render(KValue v, long long quote);
+KValue k_b_render_value(KValue v) {
+    return k_render(v, 0);
+}
+
 KValue k_force(KValue v) {
     if (v.tag != K_THUNK) return v;
     KThunk* t = (KThunk*)v.payload;
