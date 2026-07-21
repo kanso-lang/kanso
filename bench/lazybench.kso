@@ -1,0 +1,27 @@
+fn burn 0 acc
+  acc
+
+fn burn n acc
+  burn (n - 1) (mix acc n)
+
+fn mix acc n
+  m = acc * 31 + n
+  m - (m / 1000003 * 1000003)
+
+fn pick false _
+  0
+
+fn pick true chosen
+  chosen
+
+pub play = print "sum {walk 100000 0}"
+
+fn step i
+  expensive = burn 5000 i
+  pick (i - (i / 20 * 20) == 1) expensive
+
+fn walk 0 total
+  total
+
+fn walk i total
+  walk (i - 1) (total + step i)
