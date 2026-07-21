@@ -1,0 +1,3 @@
+pub play = print "third: {at xs 3}"
+
+xs = [10 20]
