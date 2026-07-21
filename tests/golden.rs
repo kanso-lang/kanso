@@ -113,6 +113,25 @@ fn mem_corpus_pins_native_allocator_counters() {
 }
 
 #[test]
+fn strict_mode_thunks_nothing_with_identical_output() {
+    // The worst-case measurement mode: --strict compiles every binding
+    // eager. Output must match the lazy build; the counters prove no cell
+    // was ever created.
+    let program = manifest_dir().join("tests/golden/mem/skip_unused.kso");
+    let strict = run_kanso_env(&program, &["--strict"], &[("KANSO_COUNTERS", "1")]);
+
+    assert_eq!(
+        String::from_utf8_lossy(&strict.stdout),
+        expected(&program, "stdout"),
+        "strict output diverged"
+    );
+    assert!(
+        String::from_utf8_lossy(&strict.stderr).contains("thunk_allocs=0\n"),
+        "strict mode still allocated thunks"
+    );
+}
+
+#[test]
 fn runtime_corpus_reports_endpoint_violations() {
     for program in kso_files(&manifest_dir().join("tests/golden/runtime")) {
         // Both engines must report the endpoint violation identically: native

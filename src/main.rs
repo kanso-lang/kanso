@@ -83,6 +83,10 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             "--plan" => plan = true,
             "--release" => release = true,
             "--interp" => interp = true,
+            // worst-case measurement: thunk nothing, force everything. The
+            // env var carries it to every stage (demand runs in infer,
+            // codegen, and the interp) and into the spawned native binary.
+            "--strict" => std::env::set_var("KANSO_STRICT", "1"),
             "--" => break,
             _ => return None,
         }
