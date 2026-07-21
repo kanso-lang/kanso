@@ -70,6 +70,19 @@ struct Evaluation {
 /// shape — with printed text and diagnostics kept on separate streams so
 /// each can be asserted against its golden file.
 fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluation {
+    // The interpreter's Rust stack grows with program recursion depth; pin a
+    // deep stack explicitly instead of leaning on the test thread's margin.
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .stack_size(256 << 20)
+            .spawn_scoped(scope, || evaluate_on_stack(program, program_args))
+            .expect("spawns")
+            .join()
+            .expect("evaluation thread completes")
+    })
+}
+
+fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluation {
     let interp = Interp::new(program);
     let value = match interp.run_main() {
         Ok(value) => value,
