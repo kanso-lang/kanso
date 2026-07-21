@@ -102,6 +102,17 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
 /// can be seen before it is ported to the native and wasm engines.
 fn run_interpreted(program: &ast::Program) -> ExitCode {
     let interp = eval::Interp::new(program);
+    // Mirror the native runtime's KANSO_COUNTERS convention: semantic thunk
+    // counters print to stderr at exit, byte-identical across engines.
+    struct Stats<'i, 'p>(&'i eval::Interp<'p>);
+    impl Drop for Stats<'_, '_> {
+        fn drop(&mut self) {
+            if std::env::var_os("KANSO_COUNTERS").is_some() {
+                eprint!("{}", self.0.thunk_stats.render());
+            }
+        }
+    }
+    let _stats = Stats(&interp);
     let value = match interp.run_main() {
         Ok(value) => value,
         Err(e) => {
