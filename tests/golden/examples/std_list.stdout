@@ -2,3 +2,9 @@ evens: [2 4 6 8]
 first three: [9 8 7]
 found: 8
 all positive: true
+max: 9
+min: 2
+count evens: 3
+last: 6
+mean: 4.0
+tally: [1: 1 2: 2 3: 3]
