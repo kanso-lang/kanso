@@ -540,6 +540,45 @@ impl<'a> Backend<'a> {
             })
     }
 
+    /// A bind is representable as a native thunk when its captures fit the
+    /// cell (args[8]).
+    fn thunkable(&self, f: &FnEmit, expr: &Expr) -> bool {
+        let mut idents = Vec::new();
+        collect_idents(expr, &mut idents);
+        let mut captures: Vec<&String> = Vec::new();
+        for id in &idents {
+            if f.lookup(id).is_some() && !captures.contains(&id) {
+                captures.push(id);
+            }
+        }
+        captures.len() <= 8
+    }
+
+    fn emit_thunk_site(
+        &mut self,
+        sym: &str,
+        captures: &[String],
+        expr: &Expr,
+        outer: &FnEmit,
+    ) -> Result<(), String> {
+        let mut f = FnEmit::new();
+        f.origin_prefix = outer.origin_prefix.clone();
+        f.file = outer.file.clone();
+        f.start_block("entry");
+        for (i, cap) in captures.iter().enumerate() {
+            f.bind(cap, &format!("%a{i}"));
+        }
+        self.emit_tail(&mut f, expr)?;
+        let sig: Vec<String> = (0..captures.len()).map(|i| format!("%KValue %a{i}")).collect();
+        let _ = writeln!(
+            self.body,
+            "define tailcc %KValue @{sym}({}) {{\n{}}}\n",
+            sig.join(", "),
+            f.out
+        );
+        Ok(())
+    }
+
     fn emit_thunk_dispatcher(&mut self) {
         let mut arms = String::new();
         let mut cases = String::new();
@@ -902,7 +941,7 @@ impl<'a> Backend<'a> {
                     f.bind(pname, &format!("%x{i}"));
                 }
             }
-            self.emit_fn_body(&mut f, &decl.body)?;
+            self.emit_fn_body(&mut f, decl, &decl.body)?;
         }
         let _ = writeln!(self.body, "{header}
 {}}}
@@ -955,7 +994,7 @@ impl<'a> Backend<'a> {
                     }
                 }
             }
-            self.emit_fn_body(&mut f, &decl.body)?;
+            self.emit_fn_body(&mut f, decl, &decl.body)?;
             f.start_block(&fail);
         }
         for i in 0..arity {
@@ -1369,10 +1408,39 @@ impl<'a> Backend<'a> {
             .ok_or_else(|| format!("native backend: unknown type `{ty}`"))
     }
 
-    fn emit_fn_body(&mut self, f: &mut FnEmit, body: &[Stmt]) -> Result<(), String> {
+    fn emit_fn_body(&mut self, f: &mut FnEmit, decl: &FnDecl, body: &[Stmt]) -> Result<(), String> {
         let last = body.len() - 1;
         for (i, stmt) in body.iter().enumerate() {
             match stmt {
+                Stmt::Bind { pattern: Pattern::Var(name, _), expr }
+                    if self.demand.is_lazy_bind(&decl.name, decl.params.len(), i)
+                        && self.thunkable(f, expr) =>
+                {
+                    let mut idents = Vec::new();
+                    collect_idents(expr, &mut idents);
+                    let mut captures: Vec<String> = Vec::new();
+                    for id in idents {
+                        if f.lookup(&id).is_some() && !captures.contains(&id) {
+                            captures.push(id);
+                        }
+                    }
+                    let site = self.thunk_sites.len();
+                    let sym = format!("tsite{site}");
+                    self.thunk_sites.push((sym.clone(), captures.len()));
+                    self.emit_thunk_site(&sym, &captures, expr, f)?;
+                    let mut args = String::new();
+                    for cap in &captures {
+                        let temp = f.lookup(cap).expect("capture is bound");
+                        args.push_str(&format!(", %KValue {temp}"));
+                    }
+                    let t = f.tmp();
+                    f.line(&format!(
+                        "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 {}{args})",
+                        captures.len()
+                    ));
+                    f.record(&t, crate::infer::TOP);
+                    f.bind(name, &t);
+                }
                 Stmt::Bind { pattern, expr } => {
                     let value = self.emit_expr(f, expr)?;
                     match pattern {
