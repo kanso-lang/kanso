@@ -121,17 +121,17 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">teahouse/menu_test.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">is_err</span> (<span class="t">err</span> <span class="o">_</span>)
-  <span class="t">true</span>
+  <pre><code><span class="k">fn</span> <span class="f">err?</span> (<span class="f">err</span> _)
+  <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">is_err</span> <span class="o">_</span>
-  <span class="t">false</span>
+<span class="k">fn</span> <span class="f">err?</span> _
+  <span class="f">false</span>
 
-<span class="f">test_base_price_raw</span> <span class="o">=</span> (<span class="f">base_price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">350</span>
+test_base_price_raw <span class="o">=</span> (<span class="f">base_price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">350</span>
 
-<span class="f">test_dango_price</span> <span class="o">=</span> (<span class="f">price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">400</span>
+test_dango_price <span class="o">=</span> (<span class="f">price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">400</span>
 
-<span class="f">test_unknown_item_fails</span> <span class="o">=</span> <span class="f">is_err</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+test_unknown_item_fails <span class="o">=</span> <span class="f">err?</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test teahouse</div>
     <pre><code>test_base_price_raw ... ok

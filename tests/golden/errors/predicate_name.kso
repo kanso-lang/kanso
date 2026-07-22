@@ -1,0 +1,4 @@
+pub play = print "{ready 3}"
+
+fn ready n
+  n < 10

@@ -224,10 +224,10 @@ err at 1: unexpected character `?`</code></pre>
   <div class="code-panel-title">unicode.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">both</span> true true
+<span class="k">fn</span> <span class="f">both?</span> true true
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">both</span> _ _
+<span class="k">fn</span> <span class="f">both?</span> _ _
   <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">decode_u</span> s
@@ -239,13 +239,13 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">text/from_code</span> (h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4)
 
 <span class="k">fn</span> <span class="f">hex_alpha</span> c
-  <span class="f">if</span> (<span class="f">both</span> (<span class="n">96</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">103</span>)) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">hex_upper</span> c)
+  <span class="f">if</span> (<span class="f">both?</span> (<span class="n">96</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">103</span>)) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">hex_upper</span> c)
 
 <span class="k">fn</span> <span class="f">hex_digit</span> c
-  <span class="f">if</span> (<span class="f">both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)) (c <span class="o">-</span> <span class="n">48</span>) (<span class="f">hex_alpha</span> c)
+  <span class="f">if</span> (<span class="f">both?</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)) (c <span class="o">-</span> <span class="n">48</span>) (<span class="f">hex_alpha</span> c)
 
 <span class="k">fn</span> <span class="f">hex_upper</span> c
-  <span class="f">if</span> (<span class="f">both</span> (<span class="n">64</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">71</span>)) (c <span class="o">-</span> <span class="n">55</span>) (<span class="f">err</span> <span class="s">"invalid hex digit"</span>)
+  <span class="f">if</span> (<span class="f">both?</span> (<span class="n">64</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">71</span>)) (c <span class="o">-</span> <span class="n">55</span>) (<span class="f">err</span> <span class="s">"invalid hex digit"</span>)
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
@@ -303,10 +303,10 @@ err at 1: unexpected character `?`</code></pre>
   <div class="code-panel-title">numbers.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">both</span> true true
+<span class="k">fn</span> <span class="f">both?</span> true true
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">both</span> _ _
+<span class="k">fn</span> <span class="f">both?</span> _ _
   <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">classify</span> s
@@ -335,7 +335,7 @@ err at 1: unexpected character `?`</code></pre>
   <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">is_number_char</span> c
-  <span class="f">both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
+  <span class="f">both?</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
 
 <span class="k">fn</span> <span class="f">mark_from</span> cs p q
   <span class="f">if</span> (p <span class="o">&gt;</span> q) false (<span class="f">mark_step</span> cs (cs[p]) p q)
@@ -413,10 +413,10 @@ float64 6000.0</code></pre>
   position:int
   reason:string
 
-<span class="k">fn</span> <span class="f">both</span> true true
+<span class="k">fn</span> <span class="f">both?</span> true true
   <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">both</span> _ _
+<span class="k">fn</span> <span class="f">both?</span> _ _
   <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">decode_int</span> s
@@ -427,16 +427,16 @@ float64 6000.0</code></pre>
   <span class="f">trailing</span> cs (<span class="f">skip_ws</span> cs q) v
 
 <span class="k">fn</span> <span class="f">digits_end</span> cs p
-  <span class="f">if</span> (<span class="f">is_digit</span> (cs[p])) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+  <span class="f">if</span> (<span class="f">digit?</span> (cs[p])) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
 <span class="k">fn</span> <span class="f">fail</span> p reason
   <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
 
-<span class="k">fn</span> <span class="f">is_digit</span> none
+<span class="k">fn</span> <span class="f">digit?</span> none
   <span class="f">false</span>
 
-<span class="k">fn</span> <span class="f">is_digit</span> c
-  <span class="f">both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
+<span class="k">fn</span> <span class="f">digit?</span> c
+  <span class="f">both?</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
 
 <span class="k">fn</span> <span class="f">is_ws</span> <span class="n">9</span>
   <span class="f">true</span>

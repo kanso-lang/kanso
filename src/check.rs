@@ -282,9 +282,61 @@ pub fn check_unused_private(
 }
 
 /// Merged-namespace coherence for a directory module.
+/// The `?` sigil is enforced through the return-set lattice, both ways: a
+/// `?` name must answer with true/false (err allowed — a predicate over
+/// fallible work stays a predicate), and a group answering only in booleans
+/// must carry the `?`. Mixed sets are exempt in the unmarked direction.
+fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
+    use crate::infer::{ERR, FALSE, NONE, TRUE};
+    let inference = crate::infer::infer(program);
+    let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> = std::collections::HashMap::new();
+    for (i, decl) in program.fns.iter().enumerate() {
+        // test functions are assertions the test verb consumes — their own
+        // convention, not questions
+        let short = decl.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&decl.name);
+        if decl.synthetic
+            || decl.name == "main"
+            || decl.name == "play"
+            || short.starts_with("test_")
+        {
+            continue;
+        }
+        let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span));
+        entry.0 |= inference.returns[i];
+    }
+    for (name, (set, span)) in groups {
+        let short = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
+        let is_question = short.ends_with('?');
+        let boolish =
+            set != 0 && set & !(TRUE | FALSE | ERR | NONE) == 0 && set & (TRUE | FALSE) != 0
+                && set & NONE == 0;
+        // the marked direction fires only on a provable lie: a `?` group
+        // whose set cannot contain a boolean at all. generic drivers widen
+        // honest predicates to TOP, and TOP still holds bool.
+        if is_question && set != 0 && set & (TRUE | FALSE) == 0 {
+            diags.push(Diagnostic::new(
+                "naming",
+                format!(
+                    "`{short}` asks a question: a `?` function answers \
+                     true or false (err may ride along)"
+                ),
+                span,
+            ));
+        }
+        if !is_question && boolish {
+            diags.push(Diagnostic::new(
+                "naming",
+                format!("`{short}` answers only true or false: name it `{short}?`"),
+                span,
+            ));
+        }
+    }
+}
+
 pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
+    check_predicates(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }

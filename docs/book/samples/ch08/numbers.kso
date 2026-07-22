@@ -1,9 +1,9 @@
 import "std/text"
 
-fn both true true
+fn both? true true
   true
 
-fn both _ _
+fn both? _ _
   false
 
 fn classify s
@@ -32,7 +32,7 @@ fn is_number_char none
   false
 
 fn is_number_char c
-  both (47 < c) (c < 58)
+  both? (47 < c) (c < 58)
 
 fn mark_from cs p q
   if (p > q) false (mark_step cs (cs[p]) p q)

@@ -105,14 +105,14 @@ pub fn sum list
 pub fn take list n
   take_to list n 1 []
 
-fn take_done list n i
+fn take_done? list n i
   if (length list < i) true (n < i)
 
 fn take_more list n i acc
   take_to list n (i + 1) (push acc (list[i]))
 
 fn take_to list n i acc
-  if (take_done list n i) acc (take_more list n i acc)
+  if (take_done? list n i) acc (take_more list n i acc)
 
 pub fn tally list
   fold list [:] (m x -> put m x (bump m[x]))

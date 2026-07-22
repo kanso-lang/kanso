@@ -1,3 +1,4 @@
-ok: 42
-err at 3: unexpected trailing characters
-err at 5: unexpected trailing characters
+error[formatting]: function declarations appear in alphabetical order: `digit?` before `fail`
+  --> positions.kso:26:4
+  26 | fn digit? none
+          ^

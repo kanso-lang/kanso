@@ -124,7 +124,7 @@ fn value_for none _ p
   fail p "unexpected end of input"
 
 fn value_for c cs p
-  numeric = is_number_start c
+  numeric = number_start? c
   if numeric (parse_number cs p) (bad_value_char c p)
 
 fn word cs p expected v

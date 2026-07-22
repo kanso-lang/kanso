@@ -1,9 +1,9 @@
 import "std/text"
 
-fn both true true
+fn both? true true
   true
 
-fn both _ _
+fn both? _ _
   false
 
 fn expect_char cs p c
