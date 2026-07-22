@@ -1,0 +1,19 @@
+# a call may take its remaining arguments as indented lines, one
+# expression per line — width-licensed, like every wrap: a call that
+# fits on one line stays on one line.
+fn brochure name price blurb
+  "{name} — {price} yen. {blurb}"
+
+fn judge n
+  if (n < 10)
+    "small enough for the first branch of the indented expression form"
+    "large enough for the second branch of the indented expression form"
+
+pub play =
+  card = brochure
+    "the long-name matcha parfait of the west garden annex"
+    1200
+    "a dessert whose description would never have fit inline"
+  print card
+  >> print (judge 4)
+  >> print (judge 40)
