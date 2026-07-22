@@ -2,12 +2,23 @@ pub type capped
   left:int
   source:any
 
+pub type counting
+  at:int
+
 pub type cursor
+  at:int
+  source:any
+
+pub type cycled
   at:int
   source:any
 
 pub type done
   drained:bool
+
+pub type grown
+  seed:any
+  stretch:any
 
 pub type mapped
   shape:any
@@ -15,6 +26,9 @@ pub type mapped
 
 type missing
   unfound:bool
+
+pub type repeated
+  value:any
 
 pub type sifted
   keep:bool
@@ -44,6 +58,9 @@ fn bump n
 pub fn count coll pred
   fold coll 0 (c x -> if (pred x) (c + 1) c)
 
+pub fn cycle coll
+  cycled 1 (to_list coll)
+
 pub fn drop coll n
   skipped n (iter coll)
 
@@ -71,6 +88,18 @@ fn fold_go (step e rest) acc f
 fn iter (capped left source)
   capped left source
 
+fn iter (counting at)
+  counting at
+
+fn iter (cycled at source)
+  cycled at source
+
+fn iter (grown seed stretch)
+  grown seed stretch
+
+fn iter (repeated value)
+  repeated value
+
 fn iter (cursor at source)
   cursor at source
 
@@ -85,6 +114,9 @@ fn iter (skipped burn source)
 
 fn iter source
   cursor 1 source
+
+pub fn iterate seed stretch
+  grown seed stretch
 
 fn join_parts before x after
   fold after (push before x) (acc y -> push acc y)
@@ -105,14 +137,29 @@ pub fn mean coll
 pub fn min coll
   unwrap_found (fold coll (missing true) (m x -> underrank m x))
 
+pub naturals = counting 1
+
 pub fn next (capped left source)
   if (left < 1) (done true) (next_capped left (next source))
+
+pub fn next (counting at)
+  step at (counting (at + 1))
 
 pub fn next (cursor at source)
   if (length source < at) (done true) (step source[at] (cursor (at + 1) source))
 
+pub fn next (cycled at source)
+  onward = cycled (at + 1) source
+  if (length source < at) (next (cycled 1 source)) (step source[at] onward)
+
+pub fn next (grown seed stretch)
+  step seed (grown (stretch seed) stretch)
+
 pub fn next (mapped shape source)
   next_mapped shape (next source)
+
+pub fn next (repeated value)
+  step value (repeated value)
 
 pub fn next (sifted keep source test)
   next_sifted keep test (next source)
@@ -166,6 +213,9 @@ fn place sorted x
 
 pub fn reject coll pred
   sifted false (iter coll) pred
+
+pub fn repeat value
+  repeated value
 
 fn seek coll pred
   fold coll (missing true) (found x -> pick_found found (pred x) x)
