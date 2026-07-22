@@ -1,4 +1,4 @@
-# The speculation engine — work the red lights
+# The work-ahead engine — work the red lights
 
 Status: **design, head of the performance frontier. Not implemented.**
 Clay's framing, ratified in dialog 2026-07-22: the fedex driver works on
@@ -14,16 +14,20 @@ and evaluates them until the fiber wakes. Purity makes early evaluation
 invisible: no effects can leak out of order, and the value computed
 early is the value that would have been computed late.
 
-Two populations feed the pool:
+**v1 is not speculative at all** (ratified 2026-07-22): the pool holds
+only **proven-demand work** — the strictness analyzer's "certain" set.
+Early execution of work that must happen is risk-free by construction;
+no evaluation can ever be wasted. Pool ordering is **program order**
+(earliest binding whose inputs are ready) — the statement index is
+already computed, deterministic, and free; no demand-graph walking.
 
-- **Proven-demand work** (the strictness analyzer's "certain" set):
-  speculating it is risk-free — it was going to run regardless, so a
-  stall-filled evaluation is a pure win. These enter the pool whenever
-  their inputs are ready and a coarse-grain check passes.
-- **Conditional thunks** (the demand analysis deferred them): gambles.
-  The cost model prices them — likelihood of demand times cost saved —
-  and wasted work is harmless (pure, arena-reclaimed) but not free
-  (memory, cache), so admission is priced, not open.
+The true-speculation tier — **conditional thunks**, work behind a
+branch the compiler could not decide, where a stall-filled evaluation
+might compute something never asked for — is severed into an optional
+v2, priced by the cost model, taken up only if profiling shows stalls
+going unfilled. Certain work vastly outnumbers conditional work in
+real programs (the json decoder is 100% certain), so v1 should carry
+most of the win alone.
 
 ## The three pieces
 
