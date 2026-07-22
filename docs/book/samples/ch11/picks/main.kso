@@ -1,0 +1,4 @@
+import g { area:disc } "../geo"
+
+print "renamed: {disc 2.0} and {g/disc 2.0}"
+print "the alias still reaches: {g/ride_km 1.0 2.0}"

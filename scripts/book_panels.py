@@ -104,7 +104,7 @@ def render(source):
     return "\n".join(highlight_line(l) for l in source.rstrip("\n").split("\n"))
 
 PANEL = re.compile(
-    r'(<div class="code-panel-title">([a-z_0-9]+\.kso)[^<]*</div>\s*<pre><code>)(.*?)(</code></pre>)',
+    r'(<div class="code-panel-title">([a-z_0-9/]+\.kso)[^<]*</div>\s*<pre><code>)(.*?)(</code></pre>)',
     re.S,
 )
 
