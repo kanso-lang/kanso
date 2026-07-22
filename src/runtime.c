@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdint.h>
 #include <errno.h>
+#include <time.h>
 #include <unistd.h>
 
 #if defined(__aarch64__)
@@ -1077,15 +1078,23 @@ KValue k_desc_random(KValue n) {
 
 static KValue k_desc_nil(void) { return k_mkdesc(10, k_none(), k_none()); }
 
-/* SplitMix64, seeded from KANSO_SEED (else a fixed constant) — never from
-   entropy, so a concurrent program's output is byte-identical across runs and
-   engines, exactly matching the interpreter's Rng. */
+/* SplitMix64, matching the interpreter's Rng. A real run seeds from
+   entropy so dice roll differently each time; KANSO_SEED pins the stream,
+   which is how the differential lattice and the goldens hold a concurrent
+   program's output byte-identical across runs and engines. */
 static uint64_t k_rng_state = 0;
 static int k_rng_ready = 0;
 
 static void k_rng_seed(void) {
     const char* s = getenv("KANSO_SEED");
-    k_rng_state = s ? strtoull(s, NULL, 10) : 0x2545F4914F6CDD1DULL;
+    if (s) {
+        k_rng_state = strtoull(s, NULL, 10);
+    } else {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        uint64_t nanos = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+        k_rng_state = nanos ^ ((uint64_t)getpid() << 32);
+    }
     k_rng_ready = 1;
 }
 
