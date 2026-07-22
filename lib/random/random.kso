@@ -1,0 +1,2 @@
+pub fn random n
+  builtin_random n

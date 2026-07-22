@@ -1,1 +1,3 @@
-print "parsed {to_int "seven"}"
+import "std/text"
+
+print "parsed {text/to_int "seven"}"

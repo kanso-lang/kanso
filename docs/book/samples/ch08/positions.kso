@@ -1,3 +1,5 @@
+import "std/text"
+
 type parse_failure
   position:int
   reason:string
@@ -9,10 +11,10 @@ fn both _ _
   false
 
 fn decode_int s
-  cs = bytes s
+  cs = text/bytes s
   p = skip_ws cs 1
   q = digits_end cs p
-  v = to_int (slice cs p (q - 1))
+  v = text/to_int (text/slice cs p (q - 1))
   trailing cs (skip_ws cs q) v
 
 fn digits_end cs p

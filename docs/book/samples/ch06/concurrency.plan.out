@@ -1,8 +1,8 @@
 plan:
   join {
-  print "brew: steeping"    # from line 1
+  print "brew: steeping"    # from line 4
   sleep 60
-  print "brew: poured"    # from line 1
+  print "brew: poured"    # from line 4
   random 6
   . <continuation>
   } # unordered; both run

@@ -1,7 +1,9 @@
+import "std/io"
+
 fn orders (err _)
   "no orders yet"
 
 fn orders text
   "yesterday: {text}"
 
-pub play = read_file "yesterday.txt" . orders . print
+pub play = io/read_file "yesterday.txt" . orders . print

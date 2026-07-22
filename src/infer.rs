@@ -268,7 +268,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
     if let Some(set) = env.get(name) {
         return *set;
     }
-    match name {
+    match name.strip_prefix("builtin_").unwrap_or(name) {
         "true" => TRUE,
         "false" => FALSE,
         "none" => NONE,
@@ -396,12 +396,16 @@ fn eval_call<'a>(
 /// bind skips them before the continuation runs). Anything unrecognized is
 /// conservatively any-non-failure.
 fn desc_yield(e: &Expr) -> Set {
+    fn base(n: &str) -> &str {
+        let n = n.strip_prefix("builtin_").unwrap_or(n);
+        n.rsplit('/').next().unwrap_or(n)
+    }
     match e {
         Expr::App { head, piped: false, .. } => match head.as_ref() {
-            Expr::Ident(n, _) if n == "read_file" || n == "stdin" => STR,
-            Expr::Ident(n, _) if n == "args" => LIST,
-            Expr::Ident(n, _) if n == "random" => INT,
-            Expr::Ident(n, _) if n == "print" || n == "write_file" || n == "sleep" => 0,
+            Expr::Ident(n, _) if matches!(base(n), "read_file" | "stdin") => STR,
+            Expr::Ident(n, _) if base(n) == "args" => LIST,
+            Expr::Ident(n, _) if base(n) == "random" => INT,
+            Expr::Ident(n, _) if matches!(base(n), "print" | "write_file" | "sleep") => 0,
             _ => TOP & !FAIL,
         },
         // `a >> b` yields what its right side yields
@@ -413,6 +417,7 @@ fn desc_yield(e: &Expr) -> Set {
 }
 
 pub fn builtin_set(name: &str, args: &[Set]) -> Set {
+    let name = name.strip_prefix("builtin_").unwrap_or(name);
     let fails: Set = args.iter().fold(0, |acc, s| acc | (s & FAIL));
     match name {
         "at" => {

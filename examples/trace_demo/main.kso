@@ -1,1 +1,3 @@
-args . start
+import "std/io"
+
+io/args . start

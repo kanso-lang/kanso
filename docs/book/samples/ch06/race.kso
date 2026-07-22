@@ -1,7 +1,9 @@
+import "std/time"
+
 gyoza =
   print "gyoza: in the pan"
-  >> sleep 20 >> print "gyoza: flip"
-  >> sleep 20 >> print "gyoza: plated"
+  >> time/sleep 20 >> print "gyoza: flip"
+  >> time/sleep 20 >> print "gyoza: plated"
 
 pub play =
   gyoza
@@ -9,5 +11,5 @@ pub play =
 
 ramen =
   print "ramen: boiling"
-  >> sleep 30 >> print "ramen: noodles in"
-  >> sleep 30 >> print "ramen: bowled"
+  >> time/sleep 30 >> print "ramen: noodles in"
+  >> time/sleep 30 >> print "ramen: bowled"

@@ -1,3 +1,6 @@
+import "std/random"
+import "std/time"
+
 # in go, doing two things at once and waiting for both is a goroutine, a
 # channel or a WaitGroup, and a select to fan the results back. in kanso
 # bare lines already run as independent green threads: the scheduler
@@ -5,7 +8,7 @@
 # data flow is the channel. here `brew` blocks on a slow steep while the
 # dice keep rolling, so the rolls land *during* the steep, not after it.
 # swap `main` to `brew >> rolls` and the wall makes the dice wait.
-brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
+brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 
 pub play =
   brew
@@ -16,4 +19,4 @@ pub play =
   >> roll 5
 
 fn roll i
-  random 6 . (n -> print "roll {i}: a {n + 1}")
+  random/random 6 . (n -> print "roll {i}: a {n + 1}")

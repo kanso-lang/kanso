@@ -1,0 +1,32 @@
+pub fn bytes s
+  builtin_bytes s
+
+pub fn char_code c
+  builtin_char_code c
+
+pub fn chars s
+  builtin_chars s
+
+pub fn concat a b
+  builtin_concat a b
+
+pub fn find2 cs p a b
+  builtin_find2 cs p a b
+
+pub fn from_code n
+  builtin_from_code n
+
+pub fn join parts sep
+  builtin_join parts sep
+
+pub fn slice s from to
+  builtin_slice s from to
+
+pub fn to_float x
+  builtin_to_float x
+
+pub fn to_int s
+  builtin_to_int s
+
+pub fn utf8 codes
+  builtin_utf8 codes

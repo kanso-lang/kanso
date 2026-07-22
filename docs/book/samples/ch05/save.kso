@@ -1,2 +1,4 @@
+import "std/io"
+
 order = "one taiyaki, extra custard"
-write_file "order.txt" order >> read_file "order.txt" . print
+io/write_file "order.txt" order >> io/read_file "order.txt" . print

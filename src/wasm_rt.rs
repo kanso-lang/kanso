@@ -431,6 +431,7 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
         Value::Str(s) => s,
         _ => die("builtin name must be a string".to_string()),
     };
+    let name = name.strip_prefix("builtin_").map(str::to_string).unwrap_or(name);
     let handles = pop_args(n);
     if (name == "map" || name == "filter") && handles.len() == 2 {
         if let Slot::C { .. } = slot(handles[1]) {

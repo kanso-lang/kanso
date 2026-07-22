@@ -1,4 +1,5 @@
 import "std/list"
+import "std/text"
 
 fn escape_char "\""
   "\\\""
@@ -16,10 +17,10 @@ fn escape_char "\t"
   "\\t"
 
 fn escape_char c
-  if ((char_code c) < 32) (u_escape c) c
+  if ((text/char_code c) < 32) (u_escape c) c
 
 fn escape_str s
-  join (list/map (chars s) (c -> escape_char c)) ""
+  text/join (list/map (text/chars s) (c -> escape_char c)) ""
 
 fn hex4 n
   d1 = n / 4096
@@ -28,7 +29,7 @@ fn hex4 n
   r2 = r1 - (d2 * 256)
   d3 = r2 / 16
   d4 = r2 - (d3 * 16)
-  join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
+  text/join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
 
 fn hex_char n
   hex_digits[n + 1]
@@ -36,7 +37,7 @@ fn hex_char n
 hex_digits = "0123456789abcdef"
 
 pub play =
-  bell = from_code 7
+  bell = text/from_code 7
   print (quote_str "a\"b\nc")
   >> print (quote_str "ring{bell}ring")
 
@@ -44,4 +45,4 @@ fn quote_str s
   "\"{escape_str s}\""
 
 fn u_escape c
-  "\\u{hex4 (char_code c)}"
+  "\\u{hex4 (text/char_code c)}"

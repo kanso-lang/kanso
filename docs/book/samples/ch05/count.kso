@@ -1,7 +1,9 @@
+import "std/io"
 import "std/list"
+import "std/text"
 
 fn count_lines text
-  newlines = list/select (chars text) (c -> c == "\n")
+  newlines = list/select (text/chars text) (c -> c == "\n")
   "flavors.txt has {length newlines} lines"
 
-pub play = read_file "flavors.txt" . count_lines . print
+pub play = io/read_file "flavors.txt" . count_lines . print

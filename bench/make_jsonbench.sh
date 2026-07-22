@@ -21,6 +21,6 @@ lib = (
     '  loop cs (n - 1) (acc + (length (decode cs)))\n'
 )
 open('bench/jsonbench/bench.kso', 'w').write(lib)
-open('bench/jsonbench/main.kso', 'w').write('read_file "bench/large.json" . go\n')
+open('bench/jsonbench/main.kso', 'w').write('import "std/io"\n\nio/read_file "bench/large.json" . go\n')
 PY
 echo "bench/jsonbench ready (150x runtime-read; run ./jsonbench from repo root)"

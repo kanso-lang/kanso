@@ -1,7 +1,10 @@
+import "std/io"
+import "std/text"
+
 fn announce text
   print "major version {major_of text}"
 
 fn major_of text
-  to_int text
+  text/to_int text
 
-pub play = read_file "garbage.txt" . announce
+pub play = io/read_file "garbage.txt" . announce
