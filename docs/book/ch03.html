@@ -355,6 +355,29 @@ positive</code></pre>
   </div>
 </div>
 
+<p>a branch sometimes needs a working name on the way to its answer. binding is a statement, and statements need room, so the branch takes the layout form: the condition alone on the <code>if</code> line, <code>else</code> at the same indent, statements beneath each, and every branch ending in the value it answers with:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">receipt.kso</div>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">total_line</span> <span class="n">12000</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">total_line</span> <span class="n">800</span>)
+
+<span class="k">fn</span> <span class="f">total_line</span> spent
+  <span class="f">if</span> (<span class="n">10000</span> <span class="o">&lt;</span> spent)
+    saved <span class="o">=</span> spent <span class="o">/</span> <span class="n">10</span>
+    <span class="s">"big order: <span class="i">{spent}</span> yen, <span class="i">{saved}</span> back in points"</span>
+  <span class="f">else</span>
+    <span class="s">"thanks: <span class="i">{spent}</span> yen"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>big order: 12000 yen, 1200 back in points
+thanks: 800 yen</code></pre>
+  </div>
+</div>
+
+<p>the two spellings never compete, because the compiler holds the boundary: a branch with no bindings must use the expression form, and a branch that binds must use the block. there is no <code>else if</code> — a third case is a nested <code>if</code> or, nine times out of ten, the dispatch arms the next section argues for.</p>
+
 <p>the line you never want to cross is using <code>if</code> to ask which <em>kind</em> of thing a value is. that question has a better answer, and it is the design center of the whole language. suppose a chat log carries three kinds of event. the shape-question—"which event is this?"—is not a conditional; it is three arms of one function, each unpacking the record it names:</p>
 
 <div class="code-panel">
