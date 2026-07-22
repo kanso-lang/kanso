@@ -1,0 +1,21 @@
+# a branch that binds names takes the block form: `else` at the if's
+# indent, statements beneath each, every branch ending in its result.
+# branches without bindings stay in the expression form — the compiler
+# holds the boundary in both directions.
+pub play =
+  quote = if (1 < 2)
+    base = 700
+    discounted = base - 150
+    "sale price {discounted}"
+  else
+    "list price"
+  print quote
+  >> print (shipping 6000)
+  >> print (shipping 4400)
+
+fn shipping total
+  if (5000 < total)
+    "free shipping"
+  else
+    remainder = 5000 - total
+    "add {remainder} yen for free shipping"

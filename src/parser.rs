@@ -128,7 +128,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         }
         let body_start = i + 1;
         let mut body_end = body_start;
-        while body_end < lexed.lines.len() && lexed.lines[body_end].indent == 2 {
+        while body_end < lexed.lines.len() && lexed.lines[body_end].indent >= 2 {
             body_end += 1;
         }
         let body = &lexed.lines[body_start..body_end];
@@ -517,35 +517,151 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
 /// untouched.
 fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _)]);
-    let has_surface = body.iter().enumerate().any(|(i, l)| {
-        is_wall(l)
-            || matches!(l.tokens.first(), Some((Tok::SeqOp, _)))
-            || (i + 1 < body.len() && matches!(parse_stmt_shape(l), StmtShape::Expr))
+    let is_else = |line: &Line| {
+        matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
+    };
+    // group lines into units: a wall line, or a statement that may own the
+    // deeper lines under it (an if/else block construct)
+    enum Unit<'a> {
+        Wall(&'a Line),
+        Parsed(Stmt),
+    }
+    let mut units: Vec<Unit> = Vec::new();
+    let mut idx = 0;
+    while idx < body.len() {
+        let line = &body[idx];
+        let base = line.indent;
+        let mut j = idx + 1;
+        while j < body.len() && body[j].indent > base {
+            j += 1;
+        }
+        if is_else(line) {
+            return Err(Diagnostic::new(
+                "syntax",
+                "`else` needs an `if` block directly above it".to_string(),
+                head_span(line),
+            ));
+        }
+        if j == idx + 1 {
+            match is_wall(line) || matches!(line.tokens.first(), Some((Tok::SeqOp, _))) {
+                true => units.push(Unit::Wall(line)),
+                false => units.push(Unit::Parsed(parse_stmt(line)?)),
+            }
+            idx = j;
+            continue;
+        }
+        let children = &body[idx + 1..j];
+        // chain-led deeper lines under a non-`if` head are stray
+        // continuations, diagnosed elsewhere — keep them flat units so the
+        // real diagnostic stands alone
+        let head_is_if = matches!(body[idx].tokens.as_slice(), [(Tok::Ident(w), _), ..] if w == "if")
+            || matches!(
+                body[idx].tokens.as_slice(),
+                [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if"
+            );
+        if !head_is_if
+            && children
+                .iter()
+                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _))))
+        {
+            units.push(Unit::Parsed(parse_stmt(line)?));
+            idx += 1;
+            continue;
+        }
+        let (else_children, end) = match j < body.len()
+            && body[j].indent == base
+            && is_else(&body[j])
+        {
+            true => {
+                let mut k = j + 1;
+                while k < body.len() && body[k].indent > base {
+                    k += 1;
+                }
+                if k == j + 1 {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "`else` opens a branch: indent its statements beneath it".to_string(),
+                        head_span(&body[j]),
+                    ));
+                }
+                (Some(&body[j + 1..k]), k)
+            }
+            false => (None, j),
+        };
+        units.push(Unit::Parsed(parse_block_construct(line, children, else_children)?));
+        idx = end;
+    }
+    let has_surface = units.iter().enumerate().any(|(i, u)| match u {
+        Unit::Wall(_) => true,
+        Unit::Parsed(Stmt::Expr(_)) => i + 1 < units.len(),
+        Unit::Parsed(_) => false,
     });
     if !has_surface {
-        return body.iter().map(parse_stmt).collect();
+        return Ok(units
+            .into_iter()
+            .map(|u| match u {
+                Unit::Parsed(stmt) => stmt,
+                Unit::Wall(_) => unreachable!("walls imply surface"),
+            })
+            .collect());
     }
     let mut binds: Vec<Stmt> = Vec::new();
     let mut segments: Vec<Vec<Expr>> = vec![Vec::new()];
     let mut wall_spans: Vec<Span> = Vec::new();
     let mut wall_fused: Vec<bool> = Vec::new();
     let mut closed_by_fuse = false;
-    for line in body {
+    for unit in units {
+        let line = match unit {
+            Unit::Wall(line) => line,
+            Unit::Parsed(stmt) => {
+                match stmt {
+                    Stmt::Bind { pattern, expr } => {
+                        // every binding runs before every bare effect line, wherever
+                        // it appears — so the surface may not show it interleaved
+                        if !segments[0].is_empty() || segments.len() > 1 {
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                "bindings precede the effects in a body: every binding runs \
+                                 before every bare effect line, so move it above the chain"
+                                    .to_string(),
+                                expr_span(&expr),
+                            ));
+                        }
+                        binds.push(Stmt::Bind { pattern, expr });
+                    }
+                    Stmt::Expr(e) => {
+                        if closed_by_fuse {
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                "a fused `>> step` is a single sequential step — a line \
+                                 cannot silently join it. for a group, put the wall alone \
+                                 and list the members below it"
+                                    .to_string(),
+                                expr_span(&e),
+                            ));
+                        }
+                        reject_never_effect(&e)?;
+                        segments.last_mut().expect("segment").push(e);
+                    }
+                }
+                continue;
+            }
+        };
         let fused = matches!(line.tokens.first(), Some((Tok::SeqOp, _)))
             && line.tokens.len() > 1;
-        if is_wall(line) || fused {
-            let span = line.tokens[0].1;
-            if segments.last().is_some_and(Vec::is_empty) {
-                return Err(Diagnostic::new(
-                    "syntax",
-                    "nothing to sequence: a `>>` wall needs statements above it".to_string(),
-                    span,
-                ));
-            }
-            wall_spans.push(span);
-            wall_fused.push(fused);
-            segments.push(Vec::new());
-            if fused {
+        let span = line.tokens[0].1;
+        if segments.last().is_some_and(Vec::is_empty) {
+            return Err(Diagnostic::new(
+                "syntax",
+                "nothing to sequence: a `>>` wall needs statements above it".to_string(),
+                span,
+            ));
+        }
+        wall_spans.push(span);
+        wall_fused.push(fused);
+        segments.push(Vec::new());
+        match fused {
+            true => {
                 // `>> expr` is a COMPLETE sequential step: wall plus its one
                 // member, closed — nothing may silently join it
                 let mut p = P::new(&line.tokens[1..], &line.end_cols[1..], line.number);
@@ -554,40 +670,8 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 reject_never_effect(&expr)?;
                 segments.last_mut().expect("segment").push(expr);
                 closed_by_fuse = true;
-            } else {
-                closed_by_fuse = false;
             }
-            continue;
-        }
-        match parse_stmt(line)? {
-            Stmt::Bind { pattern, expr } => {
-                // every binding runs before every bare effect line, wherever
-                // it appears — so the surface may not show it interleaved
-                if !segments[0].is_empty() || segments.len() > 1 {
-                    return Err(Diagnostic::new(
-                        "formatting",
-                        "bindings precede the effects in a body: every binding runs \
-                         before every bare effect line, so move it above the chain"
-                            .to_string(),
-                        expr_span(&expr),
-                    ));
-                }
-                binds.push(Stmt::Bind { pattern, expr });
-            }
-            Stmt::Expr(e) => {
-                if closed_by_fuse {
-                    return Err(Diagnostic::new(
-                        "formatting",
-                        "a fused `>> step` is a single sequential step — a line \
-                         cannot silently join it. for a group, put the wall alone \
-                         and list the members below it"
-                            .to_string(),
-                        expr_span(&e),
-                    ));
-                }
-                reject_never_effect(&e)?;
-                segments.last_mut().expect("segment").push(e);
-            }
+            false => closed_by_fuse = false,
         }
     }
     let Some(last) = segments.last() else { unreachable!() };
@@ -631,6 +715,111 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     Ok(binds)
 }
 
+/// An `if` (or `x = if`) whose branch lines sit indented beneath it. With an
+/// `else`, the branches are blocks — fn-body statements, deferred; without
+/// one, each child line is one more argument, exactly as any indented call.
+fn parse_block_construct(
+    head: &Line,
+    children: &[Line],
+    else_children: Option<&[Line]>,
+) -> Result<Stmt, Diagnostic> {
+    let head_is_if = matches!(head.tokens.as_slice(), [(Tok::Ident(w), _), ..] if w == "if")
+        || matches!(
+            head.tokens.as_slice(),
+            [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if"
+        );
+    if !head_is_if {
+        return Err(Diagnostic::new(
+            "syntax",
+            "only `if` opens an indented block; other calls take indented \
+             arguments on the line's own indent plus two"
+                .to_string(),
+            head_span(head),
+        ));
+    }
+    let stmt = parse_stmt(head)?;
+    let extend = |expr: Expr, args: Vec<Expr>| -> Result<Expr, Diagnostic> {
+        let Expr::App { head: h, args: mut a, span, piped } = expr else {
+            return Err(Diagnostic::new(
+                "syntax",
+                "an `if` block header is `if condition`".to_string(),
+                span_of_stmt_head(head),
+            ));
+        };
+        if a.len() != 1 {
+            return Err(Diagnostic::new(
+                "syntax",
+                "an `if` block header holds the condition alone; branches sit \
+                 beneath it"
+                    .to_string(),
+                span_of_stmt_head(head),
+            ));
+        }
+        a.extend(args);
+        Ok(Expr::App { head: h, args: a, span, piped })
+    };
+    let branch_args = match else_children {
+        None => {
+            let mut args = Vec::new();
+            for child in children {
+                if child.tokens.iter().any(|(t, _)| matches!(t, Tok::Bind)) {
+                    return Err(Diagnostic::new(
+                        "formatting",
+                        "a branch that binds names needs the block form: put \
+                         `else` at the `if`'s indent and a block beneath each"
+                            .to_string(),
+                        head_span(child),
+                    ));
+                }
+                let mut p = P::new(&child.tokens, &child.end_cols, child.number);
+                let expr = p.parse_expr()?;
+                p.expect_done()?;
+                args.push(expr);
+            }
+            args
+        }
+        Some(else_lines) => {
+            let then_stmts = parse_body(children)?;
+            let else_stmts = parse_body(else_lines)?;
+            for (stmts, lines) in [(&then_stmts, children), (&else_stmts, else_lines)] {
+                if !matches!(stmts.last(), Some(Stmt::Expr(_))) {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "a branch ends with its result expression, not a binding"
+                            .to_string(),
+                        head_span(lines.last().expect("branches are non-empty")),
+                    ));
+                }
+            }
+            let plain = |stmts: &[Stmt]| {
+                stmts.len() == 1 && matches!(stmts.first(), Some(Stmt::Expr(_)))
+            };
+            if plain(&then_stmts) && plain(&else_stmts) {
+                return Err(Diagnostic::new(
+                    "formatting",
+                    "branches without bindings use the expression form: \
+                     `if cond a b`, or indented arguments"
+                        .to_string(),
+                    head_span(head),
+                ));
+            }
+            let tspan = head_span(children.first().expect("non-empty"));
+            let espan = head_span(else_lines.first().expect("non-empty"));
+            vec![Expr::Block(then_stmts, tspan), Expr::Block(else_stmts, espan)]
+        }
+    };
+    match stmt {
+        Stmt::Expr(expr) => Ok(Stmt::Expr(extend(expr, branch_args)?)),
+        Stmt::Bind { pattern, expr } => {
+            Ok(Stmt::Bind { pattern, expr: extend(expr, branch_args)? })
+        }
+    }
+}
+
+fn span_of_stmt_head(line: &Line) -> Span {
+    head_span(line)
+}
+
 /// A bare line in an effect group must at least plausibly be a description.
 /// Literals, arithmetic, comparisons, and lambdas never are — those keep the
 /// classic unused-expression error instead of dying inside the runtime join.
@@ -657,26 +846,6 @@ fn reject_never_effect(e: &Expr) -> Result<(), Diagnostic> {
     Ok(())
 }
 
-enum StmtShape {
-    Bind,
-    Expr,
-}
-
-/// Is this line a binding or a bare expression? (Mirrors parse_stmt's split
-/// without committing to a full parse.)
-fn parse_stmt_shape(line: &Line) -> StmtShape {
-    let mut depth = 0usize;
-    for (tok, _) in &line.tokens {
-        match tok {
-            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
-            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
-            Tok::Bind if depth == 0 => return StmtShape::Bind,
-            _ => {}
-        }
-    }
-    StmtShape::Expr
-}
-
 fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
@@ -688,6 +857,7 @@ fn expr_span(e: &Expr) -> Span {
         | Expr::List(_, s)
         | Expr::Seq(_, _, s)
         | Expr::Join { span: s, .. }
+        | Expr::Block(_, s)
         | Expr::Lambda { span: s, .. }
         | Expr::App { span: s, .. }
         | Expr::Index { span: s, .. }

@@ -167,6 +167,26 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
 fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, Set>) -> Set {
     match expr {
         Expr::Int(..) => INT,
+        Expr::Block(stmts, _) => {
+            // a child scope: block binds stay local to the branch
+            let mut env = env.clone();
+            let mut result = NONE;
+            for stmt in stmts {
+                match stmt {
+                    Stmt::Bind { pattern, expr } => {
+                        let value = eval_expr(ctx, expr, &mut env);
+                        match pattern {
+                            Pattern::Var(name, _) => {
+                                env.insert(name, value);
+                            }
+                            _ => bind_pattern(pattern, value, &ctx.type_fields, &ctx.type_names, &mut env),
+                        }
+                    }
+                    Stmt::Expr(expr) => result = eval_expr(ctx, expr, &mut env),
+                }
+            }
+            result
+        }
         Expr::Field { base, .. } => {
             let _ = eval_expr(ctx, base, env);
             TOP

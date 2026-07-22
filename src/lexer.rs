@@ -140,7 +140,39 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         // An indented line under an argument-taking statement is one more
         // argument — the whole line, one expression, spliced in parens so
         // the parser sees an ordinary call. Headers (`fn`, `type`,
-        // `import`, a `pub` form, a trailing `=`) hold bodies, not args.
+        // `import`, a `pub` form, a trailing `=`) hold bodies, not args —
+        // and a block header (`if cond`, `x = if cond`, `else`) holds
+        // branch lines, which stay real lines for the parser to group.
+        let is_block_header = |p: &Line| {
+            matches!(p.tokens.as_slice(), [(Tok::Ident(head), _), ..] if head == "if")
+                || matches!(
+                    p.tokens.as_slice(),
+                    [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(head), _), ..]
+                        if head == "if"
+                )
+                || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _)] if head == "else")
+        };
+        let block_child = lines.last().is_some_and(|p: &Line| {
+            is_block_header(p) && indent == p.indent + 2
+        });
+        let sibling_or_dedent = lines.last().is_some_and(|p: &Line| {
+            indent > 2 && indent % 2 == 0 && indent <= p.indent
+        });
+        if block_child || sibling_or_dedent {
+            match lex_line(content, number, indent + 1) {
+                Ok(lexed_line) => {
+                    validate_spacing(&lexed_line, number, &mut diags);
+                    lines.push(Line {
+                        number,
+                        indent,
+                        tokens: lexed_line.tokens,
+                        end_cols: lexed_line.end_cols,
+                    });
+                }
+                Err(d) => diags.push(d),
+            }
+            continue;
+        }
         let arg_parent_ok = lines.last().is_some_and(|p: &Line| {
             !matches!(
                 p.tokens.first(),
