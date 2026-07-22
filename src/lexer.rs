@@ -393,6 +393,15 @@ impl Scanner {
                 self.pos += 1;
             }
         }
+        // the naming sigils, one each, terminal only: `!` marks the strict
+        // variant (errs where the plain form is lenient), `?` a predicate
+        if self
+            .chars
+            .get(self.pos)
+            .is_some_and(|c| *c == '!' || *c == '?')
+        {
+            self.pos += 1;
+        }
         let word: String = self.chars[start..self.pos].iter().collect();
         if word.len() > 1 && word.starts_with('_') {
             return Err(Diagnostic::new(

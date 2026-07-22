@@ -358,7 +358,8 @@ impl FnEmit {
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
 fn dsym(name: &str, arity: usize) -> String {
-    match name.contains('/') {
+    // qualified names and the naming sigils need LLVM's quoted-identifier form
+    match name.contains(['/', '!', '?']) {
         true => format!("\"d_{name}_{arity}\""),
         false => format!("d_{name}_{arity}"),
     }

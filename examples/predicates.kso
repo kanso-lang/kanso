@@ -1,0 +1,4 @@
+fn even? n
+  n - (n / 2 * 2) == 0
+
+pub play = print "four {even? 4}, seven {even? 7}"
