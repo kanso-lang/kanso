@@ -1,0 +1,3 @@
+import { slice:cut } "std/text"
+
+print "{slice "kanso" 1 2}"

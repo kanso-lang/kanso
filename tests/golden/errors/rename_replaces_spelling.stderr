@@ -1,0 +1,4 @@
+error[name]: unknown name `slice`
+  --> rename_replaces_spelling.kso:3:9
+   3 | print "{slice "kanso" 1 2}"
+               ^

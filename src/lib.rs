@@ -427,10 +427,14 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet
 /// is the resolution mechanism. The clones are real declarations, which is
 /// what lets every downstream consumer (check, both engines, inference,
 /// specificity) work unchanged.
-fn enroll_bare(dep_program: &mut ast::Program, exports: &std::collections::HashMap<String, bool>) {
+fn enroll_bare(
+    dep_program: &mut ast::Program,
+    exports: &std::collections::HashMap<String, bool>,
+    renamed: &std::collections::HashSet<String>,
+) {
     let mut bare_fns = Vec::new();
     for f in &dep_program.fns {
-        if exports.get(&f.name).copied().unwrap_or(false) {
+        if exports.get(&f.name).copied().unwrap_or(false) && !renamed.contains(&f.name) {
             if let Some((_, short)) = f.name.rsplit_once('/') {
                 let mut clone = f.clone();
                 clone.name = short.to_string();
@@ -442,7 +446,7 @@ fn enroll_bare(dep_program: &mut ast::Program, exports: &std::collections::HashM
     dep_program.fns.extend(bare_fns);
     let mut bare_types = Vec::new();
     for t in &dep_program.types {
-        if exports.get(&t.name).copied().unwrap_or(false) {
+        if exports.get(&t.name).copied().unwrap_or(false) && !renamed.contains(&t.name) {
             if let Some((_, short)) = t.name.rsplit_once('/') {
                 let mut clone = t.clone();
                 clone.name = short.to_string();
@@ -546,8 +550,22 @@ fn load_dependencies(
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
-    enroll_bare(&mut dep_program, &exports);
-    // renames: theirs:yours clones a bare alias into the space
+    // a rename replaces that token's spellings: bare `yours` and
+    // `qual/yours` enroll, bare `theirs` never does — the qualified
+    // original stays, because the qualified spelling is permanent identity
+    let renamed: std::collections::HashSet<String> = imports
+        .iter()
+        .flat_map(|import| {
+            let qual =
+                import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
+            import
+                .renames
+                .iter()
+                .map(move |(theirs, _)| format!("{qual}/{theirs}"))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    enroll_bare(&mut dep_program, &exports, &renamed);
     for import in imports {
         let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
         for (theirs, yours) in &import.renames {
@@ -556,10 +574,12 @@ fn load_dependencies(
             let mut clones = Vec::new();
             for f in &dep_program.fns {
                 if f.name == qualified {
-                    let mut c = f.clone();
-                    c.name = yours.clone();
-                    c.synthetic = true;
-                    clones.push(c);
+                    for spelling in [yours.clone(), format!("{qual}/{yours}")] {
+                        let mut c = f.clone();
+                        c.name = spelling;
+                        c.synthetic = true;
+                        clones.push(c);
+                    }
                     found = true;
                 }
             }
@@ -567,10 +587,12 @@ fn load_dependencies(
             let mut tclones = Vec::new();
             for t in &dep_program.types {
                 if t.name == qualified {
-                    let mut c = t.clone();
-                    c.name = yours.clone();
-                    c.synthetic = true;
-                    tclones.push(c);
+                    for spelling in [yours.clone(), format!("{qual}/{yours}")] {
+                        let mut c = t.clone();
+                        c.name = spelling;
+                        c.synthetic = true;
+                        tclones.push(c);
+                    }
                     found = true;
                 }
             }
