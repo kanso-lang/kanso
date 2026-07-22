@@ -54,6 +54,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     }
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
+    mark_bare_quals(&program, &exports, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
@@ -120,6 +121,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     }
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
+    mark_bare_quals(&program, &exports, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
@@ -157,6 +159,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         span,
         is_pub: false,
         file: file.to_string(),
+        synthetic: false,
     });
     Ok(program)
 }
@@ -188,6 +191,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
+    mark_bare_quals(&program, &exports, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
@@ -396,6 +400,39 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet
     }
 }
 
+/// The bare overload space (the import-incarnation gavel): every pub name
+/// of every imported module also exists under its short name, so bare
+/// calls dispatch over the union of local and imported arms — overloading
+/// is the resolution mechanism. The clones are real declarations, which is
+/// what lets every downstream consumer (check, both engines, inference,
+/// specificity) work unchanged.
+fn enroll_bare(dep_program: &mut ast::Program, exports: &std::collections::HashMap<String, bool>) {
+    let mut bare_fns = Vec::new();
+    for f in &dep_program.fns {
+        if exports.get(&f.name).copied().unwrap_or(false) {
+            if let Some((_, short)) = f.name.rsplit_once('/') {
+                let mut clone = f.clone();
+                clone.name = short.to_string();
+                clone.synthetic = true;
+                bare_fns.push(clone);
+            }
+        }
+    }
+    dep_program.fns.extend(bare_fns);
+    let mut bare_types = Vec::new();
+    for t in &dep_program.types {
+        if exports.get(&t.name).copied().unwrap_or(false) {
+            if let Some((_, short)) = t.name.rsplit_once('/') {
+                let mut clone = t.clone();
+                clone.name = short.to_string();
+                clone.synthetic = true;
+                bare_types.push(clone);
+            }
+        }
+    }
+    dep_program.types.extend(bare_types);
+}
+
 /// Modules linked into every program without an import statement: groups
 /// that SYNTAX names (design/render-plan.md — "{x}" desugars to
 /// render/to_string). Ambient types bring their canonical arms; imports
@@ -474,7 +511,46 @@ fn load_dependencies(
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
+    enroll_bare(&mut dep_program, &exports);
     Ok((dep_program, exports))
+}
+
+/// Bare uses count too: a bare `select` that any import exports marks that
+/// import used — the bare overload space makes spelling optional, not the
+/// dependency.
+fn mark_bare_quals(
+    program: &ast::Program,
+    exports: &std::collections::HashMap<String, bool>,
+    quals: &mut std::collections::HashSet<String>,
+) {
+    let mut bare = std::collections::HashSet::new();
+    fn collect(e: &ast::Expr, bare: &mut std::collections::HashSet<String>) {
+        if let ast::Expr::Ident(name, _) = e {
+            if !name.contains('/') {
+                bare.insert(name.clone());
+            }
+        }
+        for child in expr_children(e) {
+            collect(child, bare);
+        }
+    }
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            match stmt {
+                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => collect(expr, &mut bare),
+            }
+        }
+    }
+    for (qualified, is_pub) in exports {
+        if !is_pub {
+            continue;
+        }
+        if let Some((qual, short)) = qualified.rsplit_once('/') {
+            if bare.contains(short) {
+                quals.insert(qual.to_string());
+            }
+        }
+    }
 }
 
 /// Every module qualifier the program references: `json/decode` marks

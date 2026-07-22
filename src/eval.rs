@@ -349,6 +349,7 @@ impl<'a> Interp<'a> {
             name: "entry".to_string(),
             is_pub: false,
             span: origin,
+            synthetic: false,
             fields: vec![
                 ("key".to_string(), vec!["any".to_string()], origin),
                 ("value".to_string(), vec!["any".to_string()], origin),

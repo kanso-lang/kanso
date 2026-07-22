@@ -149,13 +149,20 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
             }
         }
     }
-    // Imported library functions (qualified names) stay beat-ineligible:
-    // a shared driver like list/fold_at threads its caller's invariant
-    // source through the loop, and carrying it would copy per iteration.
-    // Beats belong to the user-code loops that own their data.
-    ids.retain(|(name, _), _| !name.contains('/'));
-    carried.retain(|(name, _), _| !name.contains('/'));
-    demoted.retain(|(caller, _)| !caller.0.contains('/'));
+    // Imported library functions stay beat-ineligible: a shared driver like
+    // list/fold_at threads its caller's invariant source through the loop,
+    // and carrying it would copy per iteration. Beats belong to the
+    // user-code loops that own their data. Provenance is the file stamp —
+    // bare-enrolled clones of imported decls are still imported code.
+    let imported: std::collections::HashSet<&str> = program
+        .fns
+        .iter()
+        .filter(|d| d.synthetic || d.file.starts_with("std/") || d.name.contains('/'))
+        .map(|d| d.name.as_str())
+        .collect();
+    ids.retain(|(name, _), _| !imported.contains(name.as_str()));
+    carried.retain(|(name, _), _| !imported.contains(name.as_str()));
+    demoted.retain(|(caller, _)| !imported.contains(caller.0.as_str()));
     Beats { ids, demoted, carried }
 }
 

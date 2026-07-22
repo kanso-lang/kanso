@@ -101,6 +101,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         span,
         is_pub: false,
         file: String::new(),
+        synthetic: false,
     };
     Ok(Program { fns: vec![main], types: Vec::new(), imports })
 }
@@ -307,7 +308,8 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         ));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new() })
+    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new() ,
+        synthetic: false,})
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
@@ -334,7 +336,8 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             ));
         }
         let stmts = parse_body(body)?;
-        return Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: stmts, file: String::new() });
+        return Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: stmts, file: String::new() ,
+        synthetic: false,});
     }
     if !body.is_empty() {
         return Err(Diagnostic::new(
@@ -346,7 +349,8 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let mut p = P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
-    Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() })
+    Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() ,
+        synthetic: false,})
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
@@ -356,7 +360,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     let (name, span) = p.expect_ident("a type name")?;
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, is_pub, span, fields })
+    Ok(TypeDecl { name, is_pub, span, synthetic: false, fields })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
