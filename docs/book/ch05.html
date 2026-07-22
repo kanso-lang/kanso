@@ -336,7 +336,7 @@ test_empty_text_has_no_lines ... ok
 }</code></pre>
 </div>
 
-<p>a test hands <code>main</code>'s description to the scripted executor and asserts on the transcript with plain data equality—<code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no stubbing framework, no argument matchers, no "verify this was called once." the program <em>said</em> what it would do, and the test reads the saying:</p>
+<p>a test hands <code>main</code>'s io to the scripted executor and asserts on the transcript with plain data equality—<code>assert_eq!(executor.transcript, ["print \"a\"", "print \"b\""])</code>. no stubbing framework, no argument matchers, no "verify this was called once." the program <em>said</em> what it would do, and the test reads the saying:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">cargo test scripted_executor</div>
@@ -354,12 +354,12 @@ test eval::tests::scripted_executor_records_the_transcript ... ok</code></pre>
 </div>
 </div>
 
-<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: descriptions on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two descriptions <em>don't</em> need an order—and turns it into concurrency for free.</p>
+<p>you can now split any program into the part that decides and the part that touches the world, and say precisely where the boundary sits: io values on one side, one executor on the other. you can read <code>&gt;&gt;</code> as pure sequence and <code>.</code> as a value crossing into the future, and predict a <code>--plan</code> from the source before you run it. you can trace an execution-time failure to the endpoint and explain why no arm caught it. and you can test the logic of an effectful program without faking a single i/o call. chapter 06 takes the one thing this chapter kept quiet—what happens when two io values <em>don't</em> need an order—and turns it into concurrency for free.</p>
 
 <h2>exercises</h2>
 
 <ol>
-  <li>write a program that binds one <code>print</code> description to a name and splices it into <code>main</code> twice, separated by a different print. predict the full <code>--plan</code> output on paper, then run it and compare.</li>
+  <li>write a program that binds one <code>print</code> io to a name and splices it into <code>main</code> twice, separated by a different print. predict the full <code>--plan</code> output on paper, then run it and compare.</li>
   <li>write a file copier: pipe <code>read_file "flavors.txt"</code> into a lambda that returns <code>write_file "copy.txt" text</code>. run it with <code>--plan</code> first and explain why the write step doesn't appear in the plan, then run it for real and confirm the copy exists.</li>
   <li>change <code>first</code> in <code>welcome.kso</code> to index <code>xs[2]</code> and run it with one argument, then with two. for each run, say whether the failure (if any) happened during evaluation or during execution, and quote the part of the message that told you.</li>
   <li>extract the pure function from <code>shout.kso</code> into a file of its own with two <code>test_</code> constants—one for ordinary text, one for the empty string. decide what the empty-string result <em>should</em> be before you run <code>kanso test</code>, and reconcile if the toolchain disagrees.</li>
