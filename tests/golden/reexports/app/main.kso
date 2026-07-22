@@ -1,7 +1,7 @@
 import "../geo"
 
 print "{geo/areas [3 0 2]}"
-print "{select [1 2] (x -> x < 2)}"
+print "{to_list (select [1 2] (x -> x < 2))}"
 print "{order [3 1 2]}"
 print "{geo/list/order [5 4]}"
 print "{footprint (disk 2.0)}"

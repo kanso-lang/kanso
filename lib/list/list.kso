@@ -1,3 +1,7 @@
+pub type capped
+  left:int
+  source:any
+
 pub type cursor
   at:int
   source:any
@@ -5,18 +9,31 @@ pub type cursor
 pub type done
   drained:bool
 
+pub type mapped
+  shape:any
+  source:any
+
 type missing
   unfound:bool
+
+pub type sifted
+  keep:bool
+  source:any
+  test:any
+
+pub type skipped
+  burn:int
+  source:any
 
 pub type step
   elem:any
   rest:any
 
-pub fn all? list pred
-  fold list true (ok x -> if (pred x) ok false)
+pub fn all? coll pred
+  fold coll true (ok x -> if (pred x) ok false)
 
-pub fn any? list pred
-  fold list false (hit x -> if (pred x) true hit)
+pub fn any? coll pred
+  fold coll false (hit x -> if (pred x) true hit)
 
 fn bump none
   1
@@ -24,47 +41,106 @@ fn bump none
 fn bump n
   n + 1
 
-pub fn count list pred
-  fold list 0 (c x -> if (pred x) (c + 1) c)
+pub fn count coll pred
+  fold coll 0 (c x -> if (pred x) (c + 1) c)
 
-pub fn drop list n
-  drop_from list (n + 1) []
+pub fn drop coll n
+  skipped n (iter coll)
 
-fn drop_from list i acc
-  if (length list < i) acc (drop_from list (i + 1) (push acc (list[i])))
+pub fn find coll pred
+  unwrap_found (seek coll pred)
 
-pub fn find list pred
-  unwrap_found (seek list pred)
+pub fn first coll
+  first_of (next (iter coll))
 
-pub fn first list
-  list[1]
+fn first_of (done _)
+  none
 
-pub fn fold list init f
-  fold_at list init f 1
+fn first_of (step e _)
+  e
 
-fn fold_at list acc f i
-  if (length list < i) acc (fold_at list (f acc (list[i])) f (i + 1))
+pub fn fold coll init f
+  fold_go (next (iter coll)) init f
+
+fn fold_go (done _) acc _
+  acc
+
+fn fold_go (step e rest) acc f
+  fold_go (next rest) (f acc e) f
+
+fn iter (capped left source)
+  capped left source
+
+fn iter (cursor at source)
+  cursor at source
+
+fn iter (mapped shape source)
+  mapped shape source
+
+fn iter (sifted keep source test)
+  sifted keep source test
+
+fn iter (skipped burn source)
+  skipped burn source
+
+fn iter source
+  cursor 1 source
 
 fn join_parts before x after
   fold after (push before x) (acc y -> push acc y)
 
-pub fn last list
-  list[length list]
+pub fn last coll
+  unwrap_found (fold coll (missing true) (_ x -> x))
 
-pub fn map list f
-  fold list [] (acc x -> push acc (f x))
+pub fn map coll f
+  mapped f (iter coll)
 
-pub fn max list
-  unwrap_found (fold list (missing true) (m x -> outrank m x))
+pub fn max coll
+  unwrap_found (fold coll (missing true) (m x -> outrank m x))
 
-pub fn mean list
-  (0.0 + fold list 0 (a x -> a + x)) / length list
+pub fn mean coll
+  total = fold coll 0.0 (a x -> a + x)
+  total / fold coll 0 (n _ -> n + 1)
 
-pub fn min list
-  unwrap_found (fold list (missing true) (m x -> underrank m x))
+pub fn min coll
+  unwrap_found (fold coll (missing true) (m x -> underrank m x))
+
+pub fn next (capped left source)
+  if (left < 1) (done true) (next_capped left (next source))
 
 pub fn next (cursor at source)
   if (length source < at) (done true) (step source[at] (cursor (at + 1) source))
+
+pub fn next (mapped shape source)
+  next_mapped shape (next source)
+
+pub fn next (sifted keep source test)
+  next_sifted keep test (next source)
+
+pub fn next (skipped burn source)
+  next_skipped burn source
+
+fn next_capped _ (done d)
+  done d
+
+fn next_capped left (step e rest)
+  step e (capped (left - 1) rest)
+
+fn next_mapped _ (done d)
+  done d
+
+fn next_mapped shape (step e rest)
+  step (shape e) (mapped shape rest)
+
+fn next_sifted _ _ (done d)
+  done d
+
+fn next_sifted keep test (step e rest)
+  onward = sifted keep rest test
+  if (test e == keep) (step e onward) (next onward)
+
+fn next_skipped burn source
+  if (burn < 1) (next source) (next_skipped (burn - 1) (skip_one (next source)))
 
 fn outrank (missing _) x
   x
@@ -85,37 +161,38 @@ fn pick_found found _ _
   found
 
 fn place sorted x
-  join_parts (select sorted (y -> y < x)) x (reject sorted (y -> y < x))
+  under = to_list (select sorted (y -> y < x))
+  join_parts under x (reject sorted (y -> y < x))
 
-pub fn reject list pred
-  fold list [] (acc x -> if (pred x) acc (push acc x))
+pub fn reject coll pred
+  sifted false (iter coll) pred
 
-fn seek list pred
-  fold list (missing true) (found x -> pick_found found (pred x) x)
+fn seek coll pred
+  fold coll (missing true) (found x -> pick_found found (pred x) x)
 
-pub fn select list pred
-  fold list [] (acc x -> if (pred x) (push acc x) acc)
+pub fn select coll pred
+  sifted true (iter coll) pred
 
-pub fn sort list
-  fold list [] (acc x -> place acc x)
+fn skip_one (done d)
+  done d
 
-pub fn sum list
-  fold list 0 (acc x -> acc + x)
+fn skip_one (step _ rest)
+  rest
 
-pub fn take list n
-  take_to list n 1 []
+pub fn sort coll
+  fold coll [] (acc x -> place acc x)
 
-fn take_done? list n i
-  if (length list < i) true (n < i)
+pub fn sum coll
+  fold coll 0 (acc x -> acc + x)
 
-fn take_more list n i acc
-  take_to list n (i + 1) (push acc (list[i]))
+pub fn take coll n
+  capped n (iter coll)
 
-fn take_to list n i acc
-  if (take_done? list n i) acc (take_more list n i acc)
+pub fn tally coll
+  fold coll [:] (m x -> put m x (bump m[x]))
 
-pub fn tally list
-  fold list [:] (m x -> put m x (bump m[x]))
+pub fn to_list coll
+  fold coll [] (acc x -> push acc x)
 
 fn underrank (missing _) x
   x

@@ -2,10 +2,10 @@ import "std/list"
 import "std/math"
 
 fn approval_col voters c
-  total (list/map voters (v -> approves v c))
+  sum (list/map voters (v -> approves v c))
 
 fn approval_winner voters
-  argmax (list/map (range ncand) (c -> approval_col voters c))
+  argmax (to_list (list/map (range ncand) (c -> approval_col voters c)))
 
 fn approves v c
   if (mean v < v[c]) 1 0
@@ -21,10 +21,11 @@ fn first_is v elim c
   if (rank_first v elim == c) 1 0
 
 fn in? list x
-  if (count list x == 0) false true
+  any? list (y -> y == x)
 
 fn irv_counts voters elim
-  list/map (range ncand) (c -> total (list/map voters (v -> first_is v elim c)))
+  counted = (c -> sum (list/map voters (v -> first_is v elim c)))
+  to_list (list/map (range ncand) counted)
 
 fn irv_go voters elim
   counts = irv_counts voters elim
@@ -50,34 +51,34 @@ fn min_alive counts elim
   fold (range ncand) 0 (b c -> keep_min counts elim b c)
 
 fn minimax_winner voters
-  argmax (list/map (range ncand) (c -> worst_margin voters c))
+  argmax (to_list (list/map (range ncand) (c -> worst_margin voters c)))
 
 fn pair voters a b
-  total (list/map voters (v -> if (v[b] < v[a]) 1 0))
+  sum (list/map voters (v -> if (v[b] < v[a]) 1 0))
 
 fn plurality_winner voters
   firsts = list/map voters (v -> argmax v)
-  argmax (list/map (range ncand) (c -> count firsts c))
+  argmax (to_list (list/map (range ncand) (c -> count firsts (x -> x == c))))
 
 fn prefer_count voters a b
-  total (list/map voters (v -> if (score_ballot v b < score_ballot v a) 1 0))
+  sum (list/map voters (v -> if (score_ballot v b < score_ballot v a) 1 0))
 
 fn rank_first v elim
   fold (range ncand) 0 (b c -> keep_top v elim b c)
 
 fn score_ballot v c
-  lo = minimum v
-  hi = maximum v
+  lo = min v
+  hi = max v
   math/round (5.0 * (v[c] - lo) / (hi - lo))
 
 fn score_col voters c
-  total (list/map voters (v -> score_ballot v c))
+  sum (list/map voters (v -> score_ballot v c))
 
 fn score_winner voters
-  argmax (list/map (range ncand) (c -> score_col voters c))
+  argmax (to_list (list/map (range ncand) (c -> score_col voters c)))
 
 fn star_winner voters
-  totals = list/map (range ncand) (c -> score_col voters c)
+  totals = to_list (list/map (range ncand) (c -> score_col voters c))
   a = argmax totals
   b = argmax_except totals a
   pa = prefer_count voters a b
@@ -85,4 +86,4 @@ fn star_winner voters
   if (pb < pa) a (if (pa < pb) b a)
 
 fn worst_margin voters a
-  minimum (list/map (range ncand) (b -> margin_or_high voters a b))
+  min (list/map (range ncand) (b -> margin_or_high voters a b))

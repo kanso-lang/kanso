@@ -117,8 +117,8 @@ scoops <span class="o">=</span> <span class="n">3</span>
   <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
 
 xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
-doubled <span class="o">=</span> <span class="f">list/map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
-small <span class="o">=</span> <span class="f">list/select</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>)
+doubled <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>))
+small <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/select</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>))
 first <span class="o">=</span> xs[<span class="n">1</span>]
 <span class="f">print</span> <span class="s">"sorted <span class="i">{list/sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>

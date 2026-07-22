@@ -3,7 +3,7 @@ import "std/list"
 import "std/text"
 
 fn count_lines text
-  newlines = list/select (text/chars text) (c -> c == "\n")
-  "flavors.txt has {length newlines} lines"
+  newlines = list/count (text/chars text) (c -> c == "\n")
+  "flavors.txt has {newlines} lines"
 
 pub play = io/read_file "flavors.txt" . count_lines . print

@@ -222,8 +222,8 @@ concat [1 2 3 4]</code></pre>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
-<span class="f">print</span> <span class="s">"map <span class="i">{list/map xs (n -&gt; n * 10)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"filter <span class="i">{list/select xs (n -&gt; n &gt; 1)}</span>"</span>
+<span class="f">print</span> <span class="s">"map <span class="i">{list/to_list (list/map xs (n -&gt; n * 10))}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"filter <span class="i">{list/to_list (list/select xs (n -&gt; n &gt; 1))}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sort <span class="i">{list/sort xs}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"push <span class="i">{push xs 4}</span>"</span>
