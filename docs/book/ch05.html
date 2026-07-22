@@ -1,13 +1,13 @@
 ---
 layout: book
-title: "chapter 05—effects are descriptions"
+title: "chapter 05—effects are io"
 description: "print that doesn't print, sequencing with >>, pipes that bind, real i/o with read_file and args, and testing effects with transcripts instead of mocks."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">chapter 05</span>
-<h1>effects are descriptions</h1>
+<h1>effects are io</h1>
 
-<p>time to confess what <code>print</code> has been doing all book: nothing. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns a <em>description</em> of printing, a value like any other. your entire program is one big pure computation whose final answer is <code>main</code>: a description of everything the program intends to do. the runtime receives that description and walks it. evaluation decides; the runtime performs.</p>
+<p>time to confess what <code>print</code> has been doing all book: nothing. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns an <code>io</code>, a value like any other, describing the printing it intends. your entire program is one big pure computation whose final answer is <code>main</code>: one <code>io</code> describing everything the program means to do. the runtime receives that value and walks it. evaluation decides; the runtime performs.</p>
 
 <p>you can see the seam directly, because an <code>io</code> is data, and data can be rendered instead of executed. <code>&gt;&gt;</code>—the wall—glues io values into bigger ones, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
 
@@ -40,7 +40,7 @@ pouring</code></pre>
   <pre><code><span class="f">main</span> <span class="o">=</span> <span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run quiet.kso --plan</div>
-    <pre><code><span class="k">error</span>: main is not a description; there is no plan to show</code></pre>
+    <pre><code><span class="k">error</span>: main is not an io; there is no plan to show</code></pre>
   </div>
 </div>
 
@@ -117,7 +117,7 @@ step <span class="o">=</span> <span class="f">print</span> <span class="s">"stee
   </div>
 </div>
 
-<p>now the interesting move: pipe out of a <em>description</em>. <code>read_file path</code> doesn't return a string—it returns a description of reading, and the file's contents don't exist until the runtime performs it. so when you pipe a description into a function, kanso wires the function to receive the value <em>once it exists</em>. piping into a description is bind:</p>
+<p>now the interesting move: pipe out of an <em>io</em>. <code>read_file path</code> doesn't return a string—it returns an <code>io</code> describing the read, and the file's contents don't exist until the runtime performs it. so when you pipe an io into a function, kanso wires the function to receive the value <em>once it exists</em>. piping into an io is bind:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">flavors.txt</div>
@@ -146,13 +146,13 @@ hojicha</code></pre>
   </div>
 </div>
 
-<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the dot in one screenshot: <code>&gt;&gt;</code> sequences descriptions that don't pass data (the plan lists every step up front), while <code>.</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
+<p>look at that plan. the runtime can name the first step, but the rest is <code>&lt;continuation&gt;</code>—honest notation for "what happens next depends on a value i don't have yet." that's the difference between the wall and the dot in one screenshot: <code>&gt;&gt;</code> sequences io values that don't pass data (the plan lists every step up front), while <code>.</code> threads a value through, so later steps are functions waiting for input. together they are the complete vocabulary of "before" in kanso—everywhere else, order belongs to the runtime, which is chapter 06's whole subject.</p>
 
-<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller, no effect type to declare—effectfulness travels in the value itself. a function that returns a description is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
+<p>note what <code>count_lines</code> is: an ordinary pure function that takes a string. it doesn't know files exist, and nothing in its signature says "i get used near i/o." there's no <code>async</code> keyword to sprinkle through every caller, no effect type to declare—effectfulness travels in the value itself. a function that returns an io is effectful; a function that returns a string is not; and the same function can be piped from a file today and called on a literal in a test tomorrow.</p>
 
 <h2>the rest of the i/o vocabulary</h2>
 
-<p>writing is a description too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here a wall sequences a write before a read of the same file, and a dot hands the read's contents onward:</p>
+<p>writing is an io too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here a wall sequences a write before a read of the same file, and a dot hands the read's contents onward:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">save.kso</div>
@@ -174,7 +174,7 @@ hojicha</code></pre>
 
 <p>the round trip proves the sequencing: the read found the file because the wall put the write before it. one line of source holds both operators doing their one job each—<code>&gt;&gt;</code> orders two effects that share no data, <code>.</code> moves the read's result into <code>print</code>.</p>
 
-<p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are descriptions—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
+<p><code>args</code> is the argument list (everything after <code>--</code> on the command line), and <code>stdin</code> is standard input. both are io values—the argument list and the input stream belong to the outside world, so touching them is an effect like any other, and they pipe like everything else:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso</div>
@@ -219,7 +219,7 @@ hojicha</code></pre>
   </div>
 </div>
 
-<p>read the wording against chapter 04. there the message ended "reached main," because main was the endpoint of evaluation. here it ends "reached the executor": evaluation finished long ago, <code>main</code> was a perfectly healthy description, and the failure happened while the runtime was walking it. the err rides the same railway, and the diagnostic still names where it was born. failure during effects isn't a special kind of failure; it's the same value on the same rails, with the endpoint moved one stop later.</p>
+<p>read the wording against chapter 04. there the message ended "reached main," because main was the endpoint of evaluation. here it ends "reached the executor": evaluation finished long ago, <code>main</code> was a perfectly healthy io, and the failure happened while the runtime was walking it. the err rides the same railway, and the diagnostic still names where it was born. failure during effects isn't a special kind of failure; it's the same value on the same rails, with the endpoint moved one stop later.</p>
 
 <p>a file that isn't there fails the same way:</p>
 
@@ -285,7 +285,7 @@ hojicha</code></pre>
 }</code></pre>
 </div>
 
-<p>this is the classic functional-core, imperative-shell split, enforced by construction rather than discipline. your program—every function you write, every module you'll build in chapter 07—lives in the pure core. the shell is a short loop that walks the description and calls these trait methods. chapter 01 promised "two engines, one meaning," and this seam is why the promise is cheap to keep: <code>kanso run</code> compiles your program to a native binary while <code>--plan</code> and <code>kanso test</code> stay on the interpreter, and they can't disagree about what your program <em>means</em>, because the meaning is a value fixed before any executor gets involved.</p>
+<p>this is the classic functional-core, imperative-shell split, enforced by construction rather than discipline. your program—every function you write, every module you'll build in chapter 07—lives in the pure core. the shell is a short loop that walks the io and calls these trait methods. chapter 01 promised "two engines, one meaning," and this seam is why the promise is cheap to keep: <code>kanso run</code> compiles your program to a native binary while <code>--plan</code> and <code>kanso test</code> stay on the interpreter, and they can't disagree about what your program <em>means</em>, because the meaning is a value fixed before any executor gets involved.</p>
 
 <h2>testing without mocks</h2>
 
