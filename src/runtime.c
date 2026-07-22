@@ -959,6 +959,23 @@ KValue k_div(KValue a, KValue b, const char* origin) {
     return k_none();
 }
 
+KValue k_mod(KValue a, KValue b, const char* origin) {
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (a.tag == K_INT && b.tag == K_INT) {
+        if (b.payload == 0) return k_err(k_str("modulo by zero"), origin);
+        return k_int(a.payload % b.payload);
+    }
+    if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
+        double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
+        double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
+        if (y == 0.0) return k_err(k_str("modulo by zero"), origin);
+        return k_float(fmod(x, y));
+    }
+    k_die("`%` is not defined for these values");
+    return k_none();
+}
+
 static int k_order(KValue a, KValue b) {
     if (a.tag == K_INT && b.tag == K_INT) return (a.payload > b.payload) - (a.payload < b.payload);
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) {

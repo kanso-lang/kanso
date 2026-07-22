@@ -12,4 +12,4 @@ fn spin 0 acc
   acc
 
 fn spin n acc
-  spin (n - 1) (acc + n - (n / 7 * 7))
+  spin (n - 1) (acc + n % 7)
