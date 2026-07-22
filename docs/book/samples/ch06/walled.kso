@@ -5,9 +5,9 @@ brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 
 pub play =
   brew
-  >> roll 1
-  >> roll 2
-  >> roll 3
+  >> roll 1          # the wall is now above roll 1 too --
+  >> roll 2          # brew alone is the group, so every roll
+  >> roll 3          # waits for the steep to finish
   >> roll 4
   >> roll 5
 

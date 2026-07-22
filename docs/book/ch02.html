@@ -11,11 +11,10 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">binding.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  age <span class="o">=</span> <span class="n">47</span>
-  price <span class="o">=</span> <span class="n">19.99</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> is <span class="i">{age}</span>, owes <span class="i">{price}</span>"</span></code></pre>
+  <pre><code>age <span class="o">=</span> <span class="n">47</span>
+price <span class="o">=</span> <span class="n">19.99</span>
+name <span class="o">=</span> <span class="s">"clay"</span>
+<span class="f">print</span> <span class="s">"<span class="i">{name}</span> is <span class="i">{age}</span>, owes <span class="i">{price}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay is 47, owes 19.99</code></pre>
@@ -26,9 +25,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">interp.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  guests <span class="o">=</span> <span class="n">4</span>
-  <span class="f">print</span> <span class="s">"table for <span class="i">{guests + 1}</span>, please"</span></code></pre>
+  <pre><code>guests <span class="o">=</span> <span class="n">4</span>
+<span class="f">print</span> <span class="s">"table for <span class="i">{guests + 1}</span>, please"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>table for 5, please</code></pre>
@@ -43,10 +41,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">ints.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  per_day <span class="o">=</span> <span class="n">86400</span>
-  days <span class="o">=</span> <span class="n">365000000</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{per_day * days}</span>"</span></code></pre>
+  <pre><code>per_day <span class="o">=</span> <span class="n">86400</span>
+days <span class="o">=</span> <span class="n">365000000</span>
+<span class="f">print</span> <span class="s">"<span class="i">{per_day * days}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>31536000000000</code></pre>
@@ -57,9 +54,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">overflow.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  billion <span class="o">=</span> <span class="n">1000000000</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{billion * billion * 100}</span>"</span></code></pre>
+  <pre><code>billion <span class="o">=</span> <span class="n">1000000000</span>
+<span class="f">print</span> <span class="s">"<span class="i">{billion * billion * 100}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run overflow.kso</div>
     <pre><code><span class="k">error[runtime]</span>: integer overflow (int64 native build; spec int is arbitrary precision)</code></pre>
@@ -70,9 +66,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  n <span class="o">=</span> <span class="n">10</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{n / 0}</span>"</span></code></pre>
+  <pre><code>n <span class="o">=</span> <span class="n">10</span>
+<span class="f">print</span> <span class="s">"<span class="i">{n / 0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
@@ -86,11 +81,10 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">widen.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  exact <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2</span>
-  widened <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2.0</span>
-  mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span> <span class="n">0.5</span>
-  <span class="f">print</span> <span class="s">"int/int: <span class="i">{exact}</span>, int/float: <span class="i">{widened}</span>, mixed: <span class="i">{mixed}</span>"</span></code></pre>
+  <pre><code>exact <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2</span>
+widened <span class="o">=</span> <span class="n">7</span> <span class="o">/</span> <span class="n">2.0</span>
+mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span> <span class="n">0.5</span>
+<span class="f">print</span> <span class="s">"int/int: <span class="i">{exact}</span>, int/float: <span class="i">{widened}</span>, mixed: <span class="i">{mixed}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>int/int: 3, int/float: 3.5, mixed: 3.5</code></pre>
@@ -105,10 +99,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">strings.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  scoops <span class="o">=</span> <span class="n">3</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{name}</span> ordered <span class="i">{scoops}</span> scoops, <span class="i">{scoops * 2}</span> on the house"</span></code></pre>
+  <pre><code>name <span class="o">=</span> <span class="s">"clay"</span>
+scoops <span class="o">=</span> <span class="n">3</span>
+<span class="f">print</span> <span class="s">"<span class="i">{name}</span> ordered <span class="i">{scoops}</span> scoops, <span class="i">{scoops * 2}</span> on the house"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay ordered 3 scoops, 6 on the house</code></pre>
@@ -121,13 +114,14 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">lists.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
-  doubled <span class="o">=</span> <span class="f">map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
-  small <span class="o">=</span> <span class="f">filter</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>)
-  first <span class="o">=</span> xs[<span class="n">1</span>]
-  <span class="f">print</span> <span class="s">"sorted <span class="i">{sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
+doubled <span class="o">=</span> <span class="f">list/map</span> xs (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+small <span class="o">=</span> <span class="f">list/select</span> xs (x <span class="o">-&gt;</span> x <span class="o">&lt;</span> <span class="n">3</span>)
+first <span class="o">=</span> xs[<span class="n">1</span>]
+<span class="f">print</span> <span class="s">"sorted <span class="i">{list/sort xs}</span> doubled <span class="i">{doubled}</span> small <span class="i">{small}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span> len <span class="i">{length xs}</span> first <span class="i">{first}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>sorted [1 2 3] doubled [6 2 4] small [1 2]
@@ -139,9 +133,8 @@ sum 6 len 3 first 3</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">at_miss.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{at xs 9}</span>"</span></code></pre>
+  <pre><code>xs <span class="o">=</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{xs[9]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run at_miss.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
@@ -156,10 +149,9 @@ sum 6 len 3 first 3</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">maps.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span>]
-  ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
-  <span class="f">print</span> <span class="s">"clay is <span class="i">{ages["clay"]}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
+  <pre><code>ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span>]
+ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
+<span class="f">print</span> <span class="s">"clay is <span class="i">{ages[</span>"</span>clay<span class="s">"]}"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay is 47
@@ -171,9 +163,8 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">map_miss.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{ages["nobody"]}</span>"</span></code></pre>
+  <pre><code>ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{ages[</span>"</span>nobody<span class="s">"]!}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run map_miss.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "nobody""
@@ -187,14 +178,14 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">records.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">user</span>
-  age:<span class="t">int</span>
-  name:<span class="t">string</span>
+  <pre><code><span class="k">type</span> user
+  age:int
+  name:string
 
-<span class="f">main</span> <span class="o">=</span>
-  clay <span class="o">=</span> <span class="t">user</span> <span class="n">47</span> <span class="s">"clay"</span>
-  <span class="t">user</span> years who <span class="o">=</span> clay
-  { name: alias } <span class="o">=</span> clay
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
+  <span class="f">user</span> years who <span class="o">=</span> <span class="f">clay</span>
+  { name: alias } <span class="o">=</span> <span class="f">clay</span>
   <span class="f">print</span> <span class="s">"<span class="i">{who}</span> is <span class="i">{years}</span>, also known as <span class="i">{alias}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
@@ -210,16 +201,16 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">equality.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">point</span>
-  x:<span class="t">int</span>
-  y:<span class="t">int</span>
+  <pre><code><span class="k">type</span> point
+  x:int
+  y:int
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   nums <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>] <span class="o">==</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
   words <span class="o">=</span> <span class="s">"apple"</span> <span class="o">&lt;</span> <span class="s">"banana"</span>
   order <span class="o">=</span> <span class="n">5</span> <span class="o">&lt;=</span> <span class="n">5</span>
-  here <span class="o">=</span> <span class="t">point</span> <span class="n">1</span> <span class="n">2</span>
-  there <span class="o">=</span> <span class="t">point</span> <span class="n">1</span> <span class="n">2</span>
+  here <span class="o">=</span> <span class="f">point</span> <span class="n">1</span> <span class="n">2</span>
+  there <span class="o">=</span> <span class="f">point</span> <span class="n">1</span> <span class="n">2</span>
   <span class="f">print</span> <span class="s">"lists <span class="i">{nums}</span>, words <span class="i">{words}</span>, order <span class="i">{order}</span>, points <span class="i">{here == there}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
@@ -235,10 +226,9 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">rebind.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="n">10</span>
-  total <span class="o">=</span> total <span class="o">+</span> <span class="n">5</span>
-  <span class="f">print</span> <span class="s">"total: <span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> <span class="n">10</span>
+total <span class="o">=</span> total <span class="o">+</span> <span class="n">5</span>
+<span class="f">print</span> <span class="s">"total: <span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>total: 15</code></pre>
@@ -249,10 +239,9 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">rebind_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  x <span class="o">=</span> <span class="n">1</span>
-  x <span class="o">=</span> <span class="n">2</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <pre><code>x <span class="o">=</span> <span class="n">1</span>
+x <span class="o">=</span> <span class="n">2</span>
+<span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check rebind_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding: each version of `x` is used before the next
@@ -270,11 +259,10 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">shadow_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  tau <span class="o">=</span> <span class="n">5</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{tau}</span>"</span>
+  <pre><code>tau <span class="o">=</span> <span class="n">5</span>
+tau <span class="o">=</span> <span class="n">3</span>
 
-<span class="f">tau</span> <span class="o">=</span> <span class="n">3</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{tau}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check shadow_check.kso</div>
     <pre><code><span class="k">error[name]</span>: `tau` is already a declaration; rename the binding

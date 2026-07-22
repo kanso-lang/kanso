@@ -5,9 +5,9 @@ fn cheapest prices
 
 pub play =
   prices = [520 380 450 610 290]
-  low = cheapest prices
-  total = list/sum prices
-  report low total
+  low = cheapest prices   # these two share nothing:
+  total = list/sum prices  # the compiler may run them together
+  report low total         # reads both, so it waits for both
 
 fn report low total
   print "cheapest: {low} yen / total: {total} yen"

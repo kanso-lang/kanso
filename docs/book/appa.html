@@ -17,9 +17,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unused_binding_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  x <span class="o">=</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"hi"</span></code></pre>
+  <pre><code>x <span class="o">=</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"hi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unused_binding_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `x`
@@ -37,7 +36,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">trailing_ws_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hi"</span> </code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"hi"</span> </code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check trailing_ws_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
@@ -51,9 +50,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">cramped_binding_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  answer<span class="o">=</span><span class="n">42</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
+  <pre><code>answer<span class="o">=</span><span class="n">42</span>
+<span class="f">print</span> <span class="s">"<span class="i">{answer}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check cramped_binding_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
@@ -71,7 +69,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">paren_call_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
+  <pre><code><span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check paren_call_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
@@ -85,9 +83,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">commas_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> <span class="f">sum</span> [<span class="n">1</span>, <span class="n">2</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check commas_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: kanso has no commas; enumerations are space-separated
@@ -101,7 +98,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">line_length_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check line_length_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 90
@@ -117,9 +114,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">snake_case_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  myName <span class="o">=</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
+  <pre><code>myName <span class="o">=</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"<span class="i">{myName}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check snake_case_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
@@ -139,11 +135,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">type_order_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span>
+  <pre><code><span class="k">fn</span> <span class="f">use_it</span> t
+  <span class="f">t</span>
 
-<span class="k">type</span> <span class="t">user</span>
-  admin:<span class="t">bool</span>
-  name:<span class="t">string</span></code></pre>
+<span class="k">type</span> thing
+  size:int
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check type_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `user` up
@@ -158,9 +156,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">fn_order_check.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
-  x
+  <span class="f">x</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check fn_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
@@ -174,11 +172,11 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">field_order_check.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">user</span>
-  name:<span class="t">string</span>
-  admin:<span class="t">bool</span>
+  <pre><code><span class="k">type</span> user
+  name:string
+  admin:bool
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check field_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: fields appear in alphabetical order: `admin` before `name`
@@ -192,9 +190,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">blank_between_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">greet</span> name
-  <span class="s">"hi, <span class="i">{name}</span>"</span>
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">greet</span> <span class="s">"kanso"</span>)</code></pre>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> _
+  <span class="f">print</span> <span class="s">"hi"</span>
+<span class="k">fn</span> <span class="f">wave</span> _
+  <span class="f">print</span> <span class="s">"yo"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">greet</span> <span class="n">0</span> <span class="o">.</span> <span class="f">wave</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check blank_between_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: exactly one blank line separates top-level declarations
@@ -208,10 +209,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">blank_in_body_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> _
   x <span class="o">=</span> <span class="n">1</span>
 
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">greet</span> <span class="n">0</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check blank_in_body_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: blank lines may not appear inside a body
@@ -227,7 +230,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">seq_wrap_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping"</span>
+  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check seq_wrap_check.kso</div>
@@ -242,10 +245,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">needless_continuation_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
-    <span class="o">.</span> <span class="f">sum</span>
-  <span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
+  <pre><code>total <span class="o">=</span> [<span class="n">9</span> <span class="n">1</span> <span class="n">8</span> <span class="n">2</span> <span class="n">7</span>] <span class="o">.</span> <span class="f">sort</span>
+  <span class="o">.</span> <span class="f">sum</span>
+<span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check needless_continuation_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (34 characters)
@@ -259,7 +261,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">partial_chain_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
+  <pre><code><span class="f">print</span> <span class="s">"steeping the finest uji sencha"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the hot water"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving it in the warmed cups with seasonal wagashi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check partial_chain_check.kso</div>
@@ -274,11 +276,10 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unfused_wall_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"steeping"</span>
-  <span class="f">print</span> <span class="s">"warming"</span>
-  <span class="o">&gt;&gt;</span>
-  <span class="f">print</span> <span class="s">"serving"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
+<span class="f">print</span> <span class="s">"warming"</span>
+<span class="o">&gt;&gt;</span>
+<span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unfused_wall_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a one-step stage fuses with its wall: write `&gt;&gt; step` on one line
@@ -292,10 +293,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">bare_after_fused_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"x"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"c"</span>
-  <span class="f">print</span> <span class="s">"d"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"x"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"c"</span>
+<span class="f">print</span> <span class="s">"d"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check bare_after_fused_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a fused `&gt;&gt; step` is a single sequential step — a line cannot silently join it. for a group, put the wall alone and list the members below it
@@ -309,10 +309,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">binding_after_effect_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"steeping"</span>
-  cups <span class="o">=</span> <span class="n">4</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving <span class="i">{cups}</span>"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"steeping"</span>
+cups <span class="o">=</span> <span class="n">4</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving <span class="i">{cups}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check binding_after_effect_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: bindings precede the effects in a body: every binding runs before every bare effect line, so move it above the chain
@@ -328,10 +327,10 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">paren_ascription_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">area</span> (w: <span class="t">int</span>)
+  <pre><code><span class="k">fn</span> <span class="f">area</span> (w: int)
   w <span class="o">*</span> w
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{area 3}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{area 3}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check paren_ascription_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: a single-type ascription is written tight: `w:type` (parenthesized guards return with typesets)
@@ -345,12 +344,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">keyed_order_check.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">user</span>
-  admin:<span class="t">bool</span>
-  name:<span class="t">string</span>
+  <pre><code><span class="k">type</span> user
+  admin:bool
+  name:string
 
-<span class="f">main</span> <span class="o">=</span>
-  { name admin } <span class="o">=</span> <span class="t">user</span> <span class="t">false</span> <span class="s">"clay"</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  { name admin } <span class="o">=</span> <span class="f">user</span> false <span class="s">"clay"</span>
   <span class="f">print</span> <span class="s">"<span class="i">{name}</span> <span class="i">{admin}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check keyed_order_check.kso</div>
@@ -366,12 +365,12 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">overload_order_check.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">fact</span> n
-  n <span class="o">*</span> <span class="f">fact</span> (n <span class="o">-</span> <span class="n">1</span>)
+  n <span class="o">*</span> fact (n <span class="o">-</span> <span class="n">1</span>)
 
 <span class="k">fn</span> <span class="f">fact</span> <span class="n">0</span>
   <span class="n">1</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{fact 3}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{fact 3}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check overload_order_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: overloads of `fact` appear most-specific first: literal, then concrete type, then generic
@@ -387,9 +386,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unused_expr_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  <span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
-  <span class="f">print</span> <span class="s">"hi"</span></code></pre>
+  <pre><code><span class="n">1</span> <span class="o">+</span> <span class="n">1</span>
+<span class="f">print</span> <span class="s">"hi"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unused_expr_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
@@ -403,10 +401,9 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">rebind_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  x <span class="o">=</span> <span class="n">1</span>
-  x <span class="o">=</span> <span class="n">2</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
+  <pre><code>x <span class="o">=</span> <span class="n">1</span>
+x <span class="o">=</span> <span class="n">2</span>
+<span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check rebind_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding: each version of `x` is used before the next
@@ -422,7 +419,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">unknown_name_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{mystery}</span>"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"<span class="i">{mystery}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unknown_name_check.kso</div>
     <pre><code><span class="k">error[name]</span>: unknown name `mystery`
@@ -439,7 +436,7 @@ extra_css: /book/book.css
   <pre><code><span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"hi, <span class="i">{name}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   greet <span class="o">=</span> <span class="n">1</span>
   <span class="f">print</span> <span class="s">"<span class="i">{greet}</span>"</span></code></pre>
   <div class="code-output">
@@ -472,12 +469,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">constant_overload_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{size 1}</span>"</span>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{size 1}</span>"</span>
 
-<span class="f">size</span> <span class="o">=</span> <span class="n">9</span>
+size <span class="o">=</span> <span class="n">9</span>
 
 <span class="k">fn</span> <span class="f">size</span> x
-  x</code></pre>
+  <span class="f">x</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check constant_overload_check.kso</div>
     <pre><code><span class="k">error[dispatch]</span>: `size` is a constant (arity 0); a constant admits no overloads
@@ -491,13 +488,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">overlap_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{same 1}</span>"</span>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{same 1}</span>"</span>
 
 <span class="k">fn</span> <span class="f">same</span> x
-  x
+  <span class="f">x</span>
 
 <span class="k">fn</span> <span class="f">same</span> y
-  y</code></pre>
+  <span class="f">y</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check overlap_check.kso</div>
     <pre><code><span class="k">error[dispatch]</span>: overlapping overloads of `same` are illegal
@@ -513,10 +510,10 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">marker_args_check.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">null</span>
+  <pre><code><span class="k">type</span> null
 
-<span class="f">main</span> <span class="o">=</span>
-  bad <span class="o">=</span> <span class="t">null</span> <span class="t">true</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  bad <span class="o">=</span> <span class="f">null</span> true
   <span class="f">print</span> <span class="s">"<span class="i">{bad}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check marker_args_check.kso</div>
@@ -533,12 +530,12 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">underscore_check.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">user</span>
-  admin:<span class="t">bool</span>
-  name:<span class="t">string</span>
+  <pre><code><span class="k">type</span> user
+  admin:bool
+  name:string
 
-<span class="f">main</span> <span class="o">=</span>
-  <span class="t">user</span> _ name <span class="o">=</span> <span class="t">user</span> <span class="t">false</span> <span class="s">"clay"</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">user</span> _ name <span class="o">=</span> <span class="f">user</span> false <span class="s">"clay"</span>
   <span class="f">print</span> <span class="s">"<span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check underscore_check.kso</div>
@@ -557,9 +554,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{n}</span>"</span></code></pre>
+  <pre><code>n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+<span class="f">print</span> <span class="s">"<span class="i">{n}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
@@ -571,9 +567,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">missing_index.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
-  <span class="f">print</span> <span class="s">"<span class="i">{xs.at 9}</span>"</span></code></pre>
+  <pre><code>xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
+<span class="f">print</span> <span class="s">"<span class="i">{xs.at 9}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing_index.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
