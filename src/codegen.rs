@@ -18,6 +18,16 @@ const DECLARES: &str = r#"%KValue = type { i64, i64 }
 ; boundary, leaving a real call on every `if` condition and constructor;
 ; internal linkage keeps them from colliding with the runtime's own
 ; definitions, and alwaysinline folds them into every call site.
+define internal %KValue @k_force_fast(%KValue %v) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %is = icmp eq i64 %tag, 14
+  br i1 %is, label %slow, label %done
+slow:
+  %f = call %KValue @k_force(%KValue %v)
+  ret %KValue %f
+done:
+  ret %KValue %v
+}
 define internal %KValue @k_int(i64 %n) alwaysinline {
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
@@ -584,14 +594,20 @@ impl<'a> Backend<'a> {
     }
 
     /// Force a value that may be a thunk; no-op (no IR) when the set proves
-    /// it can't be one, so strict code pays nothing.
+    /// it can't be one, so strict code pays nothing. A program the demand
+    /// analysis deferred nothing in can hold no thunk anywhere — every site
+    /// vanishes, not just the set-proven ones (conservative TOP widenings
+    /// carry the THUNK bit into code no thunk can reach).
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
+        if self.demand.lazy_bind_count() == 0 {
+            return value;
+        }
         if f.set_of(&value) & crate::infer::THUNK == 0 {
             return value;
         }
         let post = f.set_of(&value) & !crate::infer::THUNK;
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_force(%KValue {value})"));
+        f.line(&format!("{t} = call %KValue @k_force_fast(%KValue {value})"));
         // A forced thunk can yield anything its expr could; the bind site
         // recorded TOP, so widen conservatively past the removed bit.
         f.record(&t, if post == 0 { crate::infer::TOP & !crate::infer::THUNK } else { post });
