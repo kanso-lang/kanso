@@ -773,3 +773,30 @@ Beat-demotion consistency (#99 fallout, fixed same night): a demoted
 entry pair lives or dies with its target loop, never with the caller's
 name — a clone sharing the caller's name had dropped the bracket while
 the loop kept its rewinds, corrupting live memory.
+
+## 2026-07-22 day: the enumerable lands whole — and ends up faster
+
+Phase one (#134): std/list becomes the ratified pull model — adapters
+return iterator records, consumers drive next, one element in flight.
+vse/squeeze went idiomatic-std with outputs bit-identical on both
+engines; the json decode path untouched (cost golden exact). Honest
+tax at this stage: vse user-time +60%.
+
+Generators (#136): cycle/naturals/repeat/iterate as ordinary records;
+the spec's infinite examples run verbatim; no stream construct exists.
+
+Phase two (#137) erased the tax with two composable moves. Typed fold:
+per-iterator arms drive the protocol, the generic arm runs the indexed
+loop — dispatch picks the fast path, no analysis. The fusion pass
+(shared AST rewrite, post-check): consumer over map/select/reject
+chains → one fold over the root, adapter steps composed into the
+reducer. The typed arms make the rewrite sound for ANY root, which is
+the load-bearing trick — no list-ness proof, no escape analysis, and
+module re-export graphs are handled by naming a real resolved fold
+decl. take/first never fuse, so infinite sources keep their meaning.
+
+Receipts: vse 0.20s user, BELOW the eager library's 0.22 — lazy
+semantics now cost less than the code they replaced. The ch10 counters
+sample fell 4033 → 29 allocations. Follow-ups queued: fuse take/drop
+bounds into the scan, tally/group_by/tso_h reducers, and the
+defunctionalized-thunk pool sharing this composition machinery.
