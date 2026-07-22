@@ -2461,7 +2461,11 @@ impl<'a> Backend<'a> {
         for arg in iter {
             emitted.push(self.emit_expr(f, arg)?);
         }
-        // std wrappers reach natives through the builtin_ prefix
+        // std wrappers reach natives through the builtin_ prefix — and the
+        // prefix BYPASSES group dispatch entirely, or a bare clone named
+        // like the builtin would capture its own wrapper's body (the
+        // d_join_2 self-recursion)
+        let was_builtin = name.starts_with("builtin_");
         let name: &str = name.strip_prefix("builtin_").unwrap_or(name);
         if name == "err" {
             let origin = self.origin_arg(f, span);
@@ -2503,7 +2507,7 @@ impl<'a> Backend<'a> {
             f.record(&t, REC | fails);
             return Ok(t);
         }
-        if self.program.fns.iter().any(|d| d.name == *name) {
+        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
             let n = emitted.len();
             let args_ir: Vec<String> = emitted
                 .iter()
