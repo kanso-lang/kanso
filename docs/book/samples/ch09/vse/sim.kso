@@ -10,7 +10,7 @@ fn cloud n d acc
 dims = 2
 
 fn dist2 p q
-  total (list/map (range (length p)) (d -> sq (p[d] - q[d])))
+  sum (list/map (range (length p)) (d -> sq (p[d] - q[d])))
 
 fn means sums
   print "plurality VSE {(sums[1]) / runs}"
@@ -33,10 +33,10 @@ fn point d acc
 runs = 400
 
 fn socutil voters c
-  total (list/map voters (v -> v[c]))
+  sum (list/map voters (v -> v[c]))
 
 fn socutils voters
-  list/map (range ncand) (c -> socutil voters c)
+  to_list (list/map (range ncand) (c -> socutil voters c))
 
 fn sq x
   x * x
@@ -61,11 +61,11 @@ fn util vpos cpos
   0 - math/sqrt (dist2 vpos cpos)
 
 fn utilities voters cands
-  list/map voters (v -> list/map cands (c -> util v c))
+  to_list (list/map voters (v -> to_list (list/map cands (c -> util v c))))
 
 fn vse socs winner
   m = mean socs
-  (socs[winner] - m) / (maximum socs - m)
+  (socs[winner] - m) / (max socs - m)
 
 fn with_voters k acc vp
   cloud ncand dims [] . (cp -> trials (k - 1) (tally acc (utilities vp cp)))

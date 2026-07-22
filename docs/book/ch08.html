@@ -578,7 +578,7 @@ test_roundtrip ... ok
   <span class="f">if</span> ((<span class="f">text/char_code</span> c) <span class="o">&lt;</span> <span class="n">32</span>) (<span class="f">u_escape</span> c) c
 
 <span class="k">fn</span> <span class="f">escape_str</span> s
-  <span class="f">text/join</span> (<span class="f">list/map</span> (<span class="f">text/chars</span> s) (c <span class="o">-&gt;</span> <span class="f">escape_char</span> c)) <span class="s">""</span>
+  <span class="f">text/join</span> (<span class="f">list/to_list</span> (<span class="f">list/map</span> (<span class="f">text/chars</span> s) (c <span class="o">-&gt;</span> <span class="f">escape_char</span> c))) <span class="s">""</span>
 
 <span class="k">fn</span> <span class="f">hex4</span> n
   d1 <span class="o">=</span> n <span class="o">/</span> <span class="n">4096</span>
@@ -653,12 +653,14 @@ hex_digits <span class="o">=</span> <span class="s">"0123456789abcdef"</span>
 
 <span class="k">fn</span> <span class="f">pretty</span> xs:json[] d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
-  inner <span class="o">=</span> <span class="f">text/join</span> (<span class="f">list/map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{pad d2}</span><span class="i">{pretty v d2}</span>"</span>)) <span class="s">",\n"</span>
+  lines <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{pad d2}</span><span class="i">{pretty v d2}</span>"</span>))
+  inner <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">",\n"</span>
   <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{pad d}</span>]"</span>
 
 <span class="k">fn</span> <span class="f">pretty</span> m:json[string] d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
-  inner <span class="o">=</span> <span class="f">text/join</span> (<span class="f">list/map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">entry_block</span> e d2)) <span class="s">",\n"</span>
+  lines <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">entry_block</span> e d2))
+  inner <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">",\n"</span>
   <span class="s">"\<span class="i">{\n{inner}\n{pad d}}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pretty.kso</div>

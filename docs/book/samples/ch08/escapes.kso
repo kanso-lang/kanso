@@ -20,7 +20,7 @@ fn escape_char c
   if ((text/char_code c) < 32) (u_escape c) c
 
 fn escape_str s
-  text/join (list/map (text/chars s) (c -> escape_char c)) ""
+  text/join (list/to_list (list/map (text/chars s) (c -> escape_char c))) ""
 
 fn hex4 n
   d1 = n / 4096

@@ -8,7 +8,7 @@ fn describe x
 
 pub play =
   prices = [30 10 20]
-  doubled = list/map prices (x -> x * 2)
+  doubled = list/to_list (list/map prices (x -> x * 2))
   ninth = prices[9]
   print "sorted: {list/sort prices}"
     >> print "doubled: {doubled}"

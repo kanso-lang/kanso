@@ -132,8 +132,8 @@ hojicha</code></pre>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">count_lines</span> text
-  newlines <span class="o">=</span> <span class="f">list/select</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
-  <span class="s">"flavors.txt has <span class="i">{length newlines}</span> lines"</span>
+  newlines <span class="o">=</span> <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <span class="s">"flavors.txt has <span class="i">{newlines}</span> lines"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
@@ -319,8 +319,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">count_lines</span> text
-  newlines <span class="o">=</span> <span class="f">list/select</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
-  <span class="f">length</span> newlines
+  <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
 
 test_counts_lines <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span>) <span class="o">==</span> <span class="n">3</span>
 

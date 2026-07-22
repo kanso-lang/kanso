@@ -2,8 +2,7 @@ import "std/list"
 import "std/text"
 
 fn count_lines text
-  newlines = list/select (text/chars text) (c -> c == "\n")
-  length newlines
+  list/count (text/chars text) (c -> c == "\n")
 
 test_counts_lines = (count_lines "matcha\nube\nhojicha\n") == 3
 
