@@ -666,6 +666,15 @@ impl<'a> Interp<'a> {
             Expr::BinOp { op, lhs, rhs, span } => {
                 let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
                 let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
+                // records dispatch to the operator's user arms; numbers stay
+                // on the builtin (coherence licenses the fast path, and the
+                // orphan rule keeps 2 + 3 meaning one thing forever)
+                if matches!(&left, Value::Record { .. })
+                    && !is_failure(&left)
+                    && self.fns.contains_key(op as &str)
+                {
+                    return self.call_named(op, vec![left, right], *span, frame);
+                }
                 eval_binop(op, left, right, *span, frame)
             }
             Expr::Join { lhs, rhs, span } => {

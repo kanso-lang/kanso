@@ -484,6 +484,11 @@ impl<'a> WasmBackend<'a> {
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
             Expr::Join { .. } => return Err("join not yet in the wasm backend".to_string()),
             Expr::BinOp { op, lhs, rhs, span } => {
+                if matches!(*op, "+" | "-" | "*" | "/" | "%")
+                    && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2)
+                {
+                    return Err("user operator arms are not yet in the wasm backend".to_string());
+                }
                 let code = match *op {
                     "+" => 0,
                     "-" => 1,

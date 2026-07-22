@@ -382,7 +382,7 @@ impl FnEmit {
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
     // fn-value wrapper symbols share dsym's quoted-identifier rule
-    match name.contains(['/', '!', '?']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
         true => format!("\"w_{name}_{arity}\""),
         false => format!("w_{name}_{arity}"),
     }
@@ -390,7 +390,7 @@ fn wsym(name: &str, arity: usize) -> String {
 
 fn dsym(name: &str, arity: usize) -> String {
     // qualified names and the naming sigils need LLVM's quoted-identifier form
-    match name.contains(['/', '!', '?']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
         true => format!("\"d_{name}_{arity}\""),
         false => format!("d_{name}_{arity}"),
     }
@@ -2084,6 +2084,53 @@ impl<'a> Backend<'a> {
     }
 
     fn emit_binop(
+        &mut self,
+        f: &mut FnEmit,
+        op: &str,
+        a: &str,
+        b: &str,
+        span: Span,
+    ) -> Result<String, String> {
+        // a record on the left dispatches to the operator's user arms; the
+        // numeric fast paths below stay untouched for everything else
+        let armable = matches!(op, "+" | "-" | "*" | "/" | "%")
+            && self.program.fns.iter().any(|d| d.name == op && d.params.len() == 2);
+        if armable && f.set_of(a) & REC != 0 {
+            let tag = f.tmp();
+            f.line(&format!("{tag} = extractvalue %KValue {a}, 0"));
+            let isrec = f.tmp();
+            f.line(&format!("{isrec} = icmp eq i64 {tag}, 7"));
+            let user = f.label();
+            let builtin = f.label();
+            let merge = f.label();
+            f.line(&format!("br i1 {isrec}, label %{user}, label %{builtin}"));
+            f.start_block(&user);
+            let uv = f.tmp();
+            f.line(&format!(
+                "{uv} = call tailcc %KValue @{}(%KValue {a}, %KValue {b})",
+                dsym(op, 2)
+            ));
+            f.line(&format!("br label %{merge}"));
+            let user_from = user.clone();
+            f.start_block(&builtin);
+            let bv = self.emit_binop_builtin(f, op, a, b, span)?;
+            let builtin_from = f.cur_label.clone();
+            f.line(&format!("br label %{merge}"));
+            f.start_block(&merge);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"
+            ));
+            f.record(
+                &t,
+                f.set_of(&bv) | self.group_return_set(op, 2) | (f.set_of(a) & FAIL),
+            );
+            return Ok(t);
+        }
+        self.emit_binop_builtin(f, op, a, b, span)
+    }
+
+    fn emit_binop_builtin(
         &mut self,
         f: &mut FnEmit,
         op: &str,

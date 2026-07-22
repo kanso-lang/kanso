@@ -414,7 +414,17 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let mut p = P::new(&header.tokens, &header.end_cols, header.number);
     let is_pub = p.consume_pub();
     p.expect_kw_fn()?;
-    let (name, span) = p.expect_ident("a function name")?;
+    let (name, span) = match p.peek() {
+        // an operator arm: `fn + a:user b:user` extends the operator's
+        // dispatch group for a type you own
+        Some(Tok::Op(op @ ("+" | "-" | "*" | "/" | "%"))) => {
+            let op = op.to_string();
+            let span = p.span_here();
+            p.pos += 1;
+            (op, span)
+        }
+        _ => p.expect_ident("a function name")?,
+    };
     let mut params = Vec::new();
     while !p.done() {
         params.push(p.parse_pattern()?);

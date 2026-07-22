@@ -1,0 +1,18 @@
+# an operator is an ambient dispatch group: one arm for a type you own
+# extends it, and 2 + 3 keeps meaning one thing forever — numbers never
+# reach user arms. semantic equivalence stays a named convention (`eq`);
+# `==` is structural identity, closed.
+type money
+  cents:int
+
+fn + (money a) (money b)
+  money (a + b)
+
+pub play =
+  lunch = (money 350) + (money 125)
+  tea = (money 190) + (money 235)
+  total = lunch + tea
+  print "lunch {lunch}, tea {tea}, day {total}"
+
+fn to_string (money cents)
+  "${cents / 100}.{cents % 100}"
