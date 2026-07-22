@@ -1,0 +1,3 @@
+import "../geo"
+
+print "{sum (geo/areas [1 2])}"

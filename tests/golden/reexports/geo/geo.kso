@@ -1,0 +1,8 @@
+import "std/list"
+
+pub fn areas rs
+  select rs (r -> 0 < r)
+
+pub select
+
+pub sort:order

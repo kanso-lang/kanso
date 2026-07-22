@@ -108,6 +108,17 @@ pub struct Program {
     pub fns: Vec<FnDecl>,
     pub types: Vec<TypeDecl>,
     pub imports: Vec<Import>,
+    pub reexports: Vec<Reexport>,
+}
+
+/// `pub name` re-exports an imported pub (or, when `name` is an import's
+/// qualifier, that module's whole surface); `pub theirs:yours` renames on
+/// the way out. Re-exported names join this module's own surface.
+#[derive(Clone, Debug)]
+pub struct Reexport {
+    pub name: String,
+    pub rename: Option<String>,
+    pub span: crate::diag::Span,
 }
 
 #[derive(Clone, Debug)]
