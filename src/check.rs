@@ -287,7 +287,7 @@ pub fn check_unused_private(
 /// fallible work stays a predicate), and a group answering only in booleans
 /// must carry the `?`. Mixed sets are exempt in the unmarked direction.
 fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
-    use crate::infer::{ERR, FALSE, NONE, TRUE};
+    use crate::infer::{ERR, FALSE, TRUE};
     let inference = crate::infer::infer(program);
     let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> = std::collections::HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
@@ -307,9 +307,13 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
     for (name, (set, span)) in groups {
         let short = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
+        // only err rides along (a predicate over fallible work is still a
+        // predicate). none is not an answer a question may give — when the
+        // static absence checker lands, a none-bearing `?` set becomes a
+        // compile error; until then a none-polluted set is simply not
+        // provably boolean and the unmarked direction stays quiet.
         let boolish =
-            set != 0 && set & !(TRUE | FALSE | ERR | NONE) == 0 && set & (TRUE | FALSE) != 0
-                && set & NONE == 0;
+            set != 0 && set & !(TRUE | FALSE | ERR) == 0 && set & (TRUE | FALSE) != 0;
         // the marked direction fires only on a provable lie: a `?` group
         // whose set cannot contain a boolean at all. generic drivers widen
         // honest predicates to TOP, and TOP still holds bool.

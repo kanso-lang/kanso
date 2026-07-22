@@ -20,7 +20,7 @@ fn better list skip b i
 fn first_is v elim c
   if (rank_first v elim == c) 1 0
 
-fn in list x
+fn in? list x
   if (count list x == 0) false true
 
 fn irv_counts voters elim
@@ -38,10 +38,10 @@ fn irv_winner voters
   irv_go voters []
 
 fn keep_min counts elim b c
-  if (in elim c) b (if (b == 0) c (if (counts[c] < counts[b]) c b))
+  if (in? elim c) b (if (b == 0) c (if (counts[c] < counts[b]) c b))
 
 fn keep_top v elim b c
-  if (in elim c) b (if (b == 0) c (if (v[b] < v[c]) c b))
+  if (in? elim c) b (if (b == 0) c (if (v[b] < v[c]) c b))
 
 fn margin_or_high voters a b
   if (a == b) nvot (pair voters a b - pair voters b a)
