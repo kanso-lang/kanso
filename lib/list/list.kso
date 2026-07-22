@@ -76,8 +76,38 @@ fn first_of (done _)
 fn first_of (step e _)
   e
 
+pub fn fold (capped left source) init f
+  fold_go (next (capped left source)) init f
+
+pub fn fold (counting at) init f
+  fold_go (next (counting at)) init f
+
+pub fn fold (cursor at source) init f
+  fold_go (next (cursor at source)) init f
+
+pub fn fold (cycled at source) init f
+  fold_go (next (cycled at source)) init f
+
+pub fn fold (grown seed stretch) init f
+  fold_go (next (grown seed stretch)) init f
+
+pub fn fold (mapped shape source) init f
+  fold_go (next (mapped shape source)) init f
+
+pub fn fold (repeated value) init f
+  fold_go (next (repeated value)) init f
+
+pub fn fold (sifted keep source test) init f
+  fold_go (next (sifted keep source test)) init f
+
+pub fn fold (skipped burn source) init f
+  fold_go (next (skipped burn source)) init f
+
 pub fn fold coll init f
-  fold_go (next (iter coll)) init f
+  fold_flat coll init f 1
+
+fn fold_flat coll acc f i
+  if (length coll < i) acc (fold_flat coll (f acc (coll[i])) f (i + 1))
 
 fn fold_go (done _) acc _
   acc

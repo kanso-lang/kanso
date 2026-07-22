@@ -223,8 +223,8 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum (build 1000 [])}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">KANSO_COUNTERS=1 ./counters</div>
-    <pre><code>allocs=27
-alloc_bytes=33184
+    <pre><code>allocs=29
+alloc_bytes=33232
 arena_blocks=1
 perm_allocs=0
 beat_iters=0
@@ -232,7 +232,7 @@ sum 500500</code></pre>
   </div>
 </div>
 
-<p>a thousand pushes cost twenty-seven allocations. not "about twenty-seven." not "twenty-seven on my laptop." twenty-seven—run it again, run it on a different chip, a loaded cpu, a cold cache, and all five of those integers come back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
+<p>a thousand pushes cost twenty-nine allocations. not "about twenty-nine." not "twenty-nine on my laptop." twenty-nine—run it again, run it on a different chip, a loaded cpu, a cold cache, and all five of those integers come back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
 
 <p>now point the same instrument at the gauntlet:</p>
 
