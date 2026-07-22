@@ -1293,6 +1293,15 @@ static void k_flatten_join(KDesc* d, KValue* out, int* n, int cap) {
    The whole group runs under one beat — grow-only inside, everything the
    fibers allocate reclaimed at the end (their yields are garbage), which
    sidesteps any interaction between suspension and the beat mark-stack. */
+/* signed milliseconds since a monotonic mark — the nsec delta may be
+   negative when the nanosecond field wraps, so the math stays signed */
+static long long k_ms_since(const struct timespec* t0) {
+    struct timespec tn;
+    clock_gettime(CLOCK_MONOTONIC, &tn);
+    return (long long)(tn.tv_sec - t0->tv_sec) * 1000LL
+        + (long long)(tn.tv_nsec - t0->tv_nsec) / 1000000LL;
+}
+
 static KValue k_schedule(KDesc* join) {
     int n = 0;
     KValue tmp[256];
@@ -1317,22 +1326,14 @@ static KValue k_schedule(KDesc* join) {
         }
         if (wake[pick] > now) {
             if (getenv("KANSO_SCHED_DEBUG")) {
-                struct timespec td;
-                clock_gettime(CLOCK_MONOTONIC, &td);
-                unsigned long long e =
-                    (unsigned long long)(td.tv_sec - sched_t0.tv_sec) * 1000ULL
-                    + (unsigned long long)(td.tv_nsec - sched_t0.tv_nsec) / 1000000ULL;
-                fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%llu\n", pick, wake[pick], e);
+                fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%lld\n",
+                        pick, wake[pick], k_ms_since(&sched_t0));
             }
             /* loop to the deadline: usleep may return early on a signal */
             for (;;) {
-                struct timespec tn;
-                clock_gettime(CLOCK_MONOTONIC, &tn);
-                unsigned long long elapsed =
-                    (unsigned long long)(tn.tv_sec - sched_t0.tv_sec) * 1000ULL
-                    + (unsigned long long)(tn.tv_nsec - sched_t0.tv_nsec) / 1000000ULL;
-                if (wake[pick] <= elapsed) break;
-                usleep((useconds_t)((wake[pick] - elapsed) * 1000));
+                long long elapsed = k_ms_since(&sched_t0);
+                if ((long long)wake[pick] <= elapsed) break;
+                usleep((useconds_t)(((long long)wake[pick] - elapsed) * 1000));
             }
             now = wake[pick];
         }

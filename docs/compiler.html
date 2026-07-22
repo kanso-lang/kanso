@@ -535,6 +535,28 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>determinism survives because the ladder keys off logical scheduler state, never the wall clock: same program, same seed, same work-ahead transcript, on every machine. purity is what makes the whole thing legal — evaluating early is invisible, because nothing can observe the order of effect-free work.</p>
 
+<h3>wall-credit: the substrate, shipped <span class="status status-shipped">shipped</span></h3>
+
+<p>the engine's foundation is already live in both engines, and it has receipts. the deterministic scheduler used to track logical time only, so real time a fiber spent computing never counted against another fiber's pending sleep — a thread could grind for a second beside a sleeper and the sleeper still slept its full span. the scheduler now credits elapsed wall time against every deadline before it waits. the transcript and every counter stay purely logical, so replay and the goldens are untouched; only the physical wait shrinks.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">the fedex rig — a 2000 ms stall beside ~900 ms of pure work (bench/workahead/)</div>
+  <pre><code><span class="c"># as-written    sleep >> report        min 2913 ms   (stall, then work)</span>
+<span class="c"># overlapped    report beside sleep    min 2008 ms   (work inside the stall)</span>
+
+<span class="c"># the sleep is 2000 ms. overlapped lands at 2008: the entire grind</span>
+<span class="c"># disappeared into the wait. min of 15 interleaved heats; the floor is</span>
+<span class="c"># physics — a run can never beat its own sleep, and none did.</span>
+
+cargo build --release
+./target/release/kanso build bench/workahead/aswritten.kso --release
+./target/release/kanso build bench/workahead/overlapped.kso --release
+time ./aswritten; time ./overlapped
+KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = deadline</span></code></pre>
+</div>
+
+<p>today the overlap is written by hand — the two variants above are the same program arranged two ways. the engine's remaining job is exactly the gap between those rows: find the arrangement automatically, using the two-group heuristic, so as-written code gets the overlapped number. that closes the loop this section opened.</p>
+
 <h2 id="c04"><span class="sec-num">08</span>the receipts</h2>
 
 <p>none of the numbers on this page ask to be believed. here is the scoreboard and the recipe. every engine reads the file at runtime—an embedded constant would let llvm fold the decode away—and the kanso harness accumulates a checksum so the loop provably runs.</p>
