@@ -27,6 +27,8 @@ fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Outpu
         false => "run",
     };
     let mut command = Command::new(env!("CARGO_BIN_EXE_kanso"));
+    // goldens pin the dice; a bare run seeds from entropy
+    command.env("KANSO_SEED", "2685821657736338717");
     command
         .arg(verb)
         .arg(program.file_name().expect("kso files have names"))
