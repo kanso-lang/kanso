@@ -89,10 +89,10 @@ description: "kanso (簡素): a pure language where effects are values, failure 
     </div>
     <div class="code-panel">
       <div class="code-panel-title">ms per decode—m-series mac, interleaved best of 40, recipe in the repo</div>
-      <pre><code><span class="c"># serde_json (hand-tuned)   0.99</span>
-<span class="c"># reasonably-written rust   1.13</span>
-<span class="c"># kanso                     1.17    no lifetimes, no gc, no annotations</span>
-<span class="c"># go encoding/json          2.05</span></code></pre>
+      <pre><code><span class="c"># kanso                     0.85    no lifetimes, no gc, no annotations</span>
+<span class="c"># serde_json (hand-tuned)   0.86</span>
+<span class="c"># reasonably-written rust   0.99</span>
+<span class="c"># go encoding/json          1.69</span></code></pre>
     </div>
     <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong>14,799,465</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. five arena blocks across 150 decodes is the flat-memory guarantee as a constant; 151 beat iterations is one rewind per decode plus one for the program itself, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. and the counters now count laziness too: kanso computes a value when it's demanded, or never, and on a workload where one value in twenty is used, the counters read <code>thunk_allocs=100000, thunk_evals=5000</code>—95% of the work never born, the clear form running at hand-tuned-rust speed. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">both scoreboards</a> and <a href="book/ch07.html">chapter 07</a>.</p>
   </div>
@@ -248,14 +248,14 @@ three</code></pre>
       </div>
       <div class="status-card">
         <span class="badge">two engines</span>
-        <h3>rust-class speed with no lifetimes at all</h3>
-        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. memory is two tiers with no garbage collector in either: strict values live on rewinding arenas (the shipped model behind the json numbers—<strong>~1.17&nbsp;ms</strong> per 188&nbsp;KB decode, four percent off a reasonably-written rust parser, at a flat ~5.8&nbsp;mb) and deferred values live in refcounted cells the demand analysis creates only where laziness can pay. the ratified destination runs further: kanso's data graph is immutable and acyclic, which makes reference counting <em>complete</em>—the arenas survive as an optimization inside a counted world. the story, the receipts, and both scoreboards: <a href="compiler.html">the compiler page</a>.</p>
+        <h3>past serde_json with no lifetimes at all</h3>
+        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. memory is two tiers with no garbage collector in either: strict values live on rewinding arenas (the shipped model behind the json numbers—<strong>~0.85&nbsp;ms</strong> per 188&nbsp;KB decode, past hand-tuned <code>serde_json</code> at ~0.86&nbsp;ms, at a flat ~5.8&nbsp;mb) and deferred values live in refcounted cells the demand analysis creates only where laziness can pay. the ratified destination runs further: kanso's data graph is immutable and acyclic, which makes reference counting <em>complete</em>—the arenas survive as an optimization inside a counted world. the story, the receipts, and both scoreboards: <a href="compiler.html">the compiler page</a>.</p>
       </div>
       <div class="status-card">
         <span class="badge">real software</span>
         <h3>libraries and tools exist</h3>
         <ul>
-          <li><a href="https://github.com/kanso-lang/kanso-json">kanso-json</a>—a full decoder within four percent of rust, well ahead of go</li>
+          <li><a href="https://github.com/kanso-lang/kanso-json">kanso-json</a>—the decoder that edges serde_json, at the smallest footprint on the board</li>
           <li><strong>kq</strong>—a jq-style query cli, byte-identical to <code>jq&nbsp;-S</code> on the 188&nbsp;KB benchmark document, faster on path extraction</li>
           <li>an <a href="book/index.html">eleven-chapter book</a>—every sample executed before it was printed</li>
           <li>a repl (<code>kanso repl</code>) with <code>it0</code>-history, in your terminal and on the <a href="playground.html">playground</a></li>
