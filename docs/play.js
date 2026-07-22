@@ -284,7 +284,7 @@ replForm.addEventListener('submit', (event) => {
 /* ---------- examples ---------- */
 
 const EXAMPLES = {
-  hello: `main = print "hello, kanso"
+  hello: `print "hello, kanso"
 `,
   dispatch: `fn fact 0
   1
@@ -292,7 +292,7 @@ const EXAMPLES = {
 fn fact n
   n * (fact (n - 1))
 
-main = print "20! = {fact 20}"
+pub play = print "20! = {fact 20}"
 `,
   railway: `fn describe n
   "half is {n}"
@@ -303,16 +303,20 @@ fn half 0
 fn half n
   n / 2
 
-main = print (describe (half 42))
+pub play = print (describe (half 42))
 `,
-  pipes: `main =
+  pipes: `import "std/list"
+
+pub play =
   total = [9 1 8 2 7] . sort . map (n -> n * n) . sum
   print "sum of squares: {total}"
 `,
-  ordering: `fn cheapest prices
-  sort prices . at 1
+  ordering: `import "std/list"
 
-main =
+fn cheapest prices
+  first (sort prices)
+
+pub play =
   prices = [520 380 450 610 290]
   # these two share nothing: the compiler is free to run them in parallel
   low = cheapest prices
@@ -330,22 +334,23 @@ fn report low total
 # go's select-over-message-types is kanso's dispatch-over-message-types:
 # one arm per message, no select statement -- the redux example's update
 # and notify arms are exactly that receive loop.
+import "std/list"
+
 fn fetch_quote city
   length city * 130
 
-main =
+pub play =
   cities = ["tokyo" "kyoto" "osaka" "sapporo"]
   quotes = map cities (c -> fetch_quote c)
-  cheapest = sort quotes . at 1
+  cheapest = first (sort quotes)
   print "four lookups fanned out, one answer fanned in: {cheapest} yen"
 `,
   join: `# two effects with no order between them -- parallel is the default, so
 # plain lines say it. the >> is the wall: serving happens only after both.
 # failures accumulate: if both sides err you get both reasons.
-main =
-  print "steeping the sencha"
-  print "warming the cups"
-  >> print "serving"
+print "steeping the sencha"
+print "warming the cups"
+>> print "serving"
 `,
   concurrency: `# in go, two things at once + waiting for both is a goroutine, a
 # channel or WaitGroup, and a select. in kanso bare lines already run as
@@ -353,6 +358,9 @@ main =
 # only sync. brew blocks on a slow steep while the dice keep rolling,
 # so the rolls land during the steep, not after. (in the browser sleep
 # is instant, but the interleaved ORDER is the same as running it live.)
+import "std/random"
+import "std/time"
+
 brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
 
 pub play =
@@ -366,7 +374,9 @@ pub play =
 fn roll i
   random 6 . (n -> print "roll {i}: a {n + 1}")
 `,
-  redux: `type deposit
+  redux: `import "std/time"
+
+type deposit
   amount:int
 
 type logger
@@ -374,9 +384,8 @@ type logger
 type withdraw
   amount:int
 
-main =
-  moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
-  play 0 moves 1 logger (print "the till opens at 0 yen")
+fn drive store actions i sub out
+  step store actions i sub out (actions[i])
 
 fn notify logger (deposit n) balance
   print "[logger] +{n} yen in -> the till holds {balance}"
@@ -384,15 +393,16 @@ fn notify logger (deposit n) balance
 fn notify logger (withdraw n) balance
   print "[logger] -{n} yen out -> the till holds {balance}"
 
-fn play store actions i sub out
-  step store actions i sub out (at actions i)
+pub play =
+  moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
+  drive 0 moves 1 logger (print "the till opens at 0 yen")
 
 fn step _ _ _ _ out none
   out >> print "the till closes"
 
 fn step store actions i sub out action
   next = update store action
-  play next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
+  drive next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
 
 fn update balance (deposit n)
   balance + n
