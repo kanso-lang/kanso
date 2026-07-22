@@ -1,4 +1,5 @@
 import "std/list"
+import "std/text"
 
 fn escape_char "\""
   "\\\""
@@ -16,10 +17,10 @@ fn escape_char "\t"
   "\\t"
 
 fn escape_char c
-  if ((char_code c) < 32) (u_escape c) c
+  if ((text/char_code c) < 32) (u_escape c) c
 
 fn escape_str s
-  join (list/map (chars s) (c -> escape_char c)) ""
+  text/join (list/map (text/chars s) (c -> escape_char c)) ""
 
 fn hex4 n
   d1 = n / 4096
@@ -28,7 +29,7 @@ fn hex4 n
   r2 = r1 - (d2 * 256)
   d3 = r2 / 16
   d4 = r2 - (d3 * 16)
-  join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
+  text/join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
 
 fn hex_alpha c
   if (both (96 < c) (c < 103)) (c - 87) (hex_upper c)
@@ -49,7 +50,7 @@ fn parse_string cs p
 
 # string bytes: 34 quote, 92 backslash; escapes name their targets
 fn str_char _ 34 p acc
-  parsed (p + 1) (string_ok p (utf8 acc))
+  parsed (p + 1) (string_ok p (text/utf8 acc))
 
 fn str_char cs 92 p acc
   str_escape cs (cs[p + 1]) p acc
@@ -94,7 +95,7 @@ fn str_escape _ none p _
   fail p "unterminated string"
 
 fn str_escape _ c p _
-  fail p "invalid escape `\\{utf8 [c]}`"
+  fail p "invalid escape `\\{text/utf8 [c]}`"
 
 fn str_unicode cs p acc
   h1 = hex_digit (cs[p + 2])
@@ -102,13 +103,13 @@ fn str_unicode cs p acc
   h3 = hex_digit (cs[p + 4])
   h4 = hex_digit (cs[p + 5])
   code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
-  str_chars cs (p + 6) (concat acc (bytes (from_code code)))
+  str_chars cs (p + 6) (text/concat acc (text/bytes (text/from_code code)))
 
 fn string_at cs 34 start p
-  parsed (p + 1) (string_ok p (utf8 (slice cs start (p - 1))))
+  parsed (p + 1) (string_ok p (text/utf8 (text/slice cs start (p - 1))))
 
 fn string_at cs 92 start p
-  str_chars cs p (concat [] (slice cs start (p - 1)))
+  str_chars cs p (text/concat [] (text/slice cs start (p - 1)))
 
 fn string_at _ none _ p
   fail p "unterminated string"
@@ -123,8 +124,8 @@ fn string_ok _ v
   v
 
 fn string_scan cs start p
-  n = find2 cs p 34 92
+  n = text/find2 cs p 34 92
   string_at cs (cs[n]) start n
 
 fn u_escape c
-  "\\u{hex4 (char_code c)}"
+  "\\u{hex4 (text/char_code c)}"

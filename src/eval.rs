@@ -643,7 +643,7 @@ impl<'a> Interp<'a> {
                 return self.eval_body_of(constant, None);
             }
         }
-        match name {
+        match name.strip_prefix("builtin_").unwrap_or(name) {
             "args" => return Ok(Value::Desc(Rc::new(Desc::Args))),
             "stdin" => return Ok(Value::Desc(Rc::new(Desc::Stdin))),
             _ => {}
@@ -660,7 +660,10 @@ impl<'a> Interp<'a> {
             _ if self.fns.contains_key(name)
                 || self.types.contains_key(name)
                 || name == "err"
-                || crate::check::BUILTINS.contains(&name) =>
+                || crate::check::BUILTINS.contains(&name)
+                || name
+                    .strip_prefix("builtin_")
+                    .is_some_and(|n| crate::check::BUILTINS.contains(&n)) =>
             {
                 Ok(Value::FnRef(Rc::from(name)))
             }
@@ -851,6 +854,9 @@ impl<'a> Interp<'a> {
         span: Span,
         frame: &Frame,
     ) -> EvalResult {
+        // std wrapper modules reach natives through the builtin_ prefix;
+        // the checker gates those names to std-origin files
+        let name = name.strip_prefix("builtin_").unwrap_or(name);
         if name == "if" {
             return self.builtin_if(args, span);
         }

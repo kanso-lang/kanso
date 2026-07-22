@@ -1,3 +1,5 @@
+import "std/text"
+
 fn both true true
   true
 
@@ -8,7 +10,7 @@ fn expect_char cs p c
   expect_check (cs[p]) p c
 
 fn expect_check found p c
-  if (found == c) (p + 1) (fail p "expected `{utf8 [c]}`")
+  if (found == c) (p + 1) (fail p "expected `{text/utf8 [c]}`")
 
 fn fail p reason
   err (parse_failure p reason)

@@ -157,7 +157,12 @@ impl<'a> Analysis<'a> {
                 }
                 // `concat` always allocates a fresh list (k_b_concat), so its
                 // result is uniquely owned regardless of its arguments.
-                Expr::Ident(n, _) if n == "concat" && args.len() == 2 => true,
+                Expr::Ident(n, _)
+                    if matches!(n.as_str(), "concat" | "text/concat" | "builtin_concat")
+                        && args.len() == 2 =>
+                {
+                    true
+                }
                 Expr::Ident(n, _) => self.returns_unique.contains(&(n.clone(), args.len())),
                 _ => false,
             },
@@ -297,7 +302,7 @@ mod tests {
     fn aliased_list_not_flagged() {
         // xs is pushed twice, so neither push uniquely owns it — mutating in
         // place would corrupt the other reference. Must stay allocating.
-        let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  concat a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
+        let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  push a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
         let program = crate::compile("test.kso", src, true).unwrap();
         assert!(
             in_place_pushes(&program).is_empty(),

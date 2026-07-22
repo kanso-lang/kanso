@@ -1,0 +1,9 @@
+pub args = builtin_args
+
+pub fn read_file path
+  builtin_read_file path
+
+pub stdin = builtin_stdin
+
+pub fn write_file path content
+  builtin_write_file path content

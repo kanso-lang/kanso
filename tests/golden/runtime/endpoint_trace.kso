@@ -1,8 +1,10 @@
+import "std/text"
+
 fn grade outcome
   "grade {outcome}"
 
 fn parse text
-  to_int text
+  text/to_int text
 
 pub play =
   outcome = parse "oops"

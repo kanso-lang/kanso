@@ -1,3 +1,5 @@
+import "std/time"
+
 type deposit
   amount:int
 
@@ -24,7 +26,8 @@ fn step _ _ _ _ out none
 
 fn step store actions i sub out action
   next = update store action
-  drive next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
+  paced = out >> notify sub action next >> time/sleep 350
+  drive next actions (i + 1) sub paced
 
 fn update balance (deposit n)
   balance + n

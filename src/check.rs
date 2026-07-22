@@ -21,14 +21,25 @@ pub const BUILTINS: [&str; 26] = [
     "read_file",
     "render_value",
     "round",
-    "slice",
     "sleep",
-    "stdin",
+    "slice",
     "sqrt",
+    "stdin",
     "to_float",
     "to_int",
     "utf8",
     "write_file",
+];
+
+/// The bare-name subset: what resolves without an import. Everything else
+/// in BUILTINS is internal, reached only through std wrapper modules.
+pub const AMBIENT: [&str; 6] = [
+    "entries",
+    "if",
+    "length",
+    "print",
+    "push",
+    "put",
 ];
 
 pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
@@ -260,7 +271,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
 }
 
 fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<String> {
-    let mut globals: HashSet<String> = BUILTINS.iter().map(|b| b.to_string()).collect();
+    let mut globals: HashSet<String> = AMBIENT.iter().map(|b| b.to_string()).collect();
     globals.insert("entry".to_string());
     globals.insert("err".to_string());
     for nullary in NULLARY {
@@ -276,7 +287,7 @@ fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<St
         }
     }
     for decl in &program.fns {
-        if BUILTINS.contains(&decl.name.as_str())
+        if AMBIENT.contains(&decl.name.as_str())
             || program.types.iter().any(|t| t.name == decl.name)
         {
             diags.push(Diagnostic::new(
@@ -485,6 +496,9 @@ struct Resolver<'a> {
     locals: Vec<Local>,
     used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
+    /// std-origin files (stamped `std/...` by the loader) may name internal
+    /// builtins through the builtin_ prefix; nothing else may.
+    std_origin: bool,
 }
 
 fn check_fn_body(
@@ -493,8 +507,13 @@ fn check_fn_body(
     used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
 ) {
-    let mut resolver =
-        Resolver { globals, locals: Vec::new(), used_globals, diags: Vec::new() };
+    let mut resolver = Resolver {
+        globals,
+        locals: Vec::new(),
+        used_globals,
+        diags: Vec::new(),
+        std_origin: decl.file.starts_with("std/"),
+    };
     for param in &decl.params {
         resolver.bind_pattern(param);
     }
@@ -696,6 +715,19 @@ impl Resolver<'_> {
         if let Some(local) = self.locals.iter_mut().rev().find(|l| l.name == name) {
             local.used = true;
             return;
+        }
+        if let Some(stripped) = name.strip_prefix("builtin_") {
+            match self.std_origin && BUILTINS.contains(&stripped) {
+                true => return,
+                false => {
+                    self.diags.push(Diagnostic::new(
+                        "name",
+                        format!("`{name}` is internal to the standard library — import its module"),
+                        span,
+                    ));
+                    return;
+                }
+            }
         }
         match self.globals.contains(name) {
             true => {

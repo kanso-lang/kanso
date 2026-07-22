@@ -454,6 +454,11 @@ fn load_dependencies(
         let embedded = match path.as_str() {
             "std/render" => Some(("render", include_str!("../lib/render/render.kso"))),
             "std/list" => Some(("list", include_str!("../lib/list/list.kso"))),
+            "std/time" => Some(("time", include_str!("../lib/time/time.kso"))),
+            "std/random" => Some(("random", include_str!("../lib/random/random.kso"))),
+            "std/io" => Some(("io", include_str!("../lib/io/io.kso"))),
+            "std/text" => Some(("text", include_str!("../lib/text/text.kso"))),
+            "std/math" => Some(("math", include_str!("../lib/math/math.kso"))),
             _ => None,
         };
         if let Some((short, source)) = embedded {

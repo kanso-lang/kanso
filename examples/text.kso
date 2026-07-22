@@ -1,1 +1,5 @@
-pub play = print "{utf8 (bytes "mochi")} has {length (chars "héllo")} chars"
+import "std/text"
+
+back = text/utf8 (text/bytes "mochi")
+
+pub play = print "{back} has {length (text/chars "héllo")} chars"

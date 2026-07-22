@@ -1,3 +1,5 @@
+import "std/text"
+
 fn array_delim cs 44 p acc
   array_items cs (p + 1) acc
 
@@ -8,7 +10,7 @@ fn array_delim _ none p _
   fail p "unexpected end of input"
 
 fn array_delim _ c p _
-  fail p "expected `,` or `]`, found `{utf8 [c]}`"
+  fail p "expected `,` or `]`, found `{text/utf8 [c]}`"
 
 fn array_items cs p acc
   p2 = skip_ws cs p
@@ -27,6 +29,9 @@ fn array_step cs (parsed p v) acc
   acc2 = push acc v
   p2 = skip_ws cs p
   array_delim cs (cs[p2]) p2 acc2
+
+fn bad_value_char c p
+  fail p "unexpected character `{text/utf8 [c]}`"
 
 bytes_false = [102 97 108 115 101]
 
@@ -47,7 +52,7 @@ fn obj_delim _ none p _
   fail p "unexpected end of input"
 
 fn obj_delim _ c p _
-  fail p "expected `,` or `}`, found `{utf8 [c]}`"
+  fail p "expected `,` or `}`, found `{text/utf8 [c]}`"
 
 fn obj_items cs p acc
   p2 = skip_ws cs p
@@ -120,9 +125,9 @@ fn value_for none _ p
 
 fn value_for c cs p
   numeric = is_number_start c
-  if numeric (parse_number cs p) (fail p "unexpected character `{utf8 [c]}`")
+  if numeric (parse_number cs p) (bad_value_char c p)
 
 fn word cs p expected v
   n = length expected
-  seg = slice cs p (p + n - 1)
+  seg = text/slice cs p (p + n - 1)
   if (seg == expected) (parsed (p + n) v) (fail p "invalid literal")

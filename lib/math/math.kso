@@ -1,0 +1,5 @@
+pub fn round x
+  builtin_round x
+
+pub fn sqrt x
+  builtin_sqrt x

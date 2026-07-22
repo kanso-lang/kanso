@@ -1659,7 +1659,7 @@ impl<'a> Backend<'a> {
                          (only 1-4 argument functions over plain values are supported)"
                     ));
                 }
-                match name.as_str() {
+                match name.strip_prefix("builtin_").unwrap_or(name.as_str()) {
                     "true" => Ok("{ i64 2, i64 0 }".to_string()),
                     "false" => Ok("{ i64 3, i64 0 }".to_string()),
                     "none" => Ok("{ i64 4, i64 0 }".to_string()),
@@ -2450,6 +2450,8 @@ impl<'a> Backend<'a> {
         for arg in iter {
             emitted.push(self.emit_expr(f, arg)?);
         }
+        // std wrappers reach natives through the builtin_ prefix
+        let name: &str = name.strip_prefix("builtin_").unwrap_or(name);
         if name == "err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
@@ -2469,7 +2471,7 @@ impl<'a> Backend<'a> {
             f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
             return Ok(t);
         }
-        if let Some(id) = self.type_ids.get(name.as_str()).copied() {
+        if let Some(id) = self.type_ids.get(name).copied() {
             // constructors store fields; records never hold thunks in v1
             let emitted: Vec<String> =
                 emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
@@ -2498,7 +2500,7 @@ impl<'a> Backend<'a> {
                 .map(|(i, e)| self.call_arg(f, name, n, i, e))
                 .collect();
             let callee_ret = self.ret_ty(name, n);
-            let beat_entry = self.beat.ids.contains_key(&(name.clone(), n));
+            let beat_entry = self.beat.ids.contains_key(&(name.to_string(), n));
             if beat_entry {
                 // entering a beat loop: mark the frontier; args are already
                 // evaluated, so they live below the mark
@@ -2527,7 +2529,7 @@ impl<'a> Backend<'a> {
         if name == "at" && emitted.len() == 2 {
             return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));
         }
-        if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| b == name) {
+        if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == name) {
             if emitted.len() != *arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
             }
@@ -2538,7 +2540,7 @@ impl<'a> Backend<'a> {
             let mut args_ir: Vec<String> =
                 emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
-            if matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code") {
+            if matches!(name, "to_int" | "to_float" | "utf8" | "from_code") {
                 args_ir.push(self.origin_arg(f, span));
             }
             // A push the linearity analysis proved unique extends its list in
