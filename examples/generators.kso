@@ -1,0 +1,9 @@
+# infinite sources are ordinary adapters: a pull chain never asks for
+# the whole thing, so a bounding consumer terminates what a generator
+# starts. cycle, naturals, repeat, and iterate carry no special rules.
+import "std/list"
+
+print "{to_list (take (cycle [1 2 3]) 7)}"
+print "{to_list (take (map naturals (x -> x * x)) 5)}"
+print "{to_list (take (iterate 1 (x -> x * 2)) 6)}"
+print "{first (select naturals (x -> 100 < x))}"
