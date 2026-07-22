@@ -7,4 +7,4 @@ fn fib 1
 fn fib n
   (fib (n - 1)) + (fib (n - 2))
 
-main = print "fib 32 = {fib 32}"
+pub play = print "fib 32 = {fib 32}"
