@@ -112,44 +112,40 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">concurrency.kso</div>
-  <pre><code>brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/random"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">play</span>
+brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">time/sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">brew</span>
-  <span class="f">roll</span> <span class="n">1</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">4</span>
-  <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span>
+  <span class="f">rolls</span>
 
 <span class="k">fn</span> <span class="f">roll</span> i
-  <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
+  <span class="f">random/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)
+
+rolls <span class="o">=</span> <span class="f">roll</span> <span class="n">1</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">4</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run concurrency.kso</div>
     <pre><code>brew: steeping
 roll 1: a 3
-brew: poured
 roll 2: a 1
 roll 3: a 4
 roll 4: a 1
-roll 5: a 1</code></pre>
+roll 5: a 1
+brew: poured</code></pre>
   </div>
 </div>
 
-<p>read the transcript against the structure. <code>brew</code> and <code>roll 1</code> are the two bare lines—the green threads. <code>brew</code> prints <code>steeping</code> and hits its <code>sleep</code>, so it parks. the scheduler turns to <code>roll 1</code>, which prints <code>a 3</code>. that first roll landed <em>during</em> the steep. then the wall: <code>&gt;&gt; roll 2</code> waits for everything above it to settle, and <code>brew</code> hasn't—so the scheduler lets the steep finish, <code>brew: poured</code> prints, and only then do rolls two through five run in sequence. the <code>--plan</code> makes the seam explicit:</p>
+<p>read the transcript against the structure. <code>brew</code> and <code>rolls</code> are the two bare lines—the green threads. <code>brew</code> prints <code>steeping</code> and hits its <code>sleep</code>, so it parks. the scheduler turns to <code>rolls</code>, whose five throws chain with <code>&gt;&gt;</code> <em>inside</em> one thread: they run in order, and every one of them lands during the steep, because the steep belongs to the other thread. only when the sleep ends does <code>brew: poured</code> print. sequence within a thread, overlap between threads—each chosen with one symbol. the <code>--plan</code> makes the structure explicit:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">kanso run concurrency.kso --plan</div>
   <pre><code>plan:
   join {
-  print "brew: steeping"    <span class="c"># from line 1</span>
+  print "brew: steeping"    <span class="c"># from line 4</span>
   sleep 60
-  print "brew: poured"    <span class="c"># from line 1</span>
-  random 6
-  . &lt;continuation&gt;
-  } <span class="c"># unordered; both run</span>
+  print "brew: poured"    <span class="c"># from line 4</span>
   random 6
   . &lt;continuation&gt;
   random 6
@@ -157,10 +153,13 @@ roll 5: a 1</code></pre>
   random 6
   . &lt;continuation&gt;
   random 6
-  . &lt;continuation&gt;</code></pre>
+  . &lt;continuation&gt;
+  random 6
+  . &lt;continuation&gt;
+  } # unordered; both run</code></pre>
 </div>
 
-<p>only <code>brew</code> and <code>roll 1</code> live inside the <code>join</code>; rolls two through five hang below it, past the wall. the leading <code>&gt;&gt;</code> doesn't attach to the line just above it—it walls off the whole group. that is why exactly one roll overlaps the steep and the rest queue up behind the barrier. move the wall and you move the overlap.</p>
+<p>both threads live inside one <code>join</code>: the brew chain, and the five throws chained by <code>&gt;&gt;</code> into a single sequence. nothing hangs below the block, because this program has no wall—order exists only inside each thread. <code>walled.kso</code> is the same program with the wall put back:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">walled.kso — a wall in front of every roll</div>
