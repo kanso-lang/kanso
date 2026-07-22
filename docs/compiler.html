@@ -166,6 +166,8 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>you are allowed to disbelieve that. most people should. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
 
+<p>and the json table is now the <em>older</em> of the page's two scoreboards. kanso is a lazy language—a value is computed when it's demanded, or never—and on workloads where demand is conditional, the second scoreboard (§07) shows the clear kanso form running at the speed of hand-tuned rust and fifteen times ahead of rust as naturally written, with counters proving 95% of the work was never born. the strict-tier story below and the lazy story in §07 are two halves of one design.</p>
+
 <h2 id="idea"><span class="sec-num">01</span>constraints buy freedom</h2>
 
 <p>picture a fast car on a mountain road with a cliff on one side and no railing. even a great driver takes the corners slowly there, because a single mistake goes over the edge, so caution has to live in every turn.</p>
@@ -439,7 +441,37 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <h3>what's real today</h3>
 
-<p>and the first engine receipts for the performance claim itself: a workload of 100,000 items where each carries a real computation (five thousand mixing steps) and one in twenty is actually used. rust, as naturally written—compute the value, use it in the branch—runs it in <strong>1.36&nbsp;s</strong>, because the language computes what you wrote. kanso, as naturally written, runs the same program with the same checksum in <strong>0.08–0.11&nbsp;s</strong>: the demand analysis thunks the binding, the branch discards nineteen of every twenty, and 95% of the work never happens. the rust programmer who hand-restructures the computation into the branch gets 0.07&nbsp;s—so kanso's <em>clear</em> form runs at the speed of rust's <em>tuned</em> form, fifteen times ahead of rust's clear one. the sources are in <code>bench/</code>; the checksums match.</p>
+<p>and the lazy realm has a scoreboard of its own now. the workload: 100,000 items, each carrying a real computation (five thousand mixing steps), one in twenty actually used, every row producing the identical checksum. shorter is faster:</p>
+
+<table class="bench-table">
+  <thead>
+    <tr><th>program</th><th class="bar-cell"></th><th class="num">seconds</th><th class="num">why</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>rust, hand-tuned</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:4%"></span></span></td>
+      <td class="num">0.07</td><td class="num">the human moved the work</td>
+    </tr>
+    <tr class="win">
+      <td>kanso, as written</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:5%"></span></span></td>
+      <td class="num">0.10</td><td class="num">the compiler moved it</td>
+    </tr>
+    <tr>
+      <td>rust, as written</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:79%"></span></span></td>
+      <td class="num">1.51</td><td class="num">computes what you wrote</td>
+    </tr>
+    <tr>
+      <td>kanso <code>--strict</code></td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
+      <td class="num">1.92</td><td class="num">the measured worst case</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>read the rows top to bottom and the design argument reads itself. the tuned rust row is a human who restructured the computation into the branch; the kanso row is the same program in its <em>clear</em> form, within a whisker of that, because the demand analysis thunked the binding and the branch discarded nineteen of every twenty—the counters on the run say it plainly: <code>thunk_allocs=100000, thunk_evals=5000</code>, 95% of the work never born. rust-as-written pays for everything it wrote. and the bottom row is kanso's own <code>--strict</code> flag—the worst-case measurement mode—which forces every thunk and reports what this program would cost if laziness never saved a cycle: the bound you'd quote in a latency budget. the sources are in <code>bench/</code>; the checksums match on every row.</p>
 
 <p>the honesty tier, in the house convention: <em>v1 shipped in both engines; the pervasive form staged behind the same experimental gate.</em> the fragment above—conditional-demand bindings, the cost gate, refcounted cells on a free list, forcing at scrutiny—runs in the native compiler and the interpreter today, held byte-identical by a new vein of golden tests. alongside every program's expected output, a <code>.mem</code> file pins its memory <em>facts</em>, and both engines must match it byte for byte, because evaluation counts are semantics, not implementation detail. the shipped receipts: the skipped computation evaluates <strong>zero</strong> times with unchanged output; the shared thunk evaluates <strong>once</strong> under two readers; the demanded thunk forces once and exits with zero cells live; and a skipped binding whose computation would have produced an <code>err</code> simply never births it—same output, because errs are values and effects are inert, so the classic lazy-versus-strict divergence has nothing to bite. the json gauntlet is untouched: its accumulators hit the cost gate and compile strict, and the §08 cost golden pins that at zero thunks and the same 14,799,465 allocations. leak-freedom stops being a property we believe and becomes a constant the build diffs.</p>
 
