@@ -161,6 +161,13 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
+    let merged_diags: Vec<_> = check::check_merged(&program, false)
+        .into_iter()
+        .filter(|d| d.kind != "unused")
+        .collect();
+    if !merged_diags.is_empty() {
+        return Err(diag::render(&merged_diags, file, source));
+    }
     let has_play = program.fns.iter().any(|d| d.name == "play" && d.is_pub);
     if !has_play {
         return Err(format!(
@@ -239,6 +246,13 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
+    let merged_diags: Vec<_> = check::check_merged(&program, false)
+        .into_iter()
+        .filter(|d| d.kind != "unused")
+        .collect();
+    if !merged_diags.is_empty() {
+        return Err(diag::render(&merged_diags, file, source));
+    }
     canonicalize_types(&mut program);
     Ok(program)
 }
