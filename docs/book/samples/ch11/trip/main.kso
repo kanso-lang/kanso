@@ -1,0 +1,5 @@
+import "../geo"
+
+print "one wheel: {area 3.0}"
+print "the pair: {geo/area 2.0}"
+print "a ride: {ride_km 1.0 2.0}"

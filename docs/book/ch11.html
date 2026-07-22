@@ -1,0 +1,143 @@
+---
+layout: book
+title: "chapter 11—modules"
+description: "a module is a directory; an import enrolls its pub names into your overload space. dispatch resolves shared names, privacy holds at the boundary, and a surface is exactly what a module says it is."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 11</span>
+<h1>modules</h1>
+
+<p>every program so far has lived in one directory. that directory is a module: its <code>.kso</code> files share a single namespace, alphabetized within each file, and nothing more is needed until code wants to live somewhere else. this chapter is about the moment it does—what an import means, which names cross, and how two modules share a name without a fight.</p>
+
+<h2>an import enrolls names</h2>
+
+<p>here is a small geometry module and a program that uses it. <code>geo/geo.kso</code> marks two functions <code>pub</code>; a third is private working machinery.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">geo/geo.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">area</span> r
+  <span class="n">3.14159</span> <span class="o">*</span> (<span class="f">square</span> r)
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">ride_km</span> a b
+  <span class="f">math/sqrt</span> (<span class="f">area</span> a <span class="o">+</span> area b)
+
+<span class="k">fn</span> <span class="f">square</span> x
+  x <span class="o">*</span> x</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">trip/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../geo"</span>
+
+<span class="f">print</span> <span class="s">"one wheel: <span class="i">{area 3.0}</span>"</span>
+<span class="f">print</span> <span class="s">"the pair: <span class="i">{geo/area 2.0}</span>"</span>
+<span class="f">print</span> <span class="s">"a ride: <span class="i">{ride_km 1.0 2.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run trip</div>
+    <pre><code>one wheel: 28.27431
+the pair: 12.56636
+a ride: 3.963325623765981</code></pre>
+  </div>
+</div>
+
+<p>one line declares the dependency, and every <code>pub</code> name arrives twice over. the bare spelling—<code>area</code>, <code>ride_km</code>—enrolls into the file's overload space, where it dispatches like any local function. the qualified spelling—<code>geo/area</code>—is the name's permanent identity, always valid, and it doubles as a tool: writing the qualifier narrows dispatch to that module's arms alone.</p>
+
+<p>there is no list of imported names to maintain. the compiler prunes whatever the file never uses, and your editor's language server answers "where did this come from?"—provenance is tooling's job, not syntax's.</p>
+
+<h2>shared names are the normal case</h2>
+
+<p>two modules will export the same word, and a local function may use it too. all of them land in one overload space, and dispatch picks by specificity—the same mechanism that chooses between a <code>fact 0</code> arm and a <code>fact n</code> arm chooses between a local <code>select</code> on invoices and the list module's <code>select</code>. a local arm sorts before an imported one when the shapes tie, so your own definitions win the close calls. when a call is genuinely ambiguous the compiler says so, and the fix is one qualifier.</p>
+
+<h2>privacy holds at the boundary</h2>
+
+<p>inside a module, files see everything; <code>pub</code> only matters to outsiders. reach for private machinery across an import and the boundary answers:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">nosy/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../geo"</span>
+
+<span class="f">print</span> <span class="s">"<span class="i">{geo/square 3.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run nosy</div>
+    <pre><code>error[opacity]: `square` is private to module `geo`—only pub names cross an import
+  --> nosy/main.kso:3:9
+   3 | print "{geo/square 3.0}"
+               ^</code></pre>
+  </div>
+</div>
+
+<h2>renaming on the way in</h2>
+
+<p>sometimes an imported name deserves a different one in your file—it collides with a word you want, or your domain has a better word. braces rename, and an identifier before them aliases the qualifier itself. the two combine:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">picks/main.kso</div>
+  <pre><code><span class="k">import</span> g { area:disc } <span class="s">"../geo"</span>
+
+<span class="f">print</span> <span class="s">"renamed: <span class="i">{disc 2.0}</span> and <span class="i">{g/disc 2.0}</span>"</span>
+<span class="f">print</span> <span class="s">"the alias still reaches: <span class="i">{g/ride_km 1.0 2.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run picks</div>
+    <pre><code>renamed: 12.56636 and 12.56636
+the alias still reaches: 3.963325623765981</code></pre>
+  </div>
+</div>
+
+<p>a rename replaces the spelling. after <code>area:disc</code>, this file says <code>disc</code> or <code>g/disc</code>; bare <code>area</code> no longer resolves here. the whole module still enrolls—the braces adjust one token, they never select a subset.</p>
+
+<h2>re-exports shape a surface</h2>
+
+<p>a module's surface is its own <code>pub</code> names. what it imports stays off that surface: depend on a module and you get its exports, never its suppliers'. when a module genuinely wants to pass a name through—the resort below is built on geometry and its guests will need <code>area</code>—it says so with a bare <code>pub</code> line:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">resort/resort.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../geo"</span>
+
+<span class="k">pub</span> <span class="f">area</span>
+
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">lap</span> r
+  <span class="f">area</span> r <span class="o">+</span> area r</code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">visitor/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../resort"</span>
+
+<span class="f">print</span> <span class="s">"a lap: <span class="i">{lap 1.0}</span>"</span>
+<span class="f">print</span> <span class="s">"area came through: <span class="i">{area 1.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run visitor</div>
+    <pre><code>a lap: 6.28318
+area came through: 3.14159</code></pre>
+  </div>
+</div>
+
+<p><code>pub area</code> puts one imported export on the resort's surface. <code>pub geo</code> would re-export the whole module by its qualifier, and <code>pub area:footprint</code> renames on the way out. anything not re-exported stays sealed:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">sealed/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"../resort"</span>
+
+<span class="f">print</span> <span class="s">"<span class="i">{ride_km 1.0 2.0}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run sealed</div>
+    <pre><code>error[name]: unknown name `ride_km`
+  --> sealed/main.kso:3:9
+   3 | print "{ride_km 1.0 2.0}"
+               ^</code></pre>
+  </div>
+</div>
+
+<p>the visitor imported the resort, and <code>ride_km</code> belongs to geometry—the resort never re-exported it, so it never arrived. a surface is a promise about what a module offers, and the compiler holds every module to exactly the promise it wrote.</p>
+
+<h2>what to remember</h2>
+
+<ul>
+<li>a module is a directory; its files share one namespace.</li>
+<li><code>import "path"</code> declares the dependency and enrolls every pub name, bare and qualified. the compiler prunes what you don't use.</li>
+<li>overloading is the resolution mechanism. specificity picks; a qualifier narrows; ambiguity is an error with a one-word fix.</li>
+<li><code>import g { theirs:yours } "path"</code> aliases the qualifier and renames a token. a rename replaces the bare spelling.</li>
+<li>a surface is a module's own pubs plus its explicit re-exports—<code>pub name</code>, <code>pub qualifier</code>, <code>pub theirs:yours</code>. nothing leaks through on its own.</li>
+</ul>

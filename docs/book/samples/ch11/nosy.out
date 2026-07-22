@@ -1,0 +1,4 @@
+error[opacity]: `square` is private to module `geo` — only pub names cross an import
+  --> nosy/main.kso:3:9
+   3 | print "{geo/square 3.0}"
+               ^
