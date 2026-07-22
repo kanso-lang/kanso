@@ -417,6 +417,10 @@ examples.addEventListener('change', () => {
   run();
 });
 
+// a reload restores the browser's remembered dropdown choice while the
+// editor resets to the first example — pin the two together at startup
+examples.value = 'hello';
+
 loadWasm().then(() => {
   output.textContent = 'ready — ⌘⏎ runs';
   run();
