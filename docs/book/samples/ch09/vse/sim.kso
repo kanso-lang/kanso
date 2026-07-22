@@ -1,4 +1,6 @@
 import "std/list"
+import "std/math"
+import "std/random"
 
 fn cloud 0 _ acc
   acc
@@ -27,7 +29,7 @@ fn point 0 acc
   acc
 
 fn point d acc
-  random 1000 . (c -> point (d - 1) (push acc c))
+  random/random 1000 . (c -> point (d - 1) (push acc c))
 
 runs = 400
 
@@ -57,7 +59,7 @@ fn trials k acc
   cloud nvot dims [] . (vp -> with_voters k acc vp)
 
 fn util vpos cpos
-  0 - sqrt (dist2 vpos cpos)
+  0 - math/sqrt (dist2 vpos cpos)
 
 fn utilities voters cands
   list/map voters (v -> list/map cands (c -> util v c))

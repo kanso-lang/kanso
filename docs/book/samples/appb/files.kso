@@ -1,1 +1,3 @@
-write_file "note.txt" "one taiyaki" >> read_file "note.txt" . print
+import "std/io"
+
+io/write_file "note.txt" "one taiyaki" >> io/read_file "note.txt" . print

@@ -1,4 +1,5 @@
 import "std/list"
+import "std/text"
 
 xs = [3 1 2]
 print "map {list/map xs (n -> n * 10)}"
@@ -8,5 +9,5 @@ print "map {list/map xs (n -> n * 10)}"
   >> print "push {push xs 4}"
   >> print "at {xs[2]}"
   >> print "length {length xs}"
-  >> print "slice {slice xs 1 2}"
-  >> print "concat {concat xs [9]}"
+  >> print "slice {text/slice xs 1 2}"
+  >> print "concat {text/concat xs [9]}"

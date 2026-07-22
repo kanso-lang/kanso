@@ -1,3 +1,5 @@
+import "std/text"
+
 fn both true true
   true
 
@@ -5,11 +7,11 @@ fn both _ _
   false
 
 fn classify s
-  cs = bytes s
+  cs = text/bytes s
   q = number_end cs 1
-  digits = slice cs 1 (q - 1)
+  digits = text/slice cs 1 (q - 1)
   floaty = mark_from cs 1 (q - 1)
-  if floaty "float64 {to_float digits}" "int {to_int digits}"
+  if floaty "float64 {text/to_float digits}" "int {text/to_int digits}"
 
 fn is_number_char 43
   true

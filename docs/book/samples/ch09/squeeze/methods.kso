@@ -1,4 +1,5 @@
 import "std/list"
+import "std/math"
 
 fn approval_col voters c
   total (list/map voters (v -> approves v c))
@@ -67,7 +68,7 @@ fn rank_first v elim
 fn score_ballot v c
   lo = minimum v
   hi = maximum v
-  round (5.0 * (v[c] - lo) / (hi - lo))
+  math/round (5.0 * (v[c] - lo) / (hi - lo))
 
 fn score_col voters c
   total (list/map voters (v -> score_ballot v c))

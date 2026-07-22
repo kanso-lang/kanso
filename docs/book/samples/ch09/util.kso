@@ -1,3 +1,5 @@
+import "std/math"
+
 pub play =
   voter = [3 4]
   print "candidate at the origin: {util voter [0 0]}"
@@ -7,4 +9,4 @@ fn sq x
   x * x
 
 fn util v c
-  0 - sqrt (sq (v[1] - c[1]) + sq (v[2] - c[2]))
+  0 - math/sqrt (sq (v[1] - c[1]) + sq (v[2] - c[2]))

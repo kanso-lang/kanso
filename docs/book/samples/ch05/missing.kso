@@ -1,1 +1,3 @@
-read_file "yesterday.txt" . print
+import "std/io"
+
+io/read_file "yesterday.txt" . print

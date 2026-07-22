@@ -1,7 +1,9 @@
+import "std/io"
+
 fn first xs
   xs[1]!
 
 fn greet name
   "irasshaimase, {name}"
 
-pub play = args . first . greet . print
+pub play = io/args . first . greet . print

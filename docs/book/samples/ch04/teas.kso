@@ -1,3 +1,5 @@
+import "std/text"
+
 print "sencha: {3 / 0} steeps left"
-print "hojicha: {to_int "two"} steeps left"
+print "hojicha: {text/to_int "two"} steeps left"
 >> print "serving"

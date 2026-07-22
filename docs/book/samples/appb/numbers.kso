@@ -1,8 +1,11 @@
-root = sqrt 2
+import "std/math"
+import "std/text"
+
+root = math/sqrt 2
 print "sqrt {root}"
-  >> print "sqrt-int {sqrt 9}"
-  >> print "round {round 2.6}"
-  >> print "round-half {round 2.5}"
-  >> print "to_int {to_int "42"}"
-  >> print "to_float {to_float "3.14"}"
-  >> print "to_float-int {to_float 5}"
+  >> print "sqrt-int {math/sqrt 9}"
+  >> print "round {math/round 2.6}"
+  >> print "round-half {math/round 2.5}"
+  >> print "to_int {text/to_int "42"}"
+  >> print "to_float {text/to_float "3.14"}"
+  >> print "to_float-int {text/to_float 5}"

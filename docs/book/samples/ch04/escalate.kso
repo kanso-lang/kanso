@@ -1,3 +1,5 @@
+import "std/text"
+
 fn first_major lines
   major_of (lines[1])
 
@@ -5,6 +7,6 @@ fn major_of none
   err "no version line"
 
 fn major_of line
-  to_int line
+  text/to_int line
 
 pub play = print "major: {first_major []}"

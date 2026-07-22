@@ -1,4 +1,6 @@
-bs = bytes "café"
+import "std/text"
+
+bs = text/bytes "café"
 print "bytes {bs}"
-  >> print "utf8 {utf8 bs}"
-  >> print "find2 {find2 (bytes "a,b;c") 1 44 59}"
+  >> print "utf8 {text/utf8 bs}"
+  >> print "find2 {text/find2 (text/bytes "a,b;c") 1 44 59}"

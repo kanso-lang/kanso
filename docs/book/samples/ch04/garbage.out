@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the executor: ""seven point four" is not an integer"
-  born in major_of at garbage.kso:5
+  born in text/to_int at std/text/text.kso:29
