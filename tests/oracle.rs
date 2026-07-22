@@ -96,7 +96,12 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
             }
         }
     };
-    let mut executor = CollectExecutor { program_args, stdout: String::new(), rng: kanso::eval::Rng::seeded() };
+    // the corpus goldens pin the dice: same fixed seed as book_check
+    let mut executor = CollectExecutor {
+        program_args,
+        rng: kanso::eval::Rng::from_seed(2_685_821_657_736_338_717),
+        stdout: String::new(),
+    };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),

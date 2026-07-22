@@ -136,10 +136,10 @@ pub enum Desc {
     Nil,
 }
 
-/// SplitMix64: a deterministic, seedable generator. `random` must be
-/// reproducible so the differential lattice and goldens hold; the seed comes
-/// from KANSO_SEED (else a fixed constant), never from entropy — that keeps a
-/// concurrent program's output byte-identical across engines and runs.
+/// SplitMix64: a deterministic, seedable generator. A real run draws its
+/// seed from entropy so dice roll differently each time; KANSO_SEED pins
+/// the stream, which is how the differential lattice, the goldens, and any
+/// replay of a concurrent program stay byte-identical across engines.
 pub struct Rng(u64);
 
 impl Rng {
@@ -147,7 +147,7 @@ impl Rng {
         let seed = std::env::var("KANSO_SEED")
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
-            .unwrap_or(0x2545_F491_4F6C_DD1D);
+            .unwrap_or_else(entropy_seed);
         Rng(seed)
     }
 
@@ -169,6 +169,22 @@ impl Rng {
             n => self.next_u64() % n,
         }
     }
+}
+
+/// The browser has no clock at thread-local init and reseeds through
+/// `kanso_set_seed` before every run, so any fixed value serves there.
+#[cfg(target_arch = "wasm32")]
+fn entropy_seed() -> u64 {
+    0x2545_F491_4F6C_DD1D
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn entropy_seed() -> u64 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x2545_F491_4F6C_DD1D);
+    nanos ^ (u64::from(std::process::id()) << 32)
 }
 
 /// One step of a fiber: it either finished with a value, or blocked on a

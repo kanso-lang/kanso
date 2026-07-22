@@ -11,6 +11,8 @@
 # A sibling name.manual file (holding one line of why) exempts an .out the
 # harness cannot replay — repl transcripts, wall-clock timings, IR greps.
 set -e
+# the sample .outs pin the dice; a bare run seeds from entropy
+export KANSO_SEED=2685821657736338717
 KANSO=$(pwd)/target/release/kanso
 fail=0
 for out in docs/book/samples/*/*.out; do
