@@ -52,7 +52,7 @@ pub struct Lexed {
     pub blank_lines: Vec<usize>,
 }
 
-const OPS: [&str; 12] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&"];
+const OPS: [&str; 14] = ["&&", "||", ">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&"];
 
 pub const MAX_WIDTH: usize = 80;
 

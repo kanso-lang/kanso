@@ -1,4 +1,4 @@
 error[naming]: `is_number_char` answers only true or false: name it `is_number_char?`
-  --> numbers.kso:16:4
-  16 | fn is_number_char 43
+  --> numbers.kso:10:4
+  10 | fn is_number_char 43
           ^

@@ -1,11 +1,5 @@
 import "std/text"
 
-fn both? true true
-  true
-
-fn both? _ _
-  false
-
 fn decode_u s
   cs = text/bytes s
   h1 = hex_digit (cs[1])
@@ -15,13 +9,13 @@ fn decode_u s
   text/from_code (h1 * 4096 + h2 * 256 + h3 * 16 + h4)
 
 fn hex_alpha c
-  if (both? (96 < c) (c < 103)) (c - 87) (hex_upper c)
+  if ((96 < c) && (c < 103)) (c - 87) (hex_upper c)
 
 fn hex_digit c
-  if (both? (47 < c) (c < 58)) (c - 48) (hex_alpha c)
+  if ((47 < c) && (c < 58)) (c - 48) (hex_alpha c)
 
 fn hex_upper c
-  if (both? (64 < c) (c < 71)) (c - 55) (err "invalid hex digit")
+  if ((64 < c) && (c < 71)) (c - 55) (err "invalid hex digit")
 
 pub play =
   print (decode_u "00e9")

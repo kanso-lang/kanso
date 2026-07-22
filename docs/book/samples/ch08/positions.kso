@@ -4,12 +4,6 @@ type parse_failure
   position:int
   reason:string
 
-fn both? true true
-  true
-
-fn both? _ _
-  false
-
 fn decode_int s
   cs = text/bytes s
   p = skip_ws cs 1
@@ -27,7 +21,7 @@ fn digit? none
   false
 
 fn digit? c
-  both? (47 < c) (c < 58)
+  (47 < c) && (c < 58)
 
 fn is_ws 9
   true
