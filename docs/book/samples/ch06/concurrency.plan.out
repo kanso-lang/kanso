@@ -5,12 +5,12 @@ plan:
   print "brew: poured"    # from line 4
   random 6
   . <continuation>
+  random 6
+  . <continuation>
+  random 6
+  . <continuation>
+  random 6
+  . <continuation>
+  random 6
+  . <continuation>
   } # unordered; both run
-  random 6
-  . <continuation>
-  random 6
-  . <continuation>
-  random 6
-  . <continuation>
-  random 6
-  . <continuation>

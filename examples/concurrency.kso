@@ -5,18 +5,16 @@ import "std/time"
 # channel or a WaitGroup, and a select to fan the results back. in kanso
 # bare lines already run as independent green threads: the scheduler
 # overlaps them and `>>` is the only sync you write -- no channels, the
-# data flow is the channel. here `brew` blocks on a slow steep while the
-# dice keep rolling, so the rolls land *during* the steep, not after it.
-# swap `main` to `brew >> rolls` and the wall makes the dice wait.
+# data flow is the channel. `brew` blocks on a slow steep while `rolls`
+# chains the dice beside it, so every roll lands *during* the steep.
+# a lone `>>` line is a wall: everything above settles first.
 brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 
 pub play =
   brew
-  roll 1
-  >> roll 2
-  >> roll 3
-  >> roll 4
-  >> roll 5
+  rolls
 
 fn roll i
   random/random 6 . (n -> print "roll {i}: a {n + 1}")
+
+rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5

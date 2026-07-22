@@ -354,10 +354,11 @@ print "warming the cups"
 `,
   concurrency: `# in go, two things at once + waiting for both is a goroutine, a
 # channel or WaitGroup, and a select. in kanso bare lines already run as
-# cooperative green threads: the scheduler overlaps them and >> is the
-# only sync. brew blocks on a slow steep while the dice keep rolling,
-# so the rolls land during the steep, not after. (in the browser sleep
-# is instant, but the interleaved ORDER is the same as running it live.)
+# cooperative green threads: the scheduler overlaps them, >> chains
+# within a thread, and a lone >> line is a wall the whole group settles
+# behind. brew blocks on a slow steep while rolls chains the dice
+# beside it, so every roll lands during the steep. (in the browser
+# sleep is instant, but the interleaved ORDER matches a live run.)
 import "std/random"
 import "std/time"
 
@@ -365,14 +366,12 @@ brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
 
 pub play =
   brew
-  roll 1
-  >> roll 2
-  >> roll 3
-  >> roll 4
-  >> roll 5
+  rolls
 
 fn roll i
   random 6 . (n -> print "roll {i}: a {n + 1}")
+
+rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
 `,
   redux: `import "std/time"
 
