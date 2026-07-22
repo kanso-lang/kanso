@@ -94,9 +94,11 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
   </div>
 </div>
 
-<p>the rule underneath it: <strong>no function in the language can turn an <code>err</code> back into a value.</strong> not a helper, not a library, not even <code>main</code>. the arm that would swallow one—<code>(err reason) → </code> some ordinary value—can't be written at all. so there's nothing to restrict and nothing to leak: no rescuer to define, none to pass down, and no dependency that can quietly eat your errors, because the language never handed it the means.</p>
+<p>the rule underneath it is structural, and it needed no law at all. an arm that claims an <code>err</code>—<code>fn describe (err reason)</code>—is ordinary dispatch, writable anywhere. what keeps errors honest is what a handler can and cannot <em>do</em>. functions are pure and nothing is nil, so a handler that catches an err and cannot genuinely continue has nowhere to hide: it must return something, it cannot conjure a valid value from nothing, so it returns another err. the exception re-raises itself through the value model. the only handlers that can terminate a failure are the ones holding a real alternative—a default, a retry, a degraded answer—which is precisely the set of handlers that should exist. write the arm where you have one; where you don't, the err rides on without a line of plumbing.</p>
 
-<p>so who recovers? a <strong>boundary</strong>—and a boundary isn't a value you hold, it's a privileged construct: the top-level executor, a request loop, a supervisor. when an <code>err</code> escapes into one, the boundary catches it and hands you a plain <code>Failure</code> <em>record</em>: inert data describing what went wrong. you supply an ordinary function on that data, and it can't leak, because it was never the thing doing the catching.</p>
+<p>compare the language that made "ignored the error" famous. go returns a pair, <code>(value, error)</code>—a product type, so four states exist, and two of them are lies. the idiomatic lie is <code>("", err)</code>: the error is right there beside a perfectly usable zero value, the caller grabs the value half, and the type system waves it through. <code>errcheck</code> exists because go's types can't say "you got one or the other." one channel dissolves this: when a kanso function fails, the err isn't <em>beside</em> your value, it's <em>instead of</em> it. there is no valid half to grab. using the result means scrutinizing it, and scrutiny has exactly two outcomes—an arm you deliberately wrote, or the ride continuing. ignoring an error isn't linted here; it's unspellable.</p>
+
+<p>an err nobody claims rides to the <strong>endpoint</strong>—the executor, the top of <code>main</code>—and ends the program with its receipts: where it was born, everywhere it passed. that is the default fate of every unhandled failure, and it costs nothing to arrange because it's what happens when you write nothing.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">policy is data-in, effect-out<span class="fk-tag fk-proposed">proposed</span></div>
@@ -106,7 +108,7 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 <span class="f">main</span> <span class="o">=</span> <span class="f">serve</span> app <span class="o">.</span> <span class="f">on_failure</span> report</code></pre>
 </div>
 
-<p><code>report</code> takes a <code>Failure</code> and returns a description. it is <em>not</em> a rescuer—it can't catch anything, so passing it anywhere is harmless. the boundary does the catching; you only describe what happens next. there's no capability to lock down, because the capability was never expressible in the first place—same as everywhere else in the language.</p>
+<p><code>report</code> takes a <code>Failure</code> and returns a description—an ordinary function on inert data. the endpoint hands it the failure and asks only what happens next; passing <code>report</code> around is harmless because it holds no special power, just an argument type. that's the shape of every policy in the language: data in, effect out, and the machinery that delivered the data stays out of your hands.</p>
 
 <h2>a value, or an event</h2>
 
@@ -162,7 +164,7 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 
 <h2>the whole model</h2>
 
-<p>a failure asks one question—<em>did the world fail me, or did i produce a wrong?</em>—and the rest follows from the answer. a wrong is a value: deterministic, born in the core, unit-testable, and futile to retry; you fix it by changing the code or the inputs, which is a different call. a not-yet is an event: born at the shell, contingent on a world that can move, and the only thing retry was ever for. you decide whether to assume or handle it when you write the call. and if you handle none of it, the failure rises—carrying its receipts—to a boundary that hands it back as inert data and asks only what to do next. no function can swallow it along the way, because the language never gives one the means to.</p>
+<p>a failure asks one question—<em>did the world fail me, or did i produce a wrong?</em>—and the rest follows from the answer. a wrong is a value: deterministic, born in the core, unit-testable, and futile to retry; you fix it by changing the code or the inputs, which is a different call. a not-yet is an event: born at the shell, contingent on a world that can move, and the only thing retry was ever for. you decide whether to assume or handle it when you write the call. and if you handle none of it, the failure rises—carrying its receipts—to the endpoint, which ends the program with the whole story in hand. handling it early is always yours to choose and never forced on you; a handler without a genuine alternative can only pass the failure along, so the truly exceptional event reaches the top under its own power.</p>
 
 <div class="fk-legend">
   <p><span class="fk-tag fk-real">shipped</span> works in the compiler today: failure as a value, automatic propagation with born-in / passed-through receipts, none as dispatchable absence.</p>

@@ -194,7 +194,9 @@ three</code></pre>
       <div class="showcase-cell">
         <div class="code-panel">
           <div class="code-panel-title">examples/lists.kso</div>
-          <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+          <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
   <span class="s">"no ninth price"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> x
@@ -202,11 +204,11 @@ three</code></pre>
 
 <span class="f">main</span> <span class="o">=</span>
   prices <span class="o">=</span> [<span class="n">30</span> <span class="n">10</span> <span class="n">20</span>]
-  doubled <span class="o">=</span> <span class="f">map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
-  ninth <span class="o">=</span> <span class="f">at</span> prices <span class="n">9</span>
-  <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
+  doubled <span class="o">=</span> <span class="f">list/map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+  ninth <span class="o">=</span> prices[<span class="n">9</span>]
+  <span class="f">print</span> <span class="s">"sorted: <span class="i">{list/sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
         </div>
-        <p>no panicking access anywhere: <code>at prices 9</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it. <code>sort prices</code> needs no interface—<code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
+        <p>no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (assert presence with <code>prices[9]!</code> and a miss errs instead). <code>list/sort</code> needs no interface—<code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
       </div>
     </div>
   </div>
