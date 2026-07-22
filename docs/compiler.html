@@ -214,7 +214,9 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p><strong>an eight-byte ascii skip</strong> in the utf-8 validator looked like free speed: gulp eight bytes of text at once, and if they're all plain ascii, skip the per-byte checking. we tried it. it made the benchmark <em>slower</em> by 3%, because the strings in real json are mostly shorter than eight bytes, so the setup cost was paid every time and the skip almost never fired. then—months later, having forgotten—we tried the exact same thing again, and it lost again by the same margin. the log now says, in as many words: do not try a third time without a workload full of long strings.</p>
 
-<h2 id="c11"><span class="sec-num">03</span>the heartbeat, taught from scratch<span class="status status-shipped">shipped</span></h2>
+<h2 id="c11"><span class="sec-num">03</span>the strict tier: the heartbeat<span class="status status-shipped">shipped</span></h2>
+
+<p>this section teaches the shipped allocator for strict values — one of the two tiers named in the intro, and the one behind the json scoreboard. the lazy tier and the counted destination are §07's story; read them as two halves.</p>
 
 <p>the idea that does most of the work needs no background beyond "programs use memory." each step below is small.</p>
 
