@@ -205,6 +205,8 @@ roll 5: a 1</code></pre>
 
 <p>overlap would be a menace if it were nondeterministic. it isn't. the scheduler decides who runs next by the numbers <em>you</em> wrote—sleep durations and spawn order—never by the machine's clock. so the transcript is a function of the source, and every run is byte-for-byte identical. watch two dishes cook at once:</p>
 
+<p>one refinement rides under that guarantee. while a fiber sleeps, real time another fiber spends <em>computing</em> counts against the pending wait—so a thread that grinds for 900&nbsp;ms beside a 2000&nbsp;ms steep finishes with the steep, and the whole group's wall-clock is the longest branch. the machine's clock shortens the physical wait, and only that: who runs next, what prints when, and every counter still come from the numbers you wrote.</p>
+
 <div class="code-panel">
   <div class="code-panel-title">race.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/time"</span>
