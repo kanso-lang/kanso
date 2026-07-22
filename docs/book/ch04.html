@@ -99,7 +99,7 @@ extra_css: /book/book.css
 
 <p>(indexing is 1-based, everywhere, no exceptions. the first flavor is <code>flavors[1]</code>. we are at peace with this.)</p>
 
-<p>when absence is <em>expected</em>—you're asking, not promising—use <code>at</code>, which returns <code>none</code> on a miss. and <code>none</code>, unlike <code>err</code>, is a shape dispatch fully understands. it sits on the marker rung of the specificity ladder, so handling absence is one more arm, written like any other:</p>
+<p>when absence is <em>expected</em>—you're asking, not promising—plain brackets are the asking form: <code>flavors[3]</code> returns <code>none</code> on a miss. and <code>none</code>, unlike <code>err</code>, is a shape dispatch fully understands. it sits on the marker rung of the specificity ladder, so handling absence is one more arm, written like any other:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">fourth.kso</div>
@@ -112,7 +112,7 @@ extra_css: /book/book.css
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
   first <span class="o">=</span> flavors[<span class="n">1</span>]
-  fourth <span class="o">=</span> <span class="f">at</span> flavors <span class="n">4</span>
+  fourth <span class="o">=</span> flavors[<span class="n">4</span>]
   <span class="f">print</span> <span class="s">"first: <span class="i">{first}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> fourth)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
@@ -121,7 +121,7 @@ no fourth flavor</code></pre>
   </div>
 </div>
 
-<p>the same pair of tools covers maps—literal syntax <code>["dango": 350]</code>, strict lookup with brackets, polite lookup with <code>at</code>:</p>
+<p>the same pair of tools covers maps—literal syntax <code>["dango": 350]</code>, polite lookup with plain brackets, strict lookup with the sigil:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">menu.kso</div>
@@ -133,7 +133,7 @@ no fourth flavor</code></pre>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   menu <span class="o">=</span> [<span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span>]
-  <span class="f">print</span> (<span class="f">describe</span> (<span class="f">at</span> menu <span class="s">"pocky"</span>))</code></pre>
+  <span class="f">print</span> (<span class="f">describe</span> menu[<span class="s">"pocky"</span>])</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>not on the menu</code></pre>
@@ -145,7 +145,7 @@ no fourth flavor</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">ignored.kso</div>
   <pre><code>flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span>]
-third <span class="o">=</span> <span class="f">at</span> flavors <span class="n">3</span>
+third <span class="o">=</span> flavors[<span class="n">3</span>]
 <span class="f">print</span> <span class="s">"third: <span class="i">{third}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ignored.kso</div>
@@ -153,11 +153,11 @@ third <span class="o">=</span> <span class="f">at</span> flavors <span class="n"
   </div>
 </div>
 
-<p>you asked a question with <code>at</code> and then printed the answer without resolving it—so the absence prints <em>as</em> absence, the loud sentinel <code>&lt;none&gt;</code>, never a silent blank. a <code>none</code> you ignore follows you into the output where anyone can see it. an <code>err</code> refuses even that: it rides past the interpolation and ends the program at the endpoint. the difference between the two values is that <code>none</code> <em>can</em> be claimed by an arm—or rendered, visibly—and <code>err</code> cannot. asking for something you might not get means the not-getting is yours to handle, and the language makes sure you can see whether you did.</p>
+<p>you asked a question with plain brackets and then printed the answer without resolving it—so the absence prints <em>as</em> absence, the loud sentinel <code>&lt;none&gt;</code>, never a silent blank. a <code>none</code> you ignore follows you into the output where anyone can see it. an <code>err</code> refuses even that: it rides past the interpolation and ends the program at the endpoint. the difference between the two values is that <code>none</code> <em>can</em> be claimed by an arm—or rendered, visibly—and <code>err</code> cannot. asking for something you might not get means the not-getting is yours to handle, and the language makes sure you can see whether you did.</p>
 
 <h2>access is a decision</h2>
 
-<p>step back and look at what the last section actually handed you. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by which function you reach for. brackets document an invariant: this key exists, and if it doesn't, that's a bug, fail here. <code>at</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
+<p>step back and look at what the last section actually handed you. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, with one character. <code>menu["pocky"]!</code> documents an invariant: this key exists, and if it doesn't, that's a bug, fail here. <code>menu["pocky"]</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pocky.kso</div>
@@ -216,7 +216,7 @@ not a flag</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">escalate.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">first_major</span> lines
-  <span class="f">major_of</span> (<span class="f">at</span> lines <span class="n">1</span>)
+  <span class="f">major_of</span> lines[<span class="n">1</span>]
 
 <span class="k">fn</span> <span class="f">major_of</span> <span class="t">none</span>
   <span class="t">err</span> <span class="s">"no version line"</span>

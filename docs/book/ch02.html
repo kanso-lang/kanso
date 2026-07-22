@@ -127,19 +127,19 @@ sum 6 len 3 first 3</code></pre>
   </div>
 </div>
 
-<p><code>xs[i]</code> is the strict form: it expects the index to be there, and a miss becomes an <code>err</code> that rides to the endpoint. when absence is a normal outcome you plan for, reach for <code>at</code> instead—it returns the value or <code>none</code> rather than failing. asking for the ninth element of a three-element list yields <code>none</code>, and printing it shows you exactly that—absence renders as the unmistakable sentinel <code>&lt;none&gt;</code> rather than a blank or a crash:</p>
+<p><code>xs[i]</code> is the polite form: absence is a normal outcome, so a miss returns <code>none</code>—a value you can dispatch on. when your code is <em>promising</em> the index exists, add the sigil: <code>xs[i]!</code> treats a miss as an <code>err</code> that rides to the endpoint, because a broken promise is a bug. asking for the ninth element of a three-element list politely yields <code>none</code>, and printing it shows you exactly that—absence renders as the unmistakable sentinel <code>&lt;none&gt;</code> rather than a blank or a crash:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">at_miss.kso</div>
   <pre><code>xs <span class="o">=</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>]
-<span class="f">print</span> <span class="s">"<span class="i">{at xs 9}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{xs[9]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run at_miss.kso</div>
     <pre><code>&lt;none&gt;</code></pre>
   </div>
 </div>
 
-<p>two operations, two spellings, no overlap: <code>xs[i]</code> says "this is present," and a miss is a failure that rises. <code>at xs i</code> says "this might not be," and a miss is a value you can dispatch on—or print, where it announces itself instead of hiding. the choice is a sentence about your data, and the compiler holds you to it.</p>
+<p>one operation, one sigil, no overlap: <code>xs[i]</code> says "this might not be here," and a miss is a value you can dispatch on—or print, where it announces itself instead of hiding. <code>xs[i]!</code> says "this is present, and if it isn't, that's a bug"—the bang is the same mark of strictness it is everywhere in kanso. the choice is a sentence about your data, and the compiler holds you to it.</p>
 
 <h2>maps</h2>
 
