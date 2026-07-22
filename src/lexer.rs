@@ -3,6 +3,7 @@ use num_bigint::BigInt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
+    Bang,
     Ident(String),
     Int(BigInt),
     Float(f64),
@@ -289,6 +290,8 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             ')' => Some(Tok::RParen),
             '[' => Some(Tok::LBracket),
             ']' => Some(Tok::RBracket),
+            // the strict-index sigil: xs[i]! errs where xs[i] returns none
+            '!' => Some(Tok::Bang),
             '{' => Some(Tok::LBrace),
             '}' => Some(Tok::RBrace),
             ':' => Some(Tok::Colon),

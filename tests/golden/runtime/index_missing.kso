@@ -1,2 +1,2 @@
 prices = [30 10 20]
-print "ninth: {prices[9]}"
+print "ninth: {prices[9]!}"

@@ -989,7 +989,11 @@ impl<'a> P<'a> {
                 }
                 _ => return Err(self.err("expected `]`".to_string())),
             }
-            expr = Expr::Index { base: Box::new(expr), index: Box::new(index), span };
+            let strict = matches!(self.peek(), Some(Tok::Bang));
+            if strict {
+                self.pos += 1;
+            }
+            expr = Expr::Index { base: Box::new(expr), index: Box::new(index), strict, span };
         }
     }
 

@@ -1693,10 +1693,12 @@ impl<'a> Backend<'a> {
                 f.record(&t, TOP);
                 Ok(t)
             }
-            Expr::Index { base, index, span } => {
+            Expr::Index { base, index, strict, span } => {
                 let container = self.emit_expr(f, base)?;
+                let container = self.maybe_force(f, container);
                 let key = self.emit_expr(f, index)?;
-                Ok(self.emit_at(f, &container, &key, true, *span))
+                let key = self.maybe_force(f, key);
+                Ok(self.emit_at(f, &container, &key, *strict, *span))
             }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;
