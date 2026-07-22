@@ -427,15 +427,15 @@ float64 6000.0</code></pre>
   <span class="f">trailing</span> cs (<span class="f">skip_ws</span> cs q) v
 
 <span class="k">fn</span> <span class="f">digits_end</span> cs p
-  <span class="f">if</span> (<span class="f">is_digit</span> (cs[p])) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+  <span class="f">if</span> (<span class="f">digit?</span> (cs[p])) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
 <span class="k">fn</span> <span class="f">fail</span> p reason
   <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
 
-<span class="k">fn</span> <span class="f">is_digit</span> none
+<span class="k">fn</span> <span class="f">digit?</span> none
   <span class="f">false</span>
 
-<span class="k">fn</span> <span class="f">is_digit</span> c
+<span class="k">fn</span> <span class="f">digit?</span> c
   <span class="f">both?</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
 
 <span class="k">fn</span> <span class="f">is_ws</span> <span class="n">9</span>

@@ -18,15 +18,15 @@ fn decode_int s
   trailing cs (skip_ws cs q) v
 
 fn digits_end cs p
-  if (is_digit (cs[p])) (digits_end cs (p + 1)) p
+  if (digit? (cs[p])) (digits_end cs (p + 1)) p
 
 fn fail p reason
   err (parse_failure p reason)
 
-fn is_digit none
+fn digit? none
   false
 
-fn is_digit c
+fn digit? c
   both? (47 < c) (c < 58)
 
 fn is_ws 9

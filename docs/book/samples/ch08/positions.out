@@ -1,8 +1,4 @@
-error[naming]: `is_ws` answers only true or false: name it `is_ws?`
-  --> positions.kso:32:4
-  32 | fn is_ws 9
-          ^
-error[naming]: `is_digit` answers only true or false: name it `is_digit?`
+error[formatting]: function declarations appear in alphabetical order: `digit?` before `fail`
   --> positions.kso:26:4
-  26 | fn is_digit none
+  26 | fn digit? none
           ^
