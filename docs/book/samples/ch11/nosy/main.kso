@@ -1,0 +1,3 @@
+import "../geo"
+
+print "{geo/square 3.0}"

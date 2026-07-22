@@ -18,24 +18,23 @@ extra_css: /book/book.css
   <span class="n">500</span>
 
 <span class="k">fn</span> <span class="f">base_price</span> item
-  <span class="t">err</span> <span class="s">"we do not serve <span class="i">{item}</span>"</span>
+  <span class="f">err</span> <span class="s">"we do not serve <span class="i">{item}</span>"</span>
 
-<span class="k">pub fn</span> <span class="f">price</span> item
-  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span></code></pre>
-</div>
-
-<div class="code-panel">
-  <div class="code-panel-title">teahouse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">describe</span> (<span class="t">err</span> reason)
+<span class="k">fn</span> <span class="f">describe</span> (<span class="f">err</span> reason)
   <span class="s">"gomen: <span class="i">{reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> n
   <span class="s">"<span class="i">{n}</span> yen, service included"</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
-  pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
-  <span class="f">print</span> (<span class="f">describe</span> dango) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> pocky)</code></pre>
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">price</span> item
+  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">teahouse/main.kso</div>
+  <pre><code>dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
+pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
+<span class="f">print</span> (<span class="f">describe</span> dango) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> pocky)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teahouse</div>
     <pre><code>400 yen, service included

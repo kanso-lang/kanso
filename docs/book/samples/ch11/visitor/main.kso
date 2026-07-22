@@ -1,0 +1,4 @@
+import "../resort"
+
+print "a lap: {lap 1.0}"
+print "area came through: {area 1.0}"

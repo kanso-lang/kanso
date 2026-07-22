@@ -1,0 +1,10 @@
+import "std/math"
+
+pub fn area r
+  3.14159 * (square r)
+
+pub fn ride_km a b
+  math/sqrt (area a + area b)
+
+fn square x
+  x * x

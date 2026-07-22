@@ -19,17 +19,35 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">vse/enumerable.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_fold_at</span> list acc f i
-  <span class="f">if</span> (<span class="f">length</span> list <span class="o">&lt;</span> i) acc (<span class="f">_fold_at</span> list (<span class="f">f</span> acc (<span class="f">at</span> list i)) f (i <span class="o">+</span> <span class="n">1</span>))
+  <pre><code><span class="k">fn</span> <span class="f">argmax</span> list
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) <span class="n">1</span> (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
 
-<span class="k">fn</span> <span class="f">argmax</span> list
-  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) <span class="n">1</span> (b i <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">at</span> list b <span class="o">&lt;</span> <span class="f">at</span> list i) i b)
+<span class="k">fn</span> <span class="f">count</span> list x
+  <span class="f">fold</span> list <span class="n">0</span> (<span class="f">c</span> e <span class="o">-&gt;</span> <span class="f">if</span> (e <span class="o">==</span> x) (c <span class="o">+</span> <span class="n">1</span>) c)
 
 <span class="k">fn</span> <span class="f">fold</span> list init f
-  <span class="f">_fold_at</span> list init f <span class="n">1</span>
+  <span class="f">fold_at</span> list init f <span class="n">1</span>
+
+<span class="k">fn</span> <span class="f">fold_at</span> list acc f i
+  <span class="f">if</span> (<span class="f">length</span> list <span class="o">&lt;</span> i) acc (<span class="f">fold_at</span> list (<span class="f">f</span> acc (list[i])) f (i <span class="o">+</span> <span class="n">1</span>))
+
+<span class="k">fn</span> <span class="f">maximum</span> list
+  <span class="f">fold</span> list (list[<span class="n">1</span>]) (<span class="f">m</span> x <span class="o">-&gt;</span> <span class="f">if</span> (m <span class="o">&lt;</span> x) x m)
+
+<span class="k">fn</span> <span class="f">mean</span> list
+  (<span class="n">0.0</span> <span class="o">+</span> total list) <span class="o">/</span> (<span class="f">length</span> list)
+
+<span class="k">fn</span> <span class="f">minimum</span> list
+  <span class="f">fold</span> list (list[<span class="n">1</span>]) (<span class="f">m</span> x <span class="o">-&gt;</span> <span class="f">if</span> (x <span class="o">&lt;</span> m) x m)
+
+<span class="k">fn</span> <span class="f">range</span> n
+  <span class="f">range_to</span> n <span class="n">1</span> []
+
+<span class="k">fn</span> <span class="f">range_to</span> n i acc
+  <span class="f">if</span> (n <span class="o">&lt;</span> i) acc (<span class="f">range_to</span> n (i <span class="o">+</span> <span class="n">1</span>) (<span class="f">push</span> acc i))
 
 <span class="k">fn</span> <span class="f">total</span> list
-  <span class="f">fold</span> list <span class="n">0</span> (a x <span class="o">-&gt;</span> a <span class="o">+</span> x)</code></pre>
+  <span class="f">fold</span> list <span class="n">0</span> (<span class="f">a</span> x <span class="o">-&gt;</span> a <span class="o">+</span> x)</code></pre>
 </div>
 
 <p><code>fold</code> walks the list from index 1—kanso lists are 1-indexed—threading an accumulator through a two-argument lambda. everything else in the file is a fold wearing a costume: <code>total</code> folds with <code>+</code>, <code>maximum</code> and <code>minimum</code> fold with a comparison, <code>count</code> folds with an equality test, and <code>argmax</code> folds over the <em>indexes</em>, keeping whichever position holds the larger value. note the tiebreak that falls out of <code>argmax</code> for free: the comparison is strict, so an equal later value never displaces an earlier one, and ties go to the lowest index. the methods file inherits that rule everywhere it picks a winner.</p>
@@ -42,19 +60,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">vse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">cloud</span> <span class="n">0</span> <span class="o">_</span> acc
-  acc
-
-<span class="k">fn</span> <span class="f">cloud</span> n d acc
-  <span class="f">point</span> d [] <span class="o">.</span> (p <span class="o">-&gt;</span> <span class="f">cloud</span> (n <span class="o">-</span> <span class="n">1</span>) d (<span class="f">push</span> acc p))
-
-dims <span class="o">=</span> <span class="n">2</span>
-
-<span class="k">fn</span> <span class="f">point</span> <span class="n">0</span> acc
-  acc
-
-<span class="k">fn</span> <span class="f">point</span> d acc
-  <span class="f">random</span> <span class="n">1000</span> <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
+  <pre><code><span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
 </div>
 
 <p>this is chapter 05's machinery doing real work. <code>random 1000</code> is a description of a draw, not a number, so the coordinate has to be received through bind—<code>. (c -&gt; ...)</code>—and the recursion continues inside the lambda, carrying the accumulator forward. <code>point</code> binds one coordinate per step until the dimension count hits the literal-0 clause; <code>cloud</code> binds one whole point per step until the population count does. here is the same shape standing alone, small enough to watch:</p>
@@ -88,17 +94,7 @@ dims <span class="o">=</span> <span class="n">2</span>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_sq</span> x
-  x <span class="o">*</span> x
-
-<span class="k">fn</span> <span class="f">dist2</span> p q
-  <span class="f">total</span> (<span class="f">map</span> (<span class="f">range</span> (<span class="f">length</span> p)) (d <span class="o">-&gt;</span> <span class="f">_sq</span> (<span class="f">at</span> p d <span class="o">-</span> <span class="f">at</span> q d)))
-
-<span class="k">fn</span> <span class="f">util</span> vpos cpos
-  <span class="n">0</span> <span class="o">-</span> <span class="f">sqrt</span> (<span class="f">dist2</span> vpos cpos)
-
-<span class="k">fn</span> <span class="f">utilities</span> voters cands
-  <span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">map</span> cands (c <span class="o">-&gt;</span> <span class="f">util</span> v c))</code></pre>
+  <pre><code><span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
 </div>
 
 <div class="code-panel">
@@ -130,13 +126,94 @@ candidate next door: -1.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/methods.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_approves</span> v c
-  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> <span class="f">at</span> v c) <span class="n">1</span> <span class="n">0</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/math"</span>
 
-<span class="k">fn</span> <span class="f">_score_ballot</span> v c
+<span class="k">fn</span> <span class="f">approval_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">approves</span> v c))
+
+<span class="k">fn</span> <span class="f">approval_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">approval_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">approves</span> v c
+  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> v[c]) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">argmax_except</span> list skip
+  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">better</span> list skip b i)
+
+<span class="k">fn</span> <span class="f">better</span> list skip b i
+  <span class="f">if</span> (i <span class="o">==</span> skip) b (<span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
+
+<span class="k">fn</span> <span class="f">first_is</span> v elim c
+  <span class="f">if</span> (<span class="f">rank_first</span> v elim <span class="o">==</span> c) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">in</span> list x
+  <span class="f">if</span> (<span class="f">count</span> list x <span class="o">==</span> <span class="n">0</span>) false true
+
+<span class="k">fn</span> <span class="f">irv_counts</span> voters elim
+  <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">first_is</span> v elim c)))
+
+<span class="k">fn</span> <span class="f">irv_go</span> voters elim
+  counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
+  top <span class="o">=</span> <span class="f">argmax</span> counts
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+
+<span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
+  <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
+
+<span class="k">fn</span> <span class="f">irv_winner</span> voters
+  <span class="f">irv_go</span> voters []
+
+<span class="k">fn</span> <span class="f">keep_min</span> counts elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (counts[c] <span class="o">&lt;</span> counts[b]) c b))
+
+<span class="k">fn</span> <span class="f">keep_top</span> v elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (v[b] <span class="o">&lt;</span> v[c]) c b))
+
+<span class="k">fn</span> <span class="f">margin_or_high</span> voters a b
+  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">pair</span> voters a b <span class="o">-</span> pair voters b a)
+
+<span class="k">fn</span> <span class="f">min_alive</span> counts elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_min</span> counts elim b c)
+
+<span class="k">fn</span> <span class="f">minimax_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">worst_margin</span> voters c))
+
+<span class="k">fn</span> <span class="f">pair</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (v[b] <span class="o">&lt;</span> v[a]) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">plurality_winner</span> voters
+  firsts <span class="o">=</span> <span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> firsts c))
+
+<span class="k">fn</span> <span class="f">prefer_count</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">score_ballot</span> v b <span class="o">&lt;</span> score_ballot v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">rank_first</span> v elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_top</span> v elim b c)
+
+<span class="k">fn</span> <span class="f">score_ballot</span> v c
   lo <span class="o">=</span> <span class="f">minimum</span> v
   hi <span class="o">=</span> <span class="f">maximum</span> v
-  <span class="f">round</span> (<span class="n">5.0</span> <span class="o">*</span> (<span class="f">at</span> v c <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))</code></pre>
+  <span class="f">math/round</span> (<span class="n">5.0</span> <span class="o">*</span> (v[c] <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))
+
+<span class="k">fn</span> <span class="f">score_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">score_ballot</span> v c))
+
+<span class="k">fn</span> <span class="f">score_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">star_winner</span> voters
+  totals <span class="o">=</span> <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c)
+  a <span class="o">=</span> <span class="f">argmax</span> totals
+  b <span class="o">=</span> <span class="f">argmax_except</span> totals a
+  pa <span class="o">=</span> <span class="f">prefer_count</span> voters a b
+  pb <span class="o">=</span> <span class="f">prefer_count</span> voters b a
+  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)
+
+<span class="k">fn</span> <span class="f">worst_margin</span> voters a
+  <span class="f">minimum</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">margin_or_high</span> voters a b))</code></pre>
 </div>
 
 <p><code>_score_ballot</code> stretches the voter's utility row so their favorite sits at the top of the scale and their least favorite at the bottom, scales by 5.0, and rounds. the <code>round</code> is not a modeling shortcut—it is the point. real score ballots hold integers, so the simulated ones do too: a candidate 63% of the way up a voter's range gets a 3, and whatever that costs the method is part of the measurement rather than an error smoothed away. irv and minimax skip ballots entirely and read rankings straight off the utility row: voter <code>v</code> ranks <code>a</code> over <code>b</code> exactly when <code>at v b &lt; at v a</code>.</p>
@@ -147,20 +224,94 @@ candidate next door: -1.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/methods.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_approval_col</span> voters c
-  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">_approves</span> v c))
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/math"</span>
 
-<span class="k">fn</span> <span class="f">_score_col</span> voters c
-  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">_score_ballot</span> v c))
+<span class="k">fn</span> <span class="f">approval_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">approves</span> v c))
 
 <span class="k">fn</span> <span class="f">approval_winner</span> voters
-  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_approval_col</span> voters c))
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">approval_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">approves</span> v c
+  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> v[c]) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">argmax_except</span> list skip
+  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">better</span> list skip b i)
+
+<span class="k">fn</span> <span class="f">better</span> list skip b i
+  <span class="f">if</span> (i <span class="o">==</span> skip) b (<span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
+
+<span class="k">fn</span> <span class="f">first_is</span> v elim c
+  <span class="f">if</span> (<span class="f">rank_first</span> v elim <span class="o">==</span> c) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">in</span> list x
+  <span class="f">if</span> (<span class="f">count</span> list x <span class="o">==</span> <span class="n">0</span>) false true
+
+<span class="k">fn</span> <span class="f">irv_counts</span> voters elim
+  <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">first_is</span> v elim c)))
+
+<span class="k">fn</span> <span class="f">irv_go</span> voters elim
+  counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
+  top <span class="o">=</span> <span class="f">argmax</span> counts
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+
+<span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
+  <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
+
+<span class="k">fn</span> <span class="f">irv_winner</span> voters
+  <span class="f">irv_go</span> voters []
+
+<span class="k">fn</span> <span class="f">keep_min</span> counts elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (counts[c] <span class="o">&lt;</span> counts[b]) c b))
+
+<span class="k">fn</span> <span class="f">keep_top</span> v elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (v[b] <span class="o">&lt;</span> v[c]) c b))
+
+<span class="k">fn</span> <span class="f">margin_or_high</span> voters a b
+  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">pair</span> voters a b <span class="o">-</span> pair voters b a)
+
+<span class="k">fn</span> <span class="f">min_alive</span> counts elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_min</span> counts elim b c)
+
+<span class="k">fn</span> <span class="f">minimax_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">worst_margin</span> voters c))
+
+<span class="k">fn</span> <span class="f">pair</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (v[b] <span class="o">&lt;</span> v[a]) <span class="n">1</span> <span class="n">0</span>))
 
 <span class="k">fn</span> <span class="f">plurality_winner</span> voters
-  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)) c))
+  firsts <span class="o">=</span> <span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> firsts c))
+
+<span class="k">fn</span> <span class="f">prefer_count</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">score_ballot</span> v b <span class="o">&lt;</span> score_ballot v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">rank_first</span> v elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_top</span> v elim b c)
+
+<span class="k">fn</span> <span class="f">score_ballot</span> v c
+  lo <span class="o">=</span> <span class="f">minimum</span> v
+  hi <span class="o">=</span> <span class="f">maximum</span> v
+  <span class="f">math/round</span> (<span class="n">5.0</span> <span class="o">*</span> (v[c] <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))
+
+<span class="k">fn</span> <span class="f">score_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">score_ballot</span> v c))
 
 <span class="k">fn</span> <span class="f">score_winner</span> voters
-  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_score_col</span> voters c))</code></pre>
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">star_winner</span> voters
+  totals <span class="o">=</span> <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c)
+  a <span class="o">=</span> <span class="f">argmax</span> totals
+  b <span class="o">=</span> <span class="f">argmax_except</span> totals a
+  pa <span class="o">=</span> <span class="f">prefer_count</span> voters a b
+  pb <span class="o">=</span> <span class="f">prefer_count</span> voters b a
+  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)
+
+<span class="k">fn</span> <span class="f">worst_margin</span> voters a
+  <span class="f">minimum</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">margin_or_high</span> voters a b))</code></pre>
 </div>
 
 <p>read <code>plurality_winner</code> inside out: map each voter to their favorite, count how many favorites landed on candidate <code>c</code>, do that for every candidate, take the argmax. <code>approval_winner</code> and <code>score_winner</code> are the same pipeline with a different column function. all three share one signature—a list of utility rows in, a candidate index out—and that shared signature is what lets the driver treat six methods as six interchangeable values.</p>
@@ -171,20 +322,94 @@ candidate next door: -1.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/methods.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_argmax_except</span> list skip
-  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
-  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (b i <span class="o">-&gt;</span> <span class="f">_better</span> list skip b i)
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/math"</span>
 
-<span class="k">fn</span> <span class="f">_prefer_count</span> voters a b
-  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">_score_ballot</span> v b <span class="o">&lt;</span> <span class="f">_score_ballot</span> v a) <span class="n">1</span> <span class="n">0</span>))
+<span class="k">fn</span> <span class="f">approval_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">approves</span> v c))
+
+<span class="k">fn</span> <span class="f">approval_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">approval_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">approves</span> v c
+  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> v[c]) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">argmax_except</span> list skip
+  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">better</span> list skip b i)
+
+<span class="k">fn</span> <span class="f">better</span> list skip b i
+  <span class="f">if</span> (i <span class="o">==</span> skip) b (<span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
+
+<span class="k">fn</span> <span class="f">first_is</span> v elim c
+  <span class="f">if</span> (<span class="f">rank_first</span> v elim <span class="o">==</span> c) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">in</span> list x
+  <span class="f">if</span> (<span class="f">count</span> list x <span class="o">==</span> <span class="n">0</span>) false true
+
+<span class="k">fn</span> <span class="f">irv_counts</span> voters elim
+  <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">first_is</span> v elim c)))
+
+<span class="k">fn</span> <span class="f">irv_go</span> voters elim
+  counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
+  top <span class="o">=</span> <span class="f">argmax</span> counts
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+
+<span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
+  <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
+
+<span class="k">fn</span> <span class="f">irv_winner</span> voters
+  <span class="f">irv_go</span> voters []
+
+<span class="k">fn</span> <span class="f">keep_min</span> counts elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (counts[c] <span class="o">&lt;</span> counts[b]) c b))
+
+<span class="k">fn</span> <span class="f">keep_top</span> v elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (v[b] <span class="o">&lt;</span> v[c]) c b))
+
+<span class="k">fn</span> <span class="f">margin_or_high</span> voters a b
+  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">pair</span> voters a b <span class="o">-</span> pair voters b a)
+
+<span class="k">fn</span> <span class="f">min_alive</span> counts elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_min</span> counts elim b c)
+
+<span class="k">fn</span> <span class="f">minimax_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">worst_margin</span> voters c))
+
+<span class="k">fn</span> <span class="f">pair</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (v[b] <span class="o">&lt;</span> v[a]) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">plurality_winner</span> voters
+  firsts <span class="o">=</span> <span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> firsts c))
+
+<span class="k">fn</span> <span class="f">prefer_count</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">score_ballot</span> v b <span class="o">&lt;</span> score_ballot v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">rank_first</span> v elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_top</span> v elim b c)
+
+<span class="k">fn</span> <span class="f">score_ballot</span> v c
+  lo <span class="o">=</span> <span class="f">minimum</span> v
+  hi <span class="o">=</span> <span class="f">maximum</span> v
+  <span class="f">math/round</span> (<span class="n">5.0</span> <span class="o">*</span> (v[c] <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))
+
+<span class="k">fn</span> <span class="f">score_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">score_ballot</span> v c))
+
+<span class="k">fn</span> <span class="f">score_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c))
 
 <span class="k">fn</span> <span class="f">star_winner</span> voters
-  totals <span class="o">=</span> <span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_score_col</span> voters c)
+  totals <span class="o">=</span> <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c)
   a <span class="o">=</span> <span class="f">argmax</span> totals
-  b <span class="o">=</span> <span class="f">_argmax_except</span> totals a
-  pa <span class="o">=</span> <span class="f">_prefer_count</span> voters a b
-  pb <span class="o">=</span> <span class="f">_prefer_count</span> voters b a
-  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)</code></pre>
+  b <span class="o">=</span> <span class="f">argmax_except</span> totals a
+  pa <span class="o">=</span> <span class="f">prefer_count</span> voters a b
+  pb <span class="o">=</span> <span class="f">prefer_count</span> voters b a
+  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)
+
+<span class="k">fn</span> <span class="f">worst_margin</span> voters a
+  <span class="f">minimum</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">margin_or_high</span> voters a b))</code></pre>
 </div>
 
 <p>two details reward a close read. <code>_argmax_except</code> finds the runner-up by folding with a seed that dodges the skipped index—if the leader is candidate 1, start the scan at 2. and <code>_prefer_count</code> compares <em>score ballots</em>, not raw utilities: the runoff counts the ballots voters actually cast, so a voter who scored both finalists 4 genuinely abstains from the runoff. the last line settles a tied runoff in favor of the score leader.</p>
@@ -195,22 +420,94 @@ candidate next door: -1.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/methods.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_irv_counts</span> voters elim
-  <span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">_first_is</span> v elim c)))
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/math"</span>
 
-<span class="k">fn</span> <span class="f">_irv_go</span> voters elim
-  counts <span class="o">=</span> <span class="f">_irv_counts</span> voters elim
+<span class="k">fn</span> <span class="f">approval_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">approves</span> v c))
+
+<span class="k">fn</span> <span class="f">approval_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">approval_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">approves</span> v c
+  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> v[c]) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">argmax_except</span> list skip
+  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">better</span> list skip b i)
+
+<span class="k">fn</span> <span class="f">better</span> list skip b i
+  <span class="f">if</span> (i <span class="o">==</span> skip) b (<span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
+
+<span class="k">fn</span> <span class="f">first_is</span> v elim c
+  <span class="f">if</span> (<span class="f">rank_first</span> v elim <span class="o">==</span> c) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">in</span> list x
+  <span class="f">if</span> (<span class="f">count</span> list x <span class="o">==</span> <span class="n">0</span>) false true
+
+<span class="k">fn</span> <span class="f">irv_counts</span> voters elim
+  <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">first_is</span> v elim c)))
+
+<span class="k">fn</span> <span class="f">irv_go</span> voters elim
+  counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
   top <span class="o">=</span> <span class="f">argmax</span> counts
-  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (<span class="f">at</span> counts top)) top (<span class="f">_irv_next</span> voters elim counts)
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
 
-<span class="k">fn</span> <span class="f">_irv_next</span> voters elim counts
-  <span class="f">_irv_go</span> voters (<span class="f">push</span> elim (<span class="f">_min_alive</span> counts elim))
-
-<span class="k">fn</span> <span class="f">_min_alive</span> counts elim
-  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (b c <span class="o">-&gt;</span> <span class="f">_keep_min</span> counts elim b c)
+<span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
+  <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
 
 <span class="k">fn</span> <span class="f">irv_winner</span> voters
-  <span class="f">_irv_go</span> voters []</code></pre>
+  <span class="f">irv_go</span> voters []
+
+<span class="k">fn</span> <span class="f">keep_min</span> counts elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (counts[c] <span class="o">&lt;</span> counts[b]) c b))
+
+<span class="k">fn</span> <span class="f">keep_top</span> v elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (v[b] <span class="o">&lt;</span> v[c]) c b))
+
+<span class="k">fn</span> <span class="f">margin_or_high</span> voters a b
+  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">pair</span> voters a b <span class="o">-</span> pair voters b a)
+
+<span class="k">fn</span> <span class="f">min_alive</span> counts elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_min</span> counts elim b c)
+
+<span class="k">fn</span> <span class="f">minimax_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">worst_margin</span> voters c))
+
+<span class="k">fn</span> <span class="f">pair</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (v[b] <span class="o">&lt;</span> v[a]) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">plurality_winner</span> voters
+  firsts <span class="o">=</span> <span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> firsts c))
+
+<span class="k">fn</span> <span class="f">prefer_count</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">score_ballot</span> v b <span class="o">&lt;</span> score_ballot v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">rank_first</span> v elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_top</span> v elim b c)
+
+<span class="k">fn</span> <span class="f">score_ballot</span> v c
+  lo <span class="o">=</span> <span class="f">minimum</span> v
+  hi <span class="o">=</span> <span class="f">maximum</span> v
+  <span class="f">math/round</span> (<span class="n">5.0</span> <span class="o">*</span> (v[c] <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))
+
+<span class="k">fn</span> <span class="f">score_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">score_ballot</span> v c))
+
+<span class="k">fn</span> <span class="f">score_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">star_winner</span> voters
+  totals <span class="o">=</span> <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c)
+  a <span class="o">=</span> <span class="f">argmax</span> totals
+  b <span class="o">=</span> <span class="f">argmax_except</span> totals a
+  pa <span class="o">=</span> <span class="f">prefer_count</span> voters a b
+  pb <span class="o">=</span> <span class="f">prefer_count</span> voters b a
+  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)
+
+<span class="k">fn</span> <span class="f">worst_margin</span> voters a
+  <span class="f">minimum</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">margin_or_high</span> voters a b))</code></pre>
 </div>
 
 <p>the state of an irv count is nothing but the elimination list. <code>irv_winner</code> starts it empty; each round either returns a winner or recurses with one more name pushed onto <code>elim</code>. the majority test is integer arithmetic—<code>nvot &lt; 2 * top</code> is "top holds strictly more than half"—with no division to introduce a float. vote transfer costs no code at all: <code>_rank_first</code> (behind <code>_first_is</code>) folds over the candidates keeping the voter's best <em>alive</em> option, so when a candidate joins <code>elim</code>, every ballot that ranked them first simply resolves to its next surviving preference on the following count.</p>
@@ -221,17 +518,94 @@ candidate next door: -1.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/methods.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_margin_or_high</span> voters a b
-  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">_pair</span> voters a b <span class="o">-</span> <span class="f">_pair</span> voters b a)
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/math"</span>
 
-<span class="k">fn</span> <span class="f">_pair</span> voters a b
-  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">at</span> v b <span class="o">&lt;</span> <span class="f">at</span> v a) <span class="n">1</span> <span class="n">0</span>))
+<span class="k">fn</span> <span class="f">approval_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">approves</span> v c))
 
-<span class="k">fn</span> <span class="f">_worst_margin</span> voters a
-  <span class="f">minimum</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">_margin_or_high</span> voters a b))
+<span class="k">fn</span> <span class="f">approval_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">approval_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">approves</span> v c
+  <span class="f">if</span> (<span class="f">mean</span> v <span class="o">&lt;</span> v[c]) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">argmax_except</span> list skip
+  first <span class="o">=</span> <span class="f">if</span> (skip <span class="o">==</span> <span class="n">1</span>) <span class="n">2</span> <span class="n">1</span>
+  <span class="f">fold</span> (<span class="f">range</span> (<span class="f">length</span> list)) first (<span class="f">b</span> i <span class="o">-&gt;</span> <span class="f">better</span> list skip b i)
+
+<span class="k">fn</span> <span class="f">better</span> list skip b i
+  <span class="f">if</span> (i <span class="o">==</span> skip) b (<span class="f">if</span> (list[b] <span class="o">&lt;</span> list[i]) i b)
+
+<span class="k">fn</span> <span class="f">first_is</span> v elim c
+  <span class="f">if</span> (<span class="f">rank_first</span> v elim <span class="o">==</span> c) <span class="n">1</span> <span class="n">0</span>
+
+<span class="k">fn</span> <span class="f">in</span> list x
+  <span class="f">if</span> (<span class="f">count</span> list x <span class="o">==</span> <span class="n">0</span>) false true
+
+<span class="k">fn</span> <span class="f">irv_counts</span> voters elim
+  <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">first_is</span> v elim c)))
+
+<span class="k">fn</span> <span class="f">irv_go</span> voters elim
+  counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
+  top <span class="o">=</span> <span class="f">argmax</span> counts
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+
+<span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
+  <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
+
+<span class="k">fn</span> <span class="f">irv_winner</span> voters
+  <span class="f">irv_go</span> voters []
+
+<span class="k">fn</span> <span class="f">keep_min</span> counts elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (counts[c] <span class="o">&lt;</span> counts[b]) c b))
+
+<span class="k">fn</span> <span class="f">keep_top</span> v elim b c
+  <span class="f">if</span> (<span class="f">in</span> elim c) b (<span class="f">if</span> (b <span class="o">==</span> <span class="n">0</span>) c (<span class="f">if</span> (v[b] <span class="o">&lt;</span> v[c]) c b))
+
+<span class="k">fn</span> <span class="f">margin_or_high</span> voters a b
+  <span class="f">if</span> (a <span class="o">==</span> b) nvot (<span class="f">pair</span> voters a b <span class="o">-</span> pair voters b a)
+
+<span class="k">fn</span> <span class="f">min_alive</span> counts elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_min</span> counts elim b c)
 
 <span class="k">fn</span> <span class="f">minimax_winner</span> voters
-  <span class="f">argmax</span> (<span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">_worst_margin</span> voters c))</code></pre>
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">worst_margin</span> voters c))
+
+<span class="k">fn</span> <span class="f">pair</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (v[b] <span class="o">&lt;</span> v[a]) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">plurality_winner</span> voters
+  firsts <span class="o">=</span> <span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">argmax</span> v)
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">count</span> firsts c))
+
+<span class="k">fn</span> <span class="f">prefer_count</span> voters a b
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">if</span> (<span class="f">score_ballot</span> v b <span class="o">&lt;</span> score_ballot v a) <span class="n">1</span> <span class="n">0</span>))
+
+<span class="k">fn</span> <span class="f">rank_first</span> v elim
+  <span class="f">fold</span> (<span class="f">range</span> ncand) <span class="n">0</span> (<span class="f">b</span> c <span class="o">-&gt;</span> <span class="f">keep_top</span> v elim b c)
+
+<span class="k">fn</span> <span class="f">score_ballot</span> v c
+  lo <span class="o">=</span> <span class="f">minimum</span> v
+  hi <span class="o">=</span> <span class="f">maximum</span> v
+  <span class="f">math/round</span> (<span class="n">5.0</span> <span class="o">*</span> (v[c] <span class="o">-</span> lo) <span class="o">/</span> (hi <span class="o">-</span> lo))
+
+<span class="k">fn</span> <span class="f">score_col</span> voters c
+  <span class="f">total</span> (<span class="f">list/map</span> voters (v <span class="o">-&gt;</span> <span class="f">score_ballot</span> v c))
+
+<span class="k">fn</span> <span class="f">score_winner</span> voters
+  <span class="f">argmax</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c))
+
+<span class="k">fn</span> <span class="f">star_winner</span> voters
+  totals <span class="o">=</span> <span class="f">list/map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">score_col</span> voters c)
+  a <span class="o">=</span> <span class="f">argmax</span> totals
+  b <span class="o">=</span> <span class="f">argmax_except</span> totals a
+  pa <span class="o">=</span> <span class="f">prefer_count</span> voters a b
+  pb <span class="o">=</span> <span class="f">prefer_count</span> voters b a
+  <span class="f">if</span> (pb <span class="o">&lt;</span> pa) a (<span class="f">if</span> (pa <span class="o">&lt;</span> pb) b a)
+
+<span class="k">fn</span> <span class="f">worst_margin</span> voters a
+  <span class="f">minimum</span> (<span class="f">list/map</span> (<span class="f">range</span> ncand) (b <span class="o">-&gt;</span> <span class="f">margin_or_high</span> voters a b))</code></pre>
 </div>
 
 <p>the one wrinkle is the diagonal: a candidate has no margin against themselves, so <code>_margin_or_high</code> reports <code>nvot</code> there—at least as large as any real margin can be, which keeps the self-pairing from ever registering as anyone's worst. the structure buys a guarantee: when some candidate beats every rival head-to-head—a condorcet winner—all their margins are positive while every rival carries at least one negative, so minimax elects them.</p>
@@ -242,32 +616,12 @@ candidate next door: -1.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">squeeze/main.kso</div>
-  <pre><code>electorate <span class="o">=</span>
-  left <span class="o">=</span> [<span class="n">5</span> <span class="n">4</span> <span class="n">0</span>]
-  right <span class="o">=</span> [<span class="n">0</span> <span class="n">4</span> <span class="n">5</span>]
-  center <span class="o">=</span> [<span class="n">0</span> <span class="n">5</span> <span class="n">4</span>]
-  [left left left left right right right center center]
-
-<span class="k">fn</span> <span class="f">label</span> <span class="n">1</span>
-  <span class="s">"lopez"</span>
-
-<span class="k">fn</span> <span class="f">label</span> <span class="n">2</span>
-  <span class="s">"chen"</span>
-
-<span class="k">fn</span> <span class="f">label</span> <span class="n">3</span>
-  <span class="s">"reed"</span>
-
-<span class="f">main</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"plurality: <span class="i">{label (plurality_winner electorate)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"irv:       <span class="i">{label (irv_winner electorate)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"approval:  <span class="i">{label (approval_winner electorate)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"score:     <span class="i">{label (score_winner electorate)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"star:      <span class="i">{label (star_winner electorate)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"minimax:   <span class="i">{label (minimax_winner electorate)}</span>"</span>
-
-ncand <span class="o">=</span> <span class="n">3</span>
-
-nvot <span class="o">=</span> <span class="n">9</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"plurality: <span class="i">{label (plurality_winner electorate)}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"irv:       <span class="i">{label (irv_winner electorate)}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"approval:  <span class="i">{label (approval_winner electorate)}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"score:     <span class="i">{label (score_winner electorate)}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"star:      <span class="i">{label (star_winner electorate)}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"minimax:   <span class="i">{label (minimax_winner electorate)}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run squeeze</div>
     <pre><code>plurality: lopez
@@ -295,15 +649,7 @@ minimax:   chen</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">socutil</span> voters c
-  <span class="f">total</span> (<span class="f">map</span> voters (v <span class="o">-&gt;</span> <span class="f">at</span> v c))
-
-<span class="k">fn</span> <span class="f">socutils</span> voters
-  <span class="f">map</span> (<span class="f">range</span> ncand) (c <span class="o">-&gt;</span> <span class="f">socutil</span> voters c)
-
-<span class="k">fn</span> <span class="f">vse</span> socs winner
-  m <span class="o">=</span> <span class="f">mean</span> socs
-  (<span class="f">at</span> socs winner <span class="o">-</span> m) <span class="o">/</span> (<span class="f">maximum</span> socs <span class="o">-</span> m)</code></pre>
+  <pre><code><span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
 </div>
 
 <p>if the method elected the utility-maximizing candidate, numerator equals denominator and the election scores 1.0. if it elected a candidate exactly as good as the field's average—what a random draw achieves in expectation—it scores 0.0. a method can score below zero in a given election by electing someone worse than average. average the per-election scores over many elections and the number becomes stable enough to compare methods.</p>
@@ -314,32 +660,7 @@ minimax:   chen</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_tally</span> acc elec
-  socs <span class="o">=</span> <span class="f">socutils</span> elec
-  p <span class="o">=</span> (<span class="f">at</span> acc <span class="n">1</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">plurality_winner</span> elec)
-  a <span class="o">=</span> (<span class="f">at</span> acc <span class="n">2</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">approval_winner</span> elec)
-  s <span class="o">=</span> (<span class="f">at</span> acc <span class="n">3</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">score_winner</span> elec)
-  st <span class="o">=</span> (<span class="f">at</span> acc <span class="n">4</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">star_winner</span> elec)
-  i <span class="o">=</span> (<span class="f">at</span> acc <span class="n">5</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">irv_winner</span> elec)
-  m <span class="o">=</span> (<span class="f">at</span> acc <span class="n">6</span>) <span class="o">+</span> <span class="f">vse</span> socs (<span class="f">minimax_winner</span> elec)
-  [p a s st i m]
-
-<span class="k">fn</span> <span class="f">_with_voters</span> k acc vp
-  <span class="f">cloud</span> ncand dims [] <span class="o">.</span> (cp <span class="o">-&gt;</span> <span class="f">trials</span> (k <span class="o">-</span> <span class="n">1</span>) (<span class="f">_tally</span> acc (<span class="f">utilities</span> vp cp)))
-
-<span class="f">main</span> <span class="o">=</span> <span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> means
-
-ncand <span class="o">=</span> <span class="n">5</span>
-
-nvot <span class="o">=</span> <span class="n">20</span>
-
-runs <span class="o">=</span> <span class="n">400</span>
-
-<span class="k">fn</span> <span class="f">trials</span> <span class="n">0</span> acc
-  acc
-
-<span class="k">fn</span> <span class="f">trials</span> k acc
-  <span class="f">cloud</span> nvot dims [] <span class="o">.</span> (vp <span class="o">-&gt;</span> <span class="f">_with_voters</span> k acc vp)</code></pre>
+  <pre><code><span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
 </div>
 
 <p>the accumulator is a six-slot list of running sums, one per method, seeded with floats and threaded through every trial. <code>trials</code> binds a voter cloud, <code>_with_voters</code> binds a candidate cloud, <code>_tally</code>—pure, no effects—runs all six methods against the resulting matrix and returns the updated sums. there are no channels and no mutable counters; the monte carlo loop is a recursion whose state rides in its arguments, and the only effects in the entire program are the coordinate draws and the final prints. note <code>main</code>'s ending: <code>. means</code> binds the final sums straight into the reporting function, point-free, the same shape as chapter 06's <code>sort prices . at 1</code>.</p>
@@ -350,13 +671,7 @@ runs <span class="o">=</span> <span class="n">400</span>
 
 <div class="code-panel">
   <div class="code-panel-title">vse/main.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">means</span> sums
-  <span class="f">print</span> <span class="s">"plurality VSE <span class="i">{(at sums 1) / runs}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"approval  VSE <span class="i">{(at sums 2) / runs}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"score     VSE <span class="i">{(at sums 3) / runs}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"star      VSE <span class="i">{(at sums 4) / runs}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"irv       VSE <span class="i">{(at sums 5) / runs}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"minimax   VSE <span class="i">{(at sums 6) / runs}</span>"</span></code></pre>
+  <pre><code><span class="f">trials</span> runs [<span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span> <span class="n">0.0</span>] <span class="o">.</span> <span class="f">means</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run vse</div>
     <pre><code>plurality VSE 0.6861199412466163

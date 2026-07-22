@@ -1,0 +1,6 @@
+import "../geo"
+
+pub area
+
+pub fn lap r
+  area r + area r
