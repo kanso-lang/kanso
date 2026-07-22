@@ -132,6 +132,12 @@ fn is_at_call(e: &Expr) -> bool {
 fn children(e: &Expr) -> Vec<&Expr> {
     match e {
         Expr::Field { base, .. } => vec![base.as_ref()],
+        Expr::Block(stmts, _) => stmts
+            .iter()
+            .map(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+            })
+            .collect(),
         Expr::App { head, args, .. } => {
             let mut v: Vec<&Expr> = vec![head.as_ref()];
             v.extend(args.iter());

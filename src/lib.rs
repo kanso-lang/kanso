@@ -431,6 +431,11 @@ fn rewrite_stmt(stmt: &mut ast::Stmt, qual: &str, owned: &std::collections::Hash
 
 fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet<String>) {
     match e {
+        ast::Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                rewrite_stmt(stmt, qual, owned);
+            }
+        }
         ast::Expr::Ident(name, _) => {
             if owned.contains(name.as_str()) {
                 *name = format!("{qual}/{name}");
@@ -833,6 +838,7 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
         | ast::Expr::Index { span: s, .. }
         | ast::Expr::BinOp { span: s, .. }
         | ast::Expr::Join { span: s, .. }
+        | ast::Expr::Block(_, s)
         | ast::Expr::Seq(_, _, s)
         | ast::Expr::Lambda { span: s, .. }
         | ast::Expr::List(_, s)
@@ -873,6 +879,12 @@ fn private_uses(
 
 fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
+        ast::Expr::Block(stmts, _) => stmts
+            .iter()
+            .map(|st| match st {
+                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
+            })
+            .collect(),
         ast::Expr::App { head, args, .. } => {
             let mut v: Vec<&ast::Expr> = vec![head.as_ref()];
             v.extend(args.iter());

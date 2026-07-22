@@ -1529,6 +1529,25 @@ impl<'a> Backend<'a> {
                     f.bind(name, &t);
                 }
                 Stmt::Bind { pattern, expr } => {
+                    self.emit_bind(f, pattern, expr)?;
+                }
+                Stmt::Expr(expr) => {
+                    if i == last {
+                        self.emit_tail(f, expr)?;
+                    } else {
+                        let _ = self.emit_expr(f, expr)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// One strict binding: evaluate, then bind the pattern's names.
+    fn emit_bind(&mut self, f: &mut FnEmit, pattern: &Pattern, expr: &Expr) -> Result<(), String> {
+        {
+            {
+                {
                     let value = self.emit_expr(f, expr)?;
                     let value = match pattern {
                         Pattern::Var(..) => value,
@@ -1589,13 +1608,6 @@ impl<'a> Backend<'a> {
                         }
                     }
                 }
-                Stmt::Expr(expr) => {
-                    if i == last {
-                        self.emit_tail(f, expr)?;
-                    } else {
-                        let _ = self.emit_expr(f, expr)?;
-                    }
-                }
             }
         }
         Ok(())
@@ -1603,6 +1615,22 @@ impl<'a> Backend<'a> {
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
+            Expr::Block(stmts, _) => {
+                let mut value = "{ i64 4, i64 0 }".to_string();
+                let last = stmts.len().saturating_sub(1);
+                for (i, stmt) in stmts.iter().enumerate() {
+                    match stmt {
+                        Stmt::Bind { pattern, expr } => self.emit_bind(f, pattern, expr)?,
+                        Stmt::Expr(e) => {
+                            let v = self.emit_expr(f, e)?;
+                            if i == last {
+                                value = v;
+                            }
+                        }
+                    }
+                }
+                Ok(value)
+            }
             Expr::Int(n, _) => Ok(format!("{{ i64 0, i64 {n} }}")),
             Expr::Float(x, _) => {
                 let t = f.tmp();
@@ -2659,6 +2687,13 @@ impl<'a> Backend<'a> {
 fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => collect_idents(expr, out),
+                }
+            }
+        }
         Expr::Field { base, .. } => collect_idents(base, out),
         Expr::Str(parts, _) => {
             for part in parts {

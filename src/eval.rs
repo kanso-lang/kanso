@@ -512,6 +512,25 @@ impl<'a> Interp<'a> {
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::Int(n.clone())),
+            Expr::Block(stmts, _) => {
+                // a deferred branch body: fn-body statements in a child
+                // scope; the env extension is dropped with this frame
+                let mut env = env.clone();
+                let mut result = Value::NoneV;
+                for stmt in stmts {
+                    match stmt {
+                        Stmt::Bind { pattern, expr } => {
+                            let mut value = self.eval(expr, &env, frame)?;
+                            if !matches!(pattern, Pattern::Var(..)) {
+                                value = self.force_thunk(value)?;
+                            }
+                            env = self.destructure(pattern, value, env, expr.span())?;
+                        }
+                        Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
+                    }
+                }
+                Ok(result)
+            }
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::MapLit(pairs, span) => {
                 let mut entries = BTreeMap::new();

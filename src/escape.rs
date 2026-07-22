@@ -247,6 +247,9 @@ impl<'a> Analysis<'a> {
     fn expr_safe_calls(&self, ty: &str, e: &Expr) -> bool {
         match e {
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
+            Expr::Block(stmts, _) => stmts.iter().all(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_safe_calls(ty, expr),
+            }),
             Expr::Field { base, .. } => {
                 !self.produces_ty(ty, base) && self.expr_safe_calls(ty, base)
             }
@@ -364,6 +367,9 @@ impl<'a> Analysis<'a> {
         // Conservative: ty appears anywhere in this (non-tail) expression.
         match e {
             Expr::Ident(name, _) => name == ty,
+            Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_mentions_ty(ty, expr),
+            }),
             Expr::Field { base, .. } => self.expr_mentions_ty(ty, base),
             Expr::App { head, args, .. } => {
                 self.expr_mentions_ty(ty, head) || args.iter().any(|a| self.expr_mentions_ty(ty, a))

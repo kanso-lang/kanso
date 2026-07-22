@@ -115,6 +115,15 @@ fn resolve_marker_pattern(
 fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
     match expr {
         Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                        check_marker_calls(expr, markers, diags)
+                    }
+                }
+            }
+        }
         Expr::MapLit(pairs, _) => {
             for (key, value) in pairs {
                 check_marker_calls(key, markers, diags);
@@ -675,6 +684,19 @@ impl Resolver<'_> {
     fn resolve_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Int(..) | Expr::Float(..) => {}
+            Expr::Block(stmts, _) => {
+                let from = self.locals.len();
+                for stmt in stmts {
+                    match stmt {
+                        Stmt::Bind { pattern, expr } => {
+                            self.resolve_expr(expr);
+                            self.bind_pattern(pattern);
+                        }
+                        Stmt::Expr(expr) => self.resolve_expr(expr),
+                    }
+                }
+                self.locals.truncate(from);
+            }
             Expr::Field { base, .. } => self.resolve_expr(base),
             Expr::MapLit(pairs, _) => {
                 for (key, value) in pairs {

@@ -16,6 +16,10 @@ pub enum Expr {
     Lambda { params: Vec<(String, Span)>, body: Box<Expr>, span: Span },
     BinOp { op: &'static str, lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
     Join { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
+    /// A bind-bearing branch body — fn-body statements in expression
+    /// position. Exists only where evaluation is deferred (an `if` arm),
+    /// so sequencing never braids into ordinary application.
+    Block(Vec<Stmt>, Span),
 }
 
 #[derive(Clone, Debug)]
@@ -39,7 +43,8 @@ impl Expr {
             | Expr::Seq(_, _, s)
             | Expr::Lambda { span: s, .. }
             | Expr::BinOp { span: s, .. }
-            | Expr::Join { span: s, .. } => *s,
+            | Expr::Join { span: s, .. }
+            | Expr::Block(_, s) => *s,
         }
     }
 }

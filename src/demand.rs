@@ -62,6 +62,15 @@ fn collect_uses(
     match expr {
         Expr::Ident(id, _) if id == name => uses.demanding += 1,
         Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                        collect_uses(expr, name, discard, uses)
+                    }
+                }
+            }
+        }
         Expr::App { head, args, .. } => {
             let discard_slots = match head.as_ref() {
                 Expr::Ident(callee, _) => discard.get(&(callee.clone(), args.len())),
@@ -125,6 +134,9 @@ fn collect_uses(
 /// the cell, so it compiles strict.
 fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
     match expr {
+        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expensive(expr, fns),
+        }),
         Expr::App { head, args, .. } => {
             if let Expr::Ident(callee, _) = head.as_ref() {
                 if fns.contains(callee.as_str()) {
