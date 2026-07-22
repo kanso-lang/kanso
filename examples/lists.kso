@@ -7,7 +7,7 @@ fn describe x
 pub play =
   prices = [30 10 20]
   doubled = map prices (x -> x * 2)
-  ninth = at prices 9
+  ninth = prices[9]
   print "sorted: {sort prices}"
     >> print "doubled: {doubled}"
     >> print (describe ninth)

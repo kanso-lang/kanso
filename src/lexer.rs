@@ -525,7 +525,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             }
             continue;
         }
-        if matches!((prev, next), (Tok::Ident(_), Tok::LBracket)) {
+        if matches!((prev, next), (Tok::Ident(_) | Tok::RParen | Tok::RBracket, Tok::LBracket)) {
             if gap > 1 {
                 diags.push(Diagnostic::new(
                     "formatting",

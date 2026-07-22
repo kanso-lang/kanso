@@ -1,2 +1,2 @@
 xs = [10 20 30]
-print "{at xs 9}"
+print "{xs[9]}"

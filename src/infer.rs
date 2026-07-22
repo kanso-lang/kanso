@@ -195,15 +195,21 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
             }
             MAP
         }
-        Expr::Index { base, index, .. } => {
+        Expr::Index { base, index, strict, .. } => {
             let b = eval_expr(ctx, base, env);
             let k = eval_expr(ctx, index, env);
-            let mut out = (b & FAIL) | (k & FAIL) | ERR; // strict: miss is err
+            // a miss errs under the sigil (xs[i]!) and nones under the plain
+            // lenient form (xs[i])
+            let miss = match strict {
+                true => ERR,
+                false => NONE,
+            };
+            let mut out = (b & FAIL) | (k & FAIL) | miss;
             if b & BYTES != 0 {
                 out |= INT;
             }
             if b & (LIST | MAP | STR) != 0 {
-                out |= TOP & !FAIL;
+                out |= TOP & !FAIL & !THUNK;
             }
             out
         }

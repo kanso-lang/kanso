@@ -7,4 +7,4 @@ fn sq x
   x * x
 
 fn util v c
-  0 - sqrt (sq (at v 1 - at c 1) + sq (at v 2 - at c 2))
+  0 - sqrt (sq (v[1] - c[1]) + sq (v[2] - c[2]))

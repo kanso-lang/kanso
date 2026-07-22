@@ -1,5 +1,5 @@
 fn cheapest prices
-  sort prices . at 1
+  (sort prices)[1]
 
 pub play =
   prices = [520 380 450 610 290]

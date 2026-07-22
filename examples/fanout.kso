@@ -11,5 +11,5 @@ fn fetch_quote city
 pub play =
   cities = ["tokyo" "kyoto" "osaka" "sapporo"]
   quotes = map cities (c -> fetch_quote c)
-  cheapest = sort quotes . at 1
+  cheapest = (sort quotes)[1]
   print "four lookups fanned out, one answer fanned in: {cheapest} yen"

@@ -11,19 +11,19 @@ pub fn drop list n
   drop_from list (n + 1) []
 
 fn drop_from list i acc
-  if (length list < i) acc (drop_from list (i + 1) (push acc (at list i)))
+  if (length list < i) acc (drop_from list (i + 1) (push acc (list[i])))
 
 pub fn find list pred
   unwrap_found (seek list pred)
 
 pub fn first list
-  at list 1
+  list[1]
 
 pub fn fold list init f
   fold_at list init f 1
 
 fn fold_at list acc f i
-  if (length list < i) acc (fold_at list (f acc (at list i)) f (i + 1))
+  if (length list < i) acc (fold_at list (f acc (list[i])) f (i + 1))
 
 fn pick_found (missing _) true x
   x
@@ -53,7 +53,7 @@ fn take_done list n i
   if (length list < i) true (n < i)
 
 fn take_more list n i acc
-  take_to list n (i + 1) (push acc (at list i))
+  take_to list n (i + 1) (push acc (list[i]))
 
 fn take_to list n i acc
   if (take_done list n i) acc (take_more list n i acc)

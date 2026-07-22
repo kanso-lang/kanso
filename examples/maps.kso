@@ -2,4 +2,4 @@ ages = ["ken": 5 "mai": 8]
 
 older = put ages "sora" 12
 
-pub play = print "{at older "mai"} of {length older}: {entries older}"
+pub play = print "{older["mai"]} of {length older}: {entries older}"

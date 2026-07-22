@@ -125,8 +125,8 @@ fn walk(e: &Expr, name: &str, arity: usize, disc: usize, ok: &mut bool) {
 }
 
 fn is_at_call(e: &Expr) -> bool {
-    matches!(e, Expr::App { head, args, .. }
-        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "at") && args.len() == 2)
+    // lenient indexing (`cs[p]`) is the byte-discriminator shape
+    matches!(e, Expr::Index { strict: false, .. })
 }
 
 fn children(e: &Expr) -> Vec<&Expr> {

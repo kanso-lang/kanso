@@ -29,7 +29,9 @@ fn hex4 n
   join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
 
 fn hex_char n
-  at "0123456789abcdef" (n + 1)
+  hex_digits[n + 1]
+
+hex_digits = "0123456789abcdef"
 
 pub play =
   bell = from_code 7

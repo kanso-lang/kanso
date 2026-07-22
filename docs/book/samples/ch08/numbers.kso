@@ -33,7 +33,7 @@ fn is_number_char c
   both (47 < c) (c < 58)
 
 fn mark_from cs p q
-  if (p > q) false (mark_step cs (at cs p) p q)
+  if (p > q) false (mark_step cs (cs[p]) p q)
 
 fn mark_step _ 46 _ _
   true
@@ -48,7 +48,7 @@ fn mark_step cs _ p q
   mark_from cs (p + 1) q
 
 fn number_end cs p
-  if (is_number_char (at cs p)) (number_end cs (p + 1)) p
+  if (is_number_char (cs[p])) (number_end cs (p + 1)) p
 
 pub play =
   print (classify "42")
