@@ -223,55 +223,26 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
         // import { theirs:yours ... } "path" — renames only; a bare word in
         // braces is redundant (the compiler prunes; bare access is default)
         [(Tok::KwImport, _), (Tok::LBrace, brace_span), rest @ ..] => {
-            let mut renames = Vec::new();
-            let mut i = 0;
-            loop {
-                match rest.get(i) {
-                    Some((Tok::RBrace, _)) => {
-                        i += 1;
-                        break;
-                    }
-                    Some((Tok::Ident(theirs), _)) => match rest.get(i + 1) {
-                        Some((Tok::Colon, _)) => match rest.get(i + 2) {
-                            Some((Tok::Ident(yours), _)) => {
-                                renames.push((theirs.clone(), yours.clone()));
-                                i += 3;
-                            }
-                            other => {
-                                let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
-                                return Err(Diagnostic::new(
-                                    "syntax",
-                                    "a rename is theirs:yours".to_string(),
-                                    span,
-                                ));
-                            }
-                        },
-                        other => {
-                            let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
-                            return Err(Diagnostic::new(
-                                "syntax",
-                                "an unrenamed selection is redundant — the compiler \
-                                 prunes unused imports and bare access is the \
-                                 default; braces hold theirs:yours renames"
-                                    .to_string(),
-                                span,
-                            ));
-                        }
-                    },
-                    other => {
-                        let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
-                        return Err(Diagnostic::new(
-                            "syntax",
-                            "braces hold theirs:yours renames".to_string(),
-                            span,
-                        ));
-                    }
-                }
-            }
+            let (renames, i) = parse_renames(rest, *brace_span)?;
             match rest.get(i) {
                 Some((Tok::Str(parts), span)) if rest.len() == i + 1 && !renames.is_empty() => {
                     let path = plain_path(parts, *span)?;
                     Ok(Import { path, span: *span, alias: None, renames })
+                }
+                _ => Err(Diagnostic::new(
+                    "syntax",
+                    "an import ends with its path string".to_string(),
+                    *brace_span,
+                )),
+            }
+        }
+        // import t { theirs:yours ... } "path" — alias and renames combined
+        [(Tok::KwImport, _), (Tok::Ident(alias), _), (Tok::LBrace, brace_span), rest @ ..] => {
+            let (renames, i) = parse_renames(rest, *brace_span)?;
+            match rest.get(i) {
+                Some((Tok::Str(parts), span)) if rest.len() == i + 1 && !renames.is_empty() => {
+                    let path = plain_path(parts, *span)?;
+                    Ok(Import { path, span: *span, alias: Some(alias.clone()), renames })
                 }
                 _ => Err(Diagnostic::new(
                     "syntax",
@@ -286,6 +257,60 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
             head_span(line),
         )),
     }
+}
+
+/// The brace body of an import: `theirs:yours` pairs, tight colons, closed
+/// by `}`. Returns the pairs and the index just past the closing brace.
+fn parse_renames(
+    rest: &[(Tok, Span)],
+    brace_span: Span,
+) -> Result<(Vec<(String, String)>, usize), Diagnostic> {
+    let mut renames = Vec::new();
+    let mut i = 0;
+    loop {
+        match rest.get(i) {
+            Some((Tok::RBrace, _)) => {
+                i += 1;
+                break;
+            }
+            Some((Tok::Ident(theirs), _)) => match rest.get(i + 1) {
+                Some((Tok::Colon, _)) => match rest.get(i + 2) {
+                    Some((Tok::Ident(yours), _)) => {
+                        renames.push((theirs.clone(), yours.clone()));
+                        i += 3;
+                    }
+                    other => {
+                        let span = other.map(|(_, s)| *s).unwrap_or(brace_span);
+                        return Err(Diagnostic::new(
+                            "syntax",
+                            "a rename is theirs:yours".to_string(),
+                            span,
+                        ));
+                    }
+                },
+                other => {
+                    let span = other.map(|(_, s)| *s).unwrap_or(brace_span);
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "an unrenamed selection is redundant — the compiler \
+                         prunes unused imports and bare access is the \
+                         default; braces hold theirs:yours renames"
+                            .to_string(),
+                        span,
+                    ));
+                }
+            },
+            other => {
+                let span = other.map(|(_, s)| *s).unwrap_or(brace_span);
+                return Err(Diagnostic::new(
+                    "syntax",
+                    "braces hold theirs:yours renames".to_string(),
+                    span,
+                ));
+            }
+        }
+    }
+    Ok((renames, i))
 }
 
 fn head_span(line: &Line) -> Span {
