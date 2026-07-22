@@ -98,6 +98,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     match merged_diags.is_empty() {
         true => {
             canonicalize_types(&mut merged);
+    fuse_enumerable(&mut merged);
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
@@ -186,6 +187,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         synthetic: false,
     });
     canonicalize_types(&mut program);
+    fuse_enumerable(&mut program);
     Ok(program)
 }
 
@@ -254,6 +256,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         return Err(diag::render(&merged_diags, file, source));
     }
     canonicalize_types(&mut program);
+    fuse_enumerable(&mut program);
     Ok(program)
 }
 
@@ -386,6 +389,242 @@ pub fn canonicalize_types(program: &mut ast::Program) {
             }
         }
     }
+}
+
+/// Enumerable fusion: a consumer applied to an adapter chain rewrites to
+/// one `fold` over the chain's root, the adapter steps composed into the
+/// reducer. `fold`'s typed arms make the rewrite sound for any root — a
+/// plain list takes the indexed loop, an iterator keeps the protocol — so
+/// no per-element wrapper records exist for chains consumed in place.
+pub fn fuse_enumerable(program: &mut ast::Program) {
+    use ast::Stmt;
+    let mut shorts: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    let std_names: std::collections::HashSet<String> = program
+        .fns
+        .iter()
+        .filter(|d| d.file.starts_with("std/list"))
+        .map(|d| {
+            d.name
+                .rsplit_once('/')
+                .map(|(_, s)| s.to_string())
+                .unwrap_or_else(|| d.name.clone())
+        })
+        .collect();
+    for d in &program.fns {
+        let short = d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name);
+        if std_names.contains(short) {
+            shorts.insert(d.name.clone(), short.to_string());
+        }
+    }
+    // the fold the rewrite names: a real decl in this program, whichever
+    // qualified spelling the module graph produced
+    let Some(fold_name) = program
+        .fns
+        .iter()
+        .find(|d| {
+            d.file.starts_with("std/list")
+                && !d.synthetic
+                && d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name) == "fold"
+        })
+        .map(|d| d.name.clone())
+    else {
+        return;
+    };
+    let mut counter = 0usize;
+    for decl in &mut program.fns {
+        if decl.file.starts_with("std/") {
+            continue;
+        }
+        for stmt in &mut decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    fuse_expr(expr, &shorts, &fold_name, &mut counter);
+                }
+            }
+        }
+    }
+}
+
+fn fuse_expr(
+    e: &mut ast::Expr,
+    shorts: &std::collections::HashMap<String, String>,
+    fold_name: &str,
+    counter: &mut usize,
+) {
+    use ast::Expr;
+    match e {
+        Expr::App { head, args, .. } => {
+            fuse_expr(head, shorts, fold_name, counter);
+            for a in args.iter_mut() {
+                fuse_expr(a, shorts, fold_name, counter);
+            }
+        }
+        Expr::Lambda { body, .. } => fuse_expr(body, shorts, fold_name, counter),
+        Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                match stmt {
+                    ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
+                        fuse_expr(expr, shorts, fold_name, counter)
+                    }
+                }
+            }
+        }
+        Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+            fuse_expr(a, shorts, fold_name, counter);
+            fuse_expr(b, shorts, fold_name, counter);
+        }
+        Expr::List(items, _) => {
+            for i in items {
+                fuse_expr(i, shorts, fold_name, counter);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                fuse_expr(k, shorts, fold_name, counter);
+                fuse_expr(v, shorts, fold_name, counter);
+            }
+        }
+        Expr::Index { base, index, .. } => {
+            fuse_expr(base, shorts, fold_name, counter);
+            fuse_expr(index, shorts, fold_name, counter);
+        }
+        Expr::Field { base, .. } => fuse_expr(base, shorts, fold_name, counter),
+        Expr::BinOp { lhs, rhs, .. } => {
+            fuse_expr(lhs, shorts, fold_name, counter);
+            fuse_expr(rhs, shorts, fold_name, counter);
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let ast::TemplatePart::Interp(inner) = p {
+                    fuse_expr(inner, shorts, fold_name, counter);
+                }
+            }
+        }
+        _ => {}
+    }
+    if let Some(rewritten) = try_fuse(e, shorts, fold_name, counter) {
+        *e = rewritten;
+    }
+}
+
+fn try_fuse(
+    e: &ast::Expr,
+    shorts: &std::collections::HashMap<String, String>,
+    fold_name: &str,
+    counter: &mut usize,
+) -> Option<ast::Expr> {
+    use ast::Expr;
+    let Expr::App { head, args, span, piped: false } = e else { return None };
+    let Expr::Ident(cname, _) = head.as_ref() else { return None };
+    let consumer = shorts.get(cname.as_str())?.clone();
+    let span = *span;
+    let lam = |params: Vec<&String>, body: Expr| Expr::Lambda {
+        params: params.iter().map(|p| ((*p).clone(), span)).collect(),
+        body: Box::new(body),
+        span,
+    };
+    let ident = |n: &str| Expr::Ident(n.to_string(), span);
+    let call = |h: Expr, a: Vec<Expr>| Expr::App {
+        head: Box::new(h),
+        args: a,
+        span,
+        piped: false,
+    };
+    *counter += 1;
+    let acc = format!("facc{counter}");
+    let x = format!("felem{counter}");
+    let (init, reducer) = match (consumer.as_str(), args.len()) {
+        ("fold", 3) => (args[1].clone(), args[2].clone()),
+        ("sum", 1) => (
+            Expr::Int(0u32.into(), span),
+            lam(
+                vec![&acc, &x],
+                Expr::BinOp {
+                    op: "+",
+                    lhs: Box::new(ident(&acc)),
+                    rhs: Box::new(ident(&x)),
+                    span,
+                },
+            ),
+        ),
+        ("to_list", 1) => (
+            Expr::List(Vec::new(), span),
+            lam(vec![&acc, &x], call(ident("push"), vec![ident(&acc), ident(&x)])),
+        ),
+        ("count", 2) => (
+            Expr::Int(0u32.into(), span),
+            lam(
+                vec![&acc, &x],
+                call(
+                    ident("if"),
+                    vec![
+                        call(args[1].clone(), vec![ident(&x)]),
+                        Expr::BinOp {
+                            op: "+",
+                            lhs: Box::new(ident(&acc)),
+                            rhs: Box::new(Expr::Int(1u32.into(), span)),
+                            span,
+                        },
+                        ident(&acc),
+                    ],
+                ),
+            ),
+        ),
+        _ => return None,
+    };
+    let mut source = args[0].clone();
+    let mut reducer = reducer;
+    let mut fused_any = false;
+    #[allow(clippy::while_let_loop)]
+    loop {
+        let Expr::App { head: ahead, args: aargs, piped: false, .. } = &source else { break };
+        let Expr::Ident(aname, _) = ahead.as_ref() else { break };
+        let Some(adapter) = shorts.get(aname.as_str()).cloned() else { break };
+        if aargs.len() != 2 {
+            break;
+        }
+        *counter += 1;
+        let a2 = format!("facc{counter}");
+        let x2 = format!("felem{counter}");
+        let step = aargs[1].clone();
+        reducer = match adapter.as_str() {
+            "map" => lam(
+                vec![&a2, &x2],
+                call(reducer.clone(), vec![ident(&a2), call(step, vec![ident(&x2)])]),
+            ),
+            "select" => lam(
+                vec![&a2, &x2],
+                call(
+                    ident("if"),
+                    vec![
+                        call(step, vec![ident(&x2)]),
+                        call(reducer.clone(), vec![ident(&a2), ident(&x2)]),
+                        ident(&a2),
+                    ],
+                ),
+            ),
+            "reject" => lam(
+                vec![&a2, &x2],
+                call(
+                    ident("if"),
+                    vec![
+                        call(step, vec![ident(&x2)]),
+                        ident(&a2),
+                        call(reducer.clone(), vec![ident(&a2), ident(&x2)]),
+                    ],
+                ),
+            ),
+            _ => break,
+        };
+        let Expr::App { args: aargs, .. } = source else { unreachable!() };
+        source = aargs.into_iter().next().expect("adapters carry a source");
+        fused_any = true;
+    }
+    if !fused_any {
+        return None;
+    }
+    Some(call(ident(fold_name), vec![source, init, reducer]))
 }
 
 fn qualify(dep: &mut ast::Program, qual: &str, exports: &mut std::collections::HashMap<String, bool>) {
@@ -1215,5 +1454,6 @@ fn compile_module_inner(
         return Err(rendered.join(""));
     }
     canonicalize_types(&mut merged);
+    fuse_enumerable(&mut merged);
     Ok(merged)
 }
