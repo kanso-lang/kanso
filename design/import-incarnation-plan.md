@@ -86,3 +86,21 @@ yours + qual/yours added — patch drafted, asserts ready); the combined
 form `import t { slice:cut } "path"`; standalone pub re-exports;
 math/random. NOTE: a stash on this repo holds next-protocol work
 (step/done/cursor/next in std/list + any-typeset legalization).
+
+## Frontier narrowed (session 3): native template corruption in nested binds
+
+Repro (vse dir, native only — interp correct): entry
+`cloud 1 1 [] . (a -> cloud 1 1 [] . (b -> print "u {(utilities a b)[1][1]}"))`
+prints `-264.0-264.0` (interp: `u -264.0...`): the literal template piece
+is REPLACED by a duplicate of the interpolated value. Second shape:
+`{length (utilities a b)}` renders EMPTY after the literal. So the
+native template emission corrupts piece temps inside doubly-nested
+lifted lambdas under a bind — suspects among THIS branch's codegen
+changes: global group ordering (dispatcher arm order for multi-file
+groups), the tie sort, maybe_force insertions in the template path,
+was_builtin hoist. Simple nested binds and chained indexes are clean;
+plain vse main is silent-exit because the k=400 chain hits this
+corruption and dies un-rendered. NEXT: extract a standalone repro (play
+file: two nested cloud-style binds + list/map lambda + template), then
+diff its .ll between this branch and main (worktree build) — the delta
+names the culprit. Interp remains the oracle throughout.
