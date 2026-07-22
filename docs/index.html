@@ -230,6 +230,19 @@ three</code></pre>
         </div>
         <p>string interpolation is dispatch on an ordinary <code>to_string</code> group—so a custom rendering is one arm for a type you own, no import, no interface, no registration. nobody can re-render <code>int</code> (no module owns both the group and the primitive), so <code>"{42}"</code> means one thing in every program ever compiled—and that guarantee doubles as the license to skip dispatch entirely on primitive-only paths.</p>
       </div>
+      <div class="showcase-cell">
+        <div class="code-panel">
+          <div class="code-panel-title">the scheduler works the red lights</div>
+          <pre><code><span class="c"># a 2000 ms wait beside ~900 ms of pure work — measured, both engines</span>
+<span class="c"># sequential (stall, then work)     2913 ms</span>
+<span class="c"># overlapped (work inside stall)    2008 ms   the grind disappeared</span>
+
+<span class="c"># the scheduler credits real compute time against every pending wait.</span>
+<span class="c"># the transcript stays purely logical: same seed, same output, same</span>
+<span class="c"># counters, on every machine — only the physical wait shrinks.</span></code></pre>
+        </div>
+        <p>the work-ahead ruling extends this: the strictness analyzer already proves which computations are certain to run, so a parked fiber's wait can be filled with proven work automatically—two rules, one sort key, no annotations. wall-credit is shipped; the pool that finds the overlap by itself is the frontier. the picture, the ladder, and the rig: <a href="compiler.html#lazy">the compiler page</a>.</p>
+      </div>
     </div>
   </div>
 </section>
