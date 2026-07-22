@@ -1,13 +1,13 @@
 ---
 layout: book
-title: "chapter 05—effects are descriptions"
+title: "chapter 05—effects are io"
 description: "print that doesn't print, sequencing with >>, pipes that bind, real i/o with read_file and args, and testing effects with transcripts instead of mocks."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">chapter 05</span>
-<h1>effects are descriptions</h1>
+<h1>effects are io</h1>
 
-<p>time to confess what <code>print</code> has been doing all book: nothing. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns a <em>description</em> of printing, a value like any other. your entire program is one big pure computation whose final answer is <code>main</code>: a description of everything the program intends to do. the runtime receives that description and walks it. evaluation decides; the runtime performs.</p>
+<p>time to confess what <code>print</code> has been doing all book: nothing. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns an <code>io</code>, a value like any other, describing the printing it intends. your entire program is one big pure computation whose final answer is <code>main</code>: one <code>io</code> describing everything the program means to do. the runtime receives that value and walks it. evaluation decides; the runtime performs.</p>
 
 <p>you can see the seam directly, because a description is data, and data can be rendered instead of executed. <code>&gt;&gt;</code>—the wall—glues descriptions into bigger descriptions, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
 
@@ -40,7 +40,7 @@ pouring</code></pre>
   <pre><code><span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run quiet.kso --plan</div>
-    <pre><code><span class="k">error</span>: main is not a description; there is no plan to show</code></pre>
+    <pre><code><span class="k">error</span>: main is not an io; there is no plan to show</code></pre>
   </div>
 </div>
 
