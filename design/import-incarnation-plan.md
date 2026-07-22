@@ -50,13 +50,15 @@ quoting, synthetic markers consumed by beat + door advisory, suite
 11/11 at the core commit. examples/imports.kso written — INTERP runs
 all four forms correctly; PLAN correct.
 
-OPEN BUG: the example SEGFAULTS native (exit 139) even after suppressing
-%parsed conventions for union groups (escape retains filtered). Next
-debug steps: bisect which of the four lines crashes (suspects: the
-union dispatcher mixing local Ctor-pattern arm with imported Var arms;
-the t/ alias path through codegen dsym; check imports.ll for the
-d_select_2 union dispatcher's arm ABI and the k_call paths). The
-interp is the semantics oracle — native must match it.
+OPEN BUG (bisected): the ALIAS form alone segfaults native — minimal
+repro `import t "std/text"` + `t/join ["a" "b"] "-"` = exit 139; the
+same call unaliased (text/join) is green corpus-wide, and bare-union +
+rename forms pass in isolation. Interp correct on all forms. Suspects:
+alias-qualified decls interacting with a bare clone named `join`
+colliding with the k_desc_join/BUILTIN_CALLS join paths in codegen; or
+the alias qual flowing somewhere short_name(path) is still assumed.
+Attack with the emitted b3.ll (d_t/join_2 and the bare d_join_2
+dispatchers) next window. The interp is the oracle.
 
 THEN: math/random move, corpus re-sweep to bare, formatter canon,
 grammar forms, book spine.
