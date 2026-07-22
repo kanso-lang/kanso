@@ -1,16 +1,8 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>kanso playground</title>
-<meta name="description" content="run kanso in your browser: programs compile to wasm modules right in the tab via kanso's own wasm backend, with a live syntax-highlighted editor and a repl.">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=2">
-  <link rel="icon" type="image/x-icon" href="favicon.ico?v=2">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+---
+layout: default
+title: "kanso playground"
+description: "run kanso in your browser: programs compile to wasm modules right in the tab via kanso's own wasm backend, with a live syntax-highlighted editor and a repl."
+---
 <style>
 .play-wrap {
   margin: 0 auto;
@@ -165,24 +157,6 @@
 }
 .play-note code { font-size: 0.85em; }
 </style>
-</head>
-<body>
-
-<header class="site-header">
-  <a class="brand" href="index.html">
-    <svg class="enso-mark" viewBox="0 0 100 100" aria-hidden="true">
-      <circle cx="50" cy="50" r="40" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round" stroke-dasharray="222 30" transform="rotate(-80 50 50)"/>
-    </svg>
-    kanso <span class="brand-kanji">簡素</span>
-  </a>
-  <nav class="site-nav">
-    <a href="playground.html">playground</a>
-    <a href="book/index.html">book</a>
-    <a href="about.html">about</a>
-    <a href="compiler.html">compiler</a>
-    <a href="https://github.com/kanso-lang/kanso">github</a>
-  </nav>
-</header>
 
 <div class="play-wrap">
   <div class="play-head">
@@ -233,6 +207,4 @@
   err, exactly as the model says it should.</p>
 </div>
 
-<script src="play.js"></script>
-</body>
-</html>
+<script src="/play.js"></script>
