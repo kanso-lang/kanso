@@ -1,0 +1,17 @@
+import "std/io"
+import "std/time"
+
+crunch = io/args . (_ -> print "report: {grind 150000000}")
+
+fn grind n
+  spin n 0
+
+pub play =
+  sleep 2000 >> print "delivery: made"
+  crunch
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + n - (n / 7 * 7))
