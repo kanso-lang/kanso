@@ -1708,6 +1708,13 @@ pub fn eval_binop(
             )),
             false => Ok(Value::Int(a / b)),
         },
+        ("%", Value::Int(a), Value::Int(b)) => match b.is_zero() {
+            true => Ok(err_value(
+                Value::Str("modulo by zero".to_string()),
+                origin_at(frame, span),
+            )),
+            false => Ok(Value::Int(a % b)),
+        },
         ("+", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
         ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
@@ -1717,6 +1724,13 @@ pub fn eval_binop(
                 origin_at(frame, span),
             )),
             false => Ok(Value::Float(a / b)),
+        },
+        ("%", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
+            true => Ok(err_value(
+                Value::Str("modulo by zero".to_string()),
+                origin_at(frame, span),
+            )),
+            false => Ok(Value::Float(a % b)),
         },
         // int meets float: the int widens (as if cast `x:float`), result float
         ("+", Value::Int(a), Value::Float(b)) => Ok(Value::Float(int_f(a) + b)),

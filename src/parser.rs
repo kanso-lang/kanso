@@ -1222,7 +1222,7 @@ impl<'a> P<'a> {
 
     fn parse_mul(&mut self) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_app()?;
-        while let Some(Tok::Op(op @ ("*" | "/"))) = self.peek() {
+        while let Some(Tok::Op(op @ ("*" | "/" | "%"))) = self.peek() {
             let op = *op;
             let span = self.span_here();
             self.pos += 1;

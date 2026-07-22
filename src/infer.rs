@@ -254,7 +254,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                 // int op int stays int; any float operand widens the other,
                 // so the result is float
                 "+" | "-" | "*" => fails | numeric_result(a, b),
-                "/" => fails | ERR | numeric_result(a, b),
+                "/" | "%" => fails | ERR | numeric_result(a, b),
                 _ => BOOL | fails,
             }
         }

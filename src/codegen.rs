@@ -111,6 +111,7 @@ declare %KValue @k_add(%KValue, %KValue)
 declare %KValue @k_sub(%KValue, %KValue)
 declare %KValue @k_mul(%KValue, %KValue)
 declare %KValue @k_div(%KValue, %KValue, ptr)
+declare %KValue @k_mod(%KValue, %KValue, ptr)
 declare %KValue @k_cmp(%KValue, %KValue, i64)
 declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
@@ -2098,6 +2099,10 @@ impl<'a> Backend<'a> {
                 let origin = self.origin_arg(f, span);
                 format!("call %KValue @k_div(%KValue {a}, %KValue {b}, {origin})")
             }
+            "%" => {
+                let origin = self.origin_arg(f, span);
+                format!("call %KValue @k_mod(%KValue {a}, %KValue {b}, {origin})")
+            }
             "==" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 0)"),
             "!=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 1)"),
             "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
@@ -2105,7 +2110,7 @@ impl<'a> Backend<'a> {
             ">" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 4)"),
             _ => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
         };
-        if op == "/" {
+        if op == "/" || op == "%" {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
             f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT | FLOAT | ERR);

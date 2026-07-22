@@ -52,7 +52,7 @@ pub struct Lexed {
     pub blank_lines: Vec<usize>,
 }
 
-const OPS: [&str; 11] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "<", ">", "&"];
+const OPS: [&str; 12] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&"];
 
 pub const MAX_WIDTH: usize = 80;
 
@@ -323,6 +323,33 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             tokens.push((s.lex_int()?, span));
             end_cols.push(s.span().col);
             continue;
+        }
+        // a prefix minus folds into the literal: `-1` is a number, not an
+        // operation — binary minus needs an operand on its left
+        if c == '-' && s.peek(1).is_some_and(|d| d.is_ascii_digit()) {
+            let prefix = !matches!(
+                tokens.last(),
+                Some((
+                    Tok::Ident(_)
+                        | Tok::Int(_)
+                        | Tok::Float(_)
+                        | Tok::Str(_)
+                        | Tok::RParen
+                        | Tok::RBracket,
+                    _
+                ))
+            );
+            if prefix {
+                s.pos += 1;
+                let tok = match s.lex_int()? {
+                    Tok::Int(n) => Tok::Int(-n),
+                    Tok::Float(x) => Tok::Float(-x),
+                    other => other,
+                };
+                tokens.push((tok, span));
+                end_cols.push(s.span().col);
+                continue;
+            }
         }
         if c.is_ascii_lowercase() || c == '_' {
             tokens.push((s.lex_word()?, span));

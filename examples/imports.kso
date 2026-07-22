@@ -12,7 +12,7 @@ fn paid? (invoice total)
 
 pub play =
   inv = invoice 900
-  evens = select [1 2 3 4] (x -> x - (x / 2 * 2) == 0)
+  evens = select [1 2 3 4] (x -> x % 2 == 0)
   print "bare, union-dispatched: {select inv paid?} / {evens}"
   >> print "narrowed to the module: {list/select [5 6 7] (x -> 5 < x)}"
   >> print "renamed on the way in: {cut "kanso" 1 2} then {t/cut "kanso" 4 5}"
