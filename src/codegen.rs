@@ -207,6 +207,18 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     for (i, ty) in program.types.iter().enumerate() {
         type_ids.insert(ty.name.as_str(), (i + 1) as i64);
     }
+    // an enrollment clone is an alias: it constructs and matches as its
+    // origin, one identity per type no matter the spelling
+    let clone_ids: Vec<(&str, i64)> = program
+        .types
+        .iter()
+        .filter_map(|t| {
+            t.origin.as_deref().and_then(|o| type_ids.get(o).map(|id| (t.name.as_str(), *id)))
+        })
+        .collect();
+    for (name, id) in clone_ids {
+        type_ids.insert(name, id);
+    }
     let mut escape = crate::escape::analyze(program);
     // The by-value `%parsed` is two i64s, so it only fits a record shaped like
     // the scanner's `_parsed`: exactly two fields, a small int position packed
@@ -769,6 +781,10 @@ impl<'a> Backend<'a> {
         let mut arms = String::new();
         let mut cases = String::new();
         for ty in &self.program.types {
+            if ty.origin.is_some() {
+                // an alias shares its origin's id; the origin owns the case
+                continue;
+            }
             let id = self.type_ids[ty.name.as_str()];
             let (name, _len) = self.intern(&format!("{}\0", ty.name));
             let _ = writeln!(cases, "    i64 {id}, label %T{id}");
@@ -790,6 +806,10 @@ impl<'a> Backend<'a> {
     fn emit_type_fields(&mut self) {
         let mut tables: Vec<(i64, Vec<String>)> = vec![(0, vec!["key".into(), "value".into()])];
         for ty in &self.program.types {
+            if ty.origin.is_some() {
+                // an alias shares its origin's id; the origin owns the case
+                continue;
+            }
             let id = self.type_ids[ty.name.as_str()];
             let fields = ty.fields.iter().map(|(name, _, _)| name.clone()).collect();
             tables.push((id, fields));

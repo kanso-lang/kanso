@@ -1,0 +1,13 @@
+# the enumerable role: a type joins by arming `next` for a state it owns.
+# std/list arms it for cursors; a consumer drives until done.
+import "std/list"
+
+fn drain (step elem rest) acc
+  drain (next rest) (push acc elem)
+
+fn drain (done _) acc
+  acc
+
+pub play =
+  start = cursor 1 [10 20 30]
+  print "drained: {drain (next start) []}"

@@ -15,7 +15,7 @@ fn reexported_names_join_the_surface_bare_and_qualified() {
 
     assert_eq!(
         String::from_utf8_lossy(&output.stdout),
-        "[3 2]\n[1]\n[1 2 3]\n[4 5]\n"
+        "[3 2]\n[1]\n[1 2 3]\n[4 5]\n12.56636\n"
     );
     assert!(output.status.success());
 }

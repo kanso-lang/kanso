@@ -96,7 +96,10 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
         .filter(|d| d.kind != "unused")
         .collect();
     match merged_diags.is_empty() {
-        true => Ok(merged),
+        true => {
+            canonicalize_types(&mut merged);
+            Ok(merged)
+        }
         false => Err(diag::render(&merged_diags, file, source)),
     }
 }
@@ -175,6 +178,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         file: file.to_string(),
         synthetic: false,
     });
+    canonicalize_types(&mut program);
     Ok(program)
 }
 
@@ -235,6 +239,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
+    canonicalize_types(&mut program);
     Ok(program)
 }
 
@@ -320,11 +325,63 @@ fn short_name(path: &str) -> &str {
 /// Prefix every top-level name of `dep` with `qual/`, rewriting the module's
 /// own references so it still resolves internally, and record which
 /// qualified names are pub — the boundary the checker enforces.
+/// Rewrite every type reference that resolves to an enrollment clone to
+/// the canonical (origin) name: patterns and typeset members are type
+/// positions, so no local binding can shadow them. Records then match by
+/// one identity no matter which spelling constructed or destructured them.
+pub fn canonicalize_types(program: &mut ast::Program) {
+    let aliases: std::collections::HashMap<String, String> = program
+        .types
+        .iter()
+        .filter_map(|t| t.origin.clone().map(|o| (t.name.clone(), o)))
+        .collect();
+    if aliases.is_empty() {
+        return;
+    }
+    fn fix(name: &mut String, aliases: &std::collections::HashMap<String, String>) {
+        if let Some(canon) = aliases.get(name.as_str()) {
+            *name = canon.clone();
+        }
+    }
+    fn walk_pattern(p: &mut ast::Pattern, aliases: &std::collections::HashMap<String, String>) {
+        match p {
+            ast::Pattern::Ctor { ty, fields } => {
+                fix(ty, aliases);
+                for f in fields {
+                    walk_pattern(f, aliases);
+                }
+            }
+            ast::Pattern::Annotated { ty, .. } => fix(ty, aliases),
+            _ => {}
+        }
+    }
+    for decl in &mut program.fns {
+        for p in &mut decl.params {
+            walk_pattern(p, &aliases);
+        }
+        for stmt in &mut decl.body {
+            if let ast::Stmt::Bind { pattern, .. } = stmt {
+                walk_pattern(pattern, &aliases);
+            }
+        }
+    }
+    for ty in &mut program.types {
+        for (_, members, _) in &mut ty.fields {
+            for member in members {
+                fix(member, &aliases);
+            }
+        }
+    }
+}
+
 fn qualify(dep: &mut ast::Program, qual: &str, exports: &mut std::collections::HashMap<String, bool>) {
     let owned: std::collections::HashSet<String> = check::declared_names(dep);
     for ty in &mut dep.types {
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
         ty.name = format!("{qual}/{}", ty.name);
+        if let Some(o) = &mut ty.origin {
+            *o = format!("{qual}/{o}");
+        }
         for (_, members, _) in &mut ty.fields {
             for member in members {
                 if owned.contains(member.as_str()) {
@@ -451,6 +508,7 @@ fn enroll_bare(
                 let mut clone = t.clone();
                 clone.name = short.to_string();
                 clone.synthetic = true;
+                clone.origin = Some(t.origin.clone().unwrap_or_else(|| t.name.clone()));
                 bare_types.push(clone);
             }
         }
@@ -597,6 +655,7 @@ fn load_dependencies(
                         let mut c = t.clone();
                         c.name = spelling;
                         c.synthetic = true;
+                        c.origin = Some(t.origin.clone().unwrap_or_else(|| t.name.clone()));
                         tclones.push(c);
                     }
                     found = true;
@@ -946,6 +1005,7 @@ fn apply_reexport(
                         c.name = format!("{q}/{yours}");
                         c.synthetic = true;
                         c.is_pub = true;
+                        c.origin = Some(t.origin.clone().unwrap_or_else(|| t.name.clone()));
                         tclones.push(c);
                         any = true;
                     }
@@ -1128,5 +1188,6 @@ fn compile_module_inner(
             .collect();
         return Err(rendered.join(""));
     }
+    canonicalize_types(&mut merged);
     Ok(merged)
 }

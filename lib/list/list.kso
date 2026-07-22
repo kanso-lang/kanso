@@ -1,5 +1,16 @@
+pub type cursor
+  at:int
+  source:any
+
+pub type done
+  drained:bool
+
 type missing
   unfound:bool
+
+pub type step
+  elem:any
+  rest:any
 
 pub fn all? list pred
   fold list true (ok x -> if (pred x) ok false)
@@ -51,6 +62,9 @@ pub fn mean list
 
 pub fn min list
   unwrap_found (fold list (missing true) (m x -> underrank m x))
+
+pub fn next (cursor at source)
+  if (length source < at) (done true) (step source[at] (cursor (at + 1) source))
 
 fn outrank (missing _) x
   x

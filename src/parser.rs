@@ -486,7 +486,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     let (name, span) = p.expect_ident("a type name")?;
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, is_pub, span, synthetic: false, fields })
+    Ok(TypeDecl { name, is_pub, span, synthetic: false, origin: None, fields })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {

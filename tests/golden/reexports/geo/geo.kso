@@ -1,7 +1,13 @@
 import "std/list"
 
+pub type disk
+  r:float64
+
 pub fn areas rs
   select rs (r -> 0 < r)
+
+pub fn footprint (disk r)
+  3.14159 * r * r
 
 pub select
 

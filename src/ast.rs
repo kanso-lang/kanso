@@ -99,6 +99,9 @@ pub struct TypeDecl {
     pub is_pub: bool,
     pub span: Span,
     pub synthetic: bool,
+    /// For an enrollment clone: the declaring module's qualified name. A
+    /// record's identity is the canonical name; clones alias, never fork.
+    pub origin: Option<String>,
     /// Field name, permitted types (a typeset: one or more members), span.
     pub fields: Vec<(String, Vec<String>, Span)>,
 }
