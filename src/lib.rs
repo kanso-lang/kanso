@@ -84,7 +84,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
     }
-    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
+    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new(), reexports: Vec::new() };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
@@ -512,7 +512,7 @@ fn load_dependencies(
     imports: &[ast::Import],
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
 ) -> Result<(ast::Program, std::collections::HashMap<String, bool>), String> {
-    let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
+    let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new(), reexports: Vec::new() };
     let mut exports = std::collections::HashMap::new();
     for import in imports {
         let path = &import.path;
@@ -644,9 +644,13 @@ fn mark_bare_quals(
         if !is_pub {
             continue;
         }
-        if let Some((qual, short)) = qualified.rsplit_once('/') {
-            if bare.contains(short) {
-                quals.insert(qual.to_string());
+        // a re-export surfaces as a nested qual (geo/list/select): the
+        // import that owns it is the first segment, the bare spelling the last
+        if let Some((first, _)) = qualified.split_once('/') {
+            if let Some((_, short)) = qualified.rsplit_once('/') {
+                if bare.contains(short) {
+                    quals.insert(first.to_string());
+                }
             }
         }
     }
@@ -859,6 +863,107 @@ thread_local! {
     static AMBIENT_ROOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
+/// One `pub name` line: elevate the matching demoted dependency pubs back
+/// onto this module's surface. A qualifier elevates its module's whole
+/// surface; a lone name elevates that export wherever imports offer it;
+/// `theirs:yours` clones under the new name instead.
+fn apply_reexport(
+    dep_program: &mut ast::Program,
+    was_pub: &std::collections::HashSet<String>,
+    import_quals: &[String],
+    re: &ast::Reexport,
+) -> Result<(), diag::Diagnostic> {
+    if import_quals.iter().any(|q| q == &re.name) {
+        if re.rename.is_some() {
+            return Err(diag::Diagnostic::new(
+                "syntax",
+                "a whole module re-exports by its own name; rename exports one at a time"
+                    .to_string(),
+                re.span,
+            ));
+        }
+        let prefix = format!("{}/", re.name);
+        let mut any = false;
+        for f in &mut dep_program.fns {
+            if f.name.starts_with(&prefix) && was_pub.contains(&f.name) {
+                f.is_pub = true;
+                any = true;
+            }
+        }
+        for t in &mut dep_program.types {
+            if t.name.starts_with(&prefix) && was_pub.contains(&t.name) {
+                t.is_pub = true;
+                any = true;
+            }
+        }
+        if !any {
+            return Err(diag::Diagnostic::new(
+                "name",
+                format!("`{}` exports nothing to re-export", re.name),
+                re.span,
+            ));
+        }
+        return Ok(());
+    }
+    let mut any = false;
+    for q in import_quals {
+        let qualified = format!("{q}/{}", re.name);
+        if !was_pub.contains(&qualified) {
+            continue;
+        }
+        match &re.rename {
+            None => {
+                for f in &mut dep_program.fns {
+                    if f.name == qualified {
+                        f.is_pub = true;
+                        any = true;
+                    }
+                }
+                for t in &mut dep_program.types {
+                    if t.name == qualified {
+                        t.is_pub = true;
+                        any = true;
+                    }
+                }
+            }
+            Some(yours) => {
+                let mut fclones = Vec::new();
+                for f in &dep_program.fns {
+                    if f.name == qualified {
+                        let mut c = f.clone();
+                        c.name = format!("{q}/{yours}");
+                        c.synthetic = true;
+                        c.is_pub = true;
+                        fclones.push(c);
+                        any = true;
+                    }
+                }
+                dep_program.fns.extend(fclones);
+                let mut tclones = Vec::new();
+                for t in &dep_program.types {
+                    if t.name == qualified {
+                        let mut c = t.clone();
+                        c.name = format!("{q}/{yours}");
+                        c.synthetic = true;
+                        c.is_pub = true;
+                        tclones.push(c);
+                        any = true;
+                    }
+                }
+                dep_program.types.extend(tclones);
+            }
+        }
+    }
+    if !any {
+        return Err(diag::Diagnostic::new(
+            "name",
+            format!("no import offers a pub `{}` to re-export", re.name),
+            re.span,
+        ));
+    }
+    Ok(())
+}
+
 fn compile_module_inner(
     dir: &std::path::Path,
     require_main: bool,
@@ -909,7 +1014,34 @@ fn compile_module_inner(
     if root && !dir.ends_with("render") {
         ambient_imports(&mut import_list);
     }
-    let (dep_program, exports) = load_dependencies(dir, &import_list, visited)?;
+    let (mut dep_program, exports) = load_dependencies(dir, &import_list, visited)?;
+    // A module's surface is its own. Dependency pubs demote at this
+    // boundary — importers of this module see none of them — and only an
+    // explicit re-export puts an imported name back on the surface, as a
+    // pub the importer then enrolls like any other.
+    let was_pub: std::collections::HashSet<String> = dep_program
+        .fns
+        .iter()
+        .filter(|f| f.is_pub)
+        .map(|f| f.name.clone())
+        .chain(dep_program.types.iter().filter(|t| t.is_pub).map(|t| t.name.clone()))
+        .collect();
+    for f in &mut dep_program.fns {
+        f.is_pub = false;
+    }
+    for t in &mut dep_program.types {
+        t.is_pub = false;
+    }
+    let import_quals: Vec<String> = import_list
+        .iter()
+        .map(|i| i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string()))
+        .collect();
+    for (file, source, program) in &parsed {
+        for re in &program.reexports {
+            apply_reexport(&mut dep_program, &was_pub, &import_quals, re)
+                .map_err(|d| diag::render(&[d], file, source))?;
+        }
+    }
     let mut all_names = std::collections::HashSet::new();
     let mut all_markers = std::collections::HashSet::new();
     let mut all_type_names = std::collections::HashSet::new();
@@ -944,10 +1076,26 @@ fn compile_module_inner(
     }
     // pub bites at the boundary: a qualified reference to a non-pub name.
     // Imports are module-scoped, so use is counted across every file before
-    // any one file's import block is called unused.
+    // any one file's import block is called unused. Bare spellings count
+    // too — enrollment makes the qualifier optional, not the dependency.
     let mut quals = std::collections::HashSet::new();
     for (_, _, program) in &parsed {
         used_quals(program, &mut quals);
+        mark_bare_quals(program, &exports, &mut quals);
+        for re in &program.reexports {
+            match import_quals.iter().find(|q| *q == &re.name) {
+                Some(q) => {
+                    quals.insert(q.clone());
+                }
+                None => {
+                    for q in &import_quals {
+                        if was_pub.contains(&format!("{q}/{}", re.name)) {
+                            quals.insert(q.clone());
+                        }
+                    }
+                }
+            }
+        }
     }
     for (file, source, program) in &parsed {
         let mut diags = Vec::new();
@@ -963,7 +1111,7 @@ fn compile_module_inner(
             return Err(diag::render(&diags, file, source));
         }
     }
-    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
+    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new(), reexports: Vec::new() };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     for (_, _, program) in parsed {

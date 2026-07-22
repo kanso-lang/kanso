@@ -103,7 +103,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         file: String::new(),
         synthetic: false,
     };
-    Ok(Program { fns: vec![main], types: Vec::new(), imports })
+    Ok(Program { fns: vec![main], types: Vec::new(), imports, reexports: Vec::new() })
 }
 
 pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
@@ -111,6 +111,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut fns = Vec::new();
     let mut types = Vec::new();
     let mut imports: Vec<Import> = Vec::new();
+    let mut reexports: Vec<crate::ast::Reexport> = Vec::new();
     let mut past_imports = false;
     check_blank_policy(lexed, &mut diags);
     let mut i = 0;
@@ -181,6 +182,13 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 Ok(decl) => fns.push(decl),
                 Err(d) => diags.push(d),
             },
+            // `pub name` / `pub theirs:yours` — a re-export, nothing else
+            Some((Tok::Ident(_), _)) if head_idx == 1 => {
+                match parse_reexport(line, body) {
+                    Ok(reexport) => reexports.push(reexport),
+                    Err(d) => diags.push(d),
+                }
+            }
             _ => diags.push(Diagnostic::new(
                 "syntax",
                 "a top-level line must begin with `fn`, `type`, or a constant binding"
@@ -190,7 +198,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         }
         i = body_end;
     }
-    if diags.is_empty() { Ok(Program { fns, types, imports }) } else { Err(diags) }
+    if diags.is_empty() { Ok(Program { fns, types, imports, reexports }) } else { Err(diags) }
 }
 
 /// `import "path"` — one string, nothing else, no body.
@@ -311,6 +319,35 @@ fn parse_renames(
         }
     }
     Ok((renames, i))
+}
+
+/// `pub name` re-exports one imported pub (or a whole module by its
+/// qualifier); `pub theirs:yours` renames on the way out.
+fn parse_reexport(line: &Line, body: &[Line]) -> Result<crate::ast::Reexport, Diagnostic> {
+    if !body.is_empty() {
+        return Err(Diagnostic::new(
+            "syntax",
+            "a re-export has no body".to_string(),
+            head_span(&body[0]),
+        ));
+    }
+    match line.tokens.as_slice() {
+        [(Tok::KwPub, _), (Tok::Ident(name), span)] => {
+            Ok(crate::ast::Reexport { name: name.clone(), rename: None, span: *span })
+        }
+        [(Tok::KwPub, _), (Tok::Ident(theirs), span), (Tok::Colon, _), (Tok::Ident(yours), _)] => {
+            Ok(crate::ast::Reexport {
+                name: theirs.clone(),
+                rename: Some(yours.clone()),
+                span: *span,
+            })
+        }
+        _ => Err(Diagnostic::new(
+            "syntax",
+            "a re-export is `pub name` or `pub theirs:yours`".to_string(),
+            head_span(line),
+        )),
+    }
 }
 
 fn head_span(line: &Line) -> Span {
