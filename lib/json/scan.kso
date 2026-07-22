@@ -1,11 +1,5 @@
 import "std/text"
 
-fn both? true true
-  true
-
-fn both? _ _
-  false
-
 fn expect_char cs p c
   expect_check (cs[p]) p c
 

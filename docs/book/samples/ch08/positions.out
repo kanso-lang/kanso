@@ -1,4 +1,4 @@
 error[formatting]: function declarations appear in alphabetical order: `digit?` before `fail`
-  --> positions.kso:26:4
-  26 | fn digit? none
+  --> positions.kso:20:4
+  20 | fn digit? none
           ^

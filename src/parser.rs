@@ -856,6 +856,17 @@ fn reject_never_effect(e: &Expr) -> Result<(), Diagnostic> {
     Ok(())
 }
 
+/// `a && b` is `if a b false`; `a || b` is `if a true b` — the operators
+/// are spelling, the deferred if family is the semantics.
+fn logical_if(cond: Expr, then_e: Expr, else_e: Expr, span: Span) -> Expr {
+    Expr::App {
+        head: Box::new(Expr::Ident("if".to_string(), span)),
+        args: vec![cond, then_e, else_e],
+        span,
+        piped: false,
+    }
+}
+
 fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
@@ -1190,7 +1201,7 @@ impl<'a> P<'a> {
     }
 
     fn parse_join(&mut self) -> Result<Expr, Diagnostic> {
-        let lhs = self.parse_cmp()?;
+        let lhs = self.parse_or()?;
         if let Some(Tok::Op("&")) = self.peek() {
             return Err(Diagnostic::new(
                 "syntax",
@@ -1199,6 +1210,28 @@ impl<'a> P<'a> {
                     .to_string(),
                 self.span_here(),
             ));
+        }
+        Ok(lhs)
+    }
+
+    fn parse_or(&mut self) -> Result<Expr, Diagnostic> {
+        let mut lhs = self.parse_and()?;
+        while let Some(Tok::Op("||")) = self.peek() {
+            let span = self.span_here();
+            self.pos += 1;
+            let rhs = self.parse_and()?;
+            lhs = logical_if(lhs, Expr::Ident("true".to_string(), span), rhs, span);
+        }
+        Ok(lhs)
+    }
+
+    fn parse_and(&mut self) -> Result<Expr, Diagnostic> {
+        let mut lhs = self.parse_cmp()?;
+        while let Some(Tok::Op("&&")) = self.peek() {
+            let span = self.span_here();
+            self.pos += 1;
+            let rhs = self.parse_cmp()?;
+            lhs = logical_if(lhs, rhs, Expr::Ident("false".to_string(), span), span);
         }
         Ok(lhs)
     }
