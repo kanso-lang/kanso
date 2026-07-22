@@ -483,6 +483,58 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>two dials came out of the same conversation, both awaiting the surface-syntax rulings: a strict <em>mode</em> (force everything, measure the worst case—a measurement tool, since forcing runs what laziness would skip) and a <code>sync</code>-style <em>block</em> (a scope guaranteed thunk-free, so peak memory inside equals strict memory). one gate in the compiler implements both.</p>
 
+<h3>the work-ahead engine <span class="status status-design">design</span></h3>
+
+<p>the newest ruling on this frontier is scheduling, and it needs one picture. a fiber that blocks on io leaves a hole in the timeline. demand-driven evaluation cannot fill it — a blocked fiber demands nothing — so the hole is dead time, and the work it was saving up runs after the wait instead of during it. the strictness analyzer already knows which computations are certain to run. so the scheduler keeps a pool of them, and when a fiber parks, it works ahead:</p>
+
+<figure style="margin:2rem 0">
+<svg viewBox="0 0 640 210" width="100%" role="img" aria-label="two timelines: demand-driven leaves the io stall idle and finishes late; work-ahead fills the stall with proven work and finishes early" style="font-family:var(--font-mono);max-width:640px">
+  <text x="20" y="28" fill="var(--muted)" font-size="12">demand-driven</text>
+  <rect x="20" y="38" width="150" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="95" y="55" fill="var(--ink)" font-size="11" text-anchor="middle">compute</text>
+  <rect x="170" y="38" width="180" height="26" rx="4" fill="none" stroke="var(--line)" stroke-dasharray="4 3"/>
+  <text x="260" y="55" fill="var(--muted)" font-size="11" text-anchor="middle">io stall — idle</text>
+  <rect x="350" y="38" width="180" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="440" y="55" fill="var(--ink)" font-size="11" text-anchor="middle">proven work, run late</text>
+  <line x1="530" y1="30" x2="530" y2="72" stroke="var(--ink)" stroke-width="1.5"/>
+  <text x="536" y="55" fill="var(--ink)" font-size="11">done</text>
+
+  <text x="20" y="118" fill="var(--muted)" font-size="12">work-ahead</text>
+  <rect x="20" y="128" width="150" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="95" y="145" fill="var(--ink)" font-size="11" text-anchor="middle">compute</text>
+  <rect x="170" y="128" width="180" height="26" rx="4" fill="var(--accent-soft)" stroke="var(--accent)"/>
+  <text x="260" y="145" fill="var(--ink)" font-size="11" text-anchor="middle">proven work, in the stall</text>
+  <line x1="350" y1="120" x2="350" y2="162" stroke="var(--ink)" stroke-width="1.5"/>
+  <text x="356" y="145" fill="var(--ink)" font-size="11">done</text>
+  <line x1="350" y1="188" x2="530" y2="188" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#wa-arrow)"/>
+  <defs><marker id="wa-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="none" stroke="var(--accent)"/></marker></defs>
+  <text x="440" y="182" fill="var(--accent)" font-size="11" text-anchor="middle">the recovered time</text>
+</svg>
+</figure>
+
+<p>what fills the hole is chosen by three rules, checked in order. that is the entire policy:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">the work-ahead ladder</div>
+  <pre><code><span class="c">a fiber parks on io. the scheduler asks, in order:</span>
+
+  1  proven work, inputs ready?      <span class="c">-> run it. certain to be needed —</span>
+     |                               <span class="c">   early is free. program order.</span>
+     no
+     v
+  2  a gate of proven work?          <span class="c">-> run it. one branch decides its</span>
+     |                               <span class="c">   fate, and finishing it refills</span>
+     no                              <span class="c">   rung 1.</span>
+     v
+  3  a free gamble, priced cheap?    <span class="c">-> maybe. only here is anything</span>
+     |                               <span class="c">   speculative, and only when the</span>
+     no                              <span class="c">   rungs above are empty.</span>
+     v
+     sleep until the io returns      <span class="c">-> the driver actually rests.</span></code></pre>
+</div>
+
+<p>determinism survives because the ladder keys off logical scheduler state, never the wall clock: same program, same seed, same work-ahead transcript, on every machine. purity is what makes the whole thing legal — evaluating early is invisible, because nothing can observe the order of effect-free work.</p>
+
 <h2 id="c04"><span class="sec-num">08</span>the receipts</h2>
 
 <p>none of the numbers on this page ask to be believed. here is the scoreboard and the recipe. every engine reads the file at runtime—an embedded constant would let llvm fold the decode away—and the kanso harness accumulates a checksum so the loop provably runs.</p>
