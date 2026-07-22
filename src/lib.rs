@@ -448,14 +448,17 @@ fn load_dependencies(
     let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
     let mut exports = std::collections::HashMap::new();
     for path in import_paths {
-        if path == "std/render" {
-            // The ambient module is embedded in the toolchain: it must load
-            // where no filesystem exists (the browser) and where no lib/
-            // ships beside the binary (installs). include_str! of the same
-            // file keeps the embedded copy incapable of drifting.
-            let source = include_str!("../lib/render/render.kso");
-            let mut dep = compile("std/render/render.kso", source, false)?;
-            qualify(&mut dep, "render", &mut exports);
+        // Embedded std modules load where no filesystem exists (the browser)
+        // and where no lib/ ships beside the binary (installs). include_str!
+        // of the same files keeps the embedded copies incapable of drifting.
+        let embedded = match path.as_str() {
+            "std/render" => Some(("render", include_str!("../lib/render/render.kso"))),
+            "std/list" => Some(("list", include_str!("../lib/list/list.kso"))),
+            _ => None,
+        };
+        if let Some((short, source)) = embedded {
+            let mut dep = compile(&format!("{path}/{short}.kso"), source, false)?;
+            qualify(&mut dep, short, &mut exports);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
