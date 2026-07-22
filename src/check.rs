@@ -514,15 +514,6 @@ struct Resolver<'a> {
     std_origin: bool,
 }
 
-fn check_fn_body(
-    decl: &FnDecl,
-    globals: &HashSet<String>,
-    used_globals: &mut HashSet<String>,
-    diags: &mut Vec<Diagnostic>,
-) {
-    check_fn_body_shadow(decl, globals, used_globals, diags, &HashSet::new())
-}
-
 fn check_fn_body_shadow(
     decl: &FnDecl,
     globals: &HashSet<String>,
