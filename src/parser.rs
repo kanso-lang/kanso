@@ -202,19 +202,83 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
             head_span(&body[0]),
         ));
     }
+    let plain_path = |parts: &[crate::lexer::StrPart], span: Span| match parts {
+        [crate::lexer::StrPart::Lit(text)] => Ok(text.clone()),
+        _ => Err(Diagnostic::new(
+            "syntax",
+            "an import path is a plain string".to_string(),
+            span,
+        )),
+    };
     match line.tokens.as_slice() {
         [(Tok::KwImport, _), (Tok::Str(parts), span)] => {
-            let path = match parts.as_slice() {
-                [crate::lexer::StrPart::Lit(text)] => text.clone(),
-                _ => {
-                    return Err(Diagnostic::new(
-                        "syntax",
-                        "an import path is a plain string".to_string(),
-                        *span,
-                    ))
+            let path = plain_path(parts, *span)?;
+            Ok(Import { path, span: *span, alias: None, renames: Vec::new() })
+        }
+        // import t "path" — alias the qualifier
+        [(Tok::KwImport, _), (Tok::Ident(alias), _), (Tok::Str(parts), span)] => {
+            let path = plain_path(parts, *span)?;
+            Ok(Import { path, span: *span, alias: Some(alias.clone()), renames: Vec::new() })
+        }
+        // import { theirs:yours ... } "path" — renames only; a bare word in
+        // braces is redundant (the compiler prunes; bare access is default)
+        [(Tok::KwImport, _), (Tok::LBrace, brace_span), rest @ ..] => {
+            let mut renames = Vec::new();
+            let mut i = 0;
+            loop {
+                match rest.get(i) {
+                    Some((Tok::RBrace, _)) => {
+                        i += 1;
+                        break;
+                    }
+                    Some((Tok::Ident(theirs), _)) => match rest.get(i + 1) {
+                        Some((Tok::Colon, _)) => match rest.get(i + 2) {
+                            Some((Tok::Ident(yours), _)) => {
+                                renames.push((theirs.clone(), yours.clone()));
+                                i += 3;
+                            }
+                            other => {
+                                let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
+                                return Err(Diagnostic::new(
+                                    "syntax",
+                                    "a rename is theirs:yours".to_string(),
+                                    span,
+                                ));
+                            }
+                        },
+                        other => {
+                            let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
+                            return Err(Diagnostic::new(
+                                "syntax",
+                                "an unrenamed selection is redundant — the compiler \
+                                 prunes unused imports and bare access is the \
+                                 default; braces hold theirs:yours renames"
+                                    .to_string(),
+                                span,
+                            ));
+                        }
+                    },
+                    other => {
+                        let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
+                        return Err(Diagnostic::new(
+                            "syntax",
+                            "braces hold theirs:yours renames".to_string(),
+                            span,
+                        ));
+                    }
                 }
-            };
-            Ok(Import { path, span: *span })
+            }
+            match rest.get(i) {
+                Some((Tok::Str(parts), span)) if rest.len() == i + 1 && !renames.is_empty() => {
+                    let path = plain_path(parts, *span)?;
+                    Ok(Import { path, span: *span, alias: None, renames })
+                }
+                _ => Err(Diagnostic::new(
+                    "syntax",
+                    "an import ends with its path string".to_string(),
+                    *brace_span,
+                )),
+            }
         }
         _ => Err(Diagnostic::new(
             "syntax",

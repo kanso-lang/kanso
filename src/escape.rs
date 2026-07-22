@@ -42,6 +42,23 @@ impl EscapeInfo {
 /// Full analysis result for codegen: the returnable types plus the groups that
 /// return them and the parameter positions that carry them.
 pub fn analyze(program: &Program) -> EscapeInfo {
+    let mut info = analyze_inner(program);
+    // union groups (any synthetic member — the bare overload space) stay
+    // boxed: their arms come from different modules with independently
+    // computed conventions, and mixing %parsed with %KValue in one
+    // dispatcher is the register-ABI crash family
+    let mut union_groups = std::collections::HashSet::new();
+    for d in &program.fns {
+        if d.synthetic {
+            union_groups.insert((d.name.clone(), d.params.len()));
+        }
+    }
+    info.returns.retain(|k, _| !union_groups.contains(k));
+    info.carries.retain(|(name, arity, _), _| !union_groups.contains(&(name.clone(), *arity)));
+    info
+}
+
+fn analyze_inner(program: &Program) -> EscapeInfo {
     let returnable = register_returnable(program);
     let mut field_count = HashMap::new();
     let mut returns = HashMap::new();

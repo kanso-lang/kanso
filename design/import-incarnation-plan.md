@@ -39,3 +39,24 @@ the file's bare overload space. Overloading IS the resolution mechanism.
 
 Committee reviews the library rewrite in this incarnation as the
 feedback loop (Clay's standing instruction).
+
+## Status (2026-07-22, WIP on branch import-incarnation)
+
+DONE: bare enrollment via synthetic clones (load_dependencies), union
+dispatch working interp-side (flagship probe PAID/[2 4] both engines
+after the codegen global-grouping fix), alias + rename parser forms and
+loader plumbing, bare/rename/alias unused-import accounting, wsym sigil
+quoting, synthetic markers consumed by beat + door advisory, suite
+11/11 at the core commit. examples/imports.kso written — INTERP runs
+all four forms correctly; PLAN correct.
+
+OPEN BUG: the example SEGFAULTS native (exit 139) even after suppressing
+%parsed conventions for union groups (escape retains filtered). Next
+debug steps: bisect which of the four lines crashes (suspects: the
+union dispatcher mixing local Ctor-pattern arm with imported Var arms;
+the t/ alias path through codegen dsym; check imports.ll for the
+d_select_2 union dispatcher's arm ABI and the k_call paths). The
+interp is the semantics oracle — native must match it.
+
+THEN: math/random move, corpus re-sweep to bare, formatter canon,
+grammar forms, book spine.

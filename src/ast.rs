@@ -114,6 +114,10 @@ pub struct Program {
 pub struct Import {
     pub path: String,
     pub span: Span,
+    /// `import t "path"` — replaces the qualifier for this file.
+    pub alias: Option<String>,
+    /// `import { theirs:yours } "path"` — bare renames on the way in.
+    pub renames: Vec<(String, String)>,
 }
 
 pub const NULLARY: [&str; 3] = ["false", "none", "true"];

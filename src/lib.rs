@@ -42,10 +42,10 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     if !ownership_diags.is_empty() {
         return Err(diag::render(&ownership_diags, file, source));
     }
-    let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
-    ambient_imports(&mut import_paths);
+    let mut import_list: Vec<ast::Import> = program.imports.clone();
+    ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
+    let (dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -109,10 +109,10 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
     // a play library may import like any module; the ambient module rides
-    let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
-    ambient_imports(&mut import_paths);
+    let mut import_list: Vec<ast::Import> = program.imports.clone();
+    ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
+    let (dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -179,10 +179,10 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
-    let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
-    ambient_imports(&mut import_paths);
+    let mut import_list: Vec<ast::Import> = program.imports.clone();
+    ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
+    let (dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -470,21 +470,35 @@ fn merge_ambient_arms(program: &mut ast::Program) -> Vec<diag::Diagnostic> {
     diags
 }
 
-fn ambient_imports(import_paths: &mut Vec<String>) {
-    if !import_paths.iter().any(|p| p == "std/render") {
-        import_paths.push("std/render".to_string());
+fn ambient_imports(imports: &mut Vec<ast::Import>) {
+    if !imports.iter().any(|i| i.path == "std/render") {
+        imports.push(ast::Import {
+            path: "std/render".to_string(),
+            span: diag::Span { line: 0, col: 0 },
+            alias: None,
+            renames: Vec::new(),
+        });
     }
 }
 
 /// Load and qualify every imported module, recursively.
 fn load_dependencies(
     base: &std::path::Path,
-    import_paths: &[String],
+    imports: &[ast::Import],
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
 ) -> Result<(ast::Program, std::collections::HashMap<String, bool>), String> {
     let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new() };
     let mut exports = std::collections::HashMap::new();
-    for path in import_paths {
+    for import in imports {
+        let path = &import.path;
+        let qual_owned;
+        let qual = match &import.alias {
+            Some(alias) => alias.as_str(),
+            None => {
+                qual_owned = short_name(path).to_string();
+                &qual_owned
+            }
+        };
         // Embedded std modules load where no filesystem exists (the browser)
         // and where no lib/ ships beside the binary (installs). include_str!
         // of the same files keeps the embedded copies incapable of drifting.
@@ -500,18 +514,54 @@ fn load_dependencies(
         };
         if let Some((short, source)) = embedded {
             let mut dep = compile(&format!("{path}/{short}.kso"), source, false)?;
-            qualify(&mut dep, short, &mut exports);
+            qualify(&mut dep, qual, &mut exports);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
         }
         let dep_dir = resolve_import(base, path)?;
         let mut dep = compile_module_inner(&dep_dir, false, visited)?;
-        qualify(&mut dep, short_name(path), &mut exports);
+        qualify(&mut dep, qual, &mut exports);
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
     enroll_bare(&mut dep_program, &exports);
+    // renames: theirs:yours clones a bare alias into the space
+    for import in imports {
+        let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
+        for (theirs, yours) in &import.renames {
+            let qualified = format!("{qual}/{theirs}");
+            let mut found = false;
+            let mut clones = Vec::new();
+            for f in &dep_program.fns {
+                if f.name == qualified {
+                    let mut c = f.clone();
+                    c.name = yours.clone();
+                    c.synthetic = true;
+                    clones.push(c);
+                    found = true;
+                }
+            }
+            dep_program.fns.extend(clones);
+            let mut tclones = Vec::new();
+            for t in &dep_program.types {
+                if t.name == qualified {
+                    let mut c = t.clone();
+                    c.name = yours.clone();
+                    c.synthetic = true;
+                    tclones.push(c);
+                    found = true;
+                }
+            }
+            dep_program.types.extend(tclones);
+            if !found {
+                return Err(format!(
+                    "error: `{}` exports no `{theirs}` to rename\n",
+                    import.path
+                ));
+            }
+        }
+    }
     Ok((dep_program, exports))
 }
 
@@ -549,6 +599,12 @@ fn mark_bare_quals(
             if bare.contains(short) {
                 quals.insert(qual.to_string());
             }
+        }
+    }
+    for import in &program.imports {
+        let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
+        if import.renames.iter().any(|(_, yours)| bare.contains(yours)) {
+            quals.insert(qual);
         }
     }
 }
@@ -611,7 +667,10 @@ fn unused_imports(
 ) -> Vec<diag::Diagnostic> {
     imports
         .iter()
-        .filter(|i| !quals.contains(short_name(&i.path)))
+        .filter(|i| {
+            let qual = i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string());
+            !quals.contains(&qual)
+        })
         .map(|i| {
             diag::Diagnostic::new(
                 "unused",
@@ -789,19 +848,19 @@ fn compile_module_inner(
     }
     // the module's imports: the union across files, resolved and loaded
     // recursively, each dependency's names qualified by its short name
-    let mut import_paths: Vec<String> = Vec::new();
+    let mut import_list: Vec<ast::Import> = Vec::new();
     for (_, _, program) in &parsed {
         for import in &program.imports {
-            if !import_paths.contains(&import.path) {
-                import_paths.push(import.path.clone());
+            if !import_list.iter().any(|i| i.path == import.path) {
+                import_list.push(import.clone());
             }
         }
     }
     let root = AMBIENT_ROOT.with(|c| c.replace(false));
     if root && !dir.ends_with("render") {
-        ambient_imports(&mut import_paths);
+        ambient_imports(&mut import_list);
     }
-    let (dep_program, exports) = load_dependencies(dir, &import_paths, visited)?;
+    let (dep_program, exports) = load_dependencies(dir, &import_list, visited)?;
     let mut all_names = std::collections::HashSet::new();
     let mut all_markers = std::collections::HashSet::new();
     let mut all_type_names = std::collections::HashSet::new();

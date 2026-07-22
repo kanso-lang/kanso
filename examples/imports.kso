@@ -1,0 +1,24 @@
+# every import semantic in one place. an import declares the dependency
+# and enrolls its pub names into this file's bare overload space —
+# overloading is the resolution mechanism, the compiler prunes the rest.
+import { select:pick } "std/list"
+import t "std/text"
+
+type invoice
+  total:int
+
+fn paid? (invoice total)
+  0 < total
+
+pub play =
+  inv = invoice 900
+  evens = select [1 2 3 4] (x -> x - (x / 2 * 2) == 0)
+  print "bare, union-dispatched: {select inv paid?} / {evens}"
+  >> print "narrowed to the module: {list/select [5 6 7] (x -> 5 < x)}"
+  >> print "renamed on the way in: {pick [1 2 3] (x -> 1 < x)}"
+  >> print "aliased qualifier: {t/join ["ka" "nso"] ""}"
+
+# a local arm named like an imported export joins the same bare space:
+# dispatch picks by specificity, exactly as arms always have
+fn select (invoice _) _
+  "an invoice selects itself"
