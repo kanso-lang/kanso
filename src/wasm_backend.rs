@@ -121,6 +121,17 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
     for (i, ty) in program.types.iter().enumerate() {
         type_ids.insert(ty.name.as_str(), (i + 1) as i64);
     }
+    // an enrollment clone is an alias: one identity per type
+    let clone_ids: Vec<(&str, i64)> = program
+        .types
+        .iter()
+        .filter_map(|t| {
+            t.origin.as_deref().and_then(|o| type_ids.get(o).map(|id| (t.name.as_str(), *id)))
+        })
+        .collect();
+    for (name, id) in clone_ids {
+        type_ids.insert(name, id);
+    }
     let mut backend = WasmBackend {
         program,
         module: Module::new(imports()),

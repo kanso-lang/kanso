@@ -371,6 +371,7 @@ impl<'a> Interp<'a> {
             is_pub: false,
             span: origin,
             synthetic: false,
+            origin: None,
             fields: vec![
                 ("key".to_string(), vec!["any".to_string()], origin),
                 ("value".to_string(), vec!["any".to_string()], origin),
@@ -807,7 +808,8 @@ impl<'a> Interp<'a> {
                 });
             }
         }
-        Ok(Value::Record { ty: Rc::from(ty.name.as_str()), fields: Rc::new(args) })
+        let canonical = ty.origin.as_deref().unwrap_or(ty.name.as_str());
+        Ok(Value::Record { ty: Rc::from(canonical), fields: Rc::new(args) })
     }
 
     fn dispatch(
