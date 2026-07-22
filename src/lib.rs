@@ -69,10 +69,17 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
         program.types.iter().map(|t| t.name.clone()).collect();
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
     let extern_globals = check::declared_names(&dep_program);
+    let shadowable: std::collections::HashSet<String> = dep_program
+        .fns
+        .iter()
+        .filter(|d| d.synthetic)
+        .map(|d| d.name.clone())
+        .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
+        .collect();
     let mut used = std::collections::HashSet::new();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file(&program, &extern_globals, &mut used));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -129,6 +136,13 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         return Err(diag::render(&diags, file, source));
     }
     let extern_globals = check::declared_names(&dep_program);
+    let shadowable: std::collections::HashSet<String> = dep_program
+        .fns
+        .iter()
+        .filter(|d| d.synthetic)
+        .map(|d| d.name.clone())
+        .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
+        .collect();
     let mut all_markers = check::marker_names(&program);
     all_markers.extend(check::marker_names(&dep_program));
     let mut all_type_names: std::collections::HashSet<String> =
@@ -137,7 +151,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut used = std::collections::HashSet::new();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file(&program, &extern_globals, &mut used));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -199,6 +213,13 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         return Err(diag::render(&diags, file, source));
     }
     let extern_globals = check::declared_names(&dep_program);
+    let shadowable: std::collections::HashSet<String> = dep_program
+        .fns
+        .iter()
+        .filter(|d| d.synthetic)
+        .map(|d| d.name.clone())
+        .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
+        .collect();
     let mut all_markers = check::marker_names(&program);
     all_markers.extend(check::marker_names(&dep_program));
     let mut all_type_names: std::collections::HashSet<String> =
@@ -207,7 +228,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut used = std::collections::HashSet::new();
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
-    diags.extend(check::check_file(&program, &extern_globals, &mut used));
+    diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -872,6 +893,13 @@ fn compile_module_inner(
     all_names.extend(check::declared_names(&dep_program));
     all_markers.extend(check::marker_names(&dep_program));
     all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
+    let shadowable: std::collections::HashSet<String> = dep_program
+        .fns
+        .iter()
+        .filter(|d| d.synthetic)
+        .map(|d| d.name.clone())
+        .chain(dep_program.types.iter().filter(|t| t.synthetic).map(|t| t.name.clone()))
+        .collect();
     let mut used = std::collections::HashSet::new();
     for (file, source, program) in &mut parsed {
         let mut extern_globals = all_names.clone();
@@ -880,7 +908,7 @@ fn compile_module_inner(
         }
         let mut diags = check::resolve_markers(program, &all_markers);
         diags.extend(check::check_typesets(program, &all_type_names));
-        diags.extend(check::check_file(program, &extern_globals, &mut used));
+        diags.extend(check::check_file_shadow(program, &extern_globals, &mut used, &shadowable));
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));

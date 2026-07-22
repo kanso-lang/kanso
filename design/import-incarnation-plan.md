@@ -62,3 +62,27 @@ dispatchers) next window. The interp is the oracle.
 
 THEN: math/random move, corpus re-sweep to bare, formatter canon,
 grammar forms, book spine.
+
+## Frontier (2026-07-22, second debugging session)
+
+FIXED: locals SHADOW synthetic clones as binding names (check gains
+shadowable set — vse's `first =` binding compiles); specificity TIES
+break by PROXIMITY (local arms sort before clones in both engines —
+vse's count-value vs std count-pred picks the local, interp verified
+end-to-end on ch09/vse: exact Quinn output).
+
+OPEN: native runs ch09/vse to silent exit 0 with NO output (interp
+exact). Suspect: inference set-widening from union arms steering the
+desc-pipe/bind detection in main.kso's `trials runs [...] . means`
+chain — if the piped value's set isn't pure DESC, codegen compiles a
+value-pipe instead of bind and main's desc is never built. Check
+infer's group joins with synthetic arms; consider excluding synthetics
+from QUALIFIED-call set joins (bare calls genuinely union; qualified
+calls never reach clones).
+
+ALSO QUEUED HERE: rename-REPLACES-spelling semantics (Clay's
+clarification: whole module still enrolls; bare theirs suppressed;
+yours + qual/yours added — patch drafted, asserts ready); the combined
+form `import t { slice:cut } "path"`; standalone pub re-exports;
+math/random. NOTE: a stash on this repo holds next-protocol work
+(step/done/cursor/next in std/list + any-typeset legalization).

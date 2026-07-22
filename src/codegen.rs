@@ -659,6 +659,10 @@ impl<'a> Backend<'a> {
                 None => groups.push((&decl.name, vec![decl])),
             }
         }
+        // proximity breaks specificity ties: local arms precede clones
+        for (_, decls) in &mut groups {
+            decls.sort_by_key(|d| d.synthetic);
+        }
         for (name, decls) in &groups {
             let mut by_arity: HashMap<usize, Vec<&FnDecl>> = HashMap::new();
             for d in decls {
