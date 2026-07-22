@@ -1,0 +1,10 @@
+pub play =
+  print (total_line 12000)
+  >> print (total_line 800)
+
+fn total_line spent
+  if (10000 < spent)
+    saved = spent / 10
+    "big order: {spent} yen, {saved} back in points"
+  else
+    "thanks: {spent} yen"
