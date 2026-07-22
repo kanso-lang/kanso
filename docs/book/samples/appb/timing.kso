@@ -1,7 +1,7 @@
-import "std/random"
+import "std/math"
 import "std/time"
 
-pub play = time/sleep 10 >> random/random 6 . show
+pub play = time/sleep 10 >> math/random 6 . show
 
 fn show n
   print "rolled {n}"

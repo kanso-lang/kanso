@@ -1,3 +1,6 @@
+pub fn random n
+  builtin_random n
+
 pub fn round x
   builtin_round x
 

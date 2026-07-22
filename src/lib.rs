@@ -531,7 +531,7 @@ fn load_dependencies(
             "std/render" => Some(("render", include_str!("../lib/render/render.kso"))),
             "std/list" => Some(("list", include_str!("../lib/list/list.kso"))),
             "std/time" => Some(("time", include_str!("../lib/time/time.kso"))),
-            "std/random" => Some(("random", include_str!("../lib/random/random.kso"))),
+
             "std/io" => Some(("io", include_str!("../lib/io/io.kso"))),
             "std/text" => Some(("text", include_str!("../lib/text/text.kso"))),
             "std/math" => Some(("math", include_str!("../lib/math/math.kso"))),
@@ -543,6 +543,12 @@ fn load_dependencies(
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
+        }
+        if path == "std/random" {
+            return Err(
+                "error: `std/random` moved — `random` lives in `std/math`
+".to_string()
+            );
         }
         let dep_dir = resolve_import(base, path)?;
         let mut dep = compile_module_inner(&dep_dir, false, visited)?;

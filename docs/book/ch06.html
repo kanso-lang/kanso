@@ -113,7 +113,7 @@ serving</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">concurrency.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/random"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
 <span class="k">import</span> <span class="s">"std/time"</span>
 
 brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">time/sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
@@ -123,7 +123,7 @@ brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew
   <span class="f">rolls</span>
 
 <span class="k">fn</span> <span class="f">roll</span> i
-  <span class="f">random/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)
+  <span class="f">math/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)
 
 rolls <span class="o">=</span> <span class="f">roll</span> <span class="n">1</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">2</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">3</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">4</span> <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span></code></pre>
   <div class="code-output">
@@ -164,7 +164,7 @@ brew: poured</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">walled.kso — a wall in front of every roll</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/random"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
 <span class="k">import</span> <span class="s">"std/time"</span>
 
 brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew: steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">time/sleep</span> <span class="n">60</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"brew: poured"</span>
@@ -178,7 +178,7 @@ brew <span class="o">=</span> <span class="f">print</span> <span class="s">"brew
   <span class="o">&gt;&gt;</span> <span class="f">roll</span> <span class="n">5</span>
 
 <span class="k">fn</span> <span class="f">roll</span> i
-  <span class="f">random/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
+  <span class="f">math/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run walled.kso</div>
     <pre><code>brew: steeping
@@ -235,7 +235,7 @@ ramen: bowled</code></pre>
 
 <p>both threads start, print their opening line, and park on a sleep. the gyoza wakes at 20, the ramen at 30, the gyoza again at 40, the ramen again at 60—so the lines interleave in exactly that order. run it a thousand times and it never wavers, because "who is due next" is settled by <code>20 &lt; 30 &lt; 40 &lt; 60</code>, not by which thread the operating system happened to favor this millisecond. the delays are real time—<code>sleep 30</code> genuinely pauses that thread—but the <em>order</em> they impose is fixed by the numbers, so the output is reproducible to the byte.</p>
 
-<p>randomness rides the same rails. <code>random/random n</code> is an effect drawn from a seeded generator. a bare run seeds from the clock, so your dice differ from these panels. set <code>KANSO_SEED</code> and the whole run replays byte-identically—scheduling, interleaving, and rolls. that is why <code>concurrency.kso</code> and <code>walled.kso</code> both show <code>3, 1, 4, 1, 1</code> here: same program, same pinned seed, same dice. replay on demand is a debugging superpower—a bug seen once under seed 41 reproduces forever under seed 41, so there is no "heisenbug that only happens under load."</p>
+<p>randomness rides the same rails. <code>math/random n</code> is an effect drawn from a seeded generator. a bare run seeds from the clock, so your dice differ from these panels. set <code>KANSO_SEED</code> and the whole run replays byte-identically—scheduling, interleaving, and rolls. that is why <code>concurrency.kso</code> and <code>walled.kso</code> both show <code>3, 1, 4, 1, 1</code> here: same program, same pinned seed, same dice. replay on demand is a debugging superpower—a bug seen once under seed 41 reproduces forever under seed 41, so there is no "heisenbug that only happens under load."</p>
 
 <div class="fl-pull">the scheduler reads the numbers you wrote, not the clock on the wall. concurrency in kanso is a value you can print, replay, and pin in a test.</div>
 
@@ -321,7 +321,7 @@ ramen: bowled</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">dice.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/random"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">roll</span> <span class="n">1</span>
@@ -329,7 +329,7 @@ ramen: bowled</code></pre>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"both dice have landed"</span>
 
 <span class="k">fn</span> <span class="f">roll</span> i
-  <span class="f">random/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
+  <span class="f">math/random</span> <span class="n">6</span> <span class="o">.</span> (n <span class="o">-&gt;</span> <span class="f">print</span> <span class="s">"roll <span class="i">{i}</span>: a <span class="i">{n + 1}</span>"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run dice.kso</div>
     <pre><code>roll 1: a 3
