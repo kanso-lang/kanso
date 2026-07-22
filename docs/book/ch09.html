@@ -61,7 +61,7 @@ dims <span class="o">=</span> <span class="n">2</span>
 
 <div class="code-panel">
   <div class="code-panel-title">cloud.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/random"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
 
 <span class="k">fn</span> <span class="f">cloud</span> <span class="n">0</span> acc
   <span class="f">acc</span>
@@ -75,7 +75,7 @@ dims <span class="o">=</span> <span class="n">2</span>
   <span class="f">acc</span>
 
 <span class="k">fn</span> <span class="f">point</span> d acc
-  <span class="f">random/random</span> <span class="n">1000</span> <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
+  <span class="f">math/random</span> <span class="n">1000</span> <span class="o">.</span> (c <span class="o">-&gt;</span> <span class="f">point</span> (d <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc c))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run cloud.kso</div>
     <pre><code>three voters: [[876 612] [601 850] [662 624]]</code></pre>

@@ -1,4 +1,4 @@
-import "std/random"
+import "std/math"
 
 fn cloud 0 acc
   acc
@@ -12,4 +12,4 @@ fn point 0 acc
   acc
 
 fn point d acc
-  random/random 1000 . (c -> point (d - 1) (push acc c))
+  math/random 1000 . (c -> point (d - 1) (push acc c))

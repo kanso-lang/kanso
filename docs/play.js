@@ -359,7 +359,7 @@ print "warming the cups"
 # behind. brew blocks on a slow steep while rolls chains the dice
 # beside it, so every roll lands during the steep. (in the browser
 # sleep is instant, but the interleaved ORDER matches a live run.)
-import "std/random"
+import "std/math"
 import "std/time"
 
 brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"

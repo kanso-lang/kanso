@@ -1,6 +1,5 @@
 import "std/list"
 import "std/math"
-import "std/random"
 
 fn cloud 0 _ acc
   acc
@@ -29,7 +28,7 @@ fn point 0 acc
   acc
 
 fn point d acc
-  random/random 1000 . (c -> point (d - 1) (push acc c))
+  math/random 1000 . (c -> point (d - 1) (push acc c))
 
 runs = 400
 
