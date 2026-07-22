@@ -1,15 +1,15 @@
-fn even 0
+fn even? 0
   true
 
-fn even n
-  odd (n - 1)
+fn even? n
+  odd? (n - 1)
 
-fn odd 0
+fn odd? 0
   false
 
-fn odd n
-  even (n - 1)
+fn odd? n
+  even? (n - 1)
 
 pub play =
-  verdict = even 10000000
+  verdict = even? 10000000
   print "10000000 even? {verdict}"
