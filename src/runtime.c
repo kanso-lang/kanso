@@ -789,7 +789,7 @@ KValue k_render(KValue v, long long quote) {
             }
             return out;
         }
-        case K_DESC: return k_str("<description>");
+        case K_DESC: return k_str("<io>");
         case K_LIST: {
             KList* l = (KList*)(intptr_t)v.payload;
             KValue out = k_str("[");

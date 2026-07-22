@@ -1781,7 +1781,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
         },
         Value::FnRef(name) => format!("<fn {name}>"),
         Value::Closure(_) => "<fn>".to_string(),
-        Value::Desc(_) => "<description>".to_string(),
+        Value::Desc(_) => "<io>".to_string(),
     }
 }
 
