@@ -37,12 +37,11 @@ pub fn encode s:string
   "\"{escape_str s}\""
 
 pub fn encode xs:json[]
-  inner = text/join (list/to_list (list/map xs (v -> encode v))) ","
+  inner = text/join (list/to_list (list/map xs encode)) ","
   "[{inner}]"
 
 pub fn encode m:json[string]
-  parts = list/to_list (list/map (entries m) (e -> encode_entry e))
-  inner = text/join parts ","
+  inner = text/join (list/to_list (list/map (entries m) encode_entry)) ","
   "\{{inner}}"
 
 fn encode_entry (entry k v)

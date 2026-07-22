@@ -800,3 +800,11 @@ semantics now cost less than the code they replaced. The ch10 counters
 sample fell 4033 → 29 allocations. Follow-ups queued: fuse take/drop
 bounds into the scan, tally/group_by/tso_h reducers, and the
 defunctionalized-thunk pool sharing this composition machinery.
+## 2026-07-22 evening: fusion is syntactic — keep the chain in sight
+
+The kq pretty-print race exposed the pass's blindness: a width-forced
+binding split (`rows = map …` then `to_list rows`) hides the chain, so
+no fusion, so per-element wrapper records return. Convention until the
+pass learns better: name the LAMBDA, nest the chain. Queued: fusion
+through single-use local bindings (the binding is a rename, not an
+escape — provable cheaply).
