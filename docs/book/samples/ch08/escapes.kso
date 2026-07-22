@@ -1,3 +1,5 @@
+import "std/list"
+
 fn escape_char "\""
   "\\\""
 
@@ -17,7 +19,7 @@ fn escape_char c
   if ((char_code c) < 32) (u_escape c) c
 
 fn escape_str s
-  join (map (chars s) (c -> escape_char c)) ""
+  join (list/map (chars s) (c -> escape_char c)) ""
 
 fn hex4 n
   d1 = n / 4096

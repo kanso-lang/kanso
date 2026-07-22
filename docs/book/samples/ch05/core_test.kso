@@ -1,5 +1,7 @@
+import "std/list"
+
 fn count_lines text
-  newlines = filter (chars text) (c -> c == "\n")
+  newlines = list/select (chars text) (c -> c == "\n")
   length newlines
 
 test_counts_lines = (count_lines "matcha\nube\nhojicha\n") == 3

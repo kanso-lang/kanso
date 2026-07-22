@@ -1,8 +1,10 @@
+import "std/list"
+
 fn approval_col voters c
-  total (map voters (v -> approves v c))
+  total (list/map voters (v -> approves v c))
 
 fn approval_winner voters
-  argmax (map (range ncand) (c -> approval_col voters c))
+  argmax (list/map (range ncand) (c -> approval_col voters c))
 
 fn approves v c
   if (mean v < v[c]) 1 0
@@ -21,7 +23,7 @@ fn in list x
   if (count list x == 0) false true
 
 fn irv_counts voters elim
-  map (range ncand) (c -> total (map voters (v -> first_is v elim c)))
+  list/map (range ncand) (c -> total (list/map voters (v -> first_is v elim c)))
 
 fn irv_go voters elim
   counts = irv_counts voters elim
@@ -47,16 +49,17 @@ fn min_alive counts elim
   fold (range ncand) 0 (b c -> keep_min counts elim b c)
 
 fn minimax_winner voters
-  argmax (map (range ncand) (c -> worst_margin voters c))
+  argmax (list/map (range ncand) (c -> worst_margin voters c))
 
 fn pair voters a b
-  total (map voters (v -> if (v[b] < v[a]) 1 0))
+  total (list/map voters (v -> if (v[b] < v[a]) 1 0))
 
 fn plurality_winner voters
-  argmax (map (range ncand) (c -> count (map voters (v -> argmax v)) c))
+  firsts = list/map voters (v -> argmax v)
+  argmax (list/map (range ncand) (c -> count firsts c))
 
 fn prefer_count voters a b
-  total (map voters (v -> if (score_ballot v b < score_ballot v a) 1 0))
+  total (list/map voters (v -> if (score_ballot v b < score_ballot v a) 1 0))
 
 fn rank_first v elim
   fold (range ncand) 0 (b c -> keep_top v elim b c)
@@ -67,13 +70,13 @@ fn score_ballot v c
   round (5.0 * (v[c] - lo) / (hi - lo))
 
 fn score_col voters c
-  total (map voters (v -> score_ballot v c))
+  total (list/map voters (v -> score_ballot v c))
 
 fn score_winner voters
-  argmax (map (range ncand) (c -> score_col voters c))
+  argmax (list/map (range ncand) (c -> score_col voters c))
 
 fn star_winner voters
-  totals = map (range ncand) (c -> score_col voters c)
+  totals = list/map (range ncand) (c -> score_col voters c)
   a = argmax totals
   b = argmax_except totals a
   pa = prefer_count voters a b
@@ -81,4 +84,4 @@ fn star_winner voters
   if (pb < pa) a (if (pa < pb) b a)
 
 fn worst_margin voters a
-  minimum (map (range ncand) (b -> margin_or_high voters a b))
+  minimum (list/map (range ncand) (b -> margin_or_high voters a b))

@@ -34,8 +34,14 @@ pub fn fold list init f
 fn fold_at list acc f i
   if (length list < i) acc (fold_at list (f acc (list[i])) f (i + 1))
 
+fn join_parts before x after
+  fold after (push before x) (acc y -> push acc y)
+
 pub fn last list
-  at list (length list)
+  list[length list]
+
+pub fn map list f
+  fold list [] (acc x -> push acc (f x))
 
 pub fn max list
   unwrap_found (fold list (missing true) (m x -> outrank m x))
@@ -64,6 +70,9 @@ fn pick_found (err e) _ _
 fn pick_found found _ _
   found
 
+fn place sorted x
+  join_parts (select sorted (y -> y < x)) x (reject sorted (y -> y < x))
+
 pub fn reject list pred
   fold list [] (acc x -> if (pred x) acc (push acc x))
 
@@ -72,6 +81,12 @@ fn seek list pred
 
 pub fn select list pred
   fold list [] (acc x -> if (pred x) (push acc x) acc)
+
+pub fn sort list
+  fold list [] (acc x -> place acc x)
+
+pub fn sum list
+  fold list 0 (acc x -> acc + x)
 
 pub fn take list n
   take_to list n 1 []
@@ -86,7 +101,7 @@ fn take_to list n i acc
   if (take_done list n i) acc (take_more list n i acc)
 
 pub fn tally list
-  fold list [:] (m x -> put m x (bump (at m x)))
+  fold list [:] (m x -> put m x (bump m[x]))
 
 fn underrank (missing _) x
   x

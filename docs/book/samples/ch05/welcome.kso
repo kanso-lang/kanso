@@ -1,5 +1,5 @@
 fn first xs
-  xs[1]
+  xs[1]!
 
 fn greet name
   "irasshaimase, {name}"

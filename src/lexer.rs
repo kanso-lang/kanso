@@ -506,6 +506,8 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
         (_, Tok::RParen) | (_, Tok::RBracket) => 0,
         (Tok::LParen, _) | (Tok::LBracket, _) => 0,
         (_, Tok::Colon) => 0,
+        // the strict-index sigil hugs its bracket: xs[i]!
+        (Tok::RBracket, Tok::Bang) => 0,
         _ => 1,
     }
 }

@@ -1,3 +1,5 @@
+import "std/list"
+
 type json_null
 
 fn entry_block (entry k v) d
@@ -33,10 +35,10 @@ fn pretty s:string _
 
 fn pretty xs:json[] d
   d2 = d + 1
-  inner = join (map xs (v -> "{pad d2}{pretty v d2}")) ",\n"
+  inner = join (list/map xs (v -> "{pad d2}{pretty v d2}")) ",\n"
   "[\n{inner}\n{pad d}]"
 
 fn pretty m:json[string] d
   d2 = d + 1
-  inner = join (map (entries m) (e -> entry_block e d2)) ",\n"
+  inner = join (list/map (entries m) (e -> entry_block e d2)) ",\n"
   "\{\n{inner}\n{pad d}}"

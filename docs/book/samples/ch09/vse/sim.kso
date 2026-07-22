@@ -1,3 +1,5 @@
+import "std/list"
+
 fn cloud 0 _ acc
   acc
 
@@ -7,7 +9,7 @@ fn cloud n d acc
 dims = 2
 
 fn dist2 p q
-  total (map (range (length p)) (d -> sq (p[d] - q[d])))
+  total (list/map (range (length p)) (d -> sq (p[d] - q[d])))
 
 fn means sums
   print "plurality VSE {(sums[1]) / runs}"
@@ -30,10 +32,10 @@ fn point d acc
 runs = 400
 
 fn socutil voters c
-  total (map voters (v -> v[c]))
+  total (list/map voters (v -> v[c]))
 
 fn socutils voters
-  map (range ncand) (c -> socutil voters c)
+  list/map (range ncand) (c -> socutil voters c)
 
 fn sq x
   x * x
@@ -58,7 +60,7 @@ fn util vpos cpos
   0 - sqrt (dist2 vpos cpos)
 
 fn utilities voters cands
-  map voters (v -> map cands (c -> util v c))
+  list/map voters (v -> list/map cands (c -> util v c))
 
 fn vse socs winner
   m = mean socs

@@ -1,6 +1,8 @@
+import "std/list"
+
 xs = [3 1 2]
-doubled = map xs (x -> x * 2)
-small = filter xs (x -> x < 3)
+doubled = list/map xs (x -> x * 2)
+small = list/select xs (x -> x < 3)
 first = xs[1]
-print "sorted {sort xs} doubled {doubled} small {small}"
-  >> print "sum {sum xs} len {length xs} first {first}"
+print "sorted {list/sort xs} doubled {doubled} small {small}"
+  >> print "sum {list/sum xs} len {length xs} first {first}"
