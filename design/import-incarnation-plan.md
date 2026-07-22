@@ -104,3 +104,16 @@ corruption and dies un-rendered. NEXT: extract a standalone repro (play
 file: two nested cloud-style binds + list/map lambda + template), then
 diff its .ll between this branch and main (worktree build) — the delta
 names the culprit. Interp remains the oracle throughout.
+
+## Type enrollment is aliasing, not cloning (found 2026-07-22, parked)
+
+Bare-enrolled TYPE clones split identity: `cursor 1 [...]` constructs a
+record tagged with the CLONE name, and std's `next (cursor at source)`
+arm — qualified to `list/cursor` — never matches. Runtime repro on the
+next-protocol branch (`next-protocol-v2`, local only). Fix direction:
+enroll_bare stops cloning types; a bare->qualified alias map rides to a
+mutating resolver pass (piggyback the resolve_markers shape) that
+rewrites bare type names in expressions AND patterns, honoring local
+shadowing exactly as the fn shadowable set does. Until then, bare type
+enrollment silently manufactures a second identity for every imported
+pub type — fn clones are unaffected (dispatch groups merge by name).
