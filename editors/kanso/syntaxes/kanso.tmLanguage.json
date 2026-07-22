@@ -1,44 +1,126 @@
 {
   "name": "kanso",
   "scopeName": "source.kanso",
-  "fileTypes": ["kso"],
+  "fileTypes": [
+    "kso"
+  ],
   "patterns": [
-    { "include": "#comment" },
-    { "include": "#fn-declaration" },
-    { "include": "#type-declaration" },
-    { "include": "#field" },
-    { "include": "#string" },
-    { "include": "#number" },
-    { "include": "#constant" },
-    { "include": "#builtin" },
-    { "include": "#primitive-type" },
-    { "include": "#wildcard" },
-    { "include": "#operator" }
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#import"
+    },
+    {
+      "include": "#fn-declaration"
+    },
+    {
+      "include": "#type-declaration"
+    },
+    {
+      "include": "#constant-declaration"
+    },
+    {
+      "include": "#field"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#float"
+    },
+    {
+      "include": "#number"
+    },
+    {
+      "include": "#constant"
+    },
+    {
+      "include": "#qualified"
+    },
+    {
+      "include": "#builtin"
+    },
+    {
+      "include": "#primitive-type"
+    },
+    {
+      "include": "#sigil-name"
+    },
+    {
+      "include": "#wildcard"
+    },
+    {
+      "include": "#strict-index"
+    },
+    {
+      "include": "#operator"
+    }
   ],
   "repository": {
     "comment": {
       "match": "#.*$",
       "name": "comment.line.number-sign.kanso"
     },
-    "fn-declaration": {
-      "match": "^(fn)\\s+([a-z][a-z0-9_]*)",
+    "import": {
+      "match": "^(import)\\s+(\"[^\"]+\")",
       "captures": {
-        "1": { "name": "keyword.declaration.function.kanso" },
-        "2": { "name": "entity.name.function.kanso" }
+        "1": {
+          "name": "keyword.control.import.kanso"
+        },
+        "2": {
+          "name": "string.quoted.double.import-path.kanso"
+        }
+      }
+    },
+    "fn-declaration": {
+      "match": "^(pub\\s+)?(fn)\\s+([a-z_][a-z0-9_]*(?:/[a-z_][a-z0-9_]*)*[!?]?)",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.pub.kanso"
+        },
+        "2": {
+          "name": "keyword.declaration.function.kanso"
+        },
+        "3": {
+          "name": "entity.name.function.kanso"
+        }
       }
     },
     "type-declaration": {
-      "match": "^(type|typeset)\\s+([a-z][a-z0-9_]*)",
+      "match": "^(pub\\s+)?(type|typeset)\\s+([a-z][a-z0-9_]*)",
       "captures": {
-        "1": { "name": "keyword.declaration.type.kanso" },
-        "2": { "name": "entity.name.type.kanso" }
+        "1": {
+          "name": "storage.modifier.pub.kanso"
+        },
+        "2": {
+          "name": "keyword.declaration.type.kanso"
+        },
+        "3": {
+          "name": "entity.name.type.kanso"
+        }
+      }
+    },
+    "constant-declaration": {
+      "match": "^(pub\\s+)?([a-z_][a-z0-9_]*[!?]?)(?=\\s*=\\s)",
+      "captures": {
+        "1": {
+          "name": "storage.modifier.pub.kanso"
+        },
+        "2": {
+          "name": "entity.name.constant.kanso"
+        }
       }
     },
     "field": {
-      "match": "^  ([a-z][a-z0-9_]*)(:)\\s",
+      "match": "^  ([a-z][a-z0-9_]*)(:)",
       "captures": {
-        "1": { "name": "variable.other.member.kanso" },
-        "2": { "name": "punctuation.separator.field.kanso" }
+        "1": {
+          "name": "variable.other.member.kanso"
+        },
+        "2": {
+          "name": "punctuation.separator.field.kanso"
+        }
       }
     },
     "string": {
@@ -46,14 +128,18 @@
       "end": "\"",
       "name": "string.quoted.double.kanso",
       "beginCaptures": {
-        "0": { "name": "punctuation.definition.string.begin.kanso" }
+        "0": {
+          "name": "punctuation.definition.string.begin.kanso"
+        }
       },
       "endCaptures": {
-        "0": { "name": "punctuation.definition.string.end.kanso" }
+        "0": {
+          "name": "punctuation.definition.string.end.kanso"
+        }
       },
       "patterns": [
         {
-          "match": "\\\\[\"\\\\{n]",
+          "match": "\\\\[\"\\\\{ntr]",
           "name": "constant.character.escape.kanso"
         },
         {
@@ -61,14 +147,26 @@
           "end": "\\}",
           "name": "meta.interpolation.kanso",
           "beginCaptures": {
-            "0": { "name": "punctuation.section.interpolation.begin.kanso" }
+            "0": {
+              "name": "punctuation.section.interpolation.begin.kanso"
+            }
           },
           "endCaptures": {
-            "0": { "name": "punctuation.section.interpolation.end.kanso" }
+            "0": {
+              "name": "punctuation.section.interpolation.end.kanso"
+            }
           },
-          "patterns": [{ "include": "$self" }]
+          "patterns": [
+            {
+              "include": "$self"
+            }
+          ]
         }
       ]
+    },
+    "float": {
+      "match": "\\b[0-9]+\\.[0-9]+\\b",
+      "name": "constant.numeric.float.kanso"
     },
     "number": {
       "match": "\\b[0-9]+\\b",
@@ -78,26 +176,56 @@
       "match": "\\b(true|false|none)\\b",
       "name": "constant.language.kanso"
     },
+    "qualified": {
+      "match": "\\b[a-z_][a-z0-9_]*/[a-z_][a-z0-9_]*(?:/[a-z_][a-z0-9_]*)*[!?]?",
+      "name": "support.function.qualified.kanso"
+    },
     "builtin": {
-      "match": "\\b(at|err|filter|if|length|map|print|sort|sum)\\b",
+      "match": "\\b(entries|err|if|length|print|push|put)\\b",
       "name": "support.function.builtin.kanso"
     },
     "primitive-type": {
-      "match": "\\b(bool|float32|float64|int|int8|int16|int32|int64|string|uint8|uint16|uint32|uint64)\\b",
+      "match": "\\b(any|bool|bytes|float64|int|io|string)\\b",
       "name": "support.type.primitive.kanso"
+    },
+    "sigil-name": {
+      "match": "\\b[a-z_][a-z0-9_]*[!?]",
+      "name": "entity.name.function.sigil.kanso"
     },
     "wildcard": {
       "match": "\\b_\\b",
       "name": "variable.language.wildcard.kanso"
     },
+    "strict-index": {
+      "match": "(?<=\\])!",
+      "name": "keyword.operator.strict-index.kanso"
+    },
     "operator": {
       "patterns": [
-        { "match": "->", "name": "keyword.operator.arrow.kanso" },
-        { "match": ">>", "name": "keyword.operator.sequence.kanso" },
-        { "match": "(?<= )\\.(?= )", "name": "keyword.operator.pipe.kanso" },
-        { "match": "==|!=|<=|>=|<|>", "name": "keyword.operator.comparison.kanso" },
-        { "match": "(?<= )=(?= )", "name": "keyword.operator.assignment.kanso" },
-        { "match": "[+*/-]", "name": "keyword.operator.arithmetic.kanso" }
+        {
+          "match": "->",
+          "name": "keyword.operator.arrow.kanso"
+        },
+        {
+          "match": ">>",
+          "name": "keyword.operator.sequence.kanso"
+        },
+        {
+          "match": "(?<= )\\.(?= )",
+          "name": "keyword.operator.pipe.kanso"
+        },
+        {
+          "match": "==|!=|<=|>=|<|>",
+          "name": "keyword.operator.comparison.kanso"
+        },
+        {
+          "match": "(?<= )=(?= )",
+          "name": "keyword.operator.assignment.kanso"
+        },
+        {
+          "match": "[+*/-]",
+          "name": "keyword.operator.arithmetic.kanso"
+        }
       ]
     }
   }
