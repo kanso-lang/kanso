@@ -21,13 +21,26 @@ no evaluation can ever be wasted. Pool ordering is **program order**
 (earliest binding whose inputs are ready) — the statement index is
 already computed, deterministic, and free; no demand-graph walking.
 
-The true-speculation tier — **conditional thunks**, work behind a
-branch the compiler could not decide, where a stall-filled evaluation
-might compute something never asked for — is severed into an optional
-v2, priced by the cost model, taken up only if profiling shows stalls
-going unfilled. Certain work vastly outnumbers conditional work in
-real programs (the json decoder is 100% certain), so v1 should carry
-most of the win alone.
+Demand propagates backward through the dependency graph: an input a
+proven computation definitely touches is itself proven, transitively —
+so most inputs join the certain set outright and rung 1 covers them.
+
+The true-speculation tiers are severed into an optional v2, admitted
+only when rung 1 runs dry, as a priority ladder (ratified 2026-07-22):
+
+1. **Proven, inputs ready** — always first. No policy beyond program
+   order.
+2. **Gates of proven work** — conditional inputs of certain
+   computations (a branch inside the proven dependent decides whether
+   the input is touched). A gamble priced by that one branch alone —
+   the dependent is definitely coming — and finishing one can unblock
+   rung 1, so the pool re-sorts as evaluation proceeds.
+3. **Free gambles** — unproven thunks with no proven dependent. Only
+   when rungs 1–2 are empty, priced by the cost model.
+
+Certain work vastly outnumbers conditional work in real programs (the
+json decoder is 100% certain), so v1 — rung 1 alone — should carry
+most of the win.
 
 ## The three pieces
 
