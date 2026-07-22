@@ -94,7 +94,7 @@ description: "kanso (簡素): a pure language where effects are values, failure 
 <span class="c"># reasonably-written rust   0.98</span>
 <span class="c"># go encoding/json          1.73</span></code></pre>
     </div>
-    <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong>14,799,465</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. five arena blocks across 150 decodes is the flat-memory guarantee as a constant; 151 beat iterations is one heartbeat per decode plus one for the program's own pulse, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">the scoreboard</a> and <a href="book/ch07.html">chapter 07</a>.</p>
+    <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong>14,799,465</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. five arena blocks across 150 decodes is the flat-memory guarantee as a constant; 151 beat iterations is one heartbeat per decode plus one for the program's own pulse, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. and the counters now count laziness too: kanso computes a value when it's demanded, or never, and on a workload where one value in twenty is used, the counters read <code>thunk_allocs=100000, thunk_evals=5000</code>—95% of the work never born, the clear form running at hand-tuned-rust speed. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">both scoreboards</a> and <a href="book/ch07.html">chapter 07</a>.</p>
   </div>
 </section>
 
@@ -204,11 +204,31 @@ three</code></pre>
 
 <span class="f">main</span> <span class="o">=</span>
   prices <span class="o">=</span> [<span class="n">30</span> <span class="n">10</span> <span class="n">20</span>]
-  doubled <span class="o">=</span> <span class="f">list/map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
+  doubled <span class="o">=</span> <span class="f">map</span> prices (x <span class="o">-&gt;</span> x <span class="o">*</span> <span class="n">2</span>)
   ninth <span class="o">=</span> prices[<span class="n">9</span>]
-  <span class="f">print</span> <span class="s">"sorted: <span class="i">{list/sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
+  <span class="f">print</span> <span class="s">"sorted: <span class="i">{sort prices}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"doubled: <span class="i">{doubled}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> ninth)</code></pre>
         </div>
-        <p>no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (assert presence with <code>prices[9]!</code> and a miss errs instead). <code>list/sort</code> needs no interface—<code>compare</code> derives structurally. indexing is 1-based, everywhere, no exceptions.</p>
+        <p>one import enrolls <code>std/list</code>'s names into the file's overload space—<code>map</code> and <code>sort</code> arrive bare, and dispatch resolves shared names by specificity, the same mechanism as everything else. no panicking access anywhere: <code>prices[9]</code> returns <code>none</code>, which propagates until a <code>describe</code> overload dispatches on it (assert presence with <code>prices[9]!</code> and a miss errs instead). indexing is 1-based, everywhere, no exceptions.</p>
+      </div>
+
+      <div class="showcase-cell">
+        <div class="code-panel">
+          <div class="code-panel-title">examples/custom_render.kso</div>
+          <pre><code><span class="k">type</span> <span class="t">money</span>
+  cents:<span class="t">int</span>
+
+<span class="k">pub</span> play =
+  price = <span class="f">money</span> <span class="n">350</span>
+  <span class="f">print</span> <span class="s">"that costs <span class="i">{price}</span>"</span>
+
+<span class="k">fn</span> <span class="f">to_string</span> (<span class="t">money</span> cents)
+  <span class="s">"${cents / 100}.{cents - (cents / 100 * 100)}"</span></code></pre>
+          <div class="code-output">
+            <div class="code-panel-title">output</div>
+            <pre><code>that costs $3.50</code></pre>
+          </div>
+        </div>
+        <p>string interpolation is dispatch on an ordinary <code>to_string</code> group—so a custom rendering is one arm for a type you own, no import, no interface, no registration. nobody can re-render <code>int</code> (no module owns both the group and the primitive), so <code>"{42}"</code> means one thing in every program ever compiled—and that guarantee doubles as the license to skip dispatch entirely on primitive-only paths.</p>
       </div>
     </div>
   </div>
@@ -229,7 +249,7 @@ three</code></pre>
       <div class="status-card">
         <span class="badge">two engines</span>
         <h3>faster than rust and serde_json at json</h3>
-        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. with the heartbeat memory model now shipped by default, the compiler decodes a 188&nbsp;KB document in <strong>~0.81&nbsp;ms</strong>—past a reasonably-written rust parser at ~0.98&nbsp;ms, go's <code>encoding/json</code> at ~1.73&nbsp;ms, and hand-tuned <code>serde_json</code> at ~0.83&nbsp;ms (24 of 25 pairwise best-of-25 runs, m-series mac), at a ~5.8&nbsp;mb peak footprint—under serde_json's 6.7—and flat at any decode count. the story, the diagrams, and the reproduce-it-yourself recipe: <a href="compiler.html#c11">the heartbeat</a>.</p>
+        <p>a reference interpreter (the semantics oracle—it also runs in your browser on the <a href="playground.html">playground</a>) and an llvm-backed native compiler, held byte-identical across the golden corpus by differential ci—floats included, because every engine renders the shortest round-trip. memory is two tiers with no garbage collector in either: strict values live on the heartbeat's rewinding arenas (the shipped model behind the json numbers—<strong>~0.81&nbsp;ms</strong> per 188&nbsp;KB decode, past hand-tuned <code>serde_json</code> at ~0.83&nbsp;ms, at a flat ~5.8&nbsp;mb) and deferred values live in refcounted cells the demand analysis creates only where laziness can pay. the ratified destination runs further: kanso's data graph is immutable and acyclic, which makes reference counting <em>complete</em>—the arenas survive as an optimization inside a counted world. the story, the receipts, and both scoreboards: <a href="compiler.html">the compiler page</a>.</p>
       </div>
       <div class="status-card">
         <span class="badge">real software</span>
