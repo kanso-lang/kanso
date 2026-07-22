@@ -137,6 +137,37 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             }
             continue;
         }
+        // An indented line under an argument-taking statement is one more
+        // argument — the whole line, one expression, spliced in parens so
+        // the parser sees an ordinary call. Headers (`fn`, `type`,
+        // `import`, a `pub` form, a trailing `=`) hold bodies, not args.
+        let arg_parent_ok = lines.last().is_some_and(|p: &Line| {
+            !matches!(
+                p.tokens.first(),
+                Some((Tok::KwFn | Tok::KwType | Tok::KwImport | Tok::KwPub, _))
+            ) && !matches!(p.tokens.last(), Some((Tok::Bind, _)))
+        });
+        if cont_indent_ok && arg_parent_ok {
+            match lex_line(content, number, indent + 1) {
+                Ok(lexed_line) => {
+                    validate_spacing(&lexed_line, number, &mut diags);
+                    let parent = lines.last_mut().expect("cont_indent_ok checked");
+                    let open_span = Span { line: number, col: 1 };
+                    let close_span = Span {
+                        line: number,
+                        col: lexed_line.end_cols.last().copied().unwrap_or(1),
+                    };
+                    parent.tokens.push((Tok::LParen, open_span));
+                    parent.end_cols.push(1);
+                    parent.tokens.extend(lexed_line.tokens);
+                    parent.end_cols.extend(lexed_line.end_cols);
+                    parent.tokens.push((Tok::RParen, close_span));
+                    parent.end_cols.push(close_span.col);
+                }
+                Err(d) => diags.push(d),
+            }
+            continue;
+        }
         if indent != 0 && indent != 2 {
             diags.push(Diagnostic::new(
                 "formatting",
