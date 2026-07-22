@@ -1,3 +1,8 @@
-ok: 42
-err at 3: unexpected trailing characters
-err at 5: unexpected trailing characters
+error[naming]: `is_ws` answers only true or false: name it `is_ws?`
+  --> positions.kso:32:4
+  32 | fn is_ws 9
+          ^
+error[naming]: `is_digit` answers only true or false: name it `is_digit?`
+  --> positions.kso:26:4
+  26 | fn is_digit none
+          ^
