@@ -1,10 +1,10 @@
 type missing
   unfound:bool
 
-pub fn all list pred
+pub fn all? list pred
   fold list true (ok x -> if (pred x) ok false)
 
-pub fn any list pred
+pub fn any? list pred
   fold list false (hit x -> if (pred x) true hit)
 
 fn bump none

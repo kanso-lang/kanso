@@ -4,7 +4,7 @@ evens = list/select [1 2 3 4 5 6 7 8] (x -> x - (x / 2 * 2) == 0)
 print "evens: {evens}"
 print "first three: {list/take [9 8 7 6 5] 3}"
 print "found: {list/find [3 5 8 9] (x -> x - (x / 2 * 2) == 0)}"
-print "all positive: {list/all [1 2 3] (x -> 0 < x)}"
+print "all positive: {list/all? [1 2 3] (x -> 0 < x)}"
 print "max: {list/max [3 9 2 7]}"
 print "min: {list/min [3 9 2 7]}"
 print "count evens: {list/count [1 2 3 4 5 6] (x -> x - (x / 2 * 2) == 0)}"
