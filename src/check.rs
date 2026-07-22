@@ -287,7 +287,7 @@ pub fn check_unused_private(
 /// fallible work stays a predicate), and a group answering only in booleans
 /// must carry the `?`. Mixed sets are exempt in the unmarked direction.
 fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
-    use crate::infer::{ERR, FALSE, NONE, TRUE};
+    use crate::infer::{ERR, FALSE, TRUE};
     let inference = crate::infer::infer(program);
     let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> = std::collections::HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
