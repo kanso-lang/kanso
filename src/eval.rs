@@ -1882,6 +1882,11 @@ impl<'a> Interp<'a> {
             .map(|(i, d)| (0u64, i, d))
             .collect();
         let mut now = 0u64;
+        // wall-credit: real time spent computing counts against a pending
+        // wait, so compute overlaps sleeps in wall-clock. the transcript
+        // stays purely logical — only the physical wait shrinks.
+        #[cfg(not(target_arch = "wasm32"))]
+        let wall_start = std::time::Instant::now();
         let mut failures: Vec<Value> = Vec::new();
         while !ready.is_empty() {
             let pick = (0..ready.len())
@@ -1889,6 +1894,14 @@ impl<'a> Interp<'a> {
                 .expect("non-empty");
             let (wake, idx, desc) = ready.remove(pick);
             if wake > now {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let elapsed = wall_start.elapsed().as_millis() as u64;
+                    if wake > elapsed {
+                        executor.sleep(wake - elapsed);
+                    }
+                }
+                #[cfg(target_arch = "wasm32")]
                 executor.sleep(wake - now);
                 now = wake;
             }

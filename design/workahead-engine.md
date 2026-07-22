@@ -25,21 +25,24 @@ Demand propagates backward through the dependency graph: an input a
 proven computation definitely touches is itself proven, transitively —
 so most inputs join the certain set outright and rung 1 covers them.
 
-The true-speculation tiers are severed into an optional v2, admitted
-only when rung 1 runs dry, as a priority ladder (ratified 2026-07-22):
+The whole policy, ratified in its final simple form (2026-07-22):
+**do work proven to be needed; if none remains, do speculative work.**
+Two groups, nothing else. Within each group, priority is *first-use
+order* — and because the scheduler is deterministic, first use is not
+a guess: the logical schedule is a pure function of the program, so
+use order is knowable exactly. The cheap static measure (statement
+index of the first consuming site) is exact for straight-line code and
+a tight approximation across calls; if profiling ever shows it
+misordering, the exact schedule position is available to compute. The
+sort key for the entire engine is one pair: (proven-first,
+first-use index).
 
-1. **Proven, inputs ready** — always first. No policy beyond program
-   order.
-2. **Gates of proven work** — conditional inputs of certain
-   computations (a branch inside the proven dependent decides whether
-   the input is touched). A gamble priced by that one branch alone —
-   the dependent is definitely coming — and finishing one can unblock
-   rung 1, so the pool re-sorts as evaluation proceeds.
-3. **Free gambles** — unproven thunks with no proven dependent. Only
-   when rungs 1–2 are empty, priced by the cost model.
+Gates of proven work (conditional inputs a certain computation may
+touch) are simply the best-priced members of the speculative group —
+a priority detail inside group two, not a rung of their own.
 
 Certain work vastly outnumbers conditional work in real programs (the
-json decoder is 100% certain), so v1 — rung 1 alone — should carry
+json decoder is 100% certain), so v1 — group one alone — should carry
 most of the win.
 
 ## The three pieces

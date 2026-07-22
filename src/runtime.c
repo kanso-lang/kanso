@@ -1302,6 +1302,11 @@ static KValue k_schedule(KDesc* join) {
     int* done = malloc(sizeof(int) * n);
     for (int i = 0; i < n; i++) { wake[i] = 0; fiber[i] = tmp[i]; done[i] = 0; }
     unsigned long long now = 0;
+    /* wall-credit: real time spent computing counts against a pending
+       wait, so compute overlaps sleeps in wall-clock. the transcript
+       stays purely logical — only the physical wait shrinks. */
+    struct timespec sched_t0;
+    clock_gettime(CLOCK_MONOTONIC, &sched_t0);
     KValue result = k_none();
     int remaining = n;
     k_beat_push();
@@ -1311,7 +1316,24 @@ static KValue k_schedule(KDesc* join) {
             if (!done[i] && (pick < 0 || wake[i] < wake[pick])) pick = i;
         }
         if (wake[pick] > now) {
-            usleep((useconds_t)((wake[pick] - now) * 1000));
+            if (getenv("KANSO_SCHED_DEBUG")) {
+                struct timespec td;
+                clock_gettime(CLOCK_MONOTONIC, &td);
+                unsigned long long e =
+                    (unsigned long long)(td.tv_sec - sched_t0.tv_sec) * 1000ULL
+                    + (unsigned long long)(td.tv_nsec - sched_t0.tv_nsec) / 1000000ULL;
+                fprintf(stderr, "[sched] pick=%d wake=%llu elapsed=%llu\n", pick, wake[pick], e);
+            }
+            /* loop to the deadline: usleep may return early on a signal */
+            for (;;) {
+                struct timespec tn;
+                clock_gettime(CLOCK_MONOTONIC, &tn);
+                unsigned long long elapsed =
+                    (unsigned long long)(tn.tv_sec - sched_t0.tv_sec) * 1000ULL
+                    + (unsigned long long)(tn.tv_nsec - sched_t0.tv_nsec) / 1000000ULL;
+                if (wake[pick] <= elapsed) break;
+                usleep((useconds_t)((wake[pick] - elapsed) * 1000));
+            }
             now = wake[pick];
         }
         KStep s = k_step(k_as_desc(fiber[pick]));
