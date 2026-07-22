@@ -246,7 +246,7 @@ beat_iters=151
 decoded 150 times, checksum 24000</code></pre>
 </div>
 
-<p>two of those integers tell the memory story cleanly. <code>arena_blocks=5</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches five blocks of scratch space, a hundred and fifty decodes touch the same five, because each decode hands its arena back before the next begins. <code>beat_iters=151</code> is one heartbeat per decode plus one for the program's own pulse, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
+<p>two of those integers tell the memory story cleanly. <code>arena_blocks=5</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches five blocks of scratch space, a hundred and fifty decodes touch the same five, because each decode hands its arena back before the next begins. <code>beat_iters=151</code> is one rewind per decode plus one for the program itself, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">bench/cost_golden.txt</div>
