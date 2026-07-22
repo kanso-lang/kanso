@@ -30,7 +30,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">hello.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"hello, world"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"hello, world"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run hello.kso</div>
     <pre><code>hello, world</code></pre>
@@ -112,10 +112,9 @@ tau is 6.28318</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">unused_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  greeting <span class="o">=</span> <span class="s">"hello"</span>
-  <span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
+  <pre><code>name <span class="o">=</span> <span class="s">"clay"</span>
+greeting <span class="o">=</span> <span class="s">"hello"</span>
+<span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check unused_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `greeting`
@@ -129,9 +128,8 @@ tau is 6.28318</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">greeting.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  name <span class="o">=</span> <span class="s">"clay"</span>
-  <span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
+  <pre><code>name <span class="o">=</span> <span class="s">"clay"</span>
+<span class="f">print</span> <span class="s">"hello, <span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run greeting.kso</div>
     <pre><code>hello, clay</code></pre>

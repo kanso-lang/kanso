@@ -99,15 +99,17 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">numbers.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  root <span class="o">=</span> <span class="f">sqrt</span> <span class="n">2</span>
-  <span class="f">print</span> <span class="s">"sqrt <span class="i">{root}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sqrt-int <span class="i">{sqrt 9}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"round <span class="i">{round 2.6}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"round-half <span class="i">{round 2.5}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_int <span class="i">{to_int "42"}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_float <span class="i">{to_float "3.14"}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_float-int <span class="i">{to_float 5}</span>"</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/math"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+root <span class="o">=</span> <span class="f">math/sqrt</span> <span class="n">2</span>
+<span class="f">print</span> <span class="s">"sqrt <span class="i">{root}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sqrt-int <span class="i">{math/sqrt 9}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"round <span class="i">{math/round 2.6}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"round-half <span class="i">{math/round 2.5}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_int <span class="i">{text/to_int </span>"</span><span class="n">42</span><span class="s">"}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_float <span class="i">{text/to_float </span>"</span><span class="n">3.14</span><span class="s">"}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"to_float-int <span class="i">{text/to_float 5}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run numbers.kso</div>
     <pre><code>sqrt 1.4142135623730951
@@ -124,7 +126,9 @@ to_float-int 5.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">parse_fail.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"parsed <span class="i">{to_int "seven"}</span>"</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="f">print</span> <span class="s">"parsed <span class="i">{text/to_int </span>"</span>seven<span class="s">"}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run parse_fail.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ""seven" is not an integer"
@@ -160,15 +164,16 @@ to_float-int 5.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">strings.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  cs <span class="o">=</span> <span class="f">chars</span> <span class="s">"café"</span>
-  <span class="f">print</span> <span class="s">"chars <span class="i">{cs}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length "café"}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"char_code <span class="i">{char_code "A"}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"from_code <span class="i">{from_code 233}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"join <span class="i">{join ["a" "b" "c"] "-"}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{slice "kanso" 2 4}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{concat [1 2] [3 4]}</span>"</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+cs <span class="o">=</span> <span class="f">text/chars</span> <span class="s">"café"</span>
+<span class="f">print</span> <span class="s">"chars <span class="i">{cs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length </span>"</span>café<span class="s">"}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"char_code <span class="i">{text/char_code </span>"</span>A<span class="s">"}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"from_code <span class="i">{text/from_code 233}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"join <span class="i">{text/join [</span>"</span>a<span class="s">" "</span>b<span class="s">" "</span>c<span class="s">"] "</span><span class="o">-</span><span class="s">"}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{text/slice </span>"</span>kanso<span class="s">" 2 4}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{text/concat [1 2] [3 4]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run strings.kso</div>
     <pre><code>chars ["c" "a" "f" "é"]
@@ -213,17 +218,19 @@ concat [1 2 3 4]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">lists.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
-  <span class="f">print</span> <span class="s">"map <span class="i">{map xs (n -&gt; n * 10)}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"filter <span class="i">{filter xs (n -&gt; n &gt; 1)}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sort <span class="i">{sort xs}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum xs}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"push <span class="i">{push xs 4}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{at xs 2}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length xs}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{slice xs 1 2}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{concat xs [9]}</span>"</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
+<span class="f">print</span> <span class="s">"map <span class="i">{list/map xs (n -&gt; n * 10)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"filter <span class="i">{list/select xs (n -&gt; n &gt; 1)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sort <span class="i">{list/sort xs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"push <span class="i">{push xs 4}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{xs[2]}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length xs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"slice <span class="i">{text/slice xs 1 2}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"concat <span class="i">{text/concat xs [9]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run lists.kso</div>
     <pre><code>map [30 10 20]
@@ -242,15 +249,15 @@ concat [3 1 2 9]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">missing.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">describe</span> <span class="t">none</span>
+  <pre><code><span class="k">fn</span> <span class="f">describe</span> none
   <span class="s">"index out of range"</span>
 
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"value is <span class="i">{x}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
-  found <span class="o">=</span> <span class="f">describe</span> (<span class="f">at</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>] <span class="n">2</span>)
-  gone <span class="o">=</span> <span class="f">describe</span> (<span class="f">at</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>] <span class="n">9</span>)
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  found <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">2</span>]
+  gone <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">9</span>]
   <span class="f">print</span> <span class="s">"in-range: <span class="i">{found}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"missing: <span class="i">{gone}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing.kso</div>
@@ -273,15 +280,14 @@ missing: index out of range</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">maps.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  base <span class="o">=</span> [<span class="s">"a"</span><span class="o">:</span> <span class="n">1</span> <span class="s">"b"</span><span class="o">:</span> <span class="n">2</span>]
-  grown <span class="o">=</span> <span class="f">put</span> base <span class="s">"c"</span> <span class="n">3</span>
-  <span class="f">print</span> <span class="s">"literal <span class="i">{base}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"put <span class="i">{grown}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{at grown "b"}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"entries <span class="i">{entries grown}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length grown}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"empty <span class="i">{[:]}</span>"</span></code></pre>
+  <pre><code>base <span class="o">=</span> [<span class="s">"a"</span>: <span class="n">1</span> <span class="s">"b"</span>: <span class="n">2</span>]
+grown <span class="o">=</span> <span class="f">put</span> base <span class="s">"c"</span> <span class="n">3</span>
+<span class="f">print</span> <span class="s">"literal <span class="i">{base}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"put <span class="i">{grown}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{grown[</span>"</span>b<span class="s">"]}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"entries <span class="i">{entries grown}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length grown}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"empty <span class="i">{[:]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run maps.kso</div>
     <pre><code>literal ["a": 1 "b": 2]
@@ -309,11 +315,12 @@ empty [:]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">bytes.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  bs <span class="o">=</span> <span class="f">bytes</span> <span class="s">"café"</span>
-  <span class="f">print</span> <span class="s">"bytes <span class="i">{bs}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"utf8 <span class="i">{utf8 bs}</span>"</span>
-    <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"find2 <span class="i">{find2 (bytes "a,b;c") 1 44 59}</span>"</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+bs <span class="o">=</span> <span class="f">text/bytes</span> <span class="s">"café"</span>
+<span class="f">print</span> <span class="s">"bytes <span class="i">{bs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"utf8 <span class="i">{text/utf8 bs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"find2 <span class="i">{text/find2 (text/bytes </span>"</span>a,b;c<span class="s">") 1 44 59}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run bytes.kso</div>
     <pre><code>bytes [99 97 102 195 169]
@@ -335,7 +342,7 @@ find2 2</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">classify</span> n
   <span class="f">if</span> (n <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"positive"</span> <span class="s">"non-positive"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run control.kso</div>
     <pre><code>seven positive
@@ -353,10 +360,12 @@ zero non-positive</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">argv.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">first</span> xs
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">fn</span> <span class="f">first</span> xs
   xs[<span class="n">1</span>]
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run argv.kso -- clay</div>
     <pre><code>clay</code></pre>
@@ -374,7 +383,7 @@ zero non-positive</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">print.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"first"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"second"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"third"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"first"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"second"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"third"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run print.kso</div>
     <pre><code>first
@@ -400,7 +409,10 @@ third</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">timing.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">sleep</span> <span class="n">10</span> <span class="o">&gt;&gt;</span> <span class="f">random</span> <span class="n">6</span> <span class="o">.</span> <span class="f">show</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/random"</span>
+<span class="k">import</span> <span class="s">"std/time"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">time/sleep</span> <span class="n">10</span> <span class="o">&gt;&gt;</span> <span class="f">random/random</span> <span class="n">6</span> <span class="o">.</span> <span class="f">show</span>
 
 <span class="k">fn</span> <span class="f">show</span> n
   <span class="f">print</span> <span class="s">"rolled <span class="i">{n}</span>"</span></code></pre>
@@ -429,7 +441,9 @@ third</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">files.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">read_file</span> <span class="s">"note.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="f">io/write_file</span> <span class="s">"note.txt"</span> <span class="s">"one taiyaki"</span> <span class="o">&gt;&gt;</span> <span class="f">io/read_file</span> <span class="s">"note.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run files.kso</div>
     <pre><code>one taiyaki</code></pre>
@@ -442,7 +456,9 @@ third</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">input.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">stdin</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">print</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">print</span>
 
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>

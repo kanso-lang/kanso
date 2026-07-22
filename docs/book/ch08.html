@@ -117,54 +117,56 @@ parse failed at byte 10: invalid literal</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">literal.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">parse_failure</span>
-  position:<span class="t">int</span>
-  reason:<span class="t">string</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-_bytes_false <span class="o">=</span> [<span class="n">102</span> <span class="n">97</span> <span class="n">108</span> <span class="n">115</span> <span class="n">101</span>]
+<span class="k">type</span> parse_failure
+  position:int
+  reason:string
 
-_bytes_null <span class="o">=</span> [<span class="n">110</span> <span class="n">117</span> <span class="n">108</span> <span class="n">108</span>]
+bytes_false <span class="o">=</span> [<span class="n">102</span> <span class="n">97</span> <span class="n">108</span> <span class="n">115</span> <span class="n">101</span>]
 
-_bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">114</span> <span class="n">117</span> <span class="n">101</span>]
+bytes_null <span class="o">=</span> [<span class="n">110</span> <span class="n">117</span> <span class="n">108</span> <span class="n">108</span>]
 
-<span class="k">fn</span> <span class="f">_fail</span> p reason
-  <span class="t">err</span> (<span class="t">parse_failure</span> p reason)
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">102</span> cs p
-  <span class="f">_word</span> cs p _bytes_false <span class="t">false</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">110</span> cs p
-  <span class="f">_word</span> cs p _bytes_null <span class="s">"null"</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="n">116</span> cs p
-  <span class="f">_word</span> cs p _bytes_true <span class="t">true</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> <span class="t">none</span> <span class="o">_</span> p
-  <span class="f">_fail</span> p <span class="s">"unexpected end of input"</span>
-
-<span class="k">fn</span> <span class="f">_value_for</span> c <span class="o">_</span> p
-  <span class="f">_fail</span> p <span class="s">"unexpected character `<span class="i">{utf8 [c]}</span>`"</span>
-
-<span class="k">fn</span> <span class="f">_word</span> cs p expected v
-  n <span class="o">=</span> <span class="f">length</span> expected
-  seg <span class="o">=</span> <span class="f">slice</span> cs p (p <span class="o">+</span> n <span class="o">-</span> <span class="n">1</span>)
-  <span class="f">if</span> (seg <span class="o">==</span> expected) v (<span class="f">_fail</span> p <span class="s">"invalid literal"</span>)
+bytes_true <span class="o">=</span> [<span class="n">116</span> <span class="n">114</span> <span class="n">117</span> <span class="n">101</span>]
 
 <span class="k">fn</span> <span class="f">decode_literal</span> s
-  cs <span class="o">=</span> <span class="f">bytes</span> s
-  <span class="f">_value_for</span> (<span class="f">at</span> cs <span class="n">1</span>) cs <span class="n">1</span>
+  cs <span class="o">=</span> <span class="f">text/bytes</span> s
+  <span class="f">value_for</span> (cs[<span class="n">1</span>]) cs <span class="n">1</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">fn</span> <span class="f">fail</span> p reason
+  <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"true"</span>))
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"null"</span>))
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"nope"</span>))
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_literal</span> <span class="s">"?"</span>))
 
-<span class="k">fn</span> <span class="f">show</span> (<span class="t">err</span> (<span class="t">parse_failure</span> p reason))
+<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> (<span class="f">parse_failure</span> p reason))
   <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
 
 <span class="k">fn</span> <span class="f">show</span> v
-  <span class="s">"ok: <span class="i">{v}</span>"</span></code></pre>
+  <span class="s">"ok: <span class="i">{v}</span>"</span>
+
+<span class="k">fn</span> <span class="f">value_for</span> <span class="n">102</span> cs p
+  <span class="f">word</span> cs p bytes_false false
+
+<span class="k">fn</span> <span class="f">value_for</span> <span class="n">110</span> cs p
+  <span class="f">word</span> cs p bytes_null <span class="s">"null"</span>
+
+<span class="k">fn</span> <span class="f">value_for</span> <span class="n">116</span> cs p
+  <span class="f">word</span> cs p bytes_true true
+
+<span class="k">fn</span> <span class="f">value_for</span> none _ p
+  <span class="f">fail</span> p <span class="s">"unexpected end of input"</span>
+
+<span class="k">fn</span> <span class="f">value_for</span> c _ p
+  <span class="f">fail</span> p <span class="s">"unexpected character `<span class="i">{text/utf8 [c]}</span>`"</span>
+
+<span class="k">fn</span> <span class="f">word</span> cs p expected v
+  n <span class="o">=</span> <span class="f">length</span> expected
+  seg <span class="o">=</span> <span class="f">text/slice</span> cs p (p <span class="o">+</span> n <span class="o">-</span> <span class="n">1</span>)
+  <span class="f">if</span> (seg <span class="o">==</span> expected) v (<span class="f">fail</span> p <span class="s">"invalid literal"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run literal.kso</div>
     <pre><code>ok: true
@@ -227,30 +229,32 @@ err at 1: unexpected character `?`</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">unicode.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_both</span> <span class="t">true</span> <span class="t">true</span>
-  <span class="t">true</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">_both</span> <span class="o">_</span> <span class="o">_</span>
-  <span class="t">false</span>
+<span class="k">fn</span> <span class="f">both</span> true true
+  <span class="f">true</span>
 
-<span class="k">fn</span> <span class="f">_hex_alpha</span> c
-  <span class="f">if</span> (<span class="f">_both</span> (<span class="n">96</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">103</span>)) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">_hex_upper</span> c)
-
-<span class="k">fn</span> <span class="f">_hex_digit</span> c
-  <span class="f">if</span> (<span class="f">_both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)) (c <span class="o">-</span> <span class="n">48</span>) (<span class="f">_hex_alpha</span> c)
-
-<span class="k">fn</span> <span class="f">_hex_upper</span> c
-  <span class="f">if</span> (<span class="f">_both</span> (<span class="n">64</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">71</span>)) (c <span class="o">-</span> <span class="n">55</span>) (<span class="t">err</span> <span class="s">"invalid hex digit"</span>)
+<span class="k">fn</span> <span class="f">both</span> _ _
+  <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">decode_u</span> s
-  cs <span class="o">=</span> <span class="f">bytes</span> s
-  h1 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">1</span>)
-  h2 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">2</span>)
-  h3 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">3</span>)
-  h4 <span class="o">=</span> <span class="f">_hex_digit</span> (<span class="f">at</span> cs <span class="n">4</span>)
-  <span class="f">from_code</span> (h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4)
+  cs <span class="o">=</span> <span class="f">text/bytes</span> s
+  h1 <span class="o">=</span> <span class="f">hex_digit</span> (cs[<span class="n">1</span>])
+  h2 <span class="o">=</span> <span class="f">hex_digit</span> (cs[<span class="n">2</span>])
+  h3 <span class="o">=</span> <span class="f">hex_digit</span> (cs[<span class="n">3</span>])
+  h4 <span class="o">=</span> <span class="f">hex_digit</span> (cs[<span class="n">4</span>])
+  <span class="f">text/from_code</span> (h1 <span class="o">*</span> <span class="n">4096</span> <span class="o">+</span> h2 <span class="o">*</span> <span class="n">256</span> <span class="o">+</span> h3 <span class="o">*</span> <span class="n">16</span> <span class="o">+</span> h4)
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">fn</span> <span class="f">hex_alpha</span> c
+  <span class="f">if</span> (<span class="f">both</span> (<span class="n">96</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">103</span>)) (c <span class="o">-</span> <span class="n">87</span>) (<span class="f">hex_upper</span> c)
+
+<span class="k">fn</span> <span class="f">hex_digit</span> c
+  <span class="f">if</span> (<span class="f">both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)) (c <span class="o">-</span> <span class="n">48</span>) (<span class="f">hex_alpha</span> c)
+
+<span class="k">fn</span> <span class="f">hex_upper</span> c
+  <span class="f">if</span> (<span class="f">both</span> (<span class="n">64</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">71</span>)) (c <span class="o">-</span> <span class="n">55</span>) (<span class="f">err</span> <span class="s">"invalid hex digit"</span>)
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"00e9"</span>)
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"305f"</span>)
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">decode_u</span> <span class="s">"7b80"</span>)</code></pre>
@@ -304,14 +308,61 @@ err at 1: unexpected character `?`</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">numbers.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">classify</span> s
-  cs <span class="o">=</span> <span class="f">bytes</span> s
-  q <span class="o">=</span> <span class="f">_number_end</span> cs <span class="n">1</span>
-  digits <span class="o">=</span> <span class="f">slice</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
-  floaty <span class="o">=</span> <span class="f">_mark_from</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
-  <span class="f">if</span> floaty <span class="s">"float64 <span class="i">{to_float digits}</span>"</span> <span class="s">"int <span class="i">{to_int digits}</span>"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">fn</span> <span class="f">both</span> true true
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">both</span> _ _
+  <span class="f">false</span>
+
+<span class="k">fn</span> <span class="f">classify</span> s
+  cs <span class="o">=</span> <span class="f">text/bytes</span> s
+  q <span class="o">=</span> <span class="f">number_end</span> cs <span class="n">1</span>
+  digits <span class="o">=</span> <span class="f">text/slice</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
+  floaty <span class="o">=</span> <span class="f">mark_from</span> cs <span class="n">1</span> (q <span class="o">-</span> <span class="n">1</span>)
+  <span class="f">if</span> floaty <span class="s">"float64 <span class="i">{text/to_float digits}</span>"</span> <span class="s">"int <span class="i">{text/to_int digits}</span>"</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">43</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">45</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">46</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">69</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> <span class="n">101</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> none
+  <span class="f">false</span>
+
+<span class="k">fn</span> <span class="f">is_number_char</span> c
+  <span class="f">both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
+
+<span class="k">fn</span> <span class="f">mark_from</span> cs p q
+  <span class="f">if</span> (p <span class="o">&gt;</span> q) false (<span class="f">mark_step</span> cs (cs[p]) p q)
+
+<span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">46</span> _ _
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">69</span> _ _
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">mark_step</span> _ <span class="n">101</span> _ _
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">mark_step</span> cs _ p q
+  <span class="f">mark_from</span> cs (p <span class="o">+</span> <span class="n">1</span>) q
+
+<span class="k">fn</span> <span class="f">number_end</span> cs p
+  <span class="f">if</span> (<span class="f">is_number_char</span> (cs[p])) (<span class="f">number_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>)
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>)
@@ -363,20 +414,71 @@ float64 6000.0</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">positions.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_trailing</span> cs p v
-  <span class="f">if</span> (p <span class="o">&gt;</span> (<span class="f">length</span> cs)) v (<span class="f">_fail</span> p <span class="s">"unexpected trailing characters"</span>)
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">type</span> parse_failure
+  position:int
+  reason:string
+
+<span class="k">fn</span> <span class="f">both</span> true true
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">both</span> _ _
+  <span class="f">false</span>
 
 <span class="k">fn</span> <span class="f">decode_int</span> s
-  cs <span class="o">=</span> <span class="f">bytes</span> s
-  p <span class="o">=</span> <span class="f">_skip_ws</span> cs <span class="n">1</span>
-  q <span class="o">=</span> <span class="f">_digits_end</span> cs p
-  v <span class="o">=</span> <span class="f">to_int</span> (<span class="f">slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
-  <span class="f">_trailing</span> cs (<span class="f">_skip_ws</span> cs q) v
+  cs <span class="o">=</span> <span class="f">text/bytes</span> s
+  p <span class="o">=</span> <span class="f">skip_ws</span> cs <span class="n">1</span>
+  q <span class="o">=</span> <span class="f">digits_end</span> cs p
+  v <span class="o">=</span> <span class="f">text/to_int</span> (<span class="f">text/slice</span> cs p (q <span class="o">-</span> <span class="n">1</span>))
+  <span class="f">trailing</span> cs (<span class="f">skip_ws</span> cs q) v
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">fn</span> <span class="f">digits_end</span> cs p
+  <span class="f">if</span> (<span class="f">is_digit</span> (cs[p])) (<span class="f">digits_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+
+<span class="k">fn</span> <span class="f">fail</span> p reason
+  <span class="f">err</span> (<span class="f">parse_failure</span> p reason)
+
+<span class="k">fn</span> <span class="f">is_digit</span> none
+  <span class="f">false</span>
+
+<span class="k">fn</span> <span class="f">is_digit</span> c
+  <span class="f">both</span> (<span class="n">47</span> <span class="o">&lt;</span> c) (c <span class="o">&lt;</span> <span class="n">58</span>)
+
+<span class="k">fn</span> <span class="f">is_ws</span> <span class="n">9</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_ws</span> <span class="n">10</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_ws</span> <span class="n">13</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_ws</span> <span class="n">32</span>
+  <span class="f">true</span>
+
+<span class="k">fn</span> <span class="f">is_ws</span> none
+  <span class="f">false</span>
+
+<span class="k">fn</span> <span class="f">is_ws</span> _
+  <span class="f">false</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  42  "</span>))
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"1 x"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))</code></pre>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">show</span> (<span class="f">decode_int</span> <span class="s">"  7 ;"</span>))
+
+<span class="k">fn</span> <span class="f">show</span> (<span class="f">err</span> (<span class="f">parse_failure</span> p reason))
+  <span class="s">"err at <span class="i">{p}</span>: <span class="i">{reason}</span>"</span>
+
+<span class="k">fn</span> <span class="f">show</span> v
+  <span class="s">"ok: <span class="i">{v}</span>"</span>
+
+<span class="k">fn</span> <span class="f">skip_ws</span> cs p
+  <span class="f">if</span> (<span class="f">is_ws</span> (cs[p])) (<span class="f">skip_ws</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
+
+<span class="k">fn</span> <span class="f">trailing</span> cs p v
+  <span class="f">if</span> (p <span class="o">&gt;</span> (<span class="f">length</span> cs)) v (<span class="f">fail</span> p <span class="s">"unexpected trailing characters"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run positions.kso</div>
     <pre><code>ok: 42
@@ -479,28 +581,54 @@ test_roundtrip ... ok
 
 <div class="code-panel">
   <div class="code-panel-title">escapes.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">_escape_char</span> <span class="s">"\""</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\""</span>
   <span class="s">"\\\""</span>
 
-<span class="k">fn</span> <span class="f">_escape_char</span> <span class="s">"\n"</span>
+<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\\"</span>
+  <span class="s">"\\\\"</span>
+
+<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\n"</span>
   <span class="s">"\\n"</span>
 
-<span class="k">fn</span> <span class="f">_escape_char</span> c
-  <span class="f">if</span> ((<span class="f">char_code</span> c) <span class="o">&lt;</span> <span class="n">32</span>) (<span class="f">_u_escape</span> c) c
+<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\r"</span>
+  <span class="s">"\\r"</span>
 
-<span class="k">fn</span> <span class="f">_escape_str</span> s
-  <span class="f">join</span> (<span class="f">map</span> (<span class="f">chars</span> s) (c <span class="o">-&gt;</span> <span class="f">_escape_char</span> c)) <span class="s">""</span>
+<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\t"</span>
+  <span class="s">"\\t"</span>
 
-<span class="k">fn</span> <span class="f">_u_escape</span> c
-  <span class="s">"\\u<span class="i">{_hex4 (char_code c)}</span>"</span>
+<span class="k">fn</span> <span class="f">escape_char</span> c
+  <span class="f">if</span> ((<span class="f">text/char_code</span> c) <span class="o">&lt;</span> <span class="n">32</span>) (<span class="f">u_escape</span> c) c
 
-<span class="f">main</span> <span class="o">=</span>
-  bell <span class="o">=</span> <span class="f">from_code</span> <span class="n">7</span>
+<span class="k">fn</span> <span class="f">escape_str</span> s
+  <span class="f">text/join</span> (<span class="f">list/map</span> (<span class="f">text/chars</span> s) (c <span class="o">-&gt;</span> <span class="f">escape_char</span> c)) <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">hex4</span> n
+  d1 <span class="o">=</span> n <span class="o">/</span> <span class="n">4096</span>
+  r1 <span class="o">=</span> n <span class="o">-</span> (d1 <span class="o">*</span> <span class="n">4096</span>)
+  d2 <span class="o">=</span> r1 <span class="o">/</span> <span class="n">256</span>
+  r2 <span class="o">=</span> r1 <span class="o">-</span> (d2 <span class="o">*</span> <span class="n">256</span>)
+  d3 <span class="o">=</span> r2 <span class="o">/</span> <span class="n">16</span>
+  d4 <span class="o">=</span> r2 <span class="o">-</span> (d3 <span class="o">*</span> <span class="n">16</span>)
+  <span class="f">text/join</span> [(<span class="f">hex_char</span> d1) (<span class="f">hex_char</span> d2) (<span class="f">hex_char</span> d3) (<span class="f">hex_char</span> d4)] <span class="s">""</span>
+
+<span class="k">fn</span> <span class="f">hex_char</span> n
+  hex_digits[n <span class="o">+</span> <span class="n">1</span>]
+
+hex_digits <span class="o">=</span> <span class="s">"0123456789abcdef"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  bell <span class="o">=</span> <span class="f">text/from_code</span> <span class="n">7</span>
   <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"a\"b\nc"</span>)
   <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">quote_str</span> <span class="s">"ring<span class="i">{bell}</span>ring"</span>)
 
 <span class="k">fn</span> <span class="f">quote_str</span> s
-  <span class="s">"\"<span class="i">{_escape_str s}</span>\""</span></code></pre>
+  <span class="s">"\"<span class="i">{escape_str s}</span>\""</span>
+
+<span class="k">fn</span> <span class="f">u_escape</span> c
+  <span class="s">"\\u<span class="i">{hex4 (text/char_code c)}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run escapes.kso</div>
     <pre><code>"a\"b\nc"
@@ -512,48 +640,51 @@ test_roundtrip ... ok
 
 <div class="code-panel">
   <div class="code-panel-title">pretty.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">json_null</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">_entry_block</span> (<span class="t">entry</span> k v) d
-  <span class="s">"<span class="i">{_pad d}</span>\"<span class="i">{k}</span>\": <span class="i">{pretty v d}</span>"</span>
+<span class="k">type</span> json_null
 
-<span class="k">fn</span> <span class="f">_pad</span> <span class="n">0</span>
+<span class="k">fn</span> <span class="f">entry_block</span> (<span class="f">entry</span> k v) d
+  <span class="s">"<span class="i">{pad d}</span>\"<span class="i">{k}</span>\": <span class="i">{pretty v d}</span>"</span>
+
+<span class="k">fn</span> <span class="f">pad</span> <span class="n">0</span>
   <span class="s">""</span>
 
-<span class="k">fn</span> <span class="f">_pad</span> n
-  <span class="s">"  <span class="i">{_pad (n - 1)}</span>"</span>
+<span class="k">fn</span> <span class="f">pad</span> n
+  <span class="s">"  <span class="i">{pad (n - 1)}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   doc <span class="o">=</span> [<span class="s">"name"</span>: <span class="s">"kanso"</span> <span class="s">"port"</span>: <span class="n">8080</span> <span class="s">"tags"</span>: [<span class="s">"fast"</span> <span class="s">"simple"</span>]]
   <span class="f">print</span> (<span class="f">pretty</span> doc <span class="n">0</span>)
 
-<span class="k">fn</span> <span class="f">pretty</span> <span class="t">true</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">pretty</span> true _
   <span class="s">"true"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> <span class="t">false</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">pretty</span> false _
   <span class="s">"false"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> <span class="t">json_null</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">pretty</span> json_null _
   <span class="s">"null"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> n:<span class="t">int</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">pretty</span> n:int _
   <span class="s">"<span class="i">{n}</span>"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> x:<span class="t">float64</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">pretty</span> x:float64 _
   <span class="s">"<span class="i">{x}</span>"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> s:<span class="t">string</span> <span class="o">_</span>
+<span class="k">fn</span> <span class="f">pretty</span> s:string _
   <span class="s">"\"<span class="i">{s}</span>\""</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> xs:<span class="t">json[]</span> d
+<span class="k">fn</span> <span class="f">pretty</span> xs:json[] d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
-  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{_pad d2}</span><span class="i">{pretty v d2}</span>"</span>)) <span class="s">",\n"</span>
-  <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{_pad d}</span>]"</span>
+  inner <span class="o">=</span> <span class="f">text/join</span> (<span class="f">list/map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{pad d2}</span><span class="i">{pretty v d2}</span>"</span>)) <span class="s">",\n"</span>
+  <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{pad d}</span>]"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> m:<span class="t">json[string]</span> d
+<span class="k">fn</span> <span class="f">pretty</span> m:json[string] d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
-  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">_entry_block</span> e d2)) <span class="s">",\n"</span>
-  <span class="s">"\{\n<span class="i">{inner}</span>\n<span class="i">{_pad d}</span>}"</span></code></pre>
+  inner <span class="o">=</span> <span class="f">text/join</span> (<span class="f">list/map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">entry_block</span> e d2)) <span class="s">",\n"</span>
+  <span class="s">"\<span class="i">{\n{inner}\n{pad d}}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pretty.kso</div>
     <pre><code>{

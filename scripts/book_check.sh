@@ -11,6 +11,8 @@
 # A sibling name.manual file (holding one line of why) exempts an .out the
 # harness cannot replay — repl transcripts, wall-clock timings, IR greps.
 set -e
+# panels render their samples; drift fails the build
+python3 scripts/book_panels.py --check
 # the sample .outs pin the dice; a bare run seeds from entropy
 export KANSO_SEED=2685821657736338717
 KANSO=$(pwd)/target/release/kanso

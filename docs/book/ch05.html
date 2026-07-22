@@ -13,7 +13,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">brew.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"brewing"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span></code></pre>
+  <pre><code><span class="f">print</span> <span class="s">"brewing"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run brew.kso --plan</div>
     <pre><code>plan:
@@ -37,7 +37,7 @@ pouring</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">quiet.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
+  <pre><code><span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run quiet.kso --plan</div>
     <pre><code><span class="k">error</span>: main is not an io; there is no plan to show</code></pre>
@@ -52,7 +52,7 @@ pouring</code></pre>
   <div class="code-panel-title">knock.kso</div>
   <pre><code>knock <span class="o">=</span> <span class="f">print</span> <span class="s">"kon kon"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span></code></pre>
+<span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run knock.kso --plan</div>
     <pre><code>plan:
@@ -74,9 +74,9 @@ kon kon</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">render.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"an io renders as <span class="i">{step}</span>"</span>
+  <pre><code>step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span>
 
-step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span></code></pre>
+<span class="f">print</span> <span class="s">"an io renders as <span class="i">{step}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run render.kso</div>
     <pre><code>an io renders as &lt;io&gt;</code></pre>
@@ -87,9 +87,8 @@ step <span class="o">=</span> <span class="f">print</span> <span class="s">"stee
 
 <div class="code-panel">
   <div class="code-panel-title">dropped_check.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  goodbye <span class="o">=</span> <span class="f">print</span> <span class="s">"sayonara"</span>
-  <span class="f">print</span> <span class="s">"the goodbye never ran"</span></code></pre>
+  <pre><code>goodbye <span class="o">=</span> <span class="f">print</span> <span class="s">"sayonara"</span>
+<span class="f">print</span> <span class="s">"the goodbye never ran"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check dropped_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `goodbye`
@@ -110,7 +109,7 @@ step <span class="o">=</span> <span class="f">print</span> <span class="s">"stee
   <pre><code><span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"hello, <span class="i">{name}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="s">"kanso"</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="s">"kanso"</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>hello, kanso</code></pre>
@@ -128,11 +127,15 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">count.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">count_lines</span> text
-  newlines <span class="o">=</span> <span class="f">filter</span> (<span class="f">chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+<span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">count_lines</span> text
+  newlines <span class="o">=</span> <span class="f">list/select</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
   <span class="s">"flavors.txt has <span class="i">{length newlines}</span> lines"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"flavors.txt"</span> <span class="o">.</span> <span class="f">count_lines</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run count.kso</div>
     <pre><code>flavors.txt has 3 lines</code></pre>
@@ -156,9 +159,10 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">save.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span>
-  order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
-  <span class="f">write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</span>
+<span class="f">io/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">io/read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso --plan</div>
     <pre><code>plan:
@@ -178,13 +182,15 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">first</span> xs
-  xs[<span class="n">1</span>]
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">fn</span> <span class="f">first</span> xs
+  xs[<span class="n">1</span>]!
 
 <span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run welcome.kso -- clay</div>
     <pre><code>irasshaimase, clay</code></pre>
@@ -193,7 +199,9 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">shout.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">stdin</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">print</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/stdin</span> <span class="o">.</span> <span class="f">shout</span> <span class="o">.</span> <span class="f">print</span>
 
 <span class="k">fn</span> <span class="f">shout</span> text
   <span class="s">"<span class="i">{text}</span>!!"</span></code></pre>
@@ -211,7 +219,15 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">welcome.kso, run bare</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">fn</span> <span class="f">first</span> xs
+  xs[<span class="n">1</span>]!
+
+<span class="k">fn</span> <span class="f">greet</span> name
+  <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run welcome.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
@@ -225,7 +241,9 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">missing.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="f">io/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
@@ -236,13 +254,15 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">fallback.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
 
 <span class="k">fn</span> <span class="f">orders</span> (<span class="f">err</span> _)
   <span class="s">"no orders yet"</span>
 
 <span class="k">fn</span> <span class="f">orders</span> text
-  <span class="s">"yesterday: <span class="i">{text}</span>"</span></code></pre>
+  <span class="s">"yesterday: <span class="i">{text}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"yesterday.txt"</span> <span class="o">.</span> <span class="f">orders</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run fallback.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read yesterday.txt: no such file or unreadable"</code></pre>
@@ -295,13 +315,16 @@ hojicha</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">core_test.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">count_lines</span> text
-  newlines <span class="o">=</span> <span class="f">filter</span> (<span class="f">chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+<span class="k">import</span> <span class="s">"std/text"</span>
+
+<span class="k">fn</span> <span class="f">count_lines</span> text
+  newlines <span class="o">=</span> <span class="f">list/select</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
   <span class="f">length</span> newlines
 
-<span class="f">test_counts_lines</span> <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span>) <span class="o">==</span> <span class="n">3</span>
+test_counts_lines <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span>) <span class="o">==</span> <span class="n">3</span>
 
-<span class="f">test_empty_text_has_no_lines</span> <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">""</span>) <span class="o">==</span> <span class="n">0</span></code></pre>
+test_empty_text_has_no_lines <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">""</span>) <span class="o">==</span> <span class="n">0</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test core_test.kso</div>
     <pre><code>test_counts_lines ... ok

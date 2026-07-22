@@ -57,16 +57,16 @@ gomen: we do not serve pocky</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">shop.kso</div>
-  <pre><code><span class="k">pub type</span> <span class="t">receipt</span>
-  total:<span class="t">int</span>
+  <pre><code><span class="k">pub</span> <span class="k">type</span> receipt
+  total:int
 
-<span class="k">pub fn</span> <span class="f">checkout</span> item qty
-  <span class="t">receipt</span> (<span class="f">line</span> item qty)
+<span class="k">pub</span> <span class="k">fn</span> <span class="f">checkout</span> item qty
+  <span class="f">receipt</span> (<span class="f">line</span> item qty)
 
 <span class="k">fn</span> <span class="f">line</span> item qty
   qty <span class="o">*</span> (<span class="f">price</span> item) <span class="o">+</span> service
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout "matcha" 2}</span>"</span>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout </span>"</span>matcha<span class="s">" 2}"</span>
 
 <span class="k">fn</span> <span class="f">price</span> <span class="s">"matcha"</span>
   <span class="n">600</span>
@@ -87,13 +87,10 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">order_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">taiyaki</span> n
-  n <span class="o">+</span> <span class="n">50</span>
+  <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
+  <span class="f">x</span>
 
-<span class="k">fn</span> <span class="f">dango</span> n
-  n <span class="o">+</span> <span class="n">50</span>
-
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{dango 350}</span> <span class="i">{taiyaki 500}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check order_check.kso</div>
     <pre><code>error[formatting]: function declarations appear in alphabetical order: `dango` before `taiyaki`
