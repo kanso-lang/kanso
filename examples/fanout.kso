@@ -1,3 +1,5 @@
+import "std/list"
+
 # in go this is four goroutines, a channel, a WaitGroup, and a select.
 # in kanso the channel is the data flow itself: fan-out is a map whose
 # calls share nothing (the compiler is free to run them in parallel),
@@ -10,6 +12,6 @@ fn fetch_quote city
 
 pub play =
   cities = ["tokyo" "kyoto" "osaka" "sapporo"]
-  quotes = map cities (c -> fetch_quote c)
-  cheapest = sort quotes . at 1
+  quotes = list/map cities (c -> fetch_quote c)
+  cheapest = (list/sort quotes)[1]
   print "four lookups fanned out, one answer fanned in: {cheapest} yen"

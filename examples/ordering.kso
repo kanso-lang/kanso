@@ -1,11 +1,13 @@
+import "std/list"
+
 fn cheapest prices
-  sort prices . at 1
+  (list/sort prices)[1]
 
 pub play =
   prices = [520 380 450 610 290]
   # these two share nothing: the compiler is free to run them in parallel
   low = cheapest prices
-  total = sum prices
+  total = list/sum prices
   # report consumes both, so it waits for both -- the barrier is the data
   report low total
 

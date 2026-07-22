@@ -5,6 +5,6 @@ fn describe x
   "value is {x}"
 
 pub play =
-  found = describe (at [10 20 30] 2)
-  gone = describe (at [10 20 30] 9)
+  found = describe [10 20 30][2]
+  gone = describe [10 20 30][9]
   print "in-range: {found}" >> print "missing: {gone}"

@@ -1,10 +1,12 @@
+import "std/list"
+
 fn cheapest prices
-  sort prices . at 1
+  (list/sort prices)[1]
 
 pub play =
   prices = [520 380 450 610 290]
   low = cheapest prices
-  total = sum prices
+  total = list/sum prices
   report low total
 
 fn report low total

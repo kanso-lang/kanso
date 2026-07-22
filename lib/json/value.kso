@@ -26,7 +26,7 @@ fn array_open cs _ p
 fn array_step cs (parsed p v) acc
   acc2 = push acc v
   p2 = skip_ws cs p
-  array_delim cs (at cs p2) p2 acc2
+  array_delim cs (cs[p2]) p2 acc2
 
 bytes_false = [102 97 108 115 101]
 
@@ -51,7 +51,7 @@ fn obj_delim _ c p _
 
 fn obj_items cs p acc
   p2 = skip_ws cs p
-  obj_key_start cs (at cs p2) p2 acc
+  obj_key_start cs (cs[p2]) p2 acc
 
 fn obj_key cs (parsed p k) acc
   p2 = skip_ws cs p
@@ -78,11 +78,11 @@ fn obj_open cs _ p
 fn obj_value cs (parsed p v) k acc
   acc2 = put acc k v
   p2 = skip_ws cs p
-  obj_delim cs (at cs p2) p2 acc2
+  obj_delim cs (cs[p2]) p2 acc2
 
 fn parse_array cs p
   p2 = skip_ws cs p
-  array_open cs (at cs p2) p2
+  array_open cs (cs[p2]) p2
 
 fn parse_number cs p
   q = number_end cs p
@@ -90,11 +90,11 @@ fn parse_number cs p
 
 fn parse_object cs p
   p2 = skip_ws cs p
-  obj_open cs (at cs p2) p2
+  obj_open cs (cs[p2]) p2
 
 fn parse_value cs p
   p2 = skip_ws cs p
-  value_for (at cs p2) cs p2
+  value_for (cs[p2]) cs p2
 
 # value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace
 fn value_for 34 cs p

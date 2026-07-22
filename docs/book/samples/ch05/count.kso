@@ -1,5 +1,7 @@
+import "std/list"
+
 fn count_lines text
-  newlines = filter (chars text) (c -> c == "\n")
+  newlines = list/select (chars text) (c -> c == "\n")
   "flavors.txt has {length newlines} lines"
 
 pub play = read_file "flavors.txt" . count_lines . print

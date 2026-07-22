@@ -407,6 +407,15 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
     }
 }
 
+/// Lenient indexing: a miss is none — the plain `xs[i]` form.
+#[no_mangle]
+pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
+    match index_value(val(base), val(index), SPAN0) {
+        Ok(v) => push(Slot::V(v)),
+        Err(rt) => die(rt.message),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_truthy(h: u32) -> u32 {
     match val(h) {

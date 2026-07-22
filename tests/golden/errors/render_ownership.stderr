@@ -1,4 +1,4 @@
 error[ownership]: an arm of `to_string` must match on a type this module defines — rendering of primitives and sentinels is fixed; wrap the value in your own type
-  --> render_ownership.kso:3:4
-   3 | fn to_string none
+  --> render_ownership.kso:5:4
+   5 | fn to_string none
           ^

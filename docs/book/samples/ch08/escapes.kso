@@ -1,3 +1,5 @@
+import "std/list"
+
 fn escape_char "\""
   "\\\""
 
@@ -17,7 +19,7 @@ fn escape_char c
   if ((char_code c) < 32) (u_escape c) c
 
 fn escape_str s
-  join (map (chars s) (c -> escape_char c)) ""
+  join (list/map (chars s) (c -> escape_char c)) ""
 
 fn hex4 n
   d1 = n / 4096
@@ -29,7 +31,9 @@ fn hex4 n
   join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
 
 fn hex_char n
-  at "0123456789abcdef" (n + 1)
+  hex_digits[n + 1]
+
+hex_digits = "0123456789abcdef"
 
 pub play =
   bell = from_code 7

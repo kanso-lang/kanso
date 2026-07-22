@@ -1,29 +1,62 @@
 type missing
   unfound:bool
 
-pub fn all list pred
+pub fn all? list pred
   fold list true (ok x -> if (pred x) ok false)
 
-pub fn any list pred
+pub fn any? list pred
   fold list false (hit x -> if (pred x) true hit)
+
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+pub fn count list pred
+  fold list 0 (c x -> if (pred x) (c + 1) c)
 
 pub fn drop list n
   drop_from list (n + 1) []
 
 fn drop_from list i acc
-  if (length list < i) acc (drop_from list (i + 1) (push acc (at list i)))
+  if (length list < i) acc (drop_from list (i + 1) (push acc (list[i])))
 
 pub fn find list pred
   unwrap_found (seek list pred)
 
 pub fn first list
-  at list 1
+  list[1]
 
 pub fn fold list init f
   fold_at list init f 1
 
 fn fold_at list acc f i
-  if (length list < i) acc (fold_at list (f acc (at list i)) f (i + 1))
+  if (length list < i) acc (fold_at list (f acc (list[i])) f (i + 1))
+
+fn join_parts before x after
+  fold after (push before x) (acc y -> push acc y)
+
+pub fn last list
+  list[length list]
+
+pub fn map list f
+  fold list [] (acc x -> push acc (f x))
+
+pub fn max list
+  unwrap_found (fold list (missing true) (m x -> outrank m x))
+
+pub fn mean list
+  (0.0 + fold list 0 (a x -> a + x)) / length list
+
+pub fn min list
+  unwrap_found (fold list (missing true) (m x -> underrank m x))
+
+fn outrank (missing _) x
+  x
+
+fn outrank m x
+  if (m < x) x m
 
 fn pick_found (missing _) true x
   x
@@ -37,6 +70,9 @@ fn pick_found (err e) _ _
 fn pick_found found _ _
   found
 
+fn place sorted x
+  join_parts (select sorted (y -> y < x)) x (reject sorted (y -> y < x))
+
 pub fn reject list pred
   fold list [] (acc x -> if (pred x) acc (push acc x))
 
@@ -46,6 +82,12 @@ fn seek list pred
 pub fn select list pred
   fold list [] (acc x -> if (pred x) (push acc x) acc)
 
+pub fn sort list
+  fold list [] (acc x -> place acc x)
+
+pub fn sum list
+  fold list 0 (acc x -> acc + x)
+
 pub fn take list n
   take_to list n 1 []
 
@@ -53,10 +95,19 @@ fn take_done list n i
   if (length list < i) true (n < i)
 
 fn take_more list n i acc
-  take_to list n (i + 1) (push acc (at list i))
+  take_to list n (i + 1) (push acc (list[i]))
 
 fn take_to list n i acc
   if (take_done list n i) acc (take_more list n i acc)
+
+pub fn tally list
+  fold list [:] (m x -> put m x (bump m[x]))
+
+fn underrank (missing _) x
+  x
+
+fn underrank m x
+  if (x < m) x m
 
 fn unwrap_found (missing _)
   none

@@ -96,7 +96,9 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 /// `kanso play`: the playground's convention at the terminal. The file is a
 /// library defining `pub play`; the synthesized entry runs it.
 pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
-    let mut program = compile(file, source, false)?;
+    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    stamp_file(&mut program, file);
     let ownership_diags = merge_ambient_arms(&mut program);
     if !ownership_diags.is_empty() {
         return Err(diag::render(&ownership_diags, file, source));
@@ -105,13 +107,41 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         .parent()
         .map(|p| p.to_path_buf())
         .unwrap_or_default();
-    let mut ambient = Vec::new();
-    ambient_imports(&mut ambient);
+    // a play library may import like any module; the ambient module rides
+    let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
+    ambient_imports(&mut import_paths);
     let mut visited = std::collections::HashSet::new();
-    if let Ok((dep_program, _)) = load_dependencies(&base, &ambient, &mut visited) {
-        program.types.extend(dep_program.types);
-        program.fns.extend(dep_program.fns);
+    let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
+    let mut diags = Vec::new();
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            private_uses(stmt, &exports, &mut diags);
+        }
     }
+    let mut quals = std::collections::HashSet::new();
+    used_quals(&program, &mut quals);
+    diags.extend(unused_imports(&program.imports, &quals));
+    foreign_destructures(&program, &mut diags);
+    if !diags.is_empty() {
+        diags.sort_by_key(|d| (d.span.line, d.span.col));
+        return Err(diag::render(&diags, file, source));
+    }
+    let extern_globals = check::declared_names(&dep_program);
+    let mut all_markers = check::marker_names(&program);
+    all_markers.extend(check::marker_names(&dep_program));
+    let mut all_type_names: std::collections::HashSet<String> =
+        program.types.iter().map(|t| t.name.clone()).collect();
+    all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
+    let mut used = std::collections::HashSet::new();
+    let mut diags = check::resolve_markers(&mut program, &all_markers);
+    diags.extend(check::check_typesets(&program, &all_type_names));
+    diags.extend(check::check_file(&program, &extern_globals, &mut used));
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    if !diags.is_empty() {
+        return Err(diag::render(&diags, file, source));
+    }
+    program.types.extend(dep_program.types);
+    program.fns.extend(dep_program.fns);
     let has_play = program.fns.iter().any(|d| d.name == "play" && d.is_pub);
     if !has_play {
         return Err(format!(
@@ -131,6 +161,58 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     Ok(program)
 }
 
+/// A lone library file under a library verb (`kanso test`/`check`): parses
+/// as a library and loads its imports (plus the ambient module) like any
+/// other root compile.
+pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
+    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    stamp_file(&mut program, file);
+    let ownership_diags = merge_ambient_arms(&mut program);
+    if !ownership_diags.is_empty() {
+        return Err(diag::render(&ownership_diags, file, source));
+    }
+    let base = std::path::Path::new(file)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .unwrap_or_default();
+    let mut import_paths: Vec<String> = program.imports.iter().map(|i| i.path.clone()).collect();
+    ambient_imports(&mut import_paths);
+    let mut visited = std::collections::HashSet::new();
+    let (dep_program, exports) = load_dependencies(&base, &import_paths, &mut visited)?;
+    let mut diags = Vec::new();
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            private_uses(stmt, &exports, &mut diags);
+        }
+    }
+    let mut quals = std::collections::HashSet::new();
+    used_quals(&program, &mut quals);
+    diags.extend(unused_imports(&program.imports, &quals));
+    foreign_destructures(&program, &mut diags);
+    if !diags.is_empty() {
+        diags.sort_by_key(|d| (d.span.line, d.span.col));
+        return Err(diag::render(&diags, file, source));
+    }
+    let extern_globals = check::declared_names(&dep_program);
+    let mut all_markers = check::marker_names(&program);
+    all_markers.extend(check::marker_names(&dep_program));
+    let mut all_type_names: std::collections::HashSet<String> =
+        program.types.iter().map(|t| t.name.clone()).collect();
+    all_type_names.extend(dep_program.types.iter().map(|t| t.name.clone()));
+    let mut used = std::collections::HashSet::new();
+    let mut diags = check::resolve_markers(&mut program, &all_markers);
+    diags.extend(check::check_typesets(&program, &all_type_names));
+    diags.extend(check::check_file(&program, &extern_globals, &mut used));
+    diags.sort_by_key(|d| (d.span.line, d.span.col));
+    if !diags.is_empty() {
+        return Err(diag::render(&diags, file, source));
+    }
+    program.types.extend(dep_program.types);
+    program.fns.extend(dep_program.fns);
+    Ok(program)
+}
+
 /// Route a single source file to the right compile for a verb, by content:
 /// `pub play` is a play library, bare statements are an entry, definitions
 /// alone are a library (runnable only under a library verb like `test`).
@@ -145,13 +227,13 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     match (command, has_play, has_defs) {
         ("play", _, _) => compile_play(file, source),
         (_, true, _) if !library_verb => compile_play(file, source),
-        ("check", false, true) => compile(file, source, false),
+        ("check", false, true) => compile_library(file, source),
         (_, false, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the \
              module a main.kso entry, or define `pub play` and use \
              `kanso play`\n"
         )),
-        _ if library_verb => compile(file, source, false),
+        _ if library_verb => compile_library(file, source),
         _ => compile_entry(file, source),
     }
 }

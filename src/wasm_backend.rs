@@ -61,6 +61,7 @@ const RT_DIE: u32 = 24;
 const RT_LIST_LEN: u32 = 25;
 const RT_ERR_HOP: u32 = 26;
 const RT_ERR_STAMP: u32 = 27;
+const RT_AT: u32 = 28;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -92,6 +93,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_list_len", params: 1, returns: true },
         Import { name: "rt_err_hop", params: 2, returns: true },
         Import { name: "rt_err_stamp", params: 2, returns: true },
+        Import { name: "rt_at", params: 2, returns: true },
     ]
 }
 
@@ -447,13 +449,18 @@ impl<'a> WasmBackend<'a> {
             Expr::Field { .. } => {
                 return Err("field access (`.name`) is not yet in the browser backend".to_string());
             }
-            Expr::Index { base, index, span } => {
+            Expr::Index { base, index, strict, span } => {
                 self.emit_expr(ctx, base, false)?;
                 self.emit_expr(ctx, index, false)?;
-                ctx.body.call(RT_INDEX);
-                let origin = self.origin_lit(&ctx.prefix, *span);
-                ctx.body.i32_const(origin as i64);
-                ctx.body.call(RT_ERR_STAMP);
+                match strict {
+                    true => {
+                        ctx.body.call(RT_INDEX);
+                        let origin = self.origin_lit(&ctx.prefix, *span);
+                        ctx.body.i32_const(origin as i64);
+                        ctx.body.call(RT_ERR_STAMP);
+                    }
+                    false => ctx.body.call(RT_AT),
+                }
             }
             Expr::Seq(l, r, _) => {
                 self.emit_expr(ctx, l, false)?;

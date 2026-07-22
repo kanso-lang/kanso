@@ -2,21 +2,18 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::HashSet;
 
-pub const BUILTINS: [&str; 31] = [
+pub const BUILTINS: [&str; 26] = [
     "args",
-    "at",
     "bytes",
     "char_code",
     "chars",
     "concat",
     "entries",
-    "filter",
     "find2",
     "from_code",
     "if",
     "join",
     "length",
-    "map",
     "print",
     "push",
     "put",
@@ -27,9 +24,7 @@ pub const BUILTINS: [&str; 31] = [
     "slice",
     "sleep",
     "stdin",
-    "sort",
     "sqrt",
-    "sum",
     "to_float",
     "to_int",
     "utf8",

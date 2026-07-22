@@ -149,6 +149,13 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
             }
         }
     }
+    // Imported library functions (qualified names) stay beat-ineligible:
+    // a shared driver like list/fold_at threads its caller's invariant
+    // source through the loop, and carrying it would copy per iteration.
+    // Beats belong to the user-code loops that own their data.
+    ids.retain(|(name, _), _| !name.contains('/'));
+    carried.retain(|(name, _), _| !name.contains('/'));
+    demoted.retain(|(caller, _)| !caller.0.contains('/'));
     Beats { ids, demoted, carried }
 }
 
@@ -894,7 +901,7 @@ mod tests {
         // push acc n extends its own previous value: carrying it would copy
         // quadratic bytes where grow-only allocates linear. The gate keeps
         // it off the carry path.
-        let src = "fn collect 0 acc\n  sum acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
+        let src = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 
@@ -905,7 +912,7 @@ mod tests {
     fn bounded_accumulator_carries() {
         // a fixed-shape rebuild does not grow with the iteration count; the
         // carry evacuates it each rewind.
-        let src = "main = print \"{spin 10 [0 1]}\"\n\nfn spin 0 acc\n  sum acc\n\nfn spin n acc\n  a = at acc 1\n  b = at acc 2\n  spin (n - 1) [b (a + b)]\n";
+        let src = "main = print \"{spin 10 [0 1]}\"\n\nfn spin 0 acc\n  length acc\n\nfn spin n acc\n  a = acc[1]\n  b = acc[2]\n  spin (n - 1) [b (a + b)]\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 
@@ -939,7 +946,7 @@ mod tests {
     fn list_threaded_loop_is_a_beat() {
         // the list is handed onward unchanged every iteration: below the
         // mark, header never mutated, safe across the rewind.
-        let src = "fn go xs n\n  spin xs n 0\n\nmain =\n  base = [10 20 30]\n  print \"{go base 5}\"\n\nfn spin xs 0 acc\n  acc + sum xs\n\nfn spin xs n acc\n  garbage = \"iteration {n}\"\n  spin xs (n - 1) (acc + length garbage)\n";
+        let src = "fn go xs n\n  spin xs n 0\n\nmain =\n  base = [10 20 30]\n  print \"{go base 5}\"\n\nfn spin xs 0 acc\n  acc + length xs\n\nfn spin xs n acc\n  garbage = \"iteration {n}\"\n  spin xs (n - 1) (acc + length garbage)\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 

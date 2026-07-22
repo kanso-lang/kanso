@@ -358,7 +358,8 @@ impl FnEmit {
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
 fn dsym(name: &str, arity: usize) -> String {
-    match name.contains('/') {
+    // qualified names and the naming sigils need LLVM's quoted-identifier form
+    match name.contains(['/', '!', '?']) {
         true => format!("\"d_{name}_{arity}\""),
         false => format!("d_{name}_{arity}"),
     }
@@ -1692,10 +1693,12 @@ impl<'a> Backend<'a> {
                 f.record(&t, TOP);
                 Ok(t)
             }
-            Expr::Index { base, index, span } => {
+            Expr::Index { base, index, strict, span } => {
                 let container = self.emit_expr(f, base)?;
+                let container = self.maybe_force(f, container);
                 let key = self.emit_expr(f, index)?;
-                Ok(self.emit_at(f, &container, &key, true, *span))
+                let key = self.maybe_force(f, key);
+                Ok(self.emit_at(f, &container, &key, *strict, *span))
             }
             Expr::Seq(lhs, rhs, _) => {
                 let a = self.emit_expr(f, lhs)?;

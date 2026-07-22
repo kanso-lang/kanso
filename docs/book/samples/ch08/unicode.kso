@@ -6,10 +6,10 @@ fn both _ _
 
 fn decode_u s
   cs = bytes s
-  h1 = hex_digit (at cs 1)
-  h2 = hex_digit (at cs 2)
-  h3 = hex_digit (at cs 3)
-  h4 = hex_digit (at cs 4)
+  h1 = hex_digit (cs[1])
+  h2 = hex_digit (cs[2])
+  h3 = hex_digit (cs[3])
+  h4 = hex_digit (cs[4])
   from_code (h1 * 4096 + h2 * 256 + h3 * 16 + h4)
 
 fn hex_alpha c

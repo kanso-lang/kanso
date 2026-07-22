@@ -1,3 +1,5 @@
+import "std/list"
+
 fn describe none
   "no ninth price"
 
@@ -6,8 +8,8 @@ fn describe x
 
 pub play =
   prices = [30 10 20]
-  doubled = map prices (x -> x * 2)
-  ninth = at prices 9
-  print "sorted: {sort prices}"
+  doubled = list/map prices (x -> x * 2)
+  ninth = prices[9]
+  print "sorted: {list/sort prices}"
     >> print "doubled: {doubled}"
     >> print (describe ninth)

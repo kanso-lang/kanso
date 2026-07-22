@@ -6,4 +6,4 @@ fn describe price
 
 pub play =
   menu = ["dango": 350 "taiyaki": 500]
-  print (describe (at menu "pocky"))
+  print (describe menu["pocky"])

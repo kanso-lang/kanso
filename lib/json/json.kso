@@ -1,3 +1,5 @@
+import "std/list"
+
 type defect
   reason:string
 
@@ -34,11 +36,11 @@ pub fn encode s:string
   "\"{escape_str s}\""
 
 pub fn encode xs:json[]
-  inner = join (map xs (v -> encode v)) ","
+  inner = join (list/map xs (v -> encode v)) ","
   "[{inner}]"
 
 pub fn encode m:json[string]
-  inner = join (map (entries m) (e -> encode_entry e)) ","
+  inner = join (list/map (entries m) (e -> encode_entry e)) ","
   "\{{inner}}"
 
 fn encode_entry (entry k v)

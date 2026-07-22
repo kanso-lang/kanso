@@ -5,7 +5,7 @@ fn both _ _
   false
 
 fn expect_char cs p c
-  expect_check (at cs p) p c
+  expect_check (cs[p]) p c
 
 fn expect_check found p c
   if (found == c) (p + 1) (fail p "expected `{utf8 [c]}`")
@@ -13,24 +13,24 @@ fn expect_check found p c
 fn fail p reason
   err (parse_failure p reason)
 
-# json whitespace bytes: tab, newline, carriage return, space
-fn is_ws 9
-  true
-
-fn is_ws 10
-  true
-
-fn is_ws 13
-  true
-
-fn is_ws 32
-  true
-
-fn is_ws none
-  false
-
-fn is_ws _
-  false
-
 fn skip_ws cs p
-  if (is_ws (at cs p)) (skip_ws cs (p + 1)) p
+  if (ws? (cs[p])) (skip_ws cs (p + 1)) p
+
+# json whitespace bytes: tab, newline, carriage return, space
+fn ws? 9
+  true
+
+fn ws? 10
+  true
+
+fn ws? 13
+  true
+
+fn ws? 32
+  true
+
+fn ws? none
+  false
+
+fn ws? _
+  false

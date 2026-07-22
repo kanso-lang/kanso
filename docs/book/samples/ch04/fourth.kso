@@ -7,5 +7,5 @@ fn describe x
 pub play =
   flavors = ["matcha" "ube" "hojicha"]
   first = flavors[1]
-  fourth = at flavors 4
+  fourth = flavors[4]
   print "first: {first}" >> print (describe fourth)

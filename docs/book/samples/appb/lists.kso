@@ -1,10 +1,12 @@
+import "std/list"
+
 xs = [3 1 2]
-print "map {map xs (n -> n * 10)}"
-  >> print "filter {filter xs (n -> n > 1)}"
-  >> print "sort {sort xs}"
-  >> print "sum {sum xs}"
+print "map {list/map xs (n -> n * 10)}"
+  >> print "filter {list/select xs (n -> n > 1)}"
+  >> print "sort {list/sort xs}"
+  >> print "sum {list/sum xs}"
   >> print "push {push xs 4}"
-  >> print "at {at xs 2}"
+  >> print "at {xs[2]}"
   >> print "length {length xs}"
   >> print "slice {slice xs 1 2}"
   >> print "concat {concat xs [9]}"

@@ -1,2 +1,2 @@
 flavors = ["matcha" "ube" "hojicha"]
-print "ninth: {flavors[9]}"
+print "ninth: {flavors[9]!}"

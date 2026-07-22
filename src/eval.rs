@@ -539,11 +539,11 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
-            Expr::Index { base, index, span } => {
-                let container = self.eval(base, env, frame)?;
-                let key = self.eval(index, env, frame)?;
+            Expr::Index { base, index, strict, span } => {
+                let container = self.force_thunk(self.eval(base, env, frame)?)?;
+                let key = self.force_thunk(self.eval(index, env, frame)?)?;
                 match index_value(container, key.clone(), *span)? {
-                    Value::NoneV => Ok(err_value(
+                    Value::NoneV if *strict => Ok(err_value(
                         Value::Str(format!("missing index {}", render(&key, true))),
                         origin_at(frame, *span),
                     )),

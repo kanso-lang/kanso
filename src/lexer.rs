@@ -3,6 +3,7 @@ use num_bigint::BigInt;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
+    Bang,
     Ident(String),
     Int(BigInt),
     Float(f64),
@@ -289,6 +290,8 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             ')' => Some(Tok::RParen),
             '[' => Some(Tok::LBracket),
             ']' => Some(Tok::RBracket),
+            // the strict-index sigil: xs[i]! errs where xs[i] returns none
+            '!' => Some(Tok::Bang),
             '{' => Some(Tok::LBrace),
             '}' => Some(Tok::RBrace),
             ':' => Some(Tok::Colon),
@@ -393,6 +396,15 @@ impl Scanner {
                 self.pos += 1;
             }
         }
+        // the naming sigils, one each, terminal only: `!` marks the strict
+        // variant (errs where the plain form is lenient), `?` a predicate
+        if self
+            .chars
+            .get(self.pos)
+            .is_some_and(|c| *c == '!' || *c == '?')
+        {
+            self.pos += 1;
+        }
         let word: String = self.chars[start..self.pos].iter().collect();
         if word.len() > 1 && word.starts_with('_') {
             return Err(Diagnostic::new(
@@ -494,6 +506,8 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
         (_, Tok::RParen) | (_, Tok::RBracket) => 0,
         (Tok::LParen, _) | (Tok::LBracket, _) => 0,
         (_, Tok::Colon) => 0,
+        // the strict-index sigil hugs its bracket: xs[i]!
+        (Tok::RBracket, Tok::Bang) => 0,
         _ => 1,
     }
 }
@@ -513,7 +527,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             }
             continue;
         }
-        if matches!((prev, next), (Tok::Ident(_), Tok::LBracket)) {
+        if matches!((prev, next), (Tok::Ident(_) | Tok::RParen | Tok::RBracket, Tok::LBracket)) {
             if gap > 1 {
                 diags.push(Diagnostic::new(
                     "formatting",

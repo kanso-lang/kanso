@@ -10,7 +10,7 @@ bytes_true = [116 114 117 101]
 
 fn decode_literal s
   cs = bytes s
-  value_for (at cs 1) cs 1
+  value_for (cs[1]) cs 1
 
 fn fail p reason
   err (parse_failure p reason)

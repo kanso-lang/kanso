@@ -7,7 +7,7 @@ type withdraw
   amount:int
 
 fn drive store actions i sub out
-  step store actions i sub out (at actions i)
+  step store actions i sub out (actions[i])
 
 fn notify logger (deposit n) balance
   print "[logger] +{n} yen in -> the till holds {balance}"
