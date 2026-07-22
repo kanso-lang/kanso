@@ -436,6 +436,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         if decl.file.starts_with("std/") {
             continue;
         }
+        inline_single_use_chains(&mut decl.body, &shorts);
         for stmt in &mut decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
@@ -443,6 +444,158 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
                 }
             }
         }
+    }
+}
+
+/// A width-forced split must not hide a chain: a binding whose value is an
+/// adapter application and whose name is used exactly once — as the
+/// collection argument of a later enumerable call — inlines back into the
+/// chain before fusion looks. The binding was a rename, not an escape.
+fn inline_single_use_chains(
+    body: &mut Vec<ast::Stmt>,
+    shorts: &std::collections::HashMap<String, String>,
+) {
+    use ast::{Expr, Stmt};
+    const ADAPTERS: [&str; 5] = ["drop", "map", "reject", "select", "take"];
+    let mut idx = 0;
+    while idx < body.len() {
+        let Stmt::Bind { pattern: ast::Pattern::Var(name, _), expr } = &body[idx] else {
+            idx += 1;
+            continue;
+        };
+        let Expr::App { head, .. } = expr else {
+            idx += 1;
+            continue;
+        };
+        let Expr::Ident(aname, _) = head.as_ref() else {
+            idx += 1;
+            continue;
+        };
+        let is_adapter = shorts
+            .get(aname.as_str())
+            .is_some_and(|s| ADAPTERS.contains(&s.as_str()));
+        if !is_adapter {
+            idx += 1;
+            continue;
+        }
+        let name = name.clone();
+        let mut uses = 0usize;
+        for later in body.iter().skip(idx + 1) {
+            match later {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    count_ident_uses(expr, &name, &mut uses);
+                }
+            }
+        }
+        let sole_coll_use = uses == 1
+            && body.iter().skip(idx + 1).any(|later| match later {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    coll_arg_use(expr, &name, shorts)
+                }
+            });
+        if !sole_coll_use {
+            idx += 1;
+            continue;
+        }
+        let Stmt::Bind { expr, .. } = body.remove(idx) else { unreachable!() };
+        for later in body.iter_mut().skip(idx) {
+            match later {
+                Stmt::Bind { expr: e, .. } | Stmt::Expr(e) => {
+                    substitute_ident(e, &name, &expr);
+                }
+            }
+        }
+    }
+}
+
+fn count_ident_uses(e: &ast::Expr, name: &str, uses: &mut usize) {
+    if let ast::Expr::Ident(n, _) = e {
+        if n == name {
+            *uses += 1;
+        }
+    }
+    for child in expr_children(e) {
+        count_ident_uses(child, name, uses);
+    }
+}
+
+/// Is the sole use of `name` the collection argument of an enumerable call?
+fn coll_arg_use(
+    e: &ast::Expr,
+    name: &str,
+    shorts: &std::collections::HashMap<String, String>,
+) -> bool {
+    if let ast::Expr::App { head, args, .. } = e {
+        if let ast::Expr::Ident(h, _) = head.as_ref() {
+            if shorts.contains_key(h.as_str()) {
+                if let Some(ast::Expr::Ident(first, _)) = args.first() {
+                    if first == name {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    expr_children(e).into_iter().any(|c| coll_arg_use(c, name, shorts))
+}
+
+fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
+    use ast::Expr;
+    if let Expr::Ident(n, _) = e {
+        if n == name {
+            *e = replacement.clone();
+            return;
+        }
+    }
+    match e {
+        Expr::App { head, args, .. } => {
+            substitute_ident(head, name, replacement);
+            for a in args {
+                substitute_ident(a, name, replacement);
+            }
+        }
+        Expr::Lambda { body, .. } => substitute_ident(body, name, replacement),
+        Expr::Block(stmts, _) => {
+            for stmt in stmts {
+                match stmt {
+                    ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
+                        substitute_ident(expr, name, replacement)
+                    }
+                }
+            }
+        }
+        Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
+            substitute_ident(a, name, replacement);
+            substitute_ident(b, name, replacement);
+        }
+        Expr::List(items, _) => {
+            for i in items {
+                substitute_ident(i, name, replacement);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                substitute_ident(k, name, replacement);
+                substitute_ident(v, name, replacement);
+            }
+        }
+        Expr::Index { base, index, .. } => {
+            substitute_ident(base, name, replacement);
+            substitute_ident(index, name, replacement);
+        }
+        Expr::Field { base, .. } => substitute_ident(base, name, replacement),
+        Expr::BinOp { lhs, rhs, .. } => {
+            substitute_ident(lhs, name, replacement);
+            substitute_ident(rhs, name, replacement);
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let ast::TemplatePart::Interp(inner) = p {
+                    substitute_ident(inner, name, replacement);
+                }
+            }
+        }
+        _ => {}
     }
 }
 
