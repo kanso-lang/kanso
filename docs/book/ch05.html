@@ -9,7 +9,7 @@ extra_css: /book/book.css
 
 <p>time to confess what <code>print</code> has been doing all book: nothing. every kanso function is pure—evaluating <code>print "hi"</code> performs no i/o. it returns a <em>description</em> of printing, a value like any other. your entire program is one big pure computation whose final answer is <code>main</code>: a description of everything the program intends to do. the runtime receives that description and walks it. evaluation decides; the runtime performs.</p>
 
-<p>you can see the seam directly, because a description is data, and data can be rendered instead of executed. <code>&gt;&gt;</code>—the wall—glues descriptions into bigger descriptions, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
+<p>you can see the seam directly, because an <code>io</code> is data, and data can be rendered instead of executed. <code>&gt;&gt;</code>—the wall—glues io values into bigger ones, "this, then that", and the <code>--plan</code> flag from chapter 01 shows the glued-up value without running it:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">brew.kso</div>
@@ -31,9 +31,9 @@ pouring</code></pre>
 
 <p><code>--plan</code> isn't a debugger bolted on afterwards; it falls out of the design. the plan already exists as a value—the flag just prints it instead of handing it to the executor. each print step carries the source span it came from, which is where the provenance comments come from. nothing else in this chapter is new machinery either. everything is a consequence of one sentence: an effect is a value.</p>
 
-<h2>a description is a value</h2>
+<h2>an io is a value</h2>
 
-<p>take that sentence literally and follow it around. first: if <code>main</code> is just a constant, a program whose <code>main</code> is a plain number should be legal. it is. it computes the number, tells no one, and exits cleanly—there is no description to walk, so the runtime has nothing to do:</p>
+<p>take that sentence literally and follow it around. first: if <code>main</code> is just a constant, a program whose <code>main</code> is a plain number should be legal. it is. it computes the number, tells no one, and exits cleanly—there is no io to walk, so the runtime has nothing to do:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">quiet.kso</div>
@@ -46,7 +46,7 @@ pouring</code></pre>
 
 <p><code>kanso run quiet.kso</code> prints nothing and exits zero. the answer 42 was computed and discarded, because printing is not a thing that happens to values—it is a value, and this program never built one. ask for the plan and the toolchain says so in as many words.</p>
 
-<p>second: a value can be bound to a name, and a name can be used more than once. a description doesn't remember having run, because it hasn't—splice it in three times and the program means three prints:</p>
+<p>second: a value can be bound to a name, and a name can be used more than once. an io doesn't remember having run, because it hasn't—splice it in three times and the program means three prints:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">knock.kso</div>
@@ -68,22 +68,22 @@ kon kon</code></pre>
   </div>
 </div>
 
-<p>in a language where <code>print</code> fires on evaluation, <code>knock</code> would print once, at definition, and the reuse would be a mystery. here the constant is a description, the three uses are three copies in the final value, and the plan shows all three—each pointing back at the one line that built it.</p>
+<p>in a language where <code>print</code> fires on evaluation, <code>knock</code> would print once, at definition, and the reuse would be a mystery. here the constant is an io, the three uses are three copies in the final value, and the plan shows all three—each pointing back at the one line that built it.</p>
 
-<p>third: interpolate a description into a string and you get its face, not its result. there is no result yet; nothing has run:</p>
+<p>third: interpolate an io into a string and you get its face, not its result. there is no result yet; nothing has run:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">render.kso</div>
-  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"a description renders as <span class="i">{step}</span>"</span>
+  <pre><code><span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"an io renders as <span class="i">{step}</span>"</span>
 
 step <span class="o">=</span> <span class="f">print</span> <span class="s">"steep"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run render.kso</div>
-    <pre><code>a description renders as &lt;description&gt;</code></pre>
+    <pre><code>an io renders as &lt;io&gt;</code></pre>
   </div>
 </div>
 
-<p>and fourth: because intent is a value, dropping intent on the floor is visible—and refused. bind a description and never use it, and the program has written down a thing it will never do. kanso treats that as a bug at compile time, the same way chapter 04 treated an unreceived err:</p>
+<p>and fourth: because intent is a value, dropping intent on the floor is visible—and refused. bind an io and never use it, and the program has written down a thing it will never do. kanso treats that as a bug at compile time, the same way chapter 04 treated an unreceived err:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">dropped_check.kso</div>
