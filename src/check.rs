@@ -216,6 +216,18 @@ pub fn check_file(
     extern_globals: &HashSet<String>,
     used_globals: &mut HashSet<String>,
 ) -> Vec<Diagnostic> {
+    check_file_shadow(program, extern_globals, used_globals, &HashSet::new())
+}
+
+/// Bare-enrolled imports (synthetic clones) are shadowable: a local binding
+/// named like one is the local's to keep — the enrollment must never make
+/// every stdlib export a forbidden binding name.
+pub fn check_file_shadow(
+    program: &Program,
+    extern_globals: &HashSet<String>,
+    used_globals: &mut HashSet<String>,
+    shadowable: &HashSet<String>,
+) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
@@ -223,7 +235,7 @@ pub fn check_file(
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
     for decl in &program.fns {
-        check_fn_body(decl, &globals, used_globals, &mut diags);
+        check_fn_body_shadow(decl, &globals, used_globals, &mut diags, shadowable);
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -496,16 +508,18 @@ struct Resolver<'a> {
     locals: Vec<Local>,
     used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
+    shadowable: &'a HashSet<String>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
 }
 
-fn check_fn_body(
+fn check_fn_body_shadow(
     decl: &FnDecl,
     globals: &HashSet<String>,
     used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
+    shadowable: &HashSet<String>,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -513,6 +527,7 @@ fn check_fn_body(
         used_globals,
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
+        shadowable,
     };
     for param in &decl.params {
         resolver.bind_pattern(param);
@@ -619,7 +634,7 @@ impl Resolver<'_> {
     }
 
     fn push_local(&mut self, name: &str, span: Span) {
-        if self.globals.contains(name) {
+        if self.globals.contains(name) && !self.shadowable.contains(name) {
             self.diags.push(Diagnostic::new(
                 "name",
                 format!("`{name}` is already a declaration; rename the binding"),

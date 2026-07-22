@@ -343,12 +343,18 @@ impl<'a> Interp<'a> {
         for decl in &program.fns {
             fns.entry(&decl.name).or_default().push(decl);
         }
+        // proximity breaks specificity ties: local arms come before
+        // bare-enrolled clones, so a same-shape local wins its own file
+        for overloads in fns.values_mut() {
+            overloads.sort_by_key(|d| d.synthetic);
+        }
         let types = program.types.iter().map(|t| (t.name.as_str(), t)).collect();
         let origin = Span { line: 0, col: 0 };
         let entry_decl = TypeDecl {
             name: "entry".to_string(),
             is_pub: false,
             span: origin,
+            synthetic: false,
             fields: vec![
                 ("key".to_string(), vec!["any".to_string()], origin),
                 ("value".to_string(), vec!["any".to_string()], origin),

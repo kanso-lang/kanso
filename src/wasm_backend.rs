@@ -738,6 +738,21 @@ impl<'a> WasmBackend<'a> {
             ctx.body.call(RT_MKREC);
             return Ok(());
         }
+        // builtin_ names bypass group dispatch (the bare-clone recursion trap)
+        if let Some(stripped) = name.strip_prefix("builtin_") {
+            if crate::check::BUILTINS.contains(&stripped) {
+                for arg in args {
+                    self.emit_expr(ctx, arg, false)?;
+                    ctx.body.call(RT_ARG);
+                }
+                let lit = self.str_lit(stripped);
+                ctx.body.i32_const(lit as i64);
+                ctx.body.i32_const(args.len() as i64);
+                ctx.body.call(RT_BUILTIN);
+                self.stamp_fallible(ctx, stripped, span);
+                return Ok(());
+            }
+        }
         if let Some(idx) = self.dispatchers.get(&(name.clone(), args.len())).copied() {
             for arg in args {
                 self.emit_expr(ctx, arg, false)?;

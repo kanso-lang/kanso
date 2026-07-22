@@ -79,7 +79,7 @@ pub enum Stmt {
     Expr(Expr),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FnDecl {
     pub name: String,
     pub is_pub: bool,
@@ -88,13 +88,17 @@ pub struct FnDecl {
     pub body: Vec<Stmt>,
     /// Source file, stamped after parsing; err origins are "{name} at {file}:{line}".
     pub file: String,
+    /// True for bare-enrollment clones of imported decls (the import
+    /// incarnation): real for dispatch, invisible to provenance analyses.
+    pub synthetic: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TypeDecl {
     pub name: String,
     pub is_pub: bool,
     pub span: Span,
+    pub synthetic: bool,
     /// Field name, permitted types (a typeset: one or more members), span.
     pub fields: Vec<(String, Vec<String>, Span)>,
 }
@@ -110,6 +114,10 @@ pub struct Program {
 pub struct Import {
     pub path: String,
     pub span: Span,
+    /// `import t "path"` — replaces the qualifier for this file.
+    pub alias: Option<String>,
+    /// `import { theirs:yours } "path"` — bare renames on the way in.
+    pub renames: Vec<(String, String)>,
 }
 
 pub const NULLARY: [&str; 3] = ["false", "none", "true"];

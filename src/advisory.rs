@@ -6,23 +6,33 @@ use std::collections::{HashMap, HashSet};
 /// analysis under-approximates (only constructions and calls it can trace),
 /// so every advisory is a real handle with no door.
 pub fn door_advisories(program: &Program) -> Vec<String> {
-    let type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    // bare-enrollment clones are dispatch conveniences, not surface facts —
+    // the door analysis reasons about the real declarations only
+    let type_names: HashSet<&str> = program
+        .types
+        .iter()
+        .filter(|t| !t.synthetic)
+        .map(|t| t.name.as_str())
+        .collect();
     let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
+        if decl.synthetic {
+            continue;
+        }
         groups.entry(decl.name.as_str()).or_default().push(i);
     }
     let returns = return_type_names(program, &type_names, &groups);
     let pub_names: HashSet<&str> = program
         .fns
         .iter()
-        .filter(|d| d.is_pub)
+        .filter(|d| d.is_pub && !d.synthetic)
         .map(|d| d.name.as_str())
         .collect();
     let accepted = accepted_types(program, &pub_names, &groups);
     let mut advisories = Vec::new();
     let mut seen = HashSet::new();
     for (i, decl) in program.fns.iter().enumerate() {
-        if !decl.is_pub || decl.name.contains('/') {
+        if !decl.is_pub || decl.name.contains('/') || decl.synthetic {
             continue;
         }
         for ty in &returns[i] {

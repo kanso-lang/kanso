@@ -149,13 +149,24 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
             }
         }
     }
-    // Imported library functions (qualified names) stay beat-ineligible:
-    // a shared driver like list/fold_at threads its caller's invariant
-    // source through the loop, and carrying it would copy per iteration.
-    // Beats belong to the user-code loops that own their data.
-    ids.retain(|(name, _), _| !name.contains('/'));
-    carried.retain(|(name, _), _| !name.contains('/'));
-    demoted.retain(|(caller, _)| !caller.0.contains('/'));
+    // Imported library functions stay beat-ineligible: a shared driver like
+    // list/fold_at threads its caller's invariant source through the loop,
+    // and carrying it would copy per iteration. Beats belong to the
+    // user-code loops that own their data. Provenance is the file stamp —
+    // bare-enrolled clones of imported decls are still imported code.
+    let imported: std::collections::HashSet<&str> = program
+        .fns
+        .iter()
+        .filter(|d| d.synthetic || d.file.starts_with("std/") || d.name.contains('/'))
+        .map(|d| d.name.as_str())
+        .collect();
+    ids.retain(|(name, _), _| !imported.contains(name.as_str()));
+    carried.retain(|(name, _), _| !imported.contains(name.as_str()));
+    // A demoted pair lives or dies with its target loop, never with the
+    // caller's name: a user loop entered through a group that shares its
+    // name with a clone still needs the entry demoted, or the loop's
+    // rewinds run against a mark nobody pushed.
+    demoted.retain(|(_, callee)| ids.contains_key(callee));
     Beats { ids, demoted, carried }
 }
 
@@ -963,6 +974,26 @@ mod tests {
         let beats = super::beat_loops(&program, &inference);
 
         assert_eq!(beats.carried.get(&("spin".to_string(), 3)), Some(&vec![0]));
+    }
+
+    #[test]
+    fn demoted_entry_survives_a_clone_sharing_the_callers_name() {
+        // a bare-enrolled clone named `go` joins the local go's dispatch
+        // group; spin stays an eligible user loop, so go's entry must stay
+        // demoted — losing the bracket while spin keeps its rewinds
+        // corrupts live memory (the vse fold/fold_at miscompile).
+        let src = "fn go n\n  spin n 0\n\nmain = print \"{go 3}\"\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
+        let (mut program, _) = compiled(src);
+        let mut clone = program.fns.iter().find(|d| d.name == "go").unwrap().clone();
+        clone.synthetic = true;
+        clone.file = "std/list".to_string();
+        program.fns.push(clone);
+        let inference = infer::infer(&program);
+        let beats = beat_loops(&program, &inference);
+
+        assert!(beats
+            .demoted
+            .contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
     }
 
     #[test]

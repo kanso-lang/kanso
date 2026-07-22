@@ -357,6 +357,14 @@ impl FnEmit {
 
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
 /// module qualifier's slash.
+fn wsym(name: &str, arity: usize) -> String {
+    // fn-value wrapper symbols share dsym's quoted-identifier rule
+    match name.contains(['/', '!', '?']) {
+        true => format!("\"w_{name}_{arity}\""),
+        false => format!("w_{name}_{arity}"),
+    }
+}
+
 fn dsym(name: &str, arity: usize) -> String {
     // qualified names and the naming sigils need LLVM's quoted-identifier form
     match name.contains(['/', '!', '?']) {
@@ -642,12 +650,18 @@ impl<'a> Backend<'a> {
     fn emit(&mut self) -> Result<String, String> {
         self.emit_type_names();
         self.emit_type_fields();
+        // group by name across the whole program: the bare overload space
+        // interleaves same-named decls from different modules
         let mut groups: Vec<(&str, Vec<&FnDecl>)> = Vec::new();
         for decl in &self.program.fns {
-            match groups.last_mut() {
-                Some((name, decls)) if *name == decl.name => decls.push(decl),
-                _ => groups.push((&decl.name, vec![decl])),
+            match groups.iter_mut().find(|(name, _)| *name == decl.name) {
+                Some((_, decls)) => decls.push(decl),
+                None => groups.push((&decl.name, vec![decl])),
             }
+        }
+        // proximity breaks specificity ties: local arms precede clones
+        for (_, decls) in &mut groups {
+            decls.sort_by_key(|d| d.synthetic);
         }
         for (name, decls) in &groups {
             let mut by_arity: HashMap<usize, Vec<&FnDecl>> = HashMap::new();
@@ -681,7 +695,8 @@ impl<'a> Backend<'a> {
             let _ = writeln!(conv, "  %r = call tailcc %KValue @{sym}({})", call_args.join(", "));
             let _ = writeln!(
                 self.body,
-                "define %KValue @w_{name}_{arity}({}) {{\nentry:\n{conv}  ret %KValue %r\n}}\n",
+                "define %KValue @{}({}) {{\nentry:\n{conv}  ret %KValue %r\n}}\n",
+                wsym(name, arity),
                 params.join(", ")
             );
         }
@@ -1650,7 +1665,7 @@ impl<'a> Backend<'a> {
                     let arity = arities[0];
                     self.fn_value_wrappers.push((name.clone(), arity));
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @w_{name}_{arity})"));
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", wsym(name, arity)));
                     return Ok(t);
                 }
                 if !arities.is_empty() {
@@ -2450,7 +2465,11 @@ impl<'a> Backend<'a> {
         for arg in iter {
             emitted.push(self.emit_expr(f, arg)?);
         }
-        // std wrappers reach natives through the builtin_ prefix
+        // std wrappers reach natives through the builtin_ prefix — and the
+        // prefix BYPASSES group dispatch entirely, or a bare clone named
+        // like the builtin would capture its own wrapper's body (the
+        // d_join_2 self-recursion)
+        let was_builtin = name.starts_with("builtin_");
         let name: &str = name.strip_prefix("builtin_").unwrap_or(name);
         if name == "err" {
             let origin = self.origin_arg(f, span);
@@ -2492,7 +2511,7 @@ impl<'a> Backend<'a> {
             f.record(&t, REC | fails);
             return Ok(t);
         }
-        if self.program.fns.iter().any(|d| d.name == *name) {
+        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
             let n = emitted.len();
             let args_ir: Vec<String> = emitted
                 .iter()

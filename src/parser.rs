@@ -101,6 +101,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         span,
         is_pub: false,
         file: String::new(),
+        synthetic: false,
     };
     Ok(Program { fns: vec![main], types: Vec::new(), imports })
 }
@@ -201,19 +202,83 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
             head_span(&body[0]),
         ));
     }
+    let plain_path = |parts: &[crate::lexer::StrPart], span: Span| match parts {
+        [crate::lexer::StrPart::Lit(text)] => Ok(text.clone()),
+        _ => Err(Diagnostic::new(
+            "syntax",
+            "an import path is a plain string".to_string(),
+            span,
+        )),
+    };
     match line.tokens.as_slice() {
         [(Tok::KwImport, _), (Tok::Str(parts), span)] => {
-            let path = match parts.as_slice() {
-                [crate::lexer::StrPart::Lit(text)] => text.clone(),
-                _ => {
-                    return Err(Diagnostic::new(
-                        "syntax",
-                        "an import path is a plain string".to_string(),
-                        *span,
-                    ))
+            let path = plain_path(parts, *span)?;
+            Ok(Import { path, span: *span, alias: None, renames: Vec::new() })
+        }
+        // import t "path" — alias the qualifier
+        [(Tok::KwImport, _), (Tok::Ident(alias), _), (Tok::Str(parts), span)] => {
+            let path = plain_path(parts, *span)?;
+            Ok(Import { path, span: *span, alias: Some(alias.clone()), renames: Vec::new() })
+        }
+        // import { theirs:yours ... } "path" — renames only; a bare word in
+        // braces is redundant (the compiler prunes; bare access is default)
+        [(Tok::KwImport, _), (Tok::LBrace, brace_span), rest @ ..] => {
+            let mut renames = Vec::new();
+            let mut i = 0;
+            loop {
+                match rest.get(i) {
+                    Some((Tok::RBrace, _)) => {
+                        i += 1;
+                        break;
+                    }
+                    Some((Tok::Ident(theirs), _)) => match rest.get(i + 1) {
+                        Some((Tok::Colon, _)) => match rest.get(i + 2) {
+                            Some((Tok::Ident(yours), _)) => {
+                                renames.push((theirs.clone(), yours.clone()));
+                                i += 3;
+                            }
+                            other => {
+                                let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
+                                return Err(Diagnostic::new(
+                                    "syntax",
+                                    "a rename is theirs:yours".to_string(),
+                                    span,
+                                ));
+                            }
+                        },
+                        other => {
+                            let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
+                            return Err(Diagnostic::new(
+                                "syntax",
+                                "an unrenamed selection is redundant — the compiler \
+                                 prunes unused imports and bare access is the \
+                                 default; braces hold theirs:yours renames"
+                                    .to_string(),
+                                span,
+                            ));
+                        }
+                    },
+                    other => {
+                        let span = other.map(|(_, s)| *s).unwrap_or(*brace_span);
+                        return Err(Diagnostic::new(
+                            "syntax",
+                            "braces hold theirs:yours renames".to_string(),
+                            span,
+                        ));
+                    }
                 }
-            };
-            Ok(Import { path, span: *span })
+            }
+            match rest.get(i) {
+                Some((Tok::Str(parts), span)) if rest.len() == i + 1 && !renames.is_empty() => {
+                    let path = plain_path(parts, *span)?;
+                    Ok(Import { path, span: *span, alias: None, renames })
+                }
+                _ => Err(Diagnostic::new(
+                    "syntax",
+                    "an import ends with its path string".to_string(),
+                    *brace_span,
+                )),
+            }
         }
         _ => Err(Diagnostic::new(
             "syntax",
@@ -307,7 +372,8 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         ));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new() })
+    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new() ,
+        synthetic: false,})
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
@@ -334,7 +400,8 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             ));
         }
         let stmts = parse_body(body)?;
-        return Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: stmts, file: String::new() });
+        return Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: stmts, file: String::new() ,
+        synthetic: false,});
     }
     if !body.is_empty() {
         return Err(Diagnostic::new(
@@ -346,7 +413,8 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let mut p = P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
-    Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() })
+    Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() ,
+        synthetic: false,})
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
@@ -356,7 +424,7 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     let (name, span) = p.expect_ident("a type name")?;
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, is_pub, span, fields })
+    Ok(TypeDecl { name, is_pub, span, synthetic: false, fields })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
