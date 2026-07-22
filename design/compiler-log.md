@@ -746,3 +746,30 @@ SCOPE as no-deferral — compute now, hold no cells, peak memory equals
 strict memory. Same single gate implements both (the demand pass skips
 marked scopes); the mode measures, the construct guarantees. Candidate
 gavel when the surface syntax conversation happens.
+
+## 2026-07-22 overnight: the lazy tax, and types that alias
+
+The serde regression root-caused by ratio bisect (ratio is
+machine-noise-proof; absolutes are not). Lazy v1 (#83) moved
+kanso/serde from 0.85 to 1.33 in one merge while creating zero thunks:
+conservative TOP widenings carry the THUNK bit, and 133 static k_force
+call sites landed in the strict decoder's hot loops as external no-op
+calls. Two-part fix (#105): a program whose demand analysis deferred
+nothing skips every force site — no thunk can exist anywhere — and
+live-thunk programs pay one alwaysinline tag compare (k_force_fast)
+instead of a call. Post-fix same-night interleave: kanso/serde 0.949.
+Lesson for every future pass: a bit added to TOP is a cost added to
+every conservatively-typed hot path; gate emission on whether the
+feature is live in THIS program, not on the lattice alone.
+
+Type enrollment identity (#113): clones forked type identity — a
+bare-constructed `cursor` never matched std's `list/cursor` arms.
+Ruling: types alias, never fork. TypeDecl.origin marks clones, records
+tag with the canonical name, one post-check pass canonicalizes
+patterns and typeset members (type positions cannot be shadowed, so
+the rewrite needs no scope analysis), and both backends give aliases
+their origin's type id, skipping them in the name/field switch tables.
+Beat-demotion consistency (#99 fallout, fixed same night): a demoted
+entry pair lives or dies with its target loop, never with the caller's
+name — a clone sharing the caller's name had dropped the bracket while
+the loop kept its rewinds, corrupting live memory.
