@@ -106,7 +106,7 @@ declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
 declare %KValue @k_concat(%KValue, %KValue)
-declare %KValue @k_concat_n(i64, ...)
+declare %KValue @k_concat_arr(i64, ptr)
 declare %KValue @k_render(%KValue, i64)
 declare %KValue @k_add(%KValue, %KValue)
 declare %KValue @k_sub(%KValue, %KValue)
@@ -1684,13 +1684,20 @@ impl<'a> Backend<'a> {
                         pieces.into_iter().next().expect("one piece")
                     }
                     Some(pieces) if pieces.len() <= 16 => {
+                        let arr = f.tmp();
+                        f.line(&format!("{arr} = alloca [{} x %KValue]", pieces.len()));
+                        for (i, p) in pieces.iter().enumerate() {
+                            let slot = f.tmp();
+                            f.line(&format!(
+                                "{slot} = getelementptr [{} x %KValue], ptr {arr}, i64 0, i64 {i}",
+                                pieces.len()
+                            ));
+                            f.line(&format!("store %KValue {p}, ptr {slot}"));
+                        }
                         let t = f.tmp();
-                        let args: Vec<String> =
-                            pieces.iter().map(|p| format!(", %KValue {p}")).collect();
                         f.line(&format!(
-                            "{t} = call %KValue (i64, ...) @k_concat_n(i64 {}{})",
-                            pieces.len(),
-                            args.join("")
+                            "{t} = call %KValue @k_concat_arr(i64 {}, ptr {arr})",
+                            pieces.len()
                         ));
                         t
                     }

@@ -766,19 +766,16 @@ long long k_check_bool(KValue v) { return v.tag == K_TRUE || v.tag == K_FALSE; }
 
 /* One allocation for a whole template: sums the piece lengths, copies
    once. A failure piece propagates; the profile showed chained k_concat
-   quadratic-copying hot on the encode path. */
-KValue k_concat_n(long long n, ...) {
-    va_list ap;
-    va_start(ap, n);
-    KValue parts[16];
+   quadratic-copying hot on the encode path. An array, not varargs —
+   16-byte structs through va_arg differ between the arm64 and x86_64
+   ABIs when the caller is emitted IR. */
+KValue k_concat_arr(long long n, const KValue* parts) {
     long long total = 0;
     for (long long i = 0; i < n; i++) {
-        KValue p = va_arg(ap, KValue);
-        if (!k_not_failure(p)) { va_end(ap); return p; }
-        parts[i] = p;
+        KValue p = parts[i];
+        if (!k_not_failure(p)) return p;
         total += k_as_str(p)->len;
     }
-    va_end(ap);
     KStr* s = k_alloc(sizeof(KStr));
     s->len = total;
     s->data = k_alloc(total + 1);
