@@ -494,9 +494,37 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     let is_pub = p.consume_pub();
     p.expect_kw_type()?;
     let (name, span) = p.expect_ident("a type name")?;
+    if !p.done() {
+        let (parent, parent_span) = p.expect_ident("a parent type")?;
+        if !p.done() {
+            return Err(Diagnostic::new(
+                "syntax",
+                "a subtype names one parent; named typesets are not here yet"
+                    .to_string(),
+                parent_span,
+            ));
+        }
+        if !body.is_empty() {
+            return Err(Diagnostic::new(
+                "syntax",
+                "a subtype declaration is one line; fields belong to records"
+                    .to_string(),
+                parent_span,
+            ));
+        }
+        return Ok(TypeDecl {
+            name,
+            is_pub,
+            span,
+            synthetic: false,
+            origin: None,
+            parent: Some(parent),
+            fields: Vec::new(),
+        });
+    }
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, is_pub, span, synthetic: false, origin: None, fields })
+    Ok(TypeDecl { name, is_pub, span, synthetic: false, origin: None, parent: None, fields })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {

@@ -107,6 +107,10 @@ pub struct TypeDecl {
     /// For an enrollment clone: the declaring module's qualified name. A
     /// record's identity is the canonical name; clones alias, never fork.
     pub origin: Option<String>,
+    /// `type post_body string` — a nominal subtype of the named parent.
+    /// Mutually exclusive with fields; values construct with one argument
+    /// and flow transparently wherever the parent flows.
+    pub parent: Option<String>,
     /// Field name, permitted types (a typeset: one or more members), span.
     pub fields: Vec<(String, Vec<String>, Span)>,
 }
