@@ -1109,3 +1109,32 @@ The leak-to-exit is unchanged from before cell-RC but now fully
 attributed: live_exit equals escaped, nothing unaccounted. Recycling
 these is the defunctionalized-thunk work (ownership riding the
 calling convention), already OPEN on this log.
+
+## 2026-07-23 — SHIPPED: eisel–lemire float parsing (mined queue item 2, taken first)
+
+Taken ahead of dragonbox by judgment: the same machinery serves both —
+to_float's parse AND the float renderer's round-trip probe (which was
+calling strtod per probe). Implementation: generated pow10 table
+(10^q as MSB-normalized 128-bit significand + exact per-entry binary
+exponent, q in [-342, 308]; negative powers rounded up), clinger
+exact-small fast path, 64x64->128 multiply with low-word refinement,
+round-to-nearest-even with defer-on-uncertainty (halfway under
+truncation, subnormal, overflow, >19 digits, exotic forms) to strtod,
+which remains the semantic authority. Table generated exactly by
+python (regeneration block lives with the table in runtime.c).
+
+VERIFICATION: standalone fuzz harness (scratchpad, extracts the real
+function text from runtime.c) — 30M cases (random 19-digit
+significands x q in [-330,309], plus %.17g round-trips of random
+bit-pattern doubles): 0 mismatches vs strtod, 1.83% deferred. All 12
+suites + book_check green; cost golden exact.
+
+BENCH (loaded box, same-sitting comparisons): jsonbench user
+0.147s avg vs serde 0.173s — kanso ~1.18x AHEAD where the quiet
+board had ~1.01x. Interleaved wall best-of-20: 1.78ms vs 1.85ms
+per decode. Encode unchanged (0.88s). OWED: a quiet sitting to
+refresh the §08 board absolutes (watcher re-armed); the published
+0.85/0.86 numbers predate this change and now undersell the lead.
+
+First rung of mined-queue item 1 also fell for free: the render
+probe no longer calls strtod on its happy path.
