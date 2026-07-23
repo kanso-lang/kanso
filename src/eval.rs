@@ -1961,7 +1961,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
                             MapKey::Int(n) => n.to_string(),
                             MapKey::Str(s) => format!("\"{s}\""),
                         };
-                        format!("{key}: {}", render(value, true))
+                        format!("{key}:{}", render(value, true))
                     })
                     .collect();
                 format!("{{ {} }}", inner.join(" "))

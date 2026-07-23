@@ -121,7 +121,7 @@ no fourth flavor</code></pre>
   </div>
 </div>
 
-<p>the same pair of tools covers maps—literal syntax <code>{ "dango": 350 }</code>, strict lookup with brackets, polite lookup with <code>at</code>:</p>
+<p>the same pair of tools covers maps—literal syntax <code>{ "dango":350 }</code>, strict lookup with brackets, polite lookup with <code>at</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">menu.kso</div>
@@ -132,7 +132,7 @@ no fourth flavor</code></pre>
   <span class="s">"<span class="i">{price}</span> yen"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  menu <span class="o">=</span> { <span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span> }
+  menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
   <span class="f">print</span> (<span class="f">describe</span> menu[<span class="s">"pocky"</span>])</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
@@ -161,7 +161,7 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 
 <div class="code-panel">
   <div class="code-panel-title">pocky.kso</div>
-  <pre><code>menu <span class="o">=</span> { <span class="s">"dango"</span>: <span class="n">350</span> <span class="s">"taiyaki"</span>: <span class="n">500</span> }
+  <pre><code>menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
 <span class="f">print</span> <span class="s">"pocky: <span class="i">{menu[</span>"</span>pocky<span class="s">"]!}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run pocky.kso</div>

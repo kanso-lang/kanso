@@ -16,9 +16,9 @@ test_decode_int = (decode "42") == 42
 
 test_decode_nested =
   decoded = decode "\{\"a\": [1, \{\"b\": null}]}"
-  decoded == { "a": [1 { "b": json_null }] }
+  decoded == { "a":[1 { "b":json_null }] }
 
-test_decode_object = (decode "\{\"a\": 1, \"b\": 2}") == { "a": 1 "b": 2 }
+test_decode_object = (decode "\{\"a\": 1, \"b\": 2}") == { "a":1 "b":2 }
 
 test_decode_string = (decode "\"hello\"") == "hello"
 
@@ -29,7 +29,7 @@ test_decode_whitespace = (decode "  [ 1 , 2 ]  ") == [1 2]
 test_encode_escapes = (encode "a\"b\nc") == "\"a\\\"b\\nc\""
 
 test_encode_nested =
-  value = { "a": true "b": [1 2] }
+  value = { "a":true "b":[1 2] }
   (encode value) == "\{\"a\":true,\"b\":[1,2]}"
 
 test_error_position = (failure_position (decode "[1, nope]")) == 5

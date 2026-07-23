@@ -1,4 +1,4 @@
-base = { "a": 1 "b": 2 }
+base = { "a":1 "b":2 }
 grown = put base "c" 3
 print "literal {base}"
   >> print "put {grown}"

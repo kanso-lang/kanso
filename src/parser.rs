@@ -1414,10 +1414,10 @@ impl<'a> P<'a> {
                         _ => return Err(self.err("expected `:` after a map key".to_string())),
                     }
                     let value_span = self.span_here();
-                    if value_span.col != colon_span.col + 2 {
+                    if value_span.col != colon_span.col + 1 {
                         return Err(Diagnostic::new(
                             "formatting",
-                            "a map pair is spaced: `key: value`".to_string(),
+                            "a map pair is tight: `key:value`".to_string(),
                             colon_span,
                         ));
                     }
