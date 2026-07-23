@@ -1161,6 +1161,37 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Str(parts.join(sep)))
             }
+            "find2_below" => {
+                let [cs, from, a, b, lim] = arity(args, name, span)?;
+                for v in [&cs, &from, &a, &b, &lim] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let (
+                    Value::List(items),
+                    Value::Int(from),
+                    Value::Int(a),
+                    Value::Int(b),
+                    Value::Int(lim),
+                ) = (&cs, &from, &a, &b, &lim)
+                else {
+                    return Err(RuntimeError {
+                        message: "find2_below takes bytes".to_string(),
+                        span,
+                    });
+                };
+                let len = items.len();
+                let start = usize::try_from(from.clone()).unwrap_or(1).max(1);
+                let mut at = len + 1;
+                for (i, item) in items.iter().enumerate().skip(start - 1) {
+                    if matches!(item, Value::Int(byte) if byte == a || byte == b || byte < lim) {
+                        at = i + 1;
+                        break;
+                    }
+                }
+                Ok(Value::Int(BigInt::from(at)))
+            }
             "find2" => {
                 let [cs, from, a, b] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b] {
