@@ -858,3 +858,48 @@ deterministic under KANSO_POISON=1 (rewound memory filled with 0xAB),
 which is now a permanent runtime flag. The regression is a runtime
 golden (reencode) exercising both layers on both engines. Cost golden
 and vse stayed bit-exact through the whole fix.
+
+## 2026-07-22 — the encode campaign lands at 3.5x
+
+Encode of bench/large.json (400 rounds): 3.46s user at the start of
+the campaign, 1.00s at the end. Four cuts, each found by sampling and
+each shipped behind the full 12-suite gate:
+
+1. Numbers and templates (#145). The float renderer probes precision
+   15..17 instead of 1..17 (dtoa and vfprintf left the profile
+   entirely), ints render through a hand k_itoa, interpolation
+   templates concatenate through one k_concat_arr call (an array
+   parameter, not varargs — 16-byte struct varargs disagree between
+   arm64 and x86_64 SysV), and join writes into a buffer it then
+   wraps instead of recopying.
+
+2. Escape on bytes (#146). escape_char dispatched on single-character
+   string literals — a memcmp probe per character of every string
+   encoded. The pipeline became decode-symmetric: bytes in, int arms
+   (a jump table), one utf8 out.
+
+3. The clean-string scan (#148). find2_below — find2 with a floor —
+   proves in one SIMD pass that a string holds no quote, backslash,
+   or control byte, and the overwhelmingly common clean string passes
+   through in a single copy. The bump allocator also inlines into its
+   callers now (the refill path stays out of line; counters stay
+   exact on both paths).
+
+4. The byte builder (#148). The structural cut: the old encode
+   re-copied every child's bytes at each nesting level (template
+   wrap, join, parent template — six copies per byte on a flat
+   document). append is a builtin bytes accumulator with a KBuf
+   header that claims its frontier the way list push does, so a fold
+   of appends is amortized linear under plain value semantics. encode
+   and escape thread one builder end to end.
+
+The beat analysis grew two conservative rules on the way: a crossing
+slot whose inference set is empty, or which may hold a byte builder,
+is never assumed cheap to carry — rewind-copying a growing buffer is
+quadratic where grow-only is linear. Both engines byte-identical
+throughout; cost golden exact.
+
+OPEN: decode still assembles escaped strings through text/concat on
+byte lists — the builder should serve both directions. kq's pretty
+renderer still templates per row; folding it onto the builder is the
+next pretty-path cut.
