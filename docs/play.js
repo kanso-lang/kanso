@@ -362,14 +362,14 @@ print "warming the cups"
 import "std/math"
 import "std/time"
 
-brew = print "brew: steeping" >> sleep 60 >> print "brew: poured"
+brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 
 pub play =
   brew
   rolls
 
 fn roll i
-  random 6 . (n -> print "roll {i}: a {n + 1}")
+  math/random 6 . (n -> print "roll {i}: a {n + 1}")
 
 rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
 `,
@@ -401,7 +401,8 @@ fn step _ _ _ _ out none
 
 fn step store actions i sub out action
   next = update store action
-  drive next actions (i + 1) sub (out >> notify sub action next >> sleep 350)
+  told = out >> notify sub action next >> time/sleep 350
+  drive next actions (i + 1) sub told
 
 fn update balance (deposit n)
   balance + n
