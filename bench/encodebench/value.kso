@@ -1,0 +1,133 @@
+import "std/text"
+
+fn array_delim cs 44 p acc
+  array_items cs (p + 1) acc
+
+fn array_delim _ 93 p acc
+  parsed (p + 1) acc
+
+fn array_delim _ none p _
+  fail p "unexpected end of input"
+
+fn array_delim _ c p _
+  fail p "expected `,` or `]`, found `{text/utf8 [c]}`"
+
+fn array_items cs p acc
+  p2 = skip_ws cs p
+  array_step cs (parse_value cs p2) acc
+
+fn array_open _ 93 p
+  parsed (p + 1) []
+
+fn array_open _ none p
+  fail p "unexpected end of input"
+
+fn array_open cs _ p
+  array_items cs p []
+
+fn array_step cs (parsed p v) acc
+  acc2 = push acc v
+  p2 = skip_ws cs p
+  array_delim cs (cs[p2]) p2 acc2
+
+fn bad_value_char c p
+  fail p "unexpected character `{text/utf8 [c]}`"
+
+bytes_false = [102 97 108 115 101]
+
+bytes_null = [110 117 108 108]
+
+bytes_true = [116 114 117 101]
+
+fn obj_colon cs p k acc
+  obj_value cs (parse_value cs p) k acc
+
+fn obj_delim cs 44 p acc
+  obj_items cs (p + 1) acc
+
+fn obj_delim _ 125 p acc
+  parsed (p + 1) acc
+
+fn obj_delim _ none p _
+  fail p "unexpected end of input"
+
+fn obj_delim _ c p _
+  fail p "expected `,` or `}`, found `{text/utf8 [c]}`"
+
+fn obj_items cs p acc
+  p2 = skip_ws cs p
+  obj_key_start cs (cs[p2]) p2 acc
+
+fn obj_key cs (parsed p k) acc
+  p2 = skip_ws cs p
+  obj_colon cs (expect_char cs p2 58) k acc
+
+fn obj_key_start cs 34 p acc
+  obj_key cs (parse_string cs (p + 1)) acc
+
+fn obj_key_start _ none p _
+  fail p "unexpected end of input"
+
+fn obj_key_start _ _ p _
+  fail p "expected a string key"
+
+fn obj_open _ 125 p
+  parsed (p + 1) [:]
+
+fn obj_open _ none p
+  fail p "unexpected end of input"
+
+fn obj_open cs _ p
+  obj_items cs p [:]
+
+fn obj_value cs (parsed p v) k acc
+  acc2 = put acc k v
+  p2 = skip_ws cs p
+  obj_delim cs (cs[p2]) p2 acc2
+
+fn parse_array cs p
+  p2 = skip_ws cs p
+  array_open cs (cs[p2]) p2
+
+fn parse_number cs p
+  q = number_end cs p
+  parsed q (number_value cs p (q - 1))
+
+fn parse_object cs p
+  p2 = skip_ws cs p
+  obj_open cs (cs[p2]) p2
+
+fn parse_value cs p
+  p2 = skip_ws cs p
+  value_for (cs[p2]) cs p2
+
+# value starts by byte: 34 quote, 91 bracket, 102 f, 110 n, 116 t, 123 brace
+fn value_for 34 cs p
+  parse_string cs (p + 1)
+
+fn value_for 91 cs p
+  parse_array cs (p + 1)
+
+fn value_for 102 cs p
+  word cs p bytes_false false
+
+fn value_for 110 cs p
+  word cs p bytes_null json_null
+
+fn value_for 116 cs p
+  word cs p bytes_true true
+
+fn value_for 123 cs p
+  parse_object cs (p + 1)
+
+fn value_for none _ p
+  fail p "unexpected end of input"
+
+fn value_for c cs p
+  numeric = number_start? c
+  if numeric (parse_number cs p) (bad_value_char c p)
+
+fn word cs p expected v
+  n = length expected
+  seg = text/slice cs p (p + n - 1)
+  if (seg == expected) (parsed (p + n) v) (fail p "invalid literal")

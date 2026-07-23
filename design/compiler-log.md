@@ -808,3 +808,27 @@ no fusion, so per-element wrapper records return. Convention until the
 pass learns better: name the LAMBDA, nest the chain. Queued: fusion
 through single-use local bindings (the binding is a rename, not an
 escape — provable cheaply).
+
+## 2026-07-22 night: the encode crasher — latent, pinned, unsolved
+
+Building the encode-side profile for the kq pretty gap surfaced a
+native crash: decode bench/large.json once, encode it in a self-tail
+loop, and the SECOND iteration segfaults (n=1 clean, n=2 dies; two
+INLINE encodes without the loop are clean). Repro: bench/encodebench.
+The crash stack (macOS .ips): k_b_at <- fold dispatch <- d_encode_1
+<- fused lambda <- d_encode_1 <- d_rounds_3, faulting on an address
+whose bytes are iteration-one ENCODE OUTPUT — a KValue payload holding
+string content where a list pointer belonged.
+
+Ruled out tonight, with receipts: NOT the enumerable migration (the
+pre-enumerable #133-era binary crashes identically); NOT the map
+sorted-view-cache-above-the-mark hazard (instrumentation shows zero
+beat rewinds run during the loop, and a cache-reset sweep on every
+rewind path did not change the crash — the sweep was reverted as an
+unproven guard). The loop does NOT beat-iterate; the arena only grows
+during it, so the stale-looking payload is corruption, not
+use-after-rewind. Suspect space for the next session: the bind-chain
+pulse's carry evacuation interacting with values returned from
+k_call1, or an ABI/boxing edge in the fold dispatch under deep
+encode recursion. The interp runs the same program correctly, and the
+.ips reports in ~/Library/Logs/DiagnosticReports carry full stacks.

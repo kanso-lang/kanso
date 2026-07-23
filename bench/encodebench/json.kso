@@ -1,0 +1,73 @@
+import "std/list"
+import "std/text"
+
+type defect
+  reason:string
+
+pub type json_null
+
+pub type parse_failure
+  position:int
+  reason:string
+
+type parsed
+  pos:int
+  value:json
+
+pub fn decode s
+  cs = text/bytes s
+  finish cs (parse_value cs 1)
+
+pub fn encode true
+  "true"
+
+pub fn encode false
+  "false"
+
+pub fn encode json_null
+  "null"
+
+pub fn encode n:int
+  "{n}"
+
+pub fn encode x:float64
+  "{x}"
+
+pub fn encode s:string
+  "\"{escape_str s}\""
+
+pub fn encode xs:json[]
+  inner = text/join (list/to_list (list/map xs encode)) ","
+  "[{inner}]"
+
+pub fn encode m:json[string]
+  inner = text/join (list/to_list (list/map (entries m) encode_entry)) ","
+  "\{{inner}}"
+
+fn encode_entry (entry k v)
+  "{encode k}:{encode v}"
+
+pub fn failure_position (err (parse_failure p _))
+  p
+
+pub fn failure_position _
+  0
+
+pub fn failure_reason (err (parse_failure _ reason))
+  reason
+
+pub fn failure_reason _
+  ""
+
+fn finish _ none
+  err (parse_failure 0 "unexpected end of input")
+
+fn finish cs (parsed p v)
+  p2 = skip_ws cs p
+  if (p2 > (length cs)) v (fail p2 "unexpected trailing characters")
+
+fn must (err reason)
+  err (defect "{reason}")
+
+fn must v
+  v
