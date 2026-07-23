@@ -72,13 +72,13 @@ fn obj_key_start _ _ p _
   fail p "expected a string key"
 
 fn obj_open _ 125 p
-  parsed (p + 1) [:]
+  parsed (p + 1) {:}
 
 fn obj_open _ none p
   fail p "unexpected end of input"
 
 fn obj_open cs _ p
-  obj_items cs p [:]
+  obj_items cs p {:}
 
 fn obj_value cs (parsed p v) k acc
   acc2 = put acc k v

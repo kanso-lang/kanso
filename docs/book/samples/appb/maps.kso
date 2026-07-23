@@ -1,8 +1,8 @@
-base = ["a": 1 "b": 2]
+base = { "a": 1 "b": 2 }
 grown = put base "c" 3
 print "literal {base}"
   >> print "put {grown}"
   >> print "at {grown["b"]}"
   >> print "entries {entries grown}"
   >> print "length {length grown}"
-  >> print "empty {[:]}"
+  >> print "empty {{:}}"

@@ -269,7 +269,7 @@ pub fn take coll n
   capped n (iter coll)
 
 pub fn tally coll
-  fold coll [:] (m x -> put m x (bump m[x]))
+  fold coll {:} (m x -> put m x (bump m[x]))
 
 pub fn to_list coll
   fold coll [] (acc x -> push acc x)

@@ -5,5 +5,5 @@ fn describe price
   "{price} yen"
 
 pub play =
-  menu = ["dango": 350 "taiyaki": 500]
+  menu = { "dango": 350 "taiyaki": 500 }
   print (describe menu["pocky"])

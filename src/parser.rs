@@ -1285,6 +1285,7 @@ impl<'a> P<'a> {
                     | Tok::Str(_)
                     | Tok::LParen
                     | Tok::LBracket
+                    | Tok::LBrace
             )
         )
     }
@@ -1363,17 +1364,51 @@ impl<'a> P<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Expr::Str(template, span))
             }
-            Some(Tok::LBracket) => {
+            Some(Tok::LBrace) => {
                 self.pos += 1;
                 if matches!(self.peek(), Some(Tok::Colon)) {
                     self.pos += 1;
                     match self.peek() {
-                        Some(Tok::RBracket) => {
+                        Some(Tok::RBrace) => {
                             self.pos += 1;
                             return Ok(Expr::MapLit(Vec::new(), span));
                         }
-                        _ => return Err(self.err("`[:]` is the empty map".to_string())),
+                        _ => return Err(self.err("`{:}` is the empty map".to_string())),
                     }
+                }
+                let mut pairs = Vec::new();
+                let mut key = self.parse_atom()?;
+                loop {
+                    self.require_literal_key(&key)?;
+                    let colon_span = self.span_here();
+                    match self.peek() {
+                        Some(Tok::Colon) => self.pos += 1,
+                        _ => return Err(self.err("expected `:` after a map key".to_string())),
+                    }
+                    let value_span = self.span_here();
+                    if value_span.col != colon_span.col + 2 {
+                        return Err(Diagnostic::new(
+                            "formatting",
+                            "a map pair is spaced: `key: value`".to_string(),
+                            colon_span,
+                        ));
+                    }
+                    let value = self.parse_atom()?;
+                    pairs.push((key, value));
+                    if matches!(self.peek(), Some(Tok::RBrace)) {
+                        self.pos += 1;
+                        self.check_key_order(&pairs)?;
+                        return Ok(Expr::MapLit(pairs, span));
+                    }
+                    key = self.parse_atom()?;
+                }
+            }
+            Some(Tok::LBracket) => {
+                self.pos += 1;
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    return Err(self.err(
+                        "maps use curly braces: `{:}` is the empty map".to_string(),
+                    ));
                 }
                 if matches!(self.peek(), Some(Tok::RBracket)) {
                     self.pos += 1;
@@ -1381,33 +1416,9 @@ impl<'a> P<'a> {
                 }
                 let first = self.parse_atom()?;
                 if matches!(self.peek(), Some(Tok::Colon)) {
-                    let mut pairs = Vec::new();
-                    let mut key = first;
-                    loop {
-                        self.require_literal_key(&key)?;
-                        let colon_span = self.span_here();
-                        self.pos += 1;
-                        let value_span = self.span_here();
-                        if value_span.col != colon_span.col + 2 {
-                            return Err(Diagnostic::new(
-                                "formatting",
-                                "a map pair is spaced: `key: value`".to_string(),
-                                colon_span,
-                            ));
-                        }
-                        let value = self.parse_atom()?;
-                        pairs.push((key, value));
-                        if matches!(self.peek(), Some(Tok::RBracket)) {
-                            self.pos += 1;
-                            self.check_key_order(&pairs)?;
-                            return Ok(Expr::MapLit(pairs, span));
-                        }
-                        key = self.parse_atom()?;
-                        match self.peek() {
-                            Some(Tok::Colon) => {}
-                            _ => return Err(self.err("expected `:` after a map key".to_string())),
-                        }
-                    }
+                    return Err(self.err(
+                        "maps use curly braces: `{key: value}`".to_string(),
+                    ));
                 }
                 let mut items = vec![first];
                 while !matches!(self.peek(), Some(Tok::RBracket)) {

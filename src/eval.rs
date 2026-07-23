@@ -1884,7 +1884,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
         Value::Int(n) => n.to_string(),
         Value::Float(x) => render_float(*x),
         Value::Map(entries) => match entries.is_empty() {
-            true => "[:]".to_string(),
+            true => "{:}".to_string(),
             false => {
                 let inner: Vec<String> = entries
                     .iter()
@@ -1896,7 +1896,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
                         format!("{key}: {}", render(value, true))
                     })
                     .collect();
-                format!("[{}]", inner.join(" "))
+                format!("{{ {} }}", inner.join(" "))
             }
         },
         Value::Str(s) => match quote_strings {
