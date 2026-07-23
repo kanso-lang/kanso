@@ -167,10 +167,15 @@ static void k_arena_push(size_t need) {
     k_arena_left = b->cap;
 }
 
+static int k_stats_on = -1;
+
 static void* k_alloc(size_t n) {
     n = (n + 15) & ~(size_t)15;
-    k_stat_allocs++;
-    k_stat_alloc_bytes += (long long)n;
+    if (k_stats_on < 0) k_stats_on = getenv("KANSO_COUNTERS") != NULL;
+    if (k_stats_on) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += (long long)n;
+    }
     if (n > k_arena_left) {
         k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
     }
@@ -627,6 +632,22 @@ void k_die(const char* msg) {
     exit(1);
 }
 
+/* Hand-rolled lld formatting: the vfprintf machinery showed up hot in
+   the encode profile, and a digit loop beats it several times over. */
+static void k_itoa(char* buf, long long v) {
+    char tmp[24];
+    int n = 0;
+    unsigned long long u = v < 0 ? (unsigned long long)(-(v + 1)) + 1 : (unsigned long long)v;
+    do {
+        tmp[n++] = (char)('0' + (u % 10));
+        u /= 10;
+    } while (u);
+    char* w = buf;
+    if (v < 0) *w++ = '-';
+    while (n) *w++ = tmp[--n];
+    *w = 0;
+}
+
 static long long k_ptr(void* p) { return (long long)(intptr_t)p; }
 static KStr* k_as_str(KValue v) { return (KStr*)(intptr_t)v.payload; }
 static KRec* k_as_rec(KValue v) { return (KRec*)(intptr_t)v.payload; }
@@ -743,6 +764,32 @@ long long k_check_rec(KValue v, long long type_id, long long nfields) {
 }
 long long k_check_bool(KValue v) { return v.tag == K_TRUE || v.tag == K_FALSE; }
 
+/* One allocation for a whole template: sums the piece lengths, copies
+   once. A failure piece propagates; the profile showed chained k_concat
+   quadratic-copying hot on the encode path. An array, not varargs —
+   16-byte structs through va_arg differ between the arm64 and x86_64
+   ABIs when the caller is emitted IR. */
+KValue k_concat_arr(long long n, const KValue* parts) {
+    long long total = 0;
+    for (long long i = 0; i < n; i++) {
+        KValue p = parts[i];
+        if (!k_not_failure(p)) return p;
+        total += k_as_str(p)->len;
+    }
+    KStr* s = k_alloc(sizeof(KStr));
+    s->len = total;
+    s->data = k_alloc(total + 1);
+    long long at = 0;
+    for (long long i = 0; i < n; i++) {
+        KStr* ps = k_as_str(parts[i]);
+        memcpy(s->data + at, ps->data, ps->len);
+        at += ps->len;
+    }
+    s->data[total] = 0;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(s);
+    return v;
+}
+
 KValue k_concat(KValue a, KValue b) {
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
@@ -805,7 +852,7 @@ KValue k_render(KValue v, long long quote) {
     char buf[64];
     switch (v.tag) {
         case K_INT:
-            snprintf(buf, sizeof buf, "%lld", v.payload);
+            k_itoa(buf, v.payload);
             return k_str(buf);
         case K_FLOAT: {
             double d = k_as_f(v);
@@ -813,7 +860,10 @@ KValue k_render(KValue v, long long quote) {
                 snprintf(buf, sizeof buf, "%.1f", d);
                 return k_str(buf);
             }
-            for (int prec = 1; prec <= 17; prec++) {
+            /* shortest round-trip: %g trims trailing zeros, so probing
+               15..17 yields byte-identical strings to probing 1..17 — a
+               double never needs more, and rarely fewer, than 15 digits */
+            for (int prec = 15; prec <= 17; prec++) {
                 snprintf(buf, sizeof buf, "%.*g", prec, d);
                 if (strtod(buf, NULL) == d) break;
             }
@@ -1999,7 +2049,11 @@ KValue k_b_join(KValue lv, KValue sep) {
         memcpy(data + at, is->data, is->len);
         at += is->len;
     }
-    KValue out = k_str_n(data, total);
+    KStr* os = k_alloc(sizeof(KStr));
+    os->len = total;
+    os->data = data;
+    data[total] = 0;
+    KValue out; out.tag = K_STR; out.payload = k_ptr(os);
     return out;
 }
 
