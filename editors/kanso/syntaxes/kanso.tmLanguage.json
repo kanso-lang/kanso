@@ -33,6 +33,9 @@
       "include": "#number"
     },
     {
+      "include": "#conditional"
+    },
+    {
       "include": "#constant"
     },
     {
@@ -63,12 +66,18 @@
       "name": "comment.line.number-sign.kanso"
     },
     "import": {
-      "match": "^(import)\\s+(\"[^\"]+\")",
+      "match": "^(import)\\s+(?:([a-z_][a-z0-9_]*)\\s+)?(\\{[^}]*\\}\\s+)?(\"[^\"]+\")",
       "captures": {
         "1": {
           "name": "keyword.control.import.kanso"
         },
         "2": {
+          "name": "entity.name.namespace.kanso"
+        },
+        "3": {
+          "name": "meta.import.renames.kanso"
+        },
+        "4": {
           "name": "string.quoted.double.import-path.kanso"
         }
       }
@@ -165,11 +174,11 @@
       ]
     },
     "float": {
-      "match": "\\b[0-9]+\\.[0-9]+\\b",
+      "match": "(?:(?<=[\\s(\\[=])-)?\\b[0-9]+\\.[0-9]+\\b",
       "name": "constant.numeric.float.kanso"
     },
     "number": {
-      "match": "\\b[0-9]+\\b",
+      "match": "(?:(?<=[\\s(\\[=])-)?\\b[0-9]+\\b",
       "name": "constant.numeric.integer.kanso"
     },
     "constant": {
@@ -181,7 +190,7 @@
       "name": "support.function.qualified.kanso"
     },
     "builtin": {
-      "match": "\\b(entries|err|if|length|print|push|put)\\b",
+      "match": "\\b(entries|err|length|print|push|put)\\b",
       "name": "support.function.builtin.kanso"
     },
     "primitive-type": {
@@ -215,6 +224,10 @@
           "name": "keyword.operator.pipe.kanso"
         },
         {
+          "match": "&&|\\|\\|",
+          "name": "keyword.operator.logical.kanso"
+        },
+        {
           "match": "==|!=|<=|>=|<|>",
           "name": "keyword.operator.comparison.kanso"
         },
@@ -223,10 +236,14 @@
           "name": "keyword.operator.assignment.kanso"
         },
         {
-          "match": "[+*/-]",
+          "match": "[+*/%-]",
           "name": "keyword.operator.arithmetic.kanso"
         }
       ]
+    },
+    "conditional": {
+      "match": "\\b(if|else)\\b",
+      "name": "keyword.control.conditional.kanso"
     }
   }
 }
