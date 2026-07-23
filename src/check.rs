@@ -160,6 +160,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
             }
         }
         Expr::Field { base, .. } => check_marker_calls(base, markers, diags),
+        Expr::Upcast { expr, .. } => check_marker_calls(expr, markers, diags),
         Expr::Index { base, index, .. } => {
             check_marker_calls(base, markers, diags);
             check_marker_calls(index, markers, diags);
@@ -770,6 +771,7 @@ impl Resolver<'_> {
                 self.locals.truncate(from);
             }
             Expr::Field { base, .. } => self.resolve_expr(base),
+            Expr::Upcast { expr, .. } => self.resolve_expr(expr),
             Expr::MapLit(pairs, _) => {
                 for (key, value) in pairs {
                     self.resolve_expr(key);

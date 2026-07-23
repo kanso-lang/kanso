@@ -1662,6 +1662,7 @@ impl<'a> Backend<'a> {
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
+            Expr::Upcast { expr: inner, .. } => self.emit_expr(f, inner),
             Expr::Block(stmts, _) => {
                 let mut value = "{ i64 4, i64 0 }".to_string();
                 let last = stmts.len().saturating_sub(1);
@@ -2859,6 +2860,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
             }
         }
         Expr::Field { base, .. } => collect_idents(base, out),
+        Expr::Upcast { expr, .. } => collect_idents(expr, out),
         Expr::Str(parts, _) => {
             for part in parts {
                 if let TemplatePart::Interp(inner) = part {

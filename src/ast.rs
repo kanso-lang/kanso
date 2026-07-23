@@ -20,6 +20,9 @@ pub enum Expr {
     /// position. Exists only where evaluation is deferred (an `if` arm),
     /// so sequencing never braids into ordinary application.
     Block(Vec<Stmt>, Span),
+    /// `(expr):type` — the upcast: strips a subtype value to the named
+    /// ancestor. Widening only; construction is the downward direction.
+    Upcast { expr: Box<Expr>, ty: String, span: Span },
 }
 
 #[derive(Clone, Debug)]
@@ -44,7 +47,8 @@ impl Expr {
             | Expr::Lambda { span: s, .. }
             | Expr::BinOp { span: s, .. }
             | Expr::Join { span: s, .. }
-            | Expr::Block(_, s) => *s,
+            | Expr::Block(_, s)
+            | Expr::Upcast { span: s, .. } => *s,
         }
     }
 }

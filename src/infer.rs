@@ -167,6 +167,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
 fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, Set>) -> Set {
     match expr {
         Expr::Int(..) => INT,
+        Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
         Expr::Block(stmts, _) => {
             // a child scope: block binds stay local to the branch
             let mut env = env.clone();

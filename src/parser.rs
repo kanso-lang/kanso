@@ -899,6 +899,7 @@ fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
         | Expr::Field { span: s, .. }
+        | Expr::Upcast { span: s, .. }
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)
@@ -1474,7 +1475,26 @@ impl<'a> P<'a> {
                     return Ok(Expr::Lambda { params, body: Box::new(body), span });
                 }
                 let inner = self.parse_expr()?;
+                let rparen_span = self.span_here();
                 self.expect_rparen()?;
+                // `(expr):type` — the upcast; the colon binds tight to the
+                // closing paren, so map pairs never collide with it
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    let colon_span = self.span_here();
+                    if colon_span.col == rparen_span.col + 1 {
+                        self.pos += 1;
+                        let ty_span = self.span_here();
+                        if ty_span.col != colon_span.col + 1 {
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                "an upcast binds tight: `(expr):type`".to_string(),
+                                colon_span,
+                            ));
+                        }
+                        let (ty, _) = self.expect_ident("a type name")?;
+                        return Ok(Expr::Upcast { expr: Box::new(inner), ty, span });
+                    }
+                }
                 Ok(inner)
             }
             _ => Err(self.err("expected an expression".to_string())),
