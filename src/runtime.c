@@ -1865,13 +1865,35 @@ KValue k_b_utf8(KValue lv, const char* origin) {
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     long long i = 0;
     while (i < len) {
-        unsigned char b0 = (unsigned char)data[i];
-        long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
-        if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"), origin);
-        for (long j = 1; j < w; j++) {
-            if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
+        /* ascii runs — nearly everything in real documents — validate a
+           vector register at a time; a multibyte sequence drops to the
+           scalar step for one codepoint, then the sweep resumes */
+#if defined(__aarch64__)
+        while (i + 16 <= len) {
+            uint8x16_t chunk = vld1q_u8((const uint8_t*)data + i);
+            if (vmaxvq_u8(chunk) >= 0x80) break;
+            i += 16;
         }
-        i += w;
+#elif defined(__x86_64__)
+        while (i + 16 <= len) {
+            __m128i chunk = _mm_loadu_si128((const __m128i*)(data + i));
+            if (_mm_movemask_epi8(chunk)) break;
+            i += 16;
+        }
+#endif
+        if (i >= len) break;
+        /* a dirty block pays one scalar pass to its end, so the sweep
+           never re-probes the block it just abandoned */
+        long long block_end = i + 16 <= len ? i + 16 : len;
+        while (i < block_end) {
+            unsigned char b0 = (unsigned char)data[i];
+            long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
+            if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"), origin);
+            for (long j = 1; j < w; j++) {
+                if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
+            }
+            i += w;
+        }
     }
     return k_none();
 }

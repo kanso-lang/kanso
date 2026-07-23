@@ -431,7 +431,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p><strong>2. float parsing at memory speed <span class="status status-planned">queued</span></strong> — the eisel–lemire algorithm (lemire, "number parsing at a gigabyte per second," 2021), now inside gcc, chrome, and rust's core. the decode mirror of the entry above, and the biggest known closer of the remaining serde gap on number-heavy documents.</p>
 
-<p><strong>3. utf-8 validation in vector registers <span class="status status-planned">queued</span></strong> — keiser &amp; lemire, "validating utf-8 in less than one instruction per byte" (2021). the builder's one full-output validation pass runs scalar today and shows in the profile; the lookup-table algorithm runs at memory bandwidth on the same neon/sse units the scanners already use.</p>
+<p><strong>3. utf-8 validation in vector registers <span class="status status-shipped">first tier shipped</span></strong> — ascii runs validate a vector register at a time (one max-lane test per sixteen bytes); a multibyte sequence pays one scalar pass to its block's end so the sweep never re-probes what it abandoned. real documents are overwhelmingly ascii, so this is the measured fraction of the win; the full nibble-lookup algorithm (keiser &amp; lemire, "validating utf-8 in less than one instruction per byte," 2021) stays queued for the day a multibyte-heavy workload shows it in a profile.</p>
 
 <p><strong>4. branchless map lookup <span class="status status-planned">queued</span></strong> — eytzinger layout (khuong &amp; morin, "array layouts for comparison-based searching," 2017). map lookups binary-search a sorted view with a branchy compare in the hot loop; the cache-aware layout plus branchless probing is a contained change to one runtime structure.</p>
 
@@ -629,7 +629,7 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <li><strong>memory-fact goldens</strong> — the .mem vein: evaluation and liveness counts pinned byte-identical across all three engines, because evaluation counts are semantics.</li>
 <li><strong>differential engine testing</strong> — mckeeman-style differential oracles: one reference interpreter, two compiled backends, every golden byte-identical across all three.</li>
 <li><strong>float parsing at memory speed</strong> — eisel–lemire (lemire, 2021). queued: the decode mirror of the rendering entry.</li>
-<li><strong>vectorized utf-8 validation</strong> — keiser &amp; lemire (2021). queued: the builder's validation pass at memory bandwidth.</li>
+<li><strong>vectorized utf-8 validation</strong> — ascii-block sweeps at a register per test, scalar only inside dirty blocks; the keiser &amp; lemire (2021) nibble-lookup tier queued behind a profile that needs it.</li>
 <li><strong>branchless map search</strong> — eytzinger layout (khuong &amp; morin, 2017). queued: cache-aware sorted views probed without branches.</li>
 <li><strong>tail recursion modulo context</strong> — leijen &amp; lorenzen (ICFP 2023). queued: results built in their final cells, no accumulator discipline at the source level.</li>
 <li><strong>fully-in-place discipline</strong> — lorenzen, leijen, swierstra (ICFP 2023). queued: in-place-ness as a checked guarantee instead of a discovered optimization.</li>

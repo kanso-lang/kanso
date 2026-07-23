@@ -1109,3 +1109,24 @@ The leak-to-exit is unchanged from before cell-RC but now fully
 attributed: live_exit equals escaped, nothing unaccounted. Recycling
 these is the defunctionalized-thunk work (ownership riding the
 calling convention), already OPEN on this log.
+
+## 2026-07-23 — SHIPPED: utf-8 ascii-sweep tier (mined queue item 3, first tier)
+
+Vector ascii sweep in k_utf8_bad (one vmaxvq/movemask test per 16
+bytes), scalar only inside a dirty block and always to that block's
+end so the sweep never re-probes what it abandoned. bench/large.json
+is 3.1% non-ascii scattered through strings — the first cut (scalar
+one codepoint per break) thrashed and moved nothing; block-granular
+fixed the thrash. Profile: k_utf8_bad drops below the noise floor;
+encode wall time unchanged on a loaded box (it was ~3% of the
+profile). The full keiser-lemire nibble-lookup tier stays queued
+behind a workload that needs it — no point carrying its tables for
+documents this ascii.
+
+FINDING while reading the validator: it is lenient (accepts
+overlongs, surrogates, >U+10FFFF — only checks continuation masks),
+while the interp presumably validates strictly through Rust's
+machinery. A latent engine divergence no golden currently reaches:
+an adversarial differential case (overlong "\xc0\xaf", surrogate
+"\xed\xa0\x80") belongs in the corpus before anything user-facing
+depends on the difference. OPEN.
