@@ -1,40 +1,41 @@
 import "std/list"
 import "std/text"
 
-fn escape_char "\""
-  "\\\""
+fn esc_byte acc 9
+  text/append (text/append acc 92) 116
 
-fn escape_char "\\"
-  "\\\\"
+fn esc_byte acc 10
+  text/append (text/append acc 92) 110
 
-fn escape_char "\n"
-  "\\n"
+fn esc_byte acc 13
+  text/append (text/append acc 92) 114
 
-fn escape_char "\r"
-  "\\r"
+fn esc_byte acc 34
+  text/append (text/append acc 92) 34
 
-fn escape_char "\t"
-  "\\t"
+fn esc_byte acc 92
+  text/append (text/append acc 92) 92
 
-fn escape_char c
-  if ((text/char_code c) < 32) (u_escape c) c
+fn esc_byte acc b
+  if (b < 32) (u_bytes acc b) (text/append acc b)
+
+fn escape_able acc bs
+  list/fold bs acc (a b -> esc_byte a b)
+
+fn escape_clean acc s bs n
+  if (length bs < n) (text/append acc s) (escape_able acc bs)
+
+fn escape_onto acc s
+  bs = text/bytes s
+  escape_clean acc s bs (text/find2_below bs 1 34 92 32)
 
 fn escape_str s
-  text/join (list/to_list (list/map (text/chars s) (c -> escape_char c))) ""
+  text/utf8 (escape_onto (text/bytes "") s)
 
-fn hex4 n
-  d1 = n / 4096
-  r1 = n - (d1 * 4096)
-  d2 = r1 / 256
-  r2 = r1 - (d2 * 256)
-  d3 = r2 / 16
-  d4 = r2 - (d3 * 16)
-  text/join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
+hex_byte_table = text/bytes "0123456789abcdef"
 
-fn hex_char n
-  hex_digits[n + 1]
-
-hex_digits = "0123456789abcdef"
+fn hex_code n
+  hex_byte_table[n + 1]
 
 pub play =
   bell = text/from_code 7
@@ -44,5 +45,7 @@ pub play =
 fn quote_str s
   "\"{escape_str s}\""
 
-fn u_escape c
-  "\\u{hex4 (text/char_code c)}"
+fn u_bytes acc b
+  lo = hex_code (b % 16)
+  hi = hex_code (b / 16)
+  text/append (text/append (text/append acc "\\u00") hi) lo

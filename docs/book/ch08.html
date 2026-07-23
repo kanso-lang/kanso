@@ -527,72 +527,78 @@ test_roundtrip ... ok
 
 <h2>encode and pretty-printing</h2>
 
-<p>the decoder is a search; the encoder is a fold. one arm per value kind, and the compound arms recurse by calling <code>encode</code> on whatever they hold:</p>
+<p>the decoder is a search; the encoder is a fold. one arm per value kind, and every arm appends onto the same byte accumulator, so a byte is written once no matter how deep in the tree it was born. <code>encode</code> itself is two calls: seed the builder, decode the finished bytes back into a string.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lib/json/json.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">encode</span> <span class="t">true</span>
-  <span class="s">"true"</span>
+  <pre><code><span class="k">fn</span> <span class="f">encode</span> v
+  <span class="f">text/utf8</span> (<span class="f">_encode_onto</span> (<span class="f">text/bytes</span> <span class="s">""</span>) v)
 
-<span class="k">fn</span> <span class="f">encode</span> <span class="t">json_null</span>
-  <span class="s">"null"</span>
+<span class="k">fn</span> <span class="f">_encode_onto</span> acc <span class="t">true</span>
+  <span class="f">text/append</span> acc <span class="s">"true"</span>
 
-<span class="k">fn</span> <span class="f">encode</span> n:<span class="t">int</span>
-  <span class="s">"<span class="i">{n}</span>"</span>
+<span class="k">fn</span> <span class="f">_encode_onto</span> acc <span class="t">json_null</span>
+  <span class="f">text/append</span> acc <span class="s">"null"</span>
 
-<span class="k">fn</span> <span class="f">encode</span> s:<span class="t">string</span>
-  <span class="s">"\"<span class="i">{_escape_str s}</span>\""</span>
+<span class="k">fn</span> <span class="f">_encode_onto</span> acc n:<span class="t">int</span>
+  <span class="f">text/append</span> acc <span class="s">"<span class="i">{n}</span>"</span>
 
-<span class="k">fn</span> <span class="f">encode</span> xs:<span class="t">json[]</span>
-  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> xs (v <span class="o">-&gt;</span> <span class="f">encode</span> v)) <span class="s">","</span>
-  <span class="s">"[<span class="i">{inner}</span>]"</span>
+<span class="k">fn</span> <span class="f">_encode_onto</span> acc s:<span class="t">string</span>
+  opened <span class="o">=</span> <span class="f">_escape_onto</span> (<span class="f">text/append</span> acc <span class="n">34</span>) s
+  <span class="f">text/append</span> opened <span class="n">34</span>
 
-<span class="k">fn</span> <span class="f">encode</span> m:<span class="t">json[string]</span>
-  inner <span class="o">=</span> <span class="f">join</span> (<span class="f">map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">_encode_entry</span> e)) <span class="s">","</span>
-  <span class="s">"\{<span class="i">{inner}</span>}"</span></code></pre>
+<span class="k">fn</span> <span class="f">_encode_onto</span> acc xs:<span class="t">json[]</span>
+  <span class="k">if</span> (<span class="f">length</span> xs <span class="o">==</span> <span class="n">0</span>) (<span class="f">text/append</span> acc <span class="s">"[]"</span>) (<span class="f">_encode_list</span> acc xs)
+
+<span class="k">fn</span> <span class="f">_encode_onto</span> acc m:<span class="t">json[string]</span>
+  es <span class="o">=</span> <span class="f">entries</span> m
+  <span class="k">if</span> (<span class="f">length</span> es <span class="o">==</span> <span class="n">0</span>) (<span class="f">text/append</span> acc <span class="s">"\{}"</span>) (<span class="f">_encode_map</span> acc es)</code></pre>
 </div>
 
-<p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:json[]</code>—which is the other half of chapter 03. the one arm with real work is strings, and the work is <code>_escape_str</code>: decode's escape path run in reverse, mapping each character to its escaped spelling, with a <code>\uXXXX</code> fallback for control characters. the sample carries the library's escape functions verbatim (the panel elides three sibling arms and the hex helpers) and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
+<p>(the <code>false</code> and <code>float64</code> arms read exactly like their neighbors, and <code>_encode_list</code> and <code>_encode_map</code> walk their elements with a comma between each pair.) where the literal arms dispatch on a value, the last four dispatch on a <em>type</em>—<code>n:int</code>, <code>xs:json[]</code>—which is the other half of chapter 03. <code>text/append</code> is the builder from chapter 06: the accumulator owns its buffer and extends it in place when it can, so the fold of appends costs what one pass over the output costs, while every intermediate stays an ordinary value.</p>
+
+<p>the one arm with real work is strings, and the work is <code>_escape_onto</code>: decode's escape path run in reverse. it dispatches on bytes, the way decode's scanner does, and it borrows decode's other habit too—one scan (<code>find2_below</code>: the first quote, backslash, or control byte) proves most strings need no escaping at all, and a proven-clean string is appended whole, in one copy. the sample carries the library's escape functions verbatim and quotes two awkward strings—one with a quote and a newline, one with a bell character (byte 7) in the middle:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">escapes.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\""</span>
-  <span class="s">"\\\""</span>
+<span class="k">fn</span> <span class="f">esc_byte</span> acc <span class="n">9</span>
+  <span class="f">text/append</span> (<span class="f">text/append</span> acc <span class="n">92</span>) <span class="n">116</span>
 
-<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\\"</span>
-  <span class="s">"\\\\"</span>
+<span class="k">fn</span> <span class="f">esc_byte</span> acc <span class="n">10</span>
+  <span class="f">text/append</span> (<span class="f">text/append</span> acc <span class="n">92</span>) <span class="n">110</span>
 
-<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\n"</span>
-  <span class="s">"\\n"</span>
+<span class="k">fn</span> <span class="f">esc_byte</span> acc <span class="n">13</span>
+  <span class="f">text/append</span> (<span class="f">text/append</span> acc <span class="n">92</span>) <span class="n">114</span>
 
-<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\r"</span>
-  <span class="s">"\\r"</span>
+<span class="k">fn</span> <span class="f">esc_byte</span> acc <span class="n">34</span>
+  <span class="f">text/append</span> (<span class="f">text/append</span> acc <span class="n">92</span>) <span class="n">34</span>
 
-<span class="k">fn</span> <span class="f">escape_char</span> <span class="s">"\t"</span>
-  <span class="s">"\\t"</span>
+<span class="k">fn</span> <span class="f">esc_byte</span> acc <span class="n">92</span>
+  <span class="f">text/append</span> (<span class="f">text/append</span> acc <span class="n">92</span>) <span class="n">92</span>
 
-<span class="k">fn</span> <span class="f">escape_char</span> c
-  <span class="f">if</span> ((<span class="f">text/char_code</span> c) <span class="o">&lt;</span> <span class="n">32</span>) (<span class="f">u_escape</span> c) c
+<span class="k">fn</span> <span class="f">esc_byte</span> acc b
+  <span class="f">if</span> (b <span class="o">&lt;</span> <span class="n">32</span>) (<span class="f">u_bytes</span> acc b) (<span class="f">text/append</span> acc b)
+
+<span class="k">fn</span> <span class="f">escape_able</span> acc bs
+  <span class="f">list/fold</span> bs acc (<span class="f">a</span> b <span class="o">-&gt;</span> <span class="f">esc_byte</span> a b)
+
+<span class="k">fn</span> <span class="f">escape_clean</span> acc s bs n
+  <span class="f">if</span> (<span class="f">length</span> bs <span class="o">&lt;</span> n) (<span class="f">text/append</span> acc s) (<span class="f">escape_able</span> acc bs)
+
+<span class="k">fn</span> <span class="f">escape_onto</span> acc s
+  bs <span class="o">=</span> <span class="f">text/bytes</span> s
+  <span class="f">escape_clean</span> acc s bs (<span class="f">text/find2_below</span> bs <span class="n">1</span> <span class="n">34</span> <span class="n">92</span> <span class="n">32</span>)
 
 <span class="k">fn</span> <span class="f">escape_str</span> s
-  <span class="f">text/join</span> (<span class="f">list/to_list</span> (<span class="f">list/map</span> (<span class="f">text/chars</span> s) (c <span class="o">-&gt;</span> <span class="f">escape_char</span> c))) <span class="s">""</span>
+  <span class="f">text/utf8</span> (<span class="f">escape_onto</span> (<span class="f">text/bytes</span> <span class="s">""</span>) s)
 
-<span class="k">fn</span> <span class="f">hex4</span> n
-  d1 <span class="o">=</span> n <span class="o">/</span> <span class="n">4096</span>
-  r1 <span class="o">=</span> n <span class="o">-</span> (d1 <span class="o">*</span> <span class="n">4096</span>)
-  d2 <span class="o">=</span> r1 <span class="o">/</span> <span class="n">256</span>
-  r2 <span class="o">=</span> r1 <span class="o">-</span> (d2 <span class="o">*</span> <span class="n">256</span>)
-  d3 <span class="o">=</span> r2 <span class="o">/</span> <span class="n">16</span>
-  d4 <span class="o">=</span> r2 <span class="o">-</span> (d3 <span class="o">*</span> <span class="n">16</span>)
-  <span class="f">text/join</span> [(<span class="f">hex_char</span> d1) (<span class="f">hex_char</span> d2) (<span class="f">hex_char</span> d3) (<span class="f">hex_char</span> d4)] <span class="s">""</span>
+hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span class="s">"0123456789abcdef"</span>
 
-<span class="k">fn</span> <span class="f">hex_char</span> n
-  hex_digits[n <span class="o">+</span> <span class="n">1</span>]
-
-hex_digits <span class="o">=</span> <span class="s">"0123456789abcdef"</span>
+<span class="k">fn</span> <span class="f">hex_code</span> n
+  hex_byte_table[n <span class="o">+</span> <span class="n">1</span>]
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   bell <span class="o">=</span> <span class="f">text/from_code</span> <span class="n">7</span>
@@ -602,8 +608,10 @@ hex_digits <span class="o">=</span> <span class="s">"0123456789abcdef"</span>
 <span class="k">fn</span> <span class="f">quote_str</span> s
   <span class="s">"\"<span class="i">{escape_str s}</span>\""</span>
 
-<span class="k">fn</span> <span class="f">u_escape</span> c
-  <span class="s">"\\u<span class="i">{hex4 (text/char_code c)}</span>"</span></code></pre>
+<span class="k">fn</span> <span class="f">u_bytes</span> acc b
+  lo <span class="o">=</span> <span class="f">hex_code</span> (b % <span class="n">16</span>)
+  hi <span class="o">=</span> <span class="f">hex_code</span> (b <span class="o">/</span> <span class="n">16</span>)
+  <span class="f">text/append</span> (<span class="f">text/append</span> (<span class="f">text/append</span> acc <span class="s">"\\u00"</span>) hi) lo</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run escapes.kso</div>
     <pre><code>"a\"b\nc"
@@ -611,7 +619,7 @@ hex_digits <span class="o">=</span> <span class="s">"0123456789abcdef"</span>
   </div>
 </div>
 
-<p><code>encode</code> is deliberately compact—machine-to-machine json wants no whitespace. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write here in full. this is the chapter's one extension beyond the library, built in its exact style:</p>
+<p><code>encode</code> is deliberately compact—machine-to-machine json wants no whitespace. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write here in full. this is the chapter's one extension beyond the library, written in the string-per-node style the library's first encoder used—clearer on a page, and the honest starting point; threading the byte builder through it is exactly the exercise the library itself just worked through:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pretty.kso</div>
