@@ -1190,3 +1190,15 @@ publish-immediately policy): compiler page four-row race — kanso
 the primary board), naive rust 1.13, go 2.03; kq README — path
 3.6/16.0ms (1.59x/1.76x), pretty 7.8/56.9ms (1.88x/2.02x), 99/100
 runs to kq.
+
+## 2026-07-23 — MEASURED AND DECLINED: eytzinger map lookup (queue item 4)
+
+Built the full thing (lazy BFS-order key index + slot map, rewind-safe
+through the cache registry with an independent-death check for the
+index) and A/B'd it: 30-key JSON maps, 5M lookups — eytzinger 0.09s vs
+binary search 0.08s (the index costs more than it saves when the whole
+sorted view fits in a few cache lines); 10k-key map, 2M lookups — dead
+tie at 0.13s (shared-prefix string keys make memcmp the cost; layout
+can't help a comparison that has to walk bytes). The paper's wins live
+on huge arrays of word-sized keys. Reverted; the page records the
+negative result so the idea stays declined. Next: dragonbox.
