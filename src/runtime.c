@@ -44,6 +44,8 @@ static KThunk* k_thunk_free = 0;
 static long long k_stat_thunk_allocs = 0;
 static long long k_stat_thunk_forces = 0;
 static long long k_stat_thunk_evals = 0;
+static long long k_stat_thunk_frees = 0;
+static long long k_stat_thunk_escaped = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -62,12 +64,46 @@ KValue k_thunk_new(long long site, int argc, ...) {
     t->next_free = 0;
     va_list ap;
     va_start(ap, argc);
-    for (int i = 0; i < argc; i++) t->args[i] = va_arg(ap, KValue);
+    for (int i = 0; i < argc; i++) {
+        t->args[i] = va_arg(ap, KValue);
+        /* a cell holding another cell keeps it alive */
+        if (t->args[i].tag == K_THUNK) ((KThunk*)t->args[i].payload)->rc++;
+    }
     va_end(ap);
     KValue v;
     v.tag = K_THUNK;
     v.payload = (long long)t;
     return v;
+}
+
+static void k_thunk_drop_args(KThunk* t);
+
+static void k_thunk_release_cell(KThunk* t) {
+    if (--t->rc > 0) return;
+    k_thunk_drop_args(t);
+    t->next_free = k_thunk_free;
+    k_thunk_free = t;
+    k_stat_thunk_frees++;
+}
+
+static void k_thunk_drop_args(KThunk* t) {
+    for (int i = 0; i < t->argc; i++) {
+        if (t->args[i].tag == K_THUNK) k_thunk_release_cell((KThunk*)t->args[i].payload);
+    }
+    t->argc = 0;
+}
+
+/* The frame epilogue for a releasable lazy binding: free the cell unless
+   the frame's result IS the cell — the returned-thunk case, which escapes
+   upward and is counted rather than freed. */
+KValue k_thunk_release_unless(KValue cell, KValue result) {
+    if (cell.tag != K_THUNK) return result;
+    if (result.tag == K_THUNK && result.payload == cell.payload) {
+        k_stat_thunk_escaped++;
+        return result;
+    }
+    k_thunk_release_cell((KThunk*)cell.payload);
+    return result;
 }
 
 KValue k_render(KValue v, long long quote);
@@ -83,6 +119,8 @@ KValue k_force(KValue v) {
         k_stat_thunk_evals++;
         t->result = d_thunk_eval(t->site, t->args);
         t->forced = 1;
+        /* the computation ran; its captures are done */
+        k_thunk_drop_args(t);
     }
     return t->result;
 }
@@ -146,9 +184,12 @@ static void k_stats_dump(void) {
     fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
-    fprintf(stderr, "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\nthunk_live_exit=%lld\n",
+    fprintf(stderr,
+        "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
+        "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
-        k_stat_thunk_allocs - k_stat_thunk_evals);
+        k_stat_thunk_frees, k_stat_thunk_escaped,
+        k_stat_thunk_allocs - k_stat_thunk_frees);
 }
 
 static void k_arena_push(size_t need) {
