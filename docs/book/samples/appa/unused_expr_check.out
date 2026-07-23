@@ -1,4 +1,4 @@
-error[unused]: unused expression: every non-final line binds a name (sequence effects with `>>`)
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group
   --> unused_expr_check.kso:1:3
    1 | 1 + 1
          ^
