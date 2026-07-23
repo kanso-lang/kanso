@@ -245,8 +245,16 @@ pub fn check_file_shadow(
     check_constants(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
+    let mut fn_arities: std::collections::HashMap<String, Vec<usize>> =
+        std::collections::HashMap::new();
     for decl in &program.fns {
-        check_fn_body_shadow(decl, &globals, used_globals, &mut diags, shadowable);
+        let arities = fn_arities.entry(decl.name.clone()).or_default();
+        if !arities.contains(&decl.params.len()) {
+            arities.push(decl.params.len());
+        }
+    }
+    for decl in &program.fns {
+        check_fn_body_shadow(decl, &globals, used_globals, &mut diags, shadowable, &fn_arities);
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -576,6 +584,10 @@ struct Resolver<'a> {
     used_globals: &'a mut HashSet<String>,
     diags: Vec<Diagnostic>,
     shadowable: &'a HashSet<String>,
+    /// Arities of this module's own fn groups; an application of a local
+    /// group must match one (arity 0 opts out: a constant's value may be
+    /// callable, which only the runtime can arbitrate).
+    fn_arities: &'a std::collections::HashMap<String, Vec<usize>>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
@@ -587,6 +599,7 @@ fn check_fn_body_shadow(
     used_globals: &mut HashSet<String>,
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
+    fn_arities: &std::collections::HashMap<String, Vec<usize>>,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -595,6 +608,7 @@ fn check_fn_body_shadow(
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
         shadowable,
+        fn_arities,
     };
     for param in &decl.params {
         resolver.bind_pattern(param);
@@ -779,6 +793,28 @@ impl Resolver<'_> {
                 self.resolve_expr(head);
                 for arg in args {
                     self.resolve_expr(arg);
+                }
+                if let Expr::Ident(name, span) = &**head {
+                    let local = self.locals.iter().any(|l| &l.name == name);
+                    if !local {
+                        if let Some(arities) = self.fn_arities.get(name.as_str()) {
+                            if !arities.contains(&args.len()) && !arities.contains(&0) {
+                                let mut known: Vec<String> =
+                                    arities.iter().map(|a| a.to_string()).collect();
+                                known.sort();
+                                self.diags.push(Diagnostic::new(
+                                    "arity",
+                                    format!(
+                                        "no {}-argument arm of `{}` (arms take {})",
+                                        args.len(),
+                                        name,
+                                        known.join(", ")
+                                    ),
+                                    *span,
+                                ));
+                            }
+                        }
+                    }
                 }
             }
             Expr::Index { base, index, .. } => {
