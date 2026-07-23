@@ -24,6 +24,9 @@ pub enum Value {
     ErrV(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
     Record { ty: Rc<str>, fields: Rc<Vec<Value>> },
+    /// A nominal subtype wrapper: `post_body s`. Transparent — every
+    /// consumer unwraps to the base; dispatch sees the chain.
+    Sub { ty: Rc<str>, inner: Rc<Value> },
     FnRef(Rc<str>),
     Closure(Rc<ClosureData>),
     Desc(Rc<Desc>),
@@ -366,6 +369,7 @@ impl<'a> Interp<'a> {
         let types = program.types.iter().map(|t| (t.name.as_str(), t)).collect();
         let origin = Span { line: 0, col: 0 };
         let entry_decl = TypeDecl {
+            parent: None,
             name: "entry".to_string(),
             is_pub: false,
             span: origin,
@@ -449,7 +453,7 @@ impl<'a> Interp<'a> {
             Pattern::Ctor { ty, .. } => {
                 let mut binds = Vec::new();
                 match match_one(pattern, &value, &mut binds) {
-                    Some(()) => {
+                    Some(_) => {
                         let mut env = env;
                         for (name, bound) in binds {
                             env = bind(env, &name, bound);
@@ -674,7 +678,7 @@ impl<'a> Interp<'a> {
                 {
                     return self.call_named(op, vec![left, right], *span, frame);
                 }
-                eval_binop(op, left, right, *span, frame)
+                eval_binop(op, sub_base(left), sub_base(right), *span, frame)
             }
             Expr::Join { lhs, rhs, span } => {
                 let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
@@ -699,7 +703,7 @@ impl<'a> Interp<'a> {
             _ => {}
         }
         if let Some(decl) = self.type_decl(name) {
-            if decl.fields.is_empty() {
+            if decl.parent.is_none() && decl.fields.is_empty() {
                 return Ok(Value::Record { ty: Rc::from(name), fields: Rc::new(Vec::new()) });
             }
         }
@@ -808,6 +812,26 @@ impl<'a> Interp<'a> {
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
+        if let Some(parent) = &ty.parent {
+            if args.len() != 1 {
+                return Err(RuntimeError {
+                    message: format!("`{}` wraps one {} value", ty.name, parent),
+                    span,
+                });
+            }
+            let inner = args.into_iter().next().expect("one arg");
+            if is_failure(&inner) {
+                return Ok(inner);
+            }
+            if !type_matches(parent, &inner) {
+                return Err(RuntimeError {
+                    message: format!("`{}` wraps a {}", ty.name, parent),
+                    span,
+                });
+            }
+            let canonical = ty.origin.as_deref().unwrap_or(ty.name.as_str());
+            return Ok(Value::Sub { ty: Rc::from(canonical), inner: Rc::new(inner) });
+        }
         if args.len() != ty.fields.len() {
             return Err(RuntimeError {
                 message: format!(
@@ -908,6 +932,7 @@ impl<'a> Interp<'a> {
         // std wrapper modules reach natives through the builtin_ prefix;
         // the checker gates those names to std-origin files
         let name = name.strip_prefix("builtin_").unwrap_or(name);
+        let args: Vec<Value> = args.into_iter().map(sub_base).collect();
         if name == "if" {
             return self.builtin_if(args, span);
         }
@@ -1559,37 +1584,45 @@ fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)>
     let mut score = Vec::new();
     let mut binds = Vec::new();
     for (pattern, arg) in params.iter().zip(args) {
-        score.push(3 - pattern.rank());
-        match_one(pattern, arg, &mut binds)?;
+        // per-param: literals 200, annotated 100 minus subtype distance
+        // (nearer declarations outrank ancestors), generics 10 — the old
+        // three-rank ladder, widened so chain depth can order within a rank
+        let base: u8 = match pattern.rank() {
+            0 => 200,
+            1 => 100,
+            _ => 10,
+        };
+        let depth = match_one(pattern, arg, &mut binds)?;
+        score.push(base.saturating_sub(depth));
     }
     Some((score, binds))
 }
 
-fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()> {
+fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
     match (pattern, arg) {
-        (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(()),
-        (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(()),
-        (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(()),
-        (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(()),
-        (Pattern::Nullary(name, _), Value::NoneV) if name == "none" => Some(()),
+        (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(0),
+        (Pattern::StrLit(s, _), Value::Str(v)) if s == v => Some(0),
+        (Pattern::Nullary(name, _), Value::True) if name == "true" => Some(0),
+        (Pattern::Nullary(name, _), Value::False) if name == "false" => Some(0),
+        (Pattern::Nullary(name, _), Value::NoneV) if name == "none" => Some(0),
         (Pattern::Wildcard(_), _) => match is_failure(arg) {
             true => None,
-            false => Some(()),
+            false => Some(0),
         },
         (Pattern::Var(name, _), _) => match is_failure(arg) {
             true => None,
             false => {
                 binds.push((name.clone(), arg.clone()));
-                Some(())
+                Some(0)
             }
         },
         (Pattern::Annotated { name, ty, .. }, _) => {
-            match type_matches(ty, arg) {
-                true => {
+            match type_match_depth(ty, arg) {
+                Some(depth) => {
                     binds.push((name.clone(), arg.clone()));
-                    Some(())
+                    Some(depth)
                 }
-                false => None,
+                None => None,
             }
         }
         (Pattern::Keyed { .. }, _) => None,
@@ -1605,7 +1638,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<()>
             for (fp, fv) in fields.iter().zip(vfields.iter()) {
                 match_one(fp, fv, binds)?;
             }
-            Some(())
+            Some(0)
         }
         _ => None,
     }
@@ -1670,13 +1703,25 @@ pub fn is_failure(value: &Value) -> bool {
 }
 
 fn type_matches(ty: &str, arg: &Value) -> bool {
+    type_match_depth(ty, arg).is_some()
+}
+
+/// How far up the subtype chain the annotation sits: an exact match is 0,
+/// the immediate parent 1, and so on — the dispatch score prefers nearer.
+fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
+    if let Value::Sub { ty: vty, inner } = arg {
+        if ty == &**vty {
+            return Some(0);
+        }
+        return type_match_depth(ty, inner).map(|d| d.saturating_add(1));
+    }
     if ty.ends_with("[]") {
-        return matches!(arg, Value::List(_));
+        return matches!(arg, Value::List(_)).then_some(0);
     }
     if ty.contains('[') {
-        return matches!(arg, Value::Map(_));
+        return matches!(arg, Value::Map(_)).then_some(0);
     }
-    match (ty, arg) {
+    let ok = match (ty, arg) {
         ("int", Value::Int(_)) => true,
         ("float64", Value::Float(_)) => true,
         ("string", Value::Str(_)) => true,
@@ -1687,10 +1732,17 @@ fn type_matches(ty: &str, arg: &Value) -> bool {
         ("err", Value::ErrV(_)) => true,
         (name, Value::Record { ty, .. }) => name == &**ty,
         _ => false,
-    }
+    };
+    ok.then_some(0)
 }
 
 fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
+    if let Value::Sub { inner, .. } = a {
+        return compare(inner, b);
+    }
+    if let Value::Sub { inner, .. } = b {
+        return compare(a, inner);
+    }
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => Some(x.cmp(y)),
         (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),
@@ -1843,6 +1895,12 @@ fn bool_value(b: bool) -> Value {
 }
 
 fn values_equal(a: &Value, b: &Value) -> bool {
+    if let Value::Sub { inner, .. } = a {
+        return values_equal(inner, b);
+    }
+    if let Value::Sub { inner, .. } = b {
+        return values_equal(a, inner);
+    }
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
         (Value::Float(x), Value::Float(y)) => x.total_cmp(y).is_eq(),
@@ -1872,8 +1930,19 @@ fn render_float(x: f64) -> String {
     }
 }
 
+/// Transparency: a subtype value IS its base wherever machinery (builtins,
+/// operators, comparison) consumes it; only dispatch sees the wrapper.
+fn sub_base(value: Value) -> Value {
+    match value {
+        Value::Sub { inner, .. } => sub_base((*inner).clone()),
+        other => other,
+    }
+}
+
 pub fn render(value: &Value, quote_strings: bool) -> String {
     match value {
+        // a subtype renders as its base until a user arm claims it
+        Value::Sub { inner, .. } => render(inner, quote_strings),
         Value::Thunk(cell) => match &*cell.borrow() {
             ThunkState::Forced(v) => render(v, quote_strings),
             // A pending thunk reaching render is a missed force point; make

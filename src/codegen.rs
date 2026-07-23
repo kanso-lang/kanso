@@ -209,6 +209,13 @@ const BUILTIN_CALLS: [(&str, usize); 27] = [
 ];
 
 pub fn emit_ir(program: &Program) -> Result<String, String> {
+    if let Some(t) = program.types.iter().find(|t| t.parent.is_some()) {
+        return Err(format!(
+            "`{}` is a subtype — subtypes run on the interpreter in this \
+             build (kanso run --interp / the repl); native support lands next",
+            t.name
+        ));
+    }
     let inference = infer::infer(program);
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);

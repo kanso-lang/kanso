@@ -65,7 +65,7 @@ pub fn marker_names(program: &Program) -> HashSet<String> {
     program
         .types
         .iter()
-        .filter(|t| t.fields.is_empty())
+        .filter(|t| t.fields.is_empty() && t.parent.is_none())
         .map(|t| t.name.clone())
         .collect()
 }
