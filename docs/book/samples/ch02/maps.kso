@@ -1,3 +1,3 @@
-ages = ["clay": 47 "sam": 30]
+ages = { "clay": 47 "sam": 30 }
 ages = put ages "mai" 8
 print "clay is {ages["clay"]}" >> print "all: {entries ages}"

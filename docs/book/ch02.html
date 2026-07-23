@@ -149,7 +149,7 @@ sum 6 len 3 first 3</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">maps.kso</div>
-  <pre><code>ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span>]
+  <pre><code>ages <span class="o">=</span> { <span class="s">"clay"</span>: <span class="n">47</span> <span class="s">"sam"</span>: <span class="n">30</span> }
 ages <span class="o">=</span> <span class="f">put</span> ages <span class="s">"mai"</span> <span class="n">8</span>
 <span class="f">print</span> <span class="s">"clay is <span class="i">{ages[</span>"</span>clay<span class="s">"]}"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"all: <span class="i">{entries ages}</span>"</span></code></pre>
   <div class="code-output">
@@ -163,7 +163,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">map_miss.kso</div>
-  <pre><code>ages <span class="o">=</span> [<span class="s">"clay"</span>: <span class="n">47</span>]
+  <pre><code>ages <span class="o">=</span> { <span class="s">"clay"</span>: <span class="n">47</span> }
 <span class="f">print</span> <span class="s">"<span class="i">{ages[</span>"</span>nobody<span class="s">"]!}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run map_miss.kso</div>

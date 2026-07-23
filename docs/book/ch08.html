@@ -18,7 +18,7 @@ bad <span class="o">=</span> <span class="f">decode</span> <span class="s">"\<sp
 <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run using</div>
-    <pre><code>decoded: ["name": "kanso" "tags": ["fast" "simple"]]
+    <pre><code>decoded: { "name": "kanso" "tags": ["fast" "simple"] }
 recoded: {"name":"kanso","tags":["fast","simple"]}
 parse failed at byte 10: invalid literal</code></pre>
   </div>
@@ -638,7 +638,7 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
   <span class="s">"  <span class="i">{pad (n - 1)}</span>"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  doc <span class="o">=</span> [<span class="s">"name"</span>: <span class="s">"kanso"</span> <span class="s">"port"</span>: <span class="n">8080</span> <span class="s">"tags"</span>: [<span class="s">"fast"</span> <span class="s">"simple"</span>]]
+  doc <span class="o">=</span> { <span class="s">"name"</span>: <span class="s">"kanso"</span> <span class="s">"port"</span>: <span class="n">8080</span> <span class="s">"tags"</span>: [<span class="s">"fast"</span> <span class="s">"simple"</span>] }
   <span class="f">print</span> (<span class="f">pretty</span> doc <span class="n">0</span>)
 
 <span class="k">fn</span> <span class="f">pretty</span> true _

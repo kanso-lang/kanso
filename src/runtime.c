@@ -914,15 +914,15 @@ KValue k_render(KValue v, long long quote) {
             KMap* m = (KMap*)(intptr_t)v.payload;
             long long n;
             KValue* s = k_map_sorted(m, &n);
-            if (n == 0) return k_str("[:]");
-            KValue out = k_str("[");
+            if (n == 0) return k_str("{:}");
+            KValue out = k_str("{ ");
             for (long long i = 0; i < n; i++) {
                 if (i) out = k_concat(out, k_str(" "));
                 out = k_concat(out, k_render(s[i * 2], 1));
                 out = k_concat(out, k_str(": "));
                 out = k_concat(out, k_render(s[i * 2 + 1], 1));
             }
-            return k_concat(out, k_str("]"));
+            return k_concat(out, k_str(" }"));
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)(intptr_t)v.payload;

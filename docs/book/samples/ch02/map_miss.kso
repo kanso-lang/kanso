@@ -1,2 +1,2 @@
-ages = ["clay": 47]
+ages = { "clay": 47 }
 print "{ages["nobody"]!}"

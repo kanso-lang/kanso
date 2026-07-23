@@ -657,7 +657,7 @@ time ./jsonbench                                  <span class="c"># divide by 15
 
 <p><strong>1. <code>kanso test</code>.</strong> a test is a constant named <code>test_*</code> whose value is <code>true</code>. no framework, no assertion dsl—<code>==</code> on values is the assertion, because structural equality is already total. <code>kanso run</code> requires <code>main</code>; <code>check</code> and <code>test</code> don't (a library is valid kanso without an entry point).</p>
 
-<p><strong>2. map literals.</strong> <code>["a": 1 "b": 2]</code>, empty map <code>[:]</code>. keys are literals only (dynamic maps are built with <code>put</code>), and literal keys must appear sorted, without duplicates—a formatting error otherwise, consistent with fields and declarations. iteration order is always sorted-key order, so encoding is canonical for free.</p>
+<p><strong>2. map literals.</strong> <code>{ "a": 1 "b": 2 }</code>, empty map <code>{:}</code>. keys are literals only (dynamic maps are built with <code>put</code>), and literal keys must appear sorted, without duplicates—a formatting error otherwise, consistent with fields and declarations. iteration order is always sorted-key order, so encoding is canonical for free.</p>
 
 <p><strong>3. <code>entries m</code> yields <code>entry</code> records</strong> (fields <code>key</code>, <code>value</code>; the name is reserved). map traversal dogfoods records and constructor patterns instead of inventing tuples.</p>
 
