@@ -13,7 +13,7 @@ fn pad n
   "  {pad (n - 1)}"
 
 pub play =
-  doc = { "name": "kanso" "port": 8080 "tags": ["fast" "simple"] }
+  doc = { "name":"kanso" "port":8080 "tags":["fast" "simple"] }
   print (pretty doc 0)
 
 fn pretty true _

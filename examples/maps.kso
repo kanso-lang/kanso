@@ -1,4 +1,4 @@
-ages = { "ken": 5 "mai": 8 }
+ages = { "ken":5 "mai":8 }
 
 older = put ages "sora" 12
 

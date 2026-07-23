@@ -276,11 +276,11 @@ missing: index out of range</code></pre>
 
 <h3 id="b-put"><code>put</code></h3>
 <p class="builtin-sig"><code>put map key value → map</code></p>
-<p>a new map with <code>key</code> set to <code>value</code>, replacing any previous binding. keys are ints or strings. like <code>push</code> it is functional and made in-place by the runtime when the map is uniquely owned. building a map from nothing starts at the empty-map literal <code>{:}</code>; a literal with known keys is written <code>{ "a": 1 "b": 2 }</code>.</p>
+<p>a new map with <code>key</code> set to <code>value</code>, replacing any previous binding. keys are ints or strings. like <code>push</code> it is functional and made in-place by the runtime when the map is uniquely owned. building a map from nothing starts at the empty-map literal <code>{:}</code>; a literal with known keys is written <code>{ "a":1 "b":2 }</code>.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">maps.kso</div>
-  <pre><code>base <span class="o">=</span> { <span class="s">"a"</span>: <span class="n">1</span> <span class="s">"b"</span>: <span class="n">2</span> }
+  <pre><code>base <span class="o">=</span> { <span class="s">"a"</span>:<span class="n">1</span> <span class="s">"b"</span>:<span class="n">2</span> }
 grown <span class="o">=</span> <span class="f">put</span> base <span class="s">"c"</span> <span class="n">3</span>
 <span class="f">print</span> <span class="s">"literal <span class="i">{base}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"put <span class="i">{grown}</span>"</span>
@@ -290,8 +290,8 @@ grown <span class="o">=</span> <span class="f">put</span> base <span class="s">"
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"empty <span class="i">{{:}}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run maps.kso</div>
-    <pre><code>literal { "a": 1 "b": 2 }
-put { "a": 1 "b": 2 "c": 3 }
+    <pre><code>literal { "a":1 "b":2 }
+put { "a":1 "b":2 "c":3 }
 at 2
 entries [entry "a" 1 entry "b" 2 entry "c" 3]
 length 3

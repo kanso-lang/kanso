@@ -990,7 +990,7 @@ mod tests {
         // a map may never thread (its first read caches an above-mark sorted
         // view into the below-mark header), so the carry evacuates it — the
         // copy resets the cache, which keeps the rewind sound.
-        let src = "fn go m n\n  spin m n 0\n\nmain =\n  prices = { \"a\": 1 \"b\": 2 }\n  print \"{go prices 3}\"\n\nfn spin m 0 acc\n  acc + length m\n\nfn spin m n acc\n  step = \"seen {n}\"\n  spin m (n - 1) (acc + length step)\n";
+        let src = "fn go m n\n  spin m n 0\n\nmain =\n  prices = { \"a\":1 \"b\":2 }\n  print \"{go prices 3}\"\n\nfn spin m 0 acc\n  acc + length m\n\nfn spin m n acc\n  step = \"seen {n}\"\n  spin m (n - 1) (acc + length step)\n";
         let (program, inference) = compiled(src);
         let beats = super::beat_loops(&program, &inference);
 
