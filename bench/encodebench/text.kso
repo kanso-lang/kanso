@@ -33,6 +33,9 @@ pub fn escape_onto acc s
   bs = text/bytes s
   escape_clean acc s bs (text/find2_below bs 1 34 92 32)
 
+fn escape_str s
+  text/utf8 (escape_onto (text/bytes "") s)
+
 fn hex4 n
   d1 = n / 4096
   r1 = n - (d1 * 4096)
