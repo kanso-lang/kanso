@@ -1148,10 +1148,10 @@ impl<'a> P<'a> {
                     let colon_span = self.span_here();
                     self.pos += 1;
                     let target_span = self.span_here();
-                    if target_span.col != colon_span.col + 2 {
+                    if target_span.col != colon_span.col + 1 {
                         return Err(Diagnostic::new(
                             "formatting",
-                            "a rename is spaced: `field: name`".to_string(),
+                            "a rename is tight: `field:name`".to_string(),
                             colon_span,
                         ));
                     }

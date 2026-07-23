@@ -5,5 +5,5 @@ type track
 
 pub play =
   song = track "fishmans" 6 "long season"
-  { artist: who title } = song
+  { artist:who title } = song
   print "{title}, by {who}"
