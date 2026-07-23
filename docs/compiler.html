@@ -595,6 +595,53 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 
 <p>today the overlap is written by hand — the two variants above are the same program arranged two ways. the engine's remaining job is exactly the gap between those rows: find the arrangement automatically, using the two-group heuristic, so as-written code gets the overlapped number. that closes the loop this section opened.</p>
 
+<h2 id="ledger"><span class="sec-num">techniques</span>the ledger</h2>
+
+<p>every named technique in the compiler, one line each: the idea, its source, and what kanso gets from it. queue items graduate here as they ship; the list only grows.</p>
+
+<ul class="tech-ledger">
+<li><strong>rewinding arena allocation</strong> — the region lineage (tofte &amp; talpin, 1997), reshaped around loop iterations. allocation is a pointer bump, freeing is a pointer reset, no per-object headers anywhere.</li>
+<li><strong>compiler-proven beat boundaries</strong> — original to kanso. an analysis proves a loop's iterations keep nothing across the line, so the arena rewinds between iterations without a runtime check.</li>
+<li><strong>carry evacuation</strong> — original to kanso. the values an iteration does keep are copied across the rewind, deep-copy bounded by a static slot count.</li>
+<li><strong>static reuse analysis</strong> — the perceus reuse idea (reinking, xie, de moura, leijen, PLDI 2021) without its counting. provably unique values mutate in place; push and append claim their buffer's frontier.</li>
+<li><strong>ownership signatures</strong> — whole-program borrow-vs-consume inference in the koka/fip lineage, printable per function, so ownership is a pinnable contract rather than an ambient verdict.</li>
+<li><strong>strictness analysis over demand</strong> — the mycroft/ghc lineage. lazy semantics, strict compilation wherever demand is provable; the json gauntlet compiles to zero thunks, golden-pinned.</li>
+<li><strong>whole-program force elision</strong> — closed-world escape analysis over thunk reachability; 133 spurious force sites deleted in one pass, the serde lead restored.</li>
+<li><strong>defunctionalized thunk evaluation</strong> — reynolds (1972). a pending computation is a site id plus captured arguments dispatched through one generated evaluator, never a closure.</li>
+<li><strong>refcounted thunk cells on a free list</strong> — counting scoped to the one dynamic lifetime in the language (designed; engine wiring in flight). values never carry counts.</li>
+<li><strong>cohort counting for cyclic graphs</strong> — original to kanso (the birthday theorem): cycles cannot cross build-block birthdays, so one count frees a whole strongly-connected cohort. designed, queued behind build blocks.</li>
+<li><strong>fold fusion</strong> — deforestation (wadler, 1988) by way of fold/build (gill, launchbury, peyton jones, 1993). adapter chains collapse to a single scan with a composed reducer; lazy pipelines run faster than their eager ancestors.</li>
+<li><strong>dispatch as jump tables</strong> — literal-byte arms compile to one indexed jump; the decode scanner and the escape table are switchboards, never if-ladders.</li>
+<li><strong>whole-program monomorphization</strong> — one specialized copy of the code per concrete value shape that reaches it, type checks deleted rather than predicted.</li>
+<li><strong>simd substring scanning</strong> — the serde/simdjson family trick: sixteen-byte wide scans behind <code>find2</code> and <code>find2_below</code>, with the movemask-free NEON reduction (the shrn-by-4 narrowing) on apple silicon.</li>
+<li><strong>proven-clean fast paths</strong> — one vector scan proves a string needs no unescaping (decode) or no escaping (encode); the common case is a single copy.</li>
+<li><strong>the byte builder</strong> — a capacity-headed accumulator with frontier claiming, making a fold of appends amortized linear under plain value semantics.</li>
+<li><strong>inline twins</strong> — hand-emitted alwaysinline ir shims for the runtime's one-line helpers, recovering the cross-module inlining lto declines.</li>
+<li><strong>always-inline bump allocation</strong> — the allocator's fast path folds into every caller; only the refill stays out of line.</li>
+<li><strong>shortest-round-trip float rendering</strong> — precision probing 15..17 today; dragonbox (jeon, 2020) / ryū (adams, PLDI 2018) queued to compute the answer directly.</li>
+<li><strong>small-integer fast paths</strong> — arbitrary precision that costs nothing until used: word-sized arithmetic with overflow checks, the bignum path behind them.</li>
+<li><strong>register-return abi</strong> — two-word values pass in registers across the tailcc boundary; the canonical destructure costs no memory traffic.</li>
+<li><strong>recursion without stack overflow</strong> — self-tail calls compile to loops; deep non-tail recursion is bounded by an explicit check, not a segfault.</li>
+<li><strong>the deterministic green-thread scheduler</strong> — cooperative description execution with a logical clock; transcripts are pure functions of the program.</li>
+<li><strong>wall-credit sleep accounting</strong> — real compute time credits against pending sleeps, so wall-clock honesty never leaks into the logical transcript.</li>
+<li><strong>work-ahead scheduling</strong> — original to kanso (designed): io stalls fill with proven-needed work first, speculative work only when the proven queue is dry.</li>
+<li><strong>cost goldens</strong> — the performance ratchet: allocation counts, arena blocks, and beat iterations pinned as ci-diffed constants, so regressions are diffs rather than vibes.</li>
+<li><strong>memory-fact goldens</strong> — the .mem vein: evaluation and liveness counts pinned byte-identical across all three engines, because evaluation counts are semantics.</li>
+<li><strong>differential engine testing</strong> — mckeeman-style differential oracles: one reference interpreter, two compiled backends, every golden byte-identical across all three.</li>
+<li><strong>float parsing at memory speed</strong> — eisel–lemire (lemire, 2021). queued: the decode mirror of the rendering entry.</li>
+<li><strong>vectorized utf-8 validation</strong> — keiser &amp; lemire (2021). queued: the builder's validation pass at memory bandwidth.</li>
+<li><strong>branchless map search</strong> — eytzinger layout (khuong &amp; morin, 2017). queued: cache-aware sorted views probed without branches.</li>
+<li><strong>tail recursion modulo context</strong> — leijen &amp; lorenzen (ICFP 2023). queued: results built in their final cells, no accumulator discipline at the source level.</li>
+<li><strong>fully-in-place discipline</strong> — lorenzen, leijen, swierstra (ICFP 2023). queued: in-place-ness as a checked guarantee instead of a discovered optimization.</li>
+<li><strong>call-pattern specialization</strong> — SpecConstr (peyton jones, ICFP 2007). queued: the enumerable's hand-written typed fold arms, automated.</li>
+<li><strong>maximal sharing</strong> — hash-consing, the ATerm lineage. queued: repetitive documents deduplicate at decode; equality on shared subtrees becomes pointer comparison.</li>
+<li><strong>post-link layout and superoptimization</strong> — BOLT (panchenko et al., CGO 2019); souper/STOKE (schkufza, ASPLOS 2013). queued as bounded experiments on the emitted binary and the ten hottest kernels.</li>
+<li><strong>generalized ahead-of-time speculation</strong> — the moonshot tier: bail-and-restart specialization licensed by purity, jit tricks with zero deopt metadata.</li>
+<li><strong>cost-bound inference</strong> — the RAML lineage (hoffmann et al.): polynomial cost bounds as types, feeding both the check verb and the scheduler.</li>
+<li><strong>equality saturation</strong> — e-graphs (egg: willsey et al., POPL 2021): the ir rewritten by saturation instead of ordered passes, phase-ordering dissolved.</li>
+<li><strong>simd structural scanning</strong> — simdjson (langdale &amp; lemire, VLDB 2019): whole-document byte classification feeding the switchboards, the frontier past serde parity.</li>
+</ul>
+
 <h2 id="c04"><span class="sec-num">08</span>the receipts</h2>
 
 <p>none of the numbers on this page ask to be believed. here is the scoreboard and the recipe. every engine reads the file at runtime—an embedded constant would let llvm fold the decode away—and the kanso harness accumulates a checksum so the loop provably runs.</p>
