@@ -21,7 +21,9 @@ enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_L
 
 typedef struct { long len; char* data; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
-typedef struct { long long len; const unsigned char* data; } KBytes;
+/* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
+   KBuf-headed buffer this value may extend at its frontier. */
+typedef struct { long long len; const unsigned char* data; long long cap; } KBytes;
 
 /* Lazy v1 (design/lazy-v1-plan.md): a conditionally-demanded binding's
    pending computation. RC'd, malloc-backed, recycled through a free list --
@@ -433,6 +435,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KBytes* b = (KBytes*)p;
             KBytes* nb = k_copy_alloc(cp, sizeof(KBytes));
             nb->len = b->len;
+            nb->cap = 0;
             if (k_survives(b->data, cp->mark)) {
                 nb->data = b->data;
             } else {
@@ -1738,6 +1741,7 @@ static KValue k_bytes_view(const unsigned char* data, long long len) {
     KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
     b->data = data;
+    b->cap = 0;
     KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
 }
 
@@ -2002,6 +2006,61 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
         if (d[i] == ca || d[i] == cb) return k_int(i + 1);
     }
     return k_int(by->len + 1);
+}
+
+/* The byte builder. Appends a string, a bytes value, or a single byte
+   onto a bytes accumulator. The accumulator owns a KBuf-headed buffer and
+   claims its frontier exactly as list push does, so a fold of appends is
+   amortized linear while every intermediate value stays a real value. */
+static KValue k_bytes_owned(long long len, const unsigned char* data, long long cap) {
+    KBytes* b = k_alloc(sizeof(KBytes));
+    b->len = len;
+    b->data = data;
+    b->cap = cap;
+    KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
+}
+
+KValue k_b_append(KValue acc, KValue x) {
+    if (!k_not_failure(acc)) return acc;
+    if (!k_not_failure(x)) return x;
+    if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
+    KBytes* a = k_as_bytes(acc);
+    const unsigned char* src;
+    long long n;
+    unsigned char one;
+    if (x.tag == K_STR) {
+        KStr* s = k_as_str(x);
+        src = (const unsigned char*)s->data;
+        n = s->len;
+    } else if (x.tag == K_BYTES) {
+        KBytes* b = k_as_bytes(x);
+        src = b->data;
+        n = b->len;
+    } else if (x.tag == K_INT) {
+        one = (unsigned char)(x.payload & 0xff);
+        src = &one;
+        n = 1;
+    } else {
+        k_die("append takes bytes and a string, bytes, or byte");
+        return k_none();
+    }
+    if (a->cap) {
+        KBuf* buf = ((KBuf*)a->data) - 1;
+        if (buf->used == a->len && a->len + n <= a->cap) {
+            memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
+            buf->used = a->len + n;
+            return k_bytes_owned(a->len + n, a->data, a->cap);
+        }
+    }
+    long long cap = 2 * (a->len + n);
+    if (cap < 64) cap = 64;
+    KBuf* buf = k_alloc(sizeof(KBuf) + (size_t)cap);
+    buf->cap = cap;
+    buf->used = a->len + n;
+    unsigned char* data = (unsigned char*)(buf + 1);
+    memcpy(data, a->data, (size_t)a->len);
+    memcpy(data + a->len, src, (size_t)n);
+    return k_bytes_owned(a->len + n, data, cap);
 }
 
 /* find2 with a floor: also stops at the first byte below `lim`. Escape

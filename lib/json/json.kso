@@ -18,34 +18,57 @@ pub fn decode s
   cs = text/bytes s
   finish cs (parse_value cs 1)
 
-pub fn encode true
-  "true"
+# one byte accumulator threads the whole tree, so every emitted byte is
+# copied once into the builder and once into the final string
+fn elem_onto acc x
+  encode_onto (text/append acc 44) x
 
-pub fn encode false
-  "false"
+pub fn encode v
+  text/utf8 (encode_onto (text/bytes "") v)
 
-pub fn encode json_null
-  "null"
+fn encode_items acc xs i
+  if (length xs < i) acc (encode_items (elem_onto acc xs[i]) xs (i + 1))
 
-pub fn encode n:int
-  "{n}"
+fn encode_list acc xs
+  opened = encode_onto (text/append acc 91) xs[1]
+  text/append (encode_items opened xs 2) 93
 
-pub fn encode x:float64
-  "{x}"
+fn encode_map acc es
+  opened = entry_onto (text/append acc 123) es[1]
+  text/append (encode_pairs opened es 2) 125
 
-pub fn encode s:string
-  "\"{escape_str s}\""
+fn encode_onto acc true
+  text/append acc "true"
 
-pub fn encode xs:json[]
-  inner = text/join (list/to_list (list/map xs encode)) ","
-  "[{inner}]"
+fn encode_onto acc false
+  text/append acc "false"
 
-pub fn encode m:json[string]
-  inner = text/join (list/to_list (list/map (entries m) encode_entry)) ","
-  "\{{inner}}"
+fn encode_onto acc json_null
+  text/append acc "null"
 
-fn encode_entry (entry k v)
-  "{encode k}:{encode v}"
+fn encode_onto acc n:int
+  text/append acc "{n}"
+
+fn encode_onto acc x:float64
+  text/append acc "{x}"
+
+fn encode_onto acc s:string
+  opened = escape_onto (text/append acc 34) s
+  text/append opened 34
+
+fn encode_onto acc xs:json[]
+  if (length xs == 0) (text/append acc "[]") (encode_list acc xs)
+
+fn encode_onto acc m:json[string]
+  es = entries m
+  if (length es == 0) (text/append acc "\{}") (encode_map acc es)
+
+fn encode_pairs acc es i
+  if (length es < i) acc (encode_pairs (pair_onto acc es[i]) es (i + 1))
+
+fn entry_onto acc (entry k v)
+  keyed = encode_onto acc k
+  encode_onto (text/append keyed 58) v
 
 pub fn failure_position (err (parse_failure p _))
   p
@@ -71,3 +94,6 @@ fn must (err reason)
 
 fn must v
   v
+
+fn pair_onto acc e
+  entry_onto (text/append acc 44) e

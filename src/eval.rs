@@ -1161,6 +1161,36 @@ impl<'a> Interp<'a> {
                 }
                 Ok(Value::Str(parts.join(sep)))
             }
+            "append" => {
+                let [acc, x] = arity(args, name, span)?;
+                for v in [&acc, &x] {
+                    if is_failure(v) {
+                        return Ok(v.clone());
+                    }
+                }
+                let Value::List(items) = &acc else {
+                    return Err(RuntimeError {
+                        message: "append takes bytes and a string, bytes, or byte".to_string(),
+                        span,
+                    });
+                };
+                let mut out = (**items).clone();
+                match &x {
+                    Value::Str(s) => {
+                        out.extend(s.bytes().map(|b| Value::Int(BigInt::from(b))));
+                    }
+                    Value::List(more) => out.extend(more.iter().cloned()),
+                    Value::Int(_) => out.push(x.clone()),
+                    _ => {
+                        return Err(RuntimeError {
+                            message: "append takes bytes and a string, bytes, or byte"
+                                .to_string(),
+                            span,
+                        })
+                    }
+                }
+                Ok(Value::List(Rc::new(out)))
+            }
             "find2_below" => {
                 let [cs, from, a, b, lim] = arity(args, name, span)?;
                 for v in [&cs, &from, &a, &b, &lim] {
