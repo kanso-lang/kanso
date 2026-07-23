@@ -832,3 +832,29 @@ pulse's carry evacuation interacting with values returned from
 k_call1, or an ABI/boxing edge in the fold dispatch under deep
 encode recursion. The interp runs the same program correctly, and the
 .ips reports in ~/Library/Logs/DiagnosticReports carry full stacks.
+
+## 2026-07-22 late: the encode crasher falls — two rewind holes
+
+The bench/encodebench hunt (opened as "latent, pinned, unsolved")
+closed with two real mechanisms, both against the beat machinery:
+
+1. Lambda entries bypass demotion. The demotion analysis draws its
+   caller set from named declarations, so a lifted lambda tail-calling
+   into a beat-headed loop musttailed in with NO bracket — the loop's
+   per-iteration rewinds unwound to the ENCLOSING mark and freed the
+   caller's live data (the decoded tree being encoded). Codegen now
+   demotes ANY tail entry into a beat-headed loop from outside its
+   cluster. Minimal repro: [[1],[2]] encoded twice through a
+   strict-accumulator tail loop — nine bytes of json.
+
+2. Above-mark caches in below-mark headers. With brackets real, map
+   sorted-view caches filled during iteration one (allocated above the
+   loop's mark, pointed to from headers inside the threaded tree below
+   it) went stale on rewind. Every rewind path now sweeps a registry
+   of beat-era cache fills, resetting exactly what it frees.
+
+Debugging law that earned its keep: flaky-by-layout crashes become
+deterministic under KANSO_POISON=1 (rewound memory filled with 0xAB),
+which is now a permanent runtime flag. The regression is a runtime
+golden (reencode) exercising both layers on both engines. Cost golden
+and vse stayed bit-exact through the whole fix.
