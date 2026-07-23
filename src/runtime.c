@@ -1883,13 +1883,28 @@ static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
 #endif
         if (i >= len) break;
         /* a dirty block pays one scalar pass to its end, so the sweep
-           never re-probes the block it just abandoned */
+           never re-probes the block it just abandoned. the scalar tier is
+           spec-strict — overlongs, surrogates, and beyond-U+10FFFF are
+           rejected, matching the interpreter's validator exactly */
         long long block_end = i + 16 <= len ? i + 16 : len;
         while (i < block_end) {
             unsigned char b0 = (unsigned char)data[i];
-            long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
-            if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"), origin);
-            for (long j = 1; j < w; j++) {
+            if (b0 < 0x80) { i += 1; continue; }
+            long w;
+            unsigned lo = 0x80, hi = 0xBF;
+            if (b0 >= 0xC2 && b0 <= 0xDF) { w = 2; }
+            else if (b0 == 0xE0) { w = 3; lo = 0xA0; }
+            else if (b0 >= 0xE1 && b0 <= 0xEC) { w = 3; }
+            else if (b0 == 0xED) { w = 3; hi = 0x9F; }
+            else if (b0 >= 0xEE && b0 <= 0xEF) { w = 3; }
+            else if (b0 == 0xF0) { w = 4; lo = 0x90; }
+            else if (b0 >= 0xF1 && b0 <= 0xF3) { w = 4; }
+            else if (b0 == 0xF4) { w = 4; hi = 0x8F; }
+            else return k_err(k_str("invalid utf-8"), origin);
+            if (i + w > len) return k_err(k_str("invalid utf-8"), origin);
+            unsigned char b1 = (unsigned char)data[i + 1];
+            if (b1 < lo || b1 > hi) return k_err(k_str("invalid utf-8"), origin);
+            for (long j = 2; j < w; j++) {
                 if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
             }
             i += w;
