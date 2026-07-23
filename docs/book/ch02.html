@@ -185,7 +185,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
   <span class="f">user</span> years who <span class="o">=</span> <span class="f">clay</span>
-  { name: alias } <span class="o">=</span> <span class="f">clay</span>
+  { name:alias } <span class="o">=</span> <span class="f">clay</span>
   <span class="f">print</span> <span class="s">"<span class="i">{who}</span> is <span class="i">{years}</span>, also known as <span class="i">{alias}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
@@ -193,7 +193,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   </div>
 </div>
 
-<p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name: alias } = clay</code>, names just the field you want and binds it to a name of your choosing. there is no <code>clay.name</code> dotted access—the <code>.</code> is the pipe operator (chapter 06), so reaching into a record is always a destructure, stated plainly.</p>
+<p>you get the parts back out by <em>destructuring</em>, and there are two ways to do it. the positional form, <code>user years who = clay</code>, binds every field at once by position—<code>years</code> to <code>age</code>, <code>who</code> to <code>name</code>. the field form, <code>{ name:alias } = clay</code>, names just the field you want and binds it to a name of your choosing. there is no <code>clay.name</code> dotted access—the <code>.</code> is the pipe operator (chapter 06), so reaching into a record is always a destructure, stated plainly.</p>
 
 <h2>equality and comparison</h2>
 

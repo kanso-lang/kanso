@@ -5,5 +5,5 @@ type user
 pub play =
   clay = user 47 "clay"
   user years who = clay
-  { name: alias } = clay
+  { name:alias } = clay
   print "{who} is {years}, also known as {alias}"
