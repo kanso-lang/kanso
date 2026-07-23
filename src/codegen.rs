@@ -2595,9 +2595,24 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         if name == "print" {
+            // a non-string argument renders through the same ambient
+            // to_string dispatch interpolation uses, so user arms win
+            let arg = match f.set_of(&emitted[0]) & !FAIL & !STR {
+                0 => emitted[0].clone(),
+                _ => {
+                    let forced = self.maybe_force(f, emitted[0].clone());
+                    let r = f.tmp();
+                    f.line(&format!(
+                        "{r} = call tailcc %KValue @{}(%KValue {forced})",
+                        dsym("render/to_string", 1)
+                    ));
+                    f.record(&r, STR | (f.set_of(&forced) & FAIL) | ERR);
+                    r
+                }
+            };
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_desc_print(%KValue {})", emitted[0]));
-            f.record(&t, DESC | (f.set_of(&emitted[0]) & FAIL));
+            f.line(&format!("{t} = call %KValue @k_desc_print(%KValue {arg})"));
+            f.record(&t, DESC | (f.set_of(&arg) & FAIL));
             return Ok(t);
         }
         if name == "sleep" || name == "random" {
