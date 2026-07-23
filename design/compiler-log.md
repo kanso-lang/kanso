@@ -1130,3 +1130,23 @@ machinery. A latent engine divergence no golden currently reaches:
 an adversarial differential case (overlong "\xc0\xaf", surrogate
 "\xed\xa0\x80") belongs in the corpus before anything user-facing
 depends on the difference. OPEN.
+
+## 2026-07-23 — PLAN: subtypes v1 (REPL-testable slice)
+
+Ratified design (memory: kanso-subtypes): `type post_body string` —
+space form, colon stays membership-only; one member = nominal
+wrapper; ctor-form construction (down explicit), transparent up-flow
+(no unwrap form); one new dispatch rung; pointwise specificity with
+tie-rejection as compile error (gaveled).
+
+Slice for tonight, REPL-first: parser (single-member header on the
+type line; multi-member reserved with a "named typesets next"
+diagnostic), TypeDecl.parent in the AST, interp semantics complete —
+construction wraps (record-shaped, one hidden slot), Annotated
+pattern matching walks the parent chain (nearer declaration wins the
+ladder), builtins/operators/render/equality unwrap to the parent
+(parent-render default), REPL declares and dispatches. Native and
+wasm REJECT subtype declarations with a clear diagnostic in this
+slice so no engine silently diverges; corpus goldens untouched until
+all engines speak it. Tie-rejection lands with the native dispatch
+work, where the reachable-set machinery lives.
