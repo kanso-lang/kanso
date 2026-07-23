@@ -903,3 +903,14 @@ OPEN: decode still assembles escaped strings through text/concat on
 byte lists — the builder should serve both directions. kq's pretty
 renderer still templates per row; folding it onto the builder is the
 next pretty-path cut.
+
+## 2026-07-23 — quiet floors for the write path
+
+The idle-machine sitting landed after the campaign closed. encodebench
+(188KB × 400): **0.66s user** — the 1.00s closing number carried
+browser load; quiet-to-quiet the campaign is 3.46 → 0.66. kq boards,
+interleaved best-of-N, idle, byte-identity gated: path 3.0ms/13.9ms
+(1.62×/1.78× over jq), pretty 6.5ms/49.7ms (1.97×/2.11×), kq 80/80.
+Pretty quiet-to-quiet: 12.0 → 6.5ms small, 109 → 49.7ms big. kq README
+carries the table; site prose stays design-only per the no-narration
+directive.
