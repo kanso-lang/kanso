@@ -169,15 +169,27 @@ static void k_arena_push(size_t need) {
 
 static int k_stats_on = -1;
 
-static void* k_alloc(size_t n) {
+/* The refill path stays out of line; the bump inlines into every hot
+   caller. Counters, when enabled, are exact: both paths count. */
+static __attribute__((noinline)) void* k_alloc_refill(size_t n) {
+    k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
+    void* p = k_arena;
+    k_arena += n;
+    k_arena_left -= n;
+    return p;
+}
+
+static inline __attribute__((always_inline)) void* k_alloc(size_t n) {
     n = (n + 15) & ~(size_t)15;
-    if (k_stats_on < 0) k_stats_on = getenv("KANSO_COUNTERS") != NULL;
-    if (k_stats_on) {
-        k_stat_allocs++;
-        k_stat_alloc_bytes += (long long)n;
+    if (__builtin_expect(k_stats_on != 0, 0)) {
+        if (k_stats_on < 0) k_stats_on = getenv("KANSO_COUNTERS") != NULL;
+        if (k_stats_on) {
+            k_stat_allocs++;
+            k_stat_alloc_bytes += (long long)n;
+        }
     }
-    if (n > k_arena_left) {
-        k_arena_push(n > (1 << 20) ? n : (size_t)(1 << 20));
+    if (__builtin_expect(n > k_arena_left, 0)) {
+        return k_alloc_refill(n);
     }
     void* p = k_arena;
     k_arena += n;
