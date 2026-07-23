@@ -1131,6 +1131,22 @@ an adversarial differential case (overlong "\xc0\xaf", surrogate
 "\xed\xa0\x80") belongs in the corpus before anything user-facing
 depends on the difference. OPEN.
 
+## 2026-07-23 — utf-8 strictness convergence (queue item 3, second cut)
+
+Clay's ruling: no gating vector work behind hypothetical workloads —
+implement unless it actively regresses. On the way to the full
+keiser-lemire tier, the scalar tier is now SPEC-STRICT (overlong,
+surrogate, >U+10FFFF rejected via per-lead continuation windows),
+closing the lenient-native/strict-interp divergence logged earlier.
+Verified: standalone harness extracting the real validator text —
+every 1..3-byte sequence at block offsets {0,13,15} plus 20M sampled
+4-byte cases = 70.5M checks, 0 mismatches vs an independent
+spec-direct reference (which the harness itself debugged: its first
+draft accepted bare-continuation leads; the validator under test was
+right). Differential golden examples/utf8_strict.kso pins overlong/
+surrogate rejection and U+10FFFF acceptance on both engines. The
+nibble-lookup vector tier for dirty blocks is the next cut, same
+harness as gate.
 ## 2026-07-23 — PLAN: subtypes v1 (REPL-testable slice)
 
 Ratified design (memory: kanso-subtypes): `type post_body string` —
