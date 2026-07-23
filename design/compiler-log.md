@@ -1244,3 +1244,25 @@ same sitting: path 5.1/20.6ms (1.54x/1.64x), pretty 8.7/62.8ms
 slower tool more). kq README table updated to this sitting with idle
 floors footnoted. All five kernel presence counters now CI-pinned in
 the encode cost golden (#175).
+## 2026-07-23 — PLAN: ryū/dragonbox rendering (queue item 1, the last big kernel)
+
+Staged so the gate exists before the core (the EL lesson):
+
+1. HARNESS FIRST: a differential fuzzer extracting the CURRENT
+   renderer (probe via el + %g) and the candidate, requiring
+   byte-identical strings over: every float in the golden corpus, 50M
+   random bit-pattern doubles, and the edge families (powers of ten,
+   halfway cases, subnormal-adjacent, 1e15 boundary at the %.1f
+   integral fast path).
+2. FORMAT LAYER: shortest digits (k, digits, exp10) format to match
+   %g with precision max(15, k) exactly — fixed vs exponent at
+   X < -4 or X >= max(15, k), trailing-zero trim, two-digit e+XX.
+   This layer is testable against the probe independently of the
+   digit core.
+3. DIGIT CORE: ryū d2s (adams, PLDI 2018) — python-generated
+   inverse/pow5 tables exactly like the EL table, the a/b/c halfway
+   computation, shortest-digit trim. Dragonbox stays the follow-up if
+   ryū's win leaves dtoa visible in the profile.
+
+Acceptance: byte identity with the shipped renderer across the whole
+harness; the probe path retires only when the fuzzer is silent.
