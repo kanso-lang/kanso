@@ -1,26 +1,28 @@
 import "std/list"
 import "std/text"
 
-fn escape_char "\""
-  "\\\""
+# escape works on bytes: int arms compile to a jump table, output grows
+# by in-place push, and one utf8 decode closes the pipeline
+fn esc_byte acc 9
+  push (push acc 92) 116
 
-fn escape_char "\\"
-  "\\\\"
+fn esc_byte acc 10
+  push (push acc 92) 110
 
-fn escape_char "\n"
-  "\\n"
+fn esc_byte acc 13
+  push (push acc 92) 114
 
-fn escape_char "\r"
-  "\\r"
+fn esc_byte acc 34
+  push (push acc 92) 34
 
-fn escape_char "\t"
-  "\\t"
+fn esc_byte acc 92
+  push (push acc 92) 92
 
-fn escape_char c
-  if ((text/char_code c) < 32) (u_escape c) c
+fn esc_byte acc b
+  if (b < 32) (u_bytes acc b) (push acc b)
 
 fn escape_str s
-  text/join (list/to_list (list/map (text/chars s) escape_char)) ""
+  text/utf8 (list/fold (text/bytes s) [] (acc b -> esc_byte acc b))
 
 fn hex4 n
   d1 = n / 4096
@@ -34,8 +36,13 @@ fn hex4 n
 fn hex_alpha c
   if ((96 < c) && (c < 103)) (c - 87) (hex_upper c)
 
+hex_byte_table = text/bytes "0123456789abcdef"
+
 fn hex_char n
   hex_digits[n + 1]
+
+fn hex_code n
+  hex_byte_table[n + 1]
 
 fn hex_digit c
   if ((47 < c) && (c < 58)) (c - 48) (hex_alpha c)
@@ -127,5 +134,7 @@ fn string_scan cs start p
   n = text/find2 cs p 34 92
   string_at cs (cs[n]) start n
 
-fn u_escape c
-  "\\u{hex4 (text/char_code c)}"
+fn u_bytes acc b
+  lo = hex_code (b % 16)
+  hi = hex_code (b / 16)
+  push (push (push (push (push (push acc 92) 117) 48) 48) hi) lo
