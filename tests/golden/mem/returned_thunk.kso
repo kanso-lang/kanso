@@ -1,0 +1,19 @@
+# the picked arm returns the cell itself, so the frame's result IS the
+# thunk: the alias guard must skip the release and count the escape.
+fn burn 0 acc
+  acc
+
+fn burn n acc
+  burn (n - 1) (acc + n)
+
+fn hand false _
+  0
+
+fn hand true chosen
+  chosen
+
+pub play = print "relayed: {relay true}"
+
+fn relay flag
+  expensive = burn 2000 0
+  hand flag expensive

@@ -172,6 +172,8 @@ declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
 declare %KValue @k_b_render_value(%KValue)
 declare %KValue @k_thunk_new(i64, i32, ...)
+declare %KValue @k_thunk_release_unless(%KValue, %KValue)
+declare void @k_thunk_note_escape(%KValue)
 declare %KValue @k_force(%KValue)
 
 "#;
@@ -292,6 +294,26 @@ struct Backend<'a> {
     thunk_sites: Vec<(String, usize)>,
 }
 
+/// The frame epilogue: release each releasable cell unless the outgoing
+/// value IS that cell (the returned-thunk case escapes upward, counted by
+/// the runtime). Returns the value register to hand to `ret` — threading
+/// through the helper keeps the IR linear.
+fn release_cells(f: &mut FnEmit, value: &str) -> String {
+    if f.lazy_cells.is_empty() || f.parsed.contains(value) {
+        return value.to_string();
+    }
+    let cells = f.lazy_cells.clone();
+    let mut v = value.to_string();
+    for cell in cells {
+        let t = f.tmp();
+        f.line(&format!(
+            "{t} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {v})"
+        ));
+        v = t;
+    }
+    v
+}
+
 struct FnEmit {
     out: String,
     tmp: usize,
@@ -301,7 +323,7 @@ struct FnEmit {
     sets: HashMap<String, Set>,
     /// Temps carrying the by-value %parsed type rather than a boxed KValue.
     parsed: std::collections::HashSet<String>,
-    /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
+    /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
     file: String,
@@ -310,6 +332,9 @@ struct FnEmit {
     /// Dispatcher group being emitted, for recognizing self-tail-calls.
     group: String,
     arity: usize,
+    /// Registers of releasable lazy cells born in this body; every return
+    /// path releases each unless the result aliases it.
+    lazy_cells: Vec<String>,
 }
 
 impl FnEmit {
@@ -327,7 +352,7 @@ impl FnEmit {
             ret_ty: "%KValue".to_string(),
             group: String::new(),
             arity: 0,
-        }
+         lazy_cells: Vec::new(), }
     }
 
     fn tmp(&mut self) -> String {
@@ -1173,8 +1198,9 @@ impl<'a> Backend<'a> {
     /// Return a failure in the group's ABI shape: wrapped in a `%parsed` when the
     /// group returns records by value, a bare KValue otherwise.
     fn emit_ret_failure(&self, f: &mut FnEmit, name: &str, arity: usize, failure: &str) {
+        let failure = release_cells(f, failure);
         if self.ret_ty(name, arity) == "%parsed" {
-            self.emit_parsed_from_failure(f, failure);
+            self.emit_parsed_from_failure(f, &failure);
         } else {
             f.line(&format!("ret %KValue {failure}"));
         }
@@ -1184,8 +1210,9 @@ impl<'a> Backend<'a> {
     /// function only reaches here with a failure (its record tails are built
     /// directly), so the failure's two words become the `%parsed`.
     fn emit_ret(&self, f: &mut FnEmit, value: &str) {
+        let value = release_cells(f, value);
         if f.ret_ty == "%parsed" {
-            self.emit_parsed_from_failure(f, value);
+            self.emit_parsed_from_failure(f, &value);
         } else {
             f.line(&format!("ret %KValue {value}"));
         }
@@ -1532,6 +1559,13 @@ impl<'a> Backend<'a> {
                         captures.len()
                     ));
                     f.record(&t, crate::infer::TOP);
+                    let in_beat = self
+                        .beat
+                        .ids
+                        .contains_key(&(f.group.clone(), f.arity));
+                    if !in_beat && self.demand.is_releasable(&f.group, f.arity, i) {
+                        f.lazy_cells.push(t.clone());
+                    }
                     f.bind(name, &t);
                 }
                 Stmt::Bind { pattern, expr } => {
@@ -2098,6 +2132,22 @@ impl<'a> Backend<'a> {
                         .collect();
                     let t = f.tmp();
                     if same_ret {
+                        // a frame with releasable cells settles them before the
+                        // musttail: a cell riding out in the arguments escapes
+                        // (counted); every other cell dies here
+                        let cells = f.lazy_cells.clone();
+                        for cell in cells {
+                            if args_ir.iter().any(|a| a.ends_with(cell.as_str())) {
+                                f.line(&format!(
+                                    "call void @k_thunk_note_escape(%KValue {cell})"
+                                ));
+                            } else {
+                                let d = f.tmp();
+                                f.line(&format!(
+                                    "{d} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {{ i64 0, i64 0 }})"
+                                ));
+                            }
+                        }
                         f.line(&format!(
                             "{t} = musttail call tailcc {callee_ret} @{}({})",
                             dsym(name, n),

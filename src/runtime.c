@@ -96,6 +96,12 @@ static void k_thunk_drop_args(KThunk* t) {
 /* The frame epilogue for a releasable lazy binding: free the cell unless
    the frame's result IS the cell — the returned-thunk case, which escapes
    upward and is counted rather than freed. */
+/* A cell handed onward in a tail call outlives its frame by design;
+   count it so live-to-exit cells are always attributable. */
+void k_thunk_note_escape(KValue cell) {
+    if (cell.tag == K_THUNK) k_stat_thunk_escaped++;
+}
+
 KValue k_thunk_release_unless(KValue cell, KValue result) {
     if (cell.tag != K_THUNK) return result;
     if (result.tag == K_THUNK && result.payload == cell.payload) {

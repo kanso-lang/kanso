@@ -1,11 +1,11 @@
 allocs=7
-alloc_bytes=144
+alloc_bytes=160
 arena_blocks=1
 perm_allocs=0
 beat_iters=0
 thunk_allocs=1
 thunk_forces=1
 thunk_evals=1
-thunk_frees=1
-thunk_escaped=0
-thunk_live_exit=0
+thunk_frees=0
+thunk_escaped=1
+thunk_live_exit=1

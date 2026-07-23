@@ -1,0 +1,18 @@
+# one arm wraps its parameter in a list, so the cell could outlive the
+# frame: the position is unsafe, no release is emitted, the cell stays
+# live to exit — pinned so the conservative path is visible.
+fn burn 0 acc
+  acc
+
+fn burn n acc
+  burn (n - 1) (acc + n)
+
+pub play =
+  expensive = burn 2000 0
+  print "len: {length (wrap false expensive)}"
+
+fn wrap false _
+  []
+
+fn wrap true chosen
+  [chosen]

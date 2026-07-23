@@ -1040,3 +1040,57 @@ page (short-circuit and/or shipped as && / ||; negative literals and
 <div class="lore"><figure><svg class="sprite" viewBox="0 0 22 19" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="7" y="2" width="8" height="1" fill="#f03a00"/><rect x="6" y="3" width="10" height="1" fill="#f03a00"/><rect x="5" y="4" width="12" height="1" fill="#f03a00"/><rect x="4" y="5" width="1" height="1" fill="#f03a00"/><rect x="5" y="5" width="2" height="1" fill="#ff7a52"/><rect x="7" y="5" width="11" height="1" fill="#f03a00"/><rect x="4" y="6" width="1" height="1" fill="#f03a00"/><rect x="5" y="6" width="2" height="1" fill="#ff7a52"/><rect x="7" y="6" width="11" height="1" fill="#f03a00"/><rect x="3" y="7" width="16" height="1" fill="#f03a00"/><rect x="3" y="8" width="4" height="1" fill="#f03a00"/><rect x="7" y="8" width="1" height="1" fill="#2b2320"/><rect x="8" y="8" width="1" height="1" fill="#faf3e3"/><rect x="9" y="8" width="4" height="1" fill="#f03a00"/><rect x="13" y="8" width="1" height="1" fill="#2b2320"/><rect x="14" y="8" width="1" height="1" fill="#faf3e3"/><rect x="15" y="8" width="4" height="1" fill="#f03a00"/><rect x="3" y="9" width="4" height="1" fill="#f03a00"/><rect x="7" y="9" width="2" height="1" fill="#2b2320"/><rect x="9" y="9" width="4" height="1" fill="#f03a00"/><rect x="13" y="9" width="2" height="1" fill="#2b2320"/><rect x="15" y="9" width="4" height="1" fill="#f03a00"/><rect x="2" y="10" width="5" height="1" fill="#f03a00"/><rect x="7" y="10" width="2" height="1" fill="#2b2320"/><rect x="9" y="10" width="4" height="1" fill="#f03a00"/><rect x="13" y="10" width="2" height="1" fill="#2b2320"/><rect x="15" y="10" width="5" height="1" fill="#f03a00"/><rect x="3" y="11" width="4" height="1" fill="#f03a00"/><rect x="7" y="11" width="2" height="1" fill="#2b2320"/><rect x="9" y="11" width="4" height="1" fill="#f03a00"/><rect x="13" y="11" width="2" height="1" fill="#2b2320"/><rect x="15" y="11" width="4" height="1" fill="#f03a00"/><rect x="3" y="12" width="16" height="1" fill="#f03a00"/><rect x="3" y="13" width="6" height="1" fill="#f03a00"/><rect x="9" y="13" width="4" height="1" fill="#2b2320"/><rect x="13" y="13" width="6" height="1" fill="#f03a00"/><rect x="4" y="14" width="14" height="1" fill="#f03a00"/><rect x="5" y="15" width="12" height="1" fill="#f03a00"/><rect x="6" y="16" width="10" height="1" fill="#f03a00"/><rect x="4" y="17" width="13" height="1" fill="#f03a00"/></svg><figcaption>err—always arrives, never uninvited</figcaption></figure></div>
 
 ```
+## 2026-07-23 — PLAN: cell-RC wiring (mined queue item 0)
+
+The demand fragment constrains where thunk cells can flow, and the
+plan leans on it. A lazy bind's every use is a direct argument at a
+discard-capable dispatch position (demand.rs guarantees this — any
+other use kind keeps the binding strict). So cells live in: the
+creating frame's register, callee parameter registers below it, and
+other cells' capture slots. Structures can only reach a cell through
+a CALLEE ARM's handling of its parameter — the one hole.
+
+Mechanism, three pieces:
+
+1. Runtime. k_thunk_release(v): rc--, at zero release thunk-tagged
+   captured args recursively, push the cell to k_thunk_free,
+   thunk_frees++. Creation retains thunk-tagged args (cells
+   referencing cells). k_force releases captured args after eval and
+   clears argc so the cell's own free can't double-release.
+
+2. Safety classification (static, fixpoint). Per (group, arity,
+   position): SAFE iff every arm either wildcards the param, uses it
+   only under force (scrutiny sites), returns it bare, or passes it
+   only to SAFE positions; anything else — stored into a list/map/
+   record/template, captured, passed to an UNSAFE or unknown position
+   — demotes to UNSAFE. Assume SAFE, demote to fixpoint; unknown
+   callees (closures, builtins that store) are UNSAFE.
+
+3. Epilogue (codegen). For each lazy bind whose uses all target SAFE
+   positions, in a fn outside beat clusters: at every return point,
+   k_thunk_release_unless(cell, result) — the alias guard frees the
+   cell unless the frame's result IS the cell (pointer compare), which
+   is the returned-thunk case; that cell leaks upward and is counted.
+   Lazy binds in beat-cluster fns or with UNSAFE uses: no epilogue,
+   counted as escaped. Tail-position calls return normally here
+   (musttail is beat-cluster-only), so the epilogue runs.
+
+Sound by construction: a release only fires when the classification
+proves no reference survives the frame and the guard proves the
+result register is not the cell. Everything unprovable leaks exactly
+as today and shows in the counters.
+
+Counters/goldens fallout, deliberate: counters gain thunk_frees and
+thunk_escaped lines; thunk_live_exit becomes allocs - frees - escaped
+still-live arithmetic. The .mem vein (4 files), the ch10 counters
+book sample, and bench/cost_golden.txt all gain lines — regenerated
+in the same PR. New adversarial mem goldens: lazy bind shared across
+two deferrable uses (one cell, one free); returned-thunk (alias guard
+skips, escaped=1); list-wrapping arm (UNSAFE position, no release);
+a fold-driven skip workload pinning frees > 0 (the scoreboard shape
+in miniature).
+
+OPEN after this lands: escaped cells (returned thunks, beat-cluster
+binds, UNSAFE positions) still live to exit — their story belongs to
+defunctionalized thunks / pervasive-lazy, where ownership can ride
+the calling convention.

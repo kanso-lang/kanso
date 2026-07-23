@@ -347,8 +347,7 @@ impl ThunkStats {
     pub fn render(&self) -> String {
         let (allocs, forces, evals) = (self.allocs.get(), self.forces.get(), self.evals.get());
         format!(
-            "thunk_allocs={allocs}\nthunk_forces={forces}\nthunk_evals={evals}\nthunk_live_exit={}\n",
-            allocs - evals
+            "thunk_allocs={allocs}\nthunk_forces={forces}\nthunk_evals={evals}\n"
         )
     }
 }
