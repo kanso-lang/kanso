@@ -914,3 +914,32 @@ interleaved best-of-N, idle, byte-identity gated: path 3.0ms/13.9ms
 Pretty quiet-to-quiet: 12.0 → 6.5ms small, 109 → 49.7ms big. kq README
 carries the table; site prose stays design-only per the no-narration
 directive.
+
+## 2026-07-23 — FOUND: lazy v1 thunk counting is scaffolding, not counting
+
+Audit prompted by Clay's "does the lazy tier use Perceus?" — answer:
+no by design (only thunk cells count; values stay count-free under
+the arenas; no dup/drop calculus), and TODAY not even that: KThunk.rc
+is set to 1 at creation and never touched again, nothing pushes cells
+back to k_thunk_free (the free list is only ever popped, i.e. always
+empty), and forced cells hold their cached result until process exit.
+thunk_live_exit is allocs minus evals — derived arithmetic, not
+evidence of freeing. The 21.1M-cell recycle numbers came from the
+ratified PROTOTYPE; the engine inherited the struct field and the
+free-list plumbing but not the drop insertion (the piece §06 flags as
+memory-unsafe to rush). Bounded in practice by the cost gate (JSON
+gauntlet: zero thunks, golden-pinned); a long-running lazy-heavy
+program would accumulate cells.
+
+DECIDED: (1) compiler page §07 status corrected in the same PR as
+this entry — "freed the instant its last reference drops" was
+prototype behavior, now marked designed/unbuilt for the engine.
+(2) Cell-RC wiring (retain on capture/copy, compiler-inserted release
+after force and at last use) joins the mined queue as item 0 — a
+correctness-of-claims item ahead of Dragonbox, and a prerequisite for
+the still-open pervasive-lazy gavel.
+
+OPEN: the release-site insertion is the careful part (codegen-emitted
+drops; adversarial goldens for shared-thunk, escaping-thunk, and
+err-carrying-thunk cases before it may land). The .mem golden vein
+must grow a freed-cells counter so recycling is pinned, not believed.
