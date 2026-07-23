@@ -21,8 +21,14 @@ fn esc_byte acc 92
 fn esc_byte acc b
   if (b < 32) (u_bytes acc b) (push acc b)
 
+# most strings escape clean: one scan proves it and the string passes
+# through untouched
+fn escape_from s bs n
+  if (length bs < n) s (text/utf8 (list/fold bs [] (acc b -> esc_byte acc b)))
+
 fn escape_str s
-  text/utf8 (list/fold (text/bytes s) [] (acc b -> esc_byte acc b))
+  bs = text/bytes s
+  escape_from s bs (text/find2_below bs 1 34 92 32)
 
 fn hex4 n
   d1 = n / 4096

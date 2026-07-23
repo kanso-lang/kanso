@@ -2004,6 +2004,54 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     return k_int(by->len + 1);
 }
 
+/* find2 with a floor: also stops at the first byte below `lim`. Escape
+   scanning wants this shape — quote, backslash, and control bytes all
+   end a clean run, and one pass finds whichever comes first. */
+KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
+    if (!k_not_failure(cs)) return cs;
+    if (!k_not_failure(from)) return from;
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(lim)) return lim;
+    if (cs.tag != K_BYTES) k_die("find2_below takes bytes");
+    KBytes* by = k_as_bytes(cs);
+    long long p = from.payload < 1 ? 0 : from.payload - 1;
+    unsigned char ca = (unsigned char)(a.payload & 0xff);
+    unsigned char cb = (unsigned char)(b.payload & 0xff);
+    long long floor_v = lim.payload;
+    const unsigned char* d = by->data;
+    long long i = p;
+    if (floor_v > 0 && floor_v <= 256) {
+        unsigned char cl = (unsigned char)(floor_v - 1);
+#if defined(__aarch64__)
+        uint8x16_t va = vdupq_n_u8(ca), vb = vdupq_n_u8(cb), vl = vdupq_n_u8(cl);
+        for (; i + 16 <= by->len; i += 16) {
+            uint8x16_t chunk = vld1q_u8(d + i);
+            uint8x16_t m = vorrq_u8(vorrq_u8(vceqq_u8(chunk, va), vceqq_u8(chunk, vb)),
+                                    vcleq_u8(chunk, vl));
+            uint8x8_t narrowed = vshrn_n_u16(vreinterpretq_u16_u8(m), 4);
+            uint64_t mask = vget_lane_u64(vreinterpret_u64_u8(narrowed), 0);
+            if (mask) return k_int(i + (__builtin_ctzll(mask) >> 2) + 1);
+        }
+#elif defined(__x86_64__)
+        __m128i va = _mm_set1_epi8((char)ca), vb = _mm_set1_epi8((char)cb);
+        __m128i vl = _mm_set1_epi8((char)cl);
+        for (; i + 16 <= by->len; i += 16) {
+            __m128i chunk = _mm_loadu_si128((const __m128i*)(d + i));
+            __m128i low = _mm_cmpeq_epi8(_mm_min_epu8(chunk, vl), chunk);
+            __m128i m = _mm_or_si128(_mm_or_si128(_mm_cmpeq_epi8(chunk, va),
+                                                  _mm_cmpeq_epi8(chunk, vb)), low);
+            int mask = _mm_movemask_epi8(m);
+            if (mask) return k_int(i + __builtin_ctz(mask) + 1);
+        }
+#endif
+    }
+    for (; i < by->len; i++) {
+        if (d[i] == ca || d[i] == cb || (long long)d[i] < floor_v) return k_int(i + 1);
+    }
+    return k_int(by->len + 1);
+}
+
 KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(fromv)) return fromv;
