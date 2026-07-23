@@ -1,0 +1,62 @@
+import "std/text"
+
+fn mark_from? cs p q
+  if (p > q) false (mark_step? cs (cs[p]) p q)
+
+# float marks: . E e
+fn mark_step? _ 46 _ _
+  true
+
+fn mark_step? _ 69 _ _
+  true
+
+fn mark_step? _ 101 _ _
+  true
+
+fn mark_step? cs _ p q
+  mark_from? cs (p + 1) q
+
+# number bytes: + - . E e, then the ascii digits
+fn number_char? 43
+  true
+
+fn number_char? 45
+  true
+
+fn number_char? 46
+  true
+
+fn number_char? 69
+  true
+
+fn number_char? 101
+  true
+
+fn number_char? none
+  false
+
+fn number_char? c
+  (47 < c) && (c < 58)
+
+fn number_end cs p
+  if (number_char? (cs[p])) (number_end cs (p + 1)) p
+
+fn number_ok p (err _)
+  fail p "invalid number"
+
+fn number_ok _ n
+  n
+
+fn number_start? 45
+  true
+
+fn number_start? none
+  false
+
+fn number_start? c
+  (47 < c) && (c < 58)
+
+fn number_value cs p q
+  digits = text/slice cs p q
+  raw = if (mark_from? cs p q) (text/to_float digits) (text/to_int digits)
+  number_ok p raw

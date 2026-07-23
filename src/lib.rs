@@ -398,6 +398,9 @@ pub fn canonicalize_types(program: &mut ast::Program) {
 /// no per-element wrapper records exist for chains consumed in place.
 pub fn fuse_enumerable(program: &mut ast::Program) {
     use ast::Stmt;
+    if std::env::var_os("KANSO_NO_FUSE").is_some() {
+        return;
+    }
     let mut shorts: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
     let std_names: std::collections::HashSet<String> = program

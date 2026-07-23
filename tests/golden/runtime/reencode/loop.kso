@@ -1,0 +1,10 @@
+import "std/text"
+
+doc = "[[1,2],[3],[4.5,true,null]]"
+
+pub fn reencode _ _ 0 acc
+  print "twice: {acc}"
+
+pub fn reencode v m n acc
+  grown = acc + length (encode v) + length (encode m)
+  reencode v m (n - 1) grown

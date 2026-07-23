@@ -193,6 +193,7 @@ static void* k_alloc(size_t n) {
 static int k_is_heap(long long tag);
 
 typedef struct { KBlock* block; char* ptr; size_t left; } KMark;
+static void k_cache_reg_sweep(KMark* mark);
 #define K_BEAT_MAX 64
 static KMark k_beat_stack[K_BEAT_MAX];
 static int k_beat_depth = 0;
@@ -224,6 +225,7 @@ void k_beat_push(void) {
 void k_beat_iter(void) {
     k_stat_beat_iters++;
     if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+        k_cache_reg_sweep(&k_beat_stack[k_beat_depth - 1]);
         k_beat_rewind(&k_beat_stack[k_beat_depth - 1]);
     }
 }
@@ -265,6 +267,47 @@ static int k_survives(const void* p, KMark* m) {
         frontier = NULL;
     }
     return 0;
+}
+
+/* Sorted-view caches filled during a beat point above the mark; a rewind
+   frees the view while the map header — below the mark, inside data the
+   loop legitimately threads — survives holding the stale pointer. Fills
+   register here, and every rewind resets the caches it just freed. */
+#define K_CACHE_REG_MAX 65536
+static KMap** k_cache_reg = NULL;
+static int k_cache_reg_cap = 0;
+static int k_cache_reg_n = 0;
+
+static void k_cache_reg_add(KMap* m) {
+    if (k_beat_depth <= 0) return;
+    if (k_cache_reg_n == k_cache_reg_cap) {
+        int cap = k_cache_reg_cap ? k_cache_reg_cap * 2 : 1024;
+        if (cap > K_CACHE_REG_MAX) return;
+        k_cache_reg = realloc(k_cache_reg, sizeof(KMap*) * cap);
+        if (!k_cache_reg) { fputs("out of memory\n", stderr); exit(1); }
+        k_cache_reg_cap = cap;
+    }
+    k_cache_reg[k_cache_reg_n++] = m;
+}
+
+static void k_cache_reg_sweep(KMark* mark) {
+    int resets = 0;
+    int w = 0;
+    for (int i = 0; i < k_cache_reg_n; i++) {
+        KMap* m = k_cache_reg[i];
+        if (!k_survives(m, mark)) {
+            continue; /* the header itself is being freed */
+        }
+        if (m->sorted && !k_survives(m->sorted, mark)) {
+            m->sorted = NULL;
+            m->sorted_len = 0;
+            resets++;
+            continue;
+        }
+        k_cache_reg[w++] = m;
+    }
+    k_cache_reg_n = w;
+    (void)resets;
 }
 
 typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; } KCopy;
@@ -482,6 +525,7 @@ KValue k_beat_pop(KValue r) {
         if (k_beat_depth < K_BEAT_MAX) {
             KCarry* c = &k_carries[k_beat_depth];
             if (!k_is_heap(r.tag)) {
+                k_cache_reg_sweep(&k_beat_stack[k_beat_depth]);
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
             } else if (c->used_flag) {
                 KCopy cp = { NULL, NULL, 1 };
@@ -523,6 +567,7 @@ void k_beat_iter_carry(void) {
     KCopy cp = { &c->to, m, 0 };
     for (long long i = 0; i < k_carry_n; i++)
         k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
+    k_cache_reg_sweep(m);
     k_beat_rewind(m);
     KCarryBuf swap = c->from;
     c->from = c->to;
@@ -1551,6 +1596,7 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
             m->sorted_len = 0;
         }
         m->sorted = out;
+        k_cache_reg_add(m);
     }
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;

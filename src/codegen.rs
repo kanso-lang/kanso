@@ -1979,11 +1979,20 @@ impl<'a> Backend<'a> {
                 }
                 // A demoted tail entry: emitted as a plain call so the
                 // beat loop it enters gets its push/pop bracket. The caller
-                // is acyclic, so the one retained frame is bounded.
-                if self
-                    .beat
-                    .demoted
-                    .contains(&((f.group.clone(), f.arity), (name.clone(), args.len())))
+                // is acyclic, so the one retained frame is bounded. Lifted
+                // lambdas never appear in the analysis's caller set, so ANY
+                // tail entry into a beat-headed loop from outside its
+                // cluster demotes — an unbracketed entry would let the
+                // loop's rewinds unwind to an enclosing mark and free the
+                // caller's own live data.
+                let target = (name.clone(), args.len());
+                let outside_cluster = self.beat.ids.contains_key(&target)
+                    && !self.beat.same_cluster(&target, &(f.group.clone(), f.arity));
+                if outside_cluster
+                    || self
+                        .beat
+                        .demoted
+                        .contains(&((f.group.clone(), f.arity), target))
                 {
                     let value = self.emit_expr(f, expr)?;
                     self.emit_ret(f, &value);
