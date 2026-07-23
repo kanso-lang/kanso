@@ -1,0 +1,131 @@
+import "std/list"
+import "std/text"
+
+fn escape_char "\""
+  "\\\""
+
+fn escape_char "\\"
+  "\\\\"
+
+fn escape_char "\n"
+  "\\n"
+
+fn escape_char "\r"
+  "\\r"
+
+fn escape_char "\t"
+  "\\t"
+
+fn escape_char c
+  if ((text/char_code c) < 32) (u_escape c) c
+
+fn escape_str s
+  text/join (list/to_list (list/map (text/chars s) escape_char)) ""
+
+fn hex4 n
+  d1 = n / 4096
+  r1 = n - (d1 * 4096)
+  d2 = r1 / 256
+  r2 = r1 - (d2 * 256)
+  d3 = r2 / 16
+  d4 = r2 - (d3 * 16)
+  text/join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
+
+fn hex_alpha c
+  if ((96 < c) && (c < 103)) (c - 87) (hex_upper c)
+
+fn hex_char n
+  hex_digits[n + 1]
+
+fn hex_digit c
+  if ((47 < c) && (c < 58)) (c - 48) (hex_alpha c)
+
+hex_digits = "0123456789abcdef"
+
+fn hex_upper c
+  if ((64 < c) && (c < 71)) (c - 55) (err "invalid hex digit")
+
+fn parse_string cs p
+  string_scan cs p p
+
+# string bytes: 34 quote, 92 backslash; escapes name their targets
+fn str_char _ 34 p acc
+  parsed (p + 1) (string_ok p (text/utf8 acc))
+
+fn str_char cs 92 p acc
+  str_escape cs (cs[p + 1]) p acc
+
+fn str_char _ none p _
+  fail p "unterminated string"
+
+fn str_char cs c p acc
+  str_chars cs (p + 1) (push acc c)
+
+fn str_chars cs p acc
+  str_char cs (cs[p]) p acc
+
+fn str_escape cs 34 p acc
+  str_chars cs (p + 2) (push acc 34)
+
+fn str_escape cs 47 p acc
+  str_chars cs (p + 2) (push acc 47)
+
+fn str_escape cs 92 p acc
+  str_chars cs (p + 2) (push acc 92)
+
+fn str_escape cs 98 p acc
+  str_chars cs (p + 2) (push acc 8)
+
+fn str_escape cs 102 p acc
+  str_chars cs (p + 2) (push acc 12)
+
+fn str_escape cs 110 p acc
+  str_chars cs (p + 2) (push acc 10)
+
+fn str_escape cs 114 p acc
+  str_chars cs (p + 2) (push acc 13)
+
+fn str_escape cs 116 p acc
+  str_chars cs (p + 2) (push acc 9)
+
+fn str_escape cs 117 p acc
+  str_unicode cs p acc
+
+fn str_escape _ none p _
+  fail p "unterminated string"
+
+fn str_escape _ c p _
+  fail p "invalid escape `\\{text/utf8 [c]}`"
+
+fn str_unicode cs p acc
+  h1 = hex_digit (cs[p + 2])
+  h2 = hex_digit (cs[p + 3])
+  h3 = hex_digit (cs[p + 4])
+  h4 = hex_digit (cs[p + 5])
+  code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
+  str_chars cs (p + 6) (text/concat acc (text/bytes (text/from_code code)))
+
+fn string_at cs 34 start p
+  parsed (p + 1) (string_ok p (text/utf8 (text/slice cs start (p - 1))))
+
+fn string_at cs 92 start p
+  str_chars cs p (text/concat [] (text/slice cs start (p - 1)))
+
+fn string_at _ none _ p
+  fail p "unterminated string"
+
+fn string_at cs _ start p
+  string_scan cs start (p + 1)
+
+fn string_ok p (err _)
+  err (parse_failure p "invalid utf-8 in string")
+
+fn string_ok _ v
+  v
+
+fn string_scan cs start p
+  n = text/find2 cs p 34 92
+  string_at cs (cs[n]) start n
+
+fn u_escape c
+  "\\u{hex4 (text/char_code c)}"
