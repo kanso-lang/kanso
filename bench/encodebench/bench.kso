@@ -1,7 +1,7 @@
 import "std/text"
 
 pub fn rounds _ 0 acc
-  print "encoded bytes x50: {acc}"
+  print "done: {acc}"
 
 pub fn rounds v n acc
   rounds v (n - 1) (acc + length (encode v))

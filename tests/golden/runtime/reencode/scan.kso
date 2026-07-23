@@ -1,0 +1,32 @@
+import "std/text"
+
+fn expect_char cs p c
+  expect_check (cs[p]) p c
+
+fn expect_check found p c
+  if (found == c) (p + 1) (fail p "expected `{text/utf8 [c]}`")
+
+fn fail p reason
+  err (parse_failure p reason)
+
+fn skip_ws cs p
+  if (ws? (cs[p])) (skip_ws cs (p + 1)) p
+
+# json whitespace bytes: tab, newline, carriage return, space
+fn ws? 9
+  true
+
+fn ws? 10
+  true
+
+fn ws? 13
+  true
+
+fn ws? 32
+  true
+
+fn ws? none
+  false
+
+fn ws? _
+  false
