@@ -205,9 +205,10 @@ fn demotable_entries(
         // beat-worthy apart from the entry? crossing args become carried
         let crossing = crossing_positions(program, inference, &name, arity);
         if crossing.len() > K_CARRY_MAX
-            || crossing
-                .iter()
-                .any(|&p| accumulator_grows(program, &name, arity, p))
+            || crossing.iter().any(|&p| {
+                let set = group_param_set(program, inference, &name, arity, p);
+                accumulator_grows(program, &name, arity, p) || set == 0 || set & BYTES != 0
+            })
             || used_as_value(program, &name)
             || !allocating.contains(name.as_str())
         {
@@ -457,6 +458,12 @@ fn cluster_edges_ok(
             if (s != 0 && s & !FAIL & !SCALAR == 0) || threaded.contains(&(*to, i)) {
                 continue;
             }
+            // a byte builder rebuilt each iteration would deep-copy its
+            // whole buffer at every rewind: growth wearing a carry — and a
+            // slot inference can't type may hide the same shape
+            if s & BYTES != 0 || s == 0 {
+                return None;
+            }
             if let Expr::App { head: ah, args: aargs, .. } = arg {
                 if let Expr::Ident(op, _) = ah.as_ref() {
                     let own = decl.params.get(i).and_then(|p| match p {
@@ -665,10 +672,14 @@ fn classify(
     }
     let crossing = crossing_positions(program, inference, name, arity);
     if !crossing.is_empty() {
-        if let Some(&position) = crossing
-            .iter()
-            .find(|&&p| accumulator_grows(program, name, arity, p))
-        {
+        // a slot inference can't type may hide a growing accumulator
+        // behind a helper call, and a byte builder rebuilt each iteration
+        // would deep-copy its whole buffer at every rewind — neither is
+        // ever assumed cheap to carry
+        if let Some(&position) = crossing.iter().find(|&&p| {
+            let set = group_param_set(program, inference, name, arity, p);
+            accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+        }) {
             return Some(Verdict::ArgCrosses { position });
         }
         if crossing.len() <= K_CARRY_MAX {
@@ -829,8 +840,10 @@ fn arg_ok(
             }
         }
     }
+    // an empty set means inference saw no resolved call site — unknown,
+    // never assumed safe
     let callee_set = group_param_set(program, inference, name, arity, position);
-    callee_set & !FAIL & !SCALAR == 0
+    callee_set != 0 && callee_set & !FAIL & !SCALAR == 0
 }
 
 fn group_param_set(

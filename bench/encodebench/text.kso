@@ -1,28 +1,40 @@
 import "std/list"
 import "std/text"
 
-# escape works on bytes: int arms compile to a jump table, output grows
-# by in-place push, and one utf8 decode closes the pipeline
+# escape appends onto the byte builder: int arms compile to a jump
+# table and each byte lands in the accumulator once
 fn esc_byte acc 9
-  push (push acc 92) 116
+  text/append (text/append acc 92) 116
 
 fn esc_byte acc 10
-  push (push acc 92) 110
+  text/append (text/append acc 92) 110
 
 fn esc_byte acc 13
-  push (push acc 92) 114
+  text/append (text/append acc 92) 114
 
 fn esc_byte acc 34
-  push (push acc 92) 34
+  text/append (text/append acc 92) 34
 
 fn esc_byte acc 92
-  push (push acc 92) 92
+  text/append (text/append acc 92) 92
 
 fn esc_byte acc b
-  if (b < 32) (u_bytes acc b) (push acc b)
+  if (b < 32) (u_bytes acc b) (text/append acc b)
+
+# most strings escape clean: one scan proves it and the whole string
+# appends in a single copy
+fn escape_able acc bs
+  list/fold bs acc (a b -> esc_byte a b)
+
+fn escape_clean acc s bs n
+  if (length bs < n) (text/append acc s) (escape_able acc bs)
+
+pub fn escape_onto acc s
+  bs = text/bytes s
+  escape_clean acc s bs (text/find2_below bs 1 34 92 32)
 
 fn escape_str s
-  text/utf8 (list/fold (text/bytes s) [] (acc b -> esc_byte acc b))
+  text/utf8 (escape_onto (text/bytes "") s)
 
 fn hex4 n
   d1 = n / 4096
@@ -137,4 +149,4 @@ fn string_scan cs start p
 fn u_bytes acc b
   lo = hex_code (b % 16)
   hi = hex_code (b / 16)
-  push (push (push (push (push (push acc 92) 117) 48) 48) hi) lo
+  text/append (text/append (text/append acc "\\u00") hi) lo

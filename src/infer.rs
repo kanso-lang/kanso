@@ -453,8 +453,10 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
             }
             out
         }
+        "append" => BYTES | fails,
         "bytes" => BYTES | fails,
         "find2" => INT | fails,
+        "find2_below" => INT | fails,
         "slice" => (args[0] & (BYTES | LIST | STR)) | fails,
         "utf8" => STR | ERR | fails,
         "render_value" => STR | fails,

@@ -1,3 +1,6 @@
+pub fn append acc x
+  builtin_append acc x
+
 pub fn bytes s
   builtin_bytes s
 
@@ -12,6 +15,9 @@ pub fn concat a b
 
 pub fn find2 cs p a b
   builtin_find2 cs p a b
+
+pub fn find2_below cs p a b lim
+  builtin_find2_below cs p a b lim
 
 pub fn from_code n
   builtin_from_code n

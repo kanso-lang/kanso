@@ -162,6 +162,8 @@ declare %KValue @k_b_push_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
+declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
+declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
@@ -174,9 +176,11 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 25] = [
+const BUILTIN_CALLS: [(&str, usize); 27] = [
     ("at", 2),
+    ("append", 2),
     ("find2", 4),
+    ("find2_below", 5),
     ("bytes", 1),
     ("read_file", 1),
     ("write_file", 2),
