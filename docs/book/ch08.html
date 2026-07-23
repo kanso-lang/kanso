@@ -619,7 +619,7 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
   </div>
 </div>
 
-<p><code>encode</code> is deliberately compact—machine-to-machine json wants no whitespace. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write here in full. this is the chapter's one extension beyond the library, written in the string-per-node style the library's first encoder used—clearer on a page, and the honest starting point; threading the byte builder through it is exactly the exercise the library itself just worked through:</p>
+<p><code>encode</code> is deliberately compact—machine-to-machine json wants no whitespace. a pretty-printer is the same fold with an indent depth threaded through, and it is small enough to write here in full. this is the chapter's one extension beyond the library, written string-per-node because that style reads best on a page; threading the byte builder through it instead is a good exercise, and the library's own <code>encode</code> above is the worked answer:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pretty.kso</div>
