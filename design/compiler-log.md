@@ -1094,3 +1094,18 @@ OPEN after this lands: escaped cells (returned thunks, beat-cluster
 binds, UNSAFE positions) still live to exit — their story belongs to
 defunctionalized thunks / pervasive-lazy, where ownership can ride
 the calling convention.
+
+## 2026-07-23 — cell-RC post-landing benchmarks: no shifts, one attribution
+
+Per the standing perf-PR rule (benchmarks + site + dependents on every
+perf change): encode 0.88s user (unchanged), lazy scoreboard 0.09s
+(unchanged), kq specs green, kanso-json 16/16, vse checks clean on the
+new compiler. Site numbers hold as published — no doc changes owed.
+
+FINDING: the lazy scoreboard's 100,000 cells all take the escape path
+(thunk_escaped=100000, frees=0) — each rides out of its frame in a
+musttail's arguments, exactly the case the classification declines.
+The leak-to-exit is unchanged from before cell-RC but now fully
+attributed: live_exit equals escaped, nothing unaccounted. Recycling
+these is the defunctionalized-thunk work (ownership riding the
+calling convention), already OPEN on this log.
