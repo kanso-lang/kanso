@@ -106,6 +106,7 @@ declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
 declare %KValue @k_concat(%KValue, %KValue)
+declare %KValue @k_concat_n(i64, ...)
 declare %KValue @k_render(%KValue, i64)
 declare %KValue @k_add(%KValue, %KValue)
 declare %KValue @k_sub(%KValue, %KValue)
@@ -1639,7 +1640,7 @@ impl<'a> Backend<'a> {
                 Ok(t)
             }
             Expr::Str(parts, _) => {
-                let mut acc: Option<String> = None;
+                let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
                 for part in parts {
                     let piece = match part {
@@ -1673,19 +1674,38 @@ impl<'a> Backend<'a> {
                             t
                         }
                     };
-                    acc = Some(match acc {
-                        None => piece,
-                        Some(prev) => {
+                    match acc {
+                        None => acc = Some(vec![piece]),
+                        Some(ref mut pieces) => pieces.push(piece),
+                    }
+                }
+                let out = match acc {
+                    Some(pieces) if pieces.len() == 1 => {
+                        pieces.into_iter().next().expect("one piece")
+                    }
+                    Some(pieces) if pieces.len() <= 16 => {
+                        let t = f.tmp();
+                        let args: Vec<String> =
+                            pieces.iter().map(|p| format!(", %KValue {p}")).collect();
+                        f.line(&format!(
+                            "{t} = call %KValue (i64, ...) @k_concat_n(i64 {}{})",
+                            pieces.len(),
+                            args.join("")
+                        ));
+                        t
+                    }
+                    Some(pieces) => {
+                        let mut it = pieces.into_iter();
+                        let mut prev = it.next().expect("non-empty");
+                        for piece in it {
                             let t = f.tmp();
                             f.line(&format!(
                                 "{t} = call %KValue @k_concat(%KValue {prev}, %KValue {piece})"
                             ));
-                            t
+                            prev = t;
                         }
-                    });
-                }
-                let out = match acc {
-                    Some(t) => t,
+                        prev
+                    }
                     None => self.str_const(f, ""),
                 };
                 f.record(&out, STR | fails);
