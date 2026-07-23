@@ -1131,6 +1131,22 @@ an adversarial differential case (overlong "\xc0\xaf", surrogate
 "\xed\xa0\x80") belongs in the corpus before anything user-facing
 depends on the difference. OPEN.
 
+## 2026-07-23 — utf-8 strictness convergence (queue item 3, second cut)
+
+Clay's ruling: no gating vector work behind hypothetical workloads —
+implement unless it actively regresses. On the way to the full
+keiser-lemire tier, the scalar tier is now SPEC-STRICT (overlong,
+surrogate, >U+10FFFF rejected via per-lead continuation windows),
+closing the lenient-native/strict-interp divergence logged earlier.
+Verified: standalone harness extracting the real validator text —
+every 1..3-byte sequence at block offsets {0,13,15} plus 20M sampled
+4-byte cases = 70.5M checks, 0 mismatches vs an independent
+spec-direct reference (which the harness itself debugged: its first
+draft accepted bare-continuation leads; the validator under test was
+right). Differential golden examples/utf8_strict.kso pins overlong/
+surrogate rejection and U+10FFFF acceptance on both engines. The
+nibble-lookup vector tier for dirty blocks is the next cut, same
+harness as gate.
 ## 2026-07-23 — PLAN: subtypes v1 (REPL-testable slice)
 
 Ratified design (memory: kanso-subtypes): `type post_body string` —
@@ -1150,3 +1166,27 @@ wasm REJECT subtype declarations with a clear diagnostic in this
 slice so no engine silently diverges; corpus goldens untouched until
 all engines speak it. Tie-rejection lands with the native dispatch
 work, where the reachable-set machinery lives.
+
+## 2026-07-23 — SHIPPED: full keiser-lemire utf-8 tier (queue item 3 complete)
+
+Per Clay's ruling (implement unless it actively regresses): the full
+nibble-lookup algorithm on NEON — three vqtbl1q classifications per
+block, vqsubq saturating pins for 3/4-byte continuation runs,
+all-ascii blocks (both current and prev) skip classification, one
+trailing zero block terminates any truncated sequence so the
+incomplete-at-end case needs no special path. x86 keeps the
+ascii-sweep + strict-scalar tier (the SSE port of the lookups is a
+follow-up; CI's x86 lane exercises that path). The 70.5M-case
+harness (extracts the real function text) passed at zero mismatches
+on the FIRST run of the vector path — the nibble tables survived
+reconstruction intact. Encode bench 0.68s user on a quiet sitting vs
+the 0.66 pre-change floor: flat, as predicted for a 97%-ascii
+document; the win waits on multibyte-heavy workloads and the
+correctness is unconditional.
+
+Same sitting, the boards refreshed everywhere (Clay's
+publish-immediately policy): compiler page four-row race — kanso
+0.89/0.92 vs serde 0.98/1.01 ms/decode (the eisel-lemire lead now on
+the primary board), naive rust 1.13, go 2.03; kq README — path
+3.6/16.0ms (1.59x/1.76x), pretty 7.8/56.9ms (1.88x/2.02x), 99/100
+runs to kq.

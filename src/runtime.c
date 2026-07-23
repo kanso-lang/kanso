@@ -1863,39 +1863,120 @@ KValue k_b_utf8(KValue lv, const char* origin) {
 }
 
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
+#if defined(__aarch64__)
+    /* keiser & lemire, "validating utf-8 in less than one instruction per
+       byte" (2021): three nibble lookups classify every two-byte window,
+       a saturating compare pins 3/4-byte continuation runs, and the
+       whole document validates in one pass. an all-ascii block skips the
+       classification. a trailing zero block terminates any sequence cut
+       off at the end, so truncation needs no special case. */
+    enum {
+        TOO_SHORT = 1 << 0, TOO_LONG = 1 << 1, OVERLONG_3 = 1 << 2,
+        TOO_LARGE = 1 << 3, SURROGATE = 1 << 4, OVERLONG_2 = 1 << 5,
+        TOO_LARGE_1000 = 1 << 6, OVERLONG_4 = 1 << 6, TWO_CONTS = 1 << 7,
+        CARRY = TOO_SHORT | TOO_LONG | TWO_CONTS,
+    };
+    static const uint8_t b1h[16] = {
+        TOO_LONG, TOO_LONG, TOO_LONG, TOO_LONG,
+        TOO_LONG, TOO_LONG, TOO_LONG, TOO_LONG,
+        TWO_CONTS, TWO_CONTS, TWO_CONTS, TWO_CONTS,
+        TOO_SHORT | OVERLONG_2, TOO_SHORT,
+        TOO_SHORT | OVERLONG_3 | SURROGATE,
+        TOO_SHORT | TOO_LARGE | TOO_LARGE_1000 | OVERLONG_4,
+    };
+    static const uint8_t b1l[16] = {
+        CARRY | OVERLONG_2 | OVERLONG_3 | OVERLONG_4, CARRY | OVERLONG_2,
+        CARRY, CARRY,
+        CARRY | TOO_LARGE, CARRY | TOO_LARGE | TOO_LARGE_1000,
+        CARRY | TOO_LARGE | TOO_LARGE_1000, CARRY | TOO_LARGE | TOO_LARGE_1000,
+        CARRY | TOO_LARGE | TOO_LARGE_1000, CARRY | TOO_LARGE | TOO_LARGE_1000,
+        CARRY | TOO_LARGE | TOO_LARGE_1000, CARRY | TOO_LARGE | TOO_LARGE_1000,
+        CARRY | TOO_LARGE | TOO_LARGE_1000,
+        CARRY | TOO_LARGE | TOO_LARGE_1000 | SURROGATE,
+        CARRY | TOO_LARGE | TOO_LARGE_1000, CARRY | TOO_LARGE | TOO_LARGE_1000,
+    };
+    static const uint8_t b2h[16] = {
+        TOO_SHORT, TOO_SHORT, TOO_SHORT, TOO_SHORT,
+        TOO_SHORT, TOO_SHORT, TOO_SHORT, TOO_SHORT,
+        TOO_LONG | OVERLONG_2 | TWO_CONTS | OVERLONG_3 | TOO_LARGE_1000 | OVERLONG_4,
+        TOO_LONG | OVERLONG_2 | TWO_CONTS | OVERLONG_3 | TOO_LARGE,
+        TOO_LONG | OVERLONG_2 | TWO_CONTS | SURROGATE | TOO_LARGE,
+        TOO_LONG | OVERLONG_2 | TWO_CONTS | SURROGATE | TOO_LARGE,
+        TOO_SHORT, TOO_SHORT, TOO_SHORT, TOO_SHORT,
+    };
+    uint8x16_t t1h = vld1q_u8(b1h), t1l = vld1q_u8(b1l), t2h = vld1q_u8(b2h);
+    uint8x16_t prev = vdupq_n_u8(0);
+    uint8x16_t error = vdupq_n_u8(0);
+    long long i = 0;
+    long long nblocks = (len + 15) / 16 + 1;
+    for (long long blk = 0; blk < nblocks; blk++) {
+        uint8_t buf[16];
+        uint8x16_t cur;
+        if (i + 16 <= len) {
+            cur = vld1q_u8((const uint8_t*)data + i);
+        } else {
+            for (int j = 0; j < 16; j++)
+                buf[j] = i + j < len ? (uint8_t)data[i + j] : 0;
+            cur = vld1q_u8(buf);
+        }
+        i += 16;
+        if (vmaxvq_u8(cur) < 0x80 && vmaxvq_u8(prev) < 0x80) {
+            prev = cur;
+            continue;
+        }
+        uint8x16_t prev1 = vextq_u8(prev, cur, 15);
+        uint8x16_t sc = vandq_u8(
+            vandq_u8(vqtbl1q_u8(t1h, vshrq_n_u8(prev1, 4)),
+                     vqtbl1q_u8(t1l, vandq_u8(prev1, vdupq_n_u8(0x0F)))),
+            vqtbl1q_u8(t2h, vshrq_n_u8(cur, 4)));
+        uint8x16_t prev2 = vextq_u8(prev, cur, 14);
+        uint8x16_t prev3 = vextq_u8(prev, cur, 13);
+        uint8x16_t is3 = vqsubq_u8(prev2, vdupq_n_u8(0xDF));
+        uint8x16_t is4 = vqsubq_u8(prev3, vdupq_n_u8(0xEF));
+        uint8x16_t must23 = vcgtq_u8(vorrq_u8(is3, is4), vdupq_n_u8(0));
+        uint8x16_t must23_80 = vandq_u8(must23, vdupq_n_u8(0x80));
+        error = vorrq_u8(error, veorq_u8(sc, must23_80));
+        prev = cur;
+    }
+    if (vmaxvq_u8(error) != 0) return k_err(k_str("invalid utf-8"), origin);
+    return k_none();
+#else
     long long i = 0;
     while (i < len) {
-        /* ascii runs — nearly everything in real documents — validate a
-           vector register at a time; a multibyte sequence drops to the
-           scalar step for one codepoint, then the sweep resumes */
-#if defined(__aarch64__)
-        while (i + 16 <= len) {
-            uint8x16_t chunk = vld1q_u8((const uint8_t*)data + i);
-            if (vmaxvq_u8(chunk) >= 0x80) break;
-            i += 16;
-        }
-#elif defined(__x86_64__)
+#if defined(__x86_64__)
         while (i + 16 <= len) {
             __m128i chunk = _mm_loadu_si128((const __m128i*)(data + i));
             if (_mm_movemask_epi8(chunk)) break;
             i += 16;
         }
-#endif
         if (i >= len) break;
-        /* a dirty block pays one scalar pass to its end, so the sweep
-           never re-probes the block it just abandoned */
+#endif
         long long block_end = i + 16 <= len ? i + 16 : len;
         while (i < block_end) {
             unsigned char b0 = (unsigned char)data[i];
-            long w = b0 < 0x80 ? 1 : b0 < 0xc2 ? 0 : b0 < 0xe0 ? 2 : b0 < 0xf0 ? 3 : b0 < 0xf5 ? 4 : 0;
-            if (w == 0 || i + w > len) return k_err(k_str("invalid utf-8"), origin);
-            for (long j = 1; j < w; j++) {
+            if (b0 < 0x80) { i += 1; continue; }
+            long w;
+            unsigned lo = 0x80, hi = 0xBF;
+            if (b0 >= 0xC2 && b0 <= 0xDF) { w = 2; }
+            else if (b0 == 0xE0) { w = 3; lo = 0xA0; }
+            else if (b0 >= 0xE1 && b0 <= 0xEC) { w = 3; }
+            else if (b0 == 0xED) { w = 3; hi = 0x9F; }
+            else if (b0 >= 0xEE && b0 <= 0xEF) { w = 3; }
+            else if (b0 == 0xF0) { w = 4; lo = 0x90; }
+            else if (b0 >= 0xF1 && b0 <= 0xF3) { w = 4; }
+            else if (b0 == 0xF4) { w = 4; hi = 0x8F; }
+            else return k_err(k_str("invalid utf-8"), origin);
+            if (i + w > len) return k_err(k_str("invalid utf-8"), origin);
+            unsigned char b1 = (unsigned char)data[i + 1];
+            if (b1 < lo || b1 > hi) return k_err(k_str("invalid utf-8"), origin);
+            for (long j = 2; j < w; j++) {
                 if (((unsigned char)data[i + j] & 0xc0) != 0x80) return k_err(k_str("invalid utf-8"), origin);
             }
             i += w;
         }
     }
     return k_none();
+#endif
 }
 
 static KValue k_utf8_check(char* data, long long len, const char* origin) {

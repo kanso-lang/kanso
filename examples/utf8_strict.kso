@@ -1,0 +1,15 @@
+import "std/text"
+
+fn check_bad bs
+  utf8_ok (text/utf8 bs)
+
+pub play =
+  print "{check_bad [192 175]}"
+  >> print "{check_bad [237 160 128]}"
+  >> print "{check_bad [244 143 191 191]}"
+
+fn utf8_ok (err _)
+  "rejected"
+
+fn utf8_ok _
+  "accepted"
