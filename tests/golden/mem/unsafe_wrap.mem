@@ -1,12 +1,11 @@
-allocs=29
-alloc_bytes=33232
+allocs=7
+alloc_bytes=160
 arena_blocks=1
-perm_allocs=0
+perm_allocs=1
 beat_iters=0
-thunk_allocs=0
+thunk_allocs=1
 thunk_forces=0
 thunk_evals=0
 thunk_frees=0
 thunk_escaped=0
-thunk_live_exit=0
-sum 500500
+thunk_live_exit=1

@@ -147,9 +147,15 @@ fn mem_corpus_interp_matches_the_semantic_counters() {
     for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
         let compiled = compile_case(&program);
         let run = evaluate(&compiled, Vec::new());
+        // allocs/forces/evals are evaluation semantics, engine-shared;
+        // frees/escaped/live_exit are allocator behavior, native-only.
         let semantic: String = expected(&program, "mem")
             .lines()
-            .filter(|line| line.starts_with("thunk_"))
+            .filter(|line| {
+                line.starts_with("thunk_allocs")
+                    || line.starts_with("thunk_forces")
+                    || line.starts_with("thunk_evals")
+            })
             .map(|line| format!("{line}\n"))
             .collect();
 
