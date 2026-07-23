@@ -968,13 +968,19 @@ impl<'a> Interp<'a> {
                 let [text] = arity(args, name, span)?;
                 match text {
                     Value::Str(s) => Ok(Value::Desc(Rc::new(Desc::Print(s, span)))),
-                    other => Err(RuntimeError {
-                        message: format!(
-                            "print takes a string; interpolate instead: \"{{...}}\" (got {})",
-                            render(&other, false)
-                        ),
-                        span,
-                    }),
+                    // any other value renders through the same ambient
+                    // to_string dispatch interpolation uses
+                    other => {
+                        if is_failure(&other) {
+                            return Ok(other);
+                        }
+                        match self.render_interpolated(other)? {
+                            Ok(rendered) => {
+                                Ok(Value::Desc(Rc::new(Desc::Print(rendered, span))))
+                            }
+                            Err(failure) => Ok(failure),
+                        }
+                    }
                 }
             }
             "at" => {
