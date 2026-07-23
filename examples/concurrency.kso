@@ -10,13 +10,9 @@ import "std/time"
 # a lone `>>` line is a wall: everything above settles first.
 brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 
-fn test
-  2
-
 pub play =
-  print "uno"
-  test
-  print "dos"
+  brew
+  rolls
 
 fn roll i
   math/random 6 . (n -> print "roll {i}: a {n + 1}")
