@@ -587,6 +587,7 @@ fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
             substitute_ident(index, name, replacement);
         }
         Expr::Field { base, .. } => substitute_ident(base, name, replacement),
+        Expr::Upcast { expr, .. } => substitute_ident(expr, name, replacement),
         Expr::BinOp { lhs, rhs, .. } => {
             substitute_ident(lhs, name, replacement);
             substitute_ident(rhs, name, replacement);
@@ -646,6 +647,7 @@ fn fuse_expr(
             fuse_expr(index, shorts, fold_name, counter);
         }
         Expr::Field { base, .. } => fuse_expr(base, shorts, fold_name, counter),
+        Expr::Upcast { expr, .. } => fuse_expr(expr, shorts, fold_name, counter),
         Expr::BinOp { lhs, rhs, .. } => {
             fuse_expr(lhs, shorts, fold_name, counter);
             fuse_expr(rhs, shorts, fold_name, counter);
@@ -851,6 +853,7 @@ fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet
             }
         }
         ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned),
+        ast::Expr::Upcast { expr, .. } => rewrite_expr(expr, qual, owned),
         ast::Expr::App { head, args, .. } => {
             rewrite_expr(head, qual, owned);
             for a in args {
@@ -1256,6 +1259,7 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
         | ast::Expr::Int(_, s)
         | ast::Expr::Float(_, s) => s,
         ast::Expr::Field { span: s, .. } => s,
+        ast::Expr::Upcast { span: s, .. } => s,
     }
 }
 
@@ -1288,6 +1292,7 @@ fn private_uses(
 
 fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
+        ast::Expr::Upcast { expr, .. } => vec![expr.as_ref()],
         ast::Expr::Block(stmts, _) => stmts
             .iter()
             .map(|st| match st {

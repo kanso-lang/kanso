@@ -28,6 +28,20 @@ slow:
 done:
   ret %KValue %v
 }
+define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %is_list = icmp eq i64 %tag, 9
+  br i1 %is_list, label %list, label %slow
+list:
+  %p = extractvalue %KValue %v, 1
+  %lp = inttoptr i64 %p to ptr
+  %len = load i64, ptr %lp
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %len, 1
+  ret %KValue %r
+slow:
+  %f = call %KValue @k_b_length(%KValue %v)
+  ret %KValue %f
+}
 define internal %KValue @k_int(i64 %n) alwaysinline {
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
@@ -1662,6 +1676,7 @@ impl<'a> Backend<'a> {
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
+            Expr::Upcast { expr: inner, .. } => self.emit_expr(f, inner),
             Expr::Block(stmts, _) => {
                 let mut value = "{ i64 4, i64 0 }".to_string();
                 let last = stmts.len().saturating_sub(1);
@@ -2798,6 +2813,9 @@ impl<'a> Backend<'a> {
                     .contains(&(f.file.clone(), span.line, span.col))
             {
                 "push_mut"
+            } else if name == "length" {
+                // the list case is a header load; the twin inlines it
+                "length_fast"
             } else {
                 name
             };
@@ -2859,6 +2877,7 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
             }
         }
         Expr::Field { base, .. } => collect_idents(base, out),
+        Expr::Upcast { expr, .. } => collect_idents(expr, out),
         Expr::Str(parts, _) => {
             for part in parts {
                 if let TemplatePart::Interp(inner) = part {

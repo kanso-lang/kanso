@@ -58,10 +58,40 @@ impl Session {
         if trimmed.trim().is_empty() {
             return Ok(Outcome::Value(String::new()));
         }
-        match declaration_intent(trimmed) {
-            true => self.eval_declarations(trimmed),
-            false => self.eval_expression(trimmed, executor),
+        if !declaration_intent(trimmed) {
+            return self.eval_expression(trimmed, executor);
         }
+        // a paste may mix declarations with trailing expressions: commit
+        // the declarations first, then evaluate each expression in order
+        let mut decl_chunks: Vec<String> = Vec::new();
+        let mut expr_chunks: Vec<String> = Vec::new();
+        for chunk in split_declarations(trimmed) {
+            match declaration_intent(&chunk) {
+                true => decl_chunks.push(chunk),
+                false => expr_chunks.push(chunk),
+            }
+        }
+        let mut lines: Vec<String> = Vec::new();
+        if !decl_chunks.is_empty() {
+            match self.eval_declarations(&decl_chunks.join("\n\n"))? {
+                Outcome::Defined(echo) => lines.push(echo),
+                Outcome::Value(v) | Outcome::Executed(v) => lines.push(v),
+            }
+        }
+        if expr_chunks.is_empty() {
+            return Ok(Outcome::Defined(lines.join("\n")));
+        }
+        for chunk in expr_chunks {
+            match self.eval_expression(&chunk, executor)? {
+                Outcome::Value(v) | Outcome::Executed(v) => {
+                    if !v.trim().is_empty() {
+                        lines.push(v);
+                    }
+                }
+                Outcome::Defined(echo) => lines.push(echo),
+            }
+        }
+        Ok(Outcome::Value(lines.join("\n")))
     }
 
     /// Arms accumulate as overloads of a name — dispatch is open, so a new

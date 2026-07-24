@@ -75,6 +75,7 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
                 .iter()
                 .all(|(k, v)| expr_safe(k, name, false) && expr_safe(v, name, false)),
             Expr::Field { base, .. } => expr_safe(base, name, false),
+            Expr::Upcast { expr, .. } => expr_safe(expr, name, false),
             Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
                 expr_safe(a, name, false) && expr_safe(b, name, false)
             }
@@ -169,6 +170,7 @@ fn use_targets(
             }
         }
         Expr::Field { base, .. } => use_targets(base, name, out),
+        Expr::Upcast { expr, .. } => use_targets(expr, name, out),
         Expr::Index { base, index, .. } => {
             use_targets(base, name, out);
             use_targets(index, name, out);
@@ -271,6 +273,7 @@ fn collect_uses(
             }
         }
         Expr::Field { base, .. } => collect_uses(base, name, discard, uses),
+        Expr::Upcast { expr, .. } => collect_uses(expr, name, discard, uses),
         Expr::Index { base, index, .. } => {
             collect_uses(base, name, discard, uses);
             collect_uses(index, name, discard, uses);
@@ -314,6 +317,7 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
             TemplatePart::Lit(_) => false,
         }),
         Expr::Field { base, .. } => expensive(base, fns),
+        Expr::Upcast { expr, .. } => expensive(expr, fns),
         Expr::Index { base, index, .. } => expensive(base, fns) || expensive(index, fns),
         Expr::Lambda { .. } | Expr::Ident(..) | Expr::Int(..) | Expr::Float(..) => false,
     }

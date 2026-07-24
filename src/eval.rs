@@ -515,6 +515,29 @@ impl<'a> Interp<'a> {
     fn eval(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         match expr {
             Expr::Int(n, _) => Ok(Value::Int(n.clone())),
+            Expr::Upcast { expr: inner, ty, span } => {
+                let v = self.force_thunk(self.eval(inner, env, frame)?)?;
+                if is_failure(&v) {
+                    return Ok(v);
+                }
+                let mut cur = v;
+                loop {
+                    if type_matches_exact(ty, &cur) {
+                        return Ok(cur);
+                    }
+                    match cur {
+                        Value::Sub { inner, .. } => cur = (*inner).clone(),
+                        _ => {
+                            return Err(RuntimeError {
+                                message: format!(
+                                    "`:{ty}` widens; this value is not a {ty}"
+                                ),
+                                span: *span,
+                            })
+                        }
+                    }
+                }
+            }
             Expr::Block(stmts, _) => {
                 // a deferred branch body: fn-body statements in a child
                 // scope; the env extension is dropped with this frame
@@ -1704,6 +1727,15 @@ pub fn is_failure(value: &Value) -> bool {
 
 fn type_matches(ty: &str, arg: &Value) -> bool {
     type_match_depth(ty, arg).is_some()
+}
+
+/// The value's own outermost type only — used by the upcast, which walks
+/// the chain itself one level at a time.
+fn type_matches_exact(ty: &str, arg: &Value) -> bool {
+    match arg {
+        Value::Sub { ty: vty, .. } => ty == &**vty,
+        other => type_match_depth(ty, other) == Some(0),
+    }
 }
 
 /// How far up the subtype chain the annotation sits: an exact match is 0,

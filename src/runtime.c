@@ -52,6 +52,7 @@ static long long k_stat_utf8_bytes = 0;
 static long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
 static long long k_stat_append_grow = 0;
+static long long k_stat_utf8_zerocopy = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -200,12 +201,13 @@ static void k_stats_dump(void) {
         "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
         "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
-        "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n",
+        "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
+        "utf8_zerocopy=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
-        k_stat_append_fast, k_stat_append_grow);
+        k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy);
 }
 
 static void k_arena_push(size_t need) {
@@ -2655,14 +2657,12 @@ KValue k_b_concat(KValue av, KValue bv) {
 
 static KValue k_utf8_bad(const char* data, long long len, const char* origin);
 static KValue k_utf8_check(char* data, long long len, const char* origin);
+static KValue k_utf8_finish(KValue bv, const char* origin);
 
 KValue k_b_utf8(KValue lv, const char* origin) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag == K_BYTES) {
-        /* validate directly on the view (read-only) and let k_str_n do the one
-           copy into the string — a pre-copy here would just be a second pass. */
-        KBytes* b = k_as_bytes(lv);
-        return k_utf8_check((char*)b->data, b->len, origin);
+        return k_utf8_finish(lv, origin);
     }
     if (lv.tag != K_LIST) k_die("utf8 takes a list of byte values");
     KList* l = k_as_list(lv);
@@ -2807,6 +2807,30 @@ static KValue k_utf8_check(char* data, long long len, const char* origin) {
     KValue bad = k_utf8_bad(data, len, origin);
     if (bad.tag == K_ERR) return bad;
     return k_str_n(data, len);
+}
+
+/* The builder-aware finish: when the bytes own a KBuf-headed buffer with
+   room for the terminator, the string takes the buffer in place — no
+   copy — and the frontier burns (used = cap) so a later append on any
+   surviving bytes value must grow away rather than write under the
+   string. */
+static KValue k_utf8_finish(KValue bv, const char* origin) {
+    KBytes* b = k_as_bytes(bv);
+    KValue bad = k_utf8_bad((const char*)b->data, b->len, origin);
+    if (bad.tag == K_ERR) return bad;
+    if (b->cap && b->len < b->cap) {
+        KBuf* buf = ((KBuf*)b->data) - 1;
+        if (buf->used == b->len) {
+            ((unsigned char*)b->data)[b->len] = 0;
+            buf->used = b->cap;
+            KStr* s = k_alloc(sizeof(KStr));
+            s->len = (long)b->len;
+            s->data = (char*)b->data;
+            k_stat_utf8_zerocopy++;
+            KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
+        }
+    }
+    return k_str_n((const char*)b->data, b->len);
 }
 
 KValue k_b_chars(KValue sv) {
