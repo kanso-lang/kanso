@@ -1,0 +1,14 @@
+type num int
+
+fn foo i:int
+  "{i} is an int"
+
+fn foo i:num
+  "{i} is a num"
+
+pub play =
+  print (foo 3)
+  >> print (foo (num 3))
+  >> print (foo (num 3):int)
+  >> print "{(num 3) + 1}"
+  >> print "{(num 3) == 3}"

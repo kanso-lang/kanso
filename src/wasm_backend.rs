@@ -116,6 +116,13 @@ pub struct WasmBackend<'a> {
 }
 
 pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
+    if let Some(t) = program.types.iter().find(|t| t.parent.is_some()) {
+        return Err(format!(
+            "`{}` is a subtype — the wasm engine gains subtypes next; run \
+             natively or on the interpreter meanwhile",
+            t.name
+        ));
+    }
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {

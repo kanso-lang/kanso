@@ -1342,3 +1342,19 @@ The interp slice (#168, #173) is the oracle; the design is ratified
 6. Differential goldens once all engines speak it: construction,
    chain dispatch, upcast, transparency through builtins/operators,
    the tie-rejection error text.
+
+## 2026-07-24 — SHIPPED: subtypes on native (stage 2)
+
+Constructor (k_sub_ctor with parent validation), chain-aware dispatch
+checks gated to subtype-declaring programs (subtype-free programs
+keep the exact checks — zero cost), the dispatcher arm sort (deepest
+annotation first; the interp's scores as an ordering, with the
+gaveled tie-rejection to outlaw the incomparable cases at check
+time), the upcast walk with the widening error, and transparency
+guards in the C arithmetic/comparison entries. Engines byte-identical
+on the full scenario — ladder, construction, upcast, arithmetic,
+equality — AND on both error texts. examples/subtypes.kso is the
+differential golden. Wasm stays gated with a clear diagnostic; its
+mirror plus the tie-rejection checker are stage 3. Encode holds at
+0.56-0.59 under load 42 (0.39 at load 20 — weather, and the CI
+benchmark lane arbitrates).
