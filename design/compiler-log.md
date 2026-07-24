@@ -1607,3 +1607,32 @@ locality cost of full inference, mitigated by the language server.
 
 Nothing implemented — kanso has no user-defined parameterized types today
 and field types are bare names. This reserves the shape.
+
+## 2026-07-24 — type syntax: the last two rulings
+
+Two questions left open by the type-syntax gavel are now decided, and
+design/type-syntax.md is fully settled.
+
+**Typesets are always named.** No inline form. An anonymous typeset would
+need grouping, since a bare space already separates type arguments, and
+grouping drags parens into type position plus a one-member rule plus an
+ordering rule inside the group. None of that now exists, and the type
+grammar stays at exactly three forms: a name, `[]T`, `Name[args]`. The
+argument that carried it: a typeset whose best name is `string_or_user` is
+usually one that should not exist, so requiring the name surfaces the
+arbitrary unions rather than burdening the good ones. Clay noted this is
+reversible if a real one-off case shows up.
+
+Also recorded: the earlier framing of "anonymous for one-offs, named when
+it recurs" as don't-DRY-until-two was wrong, and the doc no longer implies
+it. A name is a label, not an abstraction — nothing speculative is being
+built — so YAGNI is neutral here and name-what-things-are decides it.
+
+**`map{string int}` declined.** Considered for semantic resonance with the
+`{ "a":1 }` map literal. It borrows the braces without the colon that makes
+them read as a mapping, so the resemblance is visual; the honestly resonant
+form is `{string:int}`, whose colon collides with the annotation colon
+(`m:{string:int}`). It also re-specializes `map` right after `map[K V]`
+made it an ordinary parameterized type, and the resonance principle applied
+consistently would drag slices back to `[string]`, which was already
+rejected. Declined alternatives now live in the doc so they stay declined.
