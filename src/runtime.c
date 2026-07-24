@@ -1009,12 +1009,19 @@ KValue k_keyed_check(KValue v, long long entries) {
 /* `.` field access: failures ride through; a non-record dies loudly. */
 KValue k_b_field(KValue v, const char* name) {
     if (!k_not_failure(v)) return v;
-    if (v.tag != K_REC) k_die("`.` reads a field of a record");
+    if (v.tag != K_REC) {
+        KValue shown = k_render(v, 1);
+        fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
+                k_c_err(), k_c_off(), k_as_str(shown)->data);
+        exit(1);
+    }
     KRec* r = k_as_rec(v);
     for (long long i = 0; i < r->nfields; i++) {
         if (!strcmp(k_type_field_name(r->type_id, i), name)) return r->fields[i];
     }
-    k_die("no such field");
+    fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
+            k_type_name(r->type_id), name);
+    exit(1);
     KValue none; none.tag = K_NONE; none.payload = 0; return none;
 }
 
