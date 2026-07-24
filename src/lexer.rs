@@ -602,8 +602,7 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
         (_, Tok::RParen) | (_, Tok::RBracket) => 0,
         (Tok::LParen, _) | (Tok::LBracket, _) => 0,
         (_, Tok::Colon) => 0,
-        // field access hugs both neighbors: u.age (the pipe `.` lexes as
-        // Tok::Pipe with air, and keeps the default one-space gap)
+        // field access hugs both neighbors: u.age
         (_, Tok::Dot) | (Tok::Dot, _) => 0,
         // the strict-index sigil hugs its bracket: xs[i]!
         (Tok::RBracket, Tok::Bang) => 0,

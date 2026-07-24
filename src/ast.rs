@@ -23,9 +23,7 @@ pub enum Expr {
     /// `(expr):type` — the upcast: strips a subtype value to the named
     /// ancestor. Widening only; construction is the downward direction.
     Upcast { expr: Box<Expr>, ty: String, span: Span },
-    /// `build` — the one place mutation parses. Statements run with
-    /// identity-preserving `set` writes on block-born values; the last
-    /// expression freezes to an ordinary immutable value on the way out.
+    /// The last expression freezes to an ordinary immutable value.
     Build(Vec<Stmt>, Span),
 }
 
@@ -91,9 +89,7 @@ impl Pattern {
 pub enum Stmt {
     Bind { pattern: Pattern, expr: Expr },
     Expr(Expr),
-    /// `set target field value` — legal only inside `build`, on a
-    /// block-born target: an identity-preserving field write, the one
-    /// construct that can close a cycle.
+    /// Identity-preserving: rebinding cannot close a cycle.
     Set { target: String, field: String, value: Expr, span: Span },
 }
 

@@ -571,11 +571,8 @@ impl<'a> Interp<'a> {
                                 }
                             })?;
                             let current = self.force_thunk(current)?;
-                            // a failure target propagates: a constructor that
-                            // took a failure argument already handed back that
-                            // failure, so the block-born target is not a record.
-                            // the write is skipped, exactly as native's
-                            // k_set_field returns early on a failure target.
+                            // a constructor given a failure handed the failure
+                            // back, so the target is not a record to write to
                             if is_failure(&current) {
                                 continue;
                             }
@@ -2004,12 +2001,8 @@ fn values_equal(a: &Value, b: &Value) -> bool {
     values_equal_seen(a, b, &mut std::collections::HashSet::new())
 }
 
-/// `seen` holds the record-cell pairs already assumed equal. A build block
-/// can close a cycle, so two distinct cyclic graphs are compared by
-/// bisimulation: assume a pair equal on first encounter, and a re-encounter
-/// of the same pair is the coinductive base case (true) rather than infinite
-/// recursion. The assumption is global for the comparison — a pair proven
-/// contradictory anywhere still returns false.
+/// Two cyclic graphs would compare forever, so a pair of cells is assumed
+/// equal once seen and any contradiction still returns false.
 fn values_equal_seen(
     a: &Value,
     b: &Value,
@@ -2104,9 +2097,8 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
     render_seen(value, quote_strings, &mut std::collections::HashSet::new())
 }
 
-/// `seen` holds the record cells on the current render path — a build block
-/// can close a cycle, and a cycle renders as `<cycle>` at the point of
-/// re-entry rather than recursing forever.
+/// A cycle would render forever, so re-entering a cell on the current path
+/// prints `<cycle>` instead.
 fn render_seen(
     value: &Value,
     quote_strings: bool,

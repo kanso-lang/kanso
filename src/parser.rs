@@ -891,9 +891,7 @@ fn span_of_stmt_head(line: &Line) -> Span {
     head_span(line)
 }
 
-/// `x = build` (or a bare `build` tail) opens the one block where mutation
-/// parses. The body runs top to bottom; `set target field value` lifts from
-/// application form; the last expression freezes as the block's result.
+/// The body runs top to bottom and its last expression is the result.
 fn parse_build(
     head: &Line,
     children: &[Line],
@@ -970,8 +968,7 @@ fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     Ok(stmts)
 }
 
-/// Inside a build body, a bare `set target field value` application becomes
-/// the mutation statement. The name stays free everywhere else.
+/// Lifting only here keeps the name `set` free everywhere else.
 fn lift_set(stmt: Stmt, line: &Line) -> Result<Stmt, Diagnostic> {
     let is_set_app = |e: &Expr| {
         matches!(e, Expr::App { head, .. } if matches!(&**head, Expr::Ident(w, _) if w == "set"))
