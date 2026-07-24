@@ -2020,3 +2020,29 @@ What survives is one thing, precisely bounded: cross-region cycles are a
 documented programmer obligation in the prior art, and mutation confinement
 makes them unrepresentable. Not the counting, not the automation. The
 elimination of that obligation.
+
+## 2026-07-24 — join lands in the browser; wasm parity is complete
+
+The last wasm fallback closes. Browser differential reads 39 passed, 0
+fallback, 0 failed: every golden in the corpus now runs on all three engines
+with no exceptions.
+
+Join needed far less than expected, because the scheduler was already
+reachable. Desc::Join is executed by the interpreter through schedule(), and
+wasm's exec_slot already hands a Value::Desc to interp.execute. So the
+backend only had to *build* the description; determinism, interleaving, and
+wall-crediting come from the same scheduler the other engines use, rather
+than from a reimplementation that could drift.
+
+Failure accumulation is likewise shared rather than mirrored. join_values
+became pub and rt_join calls it, so "both sides err gives you both reasons"
+has exactly one definition in the tree. join_accumulate's golden — an
+unhandled err carrying a two-element reason list — passes on the browser
+without a line of new accumulation logic.
+
+The one wasm-specific wrinkle is the deferred pair. wasm represents an
+unforced sequence as Slot::Seq rather than a Desc, so a join whose operand is
+a sequence needs materializing first; as_desc walks a Seq tree into a real
+Desc. A Bind cannot be materialized, since its continuation is a wasm table
+closure rather than a Value, and that case dies with the same wording the
+non-description case uses.

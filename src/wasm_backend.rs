@@ -67,6 +67,7 @@ const RT_UPCAST: u32 = 30;
 const RT_SETFIELD: u32 = 31;
 const RT_FIELD_BY_NAME: u32 = 32;
 const RT_IS_REC: u32 = 33;
+const RT_JOIN: u32 = 34;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -104,6 +105,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_setfield", params: 3, returns: true },
         Import { name: "rt_field_by_name", params: 2, returns: true },
         Import { name: "rt_is_rec", params: 1, returns: true },
+        Import { name: "rt_join", params: 2, returns: true },
     ]
 }
 
@@ -571,7 +573,11 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_SEQ);
             }
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
-            Expr::Join { .. } => return Err("join not yet in the wasm backend".to_string()),
+            Expr::Join { lhs, rhs, .. } => {
+                self.emit_expr(ctx, lhs, false)?;
+                self.emit_expr(ctx, rhs, false)?;
+                ctx.body.call(RT_JOIN);
+            }
             Expr::BinOp { op, lhs, rhs, span } => {
                 let armable = matches!(*op, "+" | "-" | "*" | "/" | "%")
                     && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
