@@ -367,9 +367,18 @@ impl<'a> Interp<'a> {
             overloads.sort_by_key(|d| d.synthetic);
         }
         let types = program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+        TYPESETS.with(|reg| {
+            *reg.borrow_mut() = program
+                .types
+                .iter()
+                .filter(|t| !t.members.is_empty())
+                .map(|t| (t.name.clone(), t.members.clone()))
+                .collect();
+        });
         let origin = Span { line: 0, col: 0 };
         let entry_decl = TypeDecl {
             parent: None,
+            members: Vec::new(),
             name: "entry".to_string(),
             is_pub: false,
             span: origin,
@@ -726,7 +735,7 @@ impl<'a> Interp<'a> {
             _ => {}
         }
         if let Some(decl) = self.type_decl(name) {
-            if decl.parent.is_none() && decl.fields.is_empty() {
+            if decl.parent.is_none() && decl.members.is_empty() && decl.fields.is_empty() {
                 return Ok(Value::Record { ty: Rc::from(name), fields: Rc::new(Vec::new()) });
             }
         }
@@ -835,6 +844,12 @@ impl<'a> Interp<'a> {
     }
 
     fn construct(&self, ty: &TypeDecl, args: Vec<Value>, span: Span) -> EvalResult {
+        if !ty.members.is_empty() {
+            return Err(RuntimeError {
+                message: format!("`{}` is a typeset — it only annotates", ty.name),
+                span,
+            });
+        }
         if let Some(parent) = &ty.parent {
             if args.len() != 1 {
                 return Err(RuntimeError {
@@ -1725,6 +1740,15 @@ pub fn is_failure(value: &Value) -> bool {
     matches!(value, Value::ErrV(_) | Value::NoneV)
 }
 
+thread_local! {
+    static TYPESETS: std::cell::RefCell<std::collections::HashMap<String, Vec<String>>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The typeset ladder rung: below every concrete type, above the bare
+/// generic. Encoded as a fixed depth so the score arithmetic orders it.
+const TYPESET_DEPTH: u8 = 50;
+
 pub fn type_matches(ty: &str, arg: &Value) -> bool {
     type_match_depth(ty, arg).is_some()
 }
@@ -1741,6 +1765,14 @@ fn type_matches_exact(ty: &str, arg: &Value) -> bool {
 /// How far up the subtype chain the annotation sits: an exact match is 0,
 /// the immediate parent 1, and so on — the dispatch score prefers nearer.
 fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
+    let member_hit = TYPESETS.with(|t| {
+        t.borrow().get(ty).map(|members| {
+            members.iter().any(|m| type_match_depth(m, arg).is_some())
+        })
+    });
+    if let Some(hit) = member_hit {
+        return hit.then_some(TYPESET_DEPTH);
+    }
     if let Value::Sub { ty: vty, inner } = arg {
         if ty == &**vty {
             return Some(0);

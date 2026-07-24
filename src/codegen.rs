@@ -389,6 +389,12 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
             .iter()
             .filter_map(|t| t.parent.clone().map(|p| (t.name.clone(), p)))
             .collect(),
+        typesets: program
+            .types
+            .iter()
+            .filter(|t| !t.members.is_empty())
+            .map(|t| (t.name.clone(), t.members.clone()))
+            .collect(),
         inference,
         escape,
         byte_disc,
@@ -413,6 +419,8 @@ struct Backend<'a> {
     /// subtype name -> parent name; non-empty programs get chain-aware
     /// dispatch checks, everyone else keeps the exact ones
     sub_parents: HashMap<String, String>,
+    /// typeset name -> members; an annotated param matches any member
+    typesets: HashMap<String, Vec<String>>,
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
@@ -865,17 +873,24 @@ impl<'a> Backend<'a> {
             }
             d
         };
+        // the ladder as a sort: literals, then concrete annotations (nearer
+        // subtype declarations first), then typesets, then the generics
         for (_, decls) in &mut groups {
             decls.sort_by_key(|d| {
-                let depth: i64 = d
+                let total: i64 = d
                     .params
                     .iter()
                     .map(|p| match p {
-                        Pattern::Annotated { ty, .. } => depth_of(ty),
-                        _ => 0,
+                        Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 3000,
+                        Pattern::Annotated { ty, .. } => match self.typesets.contains_key(ty) {
+                            true => 1000,
+                            false => 2000 + depth_of(ty),
+                        },
+                        Pattern::Ctor { .. } | Pattern::Keyed { .. } => 2000,
+                        Pattern::Var(..) | Pattern::Wildcard(..) => 0,
                     })
                     .sum();
-                (std::cmp::Reverse(depth), d.synthetic)
+                (std::cmp::Reverse(total), d.synthetic)
             });
         }
         for (name, decls) in &groups {
@@ -1223,6 +1238,41 @@ impl<'a> Backend<'a> {
         Ok(())
     }
 
+    /// The check call accepting one named type (chain-aware when the
+    /// program declares subtypes). Shared by concrete annotations and
+    /// typeset members.
+    fn type_check_call(&mut self, value: &str, ty: &str) -> Result<String, String> {
+        let subs = !self.sub_parents.is_empty();
+        Ok(match ty {
+            "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
+            "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
+            "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
+            "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
+            "string" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 6)"),
+            "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),
+            "bool" if subs => format!("call i64 @k_check_sub_bool(%KValue {value})"),
+            "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
+            "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
+            other => match self.type_ids.get(other) {
+                Some(id) if self.sub_parents.contains_key(other) => {
+                    format!("call i64 @k_check_sub_id(%KValue {value}, i64 {id})")
+                }
+                Some(id) => {
+                    let nfields = self.field_count(other)?;
+                    match subs {
+                        true => format!(
+                            "call i64 @k_check_sub_rec(%KValue {value}, i64 {id}, i64 {nfields})"
+                        ),
+                        false => format!(
+                            "call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})"
+                        ),
+                    }
+                }
+                None => return Err(format!("native backend: unknown type `{other}`")),
+            },
+        })
+    }
+
     /// The runtime's `want` encoding for a chain target: a declared
     /// type's id, or -(tag + 1) for a primitive.
     fn sub_want(&self, ty: &str) -> Result<i64, String> {
@@ -1560,6 +1610,30 @@ impl<'a> Backend<'a> {
                 f.bind(name, value);
                 f.record(value, known & !FAIL);
             }
+            Pattern::Annotated { name, ty, .. } if self.typesets.contains_key(ty) => {
+                // a typeset matches when any member does: OR the members'
+                // checks, then branch once
+                let members = self.typesets[ty].clone();
+                let mut acc: Option<String> = None;
+                for member in &members {
+                    let call = self.type_check_call(value, member)?;
+                    let c = f.tmp();
+                    f.line(&format!("{c} = {call}"));
+                    acc = Some(match acc {
+                        None => c,
+                        Some(prev) => {
+                            let o = f.tmp();
+                            f.line(&format!("{o} = or i64 {prev}, {c}"));
+                            o
+                        }
+                    });
+                }
+                let combined = acc.expect("a typeset has members");
+                let b = f.tmp();
+                f.line(&format!("{b} = icmp ne i64 {combined}, 0"));
+                branch_i1(f, b);
+                f.bind(name, value);
+            }
             Pattern::Annotated { name, ty, .. } => {
                 if ty.ends_with("[]") {
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 9)"));
@@ -1571,35 +1645,7 @@ impl<'a> Backend<'a> {
                     f.bind(name, value);
                     return Ok(());
                 }
-                let subs = !self.sub_parents.is_empty();
-                let call = match ty.as_str() {
-                    "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
-                    "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
-                    "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
-                    "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
-                    "string" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 6)"),
-                    "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),
-                    "bool" if subs => format!("call i64 @k_check_sub_bool(%KValue {value})"),
-                    "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
-                    "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
-                    other => match self.type_ids.get(other) {
-                        Some(id) if self.sub_parents.contains_key(other) => {
-                            format!("call i64 @k_check_sub_id(%KValue {value}, i64 {id})")
-                        }
-                        Some(id) => {
-                            let nfields = self.field_count(other)?;
-                            match subs {
-                                true => format!(
-                                    "call i64 @k_check_sub_rec(%KValue {value}, i64 {id}, i64 {nfields})"
-                                ),
-                                false => format!(
-                                    "call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})"
-                                ),
-                            }
-                        }
-                        None => return Err(format!("native backend: unknown type `{other}`")),
-                    },
-                };
+                let call = self.type_check_call(value, ty)?;
                 check(self, f, call);
                 f.bind(name, value);
             }

@@ -1,0 +1,16 @@
+type num float64 int
+
+pub play =
+  print (show 3)
+  >> print (show 2.5)
+  >> print (show "hi")
+  >> print (show true)
+
+fn show x:num
+  "a number: {x}"
+
+fn show x:string
+  "text: {x}"
+
+fn show _
+  "something else"

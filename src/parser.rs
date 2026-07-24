@@ -496,21 +496,39 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     let (name, span) = p.expect_ident("a type name")?;
     if !p.done() {
         let (parent, parent_span) = p.expect_ident("a parent type")?;
-        if !p.done() {
-            return Err(Diagnostic::new(
-                "syntax",
-                "a subtype names one parent; named typesets are not here yet"
-                    .to_string(),
-                parent_span,
-            ));
+        let mut members = vec![parent.clone()];
+        while !p.done() {
+            members.push(p.expect_ident("a member type")?.0);
         }
         if !body.is_empty() {
             return Err(Diagnostic::new(
                 "syntax",
-                "a subtype declaration is one line; fields belong to records"
+                "a subtype or typeset declaration is one line; fields belong \
+                 to records"
                     .to_string(),
                 parent_span,
             ));
+        }
+        if members.len() >= 2 {
+            let mut sorted = members.clone();
+            sorted.sort();
+            if sorted != members {
+                return Err(Diagnostic::new(
+                    "formatting",
+                    "typeset members appear in alphabetical order".to_string(),
+                    parent_span,
+                ));
+            }
+            return Ok(TypeDecl {
+                name,
+                is_pub,
+                span,
+                synthetic: false,
+                origin: None,
+                parent: None,
+                members,
+                fields: Vec::new(),
+            });
         }
         return Ok(TypeDecl {
             name,
@@ -519,12 +537,13 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
             synthetic: false,
             origin: None,
             parent: Some(parent),
+            members: Vec::new(),
             fields: Vec::new(),
         });
     }
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, is_pub, span, synthetic: false, origin: None, parent: None, fields })
+    Ok(TypeDecl { name, is_pub, span, synthetic: false, origin: None, parent: None, members: Vec::new(), fields })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {

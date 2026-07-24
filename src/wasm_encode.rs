@@ -123,6 +123,10 @@ impl Body {
         self.code.push(0x45);
     }
 
+    pub fn i32_or(&mut self) {
+        self.code.push(0x72);
+    }
+
     pub fn drop_(&mut self) {
         self.code.push(0x1a);
     }

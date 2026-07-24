@@ -1389,3 +1389,20 @@ without subtypes (the parents map gates the whole pass). Golden:
 tests/golden/errors/subtype_tie. The ratified subtype design is now
 COMPLETE across declaration, construction, dispatch, upcast,
 transparency, three engines, and the static safety rule.
+
+## 2026-07-24 — SHIPPED: named typesets — the declaration family is whole
+
+`type num float64 int` (two or more members, alphabetized like every
+enumeration) declares annotation-only vocabulary: no construction, no
+bare mention, no dispatch identity — an annotated param matches any
+member. The ladder holds everywhere: literal > concrete annotation
+(nearer subtype first) > typeset > generic — encoded as score depth
+in the interp (TYPESET_DEPTH below every chain) and as the arm-sort
+tier in both compiled backends (which also fixed the sort's blind
+spot: depth-only ordering had no rung for generics). Interp matching
+reads a registry mirrored at Interp::new; native emits a static OR of
+member checks; wasm ORs rt_check_type per member (i32.or joined the
+encoder). Differential corpus grows examples/typeset_named.kso: 28
+passed, 0 failed. One `type` declaration form now covers records
+(fields), markers (nothing), subtypes (one member), and named
+typesets (several) — the mushroom test's four-for-one, closed.
