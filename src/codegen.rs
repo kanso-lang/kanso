@@ -179,6 +179,7 @@ declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
+declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -1763,9 +1764,7 @@ impl<'a> Backend<'a> {
         let last = body.len() - 1;
         for (i, stmt) in body.iter().enumerate() {
             match stmt {
-                Stmt::Set { .. } => {
-                    return Err("native backend: `set` is not yet lowered".to_string());
-                }
+                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), i)
                         && self.thunkable(f, expr) =>
@@ -1907,8 +1906,16 @@ impl<'a> Backend<'a> {
                 for (i, stmt) in stmts.iter().enumerate() {
                     match stmt {
                         Stmt::Bind { pattern, expr } => self.emit_bind(f, pattern, expr)?,
-                        Stmt::Set { .. } => {
-                            return Err("native backend: `set` is not yet lowered".to_string());
+                        Stmt::Set { target, field, value, span } => {
+                            let new = self.emit_expr(f, value)?;
+                            let new = self.maybe_force(f, new);
+                            let ident = Expr::Ident(target.clone(), *span);
+                            let tv = self.emit_expr(f, &ident)?;
+                            let tv = self.maybe_force(f, tv);
+                            let (label, _) = self.intern(&format!("{field}\0"));
+                            f.line(&format!(
+                                "call %KValue @k_set_field(%KValue {tv}, ptr @{label}, %KValue {new})"
+                            ));
                         }
                         Stmt::Expr(e) => {
                             let v = self.emit_expr(f, e)?;

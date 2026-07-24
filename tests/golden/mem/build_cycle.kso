@@ -1,0 +1,16 @@
+type node
+  id:string
+  peers:list
+
+pub play =
+  graph = build
+    a = node "a" []
+    b = node "b" [a]
+    set a peers [b]
+    [a b]
+  ring = build
+    base = node "seed" []
+    set base peers [base]
+    base
+  print "{graph}"
+  >> print "{ring}"

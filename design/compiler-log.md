@@ -1426,3 +1426,28 @@ cyclic cohort cannot recurse it forever. (5) wasm mirrors through the
 shared Value. (6) differential goldens: wiring a two-node cycle,
 reading through it, the set-outside-build and non-block-born errors,
 and the cycle render marker.
+
+## 2026-07-23 — build blocks v1 ship
+
+All six stages landed on one branch. Surface: `x = build` (or bare tail
+`build`) opens the block; `set target field value` lifts from application
+form inside it; the last expression freezes as the result. Checker: the
+block-born rule — a set target must trace to a *direct constructor
+application* born in the same block (a call that merely returns a record
+may hand back something older, so it does not qualify; conservative v1).
+`set` outside build gets its own diagnostic off the unknown-name path.
+Interp: `Record.fields` became `Rc<RefCell<Vec<Value>>>` — the identity
+cell; set writes through it; render carries a path-scoped visited set and
+prints `<cycle>` at re-entry (shared acyclic subtrees still render fully);
+equality short-circuits on cell identity. Native: `k_set_field` writes in
+place by field name (mirror of `k_b_field`); `k_render` carries the same
+path guard; `k_eq` gets the pointer short-circuit; fns holding a build are
+beat-ineligible v1 (the carry deep-copy has no identity map yet, so cycles
+must never reach it — `beat_iters=0` is pinned in the new mem golden).
+Wasm: `rt_setfield` by name-literal, shared-Value RefCell threaded through
+`rt_mkrec`/`rt_field`/`rt_keyed_field`/`rt_check_rec`. Goldens:
+examples/build_blocks.kso (two-node cycle + self-loop, all three engines
+byte-identical, browser corpus 29/0), errors build_set_outside +
+build_not_block_born, mem build_cycle. Deferred, tracked: identity-mapped
+deep copy (unlocks beat for cohorts), equality on two distinct cyclic
+graphs (recurses in every engine today), cohort arena freeing.

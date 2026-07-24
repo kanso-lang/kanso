@@ -216,7 +216,7 @@ pub extern "C" fn rt_check_rec(h: u32, tid: u32, nfields: u32) -> u32 {
         return 0;
     };
     let matches_ty = type_index(&ty).is_some_and(|i| i == tid as usize);
-    (matches_ty && fields.len() == nfields as usize) as u32
+    (matches_ty && fields.borrow().len() == nfields as usize) as u32
 }
 
 #[no_mangle]
@@ -229,7 +229,8 @@ pub extern "C" fn rt_field(h: u32, i: u32) -> u32 {
     let Slot::V(Value::Record { fields, .. }) = slot(h) else {
         die("not a record".to_string());
     };
-    push(Slot::V(fields[i as usize].clone()))
+    let field = fields.borrow()[i as usize].clone();
+    push(Slot::V(field))
 }
 
 #[no_mangle]
@@ -264,6 +265,28 @@ pub extern "C" fn rt_keyed_check(h: u32, entries: u32) -> u32 {
 }
 
 #[no_mangle]
+pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
+    let name = match val(name_lit) {
+        Value::Str(s) => s,
+        _ => die("field name must be a string".to_string()),
+    };
+    let new = val(value_h);
+    let Slot::V(Value::Record { ty, fields }) = slot(h) else {
+        die("`set` writes a record field".to_string());
+    };
+    let position = TYPES.with(|t| {
+        let types = t.borrow();
+        let i = types.iter().position(|(n, _)| *n == *ty).expect("declared type");
+        types[i].1.iter().position(|f| *f == name)
+    });
+    match position {
+        Some(i) => fields.borrow_mut()[i] = new,
+        None => die(format!("`{ty}` has no field `{name}`")),
+    }
+    push(Slot::V(Value::NoneV))
+}
+
+#[no_mangle]
 pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
     let name = match val(name_lit) {
         Value::Str(s) => s,
@@ -278,7 +301,10 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
         types[i].1.iter().position(|f| *f == name)
     });
     match position {
-        Some(i) => push(Slot::V(fields[i].clone())),
+        Some(i) => {
+            let field = fields.borrow()[i].clone();
+            push(Slot::V(field))
+        }
         None => die(format!("`{ty}` has no field `{name}`")),
     }
 }
@@ -426,7 +452,7 @@ pub extern "C" fn rt_mkrec(tid: u32, n: u32) -> u32 {
         fields.push(v);
     }
     let name = TYPES.with(|t| t.borrow()[tid as usize].0.clone());
-    push(Slot::V(Value::Record { ty: Rc::from(name.as_str()), fields: Rc::new(fields) }))
+    push(Slot::V(Value::Record { ty: Rc::from(name.as_str()), fields: Rc::new(RefCell::new(fields)) }))
 }
 
 #[no_mangle]

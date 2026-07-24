@@ -926,6 +926,24 @@ KValue k_b_field(KValue v, const char* name) {
     KValue none; none.tag = K_NONE; none.payload = 0; return none;
 }
 
+static KValue k_sub_base(KValue v);
+
+KValue k_set_field(KValue target, const char* name, KValue v) {
+    if (!k_not_failure(target)) return target;
+    if (!k_not_failure(v)) return v;
+    if (target.tag == K_SUB) target = k_sub_base(target);
+    if (target.tag != K_REC) k_die("`set` writes a record field");
+    KRec* r = k_as_rec(target);
+    for (long long i = 0; i < r->nfields; i++) {
+        if (!strcmp(k_type_field_name(r->type_id, i), name)) {
+            r->fields[i] = v;
+            KValue none; none.tag = K_NONE; none.payload = 0; return none;
+        }
+    }
+    k_die("no such field");
+    KValue none; none.tag = K_NONE; none.payload = 0; return none;
+}
+
 KValue k_keyed_field(KValue v, const char* name) {
     KRec* r = k_as_rec(v);
     long long n = k_type_field_count(r->type_id);
@@ -1825,6 +1843,10 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
     }
 }
 
+#define K_RENDER_PATH_MAX 4096
+static const KRec* k_render_path[K_RENDER_PATH_MAX];
+static int k_render_depth = 0;
+
 KValue k_render(KValue v, long long quote) {
     // an err propagates through rendering (it is an exception); a none is a
     // value and renders its sentinel below
@@ -1866,12 +1888,19 @@ KValue k_render(KValue v, long long quote) {
             return k_concat(k_concat(k_str("\""), v), k_str("\""));
         case K_REC: {
             KRec* r = k_as_rec(v);
-            KValue out = k_str(k_type_name(r->type_id));
-            for (long long i = 0; i < r->nfields; i++) {
-                out = k_concat(out, k_str(" "));
-                out = k_concat(out, k_render(r->fields[i], 1));
+            if (r->nfields > 0) {
+                for (int d = 0; d < k_render_depth; d++)
+                    if (k_render_path[d] == r) return k_str("<cycle>");
+                if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = r;
+                KValue out = k_str(k_type_name(r->type_id));
+                for (long long i = 0; i < r->nfields; i++) {
+                    out = k_concat(out, k_str(" "));
+                    out = k_concat(out, k_render(r->fields[i], 1));
+                }
+                k_render_depth--;
+                return out;
             }
-            return out;
+            return k_str(k_type_name(r->type_id));
         }
         case K_DESC: return k_str("<io>");
         case K_LIST: {
@@ -1943,6 +1972,7 @@ static long long k_eq(KValue a, KValue b) {
         case K_REC: {
             KRec* ra = k_as_rec(a);
             KRec* rb = k_as_rec(b);
+            if (ra == rb) return 1;
             if (ra->type_id != rb->type_id) return 0;
             for (long long i = 0; i < ra->nfields; i++) {
                 if (!k_eq(ra->fields[i], rb->fields[i])) return 0;

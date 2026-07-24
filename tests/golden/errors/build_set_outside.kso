@@ -1,0 +1,8 @@
+type node
+  id:int
+  peers:list
+
+pub play =
+  a = node 1 []
+  set a peers []
+  print "{a}"

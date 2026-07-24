@@ -1,0 +1,13 @@
+type node
+  id:int
+  peers:list
+
+fn mutate n
+  build
+    a = node 9 []
+    set n peers [a]
+    a
+
+pub play =
+  outer = node 1 []
+  print "{mutate outer}"
