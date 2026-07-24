@@ -1,0 +1,4 @@
+error[type]: `missing` cannot derive from `none` yet — name the members you mean, or use a zero-field marker type
+  --> sub_of_none.kso:1:6
+   1 | type missing none
+            ^

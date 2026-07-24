@@ -1,0 +1,5 @@
+pub play =
+  xs = [1 none 3]
+  m = { "a":none "b":2 }
+  print "{xs}"
+  >> print "{m}"

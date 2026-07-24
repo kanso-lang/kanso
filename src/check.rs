@@ -59,6 +59,25 @@ pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     diags
 }
 
+/// The engines carry `none` as a tag rather than a declared type, so nothing
+/// can derive from it yet. Rejecting here keeps all three engines identical
+/// instead of one erroring and another silently dropping the subtype.
+fn check_sub_parents(program: &Program, diags: &mut Vec<Diagnostic>) {
+    for ty in &program.types {
+        if ty.parent.as_deref() == Some("none") {
+            diags.push(Diagnostic::new(
+                "type",
+                format!(
+                    "`{}` cannot derive from `none` yet — name the members you \
+                     mean, or use a zero-field marker type",
+                    ty.name
+                ),
+                ty.span,
+            ));
+        }
+    }
+}
+
 /// The gaveled tie-rejection: with subtypes, two arms of one group can
 /// overlap without either dominating — a value both accept, where each
 /// arm is the more specific one somewhere. Dispatch would need tiebreak
@@ -445,6 +464,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_predicates(program, &mut diags);
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
+    check_sub_parents(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }
