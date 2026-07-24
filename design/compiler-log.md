@@ -1544,3 +1544,17 @@ runtime goldens (field_non_record, field_missing) that run both engines and
 assert byte-identical stderr. Browser backend still rejects Expr::Field
 (clean fallback), so these are wasm fallbacks — the tracked wasm-field-access
 follow-up will add the wasm arm and fold these into its differential.
+
+## 2026-07-23 — missing_index book golden regen (follow-on to field-error fix)
+
+The field-access message change moved docs/book/samples/appa/missing_index.out
+(`xs.at 9` reads field `at` on a list, now "... not [1 2 3]"). Regenerated it;
+book_check green. Surfaced but NOT fixed here (tracked book-panel-sync work,
+"book HTML stale pre-keystone"): appa.html's output panel for this sample
+still shows the pre-module-system "error[endpoint]: unhandled none reached
+main", and the sample itself uses tight `xs.at 9` (field access) in an
+appendix about the endpoint family — it wants `xs[9]` or a re-import of `at`.
+The .out on main already carried the field-error interpretation, so the HTML
+was already unsynced; this PR only updates the message text. Note: book_check
+runs in CI separately from cargo test — run `sh scripts/book_check.sh` locally
+for any diagnostic-message change.
