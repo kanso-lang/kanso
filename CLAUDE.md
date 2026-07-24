@@ -74,10 +74,12 @@ A clean grep is necessary, not sufficient — the families above are wider than 
 ### Merge and conflict discipline
 - **Never blanket-resolve conflicts** (`checkout --ours`/`--theirs`) on
   runtime.c or any load-bearing file — resolve hunk by hunk.
-- Auto-merge races: arm auto-merge only after the final push, and after
-  any push to an armed PR, verify the PR head equals the local sha. A PR
-  that merged early strands commits — check `git log origin/<branch>`
-  against main after every auto-merge.
+- **No fire-and-forget merges.** Do not arm auto-merge and move on: wait
+  for CI green, merge, and verify the content landed on origin/main —
+  `state == MERGED` plus a grep of the changed lines. If CI fails, fix
+  and repeat. A PR is not "shipped" until this loop closes; saying
+  otherwise is false reporting. (Auto-merge silently failed to fire on
+  green PRs more than once, and stale docs sat live for hours.)
 - `git add -A` sweeps stray working-tree files into commits — scope adds
   to the paths the change owns. (A stray repl experiment once rode into a
   PR and silently broke its CI for a day.)

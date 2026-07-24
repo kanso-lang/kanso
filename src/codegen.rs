@@ -28,10 +28,73 @@ slow:
 done:
   ret %KValue %v
 }
+@k_arena = external global ptr
+@k_arena_left = external global i64
+@k_stats_on = external global i32
+
+define internal %KValue @k_b_append_byte(%KValue %acc, %KValue %x) alwaysinline {
+  %atag = extractvalue %KValue %acc, 0
+  %isb = icmp eq i64 %atag, 13
+  br i1 %isb, label %chkx, label %slow
+chkx:
+  %xtag = extractvalue %KValue %x, 0
+  %isi = icmp eq i64 %xtag, 0
+  br i1 %isi, label %chks, label %slow
+chks:
+  %so = load i32, ptr @k_stats_on
+  %counting = icmp ne i32 %so, 0
+  br i1 %counting, label %slow, label %fast
+fast:
+  %bp = extractvalue %KValue %acc, 1
+  %b = inttoptr i64 %bp to ptr
+  %len = load i64, ptr %b
+  %datap = getelementptr i8, ptr %b, i64 8
+  %data = load ptr, ptr %datap
+  %capp = getelementptr i8, ptr %b, i64 16
+  %cap = load i64, ptr %capp
+  %owned = icmp ne i64 %cap, 0
+  br i1 %owned, label %fr, label %slow
+fr:
+  %usedp = getelementptr i8, ptr %data, i64 -8
+  %used = load i64, ptr %usedp
+  %atfront = icmp eq i64 %used, %len
+  %len1 = add i64 %len, 1
+  %fits = icmp sle i64 %len1, %cap
+  %ok = and i1 %atfront, %fits
+  br i1 %ok, label %claim, label %slow
+claim:
+  %left = load i64, ptr @k_arena_left
+  %has = icmp uge i64 %left, 32
+  br i1 %has, label %alloc, label %slow
+alloc:
+  %dst = getelementptr i8, ptr %data, i64 %len
+  %xv = extractvalue %KValue %x, 1
+  %byte = trunc i64 %xv to i8
+  store i8 %byte, ptr %dst
+  store i64 %len1, ptr %usedp
+  %ar = load ptr, ptr @k_arena
+  %ar2 = getelementptr i8, ptr %ar, i64 32
+  store ptr %ar2, ptr @k_arena
+  %left2 = sub i64 %left, 32
+  store i64 %left2, ptr @k_arena_left
+  store i64 %len1, ptr %ar
+  %hd = getelementptr i8, ptr %ar, i64 8
+  store ptr %data, ptr %hd
+  %hc = getelementptr i8, ptr %ar, i64 16
+  store i64 %cap, ptr %hc
+  %pi = ptrtoint ptr %ar to i64
+  %r0 = insertvalue %KValue { i64 13, i64 undef }, i64 %pi, 1
+  ret %KValue %r0
+slow:
+  %f = call %KValue @k_b_append(%KValue %acc, %KValue %x)
+  ret %KValue %f
+}
 define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %is_list = icmp eq i64 %tag, 9
-  br i1 %is_list, label %list, label %slow
+  %is_bytes = icmp eq i64 %tag, 13
+  %fastable = or i1 %is_list, %is_bytes
+  br i1 %fastable, label %list, label %slow
 list:
   %p = extractvalue %KValue %v, 1
   %lp = inttoptr i64 %p to ptr
@@ -222,6 +285,47 @@ const BUILTIN_CALLS: [(&str, usize); 27] = [
     ("to_int", 1),
 ];
 
+/// Groups that are pure builtin forwarders: one arm, plain-var params,
+/// body exactly `builtin_X p1 p2 ...` in order. Call sites bypass the
+/// dispatch hop and reach the builtin (and its inline twins) directly.
+fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
+    let mut counts: HashMap<(String, usize), usize> = HashMap::new();
+    for d in &program.fns {
+        *counts.entry((d.name.clone(), d.params.len())).or_default() += 1;
+    }
+    let mut out = HashMap::new();
+    for d in &program.fns {
+        if counts[&(d.name.clone(), d.params.len())] != 1 || d.body.len() != 1 {
+            continue;
+        }
+        let params: Vec<&str> = d
+            .params
+            .iter()
+            .filter_map(|p| match p {
+                Pattern::Var(n, _) => Some(n.as_str()),
+                _ => None,
+            })
+            .collect();
+        if params.len() != d.params.len() {
+            continue;
+        }
+        let Stmt::Expr(Expr::App { head, args, piped: false, .. }) = &d.body[0] else {
+            continue;
+        };
+        let Expr::Ident(callee, _) = head.as_ref() else { continue };
+        let Some(target) = callee.strip_prefix("builtin_") else { continue };
+        let all_forwarded = args.len() == params.len()
+            && args
+                .iter()
+                .zip(&params)
+                .all(|(a, p)| matches!(a, Expr::Ident(n, _) if n == p));
+        if all_forwarded {
+            out.insert((d.name.clone(), d.params.len()), target.to_string());
+        }
+    }
+    out
+}
+
 pub fn emit_ir(program: &Program) -> Result<String, String> {
     if let Some(t) = program.types.iter().find(|t| t.parent.is_some()) {
         return Err(format!(
@@ -280,6 +384,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
     let mut backend = Backend {
         program,
+        forwarders: forwarder_map(program),
         inference,
         escape,
         byte_disc,
@@ -300,6 +405,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
 struct Backend<'a> {
     program: &'a Program,
     inference: infer::Inference,
+    forwarders: HashMap<(String, usize), String>,
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
@@ -2699,6 +2805,7 @@ impl<'a> Backend<'a> {
         // d_join_2 self-recursion)
         let was_builtin = name.starts_with("builtin_");
         let name: &str = name.strip_prefix("builtin_").unwrap_or(name);
+
         if name == "err" {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
@@ -2791,6 +2898,19 @@ impl<'a> Backend<'a> {
         if name == "at" && emitted.len() == 2 {
             return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));
         }
+        // a std wrapper that only forwards to a builtin costs a dispatched
+        // call per use; the call site goes straight to the builtin (and its
+        // inline twins). The rename lives INSIDE this branch only — it must
+        // never leak into user-group dispatch, whose per-site specialized
+        // signatures the renamed identity would not match.
+        let forwarded = self
+            .forwarders
+            .get(&(name.to_string(), emitted.len()))
+            .cloned();
+        let name: &str = match &forwarded {
+            Some(target) => target.as_str(),
+            None => name,
+        };
         if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == name) {
             if emitted.len() != *arity {
                 return Err(format!("native backend: `{name}` takes {arity} argument(s)"));
@@ -2816,6 +2936,10 @@ impl<'a> Backend<'a> {
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"
+            } else if name == "append" {
+                // the single-byte frontier claim inlines whole; everything
+                // else falls through to the C path inside the twin
+                "append_byte"
             } else {
                 name
             };
