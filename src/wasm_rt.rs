@@ -220,6 +220,11 @@ pub extern "C" fn rt_check_rec(h: u32, tid: u32, nfields: u32) -> u32 {
 }
 
 #[no_mangle]
+pub extern "C" fn rt_is_rec(h: u32) -> u32 {
+    matches!(slot(h), Slot::V(Value::Record { .. })) as u32
+}
+
+#[no_mangle]
 pub extern "C" fn rt_check_err(h: u32) -> u32 {
     matches!(slot(h), Slot::V(Value::ErrV(_))) as u32
 }

@@ -1840,3 +1840,25 @@ it to a value first. That is the whole discipline in one sentence.
 Dependency: enforcing the boundary exception requires knowing which calls
 cross a package boundary, so it lands with hako. Until then the rule is
 enforceable for ordinary functions and the reification form is unbuilt.
+
+## 2026-07-24 — browser backend: operator arms and function values
+
+Two of the three remaining wasm fallbacks close. Browser differential goes
+from 34 passed / 5 fallback to 37 passed / 2 fallback, 0 failed.
+
+Operator arms mirror the native strategy rather than inventing one: a record
+on the left dispatches to the operator's user group, everything else takes
+the builtin path, so numbers never reach user arms. Native decides this
+statically where inference proves the left operand can be a record; wasm
+emits the branch whenever a user group exists and tests the tag at runtime
+through a new rt_is_rec. The playground is not the performance engine, so
+the always-branch costs nothing that matters and keeps the emitter simple.
+
+Function values needed one missing case in emit_app. Bare function names
+already became closures through fn_wrapper/RT_MKCLOSURE, but a call whose
+head is a zero-arity constant holding one (`twice = double`, then `twice 7`)
+matched no dispatcher for its own arity and fell through to the error. It
+now evaluates the constant and applies the result through RT_CALL.
+
+The two remaining fallbacks are both `join`, which waits on the io/parallel
+ordering gavel rather than on emitter work.
