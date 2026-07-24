@@ -1756,3 +1756,36 @@ absence signal declared as a subtype — `type out_of_bounds none` for arrays,
 and up-flows so that code asking only "did it find anything?" keeps working
 while code that cares dispatches on the precise reason. Whether lookups
 actually return such refined types is available, not ruled.
+
+## 2026-07-24 — GAVEL: `any` excludes the absence channel
+
+Ruled, closing the question the static-slot gavel left open: `any` is legal
+everywhere, including as a collection element type. It excludes none, its
+subtypes, and any refined lookup signal derived from it.
+
+So `any` is the set of values that can be stored, and the absence channel is
+disjoint from it by definition. `[]any` and `map[string any]` are therefore
+safe by construction, and the explicit collection prohibition remains only
+for the case someone writes an element type that names none directly
+(`[]maybe_job` where `type maybe_job none string`).
+
+Consequence: a record field typed `any` no longer holds none. A field that
+wants anything-or-nothing says so — `peer:any none`, or a named typeset.
+`any` then means the same thing in a field and in an element position, and
+optionality is always written rather than inherited.
+
+This agrees with the json conclusion reached from the other direction: a
+json array holds `any`, `any` excludes the absence channel, so json null
+stays a non-none marker type.
+
+Also settled in the same exchange, on refined lookup signals: if
+`out_of_bounds` and `missing_key` are introduced, they are subtypes of none.
+The deciding argument is migration — as independent types they would break
+every existing `none` arm in the stdlib and in user code at once, while as
+subtypes they up-flow, so existing arms keep matching and code wanting the
+reason opts into dispatching on it. It also lines up conceptually: the
+lenient form `xs[i]` is the one where absence is a value rather than a bail
+(the strict form `xs[i]!` already gives the err), so its signal is a kind of
+nothing, which is what a subtype of none is. Introducing them at all remains
+optional and deferred; both gavels stand with bare none. Doing so would make
+fixing the subtype-of-none divergence load-bearing rather than incidental.
