@@ -1,0 +1,4 @@
+error[dispatch]: these `f` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position
+  --> subtype_tie.kso:6:4
+   6 | fn f a:num b:int
+          ^

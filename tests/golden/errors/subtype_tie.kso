@@ -1,0 +1,9 @@
+type num int
+
+fn f a:int b:num
+  "int num {a} {b}"
+
+fn f a:num b:int
+  "num int {a} {b}"
+
+pub play = print (f (num 1) (num 2))
