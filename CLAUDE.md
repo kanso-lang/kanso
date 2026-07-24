@@ -89,6 +89,12 @@ A clean grep is necessary, not sufficient — the families above are wider than 
    immediately** — dated, conditions named — in the site docs and every
    dependent repo (kq, kanso-json, vse). The table IS the latest sitting;
    idle-machine floors are a footnote refreshed when the box idles.
+   **The number-bearing surfaces are a checklist, not a memory** — walk
+   ALL of them every time: compiler.html decode board, compiler.html
+   lazy scoreboard (§07), compiler.html recipe block (§08),
+   index.html landing panel, about.html prose numbers, kq README table,
+   kq TRY.md timings, kanso-json README if it grows numbers. Three of
+   these sat stale for a day because the sweep ran on recall.
 2. Profile evidence in the PR (which line died, what the floor is now).
 3. Append-only log entry (design/compiler-log.md): decisions, measurements,
    open threads. Negative results (built-measured-declined) are recorded on

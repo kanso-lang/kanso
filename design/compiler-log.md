@@ -1305,3 +1305,14 @@ its keep the same day it was written into CLAUDE.md.
 
 Encode: 0.66 → 0.49-0.51s user (campaign 3.46 → 0.50, 6.9x). Encode
 cost golden exact; kq green; 12/12.
+
+## 2026-07-24 — tail-forwarder elision closes the campaign's last named line
+
+Tail-position calls to std forwarders (the musttail dispatcher route
+the value-position elision could not touch) now emit builtin-plus-ret
+— wrappers never recurse, so nothing is owed to stack safety. Encode
+0.50 → 0.39s user (campaign 3.46 → 0.39, 8.9x); the profile is flat
+at ~25 samples/line — d_encode_onto at 24 means SpecConstr is no
+longer profile-motivated for encode and defers. kq inherits through
+pretty: big-file 56.9 → 50.4ms (2.28x over jq). The surface checklist
+lands in CLAUDE.md's definition of done.
