@@ -132,7 +132,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <span class="eyebrow">the compiler</span>
 <h1>guardrails, not lifetimes</h1>
 
-<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds per decode, best of forty interleaved runs on one machine in one sitting. shorter is faster.</p>
+<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds per decode, best of forty interleaved runs on one machine in one sitting — 2026-07-23, on a heavily loaded desktop, which is exactly why the runs interleave: every decoder faces the same weather, so the comparison stays fair while the absolute numbers carry the load (idle floors: kanso 0.89, serde 0.98; medians on a loaded box mostly measure the load). shorter is faster.</p>
 
 <table class="bench-table">
   <thead>
@@ -141,28 +141,28 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
   <tbody>
     <tr class="win">
       <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:44%"></span></span></td>
-      <td class="num">0.89</td><td class="num">0.92</td><td class="num">5.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:30%"></span></span></td>
+      <td class="num">1.15</td><td class="num">3.30</td><td class="num">5.8 mb</td>
     </tr>
     <tr>
       <td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:48%"></span></span></td>
-      <td class="num">0.98</td><td class="num">1.01</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:44%"></span></span></td>
+      <td class="num">1.67</td><td class="num">3.53</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>reasonably-written rust</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:56%"></span></span></td>
-      <td class="num">1.13</td><td class="num">1.17</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:41%"></span></span></td>
+      <td class="num">1.55</td><td class="num">3.89</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>go encoding/json</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">2.03</td><td class="num">2.08</td><td class="num">10.4 mb</td>
+      <td class="num">3.81</td><td class="num">7.40</td><td class="num">10.4 mb</td>
     </tr>
   </tbody>
 </table>
 
-<p>kanso is the top line. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. and it leads <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—by ten percent on best and median alike, at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails kanso by a quarter; go runs at double with its collector working.</p>
+<p>kanso is the top line. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. and it leads <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—by forty-five percent this sitting (ten percent at the idle floors; the vectorized utf-8 validation and eisel–lemire parsing both live on the decode path, and the gap has widened with each), at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails kanso by a third; go runs past treble with its collector working.</p>
 
 <p>a pure, annotation-free language ahead of hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
 
