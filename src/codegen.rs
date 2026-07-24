@@ -28,6 +28,20 @@ slow:
 done:
   ret %KValue %v
 }
+define internal %KValue @k_b_length_fast(%KValue %v) alwaysinline {
+  %tag = extractvalue %KValue %v, 0
+  %is_list = icmp eq i64 %tag, 9
+  br i1 %is_list, label %list, label %slow
+list:
+  %p = extractvalue %KValue %v, 1
+  %lp = inttoptr i64 %p to ptr
+  %len = load i64, ptr %lp
+  %r = insertvalue %KValue { i64 0, i64 undef }, i64 %len, 1
+  ret %KValue %r
+slow:
+  %f = call %KValue @k_b_length(%KValue %v)
+  ret %KValue %f
+}
 define internal %KValue @k_int(i64 %n) alwaysinline {
   %v = insertvalue %KValue { i64 0, i64 undef }, i64 %n, 1
   ret %KValue %v
@@ -2799,6 +2813,9 @@ impl<'a> Backend<'a> {
                     .contains(&(f.file.clone(), span.line, span.col))
             {
                 "push_mut"
+            } else if name == "length" {
+                // the list case is a header load; the twin inlines it
+                "length_fast"
             } else {
                 name
             };
