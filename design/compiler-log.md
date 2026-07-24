@@ -1510,3 +1510,22 @@ field-divergent rings false, self true — byte-identical on all three engines
 Build-blocks deferred queue now: cohort arena freeing (the birthday-theorem
 memory payoff) is the last big item; identity-mapped copy and cyclic
 equality are both done.
+
+## 2026-07-23 — dot field access in expression position (spacing bug)
+
+`{u.age}` worked in interpolation but `a = u.age` in a binding was rejected
+with "canonical form requires exactly one space here". The tokenizer already
+distinguishes tight field access (Tok::Dot) from the spaced pipe (Tok::Pipe),
+but required_gap had no Dot case, so it defaulted to demanding one space —
+exactly backwards for a tight dot. Added `(_, Tok::Dot) | (Tok::Dot, _) => 0`.
+Field access now works in any expression position, chained (s.head.x) too,
+native and interp byte-identical. Pinned by examples/dot_field_access.kso.
+The bug survived because the only field-access golden lived inside an
+interpolation, which skips line spacing validation.
+
+Tracked separately (NOT this PR): the browser backend still rejects
+Expr::Field at codegen (clean fallback, differential-law-legal). Wiring it
+via the existing rt_keyed_field is a small happy-path change, but matching
+the interpreter's field-access error paths (failure propagation, the
+"`{ty}` has no field `{name}`" message) byte-for-byte needs its own
+adversarial goldens — a focused follow-up.
