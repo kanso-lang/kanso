@@ -16,4 +16,5 @@ find2_calls=0
 append_fast=0
 append_grow=0
 utf8_zerocopy=0
+carry_dedup=0
 sum 500500

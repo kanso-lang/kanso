@@ -1,0 +1,11 @@
+type node
+  id:int
+  peer:any
+
+pub play =
+  collapsed = build
+    a = node 1 none
+    b = node 2 0
+    set a peer b
+    a
+  print "{collapsed}"

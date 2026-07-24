@@ -16,3 +16,4 @@ find2_calls=4200475
 append_fast=42312800
 append_grow=5200
 utf8_zerocopy=400
+carry_dedup=0

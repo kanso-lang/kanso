@@ -571,6 +571,14 @@ impl<'a> Interp<'a> {
                                 }
                             })?;
                             let current = self.force_thunk(current)?;
+                            // a failure target propagates: a constructor that
+                            // took a failure argument already handed back that
+                            // failure, so the block-born target is not a record.
+                            // the write is skipped, exactly as native's
+                            // k_set_field returns early on a failure target.
+                            if is_failure(&current) {
+                                continue;
+                            }
                             let Value::Record { ty, fields } = &current else {
                                 return Err(RuntimeError {
                                     message: format!(
