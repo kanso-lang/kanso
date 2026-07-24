@@ -53,6 +53,7 @@ static long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
 static long long k_stat_append_grow = 0;
 static long long k_stat_utf8_zerocopy = 0;
+static long long k_stat_carry_dedup = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -205,12 +206,13 @@ static void k_stats_dump(void) {
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
         "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
         "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
-        "utf8_zerocopy=%lld\n",
+        "utf8_zerocopy=%lld\ncarry_dedup=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
-        k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy);
+        k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
+        k_stat_carry_dedup);
 }
 
 static void k_arena_push(size_t need) {
@@ -391,6 +393,63 @@ static void k_cache_reg_sweep(KMark* mark) {
     (void)resets;
 }
 
+typedef struct { const void* key; void* val; unsigned long long gen; } KPtrSlot;
+typedef struct { KPtrSlot* slots; size_t cap; unsigned long long gen; } KPtrMap;
+
+static KPtrMap k_copy_seen;   /* size pass: key visited, val unused */
+static KPtrMap k_copy_map;    /* copy pass: old node -> its one copy */
+
+static void k_ptrmap_begin(KPtrMap* t) {
+    if (!t->slots) {
+        t->cap = 1024;
+        t->slots = calloc(t->cap, sizeof(KPtrSlot));
+        if (!t->slots) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    t->gen++;
+}
+
+static size_t k_ptrmap_probe(KPtrMap* t, const void* key) {
+    size_t i = ((uintptr_t)key >> 4) * 0x9E3779B97F4A7C15ULL & (t->cap - 1);
+    while (t->slots[i].gen == t->gen && t->slots[i].key != key)
+        i = (i + 1) & (t->cap - 1);
+    return i;
+}
+
+static void k_ptrmap_grow(KPtrMap* t) {
+    KPtrSlot* old = t->slots;
+    size_t old_cap = t->cap;
+    t->cap *= 2;
+    t->slots = calloc(t->cap, sizeof(KPtrSlot));
+    if (!t->slots) { fputs("out of memory\n", stderr); exit(1); }
+    for (size_t i = 0; i < old_cap; i++) {
+        if (old[i].gen != t->gen) continue;
+        size_t j = k_ptrmap_probe(t, old[i].key);
+        t->slots[j] = old[i];
+    }
+    free(old);
+}
+
+/* returns the slot for key; caller checks gen to see whether it was present */
+static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
+    if (*live * 10 >= t->cap * 7) { k_ptrmap_grow(t); }
+    size_t i = k_ptrmap_probe(t, key);
+    return &t->slots[i];
+}
+
+static size_t k_copy_seen_live;
+static size_t k_copy_map_live;
+
+/* mark visited; returns 1 when already seen this generation */
+static int k_copy_seen_check(const void* p) {
+    KPtrSlot* s = k_ptrmap_at(&k_copy_seen, p, &k_copy_seen_live);
+    if (s->gen == k_copy_seen.gen) return 1;
+    s->gen = k_copy_seen.gen;
+    s->key = p;
+    s->val = NULL;
+    k_copy_seen_live++;
+    return 0;
+}
+
 typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; } KCopy;
 
 static void* k_copy_alloc(KCopy* cp, size_t n) {
@@ -412,6 +471,7 @@ static size_t k_copy_size(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
     const void* p = (const void*)(intptr_t)v.payload;
     if (k_survives(p, m)) return 0;
+    if (k_copy_seen_check(p)) return 0;
     size_t n = 0;
     switch (v.tag) {
         case K_STR: {
@@ -480,15 +540,33 @@ static size_t k_copy_size(KValue v, KMark* m) {
     return n;
 }
 
+static void k_copy_map_put(const void* p, void* copy) {
+    KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
+    if (slot->gen != k_copy_map.gen) k_copy_map_live++;
+    slot->gen = k_copy_map.gen;
+    slot->key = p;
+    slot->val = copy;
+}
+
 static KValue k_deep_copy(KValue v, KCopy* cp) {
     if (!k_is_heap(v.tag)) return v;
     void* p = (void*)(intptr_t)v.payload;
     if (k_survives(p, cp->mark)) return v;
+    {
+        KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
+        if (slot->gen == k_copy_map.gen && slot->key == p) {
+            k_stat_carry_dedup++;
+            KValue out = v;
+            out.payload = k_ptr(slot->val);
+            return out;
+        }
+    }
     KValue out = v;
     switch (v.tag) {
         case K_STR: {
             KStr* s = (KStr*)p;
             KStr* ns = k_copy_alloc(cp, sizeof(KStr));
+            k_copy_map_put(p, ns);
             ns->len = s->len;
             if (k_survives(s->data, cp->mark)) {
                 ns->data = s->data;
@@ -502,6 +580,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             KBytes* nb = k_copy_alloc(cp, sizeof(KBytes));
+            k_copy_map_put(p, nb);
             nb->len = b->len;
             nb->cap = 0;
             if (k_survives(b->data, cp->mark)) {
@@ -517,6 +596,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_LIST: {
             KList* l = (KList*)p;
             KList* nl = k_copy_alloc(cp, sizeof(KList));
+            k_copy_map_put(p, nl);
             KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1));
             buf->cap = l->len ? l->len : 1;
             buf->used = l->len;
@@ -530,6 +610,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_MAP: {
             KMap* mp = (KMap*)p;
             KMap* nm = k_copy_alloc(cp, sizeof(KMap));
+            k_copy_map_put(p, nm);
             KBuf* buf = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)));
             buf->cap = 2 * (mp->len ? mp->len : 1);
             buf->used = 2 * mp->len;
@@ -545,6 +626,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_SUB: {
             KSub* sb = (KSub*)p;
             KSub* nb = k_copy_alloc(cp, sizeof(KSub));
+            k_copy_map_put(p, nb);
             nb->type_id = sb->type_id;
             nb->inner = k_deep_copy(sb->inner, cp);
             out.payload = k_ptr(nb);
@@ -553,6 +635,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_REC: {
             KRec* r = (KRec*)p;
             KRec* nr = k_copy_alloc(cp, sizeof(KRec));
+            k_copy_map_put(p, nr);
             KValue* fields = k_copy_alloc(cp, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1));
             for (long long i = 0; i < r->nfields; i++) fields[i] = k_deep_copy(r->fields[i], cp);
             nr->type_id = r->type_id;
@@ -564,6 +647,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_CLOSURE: {
             KClosure* cl = (KClosure*)p;
             KClosure* nc = k_copy_alloc(cp, sizeof(KClosure));
+            k_copy_map_put(p, nc);
             KValue* env = k_copy_alloc(cp, sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1));
             for (long long i = 0; i < cl->ncaps; i++) env[i] = k_deep_copy(((KValue*)cl->env)[i], cp);
             nc->fn = cl->fn;
@@ -575,6 +659,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_DESC: {
             KDesc* d = (KDesc*)p;
             KDesc* nd = k_copy_alloc(cp, sizeof(KDesc));
+            k_copy_map_put(p, nd);
             nd->dtag = d->dtag;
             nd->x = k_deep_copy(d->x, cp);
             nd->y = k_deep_copy(d->y, cp);
@@ -584,6 +669,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         case K_ERR: {
             KErrBox* e = (KErrBox*)p;
             KErrBox* ne = k_copy_alloc(cp, sizeof(KErrBox));
+            k_copy_map_put(p, ne);
             ne->reason = k_deep_copy(e->reason, cp);
             ne->origin = e->origin;
             KHop** tail = &ne->hops;
@@ -625,6 +711,8 @@ KValue k_beat_pop(KValue r) {
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
             } else if (c->used_flag) {
                 KCopy cp = { NULL, NULL, 1 };
+                k_ptrmap_begin(&k_copy_map);
+                k_copy_map_live = 0;
                 r = k_deep_copy(r, &cp);
             }
             c->used_flag = 0;
@@ -652,6 +740,8 @@ void k_beat_iter_carry(void) {
     KMark* m = &k_beat_stack[k_beat_depth - 1];
     KCarry* c = &k_carries[k_beat_depth - 1];
     size_t need = 0;
+    k_ptrmap_begin(&k_copy_seen);
+    k_copy_seen_live = 0;
     for (long long i = 0; i < k_carry_n; i++) need += k_copy_size(k_carry_slots[i], m);
     if (c->to.cap < need) {
         free(c->to.data);
@@ -661,6 +751,8 @@ void k_beat_iter_carry(void) {
     }
     c->to.used = 0;
     KCopy cp = { &c->to, m, 0 };
+    k_ptrmap_begin(&k_copy_map);
+    k_copy_map_live = 0;
     for (long long i = 0; i < k_carry_n; i++)
         k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
     k_cache_reg_sweep(m);

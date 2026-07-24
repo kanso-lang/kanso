@@ -271,6 +271,11 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
         _ => die("field name must be a string".to_string()),
     };
     let new = val(value_h);
+    // a failure target propagates: the write is skipped, matching the
+    // interpreter oracle and native's early return.
+    if is_failure(&val(h)) {
+        return push(Slot::V(Value::NoneV));
+    }
     let Slot::V(Value::Record { ty, fields }) = slot(h) else {
         die("`set` writes a record field".to_string());
     };

@@ -1451,3 +1451,41 @@ byte-identical, browser corpus 29/0), errors build_set_outside +
 build_not_block_born, mem build_cycle. Deferred, tracked: identity-mapped
 deep copy (unlocks beat for cohorts), equality on two distinct cyclic
 graphs (recurses in every engine today), cohort arena freeing.
+
+## 2026-07-23 — carry identity map + set-on-failure engine agreement
+
+The carry deep-copy learns to walk cycles. Two generation-stamped
+open-addressing pointer tables (reused across carries, so the hot beat path
+never mallocs per iteration): a size-pass `seen` set that counts each unique
+node once, and a copy-pass `old -> copy` map consulted before recursing so a
+back-edge resolves to the already-made copy instead of recursing forever.
+The copy inserts the new node into the map *before* descending into its
+fields — the textbook cycle-safe order. New presence counter `carry_dedup`
+(a copy resolved through the map), pinned across every vein: both cost
+goldens, all mem files, the ch10 book counter sample. It reads 0 on the json
+decode and encode paths — the identity map is zero-overhead where nothing
+shares or cycles, confirmed by every other counter staying byte-identical.
+
+With cycles walkable, the v1 beat-ineligibility for build-holding functions
+is removed: a beat that carries an arena-allocated cycle now copies it
+correctly rather than being forbidden. (The v1 guard was also incomplete —
+it keyed on *holding* a build, but the real risk is *carrying* a cycle, which
+a non-build function can do; the cycle-safe copy is the complete fix.)
+
+Found and fixed a differential-law violation in `set` on a failure target:
+a constructor given a failure argument propagates it (`node 1 none` -> none,
+the documented none-propagation behavior), so a block-born `set` target can
+evaluate to none. Native's k_set_field returned early on a failure target
+(no-op); interp errored; wasm died. Interp's own field-*read* already
+propagates failures, so interp was internally inconsistent. Fixed all three
+to propagate (skip the write): native already did, interp `continue`s on a
+failure target, wasm rt_setfield returns none. Pinned by
+examples/build_set_failure.kso, byte-identical on all three engines (30
+browser cases, 0 fail).
+
+Open design question surfaced to Clay, NOT decided here: should `node 1 none`
+propagate none at all? For an `any`-typed field, none is a legitimate value,
+and propagation (treating none like an err/exception in a constructor arg)
+may be wrong — it makes a block-born `set` silently no-op. The failure-model
+gavel (none = value, err = exception) suggests only err should propagate
+through a constructor, not none. Left for dialog.
