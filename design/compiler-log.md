@@ -1789,3 +1789,54 @@ lenient form `xs[i]` is the one where absence is a value rather than a bail
 nothing, which is what a subtype of none is. Introducing them at all remains
 optional and deferred; both gavels stand with bare none. Doing so would make
 fixing the subtype-of-none divergence load-bearing rather than incidental.
+
+## 2026-07-24 — GAVEL: a function that accepts an err must return err
+
+Resurrecting the rationale behind always-bubbling err: keeping err out of
+control flow. Ruled: any function with an arm matching err must have err in
+its return. An err cannot be absorbed into an ordinary value.
+
+This completes a symmetry with the none rulings above, and the symmetry is
+the point:
+
+  none MUST be handled  — exhaustiveness forces an arm.
+  err  CANNOT be handled — accepting one forces returning one.
+
+Opposite obligations, and that difference is what separates a value from a
+bail. It also explains why err auto-propagates while none must not: err is
+unhandleable by design, none is handleable by requirement.
+
+The rule is "never rescue your own exceptions" promoted from a style
+guideline to a type rule. What it bans:
+
+    fn read_port (err _)
+      8080                 # illegal: swallows a bail into a default
+
+and the failure model already justifies the ban. A case with a sensible
+default was never a bail; a deterministic wrong-input case should have been
+a value (none, or a Malformed-style record) where it was created, rather
+than papered over at a call site downstream.
+
+Functions with no err arm are unaffected. err rides through them
+automatically and their return gains `| err`. The rule bites only where
+someone explicitly matches err.
+
+The exception is package boundaries, and it is structural rather than
+syntactic — which is what keeps it from being an escape hatch. A boundary is
+a fact the compiler knows, not a keyword that can be sprinkled, so "I will
+just catch it here" is unavailable inside one's own code by construction.
+This is precisely what try/catch gets wrong: an arbitrary catch site makes
+the discipline advisory. Two sites, both structural:
+
+- the opacity boundary — a call into a hako, whose internals are invisible,
+  so its bail can only arrive by propagating out.
+- the supervisory boundary — main/serve/supervise, applying a policy.
+
+Neither site handles an err as an err. Both REIFY it into an inert Failure
+record, after which it is a value and handling it is ordinary code — so the
+rule is never violated, and the only way to act on a failure is to convert
+it to a value first. That is the whole discipline in one sentence.
+
+Dependency: enforcing the boundary exception requires knowing which calls
+cross a package boundary, so it lands with hako. Until then the rule is
+enforceable for ordinary functions and the reification form is unbuilt.
