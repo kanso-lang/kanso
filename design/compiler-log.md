@@ -1899,3 +1899,33 @@ are what keep RC *complete* once RC exists — a cycle counts as one unit, so
 no collector is needed. What is declined is treating cohort freeing as a
 near-term performance win: its headline benefit is already delivered, and
 its remaining benefit cannot be built ahead of the machinery it rests on.
+
+## 2026-07-24 — arena block size: measured, left at 1 MiB
+
+Asked whether shrinking the standard arena block would lower peak footprint,
+on the theory that arena_blocks=1 means peak is one block regardless of how
+little is live. Measured; the theory was wrong.
+
+    block     discard_rss   json_rss   json_blocks   json_best
+    1 MiB     999424        6537216    5             0.14s
+    64 KiB    1015808       7061504    73            0.14s
+
+Smaller blocks cost memory and buy nothing. Time is unchanged, json's peak
+rises about eight percent, and the discard loop does not move at all.
+
+The reason the discard loop does not move is the useful part. A program
+whose whole body is `print "hi"` has a peak RSS of 999424 — byte-identical
+to the two-hundred-thousand-cycle loop. The floor is the process itself,
+binary and runtime and libc, and the arena never rises above it because the
+beat rewind keeps the live set to a handful of nodes. There was no arena
+contribution to shrink. json gets worse for the ordinary reason: seventy-
+three malloc'd blocks carry more per-block overhead and less contiguity
+than five.
+
+A methodology note worth keeping, because it invalidated a first attempt at
+this table. runtime.c reaches the compiled program through include_str! in
+main.rs, so it is baked into the kanso binary at *cargo* build time. Editing
+runtime.c and then running `kanso build` measures the old runtime. The tell
+was json_blocks staying at 5 while the block size supposedly fell to 16 KiB,
+which is arithmetically impossible. Any runtime experiment needs
+`cargo build --release` between the edit and the measurement.
