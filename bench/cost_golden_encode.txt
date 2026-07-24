@@ -1,6 +1,6 @@
-allocs=68653400
-alloc_bytes=2364377072
-arena_blocks=2272
+allocs=68653000
+alloc_bytes=2288895472
+arena_blocks=2205
 perm_allocs=1
 beat_iters=1
 thunk_allocs=0
@@ -15,3 +15,4 @@ utf8_bytes=75552370
 find2_calls=4200475
 append_fast=42312800
 append_grow=5200
+utf8_zerocopy=400

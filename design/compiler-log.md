@@ -1266,3 +1266,19 @@ Staged so the gate exists before the core (the EL lesson):
 
 Acceptance: byte identity with the shipped renderer across the whole
 harness; the probe path retires only when the fuzzer is silent.
+
+## 2026-07-23 — SHIPPED: zero-copy finish + length twin; TRMC re-read as already-won
+
+TRMC's regime is cons-cell construction; kanso's flat arrays with
+frontier push already sit at its endpoint, so the queue slot spent
+itself on the profile's actual names instead. (1) k_utf8_finish: a
+builder-owned buffer becomes the string in place — NUL into spare
+capacity, frontier burned (used = cap) so any surviving bytes value
+grows away on its next append rather than writing under the string.
+Encode golden: utf8_zerocopy=400, allocs -400, alloc_bytes -75.5MB
+(the whole-output copy, deleted), arena_blocks 2272→2205. (2)
+k_b_length_fast IR twin: the list case is a header load inlined into
+every fold; map/string fall through to the call. Encode 0.66-0.70s
+user on a loaded box — at the pre-ryū quiet floor despite the
+weather. Next on the floor: the k_b_append inline fast path (211
+samples), then SpecConstr for d_encode_onto dispatch (120).
