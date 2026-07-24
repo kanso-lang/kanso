@@ -1358,3 +1358,19 @@ differential golden. Wasm stays gated with a clear diagnostic; its
 mirror plus the tie-rejection checker are stage 3. Encode holds at
 0.56-0.59 under load 42 (0.39 at load 20 — weather, and the CI
 benchmark lane arbitrates).
+
+## 2026-07-24 — SHIPPED: subtypes on wasm (stage 3a) — three engines agree
+
+rt_check_type walks the Sub chain (subtype-free programs never hold a
+Sub, so nothing relaxes), rt_mksub validates the parent via the
+mirrored parent table, rt_upcast strips with the widening error,
+rt_binop unwraps to the base, and the backend gains the ctor route,
+the upcast emission, and the same deepest-first arm sort as native.
+Browser differential: 27 passed, 0 failed — up from main's 26/0
+baseline with subtypes.kso added to the corpus. Two bugs the
+differential caught on the way: a tid-scheme confusion (ctor ids are
+raw TYPES indices; check codes are 100+index — the panic poisoned the
+shared instance's RefCells and cascaded, which is worth remembering
+when reading wasm failure lists), and the missing binop unwrap.
+Remaining: stage 3b tie-rejection; the standing follow-up to wire the
+browser differential into CI just earned its priority.

@@ -1725,7 +1725,7 @@ pub fn is_failure(value: &Value) -> bool {
     matches!(value, Value::ErrV(_) | Value::NoneV)
 }
 
-fn type_matches(ty: &str, arg: &Value) -> bool {
+pub fn type_matches(ty: &str, arg: &Value) -> bool {
     type_match_depth(ty, arg).is_some()
 }
 
@@ -1989,7 +1989,7 @@ fn render_float(x: f64) -> String {
 
 /// Transparency: a subtype value IS its base wherever machinery (builtins,
 /// operators, comparison) consumes it; only dispatch sees the wrapper.
-fn sub_base(value: Value) -> Value {
+pub fn sub_base(value: Value) -> Value {
     match value {
         Value::Sub { inner, .. } => sub_base((*inner).clone()),
         other => other,

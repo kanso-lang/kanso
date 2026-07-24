@@ -62,6 +62,8 @@ const RT_LIST_LEN: u32 = 25;
 const RT_ERR_HOP: u32 = 26;
 const RT_ERR_STAMP: u32 = 27;
 const RT_AT: u32 = 28;
+const RT_MKSUB: u32 = 29;
+const RT_UPCAST: u32 = 30;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -94,6 +96,8 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_err_hop", params: 2, returns: true },
         Import { name: "rt_err_stamp", params: 2, returns: true },
         Import { name: "rt_at", params: 2, returns: true },
+        Import { name: "rt_mksub", params: 2, returns: true },
+        Import { name: "rt_upcast", params: 2, returns: true },
     ]
 }
 
@@ -116,13 +120,6 @@ pub struct WasmBackend<'a> {
 }
 
 pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
-    if let Some(t) = program.types.iter().find(|t| t.parent.is_some()) {
-        return Err(format!(
-            "`{}` is a subtype — the wasm engine gains subtypes next; run \
-             natively or on the interpreter meanwhile",
-            t.name
-        ));
-    }
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {
@@ -161,6 +158,36 @@ impl<'a> WasmBackend<'a> {
                 Some((_, _, decls)) => decls.push(decl),
                 None => groups.push((key.0, key.1, vec![decl])),
             }
+        }
+        // a subtype annotation outranks its ancestors: arms sort deepest
+        // first, mirroring the native dispatcher and the interp's scores
+        let parents: std::collections::HashMap<&str, &str> = self
+            .program
+            .types
+            .iter()
+            .filter_map(|t| t.parent.as_deref().map(|p| (t.name.as_str(), p)))
+            .collect();
+        let depth_of = |ty: &str| -> i64 {
+            let mut d = 0i64;
+            let mut cur = ty;
+            while let Some(p) = parents.get(cur) {
+                d += 1;
+                cur = p;
+            }
+            d
+        };
+        for (_, _, decls) in &mut groups {
+            decls.sort_by_key(|d| {
+                let depth: i64 = d
+                    .params
+                    .iter()
+                    .map(|p| match p {
+                        Pattern::Annotated { ty, .. } => depth_of(ty),
+                        _ => 0,
+                    })
+                    .sum();
+                (std::cmp::Reverse(depth), d.synthetic)
+            });
         }
         for (name, arity, _) in &groups {
             let idx = self.module.declare(*arity as u32);
@@ -436,7 +463,12 @@ impl<'a> WasmBackend<'a> {
 
     fn emit_expr(&mut self, ctx: &mut Ctx, expr: &Expr, tail: bool) -> Result<(), String> {
         match expr {
-            Expr::Upcast { expr: inner, .. } => self.emit_expr(ctx, inner, tail)?,
+            Expr::Upcast { expr: inner, ty, .. } => {
+                self.emit_expr(ctx, inner, false)?;
+                let code = self.type_code(ty)?;
+                ctx.body.i32_const(code);
+                ctx.body.call(RT_UPCAST);
+            }
             Expr::Block(stmts, _) => {
                 self.emit_body(ctx, stmts, tail)?;
             }
@@ -559,7 +591,12 @@ impl<'a> WasmBackend<'a> {
             ctx.body.local_get(*local);
             return Ok(());
         }
-        if self.program.types.iter().any(|t| t.name == name && t.fields.is_empty()) {
+        if self
+            .program
+            .types
+            .iter()
+            .any(|t| t.name == name && t.fields.is_empty() && t.parent.is_none())
+        {
             let tid = self.type_ids[name];
             ctx.body.i32_const(tid);
             ctx.body.i32_const(0);
@@ -742,6 +779,20 @@ impl<'a> WasmBackend<'a> {
             return Ok(());
         }
         if let Some(tid) = self.type_ids.get(name.as_str()).copied() {
+            let is_sub = self
+                .program
+                .types
+                .iter()
+                .any(|t| t.name == *name && t.parent.is_some());
+            if is_sub {
+                if args.len() != 1 {
+                    return Err(format!("wasm backend: `{name}` wraps one value"));
+                }
+                self.emit_expr(ctx, &args[0], false)?;
+                ctx.body.i32_const(tid);
+                ctx.body.call(RT_MKSUB);
+                return Ok(());
+            }
             let fields = self
                 .program
                 .types
