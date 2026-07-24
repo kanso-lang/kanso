@@ -23,7 +23,7 @@ pub enum Value {
     NoneV,
     ErrV(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
-    Record { ty: Rc<str>, fields: Rc<Vec<Value>> },
+    Record { ty: Rc<str>, fields: Rc<RefCell<Vec<Value>>> },
     /// A nominal subtype wrapper: `post_body s`. Transparent — every
     /// consumer unwraps to the base; dispatch sees the chain.
     Sub { ty: Rc<str>, inner: Rc<Value> },
@@ -425,7 +425,7 @@ impl<'a> Interp<'a> {
         let mut result = Value::NoneV;
         for (index, stmt) in body.iter().enumerate() {
             match stmt {
-                Stmt::Set { .. } => todo!("`set` interp lands with the build stage"),
+                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
                 {
@@ -509,7 +509,7 @@ impl<'a> Interp<'a> {
                             span,
                         });
                     };
-                    env = bind(env, &entry.bind_name, fields[position].clone());
+                    env = bind(env, &entry.bind_name, fields.borrow()[position].clone());
                 }
                 Ok(env)
             }
@@ -563,8 +563,38 @@ impl<'a> Interp<'a> {
                             env = self.destructure(pattern, value, env, expr.span())?;
                         }
                         Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
-                        Stmt::Set { .. } => {
-                            todo!("`set` interp lands with the build stage")
+                        Stmt::Set { target, field, value, span } => {
+                            let current = lookup(&env, target).ok_or_else(|| {
+                                RuntimeError {
+                                    message: format!("`set` target `{target}` is not bound"),
+                                    span: *span,
+                                }
+                            })?;
+                            let current = self.force_thunk(current)?;
+                            let Value::Record { ty, fields } = &current else {
+                                return Err(RuntimeError {
+                                    message: format!(
+                                        "`set` writes a record field, not {}",
+                                        render(&current, true)
+                                    ),
+                                    span: *span,
+                                });
+                            };
+                            let decl =
+                                self.type_decl(ty).expect("constructed types are declared");
+                            let position =
+                                decl.fields.iter().position(|(f, _, _)| f == field);
+                            let Some(position) = position else {
+                                return Err(RuntimeError {
+                                    message: format!("`{ty}` has no field `{field}`"),
+                                    span: *span,
+                                });
+                            };
+                            let new = self.eval(value, &env, frame)?;
+                            if is_failure(&new) {
+                                return Ok(new);
+                            }
+                            fields.borrow_mut()[position] = new;
                         }
                     }
                 }
@@ -613,7 +643,7 @@ impl<'a> Interp<'a> {
                 let decl = self.type_decl(ty).expect("constructed types are declared");
                 let position = decl.fields.iter().position(|(f, _, _)| f == name);
                 match position {
-                    Some(position) => Ok(fields[position].clone()),
+                    Some(position) => Ok(fields.borrow()[position].clone()),
                     None => Err(RuntimeError {
                         message: format!("`{ty}` has no field `{name}`"),
                         span: *span,
@@ -740,7 +770,7 @@ impl<'a> Interp<'a> {
         }
         if let Some(decl) = self.type_decl(name) {
             if decl.parent.is_none() && decl.members.is_empty() && decl.fields.is_empty() {
-                return Ok(Value::Record { ty: Rc::from(name), fields: Rc::new(Vec::new()) });
+                return Ok(Value::Record { ty: Rc::from(name), fields: Rc::new(RefCell::new(Vec::new())) });
             }
         }
         match name {
@@ -902,7 +932,7 @@ impl<'a> Interp<'a> {
             }
         }
         let canonical = ty.origin.as_deref().unwrap_or(ty.name.as_str());
-        Ok(Value::Record { ty: Rc::from(canonical), fields: Rc::new(args) })
+        Ok(Value::Record { ty: Rc::from(canonical), fields: Rc::new(RefCell::new(args)) })
     }
 
     fn dispatch(
@@ -1095,7 +1125,7 @@ impl<'a> Interp<'a> {
                         };
                         Value::Record {
                             ty: Rc::from("entry"),
-                            fields: Rc::new(vec![key, value.clone()]),
+                            fields: Rc::new(RefCell::new(vec![key, value.clone()])),
                         }
                     })
                     .collect();
@@ -1675,9 +1705,9 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             }
         }
         (Pattern::Ctor { ty, fields }, Value::Record { ty: vty, fields: vfields })
-            if ty.as_str() == &**vty && fields.len() == vfields.len() =>
+            if ty.as_str() == &**vty && fields.len() == vfields.borrow().len() =>
         {
-            for (fp, fv) in fields.iter().zip(vfields.iter()) {
+            for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
                 match_one(fp, fv, binds)?;
             }
             Some(0)
@@ -1985,7 +2015,15 @@ fn values_equal(a: &Value, b: &Value) -> bool {
             x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_equal(a, b))
         }
         (Value::Record { ty: tx, fields: fx }, Value::Record { ty: ty_, fields: fy }) => {
-            tx == ty_ && fx.iter().zip(fy.iter()).all(|(a, b)| values_equal(a, b))
+            tx == ty_
+                && Rc::ptr_eq(fx, fy)
+                || tx == ty_
+                    && fx.borrow().len() == fy.borrow().len()
+                    && fx
+                        .borrow()
+                        .iter()
+                        .zip(fy.borrow().iter())
+                        .all(|(a, b)| values_equal(a, b))
         }
         _ => false,
     }
@@ -2033,11 +2071,22 @@ pub fn sub_base(value: Value) -> Value {
 }
 
 pub fn render(value: &Value, quote_strings: bool) -> String {
+    render_seen(value, quote_strings, &mut std::collections::HashSet::new())
+}
+
+/// `seen` holds the record cells on the current render path — a build block
+/// can close a cycle, and a cycle renders as `<cycle>` at the point of
+/// re-entry rather than recursing forever.
+fn render_seen(
+    value: &Value,
+    quote_strings: bool,
+    seen: &mut std::collections::HashSet<usize>,
+) -> String {
     match value {
         // a subtype renders as its base until a user arm claims it
-        Value::Sub { inner, .. } => render(inner, quote_strings),
+        Value::Sub { inner, .. } => render_seen(inner, quote_strings, seen),
         Value::Thunk(cell) => match &*cell.borrow() {
-            ThunkState::Forced(v) => render(v, quote_strings),
+            ThunkState::Forced(v) => render_seen(v, quote_strings, seen),
             // A pending thunk reaching render is a missed force point; make
             // it loud so the differential corpus catches it.
             _ => "<thunk>".to_string(),
@@ -2054,7 +2103,7 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
                             MapKey::Int(n) => n.to_string(),
                             MapKey::Str(s) => format!("\"{s}\""),
                         };
-                        format!("{key}:{}", render(value, true))
+                        format!("{key}:{}", render_seen(value, true, seen))
                     })
                     .collect();
                 format!("{{ {} }}", inner.join(" "))
@@ -2067,15 +2116,21 @@ pub fn render(value: &Value, quote_strings: bool) -> String {
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
         Value::NoneV => "<none>".to_string(),
-        Value::ErrV(info) => format!("err {}", render(&info.reason, true)),
+        Value::ErrV(info) => format!("err {}", render_seen(&info.reason, true, seen)),
         Value::List(items) => {
-            let inner: Vec<String> = items.iter().map(|i| render(i, true)).collect();
+            let inner: Vec<String> = items.iter().map(|i| render_seen(i, true, seen)).collect();
             format!("[{}]", inner.join(" "))
         }
-        Value::Record { ty, fields } => match fields.is_empty() {
+        Value::Record { ty, fields } => match fields.borrow().is_empty() {
             true => ty.to_string(),
             false => {
-                let inner: Vec<String> = fields.iter().map(|f| render(f, true)).collect();
+                let ptr = Rc::as_ptr(fields) as usize;
+                if !seen.insert(ptr) {
+                    return "<cycle>".to_string();
+                }
+                let inner: Vec<String> =
+                    fields.borrow().iter().map(|f| render_seen(f, true, seen)).collect();
+                seen.remove(&ptr);
                 format!("{} {}", ty, inner.join(" "))
             }
         },
