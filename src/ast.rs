@@ -115,6 +115,10 @@ pub struct TypeDecl {
     /// Mutually exclusive with fields; values construct with one argument
     /// and flow transparently wherever the parent flows.
     pub parent: Option<String>,
+    /// `type num float64 int` — a named typeset: annotation-only
+    /// vocabulary for a union of types. Never constructs, never carries
+    /// dispatch identity; an annotated param matches any member.
+    pub members: Vec<String>,
     /// Field name, permitted types (a typeset: one or more members), span.
     pub fields: Vec<(String, Vec<String>, Span)>,
 }

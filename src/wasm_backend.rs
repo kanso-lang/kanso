@@ -176,17 +176,29 @@ impl<'a> WasmBackend<'a> {
             }
             d
         };
+        let typeset_names: std::collections::HashSet<&str> = self
+            .program
+            .types
+            .iter()
+            .filter(|t| !t.members.is_empty())
+            .map(|t| t.name.as_str())
+            .collect();
         for (_, _, decls) in &mut groups {
             decls.sort_by_key(|d| {
-                let depth: i64 = d
+                let total: i64 = d
                     .params
                     .iter()
                     .map(|p| match p {
-                        Pattern::Annotated { ty, .. } => depth_of(ty),
-                        _ => 0,
+                        Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 3000,
+                        Pattern::Annotated { ty, .. } => match typeset_names.contains(ty.as_str()) {
+                            true => 1000,
+                            false => 2000 + depth_of(ty),
+                        },
+                        Pattern::Ctor { .. } | Pattern::Keyed { .. } => 2000,
+                        Pattern::Var(..) | Pattern::Wildcard(..) => 0,
                     })
                     .sum();
-                (std::cmp::Reverse(depth), d.synthetic)
+                (std::cmp::Reverse(total), d.synthetic)
             });
         }
         for (name, arity, _) in &groups {
@@ -308,10 +320,27 @@ impl<'a> WasmBackend<'a> {
                 ctx.scope.insert(name.clone(), value_local);
             }
             Pattern::Annotated { name, ty, .. } => {
-                let code = self.type_code(ty)?;
-                ctx.body.local_get(value_local);
-                ctx.body.i32_const(code);
-                ctx.body.call(RT_CHECK_TYPE);
+                let members: Vec<String> = self
+                    .program
+                    .types
+                    .iter()
+                    .find(|t| t.name == *ty && !t.members.is_empty())
+                    .map(|t| t.members.clone())
+                    .unwrap_or_else(|| vec![ty.clone()]);
+                // one member is the plain check; several OR together
+                let ok = ctx.body.local();
+                ctx.body.i32_const(0);
+                ctx.body.local_set(ok);
+                for member in &members {
+                    let code = self.type_code(member)?;
+                    ctx.body.local_get(value_local);
+                    ctx.body.i32_const(code);
+                    ctx.body.call(RT_CHECK_TYPE);
+                    ctx.body.local_get(ok);
+                    ctx.body.i32_or();
+                    ctx.body.local_set(ok);
+                }
+                ctx.body.local_get(ok);
                 ctx.body.eqz();
                 ctx.body.br_if(0);
                 ctx.scope.insert(name.clone(), value_local);
