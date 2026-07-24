@@ -1489,3 +1489,24 @@ and propagation (treating none like an err/exception in a constructor arg)
 may be wrong — it makes a block-born `set` silently no-op. The failure-model
 gavel (none = value, err = exception) suggests only err should propagate
 through a constructor, not none. Left for dialog.
+
+## 2026-07-23 — cyclic-graph equality (bisimulation)
+
+Comparing two *distinct* cyclic graphs hung native and stack-overflowed
+interp: the cell-identity shortcut only caught the *same* cell, and two
+separately-built equal rings are different cells. Fixed with bisimulation —
+assume a record-cell pair equal on first encounter, and a re-encounter of
+that pair is the coinductive base case (true) rather than recursing forever.
+The assumption set is global to one comparison, so a pair contradicted
+anywhere still returns false; records are the only settable cell, so every
+cycle passes through one and guarding the record case breaks them all.
+Native carries a generation-stamped open-addressing pair-set (reused across
+comparisons, so k_eq never mallocs on the acyclic path); interp threads a
+HashSet of cell-pointer pairs; wasm inherits the fix through the shared
+eval_binop. Pinned by examples/build_cyclic_eq.kso — equal twins true,
+field-divergent rings false, self true — byte-identical on all three engines
+(31 browser cases). No counters touched.
+
+Build-blocks deferred queue now: cohort arena freeing (the birthday-theorem
+memory payoff) is the last big item; identity-mapped copy and cyclic
+equality are both done.
