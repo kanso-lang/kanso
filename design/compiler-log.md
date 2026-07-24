@@ -1929,3 +1929,37 @@ runtime.c and then running `kanso build` measures the old runtime. The tell
 was json_blocks staying at 5 while the block size supposedly fell to 16 KiB,
 which is arithmetically impossible. Any runtime experiment needs
 `cargo build --release` between the edit and the measurement.
+
+## 2026-07-24 — prior art for cohort counting (correcting an overclaim)
+
+Searched the literature after asserting from memory that the cohort scheme
+looked unclaimed. That assertion was substantially wrong, and the correction
+belongs next to the design.
+
+Region-level reference counting is established. Gay and Aiken's RC, an
+extension to C, manages regions explicitly and reference-counts the regions
+rather than the objects; the standard summary of the approach notes that
+counting at region level both shrinks counter overhead and removes the need
+for cycle detection. That is the same mechanism as "count the cohort, not
+the nodes," and it predates this design by decades.
+
+Perceus is the opposite situation and is worth stating precisely, because it
+is often cited loosely. Koka's heap is acyclic by construction: its data
+types are inductive or coinductive and immutable, so cycles never arise. The
+paper is explicit that it does not present a general solution to cycles and
+that efficient handling of them is future work. Kanso is therefore not
+duplicating Perceus on this point; it is answering a question Perceus set
+aside.
+
+What may remain distinctive is narrower than first claimed. Gay-Aiken
+regions are declared and managed by the programmer, while a cohort here is
+implicit, falling out of a syntactic mutation rule. And the contribution, if
+there is one, is the guarantee rather than the counting: mutation
+confinement is what makes a cross-cohort cycle impossible, which is what
+turns region-level counting from convenient into complete. Whether a cycle
+can span two regions in Gay-Aiken is unverified and is the question that
+decides whether even the narrow claim stands.
+
+Sources consulted: the Perceus technical report (Microsoft Research), the
+region-based memory management survey, Cyclone's region paper, and Bacon and
+Rajan on concurrent cycle collection.
