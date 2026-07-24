@@ -1202,3 +1202,34 @@ tie at 0.13s (shared-prefix string keys make memcmp the cost; layout
 can't help a comparison that has to walk bytes). The paper's wins live
 on huge arrays of word-sized keys. Reverted; the page records the
 negative result so the idea stays declined. Next: dragonbox.
+
+## 2026-07-23 — SHIPPED: ryū rendering (queue item 1); INCIDENT: the merge that ate eisel-lemire
+
+The incident first, because the guard matters more than the feature:
+main had LOST eisel-lemire — the #171 conflict resolution
+(checkout --ours on runtime.c) picked a lineage that predated #165,
+and nothing caught it: no golden pinned the fast path's existence,
+and the decode-ratio CI job is non-gating by design. The published
+0.89ms board was measured WITH el; main would not have reproduced
+it. Restored from the #165 squash commit, and the counters now
+carry el_parses (318,450 on the cost-golden workload, CI-diffed) so
+a merge can never silently drop it again. Lesson for the protocol:
+checkout --ours/--theirs on runtime.c is banned — resolve function
+by function, and every perf kernel lands with a presence counter.
+
+The feature: ryū d2s (adams, PLDI 2018) — python-generated 125-bit
+pow5/inv tables (exact, like the el table), the half-ulp interval
+walk with trailing-zero tracking, and a %g-mimic format layer
+(fixed vs exponent at max(15, k)). Fuzz: 50M doubles against the
+shipped probe — 0 failures, 495 legal shortenings (subnormals,
+where the probe's 15-digit floor overshoots true-shortest; the
+shorter form is now canon). The interpreter's render_float was
+quietly divergent on |x| outside the %g fixed range (rust Display
+never uses exponent form — 1e20 and subnormals differed across
+engines, latent because no corpus float reached there); it now
+formats rust's shortest digits through the same rules, verified
+byte-identical on the exponent-range family. dtoa/quorem/multadd:
+zero samples in the encode profile. kq jq-parity green. Profile
+floor now memmove/k_b_append/dispatch — TRMC and SpecConstr
+territory. Noted in passing: kanso has no exponent float literals
+(1.0e20 is a name error) — parked as a possible gavel.
