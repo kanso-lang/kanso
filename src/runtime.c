@@ -2764,17 +2764,83 @@ static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     }
     if (vmaxvq_u8(error) != 0) return k_err(k_str("invalid utf-8"), origin);
     return k_none();
+#elif defined(__x86_64__)
+    /* the same keiser & lemire structure as the neon path, on sse:
+       pshufb is the nibble lookup, alignr the shifted windows, subs_epu8
+       the saturating pins. */
+    enum {
+        TOO_SHORT = 1 << 0, TOO_LONG = 1 << 1, OVERLONG_3 = 1 << 2,
+        TOO_LARGE = 1 << 3, SURROGATE = 1 << 4, OVERLONG_2 = 1 << 5,
+        TOO_LARGE_1000 = 1 << 6, OVERLONG_4 = 1 << 6, TWO_CONTS = 1 << 7,
+        CARRY = TOO_SHORT | TOO_LONG | TWO_CONTS,
+    };
+    __m128i t1h = _mm_setr_epi8(
+        TOO_LONG, TOO_LONG, TOO_LONG, TOO_LONG,
+        TOO_LONG, TOO_LONG, TOO_LONG, TOO_LONG,
+        (char)TWO_CONTS, (char)TWO_CONTS, (char)TWO_CONTS, (char)TWO_CONTS,
+        TOO_SHORT | OVERLONG_2, TOO_SHORT,
+        TOO_SHORT | OVERLONG_3 | SURROGATE,
+        TOO_SHORT | TOO_LARGE | TOO_LARGE_1000 | OVERLONG_4);
+    __m128i t1l = _mm_setr_epi8(
+        (char)(CARRY | OVERLONG_2 | OVERLONG_3 | OVERLONG_4),
+        (char)(CARRY | OVERLONG_2), (char)CARRY, (char)CARRY,
+        (char)(CARRY | TOO_LARGE), (char)(CARRY | TOO_LARGE | TOO_LARGE_1000),
+        (char)(CARRY | TOO_LARGE | TOO_LARGE_1000), (char)(CARRY | TOO_LARGE | TOO_LARGE_1000),
+        (char)(CARRY | TOO_LARGE | TOO_LARGE_1000), (char)(CARRY | TOO_LARGE | TOO_LARGE_1000),
+        (char)(CARRY | TOO_LARGE | TOO_LARGE_1000), (char)(CARRY | TOO_LARGE | TOO_LARGE_1000),
+        (char)(CARRY | TOO_LARGE | TOO_LARGE_1000),
+        (char)(CARRY | TOO_LARGE | TOO_LARGE_1000 | SURROGATE),
+        (char)(CARRY | TOO_LARGE | TOO_LARGE_1000), (char)(CARRY | TOO_LARGE | TOO_LARGE_1000));
+    __m128i t2h = _mm_setr_epi8(
+        TOO_SHORT, TOO_SHORT, TOO_SHORT, TOO_SHORT,
+        TOO_SHORT, TOO_SHORT, TOO_SHORT, TOO_SHORT,
+        (char)(TOO_LONG | OVERLONG_2 | TWO_CONTS | OVERLONG_3 | TOO_LARGE_1000 | OVERLONG_4),
+        (char)(TOO_LONG | OVERLONG_2 | TWO_CONTS | OVERLONG_3 | TOO_LARGE),
+        (char)(TOO_LONG | OVERLONG_2 | TWO_CONTS | SURROGATE | TOO_LARGE),
+        (char)(TOO_LONG | OVERLONG_2 | TWO_CONTS | SURROGATE | TOO_LARGE),
+        TOO_SHORT, TOO_SHORT, TOO_SHORT, TOO_SHORT);
+    __m128i low_nib = _mm_set1_epi8(0x0F);
+    __m128i prev = _mm_setzero_si128();
+    __m128i error = _mm_setzero_si128();
+    long long i = 0;
+    long long nblocks = (len + 15) / 16 + 1;
+    for (long long blk = 0; blk < nblocks; blk++) {
+        unsigned char tail[16];
+        __m128i cur;
+        if (i + 16 <= len) {
+            cur = _mm_loadu_si128((const __m128i*)(data + i));
+        } else {
+            for (int j = 0; j < 16; j++)
+                tail[j] = i + j < len ? (unsigned char)data[i + j] : 0;
+            cur = _mm_loadu_si128((const __m128i*)tail);
+        }
+        i += 16;
+        if (!_mm_movemask_epi8(_mm_or_si128(cur, prev))) {
+            prev = cur;
+            continue;
+        }
+        __m128i prev1 = _mm_alignr_epi8(cur, prev, 15);
+        __m128i sc = _mm_and_si128(
+            _mm_and_si128(
+                _mm_shuffle_epi8(t1h, _mm_and_si128(_mm_srli_epi16(prev1, 4), low_nib)),
+                _mm_shuffle_epi8(t1l, _mm_and_si128(prev1, low_nib))),
+            _mm_shuffle_epi8(t2h, _mm_and_si128(_mm_srli_epi16(cur, 4), low_nib)));
+        __m128i prev2 = _mm_alignr_epi8(cur, prev, 14);
+        __m128i prev3 = _mm_alignr_epi8(cur, prev, 13);
+        __m128i is3 = _mm_subs_epu8(prev2, _mm_set1_epi8((char)0xDF));
+        __m128i is4 = _mm_subs_epu8(prev3, _mm_set1_epi8((char)0xEF));
+        __m128i must23 = _mm_cmpgt_epi8(
+            _mm_or_si128(is3, is4), _mm_setzero_si128());
+        __m128i must23_80 = _mm_and_si128(must23, _mm_set1_epi8((char)0x80));
+        error = _mm_or_si128(error, _mm_xor_si128(sc, must23_80));
+        prev = cur;
+    }
+    if (_mm_movemask_epi8(_mm_cmpeq_epi8(error, _mm_setzero_si128())) != 0xFFFF)
+        return k_err(k_str("invalid utf-8"), origin);
+    return k_none();
 #else
     long long i = 0;
     while (i < len) {
-#if defined(__x86_64__)
-        while (i + 16 <= len) {
-            __m128i chunk = _mm_loadu_si128((const __m128i*)(data + i));
-            if (_mm_movemask_epi8(chunk)) break;
-            i += 16;
-        }
-        if (i >= len) break;
-#endif
         long long block_end = i + 16 <= len ? i + 16 : len;
         while (i < block_end) {
             unsigned char b0 = (unsigned char)data[i];

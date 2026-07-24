@@ -355,6 +355,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     std::process::Command::new("clang")
         .arg("-O3")
         .arg("-flto")
+        .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-Wno-override-module")
         .arg("-o")
         .arg(stem)
@@ -395,6 +396,7 @@ fn cached_runtime_object() -> std::io::Result<std::path::PathBuf> {
     let staging = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}_{}.o", std::process::id()));
     let status = std::process::Command::new("clang")
         .arg("-O2")
+        .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-c")
         .arg(&c_path)
         .arg("-o")
