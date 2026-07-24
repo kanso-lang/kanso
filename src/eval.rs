@@ -1924,10 +1924,35 @@ fn values_equal(a: &Value, b: &Value) -> bool {
 }
 
 fn render_float(x: f64) -> String {
-    match x.is_finite() && x.fract() == 0.0 && x.abs() < 1e15 {
-        true => format!("{x:.1}"),
-        false => format!("{x}"),
+    if x == x.floor() && x.abs() < 1e15 && x.is_finite() {
+        return format!("{x:.1}");
     }
+    // rust's LowerExp gives the shortest round-trip digits; the format
+    // layer mirrors the native renderer's %g rules exactly: exponent form
+    // at X < -4 or X >= max(15, digit count)
+    let neg = x < 0.0;
+    let exp_form = format!("{:e}", x.abs());
+    let (mant, exp) = exp_form.split_once('e').expect("LowerExp has an e");
+    let digits: String = mant.chars().filter(|c| c.is_ascii_digit()).collect();
+    let k = digits.len() as i32;
+    let x10: i32 = exp.parse().expect("exponent parses");
+    let p = k.max(15);
+    let sign = if neg { "-" } else { "" };
+    if x10 < -4 || x10 >= p {
+        let tail = if k > 1 { format!(".{}", &digits[1..]) } else { String::new() };
+        let esign = if x10 < 0 { '-' } else { '+' };
+        return format!("{sign}{}{tail}e{esign}{:02}", &digits[..1], x10.abs());
+    }
+    if x10 >= 0 {
+        let ip = (x10 + 1) as usize;
+        let whole: String = (0..ip)
+            .map(|i| digits.as_bytes().get(i).map(|b| *b as char).unwrap_or('0'))
+            .collect();
+        let frac = if (k as usize) > ip { format!(".{}", &digits[ip..]) } else { String::new() };
+        return format!("{sign}{whole}{frac}");
+    }
+    let zeros = "0".repeat((-x10 - 1) as usize);
+    format!("{sign}0.{zeros}{digits}")
 }
 
 /// Transparency: a subtype value IS its base wherever machinery (builtins,

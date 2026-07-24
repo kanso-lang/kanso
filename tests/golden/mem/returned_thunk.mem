@@ -9,3 +9,4 @@ thunk_evals=1
 thunk_frees=0
 thunk_escaped=1
 thunk_live_exit=1
+el_parses=0
