@@ -1772,6 +1772,59 @@ long long k_sub_depth(KValue v, long long want_id) {
     return -1;
 }
 
+/* Dispatch checks for programs that declare subtypes: the annotated
+   param accepts a wrapped value whose chain reaches the annotation. */
+long long k_check_sub_tag(KValue v, long long tag) {
+    return k_sub_depth(v, -(tag + 1)) >= 0;
+}
+
+long long k_check_sub_bool(KValue v) {
+    KValue b = k_sub_base(v);
+    return b.tag == K_TRUE || b.tag == K_FALSE;
+}
+
+long long k_check_sub_id(KValue v, long long type_id) {
+    return k_sub_depth(v, type_id) >= 0;
+}
+
+long long k_check_sub_rec(KValue v, long long type_id, long long nfields) {
+    KValue b = k_sub_base(v);
+    if (b.tag != K_REC) return 0;
+    KRec* r = (KRec*)(intptr_t)b.payload;
+    return r->type_id == type_id && r->nfields == nfields;
+}
+
+/* Construction: `post_body s` — the inner value must be (or reach) the
+   parent; want encodes a type id, or -(tag+1) for a primitive. */
+KValue k_sub_ctor(long long type_id, long long want, KValue inner, const char* tyname, const char* parent) {
+    if (!k_not_failure(inner)) return inner;
+    if (k_sub_depth(inner, want) < 0) {
+        fprintf(stderr, "%serror[runtime]:%s `%s` wraps a %s\n", k_c_err(), k_c_off(), tyname, parent);
+        exit(1);
+    }
+    return k_sub_wrap(type_id, inner);
+}
+
+/* The upcast: strip to the named ancestor; widening only. */
+KValue k_upcast(KValue v, long long want, const char* tyname) {
+    KValue cur = v;
+    if (!k_not_failure(cur)) return cur;
+    for (;;) {
+        if (cur.tag == K_SUB) {
+            KSub* sb = (KSub*)(intptr_t)cur.payload;
+            if (want >= 0 && sb->type_id == want) return cur;
+            cur = sb->inner;
+            continue;
+        }
+        if (want < 0 && cur.tag == -(want + 1)) return cur;
+        if (want >= 0 && cur.tag == K_REC
+            && ((KRec*)(intptr_t)cur.payload)->type_id == want) return cur;
+        fprintf(stderr, "%serror[runtime]:%s `:%s` widens; this value is not a %s\n",
+                k_c_err(), k_c_off(), tyname, tyname);
+        exit(1);
+    }
+}
+
 KValue k_render(KValue v, long long quote) {
     // an err propagates through rendering (it is an exception); a none is a
     // value and renders its sentinel below
@@ -1926,6 +1979,8 @@ long long k_check_str(KValue v, const char* data, long long len) {
 }
 
 KValue k_add(KValue a, KValue b) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
@@ -1956,6 +2011,8 @@ KValue k_sub(KValue a, KValue b) {
 }
 
 KValue k_mul(KValue a, KValue b) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
@@ -2033,6 +2090,8 @@ static int k_order(KValue a, KValue b) {
 }
 
 KValue k_cmp(KValue a, KValue b, long long op) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
     if (op == 0) return k_bool(k_eq(a, b));

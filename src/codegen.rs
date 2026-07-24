@@ -248,6 +248,12 @@ declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
 declare %KValue @k_b_render_value(%KValue)
+declare i64 @k_check_sub_tag(%KValue, i64)
+declare i64 @k_check_sub_bool(%KValue)
+declare i64 @k_check_sub_id(%KValue, i64)
+declare i64 @k_check_sub_rec(%KValue, i64, i64)
+declare %KValue @k_sub_ctor(i64, i64, %KValue, ptr, ptr)
+declare %KValue @k_upcast(%KValue, i64, ptr)
 declare %KValue @k_thunk_new(i64, i32, ...)
 declare %KValue @k_thunk_release_unless(%KValue, %KValue)
 declare void @k_thunk_note_escape(%KValue)
@@ -327,13 +333,6 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
 }
 
 pub fn emit_ir(program: &Program) -> Result<String, String> {
-    if let Some(t) = program.types.iter().find(|t| t.parent.is_some()) {
-        return Err(format!(
-            "`{}` is a subtype — subtypes run on the interpreter in this \
-             build (kanso run --interp / the repl); native support lands next",
-            t.name
-        ));
-    }
     let inference = infer::infer(program);
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
@@ -385,6 +384,11 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     let mut backend = Backend {
         program,
         forwarders: forwarder_map(program),
+        sub_parents: program
+            .types
+            .iter()
+            .filter_map(|t| t.parent.clone().map(|p| (t.name.clone(), p)))
+            .collect(),
         inference,
         escape,
         byte_disc,
@@ -406,6 +410,9 @@ struct Backend<'a> {
     program: &'a Program,
     inference: infer::Inference,
     forwarders: HashMap<(String, usize), String>,
+    /// subtype name -> parent name; non-empty programs get chain-aware
+    /// dispatch checks, everyone else keeps the exact ones
+    sub_parents: HashMap<String, String>,
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
@@ -845,9 +852,31 @@ impl<'a> Backend<'a> {
                 None => groups.push((&decl.name, vec![decl])),
             }
         }
-        // proximity breaks specificity ties: local arms precede clones
+        // proximity breaks specificity ties: local arms precede clones —
+        // and a subtype annotation outranks its ancestors, so arms sort
+        // by total chain depth, deepest first (the interp's scores, as an
+        // ordering; tie-rejection outlaws the incomparable cases)
+        let depth_of = |ty: &str| -> i64 {
+            let mut d = 0i64;
+            let mut cur = ty;
+            while let Some(p) = self.sub_parents.get(cur) {
+                d += 1;
+                cur = p.as_str();
+            }
+            d
+        };
         for (_, decls) in &mut groups {
-            decls.sort_by_key(|d| d.synthetic);
+            decls.sort_by_key(|d| {
+                let depth: i64 = d
+                    .params
+                    .iter()
+                    .map(|p| match p {
+                        Pattern::Annotated { ty, .. } => depth_of(ty),
+                        _ => 0,
+                    })
+                    .sum();
+                (std::cmp::Reverse(depth), d.synthetic)
+            });
         }
         for (name, decls) in &groups {
             let mut by_arity: HashMap<usize, Vec<&FnDecl>> = HashMap::new();
@@ -1194,6 +1223,20 @@ impl<'a> Backend<'a> {
         Ok(())
     }
 
+    /// The runtime's `want` encoding for a chain target: a declared
+    /// type's id, or -(tag + 1) for a primitive.
+    fn sub_want(&self, ty: &str) -> Result<i64, String> {
+        Ok(match ty {
+            "int" => -1,
+            "float64" => -2,
+            "string" => -7,
+            other => match self.type_ids.get(other) {
+                Some(id) => *id,
+                None => return Err(format!("native backend: unknown type `{other}`")),
+            },
+        })
+    }
+
     fn emit_dispatcher(&mut self, name: &str, arity: usize, decls: &[&FnDecl]) -> Result<(), String> {
         if let Some(disc) = Self::switch_shape(decls) {
             return self.emit_switch_dispatcher(name, arity, decls, disc);
@@ -1528,16 +1571,31 @@ impl<'a> Backend<'a> {
                     f.bind(name, value);
                     return Ok(());
                 }
+                let subs = !self.sub_parents.is_empty();
                 let call = match ty.as_str() {
+                    "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
                     "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
+                    "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
                     "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
+                    "string" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 6)"),
                     "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),
+                    "bool" if subs => format!("call i64 @k_check_sub_bool(%KValue {value})"),
                     "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
                     "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
                     other => match self.type_ids.get(other) {
+                        Some(id) if self.sub_parents.contains_key(other) => {
+                            format!("call i64 @k_check_sub_id(%KValue {value}, i64 {id})")
+                        }
                         Some(id) => {
                             let nfields = self.field_count(other)?;
-                            format!("call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})")
+                            match subs {
+                                true => format!(
+                                    "call i64 @k_check_sub_rec(%KValue {value}, i64 {id}, i64 {nfields})"
+                                ),
+                                false => format!(
+                                    "call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})"
+                                ),
+                            }
                         }
                         None => return Err(format!("native backend: unknown type `{other}`")),
                     },
@@ -1782,7 +1840,18 @@ impl<'a> Backend<'a> {
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
-            Expr::Upcast { expr: inner, .. } => self.emit_expr(f, inner),
+            Expr::Upcast { expr: inner, ty, .. } => {
+                let v = self.emit_expr(f, inner)?;
+                let v = self.maybe_force(f, v);
+                let want = self.sub_want(ty)?;
+                let (tyn, _) = self.intern(&format!("{ty}\0"));
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_upcast(%KValue {v}, i64 {want}, ptr @{tyn})"
+                ));
+                f.record(&t, crate::infer::TOP);
+                Ok(t)
+            }
             Expr::Block(stmts, _) => {
                 let mut value = "{ i64 4, i64 0 }".to_string();
                 let last = stmts.len().saturating_sub(1);
@@ -2855,6 +2924,21 @@ impl<'a> Backend<'a> {
             return Ok(t);
         }
         if let Some(id) = self.type_ids.get(name).copied() {
+            if let Some(parent) = self.sub_parents.get(name).cloned() {
+                if emitted.len() != 1 {
+                    return Err(format!("native backend: `{name}` wraps one value"));
+                }
+                let inner = self.maybe_force(f, emitted[0].clone());
+                let want = self.sub_want(&parent)?;
+                let (tyn, _) = self.intern(&format!("{name}\0"));
+                let (par, _) = self.intern(&format!("{parent}\0"));
+                let t = f.tmp();
+                f.line(&format!(
+                    "{t} = call %KValue @k_sub_ctor(i64 {id}, i64 {want}, %KValue {inner}, ptr @{tyn}, ptr @{par})"
+                ));
+                f.record(&t, crate::infer::TOP);
+                return Ok(t);
+            }
             // constructors store fields; records never hold thunks in v1
             let emitted: Vec<String> =
                 emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
