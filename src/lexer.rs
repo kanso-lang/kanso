@@ -151,6 +151,12 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                         if head == "if"
                 )
                 || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _)] if head == "else")
+                || matches!(p.tokens.as_slice(), [(Tok::Ident(head), _)] if head == "build")
+                || matches!(
+                    p.tokens.as_slice(),
+                    [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(head), _)]
+                        if head == "build"
+                )
         };
         let block_child = lines.last().is_some_and(|p: &Line| {
             is_block_header(p) && indent == p.indent + 2

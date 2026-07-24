@@ -1,0 +1,8 @@
+error[name]: `set` lives inside `build` — mutation does not parse anywhere else
+  --> build_set_outside.kso:7:3
+   7 |   set a peers []
+         ^
+error[name]: unknown name `peers`
+  --> build_set_outside.kso:7:9
+   7 |   set a peers []
+               ^

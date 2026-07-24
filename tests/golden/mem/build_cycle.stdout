@@ -1,0 +1,2 @@
+[node "a" [node "b" [<cycle>]] node "b" [node "a" [<cycle>]]]
+node "seed" [<cycle>]

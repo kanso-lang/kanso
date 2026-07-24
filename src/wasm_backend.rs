@@ -64,6 +64,7 @@ const RT_ERR_STAMP: u32 = 27;
 const RT_AT: u32 = 28;
 const RT_MKSUB: u32 = 29;
 const RT_UPCAST: u32 = 30;
+const RT_SETFIELD: u32 = 31;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -98,6 +99,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_at", params: 2, returns: true },
         Import { name: "rt_mksub", params: 2, returns: true },
         Import { name: "rt_upcast", params: 2, returns: true },
+        Import { name: "rt_setfield", params: 3, returns: true },
     ]
 }
 
@@ -423,6 +425,17 @@ impl<'a> WasmBackend<'a> {
                     self.emit_expr(ctx, expr, false)?;
                     self.emit_binding(ctx, pattern)?;
                 }
+                Stmt::Set { target, field, value, .. } => {
+                    let Some(&local) = ctx.scope.get(target) else {
+                        return Err(format!("`set` target `{target}` is not in scope"));
+                    };
+                    let name_lit = self.str_lit(field);
+                    ctx.body.local_get(local);
+                    ctx.body.i32_const(name_lit as i64);
+                    self.emit_expr(ctx, value, false)?;
+                    ctx.body.call(RT_SETFIELD);
+                    ctx.body.drop_();
+                }
                 Stmt::Expr(expr) => {
                     self.emit_expr(ctx, expr, tail && i == last)?;
                     if i != last {
@@ -498,7 +511,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(code);
                 ctx.body.call(RT_UPCAST);
             }
-            Expr::Block(stmts, _) => {
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 self.emit_body(ctx, stmts, tail)?;
             }
             Expr::Int(n, _) => {
@@ -1031,10 +1044,10 @@ impl<'a> WasmBackend<'a> {
 fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
     match expr {
         Expr::Ident(name, _) => visit(name),
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => free_idents(expr, visit),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => free_idents(expr, visit),
                 }
             }
         }

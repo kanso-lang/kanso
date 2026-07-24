@@ -179,6 +179,7 @@ declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
+declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -1763,6 +1764,7 @@ impl<'a> Backend<'a> {
         let last = body.len() - 1;
         for (i, stmt) in body.iter().enumerate() {
             match stmt {
+                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), i)
                         && self.thunkable(f, expr) =>
@@ -1898,12 +1900,23 @@ impl<'a> Backend<'a> {
                 f.record(&t, crate::infer::TOP);
                 Ok(t)
             }
-            Expr::Block(stmts, _) => {
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 let mut value = "{ i64 4, i64 0 }".to_string();
                 let last = stmts.len().saturating_sub(1);
                 for (i, stmt) in stmts.iter().enumerate() {
                     match stmt {
                         Stmt::Bind { pattern, expr } => self.emit_bind(f, pattern, expr)?,
+                        Stmt::Set { target, field, value, span } => {
+                            let new = self.emit_expr(f, value)?;
+                            let new = self.maybe_force(f, new);
+                            let ident = Expr::Ident(target.clone(), *span);
+                            let tv = self.emit_expr(f, &ident)?;
+                            let tv = self.maybe_force(f, tv);
+                            let (label, _) = self.intern(&format!("{field}\0"));
+                            f.line(&format!(
+                                "call %KValue @k_set_field(%KValue {tv}, ptr @{label}, %KValue {new})"
+                            ));
+                        }
                         Stmt::Expr(e) => {
                             let v = self.emit_expr(f, e)?;
                             if i == last {
@@ -3137,10 +3150,10 @@ impl<'a> Backend<'a> {
 fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
     match expr {
         Expr::Int(..) | Expr::Float(..) => {}
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => collect_idents(expr, out),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => collect_idents(expr, out),
                 }
             }
         }

@@ -442,7 +442,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         inline_single_use_chains(&mut decl.body, &shorts);
         for stmt in &mut decl.body {
             match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                     fuse_expr(expr, &shorts, &fold_name, &mut counter);
                 }
             }
@@ -485,14 +485,14 @@ fn inline_single_use_chains(
         let mut uses = 0usize;
         for later in body.iter().skip(idx + 1) {
             match later {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                     count_ident_uses(expr, &name, &mut uses);
                 }
             }
         }
         let sole_coll_use = uses == 1
             && body.iter().skip(idx + 1).any(|later| match later {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                     coll_arg_use(expr, &name, shorts)
                 }
             });
@@ -503,7 +503,9 @@ fn inline_single_use_chains(
         let Stmt::Bind { expr, .. } = body.remove(idx) else { unreachable!() };
         for later in body.iter_mut().skip(idx) {
             match later {
-                Stmt::Bind { expr: e, .. } | Stmt::Expr(e) => {
+                Stmt::Bind { expr: e, .. }
+                | Stmt::Expr(e)
+                | Stmt::Set { value: e, .. } => {
                     substitute_ident(e, &name, &expr);
                 }
             }
@@ -558,10 +560,12 @@ fn substitute_ident(e: &mut ast::Expr, name: &str, replacement: &ast::Expr) {
             }
         }
         Expr::Lambda { body, .. } => substitute_ident(body, name, replacement),
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
+                    ast::Stmt::Bind { expr, .. }
+                    | ast::Stmt::Expr(expr)
+                    | ast::Stmt::Set { value: expr, .. } => {
                         substitute_ident(expr, name, replacement)
                     }
                 }
@@ -618,10 +622,12 @@ fn fuse_expr(
             }
         }
         Expr::Lambda { body, .. } => fuse_expr(body, shorts, fold_name, counter),
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => {
+                    ast::Stmt::Bind { expr, .. }
+                    | ast::Stmt::Expr(expr)
+                    | ast::Stmt::Set { value: expr, .. } => {
                         fuse_expr(expr, shorts, fold_name, counter)
                     }
                 }
@@ -837,12 +843,13 @@ fn rewrite_stmt(stmt: &mut ast::Stmt, qual: &str, owned: &std::collections::Hash
             rewrite_expr(expr, qual, owned);
         }
         ast::Stmt::Expr(e) => rewrite_expr(e, qual, owned),
+        ast::Stmt::Set { value, .. } => rewrite_expr(value, qual, owned),
     }
 }
 
 fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet<String>) {
     match e {
-        ast::Expr::Block(stmts, _) => {
+        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
             for stmt in stmts {
                 rewrite_stmt(stmt, qual, owned);
             }
@@ -1112,7 +1119,9 @@ fn mark_bare_quals(
     for decl in &program.fns {
         for stmt in &decl.body {
             match stmt {
-                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => collect(expr, &mut bare),
+                ast::Stmt::Bind { expr, .. }
+                | ast::Stmt::Expr(expr)
+                | ast::Stmt::Set { value: expr, .. } => collect(expr, &mut bare),
             }
         }
     }
@@ -1184,6 +1193,7 @@ fn used_quals(program: &ast::Program, quals: &mut std::collections::HashSet<Stri
                     walk_expr(expr, quals);
                 }
                 ast::Stmt::Expr(e) => walk_expr(e, quals),
+                ast::Stmt::Set { value, .. } => walk_expr(value, quals),
             }
         }
     }
@@ -1260,6 +1270,7 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
         | ast::Expr::Float(_, s) => s,
         ast::Expr::Field { span: s, .. } => s,
         ast::Expr::Upcast { span: s, .. } => s,
+        ast::Expr::Build(_, s) => s,
     }
 }
 
@@ -1287,16 +1298,19 @@ fn private_uses(
     match stmt {
         ast::Stmt::Bind { expr, .. } => walk(expr, exports, diags),
         ast::Stmt::Expr(e) => walk(e, exports, diags),
+        ast::Stmt::Set { value, .. } => walk(value, exports, diags),
     }
 }
 
-fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
+pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
         ast::Expr::Upcast { expr, .. } => vec![expr.as_ref()],
-        ast::Expr::Block(stmts, _) => stmts
+        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => stmts
             .iter()
             .map(|st| match st {
-                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
+                ast::Stmt::Bind { expr, .. }
+                | ast::Stmt::Expr(expr)
+                | ast::Stmt::Set { value: expr, .. } => expr,
             })
             .collect(),
         ast::Expr::App { head, args, .. } => {

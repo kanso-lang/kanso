@@ -49,6 +49,7 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
     }
     fn expr_safe(e: &Expr, name: &str, is_result: bool) -> bool {
         match e {
+            Expr::Build(..) => false,
             Expr::Ident(id, _) if id == name => is_result,
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
             Expr::BinOp { lhs, rhs, .. } => {
@@ -87,6 +88,7 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
         body.iter().enumerate().all(|(i, stmt)| match stmt {
             Stmt::Bind { expr, .. } => expr_safe(expr, name, false),
             Stmt::Expr(expr) => expr_safe(expr, name, result_ok && i == last),
+            Stmt::Set { value, .. } => expr_safe(value, name, false),
         })
     }
     param_stays_local_at(body, name, true)
@@ -144,10 +146,10 @@ fn use_targets(
                 }
             }
         }
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => use_targets(expr, name, out),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => use_targets(expr, name, out),
                 }
             }
         }
@@ -223,10 +225,10 @@ fn collect_uses(
     match expr {
         Expr::Ident(id, _) if id == name => uses.demanding += 1,
         Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         collect_uses(expr, name, discard, uses)
                     }
                 }
@@ -296,8 +298,8 @@ fn collect_uses(
 /// the cell, so it compiles strict.
 fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
     match expr {
-        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expensive(expr, fns),
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expensive(expr, fns),
         }),
         Expr::App { head, args, .. } => {
             if let Expr::Ident(callee, _) = head.as_ref() {
@@ -346,7 +348,7 @@ pub fn analyze(program: &Program) -> DemandInfo {
             let mut uses = Uses::default();
             for later in &f.body[i + 1..] {
                 let e = match later {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
                 };
                 collect_uses(e, name, &discard, &mut uses);
             }
@@ -373,7 +375,7 @@ pub fn analyze(program: &Program) -> DemandInfo {
             let mut targets = Vec::new();
             for later in &decl.body[i + 1..] {
                 let e = match later {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
                 };
                 use_targets(e, name, &mut targets);
             }

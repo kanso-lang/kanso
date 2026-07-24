@@ -704,6 +704,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                         reject_never_effect(&e, is_final_unit)?;
                         segments.last_mut().expect("segment").push(e);
                     }
+                    Stmt::Set { .. } => unreachable!("`set` lifts only inside `build`"),
                 }
                 continue;
             }
@@ -789,11 +790,19 @@ fn parse_block_construct(
             head.tokens.as_slice(),
             [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if"
         );
+    let head_is_build = matches!(head.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "build")
+        || matches!(
+            head.tokens.as_slice(),
+            [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _)] if w == "build"
+        );
+    if head_is_build {
+        return parse_build(head, children, else_children);
+    }
     if !head_is_if {
         return Err(Diagnostic::new(
             "syntax",
-            "only `if` opens an indented block; other calls take indented \
-             arguments on the line's own indent plus two"
+            "only `if` and `build` open an indented block; other calls take \
+             indented arguments on the line's own indent plus two"
                 .to_string(),
             head_span(head),
         ));
@@ -874,11 +883,127 @@ fn parse_block_construct(
         Stmt::Bind { pattern, expr } => {
             Ok(Stmt::Bind { pattern, expr: extend(expr, branch_args)? })
         }
+        Stmt::Set { .. } => unreachable!("`set` lifts only inside `build`"),
     }
 }
 
 fn span_of_stmt_head(line: &Line) -> Span {
     head_span(line)
+}
+
+/// `x = build` (or a bare `build` tail) opens the one block where mutation
+/// parses. The body runs top to bottom; `set target field value` lifts from
+/// application form; the last expression freezes as the block's result.
+fn parse_build(
+    head: &Line,
+    children: &[Line],
+    else_children: Option<&[Line]>,
+) -> Result<Stmt, Diagnostic> {
+    if else_children.is_some() {
+        return Err(Diagnostic::new(
+            "syntax",
+            "`build` has no `else` — it is a construction site, not a branch".to_string(),
+            head_span(head),
+        ));
+    }
+    let stmts = parse_build_body(children)?;
+    if !matches!(stmts.last(), Some(Stmt::Expr(_))) {
+        return Err(Diagnostic::new(
+            "syntax",
+            "a `build` ends with its result expression — the value that \
+             freezes and leaves the block"
+                .to_string(),
+            head_span(children.last().unwrap_or(head)),
+        ));
+    }
+    let build = Expr::Build(stmts, head_span(head));
+    match head.tokens.as_slice() {
+        [(Tok::Ident(name), nspan), (Tok::Bind, _), _] => Ok(Stmt::Bind {
+            pattern: Pattern::Var(name.clone(), *nspan),
+            expr: build,
+        }),
+        _ => Ok(Stmt::Expr(build)),
+    }
+}
+
+fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
+    let is_else = |line: &Line| {
+        matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
+    };
+    let mut stmts = Vec::new();
+    let mut idx = 0;
+    while idx < body.len() {
+        let line = &body[idx];
+        if matches!(line.tokens.first(), Some((Tok::SeqOp, _))) {
+            return Err(Diagnostic::new(
+                "syntax",
+                "a `build` body already runs top to bottom; `>>` walls have \
+                 no place here"
+                    .to_string(),
+                head_span(line),
+            ));
+        }
+        let base = line.indent;
+        let mut j = idx + 1;
+        while j < body.len() && body[j].indent > base {
+            j += 1;
+        }
+        if j == idx + 1 {
+            stmts.push(lift_set(parse_stmt(line)?, line)?);
+            idx = j;
+            continue;
+        }
+        let inner = &body[idx + 1..j];
+        let (else_lines, end) = match j < body.len() && body[j].indent == base && is_else(&body[j]) {
+            true => {
+                let mut k = j + 1;
+                while k < body.len() && body[k].indent > base {
+                    k += 1;
+                }
+                (Some(&body[j + 1..k]), k)
+            }
+            false => (None, j),
+        };
+        stmts.push(parse_block_construct(line, inner, else_lines)?);
+        idx = end;
+    }
+    Ok(stmts)
+}
+
+/// Inside a build body, a bare `set target field value` application becomes
+/// the mutation statement. The name stays free everywhere else.
+fn lift_set(stmt: Stmt, line: &Line) -> Result<Stmt, Diagnostic> {
+    let is_set_app = |e: &Expr| {
+        matches!(e, Expr::App { head, .. } if matches!(&**head, Expr::Ident(w, _) if w == "set"))
+    };
+    match stmt {
+        Stmt::Expr(e) if is_set_app(&e) => {
+            let Expr::App { args, span, .. } = e else { unreachable!() };
+            let shape_err = || {
+                Diagnostic::new(
+                    "syntax",
+                    "`set` writes one field: `set target field value`".to_string(),
+                    head_span(line),
+                )
+            };
+            let [target_e, field_e, value] = <[Expr; 3]>::try_from(args).map_err(|_| shape_err())?;
+            let (Expr::Ident(target, _), Expr::Ident(field, _)) = (&target_e, &field_e) else {
+                return Err(shape_err());
+            };
+            Ok(Stmt::Set {
+                target: target.clone(),
+                field: field.clone(),
+                value,
+                span,
+            })
+        }
+        Stmt::Bind { expr, .. } if is_set_app(&expr) => Err(Diagnostic::new(
+            "syntax",
+            "`set` is a statement, not an expression — it returns nothing to bind".to_string(),
+            head_span(line),
+        )),
+        other => Ok(other),
+    }
 }
 
 /// A bare line in an effect group must at least plausibly be a description.
@@ -933,6 +1058,7 @@ fn expr_span(e: &Expr) -> Span {
         Expr::Int(_, s)
         | Expr::Field { span: s, .. }
         | Expr::Upcast { span: s, .. }
+        | Expr::Build(_, s)
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)

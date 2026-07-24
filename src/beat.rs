@@ -162,6 +162,17 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
         .collect();
     ids.retain(|(name, _), _| !imported.contains(name.as_str()));
     carried.retain(|(name, _), _| !imported.contains(name.as_str()));
+    // A fn holding a `build` block stays beat-ineligible: the block's graph
+    // may close interior cycles, which the carry deep-copy cannot walk. The
+    // cohort keeps today's grow-only arena.
+    let builds: std::collections::HashSet<&str> = program
+        .fns
+        .iter()
+        .filter(|d| d.body.iter().any(stmt_has_build))
+        .map(|d| d.name.as_str())
+        .collect();
+    ids.retain(|(name, _), _| !builds.contains(name.as_str()));
+    carried.retain(|(name, _), _| !builds.contains(name.as_str()));
     // A demoted pair lives or dies with its target loop, never with the
     // caller's name: a user loop entered through a group that shares its
     // name with a clone still needs the entry demoted, or the loop's
@@ -336,6 +347,19 @@ fn tail_cycles(
 /// would free it under a live register — so threading is a fixpoint: a slot
 /// keeps its threaded standing only while every edge feeding it passes a
 /// bare parameter from a slot that kept its own.
+fn stmt_has_build(stmt: &Stmt) -> bool {
+    let e = match stmt {
+        Stmt::Bind { expr, .. } => expr,
+        Stmt::Expr(e) => e,
+        Stmt::Set { value, .. } => value,
+    };
+    expr_has_build(e)
+}
+
+fn expr_has_build(e: &Expr) -> bool {
+    matches!(e, Expr::Build(..)) || crate::expr_children(e).into_iter().any(expr_has_build)
+}
+
 fn eligible_clusters(
     program: &Program,
     inference: &infer::Inference,
@@ -722,6 +746,7 @@ fn stmt_allocates(stmt: &Stmt, fn_names: &HashSet<&str>, allocating: &HashSet<&s
     let e = match stmt {
         Stmt::Bind { expr, .. } => expr,
         Stmt::Expr(e) => e,
+        Stmt::Set { value, .. } => value,
     };
     expr_allocates(e, fn_names, allocating, seed_pass)
 }
@@ -741,8 +766,8 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
     ];
     match e {
         Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } => true,
-        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                 expr_allocates(expr, fn_names, allocating, seed_pass)
             }
         }),
@@ -870,6 +895,7 @@ fn used_as_value(program: &Program, name: &str) -> bool {
             let e = match stmt {
                 Stmt::Bind { expr, .. } => expr,
                 Stmt::Expr(e) => e,
+                Stmt::Set { value, .. } => value,
             };
             value_use(e, name)
         })
@@ -879,8 +905,8 @@ fn used_as_value(program: &Program, name: &str) -> bool {
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
         Expr::Ident(n, _) => n == name,
-        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => value_use(expr, name),
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => value_use(expr, name),
         }),
         Expr::App { head, args, .. } => {
             let head_is_plain_name = matches!(head.as_ref(), Expr::Ident(..));
