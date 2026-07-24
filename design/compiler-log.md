@@ -1988,3 +1988,35 @@ counting otherwise carries, which also lets the boundary be implicit and the
 reclamation automatic rather than declared and checked. That is a
 language-design result — a rule about where `set` may appear — rather than a
 memory-management one, which is consistent with where it came from.
+
+### Addendum 2 — settled from the paper, and narrowed twice more
+
+Read Gay and Aiken directly rather than inferring. Section 3 answers the
+cross-region question in one sentence:
+
+  "cyclic data structures can be used transparently as long as the cycles
+   are contained within a single region. When a cycle crosses regions, it is
+   the programmer's responsibility to break it before attempting to delete
+   any of the regions involved in the cycle."
+
+So RC does not have the guarantee. Cross-region cycles are legal, and
+breaking them is an explicit manual obligation.
+
+Two further corrections, both narrowing the claim.
+
+The idea is older than Gay-Aiken. Their related work credits Bobrow (1980)
+as the first to propose regions as a way to make reference counting tolerant
+of cycles; Ichisugi and Yonezawa carried it to distributed systems.
+Gay-Aiken is the practical C system, not the origin.
+
+Automatic deletion at zero was already on the table. The paper lists it as a
+design option — "implicit region deletion: at various times, e.g., when
+memory is running out, the system deallocates any regions whose reference
+count has dropped to zero" — and they chose explicit deleteregion because RC
+is a C dialect. So an implicit boundary with automatic reclamation is not
+distinctive either.
+
+What survives is one thing, precisely bounded: cross-region cycles are a
+documented programmer obligation in the prior art, and mutation confinement
+makes them unrepresentable. Not the counting, not the automation. The
+elimination of that obligation.
