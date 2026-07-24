@@ -291,6 +291,38 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
     push(Slot::V(Value::NoneV))
 }
 
+/// Dot field access `base.name`, mirroring the interpreter's Expr::Field: a
+/// failure propagates untouched, a non-record and a missing field carry the
+/// oracle's exact wording.
+#[no_mangle]
+pub extern "C" fn rt_field_by_name(base: u32, name_lit: u32) -> u32 {
+    let name = match val(name_lit) {
+        Value::Str(s) => s,
+        _ => die("field name must be a string".to_string()),
+    };
+    let value = val(base);
+    if is_failure(&value) {
+        return push(Slot::V(value));
+    }
+    match value {
+        Value::Record { ty, fields } => {
+            let position = TYPES.with(|t| {
+                let types = t.borrow();
+                let i = types.iter().position(|(n, _)| *n == *ty).expect("declared type");
+                types[i].1.iter().position(|f| *f == name)
+            });
+            match position {
+                Some(i) => {
+                    let field = fields.borrow()[i].clone();
+                    push(Slot::V(field))
+                }
+                None => die(format!("`{ty}` has no field `{name}`")),
+            }
+        }
+        other => die(format!("`.` reads a field of a record, not {}", render(&other, true))),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
     let name = match val(name_lit) {
