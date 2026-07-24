@@ -2093,6 +2093,20 @@ impl<'a> Backend<'a> {
     /// Emit an expression in tail position: direct calls to kanso functions
     /// become guaranteed tail calls, and an if's branches stay tails.
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
+        if let Expr::App { head, args, piped: false, .. } = expr {
+            if let Expr::Ident(name, _) = head.as_ref() {
+                let bare = name.strip_prefix("builtin_").unwrap_or(name);
+                if self.forwarders.contains_key(&(bare.to_string(), args.len()))
+                    || self
+                        .forwarders
+                        .contains_key(&(name.to_string(), args.len()))
+                {
+                    let value = self.emit_expr(f, expr)?;
+                    self.emit_ret(f, &value);
+                    return Ok(());
+                }
+            }
+        }
         if let Expr::App { head, args, piped, .. } = expr {
             if *piped && !args.is_empty() {
                 // a tail pipe into a literal lambda is the bind, inlined:
