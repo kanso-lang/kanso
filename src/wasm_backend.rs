@@ -65,6 +65,7 @@ const RT_AT: u32 = 28;
 const RT_MKSUB: u32 = 29;
 const RT_UPCAST: u32 = 30;
 const RT_SETFIELD: u32 = 31;
+const RT_FIELD_BY_NAME: u32 = 32;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -100,6 +101,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_mksub", params: 2, returns: true },
         Import { name: "rt_upcast", params: 2, returns: true },
         Import { name: "rt_setfield", params: 3, returns: true },
+        Import { name: "rt_field_by_name", params: 2, returns: true },
     ]
 }
 
@@ -542,8 +544,11 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(pairs.len() as i64);
                 ctx.body.call(RT_MKMAP);
             }
-            Expr::Field { .. } => {
-                return Err("field access (`.name`) is not yet in the browser backend".to_string());
+            Expr::Field { base, name, .. } => {
+                self.emit_expr(ctx, base, false)?;
+                let name_lit = self.str_lit(name);
+                ctx.body.i32_const(name_lit as i64);
+                ctx.body.call(RT_FIELD_BY_NAME);
             }
             Expr::Index { base, index, strict, span } => {
                 self.emit_expr(ctx, base, false)?;

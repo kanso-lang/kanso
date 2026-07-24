@@ -1558,3 +1558,15 @@ The .out on main already carried the field-error interpretation, so the HTML
 was already unsynced; this PR only updates the message text. Note: book_check
 runs in CI separately from cargo test — run `sh scripts/book_check.sh` locally
 for any diagnostic-message change.
+
+## 2026-07-24 — dot field access lands in the browser backend
+
+Wired Expr::Field into the wasm backend via a new rt_field_by_name that
+mirrors the interpreter's Expr::Field exactly: a failure propagates
+untouched, a non-record dies "`.` reads a field of a record, not {rendered}",
+a missing field dies "`{ty}` has no field `{name}`" — the same wording native
+was aligned to in the field-error PR, so all three engines now agree on the
+error paths too. The three field-access goldens (dot_field_access,
+field_non_record, field_missing) moved from wasm fallback to real
+three-engine passes: browser differential 34 passed / 5 fallback / 0 failed
+(was 31 / 8). No native or interp change; goldens already existed.
