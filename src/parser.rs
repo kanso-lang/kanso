@@ -648,7 +648,11 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let mut wall_spans: Vec<Span> = Vec::new();
     let mut wall_fused: Vec<bool> = Vec::new();
     let mut closed_by_fuse = false;
+    let unit_count = units.len();
+    let mut unit_index = 0usize;
     for unit in units {
+        unit_index += 1;
+        let is_final_unit = unit_index == unit_count;
         let line = match unit {
             Unit::Wall(line) => line,
             Unit::Parsed(stmt) => {
@@ -678,7 +682,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                                 expr_span(&e),
                             ));
                         }
-                        reject_never_effect(&e)?;
+                        reject_never_effect(&e, is_final_unit)?;
                         segments.last_mut().expect("segment").push(e);
                     }
                 }
@@ -705,7 +709,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 let mut p = P::new(&line.tokens[1..], &line.end_cols[1..], line.number);
                 let expr = p.parse_expr()?;
                 p.expect_done()?;
-                reject_never_effect(&expr)?;
+                reject_never_effect(&expr, is_final_unit)?;
                 segments.last_mut().expect("segment").push(expr);
                 closed_by_fuse = true;
             }
@@ -861,7 +865,7 @@ fn span_of_stmt_head(line: &Line) -> Span {
 /// A bare line in an effect group must at least plausibly be a description.
 /// Literals, arithmetic, comparisons, and lambdas never are — those keep the
 /// classic unused-expression error instead of dying inside the runtime join.
-fn reject_never_effect(e: &Expr) -> Result<(), Diagnostic> {
+fn reject_never_effect(e: &Expr, is_final: bool) -> Result<(), Diagnostic> {
     let never = matches!(
         e,
         Expr::Int(..)
@@ -873,11 +877,21 @@ fn reject_never_effect(e: &Expr) -> Result<(), Diagnostic> {
             | Expr::BinOp { .. }
     );
     if never {
+        let message = match is_final {
+            true => {
+                "a function that does io must return the io (or an err) — this \
+                 trailing value would abandon the effects above it. an io's \
+                 yield flows onward through `.`; a plain value result belongs \
+                 in a pure function"
+            }
+            false => {
+                "this value is never used: a non-final line binds a name, or is \
+                 an effect joining the group"
+            }
+        };
         return Err(Diagnostic::new(
             "unused",
-            "unused expression: every non-final line binds a name (sequence effects \
-             with `>>`)"
-                .to_string(),
+            message.to_string(),
             expr_span(e),
         ));
     }
@@ -899,6 +913,7 @@ fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
         | Expr::Field { span: s, .. }
+        | Expr::Upcast { span: s, .. }
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)
@@ -1474,7 +1489,26 @@ impl<'a> P<'a> {
                     return Ok(Expr::Lambda { params, body: Box::new(body), span });
                 }
                 let inner = self.parse_expr()?;
+                let rparen_span = self.span_here();
                 self.expect_rparen()?;
+                // `(expr):type` — the upcast; the colon binds tight to the
+                // closing paren, so map pairs never collide with it
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    let colon_span = self.span_here();
+                    if colon_span.col == rparen_span.col + 1 {
+                        self.pos += 1;
+                        let ty_span = self.span_here();
+                        if ty_span.col != colon_span.col + 1 {
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                "an upcast binds tight: `(expr):type`".to_string(),
+                                colon_span,
+                            ));
+                        }
+                        let (ty, _) = self.expect_ident("a type name")?;
+                        return Ok(Expr::Upcast { expr: Box::new(inner), ty, span });
+                    }
+                }
                 Ok(inner)
             }
             _ => Err(self.err("expected an expression".to_string())),

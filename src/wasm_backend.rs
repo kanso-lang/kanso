@@ -429,6 +429,7 @@ impl<'a> WasmBackend<'a> {
 
     fn emit_expr(&mut self, ctx: &mut Ctx, expr: &Expr, tail: bool) -> Result<(), String> {
         match expr {
+            Expr::Upcast { expr: inner, .. } => self.emit_expr(ctx, inner, tail)?,
             Expr::Block(stmts, _) => {
                 self.emit_body(ctx, stmts, tail)?;
             }
@@ -951,6 +952,7 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
             }
         }
         Expr::Field { base, .. } => free_idents(base, visit),
+        Expr::Upcast { expr, .. } => free_idents(expr, visit),
         Expr::Int(..) | Expr::Float(..) => {}
         Expr::Str(parts, _) => {
             for part in parts {

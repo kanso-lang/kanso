@@ -247,6 +247,7 @@ impl<'a> Analysis<'a> {
     fn expr_safe_calls(&self, ty: &str, e: &Expr) -> bool {
         match e {
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
+            Expr::Upcast { expr, .. } => self.expr_safe_calls(ty, expr),
             Expr::Block(stmts, _) => stmts.iter().all(|st| match st {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_safe_calls(ty, expr),
             }),
@@ -371,6 +372,7 @@ impl<'a> Analysis<'a> {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_mentions_ty(ty, expr),
             }),
             Expr::Field { base, .. } => self.expr_mentions_ty(ty, base),
+            Expr::Upcast { expr, .. } => self.expr_mentions_ty(ty, expr),
             Expr::App { head, args, .. } => {
                 self.expr_mentions_ty(ty, head) || args.iter().any(|a| self.expr_mentions_ty(ty, a))
             }
