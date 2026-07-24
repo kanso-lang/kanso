@@ -1636,3 +1636,56 @@ form is `{string:int}`, whose colon collides with the annotation colon
 made it an ordinary parameterized type, and the resonance principle applied
 consistently would drag slices back to `[string]`, which was already
 rejected. Declined alternatives now live in the doc so they stay declined.
+
+## 2026-07-24 — GAVEL: none is a value, err is the failure
+
+Ruled: `none` is not a failure. `err` is. The implementation must be brought
+in line with the already-ratified failure model, which it currently
+contradicts.
+
+Both engines classify none as a failure in one predicate each —
+`k_not_failure(v) { return v.tag != K_ERR && v.tag != K_NONE; }` and
+`is_failure(v) { matches!(v, ErrV(_) | NoneV) }` — and `k_rec`'s first act
+is to return any failing argument instead of building. So construction eats
+none.
+
+The demonstration, which is the sharpest form of the bug:
+
+    type maybe_job none string
+    type user
+      job:maybe_job
+      name:string
+
+    user "cook" "mai"   -> user "cook" "mai"    builds
+    user none "ken"     -> <none>               eaten
+
+The field's typeset explicitly admits none, the checker accepts the
+declaration, and the constructor then refuses to store the value the
+declaration permits. none is a zero-width type and belongs in a typeset like
+any other member.
+
+Downstream of the same misclassification: json's `json_null` marker exists
+only because none is eaten as data, and it carries a dummy `bool` field only
+because kanso has no zero-field types. Both inelegances trace here.
+
+What the fix is NOT: deleting auto-propagation. Propagation is load-bearing
+and correct for bails — it is what removed every "did the last step fail?"
+line from the json parser. The fix is removing none from the failure set so
+propagation applies to err alone.
+
+Sequencing, which is the real design work: the ratified model also says a
+function receiving a none must state its disposition (an arm, or resolve
+before the call), no arm being a compile error, and none-transparency being
+an explicit `none -> none` forwarding arm. That exhaustiveness check has to
+land with the demotion. Without it, none stops propagating and instead flows
+silently into code that never considered it — the anti-Ruby-nil outcome the
+model was written to prevent. Today's corpus leans on propagation heavily
+(`xs[9]` feeding arithmetic, the endpoint goldens, the mem corpus), so this
+is a campaign, not a predicate edit.
+
+Related gap found in the same probe, and it wants the same machinery:
+constructor arguments are not type-checked against field types at all.
+`node "hello" 5` against `id:int` passes `check` and constructs. Real
+checking at the value/field boundary is the prerequisite for both.
+
+Next step is a design doc for the campaign, not code.
