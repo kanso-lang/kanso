@@ -2042,7 +2042,69 @@ static long long k_bytes_eq_list(KBytes* b, KList* l) {
     return 1;
 }
 
+/* bisimulation pair-set for cyclic equality: generation-stamped open
+   addressing, reused across comparisons so k_eq never mallocs on the common
+   acyclic path. keyed on a pair of record cells already assumed equal. */
+typedef struct { const void* a; const void* b; unsigned long long gen; } KEqSlot;
+static KEqSlot* k_eq_slots = NULL;
+static size_t k_eq_cap = 0;
+static size_t k_eq_live = 0;
+static unsigned long long k_eq_gen = 0;
+
+static void k_eq_begin(void) {
+    if (!k_eq_slots) {
+        k_eq_cap = 1024;
+        k_eq_slots = calloc(k_eq_cap, sizeof(KEqSlot));
+        if (!k_eq_slots) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    k_eq_gen++;
+    k_eq_live = 0;
+}
+
+static size_t k_eq_probe(const void* a, const void* b) {
+    size_t h = (((uintptr_t)a >> 4) * 0x9E3779B97F4A7C15ULL)
+             ^ (((uintptr_t)b >> 4) * 0xC2B2AE3D27D4EB4FULL);
+    size_t i = h & (k_eq_cap - 1);
+    while (k_eq_slots[i].gen == k_eq_gen
+           && (k_eq_slots[i].a != a || k_eq_slots[i].b != b))
+        i = (i + 1) & (k_eq_cap - 1);
+    return i;
+}
+
+static void k_eq_grow(void) {
+    KEqSlot* old = k_eq_slots;
+    size_t old_cap = k_eq_cap;
+    k_eq_cap *= 2;
+    k_eq_slots = calloc(k_eq_cap, sizeof(KEqSlot));
+    if (!k_eq_slots) { fputs("out of memory\n", stderr); exit(1); }
+    for (size_t i = 0; i < old_cap; i++) {
+        if (old[i].gen != k_eq_gen) continue;
+        size_t j = k_eq_probe(old[i].a, old[i].b);
+        k_eq_slots[j] = old[i];
+    }
+    free(old);
+}
+
+/* returns 1 if the pair was already assumed equal this comparison */
+static int k_eq_assume(const void* a, const void* b) {
+    if (k_eq_live * 10 >= k_eq_cap * 7) k_eq_grow();
+    size_t i = k_eq_probe(a, b);
+    if (k_eq_slots[i].gen == k_eq_gen) return 1;
+    k_eq_slots[i].gen = k_eq_gen;
+    k_eq_slots[i].a = a;
+    k_eq_slots[i].b = b;
+    k_eq_live++;
+    return 0;
+}
+
+static long long k_eq_rec(KValue a, KValue b);
+
 static long long k_eq(KValue a, KValue b) {
+    k_eq_begin();
+    return k_eq_rec(a, b);
+}
+
+static long long k_eq_rec(KValue a, KValue b) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
     if (a.tag == K_BYTES && b.tag == K_LIST) return k_bytes_eq_list(k_as_bytes(a), k_as_list(b));
@@ -2066,8 +2128,13 @@ static long long k_eq(KValue a, KValue b) {
             KRec* rb = k_as_rec(b);
             if (ra == rb) return 1;
             if (ra->type_id != rb->type_id) return 0;
+            /* a build block can close a cycle; assume this pair equal and a
+               re-encounter is the coinductive base case, not infinite
+               recursion (records are the only settable cell, so every cycle
+               passes through one — guarding here breaks them all) */
+            if (k_eq_assume(ra, rb)) return 1;
             for (long long i = 0; i < ra->nfields; i++) {
-                if (!k_eq(ra->fields[i], rb->fields[i])) return 0;
+                if (!k_eq_rec(ra->fields[i], rb->fields[i])) return 0;
             }
             return 1;
         }
@@ -2076,7 +2143,7 @@ static long long k_eq(KValue a, KValue b) {
             KList* lb = k_as_list(b);
             if (la->len != lb->len) return 0;
             for (long long i = 0; i < la->len; i++) {
-                if (!k_eq(la->items[i], lb->items[i])) return 0;
+                if (!k_eq_rec(la->items[i], lb->items[i])) return 0;
             }
             return 1;
         }
@@ -2086,7 +2153,7 @@ static long long k_eq(KValue a, KValue b) {
             KValue* sb = k_map_sorted(k_as_map(b), &nb);
             if (na != nb) return 0;
             for (long long i = 0; i < na * 2; i++) {
-                if (!k_eq(sa[i], sb[i])) return 0;
+                if (!k_eq_rec(sa[i], sb[i])) return 0;
             }
             return 1;
         }

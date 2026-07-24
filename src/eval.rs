@@ -2001,11 +2001,25 @@ fn bool_value(b: bool) -> Value {
 }
 
 fn values_equal(a: &Value, b: &Value) -> bool {
+    values_equal_seen(a, b, &mut std::collections::HashSet::new())
+}
+
+/// `seen` holds the record-cell pairs already assumed equal. A build block
+/// can close a cycle, so two distinct cyclic graphs are compared by
+/// bisimulation: assume a pair equal on first encounter, and a re-encounter
+/// of the same pair is the coinductive base case (true) rather than infinite
+/// recursion. The assumption is global for the comparison — a pair proven
+/// contradictory anywhere still returns false.
+fn values_equal_seen(
+    a: &Value,
+    b: &Value,
+    seen: &mut std::collections::HashSet<(usize, usize)>,
+) -> bool {
     if let Value::Sub { inner, .. } = a {
-        return values_equal(inner, b);
+        return values_equal_seen(inner, b, seen);
     }
     if let Value::Sub { inner, .. } = b {
-        return values_equal(a, inner);
+        return values_equal_seen(a, inner, seen);
     }
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
@@ -2013,25 +2027,33 @@ fn values_equal(a: &Value, b: &Value) -> bool {
         (Value::Map(x), Value::Map(y)) => {
             x.len() == y.len()
                 && x.iter().zip(y.iter()).all(|((ka, va), (kb, vb))| {
-                    ka == kb && values_equal(va, vb)
+                    ka == kb && values_equal_seen(va, vb, seen)
                 })
         }
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::True, Value::True) | (Value::False, Value::False) => true,
         (Value::NoneV, Value::NoneV) => true,
         (Value::List(x), Value::List(y)) => {
-            x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_equal(a, b))
+            x.len() == y.len()
+                && x.iter().zip(y.iter()).all(|(a, b)| values_equal_seen(a, b, seen))
         }
         (Value::Record { ty: tx, fields: fx }, Value::Record { ty: ty_, fields: fy }) => {
-            tx == ty_
-                && Rc::ptr_eq(fx, fy)
-                || tx == ty_
-                    && fx.borrow().len() == fy.borrow().len()
-                    && fx
-                        .borrow()
-                        .iter()
-                        .zip(fy.borrow().iter())
-                        .all(|(a, b)| values_equal(a, b))
+            if tx != ty_ {
+                return false;
+            }
+            if Rc::ptr_eq(fx, fy) {
+                return true;
+            }
+            let key = (Rc::as_ptr(fx) as *const () as usize, Rc::as_ptr(fy) as *const () as usize);
+            if !seen.insert(key) {
+                return true;
+            }
+            fx.borrow().len() == fy.borrow().len()
+                && fx
+                    .borrow()
+                    .iter()
+                    .zip(fy.borrow().iter())
+                    .all(|(a, b)| values_equal_seen(a, b, seen))
         }
         _ => false,
     }
