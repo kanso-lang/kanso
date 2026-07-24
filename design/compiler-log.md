@@ -1862,3 +1862,40 @@ now evaluates the constant and applies the result through RT_CALL.
 
 The two remaining fallbacks are both `join`, which waits on the io/parallel
 ordering gavel rather than on emitter work.
+
+## 2026-07-24 — cohort arena freeing: measured, deferred (not a near-term win)
+
+Before designing the arena-per-block story, measured whether the workload it
+targets actually leaks. It does not.
+
+Two hundred thousand two-node cycles built and discarded in a loop:
+
+    n=20000    allocs=80003   alloc_bytes=2560080   arena_blocks=1  beat_iters=20000
+    n=200000   allocs=800003  alloc_bytes=25600080  arena_blocks=1  beat_iters=200000
+
+arena_blocks stays at 1 across a tenfold increase. alloc_bytes is cumulative
+and so grows with the work done; peak footprint does not. The beat rewind
+already reclaims each discarded cohort at its iteration boundary — one
+rewind per iteration, on the record as beat_iters. Discard-in-a-loop is the
+case cohort freeing was meant to fix, and a shipped mechanism already fixes
+it.
+
+The retaining variant grows as it should, because the graphs stay live:
+
+    n=20000    arena_blocks=4    n=200000   arena_blocks=32   beat_iters=0
+
+Nothing to free there either; those cohorts are reachable.
+
+The case that remains — a cohort held for a while, then dropped while the
+program keeps allocating — needs the drop to be *detected*, and detection is
+reference counting. The native runtime has no value-level counting at all:
+k_alloc is a bump pointer into the beat arena, reclaimed by rewind, and the
+only rc field in the runtime belongs to KThunk. So cohort freeing is not a
+standalone optimization that can be built now. It is a component of the
+counted world, and it becomes buildable when value-level RC does.
+
+The design is untouched by this. The birthday theorem and cohort counting
+are what keep RC *complete* once RC exists — a cycle counts as one unit, so
+no collector is needed. What is declined is treating cohort freeing as a
+near-term performance win: its headline benefit is already delivered, and
+its remaining benefit cannot be built ahead of the machinery it rests on.
