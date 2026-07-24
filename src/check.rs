@@ -451,10 +451,8 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     diags
 }
 
-/// The block-born rule: a `set` target must trace to a construction inside
-/// the same `build` block. That is the premise of the birthday theorem —
-/// values born before the block stay immutable, so no pointer ever aims at
-/// a younger value except within one block's walls.
+/// Values born before the block stay immutable, which is what keeps every
+/// cycle inside one birth cohort.
 fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
     let type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
     for decl in &program.fns {
@@ -474,7 +472,6 @@ fn build_walk_stmt(stmt: &Stmt, type_names: &HashSet<&str>, diags: &mut Vec<Diag
 
 fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
     if let Expr::Build(stmts, _) = expr {
-        // names born in this block whose value is a fresh construction
         let mut born: HashSet<&str> = HashSet::new();
         for stmt in stmts {
             match stmt {
@@ -505,9 +502,7 @@ fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diag
     }
 }
 
-/// Is this expression a construction the block owns — a direct constructor
-/// application? A call that merely *returns* a record may hand back
-/// something older, so it does not qualify.
+/// A call that merely returns a record may hand back something older.
 fn constructs(expr: &Expr, type_names: &HashSet<&str>) -> bool {
     matches!(expr, Expr::App { head, .. }
         if matches!(&**head, Expr::Ident(name, _) if type_names.contains(name.as_str())))

@@ -271,8 +271,8 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
         _ => die("field name must be a string".to_string()),
     };
     let new = val(value_h);
-    // a failure target propagates: the write is skipped, matching the
-    // interpreter oracle and native's early return.
+    // a constructor given a failure handed the failure back, so there is
+    // no record to write to
     if is_failure(&val(h)) {
         return push(Slot::V(Value::NoneV));
     }
@@ -291,9 +291,6 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
     push(Slot::V(Value::NoneV))
 }
 
-/// Dot field access `base.name`, mirroring the interpreter's Expr::Field: a
-/// failure propagates untouched, a non-record and a missing field carry the
-/// oracle's exact wording.
 #[no_mangle]
 pub extern "C" fn rt_field_by_name(base: u32, name_lit: u32) -> u32 {
     let name = match val(name_lit) {

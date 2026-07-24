@@ -429,7 +429,6 @@ static void k_ptrmap_grow(KPtrMap* t) {
     free(old);
 }
 
-/* returns the slot for key; caller checks gen to see whether it was present */
 static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
     if (*live * 10 >= t->cap * 7) { k_ptrmap_grow(t); }
     size_t i = k_ptrmap_probe(t, key);
@@ -2049,9 +2048,7 @@ static long long k_bytes_eq_list(KBytes* b, KList* l) {
     return 1;
 }
 
-/* bisimulation pair-set for cyclic equality: generation-stamped open
-   addressing, reused across comparisons so k_eq never mallocs on the common
-   acyclic path. keyed on a pair of record cells already assumed equal. */
+/* reused across comparisons so k_eq never mallocs on the acyclic path */
 typedef struct { const void* a; const void* b; unsigned long long gen; } KEqSlot;
 static KEqSlot* k_eq_slots = NULL;
 static size_t k_eq_cap = 0;
@@ -2135,10 +2132,8 @@ static long long k_eq_rec(KValue a, KValue b) {
             KRec* rb = k_as_rec(b);
             if (ra == rb) return 1;
             if (ra->type_id != rb->type_id) return 0;
-            /* a build block can close a cycle; assume this pair equal and a
-               re-encounter is the coinductive base case, not infinite
-               recursion (records are the only settable cell, so every cycle
-               passes through one — guarding here breaks them all) */
+            /* every cycle passes through a record, so assuming this pair
+               equal is what makes the walk terminate */
             if (k_eq_assume(ra, rb)) return 1;
             for (long long i = 0; i < ra->nfields; i++) {
                 if (!k_eq_rec(ra->fields[i], rb->fields[i])) return 0;
