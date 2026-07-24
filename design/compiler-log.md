@@ -1233,3 +1233,14 @@ zero samples in the encode profile. kq jq-parity green. Profile
 floor now memmove/k_b_append/dispatch — TRMC and SpecConstr
 territory. Noted in passing: kanso has no exponent float literals
 (1.0e20 is a name error) — parked as a possible gavel.
+
+## 2026-07-23 — post-ryū sitting (load 47, interleaved)
+
+encodebench 0.71-0.76s user under heavy load (quiet floor pre-ryū was
+0.66; the ryū win is profile-proven — dtoa/quorem/multadd at zero
+samples — and the quiet-absolute refresh stays owed). kq boards,
+same sitting: path 5.1/20.6ms (1.54x/1.64x), pretty 8.7/62.8ms
+(2.00x/4.76x — jq at 299ms on the big file; a loaded box hurts the
+slower tool more). kq README table updated to this sitting with idle
+floors footnoted. All five kernel presence counters now CI-pinned in
+the encode cost golden (#175).
