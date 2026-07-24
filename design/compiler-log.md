@@ -1316,3 +1316,29 @@ at ~25 samples/line — d_encode_onto at 24 means SpecConstr is no
 longer profile-motivated for encode and defers. kq inherits through
 pretty: big-file 56.9 → 50.4ms (2.28x over jq). The surface checklist
 lands in CLAUDE.md's definition of done.
+
+## 2026-07-24 — PLAN: subtypes on native and wasm (+ tie-rejection)
+
+The interp slice (#168, #173) is the oracle; the design is ratified
+(memory: kanso-subtypes). Native shape:
+
+1. Representation: K_SUB tag (15), KSub { type_id, KValue inner } —
+   arena-allocated like records; carry/copy/render/equality arms in
+   runtime.c mirror the interp (render/equality/compare/builtins
+   unwrap via a k_sub_base walk; construction validates the parent).
+2. Construction: a type decl with a parent compiles its ctor to
+   k_sub(type_id, inner) after a parent-type check.
+3. Dispatch: annotated params accept a Sub whose chain reaches the
+   annotation — dispatchers gain a chain-walk compare (helper
+   k_sub_matches(v, want_id_or_tag, depth_out)); specificity uses
+   depth exactly as the interp scores it. The upcast strips via a
+   k_sub_upcast walk with the widening error.
+4. Wasm mirrors through its rt (same enum, same helpers).
+5. Tie-rejection (gaveled): check.rs — for each call site, the
+   reachable per-position sets (inference) against each arm pair's
+   pointwise order; two incomparable maximal arms = compile error
+   naming both arms and the disambiguating signature. Lands with the
+   native dispatch work since it leans on the same reachable sets.
+6. Differential goldens once all engines speak it: construction,
+   chain dispatch, upcast, transparency through builtins/operators,
+   the tie-rejection error text.

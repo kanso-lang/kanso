@@ -17,7 +17,7 @@
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
 typedef struct { long long tag; long long payload; } KValue;
 
-enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK };
+enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB };
 
 typedef struct { long len; char* data; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
@@ -153,6 +153,9 @@ typedef struct {
 } KMap;
 typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; } KClosure;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
+/* A nominal subtype wrapper: transparent to every consumer, visible only
+   to dispatch, which walks the chain and prefers nearer declarations. */
+typedef struct { long long type_id; KValue inner; } KSub;
 typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind */
@@ -437,6 +440,12 @@ static size_t k_copy_size(KValue v, KMark* m) {
             for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
             break;
         }
+        case K_SUB: {
+            KSub* sb = (KSub*)p;
+            n += k_copy_size_ptr(sb, sizeof(KSub), m);
+            n += k_copy_size(sb->inner, m);
+            break;
+        }
         case K_REC: {
             KRec* r = (KRec*)p;
             n += k_copy_size_ptr(r, sizeof(KRec), m);
@@ -531,6 +540,14 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             nm->sorted = NULL;
             nm->sorted_len = 0;
             out.payload = k_ptr(nm);
+            break;
+        }
+        case K_SUB: {
+            KSub* sb = (KSub*)p;
+            KSub* nb = k_copy_alloc(cp, sizeof(KSub));
+            nb->type_id = sb->type_id;
+            nb->inner = k_deep_copy(sb->inner, cp);
+            out.payload = k_ptr(nb);
             break;
         }
         case K_REC: {
@@ -1725,10 +1742,41 @@ static void render_ryu(double d, char* buf) {
 }
 
 
+static KValue k_sub_base(KValue v) {
+    while (v.tag == K_SUB) v = ((KSub*)(intptr_t)v.payload)->inner;
+    return v;
+}
+
+KValue k_sub_wrap(long long type_id, KValue inner) {
+    if (!k_not_failure(inner)) return inner;
+    KSub* s = k_alloc(sizeof(KSub));
+    s->type_id = type_id;
+    s->inner = inner;
+    KValue v; v.tag = K_SUB; v.payload = k_ptr(s); return v;
+}
+
+/* Chain match for dispatch: 0 = exact, +1 per parent hop; -1 = no match.
+   want_id >= 0 names a declared type; want_id < 0 encodes a primitive tag
+   as -(tag + 1), so annotated primitive params accept wrapped values. */
+long long k_sub_depth(KValue v, long long want_id) {
+    long long depth = 0;
+    while (v.tag == K_SUB) {
+        KSub* s = (KSub*)(intptr_t)v.payload;
+        if (want_id >= 0 && s->type_id == want_id) return depth;
+        v = s->inner;
+        depth++;
+    }
+    if (want_id < 0 && v.tag == -(want_id + 1)) return depth;
+    if (want_id >= 0 && v.tag == K_REC
+        && ((KRec*)(intptr_t)v.payload)->type_id == want_id) return depth;
+    return -1;
+}
+
 KValue k_render(KValue v, long long quote) {
     // an err propagates through rendering (it is an exception); a none is a
     // value and renders its sentinel below
     if (v.tag == K_ERR) return v;
+    if (v.tag == K_SUB) return k_render(k_sub_base(v), quote);
     char buf[64];
     switch (v.tag) {
         case K_INT:
@@ -1821,6 +1869,8 @@ static long long k_bytes_eq_list(KBytes* b, KList* l) {
 }
 
 static long long k_eq(KValue a, KValue b) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (a.tag == K_BYTES && b.tag == K_LIST) return k_bytes_eq_list(k_as_bytes(a), k_as_list(b));
     if (a.tag == K_LIST && b.tag == K_BYTES) return k_bytes_eq_list(k_as_bytes(b), k_as_list(a));
     if (a.tag == K_BYTES && b.tag == K_BYTES) {
@@ -2486,6 +2536,8 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
 }
 
 static int k_key_cmp(KValue a, KValue b) {
+    a = k_sub_base(a);
+    b = k_sub_base(b);
     if (a.tag != b.tag) return a.tag < b.tag ? -1 : 1;
     if (a.tag == K_INT) return (a.payload > b.payload) - (a.payload < b.payload);
     KStr* sa = k_as_str(a); KStr* sb = k_as_str(b);
