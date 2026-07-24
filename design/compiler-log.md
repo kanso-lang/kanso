@@ -1406,3 +1406,23 @@ encoder). Differential corpus grows examples/typeset_named.kso: 28
 passed, 0 failed. One `type` declaration form now covers records
 (fields), markers (nothing), subtypes (one member), and named
 typesets (several) — the mushroom test's four-for-one, closed.
+
+## 2026-07-24 — PLAN: build blocks v1 (the staged slice)
+
+Per design/build-blocks.md (the ratified record). Stage order proven
+by the subtype arc: (1) parser — `x = build` header with an indented
+body; inside it, a statement `set target field value` lifts from
+application form (the name stays free elsewhere); the body's last
+expression freezes as the result. (2) check — set only inside build;
+targets trace to block-born bindings; the birthday theorem's premise
+enforced statically. (3) interp oracle — block-born records wrap in
+identity cells; set writes through; freeze is the boundary; render
+and equality carry a visited set so cycles print `<cycle>` and
+compare without divergence, byte-identical across engines by
+construction. (4) native — in-place field store into the arena;
+cohort-holding loops beat-ineligible v1 (the conservative posture the
+byte builder took); the carry's deep copy gains an identity map so a
+cyclic cohort cannot recurse it forever. (5) wasm mirrors through the
+shared Value. (6) differential goldens: wiring a two-node cycle,
+reading through it, the set-outside-build and non-block-born errors,
+and the cycle render marker.
