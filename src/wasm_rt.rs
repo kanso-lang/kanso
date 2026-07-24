@@ -6,7 +6,7 @@
 #![cfg(target_arch = "wasm32")]
 use crate::ast::Program;
 use crate::eval::{
-    self, err_value, eval_binop, hop, index_value, is_failure, render, trace_lines, Desc,
+    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render, trace_lines, Desc,
     Executor, ErrInfo, Interp, Value,
 };
 use crate::diag::Span;
@@ -644,6 +644,36 @@ pub extern "C" fn rt_seq(a: u32, b: u32) -> u32 {
         (sa, sb) if descish(&sa) && descish(&sb) => push(Slot::Seq(a, b)),
         _ => die("`>>` sequences two effect descriptions".to_string()),
     }
+}
+
+/// A deferred pair is materialized so the interpreter's scheduler sees a real
+/// description; a closure-bound one cannot be, and says so.
+fn as_desc(h: u32) -> Option<Rc<Desc>> {
+    match slot(h) {
+        Slot::V(Value::Desc(d)) => Some(d),
+        Slot::Seq(a, b) => {
+            let (da, db) = (as_desc(a)?, as_desc(b)?);
+            Some(Rc::new(Desc::Seq(da, db)))
+        }
+        _ => None,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rt_join(a: u32, b: u32) -> u32 {
+    let (left, right) = (slot(a), slot(b));
+    if let (Slot::V(x), Slot::V(y)) = (&left, &right) {
+        if is_failure(x) || is_failure(y) {
+            return match join_values(x.clone(), y.clone(), SPAN0) {
+                Ok(v) => push(Slot::V(v)),
+                Err(rt) => die(rt.message),
+            };
+        }
+    }
+    let (Some(da), Some(db)) = (as_desc(a), as_desc(b)) else {
+        die("a group joins descriptions".to_string());
+    };
+    push(Slot::V(Value::Desc(Rc::new(Desc::Join(da, db)))))
 }
 
 #[no_mangle]

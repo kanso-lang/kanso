@@ -1876,7 +1876,7 @@ fn div_float(a: f64, b: f64, frame: &Frame, span: Span) -> EvalResult {
 /// (origin-less: the merge has no single birthplace) — and a lone failure
 /// propagates as itself. Anything that isn't a description or a failure
 /// cannot be joined.
-fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
+pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
     match (is_failure(&left), is_failure(&right)) {
         (true, true) => Ok(accumulate_failures(left, right)),
         (true, false) => Ok(left),
