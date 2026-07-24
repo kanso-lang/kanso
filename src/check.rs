@@ -444,10 +444,73 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_constants(program, &mut diags);
     check_predicates(program, &mut diags);
     check_arm_ties(program, &mut diags);
+    check_build_blocks(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }
     diags
+}
+
+/// The block-born rule: a `set` target must trace to a construction inside
+/// the same `build` block. That is the premise of the birthday theorem —
+/// values born before the block stay immutable, so no pointer ever aims at
+/// a younger value except within one block's walls.
+fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let type_names: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            build_walk_stmt(stmt, &type_names, diags);
+        }
+    }
+}
+
+fn build_walk_stmt(stmt: &Stmt, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    match stmt {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+            build_walk_expr(expr, type_names, diags);
+        }
+    }
+}
+
+fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    if let Expr::Build(stmts, _) = expr {
+        // names born in this block whose value is a fresh construction
+        let mut born: HashSet<&str> = HashSet::new();
+        for stmt in stmts {
+            match stmt {
+                Stmt::Bind { pattern, expr } => {
+                    if let (Pattern::Var(name, _), true) =
+                        (pattern, constructs(expr, type_names))
+                    {
+                        born.insert(name);
+                    }
+                }
+                Stmt::Set { target, span, .. } if !born.contains(target.as_str()) => {
+                    diags.push(Diagnostic::new(
+                        "build",
+                        format!(
+                            "`set` writes only block-born values: `{target}` is not a \
+                             construction made in this `build` block, so it stays \
+                             immutable"
+                        ),
+                        *span,
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+    for child in crate::expr_children(expr) {
+        build_walk_expr(child, type_names, diags);
+    }
+}
+
+/// Is this expression a construction the block owns — a direct constructor
+/// application? A call that merely *returns* a record may hand back
+/// something older, so it does not qualify.
+fn constructs(expr: &Expr, type_names: &HashSet<&str>) -> bool {
+    matches!(expr, Expr::App { head, .. }
+        if matches!(&**head, Expr::Ident(name, _) if type_names.contains(name.as_str())))
 }
 
 fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<String> {
@@ -965,6 +1028,14 @@ impl Resolver<'_> {
         match self.globals.contains(name) {
             true => {
                 self.used_globals.insert(name.to_string());
+            }
+            false if name == "set" => {
+                self.diags.push(Diagnostic::new(
+                    "name",
+                    "`set` lives inside `build` — mutation does not parse anywhere else"
+                        .to_string(),
+                    span,
+                ));
             }
             false => {
                 self.diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));

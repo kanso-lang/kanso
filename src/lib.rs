@@ -1302,7 +1302,7 @@ fn private_uses(
     }
 }
 
-fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
+pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
         ast::Expr::Upcast { expr, .. } => vec![expr.as_ref()],
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => stmts
