@@ -37,3 +37,63 @@ Mechanical check before shipping prose:
 grep -nE "isn't .{0,60}\. it's|is not .{0,60}\. it's|—not .{0,40}, but|\. it (spends|is just how)" <file>
 ```
 A clean grep is necessary, not sufficient — the families above are wider than any regex. Read it.
+
+## Ironclad engineering rules (learned the hard way; do not relax)
+
+### Goldens for everything
+- **Every behavior ships with a golden.** A feature without a golden pinning
+  its observable behavior does not merge. A diagnostic change regenerates its
+  error-corpus goldens in the same PR.
+- **Every performance kernel ships with a presence counter** — platform-
+  invariant (counts algorithm-level events, never vector-width or
+  platform-specific paths) — pinned in a CI-diffed cost golden. The counters
+  veins: `bench/cost_golden.txt` (decode), `bench/cost_golden_encode.txt`
+  (encode/render), `tests/golden/mem/*.mem` (lazy tier), the ch10 counters
+  book sample. A merge that silently drops a kernel must turn CI red. This
+  rule exists because a conflict resolution once silently deleted
+  Eisel-Lemire from main and nothing noticed.
+- **Counters changed → regenerate every vein in the same PR**: all .mem
+  files, both cost goldens, the ch10 sample, then book panels.
+
+### The differential law
+- The interpreter is the oracle. Every engine that speaks a feature is
+  byte-identical on it, pinned by differential goldens. A feature may land
+  on fewer engines only if the others REJECT it with a clear diagnostic —
+  never silently diverge.
+- Divergence-prone surfaces (float formatting, utf-8 strictness, rendering)
+  get adversarial goldens probing the edges, not just the happy path.
+
+### Verification ethos
+- **Harness before core.** For any precision kernel (float parse/render,
+  utf-8, dispatch): build the differential fuzzer first, against an
+  independently-written reference, and iterate the implementation to
+  fuzzer silence. Record the case count in the PR (e.g. "50M doubles,
+  0 failures"). The harness extracts the real function text from the
+  source, never a copy.
+
+### Merge and conflict discipline
+- **Never blanket-resolve conflicts** (`checkout --ours`/`--theirs`) on
+  runtime.c or any load-bearing file — resolve hunk by hunk.
+- Auto-merge races: arm auto-merge only after the final push, and after
+  any push to an armed PR, verify the PR head equals the local sha. A PR
+  that merged early strands commits — check `git log origin/<branch>`
+  against main after every auto-merge.
+- `git add -A` sweeps stray working-tree files into commits — scope adds
+  to the paths the change owns. (A stray repl experiment once rode into a
+  PR and silently broke its CI for a day.)
+
+### Performance-PR definition of done
+1. Benchmarks re-run; **same-sitting interleaved numbers published
+   immediately** — dated, conditions named — in the site docs and every
+   dependent repo (kq, kanso-json, vse). The table IS the latest sitting;
+   idle-machine floors are a footnote refreshed when the box idles.
+2. Profile evidence in the PR (which line died, what the floor is now).
+3. Append-only log entry (design/compiler-log.md): decisions, measurements,
+   open threads. Negative results (built-measured-declined) are recorded on
+   the compiler page so ideas stay declined.
+4. Techniques ledger and mined-queue statuses move in the same PR.
+
+### Design flow
+- Dialog before changes while Clay is designing; a gavel is recorded in the
+  append-only log AND a memory file before implementation starts.
+- Docs present the settled design; chronology lives only in the log.
