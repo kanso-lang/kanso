@@ -34,6 +34,17 @@ jobs:
             echo "::error::iterations). If intentional, update the golden in this PR."
             exit 1
           }
+      - name: encode cost golden (every kernel's presence counter, pinned)
+        run: |
+          ./target/release/kanso build bench/encodebench --release >/dev/null
+          KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null
+          diff bench/cost_golden_encode.txt counters_encode.txt || {
+            echo "::error::encode counters diverged from cost_golden_encode.txt."
+            echo "::error::A kernel's presence counter moved — a fast path was"
+            echo "::error::dropped, rerouted, or intentionally changed. If"
+            echo "::error::intentional, update the golden in this PR."
+            exit 1
+          }
 
   # Non-blocking: reports the kanso-vs-serde decode ratio (the optimization
   # campaign's headline metric) to the run summary. CI runners are noisy, so

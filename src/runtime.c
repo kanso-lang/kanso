@@ -47,6 +47,11 @@ static long long k_stat_thunk_evals = 0;
 static long long k_stat_thunk_frees = 0;
 static long long k_stat_thunk_escaped = 0;
 static long long k_stat_el_parses = 0;
+static long long k_stat_ryu_renders = 0;
+static long long k_stat_utf8_bytes = 0;
+static long long k_stat_find2_calls = 0;
+static long long k_stat_append_fast = 0;
+static long long k_stat_append_grow = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -194,10 +199,13 @@ static void k_stats_dump(void) {
     fprintf(stderr,
         "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
-        "el_parses=%lld\n",
+        "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
+        "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
-        k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses);
+        k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
+        k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
+        k_stat_append_fast, k_stat_append_grow);
 }
 
 static void k_arena_push(size_t need) {
@@ -1735,6 +1743,7 @@ KValue k_render(KValue v, long long quote) {
                double never needs more, and rarely fewer, than 15 digits */
             /* the ryu digit core computes the true shortest round-trip
                representation directly — no probing, no dtoa */
+            k_stat_ryu_renders++;
             if (d < 0) {
                 char inner[63];
                 render_ryu(-d, inner);
@@ -2677,6 +2686,7 @@ KValue k_b_utf8(KValue lv, const char* origin) {
 }
 
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
+    k_stat_utf8_bytes += len;
 #if defined(__aarch64__)
     /* keiser & lemire, "validating utf-8 in less than one instruction per
        byte" (2021): three nibble lookups classify every two-byte window,
@@ -2935,6 +2945,7 @@ KValue k_b_length(KValue v) {
    scanner's inner loop, done as a tight pass instead of one boxed dispatch per
    byte. Returns the 1-based hit, or len+1 when neither byte appears. */
 KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
+    k_stat_find2_calls++;
     if (!k_not_failure(cs)) return cs;
     if (!k_not_failure(from)) return from;
     if (!k_not_failure(a)) return a;
@@ -3011,11 +3022,13 @@ KValue k_b_append(KValue acc, KValue x) {
     if (a->cap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
         if (buf->used == a->len && a->len + n <= a->cap) {
+            k_stat_append_fast++;
             memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
             buf->used = a->len + n;
             return k_bytes_owned(a->len + n, a->data, a->cap);
         }
     }
+    k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;
     KBuf* buf = k_alloc(sizeof(KBuf) + (size_t)cap);
@@ -3031,6 +3044,7 @@ KValue k_b_append(KValue acc, KValue x) {
    scanning wants this shape — quote, backslash, and control bytes all
    end a clean run, and one pass finds whichever comes first. */
 KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
+    k_stat_find2_calls++;
     if (!k_not_failure(cs)) return cs;
     if (!k_not_failure(from)) return from;
     if (!k_not_failure(a)) return a;
