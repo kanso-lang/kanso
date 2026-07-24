@@ -1,10 +1,9 @@
 # Type syntax — the ratified design
 
-Gaveled 2026-07-24. This document records the settled design; one question
-is still open and marked as such. Nothing here is built — kanso today has
-no user-defined parameterized types, and field types are bare names
-(`peers:list`). The rulings reserve the syntax so the generics work has a
-shape to land in.
+Gaveled 2026-07-24. The design below is settled. Nothing here is built —
+kanso today has no user-defined parameterized types, and field types are
+bare names (`peers:list`). The rulings reserve the syntax so the generics
+work has a shape to land in.
 
 ## The three forms
 
@@ -114,18 +113,9 @@ Ordinal field names are honest there and nowhere else: `zip` is
 domain-blind, so it cannot know what its two values mean. Application
 code always knows, and writes the domain record.
 
-## Open: are anonymous typesets allowed?
+## Every typeset has a name
 
-A typeset written inline needs grouping, because a bare space already
-separates type arguments. Parens do it:
-
-```
-map[(string user) string]     key is the typeset string-or-user
-fn foo x:(string user)        x is that typeset
-```
-
-The alternative is to require every typeset to be named, and drop parens
-from type position entirely:
+A typeset is declared before it is used. There is no inline form.
 
 ```
 type principal string user
@@ -134,10 +124,33 @@ map[principal string]
 
 Naming forces the question "what concept is this?", and a typeset whose
 best name is `string_or_user` is usually a typeset that should not exist.
-Requiring names also leaves the type grammar with exactly three forms —
-name, slice, application — and no parens rule to write down.
+The cost is a `type` line for a genuine one-off, paid mostly by typesets
+worth a second look.
 
-The cost is a `type` line for a genuine one-off.
+This is also what keeps the grammar at three forms. An inline typeset
+would need grouping, because a bare space already separates type
+arguments — and grouping brings parens into type position, a rule for
+one-member groups, and an ordering rule inside the group. None of that
+exists.
+
+## Alternatives and why they lose
+
+- **`[string]` for slices.** Mirrors the `[1 2 3]` literal, but reads
+  inside-out once composed, and it occupies the postfix bracket that
+  application needs.
+- **Go's `map[K]V`.** A form only `map` can use. Two rules where
+  `map[K V]` needs one.
+- **`map{string int}`.** Borrows the map literal's braces without the
+  colon that makes them read as a mapping, so the resemblance is visual
+  rather than semantic. It also re-specializes `map` after `map[K V]`
+  made it ordinary. The resonance argument, applied consistently, would
+  drag slices back to `[string]`.
+- **`{string:int}` as a bare map type.** The honestly resonant form, and
+  the colon collides with the annotation colon: `m:{string:int}` uses one
+  punctuation mark for two jobs.
+- **Anonymous typesets in parens** — `map[(string user) string]`. Costs
+  parens in type position to save a `type` line.
+- **`tuple`, or a positional `pair`.** Positional access at any arity.
 
 ## Deferred
 
