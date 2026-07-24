@@ -66,6 +66,7 @@ const RT_MKSUB: u32 = 29;
 const RT_UPCAST: u32 = 30;
 const RT_SETFIELD: u32 = 31;
 const RT_FIELD_BY_NAME: u32 = 32;
+const RT_IS_REC: u32 = 33;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -102,6 +103,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_upcast", params: 2, returns: true },
         Import { name: "rt_setfield", params: 3, returns: true },
         Import { name: "rt_field_by_name", params: 2, returns: true },
+        Import { name: "rt_is_rec", params: 1, returns: true },
     ]
 }
 
@@ -571,25 +573,38 @@ impl<'a> WasmBackend<'a> {
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
             Expr::Join { .. } => return Err("join not yet in the wasm backend".to_string()),
             Expr::BinOp { op, lhs, rhs, span } => {
-                if matches!(*op, "+" | "-" | "*" | "/" | "%")
-                    && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2)
+                let armable = matches!(*op, "+" | "-" | "*" | "/" | "%")
+                    && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
+                if let Some(idx) = armable
+                    .then(|| self.dispatchers.get(&(op.to_string(), 2)).copied())
+                    .flatten()
                 {
-                    return Err("user operator arms are not yet in the wasm backend".to_string());
+                    let a = ctx.body.local();
+                    let b = ctx.body.local();
+                    self.emit_expr(ctx, lhs, false)?;
+                    ctx.body.local_set(a);
+                    self.emit_expr(ctx, rhs, false)?;
+                    ctx.body.local_set(b);
+                    ctx.body.local_get(a);
+                    ctx.body.call(RT_IS_REC);
+                    ctx.body.if_i32();
+                    ctx.body.local_get(a);
+                    ctx.body.local_get(b);
+                    ctx.body.call(idx);
+                    ctx.body.else_();
+                    ctx.body.i32_const(self.binop_code(op)?);
+                    ctx.body.local_get(a);
+                    ctx.body.local_get(b);
+                    ctx.body.call(RT_BINOP);
+                    if *op == "/" {
+                        let origin = self.origin_lit(&ctx.prefix, *span);
+                        ctx.body.i32_const(origin as i64);
+                        ctx.body.call(RT_ERR_STAMP);
+                    }
+                    ctx.body.end();
+                    return Ok(());
                 }
-                let code = match *op {
-                    "+" => 0,
-                    "-" => 1,
-                    "*" => 2,
-                    "/" => 3,
-                    "%" => 4,
-                    "==" => 10,
-                    "!=" => 11,
-                    "<" => 12,
-                    ">" => 13,
-                    "<=" => 14,
-                    ">=" => 15,
-                    other => return Err(format!("unsupported operator `{other}`")),
-                };
+                let code = self.binop_code(op)?;
                 ctx.body.i32_const(code);
                 self.emit_expr(ctx, lhs, false)?;
                 self.emit_expr(ctx, rhs, false)?;
@@ -605,6 +620,23 @@ impl<'a> WasmBackend<'a> {
             }
         }
         Ok(())
+    }
+
+    fn binop_code(&self, op: &str) -> Result<i64, String> {
+        match op {
+            "+" => Ok(0),
+            "-" => Ok(1),
+            "*" => Ok(2),
+            "/" => Ok(3),
+            "%" => Ok(4),
+            "==" => Ok(10),
+            "!=" => Ok(11),
+            "<" => Ok(12),
+            ">" => Ok(13),
+            "<=" => Ok(14),
+            ">=" => Ok(15),
+            other => Err(format!("unsupported operator `{other}`")),
+        }
     }
 
     fn emit_template(&mut self, ctx: &mut Ctx, parts: &[TemplatePart]) -> Result<(), String> {
@@ -899,6 +931,17 @@ impl<'a> WasmBackend<'a> {
             ctx.body.i32_const(args.len() as i64);
             ctx.body.call(RT_BUILTIN);
             self.stamp_fallible(ctx, name, span);
+            return Ok(());
+        }
+        // a constant holding a function value: evaluate it, then apply
+        if let Some(idx) = self.dispatchers.get(&(name.clone(), 0)).copied() {
+            for arg in args {
+                self.emit_expr(ctx, arg, false)?;
+                ctx.body.call(RT_ARG);
+            }
+            ctx.body.call(idx);
+            ctx.body.i32_const(args.len() as i64);
+            ctx.body.call(RT_CALL);
             return Ok(());
         }
         Err(format!("unsupported call to `{name}`"))
