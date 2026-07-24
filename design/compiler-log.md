@@ -1743,3 +1743,16 @@ none's confused status:
   dispatches to the plain none arm.
 - constructor arguments are not checked against field types at all:
   `node "hello" 5` against `id:int` passes check and constructs.
+
+### Addendum — the prohibition is about the channel, not about none
+
+The rule above generalizes: whatever type a lookup uses to signal "no
+answer" must be unrepresentable as an answer in the thing being looked up.
+none is the current instance, not the principle.
+
+The gavel's "nor a subtype of none" clause already carries this. A richer
+absence signal declared as a subtype — `type out_of_bounds none` for arrays,
+`type missing_key none` for maps — is banned from collections automatically,
+and up-flows so that code asking only "did it find anything?" keeps working
+while code that cares dispatches on the precise reason. Whether lookups
+actually return such refined types is available, not ruled.
