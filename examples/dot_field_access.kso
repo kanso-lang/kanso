@@ -1,0 +1,13 @@
+type point
+  x:int
+  y:int
+
+type segment
+  head:point
+  tail:point
+
+pub play =
+  s = segment (point 1 2) (point 3 4)
+  hx = s.head.x
+  ty = s.tail.y
+  print "{hx} {ty}"
