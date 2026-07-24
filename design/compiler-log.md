@@ -1282,3 +1282,26 @@ every fold; map/string fall through to the call. Encode 0.66-0.70s
 user on a loaded box — at the pre-ryū quiet floor despite the
 weather. Next on the floor: the k_b_append inline fast path (211
 samples), then SpecConstr for d_encode_onto dispatch (120).
+
+## 2026-07-23 — SHIPPED: append byte-twin + forwarder elision (+ the golden that caught the bug)
+
+Three cuts against the post-ryū floor: (1) k_b_append_byte — the
+single-byte frontier claim fully inline in IR, arena bump exported
+(k_arena/k_arena_left/k_stats_on de-static'd), stats-gated so the
+pinned counters stay exact; (2) k_b_length_fast learns BYTES (same
+header layout as lists — fold-over-bytes loops stop calling out);
+(3) forwarder elision — std wrappers that only forward to a builtin
+(text/append and family) stop costing a dispatched call; call sites
+reach the builtin and its twins directly.
+
+The elision's first draft renamed the callee BEFORE user-group
+dispatch and a renamed call bound to the wrong dispatcher variant —
+d_text/find2_below_5 carries a byte-specialized signature (raw i64
+lanes), so boxed args reinterpreted as garbage. ch08's `using`
+book golden caught it (native err where the interp ran clean); the
+fix scopes the rename inside the builtin emission branch where it
+can never leak into group dispatch. Goldens-for-everything earned
+its keep the same day it was written into CLAUDE.md.
+
+Encode: 0.66 → 0.49-0.51s user (campaign 3.46 → 0.50, 6.9x). Encode
+cost golden exact; kq green; 12/12.

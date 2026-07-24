@@ -178,8 +178,8 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
 typedef struct KBlock { struct KBlock* next; size_t cap; } KBlock;
 static KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
-static char* k_arena = NULL;
-static size_t k_arena_left = 0;
+char* k_arena = NULL;
+size_t k_arena_left = 0;
 
 /* Cost counters: every value is an exact, machine-independent constant for a
    deterministic program, so they golden like output does. KANSO_COUNTERS=1
@@ -228,7 +228,7 @@ static void k_arena_push(size_t need) {
     k_arena_left = b->cap;
 }
 
-static int k_stats_on = -1;
+int k_stats_on = -1;
 
 /* The refill path stays out of line; the bump inlines into every hot
    caller. Counters, when enabled, are exact: both paths count. */
