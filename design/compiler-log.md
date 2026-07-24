@@ -1570,3 +1570,40 @@ error paths too. The three field-access goldens (dot_field_access,
 field_non_record, field_missing) moved from wasm fallback to real
 three-engine passes: browser differential 34 passed / 5 fallback / 0 failed
 (was 31 / 8). No native or interp change; goldens already existed.
+
+## 2026-07-24 — type syntax gaveled (design/type-syntax.md)
+
+A design session settled the type-syntax cluster. Recorded in
+design/type-syntax.md; summarized here for the chronology.
+
+Ruled: `[]T` slices, Go's prefix form (Clay: "i hate [string], i like the
+go style"). Postfix `Name[args]` for type application, so `map[string int]`
+is an ordinary application rather than Go's map-only `map[K]V` — key first,
+value second, uniform with `set[string]` and `pair[k v]`. A `[` tight
+against an identifier applies; a spaced or leading `[` is a slice, the same
+tight-versus-spaced rule the lexer already uses for field access vs pipe.
+No `<k>` binder anywhere: parameter order comes from the order variables
+first appear in a type's fields, and writing the binder repeats what the
+fields say. No type parameters on functions at all, and no annotation that
+is not load-bearing — `fn foo u:string` is an error when the body already
+pins u to string. Dispatch discriminators stay legal because choosing an
+arm is not a derivation; so does any position where subtypes/typesets leave
+inference genuinely undecided. "Typeset" is the name (not union); `|` is
+not in the language. No positional products at any arity: no tuple, no
+positional pair, because access is by name everywhere else. The stdlib
+still ships a two-field generic record called `pair` (fields first/second)
+for zip/to_h, where ordinal names are honest because zip is domain-blind.
+
+Open, and the one thing blocking a full seal: whether anonymous typesets
+exist. Parens group them unambiguously — `map[(string user) string]`,
+`x:(string user)` — and Clay called that spelling exactly right, then
+raised whether forcing a name is the better practice, since a typeset whose
+best name is `string_or_user` is one that probably should not exist.
+Requiring names also leaves the type grammar with three forms and no parens
+rule. Not decided.
+
+Deferred: constraints (bounded polymorphism, for map keys); the error-
+locality cost of full inference, mitigated by the language server.
+
+Nothing implemented — kanso has no user-defined parameterized types today
+and field types are bare names. This reserves the shape.
