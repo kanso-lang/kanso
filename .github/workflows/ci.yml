@@ -34,6 +34,13 @@ jobs:
             echo "::error::iterations). If intentional, update the golden in this PR."
             exit 1
           }
+      - name: browser differential (three engines, byte-identical, headless chrome)
+        run: |
+          rustup target add wasm32-unknown-unknown
+          bash scripts/browser_differential.sh || {
+            echo "::error::the browser wasm engine diverged from the oracle."
+            exit 1
+          }
       - name: encode cost golden (every kernel's presence counter, pinned)
         run: |
           ./target/release/kanso build bench/encodebench --release >/dev/null
