@@ -1747,7 +1747,7 @@ static KValue k_sub_base(KValue v) {
     return v;
 }
 
-KValue k_sub(long long type_id, KValue inner) {
+KValue k_sub_wrap(long long type_id, KValue inner) {
     if (!k_not_failure(inner)) return inner;
     KSub* s = k_alloc(sizeof(KSub));
     s->type_id = type_id;
