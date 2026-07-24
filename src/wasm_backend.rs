@@ -423,6 +423,9 @@ impl<'a> WasmBackend<'a> {
                     self.emit_expr(ctx, expr, false)?;
                     self.emit_binding(ctx, pattern)?;
                 }
+                Stmt::Set { .. } => {
+                    return Err("wasm backend: `set` is not yet lowered".to_string());
+                }
                 Stmt::Expr(expr) => {
                     self.emit_expr(ctx, expr, tail && i == last)?;
                     if i != last {
@@ -498,7 +501,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(code);
                 ctx.body.call(RT_UPCAST);
             }
-            Expr::Block(stmts, _) => {
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 self.emit_body(ctx, stmts, tail)?;
             }
             Expr::Int(n, _) => {
@@ -1031,10 +1034,10 @@ impl<'a> WasmBackend<'a> {
 fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
     match expr {
         Expr::Ident(name, _) => visit(name),
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => free_idents(expr, visit),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => free_idents(expr, visit),
                 }
             }
         }

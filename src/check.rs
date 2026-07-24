@@ -173,6 +173,7 @@ pub fn resolve_markers(program: &mut Program, markers: &HashSet<String>) -> Vec<
             match stmt {
                 Stmt::Bind { expr, .. } => check_marker_calls(expr, markers, &mut diags),
                 Stmt::Expr(expr) => check_marker_calls(expr, markers, &mut diags),
+                Stmt::Set { value, .. } => check_marker_calls(value, markers, &mut diags),
             }
         }
     }
@@ -207,10 +208,10 @@ fn resolve_marker_pattern(
 fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
     match expr {
         Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         check_marker_calls(expr, markers, diags)
                     }
                 }
@@ -731,6 +732,10 @@ fn check_fn_body_shadow(
                     ));
                 }
             }
+            Stmt::Set { target, value, span, .. } => {
+                resolver.resolve_name(target, *span);
+                resolver.resolve_expr(value);
+            }
         }
     }
     resolver.flush_unused(0);
@@ -848,7 +853,7 @@ impl Resolver<'_> {
     fn resolve_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Int(..) | Expr::Float(..) => {}
-            Expr::Block(stmts, _) => {
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 let from = self.locals.len();
                 for stmt in stmts {
                     match stmt {
@@ -857,6 +862,10 @@ impl Resolver<'_> {
                             self.bind_pattern(pattern);
                         }
                         Stmt::Expr(expr) => self.resolve_expr(expr),
+                        Stmt::Set { target, value, span, .. } => {
+                            self.resolve_name(target, *span);
+                            self.resolve_expr(value);
+                        }
                     }
                 }
                 self.locals.truncate(from);

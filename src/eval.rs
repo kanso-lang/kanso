@@ -425,6 +425,7 @@ impl<'a> Interp<'a> {
         let mut result = Value::NoneV;
         for (index, stmt) in body.iter().enumerate() {
             match stmt {
+                Stmt::Set { .. } => todo!("`set` interp lands with the build stage"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
                 {
@@ -547,7 +548,7 @@ impl<'a> Interp<'a> {
                     }
                 }
             }
-            Expr::Block(stmts, _) => {
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 // a deferred branch body: fn-body statements in a child
                 // scope; the env extension is dropped with this frame
                 let mut env = env.clone();
@@ -562,6 +563,9 @@ impl<'a> Interp<'a> {
                             env = self.destructure(pattern, value, env, expr.span())?;
                         }
                         Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
+                        Stmt::Set { .. } => {
+                            todo!("`set` interp lands with the build stage")
+                        }
                     }
                 }
                 Ok(result)

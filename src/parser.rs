@@ -704,6 +704,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                         reject_never_effect(&e, is_final_unit)?;
                         segments.last_mut().expect("segment").push(e);
                     }
+                    Stmt::Set { .. } => unreachable!("`set` lifts only inside `build`"),
                 }
                 continue;
             }
@@ -874,6 +875,7 @@ fn parse_block_construct(
         Stmt::Bind { pattern, expr } => {
             Ok(Stmt::Bind { pattern, expr: extend(expr, branch_args)? })
         }
+        Stmt::Set { .. } => unreachable!("`set` lifts only inside `build`"),
     }
 }
 
@@ -933,6 +935,7 @@ fn expr_span(e: &Expr) -> Span {
         Expr::Int(_, s)
         | Expr::Field { span: s, .. }
         | Expr::Upcast { span: s, .. }
+        | Expr::Build(_, s)
         | Expr::Float(_, s)
         | Expr::MapLit(_, s)
         | Expr::Str(_, s)

@@ -722,6 +722,7 @@ fn stmt_allocates(stmt: &Stmt, fn_names: &HashSet<&str>, allocating: &HashSet<&s
     let e = match stmt {
         Stmt::Bind { expr, .. } => expr,
         Stmt::Expr(e) => e,
+        Stmt::Set { value, .. } => value,
     };
     expr_allocates(e, fn_names, allocating, seed_pass)
 }
@@ -741,8 +742,8 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
     ];
     match e {
         Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } => true,
-        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                 expr_allocates(expr, fn_names, allocating, seed_pass)
             }
         }),
@@ -870,6 +871,7 @@ fn used_as_value(program: &Program, name: &str) -> bool {
             let e = match stmt {
                 Stmt::Bind { expr, .. } => expr,
                 Stmt::Expr(e) => e,
+                Stmt::Set { value, .. } => value,
             };
             value_use(e, name)
         })
@@ -879,8 +881,8 @@ fn used_as_value(program: &Program, name: &str) -> bool {
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
         Expr::Ident(n, _) => n == name,
-        Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => value_use(expr, name),
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => value_use(expr, name),
         }),
         Expr::App { head, args, .. } => {
             let head_is_plain_name = matches!(head.as_ref(), Expr::Ident(..));

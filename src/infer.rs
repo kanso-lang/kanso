@@ -159,6 +159,9 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
                 }
             }
             Stmt::Expr(expr) => result = eval_expr(ctx, expr, env),
+            Stmt::Set { value, .. } => {
+                eval_expr(ctx, value, env);
+            }
         }
     }
     result
@@ -168,7 +171,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
     match expr {
         Expr::Int(..) => INT,
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
-        Expr::Block(stmts, _) => {
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             // a child scope: block binds stay local to the branch
             let mut env = env.clone();
             let mut result = NONE;
@@ -184,6 +187,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                         }
                     }
                     Stmt::Expr(expr) => result = eval_expr(ctx, expr, &mut env),
+                    Stmt::Set { value, .. } => {
+                        eval_expr(ctx, value, &mut env);
+                    }
                 }
             }
             result

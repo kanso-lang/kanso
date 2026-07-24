@@ -118,6 +118,7 @@ impl<'a> Analysis<'a> {
                 let e = match stmt {
                     Stmt::Bind { expr, .. } => expr,
                     Stmt::Expr(e) => e,
+                    Stmt::Set { value, .. } => value,
                 };
                 self.callsites_unique(caller, e, name, arity, i)
             })
@@ -210,6 +211,7 @@ fn collect_pushes(
         let e = match stmt {
             Stmt::Bind { expr, .. } => expr,
             Stmt::Expr(e) => e,
+            Stmt::Set { value, .. } => value,
         };
         walk_for_push(a, decl, e, out);
     }
@@ -241,6 +243,7 @@ fn count_uses(var: &str, body: &[Stmt]) -> usize {
         let e = match stmt {
             Stmt::Bind { expr, .. } => expr,
             Stmt::Expr(e) => e,
+            Stmt::Set { value, .. } => value,
         };
         n += count_in_expr(var, e);
     }
@@ -256,10 +259,10 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
     match e {
         Expr::Field { base, .. } => vec![base.as_ref()],
         Expr::Upcast { expr, .. } => vec![expr.as_ref()],
-        Expr::Block(stmts, _) => stmts
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts
             .iter()
             .map(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             })
             .collect(),
         Expr::App { head, args, .. } => {

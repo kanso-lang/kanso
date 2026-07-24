@@ -203,10 +203,15 @@ impl<'a> Analysis<'a> {
                         return false;
                     }
                 }
+                Stmt::Set { value, .. } => {
+                    if self.expr_mentions_ty(ty, value) {
+                        return false;
+                    }
+                }
             }
         }
         match last {
-            Stmt::Bind { .. } => false,
+            Stmt::Bind { .. } | Stmt::Set { .. } => false,
             Stmt::Expr(e) => self.tail_position_safe(ty, e),
         }
     }
@@ -248,8 +253,8 @@ impl<'a> Analysis<'a> {
         match e {
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
             Expr::Upcast { expr, .. } => self.expr_safe_calls(ty, expr),
-            Expr::Block(stmts, _) => stmts.iter().all(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_safe_calls(ty, expr),
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().all(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => self.expr_safe_calls(ty, expr),
             }),
             Expr::Field { base, .. } => {
                 !self.produces_ty(ty, base) && self.expr_safe_calls(ty, base)
@@ -368,8 +373,8 @@ impl<'a> Analysis<'a> {
         // Conservative: ty appears anywhere in this (non-tail) expression.
         match e {
             Expr::Ident(name, _) => name == ty,
-            Expr::Block(stmts, _) => stmts.iter().any(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => self.expr_mentions_ty(ty, expr),
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => self.expr_mentions_ty(ty, expr),
             }),
             Expr::Field { base, .. } => self.expr_mentions_ty(ty, base),
             Expr::Upcast { expr, .. } => self.expr_mentions_ty(ty, expr),

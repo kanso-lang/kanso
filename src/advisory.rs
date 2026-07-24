@@ -92,6 +92,7 @@ fn body_types(
                     env.insert(name, set);
                 }
             }
+            Stmt::Set { .. } => {}
             Stmt::Expr(e) if i == decl.body.len() - 1 => {
                 tail = expr_types(e, type_names, groups, returns, &env);
             }

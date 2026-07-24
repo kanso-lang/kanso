@@ -101,6 +101,7 @@ fn all_calls_feed_at(program: &Program, name: &str, arity: usize, disc: usize) -
             match stmt {
                 Stmt::Bind { expr, .. } => walk(expr, name, arity, disc, &mut ok),
                 Stmt::Expr(e) => walk(e, name, arity, disc, &mut ok),
+                Stmt::Set { value, .. } => walk(value, name, arity, disc, &mut ok),
             }
         }
     }
@@ -133,10 +134,10 @@ fn children(e: &Expr) -> Vec<&Expr> {
     match e {
         Expr::Field { base, .. } => vec![base.as_ref()],
         Expr::Upcast { expr, .. } => vec![expr.as_ref()],
-        Expr::Block(stmts, _) => stmts
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts
             .iter()
             .map(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             })
             .collect(),
         Expr::App { head, args, .. } => {
