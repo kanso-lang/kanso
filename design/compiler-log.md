@@ -1636,3 +1636,123 @@ form is `{string:int}`, whose colon collides with the annotation colon
 made it an ordinary parameterized type, and the resonance principle applied
 consistently would drag slices back to `[string]`, which was already
 rejected. Declined alternatives now live in the doc so they stay declined.
+
+## 2026-07-24 — GAVEL: none is a value, err is the failure
+
+Ruled: `none` is not a failure. `err` is. The implementation must be brought
+in line with the already-ratified failure model, which it currently
+contradicts.
+
+Both engines classify none as a failure in one predicate each —
+`k_not_failure(v) { return v.tag != K_ERR && v.tag != K_NONE; }` and
+`is_failure(v) { matches!(v, ErrV(_) | NoneV) }` — and `k_rec`'s first act
+is to return any failing argument instead of building. So construction eats
+none.
+
+The demonstration, which is the sharpest form of the bug:
+
+    type maybe_job none string
+    type user
+      job:maybe_job
+      name:string
+
+    user "cook" "mai"   -> user "cook" "mai"    builds
+    user none "ken"     -> <none>               eaten
+
+The field's typeset explicitly admits none, the checker accepts the
+declaration, and the constructor then refuses to store the value the
+declaration permits. none is a zero-width type and belongs in a typeset like
+any other member.
+
+Downstream of the same misclassification: json's `json_null` marker exists
+only because none is eaten as data, and it carries a dummy `bool` field only
+because kanso has no zero-field types. Both inelegances trace here.
+
+What the fix is NOT: deleting auto-propagation. Propagation is load-bearing
+and correct for bails — it is what removed every "did the last step fail?"
+line from the json parser. The fix is removing none from the failure set so
+propagation applies to err alone.
+
+Sequencing, which is the real design work: the ratified model also says a
+function receiving a none must state its disposition (an arm, or resolve
+before the call), no arm being a compile error, and none-transparency being
+an explicit `none -> none` forwarding arm. That exhaustiveness check has to
+land with the demotion. Without it, none stops propagating and instead flows
+silently into code that never considered it — the anti-Ruby-nil outcome the
+model was written to prevent. Today's corpus leans on propagation heavily
+(`xs[9]` feeding arithmetic, the endpoint goldens, the mem corpus), so this
+is a campaign, not a predicate edit.
+
+Related gap found in the same probe, and it wants the same machinery:
+constructor arguments are not type-checked against field types at all.
+`node "hello" 5` against `id:int` passes `check` and constructs. Real
+checking at the value/field boundary is the prerequisite for both.
+
+Next step is a design doc for the campaign, not code.
+
+## 2026-07-24 — GAVEL: where none may live (static slots, not dynamic ones)
+
+Ruled, refining the none-is-a-value gavel above: arrays and maps may not
+hold `none` as an element or value — nor a subtype of none, nor a typeset
+admitting it. Records may.
+
+The discriminator is whether a slot's existence is static or dynamic. A
+record field is statically known to exist, so a none in it has exactly one
+reading: the value is nothing. A map key or an array index is arbitrary, so
+absence is always live and a none there has two competing readings.
+
+Both halves have their own reason, which is why neither is a concession.
+Records must allow none, or the result of a lookup that found nothing could
+not be stored without inventing a wrapper type per optional field.
+Collections must forbid it, or `xs[i] -> none` stops meaning "not found"
+and every lenient lookup in the language becomes a lie.
+
+The rule composes: a record living in a collection may hold none in its
+fields to any depth, because the collection's elements are records and a
+lookup on it never yields none. Only a *direct* element or map value is
+banned.
+
+Consequences.
+- Storing an absence inside a collection uses a zero-field marker type
+  (`type vacant`, then `type job_slot string vacant`), not none. This gives
+  zero-field types a real job and is the general form of what json_null
+  already does by hand.
+- json_null therefore stays a non-none type. Deriving it from none is dead
+  under this rule. The dummy `bool` it carries today gets fixed by zero-field
+  types, not by parenting it to none.
+- `[1 none 3]` becomes illegal. It works on both engines today, so this is
+  the breaking change, and it is the exact construct that makes lookups lie.
+
+Nesting cannot rescue the ambiguity the way it does elsewhere: none is flat,
+so `none | none` collapses, and there is no `Option<Option<T>>` to reach for.
+That is why the rule is a prohibition rather than a wrapper.
+
+Open, not ruled: what `any` means with respect to none. If `any` admits
+none then `[]any` is illegal, which is a surprise worth deciding
+deliberately rather than discovering — while `peer:any` holding none in a
+record stays desirable.
+
+Evidence gathered in the same thread, all unpinned by goldens, all rooted in
+none's confused status:
+- records eat none on both engines (`node 1 none` -> `<none>`), even when the
+  field's declared typeset admits none (`type maybe_job none string`).
+- map literals holding none diverge: native stores (`{ "a":<none> "b":2 }`),
+  interp eats (`<none>`). Lists store on both.
+- a subtype of none diverges: the checker accepts `type missing none`, native
+  fails with "unknown type `none`", interp silently erases the subtype and
+  dispatches to the plain none arm.
+- constructor arguments are not checked against field types at all:
+  `node "hello" 5` against `id:int` passes check and constructs.
+
+### Addendum — the prohibition is about the channel, not about none
+
+The rule above generalizes: whatever type a lookup uses to signal "no
+answer" must be unrepresentable as an answer in the thing being looked up.
+none is the current instance, not the principle.
+
+The gavel's "nor a subtype of none" clause already carries this. A richer
+absence signal declared as a subtype — `type out_of_bounds none` for arrays,
+`type missing_key none` for maps — is banned from collections automatically,
+and up-flows so that code asking only "did it find anything?" keeps working
+while code that cares dispatches on the precise reason. Whether lookups
+actually return such refined types is available, not ruled.
