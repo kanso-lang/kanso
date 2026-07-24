@@ -22,7 +22,29 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+import os
+
+
+def find_chrome():
+    if p := os.environ.get("KANSO_CHROME"):
+        return p
+    candidates = [
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/usr/bin/google-chrome",
+        "/usr/bin/chromium-browser",
+        "/usr/bin/chromium",
+    ]
+    import shutil as _sh
+    for c in candidates:
+        if os.path.exists(c):
+            return c
+    for name in ("google-chrome", "chromium-browser", "chromium", "chrome"):
+        if p := _sh.which(name):
+            return p
+    raise SystemExit("no chrome found: set KANSO_CHROME")
+
+
+CHROME = find_chrome()
 KANSO = ROOT / "target/release/kanso"
 
 PAGE = """<!doctype html>
