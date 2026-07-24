@@ -57,6 +57,9 @@
       "include": "#strict-index"
     },
     {
+      "include": "#upcast"
+    },
+    {
       "include": "#operator"
     }
   ],
@@ -97,7 +100,7 @@
       }
     },
     "type-declaration": {
-      "match": "^(pub\\s+)?(type|typeset)\\s+([a-z][a-z0-9_]*)",
+      "match": "^(pub\\s+)?(type|typeset)\\s+([a-z][a-z0-9_]*)(?:\\s+([a-z][a-z0-9_]*))?",
       "captures": {
         "1": {
           "name": "storage.modifier.pub.kanso"
@@ -107,6 +110,9 @@
         },
         "3": {
           "name": "entity.name.type.kanso"
+        },
+        "4": {
+          "name": "entity.name.type.parent.kanso"
         }
       }
     },
@@ -217,7 +223,7 @@
         },
         {
           "match": ">>",
-          "name": "keyword.operator.sequence.kanso"
+          "name": "keyword.control.sequence.kanso"
         },
         {
           "match": "(?<= )\\.(?= )",
@@ -244,6 +250,17 @@
     "conditional": {
       "match": "\\b(if|else)\\b",
       "name": "keyword.control.conditional.kanso"
+    },
+    "upcast": {
+      "match": "(?<=\\))(:)([a-z][a-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.upcast.kanso"
+        },
+        "2": {
+          "name": "entity.name.type.kanso"
+        }
+      }
     }
   }
 }
