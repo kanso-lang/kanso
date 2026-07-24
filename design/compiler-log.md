@@ -1963,3 +1963,28 @@ decides whether even the narrow claim stands.
 Sources consulted: the Perceus technical report (Microsoft Research), the
 region-based memory management survey, Cyclone's region paper, and Bacon and
 Rajan on concurrent cycle collection.
+
+### Addendum — the Gay-Aiken question, answered
+
+The unverified fact from the entry above is settled. RC counts, for each
+region, the external pointers into it — pointers not stored within the
+region — so interior pointers including cycles are invisible to the count.
+That confirms the mechanism as prior art.
+
+The difference is what the count is for. In RC the programmer deletes a
+region explicitly and the count exists to catch premature deletion: deleting
+a region whose count is non-zero is a runtime error. The count guards
+reclamation rather than triggering it.
+
+That leaves RC with a failure mode. Two regions holding pointers into each
+other both carry non-zero counts, so neither can ever be deleted; a
+cross-region cycle does not corrupt memory, it deadlocks reclamation and
+surfaces as an error at the delete.
+
+This is the case mutation confinement makes structurally impossible, so the
+narrow claim stands in a sharper form. The contribution is not counting the
+region. It is that confining mutation removes the failure mode region
+counting otherwise carries, which also lets the boundary be implicit and the
+reclamation automatic rather than declared and checked. That is a
+language-design result — a rule about where `set` may appear — rather than a
+memory-management one, which is consistent with where it came from.
