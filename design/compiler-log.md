@@ -1529,3 +1529,32 @@ via the existing rt_keyed_field is a small happy-path change, but matching
 the interpreter's field-access error paths (failure propagation, the
 "`{ty}` has no field `{name}`" message) byte-for-byte needs its own
 adversarial goldens — a focused follow-up.
+
+## 2026-07-23 — field-access error messages: native matches the oracle
+
+Dot field access (#60) landed on native and interp but their error messages
+never agreed, and no golden caught it: on a non-record native said "`.`
+reads a field of a record" while interp appended ", not {value}"; on a
+missing field native said "no such field" while interp said "`{ty}` has no
+field `{name}`". k_b_field used terse k_die strings; native's own
+k_keyed_field already rendered the oracle's wording, so the dot path was just
+inconsistent with both interp and the keyed path. Fixed k_b_field to render
+the value and name the type/field exactly as interp does. Pinned by two
+runtime goldens (field_non_record, field_missing) that run both engines and
+assert byte-identical stderr. Browser backend still rejects Expr::Field
+(clean fallback), so these are wasm fallbacks — the tracked wasm-field-access
+follow-up will add the wasm arm and fold these into its differential.
+
+## 2026-07-23 — missing_index book golden regen (follow-on to field-error fix)
+
+The field-access message change moved docs/book/samples/appa/missing_index.out
+(`xs.at 9` reads field `at` on a list, now "... not [1 2 3]"). Regenerated it;
+book_check green. Surfaced but NOT fixed here (tracked book-panel-sync work,
+"book HTML stale pre-keystone"): appa.html's output panel for this sample
+still shows the pre-module-system "error[endpoint]: unhandled none reached
+main", and the sample itself uses tight `xs.at 9` (field access) in an
+appendix about the endpoint family — it wants `xs[9]` or a re-import of `at`.
+The .out on main already carried the field-error interpretation, so the HTML
+was already unsynced; this PR only updates the message text. Note: book_check
+runs in CI separately from cargo test — run `sh scripts/book_check.sh` locally
+for any diagnostic-message change.

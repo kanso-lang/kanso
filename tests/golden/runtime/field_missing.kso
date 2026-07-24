@@ -1,0 +1,6 @@
+type user
+  age:int
+
+pub play =
+  u = user 1
+  print "{u.name}"
