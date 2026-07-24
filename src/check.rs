@@ -59,6 +59,96 @@ pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     diags
 }
 
+/// The gaveled tie-rejection: with subtypes, two arms of one group can
+/// overlap without either dominating — a value both accept, where each
+/// arm is the more specific one somewhere. Dispatch would need tiebreak
+/// lore; kanso outlaws the shape instead. The fix is always the same:
+/// write the doubly-specific arm.
+pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let parents: std::collections::HashMap<&str, &str> = program
+        .types
+        .iter()
+        .filter_map(|t| t.parent.as_deref().map(|p| (t.name.as_str(), p)))
+        .collect();
+    if parents.is_empty() {
+        return;
+    }
+    let relation = |a: &str, b: &str| -> Option<i64> {
+        if a == b {
+            return Some(0);
+        }
+        let mut cur = a;
+        let mut d = 0i64;
+        while let Some(p) = parents.get(cur) {
+            d += 1;
+            cur = p;
+            if cur == b {
+                return Some(d);
+            }
+        }
+        let mut cur = b;
+        let mut d = 0i64;
+        while let Some(p) = parents.get(cur) {
+            d += 1;
+            cur = p;
+            if cur == a {
+                return Some(-d);
+            }
+        }
+        None
+    };
+    let compare = |pa: &Pattern, pb: &Pattern| -> Option<i64> {
+        let rank = |p: &Pattern| p.rank() as i64;
+        match (pa, pb) {
+            (Pattern::Annotated { ty: ta, .. }, Pattern::Annotated { ty: tb, .. }) => {
+                relation(ta, tb)
+            }
+            _ => match rank(pa) == rank(pb) {
+                true => Some(0),
+                false => Some(rank(pb) - rank(pa)),
+            },
+        }
+    };
+    let mut groups: std::collections::HashMap<(&str, usize), Vec<&FnDecl>> =
+        std::collections::HashMap::new();
+    for d in &program.fns {
+        groups.entry((d.name.as_str(), d.params.len())).or_default().push(d);
+    }
+    for ((name, _), decls) in groups {
+        for i in 0..decls.len() {
+            for j in i + 1..decls.len() {
+                let a = decls[i];
+                let b = decls[j];
+                let mut a_stricter = false;
+                let mut b_stricter = false;
+                let mut overlap = true;
+                for (pa, pb) in a.params.iter().zip(&b.params) {
+                    match compare(pa, pb) {
+                        None => {
+                            overlap = false;
+                            break;
+                        }
+                        Some(c) if c > 0 => a_stricter = true,
+                        Some(c) if c < 0 => b_stricter = true,
+                        _ => {}
+                    }
+                }
+                if overlap && a_stricter && b_stricter {
+                    diags.push(Diagnostic::new(
+                        "dispatch",
+                        format!(
+                            "these `{name}` arms tie: each is the more specific \
+                             one somewhere, and a call could match both — write \
+                             the arm that is most specific in every position"
+                        ),
+                        b.span,
+                    ));
+                }
+            }
+        }
+    }
+}
+
 /// Zero-field type names: a bare mention is the marker value, and in
 /// parameter position the bare name matches that marker.
 pub fn marker_names(program: &Program) -> HashSet<String> {
@@ -352,6 +442,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
     check_predicates(program, &mut diags);
+    check_arm_ties(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }

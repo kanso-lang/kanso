@@ -1374,3 +1374,18 @@ shared instance's RefCells and cascaded, which is worth remembering
 when reading wasm failure lists), and the missing binop unwrap.
 Remaining: stage 3b tie-rejection; the standing follow-up to wire the
 browser differential into CI just earned its priority.
+
+## 2026-07-24 — SHIPPED: tie-rejection (stage 3b) — the subtype thread closes
+
+The gaveled rule, enforced at definition level per Clay's wording
+("if multiple function definitions match, that's a compile error"):
+for each group, arm pairs are compared pointwise — chain relation for
+annotated positions, rank elsewhere; a pair that overlaps in every
+position while each arm is strictly more specific somewhere is
+rejected at the later arm with the fix in the message ("write the arm
+that is most specific in every position"). Comparable arms (g x:num /
+g x:int) stay legal — the ladder orders them. Zero cost for programs
+without subtypes (the parents map gates the whole pass). Golden:
+tests/golden/errors/subtype_tie. The ratified subtype design is now
+COMPLETE across declaration, construction, dispatch, upcast,
+transparency, three engines, and the static safety rule.
