@@ -11,7 +11,7 @@
 #if defined(__aarch64__)
 #include <arm_neon.h>
 #elif defined(__x86_64__)
-#include <emmintrin.h>
+#include <tmmintrin.h>
 #endif
 
 /* ABI shared with emitted LLVM IR: %KValue = type { i64, i64 } */
