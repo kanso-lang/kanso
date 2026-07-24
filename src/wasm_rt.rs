@@ -42,9 +42,15 @@ thread_local! {
 const SPAN0: Span = Span { line: 0, col: 0 };
 
 pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
+    let parents: Vec<(String, String)> = program
+        .types
+        .iter()
+        .filter_map(|t| t.parent.clone().map(|p| (t.name.clone(), p)))
+        .collect();
     let leaked: &'static Program = Box::leak(Box::new(program));
     INTERP.with(|i| *i.borrow_mut() = Some(Interp::new(leaked)));
     TYPES.with(|t| *t.borrow_mut() = types);
+    SUB_PARENTS.with(|t| *t.borrow_mut() = parents);
     REG.with(|r| {
         let mut reg = r.borrow_mut();
         reg.clear();
@@ -107,6 +113,20 @@ fn type_index(name: &str) -> Option<usize> {
     TYPES.with(|t| t.borrow().iter().position(|(n, _)| n == name))
 }
 
+fn type_name(idx: usize) -> String {
+    TYPES.with(|t| t.borrow()[idx].0.clone())
+}
+
+/// The subtype parents, mirrored from the program at init like TYPES.
+fn sub_parent(name: &str) -> Option<String> {
+    SUB_PARENTS.with(|t| t.borrow().iter().find(|(n, _)| n == name).map(|(_, p)| p.clone()))
+}
+
+thread_local! {
+    static SUB_PARENTS: std::cell::RefCell<Vec<(String, String)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     for &h in &arg_handles {
         if let Slot::V(v) = slot(h) {
@@ -163,21 +183,30 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
     let Slot::V(v) = slot(h) else {
         return 0;
     };
-    let ok = match code {
-        0 => matches!(v, Value::Int(_)),
-        1 => matches!(v, Value::Float(_)),
-        2 => matches!(v, Value::Str(_)),
-        3 => matches!(v, Value::True | Value::False),
-        4 => matches!(v, Value::List(_)),
-        5 => matches!(v, Value::Map(_)),
-        6 => matches!(v, Value::ErrV(_)),
-        tid => match &v {
-            Value::Record { ty, .. } => {
-                type_index(ty).is_some_and(|i| i == (tid - 100) as usize)
+    fn check(v: &Value, code: u32) -> bool {
+        if let Value::Sub { ty, inner } = v {
+            if code >= 100 && type_index(ty).is_some_and(|i| i == (code - 100) as usize) {
+                return true;
             }
-            _ => false,
-        },
-    };
+            return check(inner, code);
+        }
+        match code {
+            0 => matches!(v, Value::Int(_)),
+            1 => matches!(v, Value::Float(_)),
+            2 => matches!(v, Value::Str(_)),
+            3 => matches!(v, Value::True | Value::False),
+            4 => matches!(v, Value::List(_)),
+            5 => matches!(v, Value::Map(_)),
+            6 => matches!(v, Value::ErrV(_)),
+            tid => match v {
+                Value::Record { ty, .. } => {
+                    type_index(ty).is_some_and(|i| i == (tid - 100) as usize)
+                }
+                _ => false,
+            },
+        }
+    }
+    let ok = check(&v, code);
     ok as u32
 }
 
@@ -338,6 +367,54 @@ pub extern "C" fn rt_mkmap(n: u32) -> u32 {
 }
 
 #[no_mangle]
+pub extern "C" fn rt_mksub(inner: u32, tid: u32) -> u32 {
+    let Slot::V(v) = slot(inner) else {
+        return inner;
+    };
+    if is_failure(&v) {
+        return inner;
+    }
+    let name = type_name(tid as usize);
+    let parent = sub_parent(&name).unwrap_or_default();
+    if crate::eval::type_matches(&parent, &v) {
+        push(Slot::V(Value::Sub { ty: Rc::from(name.as_str()), inner: Rc::new(v) }))
+    } else {
+        die(format!("`{name}` wraps a {parent}"))
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rt_upcast(inner: u32, code: u32) -> u32 {
+    let Slot::V(mut v) = slot(inner) else {
+        return inner;
+    };
+    if is_failure(&v) {
+        return inner;
+    }
+    let want_name = if code >= 100 { type_name(code as usize - 100) } else {
+        match code { 0 => "int", 1 => "float64", 2 => "string", 3 => "bool", 6 => "err", _ => "" }
+            .to_string()
+    };
+    loop {
+        match &v {
+            Value::Sub { ty, inner } => {
+                if **ty == *want_name {
+                    return push(Slot::V(v.clone()));
+                }
+                let next = (**inner).clone();
+                v = next;
+            }
+            other => {
+                if crate::eval::type_matches(&want_name, other) {
+                    return push(Slot::V(v.clone()));
+                }
+                return die(format!("`:{want_name}` widens; this value is not a {want_name}"));
+            }
+        }
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn rt_mkrec(tid: u32, n: u32) -> u32 {
     let handles = pop_args(n);
     let mut fields = Vec::with_capacity(handles.len());
@@ -375,6 +452,14 @@ pub extern "C" fn rt_template(n: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
+    let a = {
+        let Slot::V(v) = slot(a) else { return a };
+        push(Slot::V(crate::eval::sub_base(v)))
+    };
+    let b = {
+        let Slot::V(v) = slot(b) else { return b };
+        push(Slot::V(crate::eval::sub_base(v)))
+    };
     let op = match op {
         0 => "+",
         1 => "-",
