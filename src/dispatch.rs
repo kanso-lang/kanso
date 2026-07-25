@@ -132,6 +132,7 @@ fn is_at_call(e: &Expr) -> bool {
 
 fn children(e: &Expr) -> Vec<&Expr> {
     match e {
+        Expr::Partial(..) => Vec::new(),
         Expr::Field { base, .. } => vec![base.as_ref()],
         Expr::Upcast { expr, .. } => vec![expr.as_ref()],
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts

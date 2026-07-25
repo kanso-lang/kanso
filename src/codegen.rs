@@ -1946,6 +1946,11 @@ impl<'a> Backend<'a> {
 
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
+            // the interpreter is the oracle for `&`; the backends reject it out
+            // loud rather than lowering something that would diverge
+            Expr::Partial(name, _) => {
+                Err(format!("native backend: `&{name}` (partial application) is not lowered yet"))
+            }
             Expr::Upcast { expr: inner, ty, .. } => {
                 let v = self.emit_expr(f, inner)?;
                 let v = self.maybe_force(f, v);
@@ -3232,7 +3237,7 @@ impl<'a> Backend<'a> {
 
 fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
     match expr {
-        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Partial(..) => {}
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {

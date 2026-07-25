@@ -849,6 +849,7 @@ fn rewrite_stmt(stmt: &mut ast::Stmt, qual: &str, owned: &std::collections::Hash
 
 fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet<String>) {
     match e {
+        ast::Expr::Partial(..) => {}
         ast::Expr::Guard { cond, early, rest, .. } => {
             rewrite_expr(cond, qual, owned);
             rewrite_expr(early, qual, owned);
@@ -1286,6 +1287,7 @@ fn foreign_destructures(program: &ast::Program, diags: &mut Vec<diag::Diagnostic
 
 fn expr_span(e: &ast::Expr) -> &diag::Span {
     match e {
+        ast::Expr::Partial(_, s) => s,
         ast::Expr::Guard { span: s, .. }
         | ast::Expr::Ident(_, s)
         | ast::Expr::App { span: s, .. }
@@ -1336,6 +1338,7 @@ fn private_uses(
 
 pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
+        ast::Expr::Partial(..) => Vec::new(),
         ast::Expr::Upcast { expr, .. } => vec![expr.as_ref()],
         ast::Expr::Guard { cond, early, rest, .. } => {
             let mut v = vec![cond.as_ref(), early.as_ref()];

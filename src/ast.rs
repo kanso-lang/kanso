@@ -8,6 +8,10 @@ pub enum Expr {
     MapLit(Vec<(Expr, Expr)>, Span),
     Str(Vec<TemplatePart>, Span),
     Ident(String, Span),
+    /// `&name` — the head of a partial application. Bare, it is superfluous
+    /// (a name already denotes the function); applied to fewer arguments than
+    /// any arm takes, it is the only spelling for a partial.
+    Partial(String, Span),
     List(Vec<Expr>, Span),
     App { head: Box<Expr>, args: Vec<Expr>, span: Span, piped: bool },
     Field { base: Box<Expr>, name: String, span: Span },
@@ -45,6 +49,7 @@ impl Expr {
             | Expr::MapLit(_, s)
             | Expr::Str(_, s)
             | Expr::Ident(_, s)
+            | Expr::Partial(_, s)
             | Expr::List(_, s)
             | Expr::App { span: s, .. }
             | Expr::Index { span: s, .. }

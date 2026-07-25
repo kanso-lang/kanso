@@ -608,6 +608,8 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
         (_, Tok::Dot) | (Tok::Dot, _) => 0,
         // the strict-index sigil hugs its bracket: xs[i]!
         (Tok::RBracket, Tok::Bang) => 0,
+        // the partial sigil hugs its name: &add 2
+        (Tok::Op("&"), Tok::Ident(_)) => 0,
         _ => 1,
     }
 }

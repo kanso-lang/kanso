@@ -1217,6 +1217,7 @@ fn logical_if(cond: Expr, then_e: Expr, else_e: Expr, span: Span) -> Expr {
 fn expr_span(e: &Expr) -> Span {
     match e {
         Expr::Int(_, s)
+        | Expr::Partial(_, s)
         | Expr::Field { span: s, .. }
         | Expr::Upcast { span: s, .. }
         | Expr::Build(_, s)
@@ -1705,6 +1706,16 @@ impl<'a> P<'a> {
             Some(Tok::Ident(name)) => {
                 self.pos += 1;
                 Ok(Expr::Ident(name, span))
+            }
+            Some(Tok::Op("&")) => {
+                self.pos += 1;
+                match self.toks.get(self.pos).map(|(t, _)| t.clone()) {
+                    Some(Tok::Ident(name)) => {
+                        self.pos += 1;
+                        Ok(Expr::Partial(name, span))
+                    }
+                    _ => Err(self.err("`&` marks a partial application: `&name arg`".to_string())),
+                }
             }
             Some(Tok::Str(parts)) => {
                 self.pos += 1;

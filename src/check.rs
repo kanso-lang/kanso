@@ -410,7 +410,7 @@ fn resolve_marker_pattern(
 
 fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Diagnostic>) {
     match expr {
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => {}
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
@@ -1137,6 +1137,8 @@ impl Resolver<'_> {
     fn resolve_expr(&mut self, expr: &Expr) {
         match expr {
             Expr::Int(..) | Expr::Float(..) => {}
+            // `&f` reads f exactly as a bare mention does
+            Expr::Partial(name, span) => self.resolve_name(name, *span),
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 let from = self.locals.len();
                 for stmt in stmts {
