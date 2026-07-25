@@ -49,6 +49,7 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
         .collect();
     let leaked: &'static Program = Box::leak(Box::new(program));
     INTERP.with(|i| *i.borrow_mut() = Some(Interp::new(leaked)));
+    eval::set_foreign_call(call_from_interp);
     TYPES.with(|t| *t.borrow_mut() = types);
     SUB_PARENTS.with(|t| *t.borrow_mut() = parents);
     REG.with(|r| {
@@ -651,8 +652,10 @@ pub extern "C" fn rt_seq(a: u32, b: u32) -> u32 {
     }
 }
 
-/// A deferred pair is materialized so the interpreter's scheduler sees a real
-/// description; a closure-bound one cannot be, and says so.
+/// Every deferred shape is materialized so the interpreter's scheduler sees a
+/// real description — including a closure-bound one, whose continuation rides
+/// as a handle the interpreter calls back through. A group of green threads
+/// needs this: it can only interleave what the one scheduler can see.
 fn as_desc(h: u32) -> Option<Rc<Desc>> {
     match slot(h) {
         Slot::V(Value::Desc(d)) => Some(d),
@@ -660,7 +663,27 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
             let (da, db) = (as_desc(a)?, as_desc(b)?);
             Some(Rc::new(Desc::Seq(da, db)))
         }
+        Slot::Bind(inner, closure) => {
+            Some(Rc::new(Desc::Bind(as_desc(inner)?, Value::TableFn(closure))))
+        }
         _ => None,
+    }
+}
+
+/// The interpreter reaching back into the program module: its argument values
+/// become slots, the table entry runs, and whatever it produces returns as a
+/// value the scheduler can go on executing.
+fn call_from_interp(handle: u32, args: Vec<Value>) -> Result<Value, eval::RuntimeError> {
+    let arg_handles = args.into_iter().map(|v| push(Slot::V(v))).collect();
+    Ok(value_of(call_closure(handle, arg_handles)))
+}
+
+/// A handle as the interpreter wants it: a deferred shape becomes the
+/// description it stands for, everything else is already a value.
+fn value_of(h: u32) -> Value {
+    match as_desc(h) {
+        Some(desc) => Value::Desc(desc),
+        None => val(h),
     }
 }
 

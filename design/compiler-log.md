@@ -3081,3 +3081,48 @@ tree with the page that reads it.
 NAV. about, playground, book, compiler, github — what it is, then try it, then
 learn it, then how it works. Go leads with why, rust with install and learn;
 both answer the question before offering the tool.
+
+## 2026-07-25 — concurrency runs in the browser; the scheduler stays singular
+
+The playground offered a concurrency example that errored in the tab. Removing
+it was not an option — a sample that demonstrates the language's answer to
+goroutines is the last thing to hide.
+
+CAUSE. `rt_join` needs both sides as real `Desc`s so the interpreter's
+scheduler can interleave them, and `as_desc` could not materialize a
+`Slot::Bind` — a piped continuation whose closure lives in the wasm table.
+`rolls = roll 1 >> roll 2 >> ...` where `roll i` is `random 6 . (n -> print)`
+is exactly that, so the join died.
+
+FIX, AND WHY NOT THE OTHER ONE. `Desc::Bind` already carries its continuation
+as a `Value`, and `Value::TableFn` (from the fanout fix) already names a table
+closure — so the shape was expressible; only the call back was missing.
+`eval::set_foreign_call` is a hook the browser backend registers, and
+`Interp::call` gained one arm for `TableFn`. The alternative was a second
+scheduler inside wasm_rt, which would have put the green-thread policy in two
+places and guaranteed drift. One scheduler, in the oracle, is the whole point
+of the differential law.
+
+The interleaved ORDER now matches the interpreter exactly.
+
+THE HARNESS WAS COMPARING UNSEEDED DICE. With concurrency running, the two
+engines still disagreed — on the values, not the order. browser_differential
+never pinned the RNG: the native side ran on entropy and the page called
+kanso_set_seed with nothing. Both are pinned now. This is the same bug the
+Rust playground spec had, found twice in one day, which suggests seeding
+belongs in whatever a harness inherits rather than in each harness.
+
+Both concurrency entries left KNOWN_GAPS, and the ratchet demanded it: an
+entry that starts passing fails the run until deleted. 63 passed, 1 gap, 0
+failed.
+
+SITE. The landing editor's mirror did not track the textarea's scroll, so
+scrolling left a ghost copy — the same defect the playground fixed long ago,
+reintroduced because the binding was written fresh instead of copied. The run
+button is white on accent, matching the playground's, and the editor now
+shares the code panel's own type and padding rather than sitting flush to the
+edge.
+
+A brand guide lands at /brand.html, linked in the footer: the ten colors with
+names, the three faces at working sizes, and the reasoning — one accent spent
+deliberately, space as the material, nothing decorative that cannot be run.

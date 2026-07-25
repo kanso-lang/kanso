@@ -62,6 +62,7 @@ const TAILCALL_PROBE = new Uint8Array([
   0x03, 0x02, 0x01, 0x00,
   0x0a, 0x06, 0x01, 0x04, 0x00, 0x12, 0x00, 0x0b,
 ]);
+const SEED = 2685821657;
 const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
 
 let wasm = null;
@@ -89,6 +90,9 @@ function rtImports() {
 
 async function runCase(c) {
   const name = writeInput(c.name.split('/').pop());
+  // pin the dice: the native side gets the same value through KANSO_SEED, or
+  // a program that calls `random` compares two unrelated streams
+  wasm.kanso_set_seed(SEED);
   wasm.kanso_set_file(name.ptr, name.len);
   const { ptr, len } = writeInput(c.src);
   const status = wasm.kanso_compile_wasm(ptr, len, tailCalls ? 1 : 0);
@@ -192,6 +196,8 @@ def native_outcome(path):
         cwd=path.parent,
         text=True,
         timeout=120,
+        # the same stream the page pins with kanso_set_seed
+        env={**os.environ, "KANSO_SEED": "2685821657"},
     )
     return run.returncode, run.stdout + run.stderr
 
@@ -252,8 +258,6 @@ def show(text):
 # fails if that phrase changes, and tells you to delete the entry once the
 # program starts passing. Silence is what this file exists to prevent.
 KNOWN_GAPS = {
-    "examples/concurrency.kso": "a group joins descriptions",
-    "target/playground-corpus/concurrency.kso": "a group joins descriptions",
     "examples/json_failure_door.kso": "`std/json` is not in the shipped library",
 }
 

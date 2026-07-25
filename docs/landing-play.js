@@ -12,8 +12,17 @@
   const runButton = document.getElementById('hero-run');
   const { ready, runSource, highlight } = window.KansoEngine;
 
+  /* the <pre> is the scroll container; the <code> mirror inside it is inline
+     and cannot scroll, so the highlight layer has to be moved by its parent
+     or it lags behind the textarea and reads as a ghost copy */
+  const mirrorScroll = mirror.parentElement;
+  const track = () => {
+    mirrorScroll.scrollTop = editor.scrollTop;
+    mirrorScroll.scrollLeft = editor.scrollLeft;
+  };
   const paint = () => {
     mirror.innerHTML = highlight(editor.value) + '\n';
+    track();
   };
 
   let woken = false;
@@ -40,6 +49,7 @@
     paint();
     wake();
   });
+  editor.addEventListener('scroll', track);
   editor.addEventListener('focus', wake, { once: true });
   editor.addEventListener('keydown', (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {

@@ -5,25 +5,28 @@ description: "kanso (簡素): a pure language where effects are values, failure 
 ---
 <style>
 /* the hero sample is a real editor: a transparent textarea over a highlighted
-   mirror, the same construction the playground uses */
-.hero-edit { min-height: 7.5rem; overflow: hidden; position: relative; }
+   mirror, sharing the code panel's own type and padding so it reads as the
+   same object it replaced */
+.hero-edit { min-height: 8.5rem; position: relative; }
 .hero-edit textarea,
 .hero-edit pre {
   bottom: 0;
   font-family: var(--font-mono);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   left: 0;
-  line-height: 1.65;
+  line-height: 1.7;
   margin: 0;
   overflow: auto;
-  padding: 0;
+  padding: 1.1rem 1.25rem;
   position: absolute;
   right: 0;
   top: 0;
   white-space: pre;
 }
 .hero-edit pre { pointer-events: none; }
-.hero-edit pre code { font: inherit; }
+/* the mirror must share the textarea's exact metrics or the highlight drifts
+   from the caret; the UA `code { font-family: monospace }` rule would win */
+.hero-edit pre code { color: var(--code-ink); font: inherit; }
 .hero-edit textarea {
   background: transparent;
   border: none;
@@ -34,18 +37,32 @@ description: "kanso (簡素): a pure language where effects are values, failure 
 }
 .hero-edit textarea::selection { background: rgba(240, 58, 0, 0.25); }
 .hero-run {
-  background: none;
-  border: 1px solid var(--line);
+  background: var(--accent);
+  border: none;
   border-radius: 6px;
-  color: inherit;
+  color: #fff;
   cursor: pointer;
   float: right;
-  font: inherit;
-  font-size: 0.78rem;
-  padding: 0.1rem 0.7rem;
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: -0.2rem 0;
+  padding: 0.3rem 1rem;
+  text-transform: uppercase;
 }
-.hero-run:hover { border-color: var(--accent); color: var(--accent); }
-.hero-open { display: inline-block; font-size: 0.82rem; margin-top: 0.9rem; }
+.hero-run:hover { background: var(--accent-hover); }
+.hero-run:disabled { cursor: default; opacity: 0.55; }
+.hero-open {
+  color: var(--code-muted);
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  padding: 0 1.25rem 1rem;
+  text-transform: uppercase;
+}
+.hero-open:hover { color: var(--accent); }
 .play-error { color: var(--tok-kw); }
 </style>
 
