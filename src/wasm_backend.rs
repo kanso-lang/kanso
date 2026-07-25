@@ -413,6 +413,7 @@ impl<'a> WasmBackend<'a> {
             "string" => 2,
             "bool" => 3,
             "err" => 6,
+            "none" => 7,
             _ => {
                 let tid = self
                     .type_ids
