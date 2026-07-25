@@ -729,6 +729,7 @@ void k_carry_stage(KValue v) {
 
 KValue k_carry_take(long long i) { return k_carry_slots[i]; }
 
+
 void k_beat_iter_carry(void) {
     k_stat_beat_iters++;
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
@@ -773,6 +774,29 @@ static void* k_alloc_perm(size_t n) {
     void* p = malloc(n);
     if (!p) { fputs("out of memory\n", stderr); exit(1); }
     return p;
+}
+/* Freeze a constant so it is built once instead of per call. A zero mark
+   makes k_survives answer no for everything, which is what forces a full
+   copy out of the arena rather than the sharing the carry path wants;
+   permanent storage is then the only cache a rewind cannot invalidate. The
+   copy lands at exact capacity, which is also what keeps k_b_push_mut from
+   mutating a shared constant in place — it writes through only when a list
+   has room to spare. */
+KValue k_caf_freeze(KValue v) {
+    if (!k_is_heap(v.tag)) return v;
+    KMark none = { NULL, NULL, 0 };
+    k_ptrmap_begin(&k_copy_seen);
+    k_copy_seen_live = 0;
+    size_t need = k_copy_size(v, &none);
+    KCarryBuf* buf = k_alloc_perm(sizeof(KCarryBuf));
+    buf->data = malloc(need ? need : 16);
+    if (!buf->data) { fputs("out of memory\n", stderr); exit(1); }
+    buf->cap = need ? need : 16;
+    buf->used = 0;
+    KCopy cp = { buf, &none, 0 };
+    k_ptrmap_begin(&k_copy_map);
+    k_copy_map_live = 0;
+    return k_deep_copy(v, &cp);
 }
 
 
@@ -4506,9 +4530,14 @@ static void k_report_err(KValue e, const char* reached) {
     }
 }
 
+void k_caf_init(void);
+
 int main(int argc, char** argv) {
     k_argc_global = argc;
     k_argv_global = argv;
+    /* constants are built once, before any user code runs, so reading one is
+       a load rather than a check */
+    k_caf_init();
     if (getenv("KANSO_COUNTERS")) atexit(k_stats_dump);
     KValue v = k_user_main();
     if (v.tag == K_DESC) {

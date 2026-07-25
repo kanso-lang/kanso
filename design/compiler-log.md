@@ -3439,3 +3439,46 @@ EXPECT THE COST GOLDEN TO MOVE, and say which way: allocs should fall by about
 937,500 of 14,799,465 on the decode workload, with `perm_allocs` rising by the
 number of constant definitions the program actually reaches. That is a
 deliberate regeneration, not a drift.
+
+## 2026-07-25 — SHIPPED: constants stop being recomputed, and the lazy memo was the trap
+
+Built the CAF freeze the previous entry designed. It works, and the interesting
+part is the version that did not.
+
+WHAT SHIPPED. A zero-argument definition whose body is a literal emits its body
+under a `_build` symbol; the real symbol becomes a load from a cell that
+`@k_caf_init` fills once, before main. `k_caf_freeze` deep-copies the built
+value into permanent storage using a zero mark — `k_survives` walks an empty
+block chain and answers no for everything, which is what forces a full copy out
+of the arena instead of the sharing the carry path wants.
+
+MEASURED, decode gauntlet: allocs 14,799,465 -> 12,924,473 (-1,874,992),
+alloc_bytes 690,505,904 -> 595,495,056 (-95 MB), arena_blocks 5 -> 4,
+perm_allocs 1 -> 5. Those are exact. Per-decode cpu falls 13.6% on floors and
+5.9% on medians over forty interleaved runs; wall clock was unusable, swinging
+87% between runs on the same binary at load ~50, which is why the numbers here
+are child cpu time from wait4 rather than a stopwatch.
+
+THE TRAP, WORTH MORE THAN THE FEATURE. The first version memoized lazily —
+check a ready flag, build on miss — and measured 22% SLOWER by slope despite
+allocating 1.87M fewer times. No new hot symbol appeared in the profile; the
+cost was diffuse and sat in `d_value_for_3`, the hottest function on the board.
+A store on that path is an alias-analysis barrier: llvm can no longer assume
+the surrounding loads are unaffected, and the dispatcher it poisoned is the one
+every value passes through. Filling before main leaves the read a bare load,
+no branch and no store, and the regression became a win.
+
+The general lesson is that a memo check in a hot path can cost more than the
+work it skips, and that "fewer allocations" is not the same claim as "faster".
+
+TWO BUGS THE GOLDENS CAUGHT, both mine. `k_caf_freeze` was placed above
+`k_alloc_perm` and compiled as an implicit declaration returning int — caught
+by the build, not the tests. And `dsym` quotes module-qualified names, so
+appending `_build` outside the quotes emitted
+`@"d_json/hex_digits_0"_build` and clang rejected it; the example corpus caught
+that one as an empty stdout where a diagnostic belonged.
+
+GOLDENS REGENERATED, deliberately and in this direction: both cost goldens
+(allocs down, perm_allocs up) and the compile golden (+5 lines and +1 define
+per sample — the `@k_caf_init` function, empty in samples with no constants;
+rounds and visits unchanged, since inference did not change).
