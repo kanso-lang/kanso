@@ -3355,3 +3355,39 @@ STILL OWED BEFORE BUILDING.
     fully-applied-but-unrun case.
   - ch05 teaches the dot as `x . f is f x` and mentions neither trailing
     arguments nor `_`.
+
+## 2026-07-25 — CORRECTION: `&` is required only for a genuine partial, and that unmakes the `&`/`()` pairing
+
+Clay: `&add` is superfluous, because a function with no arguments supplied is
+already passed as a value. Verified — `fn apply f x` given `apply bump 7`
+returns 8, so a bare fn-name is the reference and always has been.
+
+So `&` marks exactly one case, and it is the only case with no other spelling:
+
+    add           zero supplied      already a value      no `&`
+    &add 2        some supplied      the partial          `&` required
+    add 2 3       all supplied       a call               no `&`
+
+By the no-superfluous rule, `&add` with nothing supplied should be an error
+rather than a tolerated synonym for `add`.
+
+WHAT THIS UNMAKES. I recorded, one entry above, that `&` and `()` are
+complements — `&` supplying without running, `()` running without supplying —
+and that `&roll 7` against a one-argument `roll` was the
+fully-applied-but-unrun value Clay asked for. That is wrong on the same
+grounds. A fully applied call is already unrun: the language is lazy, so
+`roll_7 = roll 7` defers until demanded, which is what made it print 8 only
+when interpolated. `&` on a complete application would be as superfluous as
+`&` on an empty one.
+
+WHICH LEAVES `()` NEEDING ITS OWN JUSTIFICATION. Its remaining job is the
+reference-versus-call distinction on a zero-argument definition — telling
+`foo` the value from `foo` the invocation. In a pure, lazy language those two
+are hard to tell apart from the outside: a constant referenced is computed on
+demand exactly once, and a zero-argument function called re-runs to produce
+the same value. The observable difference is memoization, not result. That is
+not an argument against `()`; it is an argument that the case for it has to be
+made on something other than deferral, and it has not been made here yet.
+
+The nullary gavel stands as ratified; what it is FOR is now the open question,
+which is a different and smaller one than whether it parses (it does not).
