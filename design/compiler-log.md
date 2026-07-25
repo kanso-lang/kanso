@@ -2291,3 +2291,22 @@ inference made three fire in a book sample and the golden began failing
 intermittently. Diagnostics now sort by span, which is both stable and the
 order a reader expects. This was a CI flake waiting for any change that
 widened a diagnostic set.
+
+## 2026-07-24 — the collection prohibition lands
+
+A list or a map may no longer hold a none. A record field still may, which
+is the whole of gavel two: a lookup answers "not found" with a none, so a
+collection that could also store one makes every lenient read ambiguous,
+while a record field is known to exist and a none there means the value is
+nothing and nothing else.
+
+The check follows the same shape as the constructor-literal check: it fires
+on a none written literally into a list or map and stays quiet everywhere
+else, so nothing computed is guessed at. That is enough to close the gavel's
+concrete case and leaves the inference-driven version for when the checker
+has types at hand.
+
+The step-one example that pinned containers holding a none is gone, replaced
+by two error goldens. It recorded agreement between the engines on a
+behavior the design had already ruled out — correct as a differential fact
+at the time, wrong as a specimen of the language.

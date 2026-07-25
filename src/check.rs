@@ -90,6 +90,54 @@ fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// A lookup answers "not found" with a none, so a collection that could
+/// hold one would make every lenient read ambiguous. A record field is
+/// different: it is known to exist, so a none there means the value is
+/// nothing and nothing else.
+fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
+    fn is_none_lit(e: &Expr) -> bool {
+        matches!(e, Expr::Ident(name, _) if name == "none")
+    }
+    fn walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
+        match e {
+            Expr::List(items, _) => {
+                for item in items.iter().filter(|i| is_none_lit(i)) {
+                    diags.push(Diagnostic::new(
+                        "none",
+                        "a list cannot hold a none: a lookup answers \"not found\" \
+                         with one, so an element would be indistinguishable"
+                            .to_string(),
+                        item.span(),
+                    ));
+                }
+            }
+            Expr::MapLit(pairs, _) => {
+                for (_, value) in pairs.iter().filter(|(_, v)| is_none_lit(v)) {
+                    diags.push(Diagnostic::new(
+                        "none",
+                        "a map cannot hold a none: a lookup answers \"not found\" \
+                         with one, so a value would be indistinguishable"
+                            .to_string(),
+                        value.span(),
+                    ));
+                }
+            }
+            _ => {}
+        }
+        for child in crate::expr_children(e) {
+            walk(child, diags);
+        }
+    }
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            walk(e, diags);
+        }
+    }
+}
+
 /// A field annotation is a promise about what the field holds, and a literal
 /// argument is the one case where the compiler can keep it without knowing
 /// anything else about the program.
@@ -556,6 +604,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
     check_ctor_literals(program, &mut diags);
+    check_none_in_collections(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }
