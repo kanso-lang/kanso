@@ -2498,3 +2498,26 @@ happened to dodge this by reporting at a declaration, where an existing
 mechanism appends the owning module. An argument span carries no such note.
 Until a reader can follow the pointer to the line that produced it, a
 compile error here would send people to the wrong file.
+
+## 2026-07-24 — a diagnostic names the module it came from
+
+The exhaustiveness reports now say which module owns the line. Before, a
+merged program's span was rendered against the entry file, so a thirteen-line
+example was told to look at line one hundred fifty-five:
+
+  examples/std_list.kso:155:17
+
+The declaration carries its own file, so the report says so directly, with
+the path trimmed to the module a reader would have searched for:
+
+  ... or give `list/unwrap_found` a `none` arm (in std/list/list.kso)
+
+This is not a none problem. Any check reporting at an expression span in a
+merged program has it; exhaustiveness is simply the first one to do that,
+since the others report at declarations, where an existing mechanism appends
+the owning module. The general repair is a span that carries its file, which
+is a wide change and worth doing on its own terms rather than inside a
+feature.
+
+With the owner visible the migration reads clearly: sixty-four sites in
+list and eleven across json's four files. Those are the arms to write.
