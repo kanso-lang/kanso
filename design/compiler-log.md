@@ -2895,3 +2895,49 @@ trade against each other, and a feature may cost one to buy the other, so
 movement is expected and silence is the failure: regenerate deliberately,
 say which way it went and why, and write the reason down beside the number.
 The same sentence is in CLAUDE.md so it governs the runtime veins too.
+
+## 2026-07-25 — the boards re-measured under one method; the serde lead was an artifact
+
+Audit of every number-bearing surface found five different figure sets
+across four pages, and the headline claim did not survive re-measurement.
+
+METHOD. Each decoder timed by slope: the same program built to run 150
+and 450 times, floors differenced over the extra 300, which cancels
+process startup and the file read for all four alike. This mattered.
+kanso's harness is the only one that does not self-time, so the earlier
+comparison clocked kanso by whole-process wall time against three rivals'
+self-timed means — an asymmetry that moves the answer by more than the
+gap being reported.
+
+MEASURED (load ~50, interleaved, two sittings): kanso 0.952/0.949,
+serde_json 0.947/0.972, naive rust 1.104/1.117, go 2.040/2.054
+ms/decode. Peak rss 6.2 / 6.8 / 6.8 / 10.5 mb.
+
+FINDING. kanso and serde_json are a dead heat — 0.5% apart in one
+sitting, 2.4% the other, order flipping between them. The board claimed
+a ten-percent idle lead and a forty-five-percent loaded lead; both are
+withdrawn. naive rust and go reproduce their published floors within 3%,
+so the sitting is comparable and the discrepancy is specific to the
+kanso/serde pair and the method that produced it.
+
+NOT A REGRESSION. #174 (the eisel-lemire restore) built and raced in the
+same sitting: 1.001x on floors across the 67 merges since. The decode
+path has not moved. The 0.89 figure came from #170, whose main lacked
+eisel-lemire outright — the incident recorded on 07-23 — so no commit
+reproduces it.
+
+LAZY BOARD, same sitting: kanso 0.10, rust hand-tuned 0.08, rust as
+written 1.54, kanso --strict 1.93. The 15x over rust-as-written holds;
+"within 14% of hand-restructured rust" was prototype-era and measures 28%
+on the shipped engine.
+
+CORRECTED: compiler.html board, recipe and lazy table; index.html panel
+and the two-engines paragraph (a third set, 0.85/0.86); about.html prose;
+kq README (its pretty rows beat the idle floors quoted underneath them —
+proof of mixed sittings); kq TRY.md.
+
+STATUS LEDGER: eisel-lemire was tagged queued while shipped and pinned at
+el_parses=318450. Eytzinger was tagged planned while its own text read
+"measured, declined"; it now carries its own class.
+
+OPEN: the idle-floor footnote is owed a quiet sitting.
