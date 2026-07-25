@@ -59,6 +59,37 @@ pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     diags
 }
 
+/// A parameter that can receive a none needs an arm that says so; a bare
+/// binding receives it without stating a disposition.
+fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let inference = crate::infer::infer(program);
+    let mut groups: std::collections::HashMap<(String, usize), Vec<usize>> = Default::default();
+    for (i, d) in program.fns.iter().enumerate() {
+        groups.entry((d.name.clone(), d.params.len())).or_default().push(i);
+    }
+    for ((name, arity), idxs) in &groups {
+        for pos in 0..*arity {
+            let can_be_none = idxs.iter().any(|&i| {
+                inference.params.get(i).and_then(|p| p.get(pos)).is_some_and(|s| s & crate::infer::NONE != 0)
+            });
+            if !can_be_none {
+                continue;
+            }
+            let handled = idxs.iter().any(|&i| {
+                matches!(program.fns[i].params.get(pos), Some(Pattern::Nullary(n, _)) if n == "none")
+            });
+            if !handled {
+                let span = program.fns[idxs[0]].span;
+                diags.push(Diagnostic::new(
+                    "exhaustive",
+                    format!("`{name}` can receive a none at position {pos} with no arm for it"),
+                    span,
+                ));
+            }
+        }
+    }
+}
+
 /// A field annotation is a promise about what the field holds, and a literal
 /// argument is the one case where the compiler can keep it without knowing
 /// anything else about the program.
@@ -521,6 +552,9 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
     check_ctor_literals(program, &mut diags);
+    if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
+        check_none_exhaustive(program, &mut diags);
+    }
     if require_main {
         check_main(program, &mut diags);
     }
