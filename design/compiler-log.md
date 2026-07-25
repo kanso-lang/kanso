@@ -3565,3 +3565,32 @@ should be an error under the no-superfluous rule and currently is not. Native
 and wasm lowering. Inference does not yet type a partial — it reads as TOP —
 so the compiler cannot yet check, as Clay put it, "the validity of any
 invocation of foo and subsequent invocation of its return value".
+
+## 2026-07-25 — OPEN: what makes `&f a` valid, and why it is a static question
+
+Clay, on the partial that just shipped: "`&roll 4` — that could only fail if
+there's no overload of roll that takes as its first argument something that 4
+could satisfy."
+
+That is the validity rule, and the shipped slice does not enforce it. Today
+`&anything 4` builds a partial and the failure, if any, waits for the
+application that completes it. The rule says the error belongs at the `&`,
+where the reader wrote it.
+
+WHAT IT REQUIRES. For each arm of the name, ask whether the supplied arguments
+could match that arm's leading patterns — literal arms by value, annotated
+arms by type, plain binders by anything. If no arm survives that filter, the
+partial can never complete and the `&` is an error naming what the arms do
+take. This is the same question dispatch already answers at a full call site,
+asked against a prefix instead of the whole argument list.
+
+It is also the piece that would let inference type a partial. Right now
+`Expr::Partial` reads as TOP, so nothing downstream knows what the value
+accepts or returns. Once the surviving arms are known, the partial's type is
+the set of their remaining parameter shapes, which is what makes Clay's larger
+point checkable: a compiler that can assess `foo` and the invocation of its
+return value together, statically, rather than discovering the mismatch when
+the last argument lands.
+
+Filed against the `&` task rather than the CAF one; it belongs with native and
+wasm lowering and the `()` form as the rest of that feature.
