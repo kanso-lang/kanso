@@ -614,9 +614,6 @@ impl<'a> Interp<'a> {
                     if is_failure(&key) {
                         return Ok(key);
                     }
-                    if is_failure(&value) {
-                        return Ok(value);
-                    }
                     let key = map_key(key, *span)?;
                     entries.insert(key, value);
                 }

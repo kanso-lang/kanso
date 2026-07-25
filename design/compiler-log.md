@@ -2046,3 +2046,32 @@ a sequence needs materializing first; as_desc walks a Seq tree into a real
 Desc. A Bind cannot be materialized, since its continuation is a wasm table
 closure rather than a Value, and that case dies with the same wording the
 non-description case uses.
+
+## 2026-07-24 — none campaign, step 1: the engines agree again
+
+The differential violations found while probing none are repaired, so the
+law holds while the rest of the campaign lands.
+
+Containers hold none. Lists already did on native and interp; maps did on
+native only, and the interpreter's MapLit carried a failure check on the
+value that its List arm did not. The check is gone, so a map value behaves
+like a list element. A map *key* is still rejected, which the literal
+grammar enforces anyway.
+
+Writing the golden turned up a third behavior nobody had looked at: the
+browser ate none in both containers, since rt_mklist and rt_mkmap propagated
+failures element by element. Both now keep what they are given. This is the
+argument for the goldens-for-everything rule in one incident — two engines
+were compared by hand and agreed, and the engine nobody thought to check was
+the one that differed.
+
+Deriving from none is rejected at check time, uniformly. The engines carry
+none as a tag rather than a declared type, so native failed with "unknown
+type `none`" while the interpreter accepted the declaration and silently
+dropped the subtype. The differential law allows a feature to land on fewer
+engines only when the others reject it clearly, and silent erasure is not
+that. Support remains available to add — the type-check side is two arms in
+the primitive match — and wants a customer first, which refined lookup
+signals would provide.
+
+Browser differential now reads 40 passed, 0 fallback, 0 failed.

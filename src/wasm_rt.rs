@@ -399,11 +399,7 @@ pub extern "C" fn rt_mklist(n: u32) -> u32 {
     let handles = pop_args(n);
     let mut items = Vec::with_capacity(handles.len());
     for h in handles {
-        let v = val(h);
-        if is_failure(&v) {
-            return h;
-        }
-        items.push(v);
+        items.push(val(h));
     }
     push(Slot::V(Value::List(Rc::new(items))))
 }
@@ -413,11 +409,7 @@ pub extern "C" fn rt_mkmap(n: u32) -> u32 {
     let handles = pop_args(n * 2);
     let mut values = Vec::with_capacity(handles.len());
     for h in &handles {
-        let v = val(*h);
-        if is_failure(&v) {
-            return *h;
-        }
-        values.push(v);
+        values.push(val(*h));
     }
     let mut map = std::collections::BTreeMap::new();
     for pair in values.chunks(2) {
