@@ -102,3 +102,63 @@ fn the_failure_twin_tests_err_and_nothing_else() {
         "the twin tests the none tag again — a none is a value, not a failure: {body}"
     );
 }
+
+const ANY_FIELD: &str = "type box
+  v:any int
+
+main = print \"{box 7}\"
+";
+
+/// `any` accepts every value except the absence channel, so its check is a
+/// call that tests the tag — not the constant true it was before `none`
+/// became a value the set had to exclude.
+#[test]
+fn any_tests_the_tag_rather_than_passing_everything() {
+    let ir = ir_for(ANY_FIELD);
+    assert!(
+        ir.contains("call i64 @k_check_any("),
+        "an `any` member no longer calls k_check_any, so it either passes a \
+         none or stopped being checked at all"
+    );
+}
+
+const STRICT_INDEX: &str = "main =
+  xs = [1 2]
+  print \"{xs[1]!}\"
+";
+
+/// The strict index is a different call from the lenient one: it errs where
+/// the lenient form answers none, which is what lets a guarded lookup say so.
+#[test]
+fn the_strict_index_errs_instead_of_answering_none() {
+    let ir = ir_for(STRICT_INDEX);
+    assert!(
+        ir.contains("@k_index("),
+        "`xs[i]!` stopped emitting the erring index, so a miss would answer \
+         none where the author said it cannot happen"
+    );
+}
+
+const GUARD: &str = "main = print (pick 3)
+
+fn pick n
+  return \"low\" if (n < 10)
+  \"high\"
+";
+
+/// A guard is a branch, not a call into a runtime helper — the tail it skips
+/// is the untaken arm of a conditional.
+#[test]
+fn a_guard_compiles_to_a_branch() {
+    let ir = ir_for(GUARD);
+    let picks: Vec<&str> = ir
+        .lines()
+        .skip_while(|l| !(l.starts_with("define") && l.contains("@d_pick_1")))
+        .take_while(|l| !l.starts_with('}'))
+        .collect();
+    let body = picks.join("\n");
+    assert!(
+        body.contains("br i1 "),
+        "a guard stopped compiling to a conditional branch: {body}"
+    );
+}
