@@ -104,14 +104,20 @@ A clean grep is necessary, not sufficient — the families above are wider than 
    **The number-bearing surfaces are a checklist, not a memory** — walk
    ALL of them every time: compiler.html decode board, compiler.html
    lazy scoreboard (§07), compiler.html recipe block (§08),
+   compiler.html compile-speed note (§08, "how fast it compiles"),
    index.html landing panel, about.html prose numbers, kq README table,
    kq TRY.md timings, kanso-json README if it grows numbers. Three of
-   these sat stale for a day because the sweep ran on recall.
+   these sat stale for a day because the sweep ran on recall, and a later
+   sweep found five disagreeing figure sets across four pages.
 2. Profile evidence in the PR (which line died, what the floor is now).
-3. Append-only log entry (design/compiler-log.md): decisions, measurements,
+3. **Every change carries a perf check**, not just perf PRs: re-run the
+   decode floor and the compile timings, and move the published numbers
+   when either shifts substantially. Compile speed is a published claim
+   now, so a change that slows the front end owes the note an edit.
+4. Append-only log entry (design/compiler-log.md): decisions, measurements,
    open threads. Negative results (built-measured-declined) are recorded on
    the compiler page so ideas stay declined.
-4. Techniques ledger and mined-queue statuses move in the same PR.
+5. Techniques ledger and mined-queue statuses move in the same PR.
 
 ### Design flow
 - Dialog before changes while Clay is designing; a gavel is recorded in the
