@@ -277,8 +277,7 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
         Expr::Guard { cond, early, rest, .. } => {
             let mut v: Vec<&Expr> = vec![cond.as_ref(), early.as_ref()];
             v.extend(rest.iter().map(|s| match s {
-                Stmt::Bind { expr, .. } => expr,
-                Stmt::Expr(expr) => expr,
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
             }));
             v
         }

@@ -415,6 +415,69 @@ impl<'a> Interp<'a> {
         Some(self.eval_body_of(decl, None))
     }
 
+    /// A statement list in expression position: a branch body, a build
+    /// block, or the tail a fired guard skipped past.
+    fn eval_stmts(
+        &self,
+        stmts: &[Stmt],
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> EvalResult {
+                let mut env = env.clone();
+                let mut result = Value::NoneV;
+                for stmt in stmts {
+                    match stmt {
+                        Stmt::Bind { pattern, expr } => {
+                            let mut value = self.eval(expr, &env, frame)?;
+                            if !matches!(pattern, Pattern::Var(..)) {
+                                value = self.force_thunk(value)?;
+                            }
+                            env = self.destructure(pattern, value, env, expr.span())?;
+                        }
+                        Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
+                        Stmt::Set { target, field, value, span } => {
+                            let current = lookup(&env, target).ok_or_else(|| {
+                                RuntimeError {
+                                    message: format!("`set` target `{target}` is not bound"),
+                                    span: *span,
+                                }
+                            })?;
+                            let current = self.force_thunk(current)?;
+                            // a constructor given a failure handed the failure
+                            // back, so the target is not a record to write to
+                            if is_failure(&current) {
+                                continue;
+                            }
+                            let Value::Record { ty, fields } = &current else {
+                                return Err(RuntimeError {
+                                    message: format!(
+                                        "`set` writes a record field, not {}",
+                                        render(&current, true)
+                                    ),
+                                    span: *span,
+                                });
+                            };
+                            let decl =
+                                self.type_decl(ty).expect("constructed types are declared");
+                            let position =
+                                decl.fields.iter().position(|(f, _, _)| f == field);
+                            let Some(position) = position else {
+                                return Err(RuntimeError {
+                                    message: format!("`{ty}` has no field `{field}`"),
+                                    span: *span,
+                                });
+                            };
+                            let new = self.eval(value, &env, frame)?;
+                            if is_failure(&new) {
+                                return Ok(new);
+                            }
+                            fields.borrow_mut()[position] = new;
+                        }
+                    }
+                }
+                Ok(result)
+    }
+
     fn eval_body_in(
         &self,
         decl: &FnDecl,
@@ -549,61 +612,7 @@ impl<'a> Interp<'a> {
                 }
             }
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
-                // a deferred branch body: fn-body statements in a child
-                // scope; the env extension is dropped with this frame
-                let mut env = env.clone();
-                let mut result = Value::NoneV;
-                for stmt in stmts {
-                    match stmt {
-                        Stmt::Bind { pattern, expr } => {
-                            let mut value = self.eval(expr, &env, frame)?;
-                            if !matches!(pattern, Pattern::Var(..)) {
-                                value = self.force_thunk(value)?;
-                            }
-                            env = self.destructure(pattern, value, env, expr.span())?;
-                        }
-                        Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
-                        Stmt::Set { target, field, value, span } => {
-                            let current = lookup(&env, target).ok_or_else(|| {
-                                RuntimeError {
-                                    message: format!("`set` target `{target}` is not bound"),
-                                    span: *span,
-                                }
-                            })?;
-                            let current = self.force_thunk(current)?;
-                            // a constructor given a failure handed the failure
-                            // back, so the target is not a record to write to
-                            if is_failure(&current) {
-                                continue;
-                            }
-                            let Value::Record { ty, fields } = &current else {
-                                return Err(RuntimeError {
-                                    message: format!(
-                                        "`set` writes a record field, not {}",
-                                        render(&current, true)
-                                    ),
-                                    span: *span,
-                                });
-                            };
-                            let decl =
-                                self.type_decl(ty).expect("constructed types are declared");
-                            let position =
-                                decl.fields.iter().position(|(f, _, _)| f == field);
-                            let Some(position) = position else {
-                                return Err(RuntimeError {
-                                    message: format!("`{ty}` has no field `{field}`"),
-                                    span: *span,
-                                });
-                            };
-                            let new = self.eval(value, &env, frame)?;
-                            if is_failure(&new) {
-                                return Ok(new);
-                            }
-                            fields.borrow_mut()[position] = new;
-                        }
-                    }
-                }
-                Ok(result)
+                self.eval_stmts(stmts, env, frame)
             }
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::MapLit(pairs, span) => {
@@ -752,7 +761,7 @@ impl<'a> Interp<'a> {
                 let c = self.eval(cond, env, frame)?;
                 match c {
                     Value::True => self.eval(early, env, frame),
-                    Value::False => self.eval_body(rest, env.clone(), frame),
+                    Value::False => self.eval_stmts(rest, env, frame),
                     bad if is_failure(&bad) => Ok(bad),
                     other => Err(RuntimeError {
                         message: format!(

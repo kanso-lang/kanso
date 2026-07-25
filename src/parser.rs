@@ -579,7 +579,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_return = |line: &Line| matches!(line.tokens.first(), Some((Tok::KwReturn, _)));
     let lead_end = body
         .iter()
-        .position(|l| !is_return(l) && !matches!(parse_stmt_shape(l), StmtShape::Bind))
+        .position(|l| !is_return(l) && !matches!(parse_stmt(l), Ok(Stmt::Bind { .. })))
         .unwrap_or(body.len());
     if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
         return Err(Diagnostic::new(
@@ -588,7 +588,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             stray.tokens[0].1,
         ));
     }
-    if !body[..lead_end].iter().any(|l| is_return(l)) {
+    if !body[..lead_end].iter().any(is_return) {
         return parse_effect_body(&body[lead_end..], &body[..lead_end]);
     }
     let mut cont = parse_effect_body(&body[lead_end..], &[])?;

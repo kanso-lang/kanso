@@ -849,6 +849,13 @@ fn rewrite_stmt(stmt: &mut ast::Stmt, qual: &str, owned: &std::collections::Hash
 
 fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet<String>) {
     match e {
+        ast::Expr::Guard { cond, early, rest, .. } => {
+            rewrite_expr(cond, qual, owned);
+            rewrite_expr(early, qual, owned);
+            for stmt in rest {
+                rewrite_stmt(stmt, qual, owned);
+            }
+        }
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
             for stmt in stmts {
                 rewrite_stmt(stmt, qual, owned);
@@ -1255,7 +1262,8 @@ fn foreign_destructures(program: &ast::Program, diags: &mut Vec<diag::Diagnostic
 
 fn expr_span(e: &ast::Expr) -> &diag::Span {
     match e {
-        ast::Expr::Ident(_, s)
+        ast::Expr::Guard { span: s, .. }
+        | ast::Expr::Ident(_, s)
         | ast::Expr::App { span: s, .. }
         | ast::Expr::Index { span: s, .. }
         | ast::Expr::BinOp { span: s, .. }

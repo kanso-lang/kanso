@@ -1156,8 +1156,9 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
             free_idents(early, visit);
             for stmt in rest {
                 match stmt {
-                    Stmt::Bind { expr, .. } => free_idents(expr, visit),
-                    Stmt::Expr(expr) => free_idents(expr, visit),
+                    Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. } => free_idents(expr, visit),
                 }
             }
         }

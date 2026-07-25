@@ -6,7 +6,7 @@ fn describe n
   return "past a thousand" if (1000 < n)
   "ordinary {n}"
 
-main =
+pub play =
   print (describe (0 - 5))
   >> print (describe 4200)
   >> print (describe 7)

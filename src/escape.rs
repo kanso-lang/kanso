@@ -285,8 +285,9 @@ impl<'a> Analysis<'a> {
                     && self.expr_safe_calls(ty, early)
                     && rest.iter().all(|s| {
                         let e = match s {
-                            Stmt::Bind { expr, .. } => expr,
-                            Stmt::Expr(expr) => expr,
+                            Stmt::Bind { expr, .. }
+                            | Stmt::Expr(expr)
+                            | Stmt::Set { value: expr, .. } => expr,
                         };
                         !self.produces_ty(ty, e) && self.expr_safe_calls(ty, e)
                     })
@@ -405,8 +406,9 @@ impl<'a> Analysis<'a> {
                     || self.expr_mentions_ty(ty, early)
                     || rest.iter().any(|s| {
                         let e = match s {
-                            Stmt::Bind { expr, .. } => expr,
-                            Stmt::Expr(expr) => expr,
+                            Stmt::Bind { expr, .. }
+                            | Stmt::Expr(expr)
+                            | Stmt::Set { value: expr, .. } => expr,
                         };
                         self.expr_mentions_ty(ty, e)
                     })

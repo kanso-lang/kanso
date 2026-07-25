@@ -131,6 +131,17 @@ fn use_targets(
     out: &mut Vec<(String, usize, usize)>,
 ) {
     match expr {
+        Expr::Guard { cond, early, rest, .. } => {
+            use_targets(cond, name, out);
+            use_targets(early, name, out);
+            for st in rest {
+                match st {
+                    Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. } => use_targets(expr, name, out),
+                }
+            }
+        }
         Expr::App { head, args, .. } => {
             if !matches!(head.as_ref(), Expr::Ident(..)) {
                 use_targets(head, name, out);
@@ -225,6 +236,17 @@ fn collect_uses(
     match expr {
         Expr::Ident(id, _) if id == name => uses.demanding += 1,
         Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::Guard { cond, early, rest, .. } => {
+            collect_uses(cond, name, discard, uses);
+            collect_uses(early, name, discard, uses);
+            for st in rest {
+                match st {
+                    Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. } => collect_uses(expr, name, discard, uses),
+                }
+            }
+        }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
@@ -298,6 +320,15 @@ fn collect_uses(
 /// the cell, so it compiles strict.
 fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
     match expr {
+        Expr::Guard { cond, early, rest, .. } => {
+            expensive(cond, fns)
+                || expensive(early, fns)
+                || rest.iter().any(|st| match st {
+                    Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. } => expensive(expr, fns),
+                })
+        }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expensive(expr, fns),
         }),

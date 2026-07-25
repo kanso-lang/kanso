@@ -780,7 +780,7 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
         Expr::Guard { cond, early, rest, .. } => {
             expr_allocates(cond, fn_names, allocating, seed_pass)
                 || expr_allocates(early, fn_names, allocating, seed_pass)
-                || rest.iter().any(|s| expr_allocates(guard_stmt_expr(s), allocating, seed_pass))
+                || rest.iter().any(|s| expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass))
         }
         Expr::Seq(a, b, _) => {
             expr_allocates(a, fn_names, allocating, seed_pass)
