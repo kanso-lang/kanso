@@ -2719,3 +2719,19 @@ already carries.
 The browser reports one fallback: guards are not in the wasm backend, which
 the differential law permits so long as the rejection is clear. Both cost
 goldens are unchanged and the decode checksum is intact.
+
+## 2026-07-24 — guards in the browser; parity is whole again
+
+The wasm backend emits return guards, and the browser differential reads
+45 passed, 0 fallback, 0 failed. The fallback that arrived with gavel BB
+lasted one commit.
+
+The emission is the shape the gavel already describes. A guard is a
+conditional whose untaken branch is the rest of the body, so the backend
+reuses what it does for `if`: test the condition for failure and hand the
+failure back, otherwise branch on truth between the early value and the
+tail. emit_body already evaluated a statement list, so the tail needed
+nothing new.
+
+Both cost goldens are unchanged. The guard costs nothing on the compiled
+path because it compiles to the same instructions the equivalent `if` would.
