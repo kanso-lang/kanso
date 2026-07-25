@@ -12,6 +12,7 @@ killed as soon as the report lands, so nothing depends on headless Chrome
 exiting on its own (its --dump-dom/--virtual-time-budget exit is flaky).
 """
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -146,17 +147,41 @@ main()
 """
 
 
+def playground_examples():
+    """The samples docs/play.js offers. A visitor runs one of these before
+    anything else in the corpus, so they belong in the differential; reading
+    them from play.js means a new example cannot ship uncovered."""
+    text = (ROOT / "docs/play.js").read_text()
+    body = text[text.index("const EXAMPLES = {") :]
+    written = ROOT / "target" / "playground-corpus"
+    written.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for match in re.finditer(r"\n  ([a-z_0-9]+): `", body):
+        source = body[match.end() :]
+        path = written / f"{match.group(1)}.kso"
+        path.write_text(source[: source.index("`")])
+        paths.append(path)
+    return paths
+
+
+def local_import(source):
+    """std/* resolves in the browser because the toolchain embeds it; a
+    relative import still wants a filesystem the tab does not have."""
+    return any(
+        line.strip().startswith("import ") and not line.strip().startswith('import "std/')
+        for line in source.splitlines()
+    )
+
+
 def corpus():
     dirs = [ROOT / "examples", ROOT / "tests/golden/runtime"]
     paths = [path for d in dirs for path in sorted(d.glob("*.kso"))]
-    # the browser has no filesystem, so `import` cannot resolve there — those
-    # programs are out of scope for the differential until the playground
-    # bundles the shipped library. skip them loudly rather than fail.
+    paths += playground_examples()
     runnable, skipped = [], []
     for path in paths:
-        (skipped if "import " in path.read_text() else runnable).append(path)
+        (skipped if local_import(path.read_text()) else runnable).append(path)
     for path in skipped:
-        print(f"SKIP  {path.relative_to(ROOT)} (uses import — no filesystem in the browser)")
+        print(f"SKIP  {path.relative_to(ROOT)} (relative import — no filesystem in the browser)")
     return runnable
 
 
@@ -222,6 +247,17 @@ def show(text):
     return json.dumps(text)
 
 
+# An engine may cover less than the oracle, but only out loud. Each entry is a
+# program the browser declines and the phrase it declines with; the harness
+# fails if that phrase changes, and tells you to delete the entry once the
+# program starts passing. Silence is what this file exists to prevent.
+KNOWN_GAPS = {
+    "examples/concurrency.kso": "a group joins descriptions",
+    "target/playground-corpus/concurrency.kso": "a group joins descriptions",
+    "examples/json_failure_door.kso": "`std/json` is not in the shipped library",
+}
+
+
 def main():
     paths = corpus()
     entries = [
@@ -233,7 +269,7 @@ def main():
     if [r["name"] for r in results] != [e["name"] for e in entries]:
         sys.exit("harness failure: result names do not match the corpus")
 
-    passed, fallbacks, failures = 0, 0, 0
+    passed, fallbacks, failures, gaps = 0, 0, 0, 0
     for path, result in zip(paths, results):
         name = result["name"]
         kind = result["kind"]
@@ -243,21 +279,31 @@ def main():
             print(f"SKIP  {name} (fallback: {reason})")
             continue
         if kind != "wasm":
-            failures += 1
             reason = result.get("reason", result.get("text", "")).strip()
+            if KNOWN_GAPS.get(name, "\0") in reason:
+                gaps += 1
+                print(f"GAP   {name} ({reason})")
+                continue
+            failures += 1
             print(f"FAIL  {name} ({kind}: {reason})")
             continue
         native_code, native_text = native_outcome(path)
         if (result["code"], result["text"]) == (native_code, native_text):
             passed += 1
             print(f"PASS  {name}")
+            if name in KNOWN_GAPS:
+                failures += 1
+                print(f"      this now passes — delete it from KNOWN_GAPS")
+        elif KNOWN_GAPS.get(name, "\0") in result["text"]:
+            gaps += 1
+            print(f"GAP   {name} ({result['text'].strip()})")
         else:
             failures += 1
             print(f"FAIL  {name}")
             print(f"      native: code={native_code} text={show(native_text)}")
             print(f"      wasm:   code={result['code']} text={show(result['text'])}")
 
-    print(f"\n{passed} passed, {fallbacks} fallback, {failures} failed")
+    print(f"\n{passed} passed, {gaps} known gaps, {fallbacks} fallback, {failures} failed")
     sys.exit(1 if failures else 0)
 
 

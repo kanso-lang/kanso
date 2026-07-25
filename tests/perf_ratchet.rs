@@ -162,3 +162,55 @@ fn a_guard_compiles_to_a_branch() {
         "a guard stopped compiling to a conditional branch: {body}"
     );
 }
+
+/// A release build links a cached runtime object rather than recompiling
+/// runtime.c, which is worth 200ms of every build's 360. The invariant is
+/// cheap to state and does not flake the way a stopwatch would: run two
+/// builds and the cached object must not be rewritten between them.
+#[test]
+fn a_release_build_reuses_the_cached_runtime() {
+    let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/hello.kso");
+    let work = std::env::temp_dir().join("kanso-runtime-cache-test");
+    std::fs::create_dir_all(&work).expect("temp work dir");
+    let build = || {
+        let done = std::process::Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .args(["build", source.to_str().expect("path is utf-8"), "--release"])
+            .current_dir(&work)
+            .output()
+            .expect("kanso build runs");
+        assert!(done.status.success(), "{}", String::from_utf8_lossy(&done.stderr));
+    };
+    let cached = || {
+        let dir = std::fs::read_dir(std::env::temp_dir()).expect("temp dir lists");
+        let mut found: Vec<_> = dir
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .filter(|n| n.starts_with("kanso_runtime_release_") && n.ends_with(".o"))
+            .collect();
+        found.sort();
+        found
+    };
+
+    build();
+    let objects = cached();
+    let stamps: Vec<_> = objects
+        .iter()
+        .map(|name| {
+            std::fs::metadata(std::env::temp_dir().join(name))
+                .and_then(|m| m.modified())
+                .expect("cached object has a timestamp")
+        })
+        .collect();
+    build();
+
+    assert!(!objects.is_empty(), "the release build compiled no cached runtime object");
+    let after: Vec<_> = objects
+        .iter()
+        .map(|name| {
+            std::fs::metadata(std::env::temp_dir().join(name))
+                .and_then(|m| m.modified())
+                .expect("cached object survives the second build")
+        })
+        .collect();
+    assert_eq!(stamps, after, "the second release build recompiled the runtime");
+}

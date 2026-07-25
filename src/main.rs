@@ -350,8 +350,7 @@ fn build(program: &ast::Program, file: &str, release: bool) -> ExitCode {
 /// Release: whole-program LTO across the program and a freshly compiled
 /// runtime — the slowest build and the fastest binary.
 fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
-    let runtime_path = std::env::temp_dir().join("kanso_runtime.c");
-    std::fs::write(&runtime_path, include_str!("runtime.c"))?;
+    let runtime_obj = cached_runtime_object("release", &["-O3", "-flto"])?;
     std::process::Command::new("clang")
         .arg("-O3")
         .arg("-flto")
@@ -360,7 +359,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
         .arg("-o")
         .arg(stem)
         .arg(ll_path)
-        .arg(&runtime_path)
+        .arg(&runtime_obj)
         .arg("-lm")
         .status()
 }
@@ -369,7 +368,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
 /// cached optimized runtime object, so the runtime's cost is paid once per
 /// runtime version, not per build.
 fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitStatus> {
-    let runtime_obj = cached_runtime_object()?;
+    let runtime_obj = cached_runtime_object("dev", &["-O2"])?;
     std::process::Command::new("clang")
         .arg("-O0")
         .arg("-Wno-override-module")
@@ -381,21 +380,23 @@ fn dev_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::ExitSta
         .status()
 }
 
-fn cached_runtime_object() -> std::io::Result<std::path::PathBuf> {
+fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::path::PathBuf> {
     use std::hash::{Hash, Hasher};
     let source = include_str!("runtime.c");
     let mut hasher = std::hash::DefaultHasher::new();
     source.hash(&mut hasher);
+    profile.hash(&mut hasher);
     let key = hasher.finish();
-    let object = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}.o"));
+    let object = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.o"));
     if object.exists() {
         return Ok(object);
     }
-    let c_path = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}.c"));
+    let c_path = std::env::temp_dir().join(format!("kanso_runtime_{profile}_{key:016x}.c"));
     std::fs::write(&c_path, source)?;
-    let staging = std::env::temp_dir().join(format!("kanso_runtime_{key:016x}_{}.o", std::process::id()));
+    let staging = std::env::temp_dir()
+        .join(format!("kanso_runtime_{profile}_{key:016x}_{}.o", std::process::id()));
     let status = std::process::Command::new("clang")
-        .arg("-O2")
+        .args(opt)
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-c")
         .arg(&c_path)

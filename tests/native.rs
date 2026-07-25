@@ -11,9 +11,12 @@ fn native_builds_match_interpreter_output() {
     std::fs::create_dir_all(&work).expect("temp work dir");
     for name in SLICE_ONE {
         let program = manifest.join("examples").join(format!("{name}.kso"));
+        // `run` compiles native; the oracle needs --interp, or this compares
+        // the native engine against itself and proves nothing.
         let interpreted = Command::new(env!("CARGO_BIN_EXE_kanso"))
             .arg("run")
             .arg(&program)
+            .arg("--interp")
             .output()
             .expect("interpreter runs");
         assert!(interpreted.status.success(), "interpreter failed on {name}");
