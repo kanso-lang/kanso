@@ -2205,3 +2205,35 @@ The shape of the remaining work follows from that. There is no separate
 "what does none do in arithmetic" mechanism to build; there is one rule,
 which is that a value arriving where no arm accepts it is a compile error.
 Exhaustiveness is that rule, and it covers operators for free.
+
+## 2026-07-24 — none is demoted: err alone is the failure
+
+The predicates now read err and nothing else. `is_failure` matches ErrV;
+`k_not_failure` tests K_ERR. none stops propagating and becomes what the
+gavel says it is, a value.
+
+The measurement that preceded the change is the point of the entry. Flipping
+both predicates and running the corpus changed exactly one golden out of
+forty-four examples, and it changed to the right answer: a construction that
+used to collapse to `<none>` now builds, so `build`'s `set` writes to a real
+record instead of silently doing nothing. That was the footgun papered over
+when the set-on-failure divergence was repaired, and demotion removes its
+cause rather than its symptom.
+
+Two fears turned out to be unfounded, both stated earlier in this log and
+both wrong.
+
+Demotion does not trade propagation for silent nil. An unhandled none
+reaching an operation already errors loudly and identically on both engines
+— `none + 1` and `xs[9] + 1` both report that `+` is not defined for these
+values. That is Clay's dispatch gavel already holding at runtime: the
+operator finds no arm and says so. Exhaustiveness moves that report from run
+time to compile time, which is an improvement rather than a prerequisite.
+
+Demotion also costs nothing. The decode cost golden is byte-identical, so
+removing a tag test from the hottest predicate in the runtime is free.
+
+Goldens: none_is_a_value pins a record field holding a none through a build
+block; none_no_arm pins the no-arm operator error; build_set_err keeps the
+failure-propagation case with an err, which is still a failure, and moves to
+the runtime corpus because an unhandled err exits one.

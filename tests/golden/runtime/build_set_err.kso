@@ -4,7 +4,7 @@ type node
 
 pub play =
   collapsed = build
-    a = node 1 none
+    a = node 1 (err "no id")
     b = node 2 0
     set a peer b
     a

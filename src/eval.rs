@@ -1773,7 +1773,7 @@ fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
 }
 
 pub fn is_failure(value: &Value) -> bool {
-    matches!(value, Value::ErrV(_) | Value::NoneV)
+    matches!(value, Value::ErrV(_))
 }
 
 thread_local! {
