@@ -169,6 +169,7 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
 }
 declare i64 @k_truthy_bad()
 
+declare %KValue @k_caf_freeze(%KValue)
 declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
@@ -406,6 +407,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         body: String::new(),
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
+        caf_cells: Vec::new(),
+        caf_fills: Vec::new(),
         demand: crate::demand::analyze(program),
         thunk_sites: Vec::new(),
     };
@@ -431,6 +434,10 @@ struct Backend<'a> {
     body: String,
     lift_counter: usize,
     fn_value_wrappers: Vec<(String, usize)>,
+    /// One cache cell per frozen constant, emitted as globals at the end.
+    caf_cells: Vec<String>,
+    /// (cell, builder) pairs filled by @k_caf_init before main runs.
+    caf_fills: Vec<(String, String)>,
     demand: crate::demand::DemandInfo,
     /// (site evaluator symbol, captured-arg count), indexed by site id.
     thunk_sites: Vec<(String, usize)>,
@@ -933,11 +940,22 @@ impl<'a> Backend<'a> {
         // Sites are emitted as cases as lazy binds are compiled; a program
         // with no lazy sites still defines the symbol so every binary links.
         self.emit_thunk_dispatcher();
+        let mut fills = String::new();
+        for (i, (cell, build)) in self.caf_fills.iter().enumerate() {
+            let _ = writeln!(fills, "  %v{i} = call tailcc %KValue @{build}()");
+            let _ = writeln!(fills, "  %f{i} = call %KValue @k_caf_freeze(%KValue %v{i})");
+            let _ = writeln!(fills, "  store %KValue %f{i}, ptr @{cell}");
+        }
+        let _ = writeln!(self.body, "define void @k_caf_init() {{\nentry:\n{fills}  ret void\n}}\n");
         self.body.push_str(
             "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
              @d_main_0()\n  ret %KValue %r\n}\n",
         );
         let mut out = String::from(DECLARES);
+        for cell in &self.caf_cells {
+            let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
+            let _ = writeln!(out, "@{cell}_ready = internal global i8 0");
+        }
         for (name, bytes) in &self.strings {
             let _ = writeln!(
                 out,
@@ -1289,6 +1307,58 @@ impl<'a> Backend<'a> {
     }
 
     fn emit_dispatcher(&mut self, name: &str, arity: usize, decls: &[&FnDecl]) -> Result<(), String> {
+        if arity == 0 && decls.len() == 1 && Self::is_constant_body(decls[0]) {
+            return self.emit_frozen_constant(name, decls);
+        }
+        self.emit_dispatcher_as(&dsym(name, arity), name, arity, decls)
+    }
+
+    /// A zero-argument definition whose body is a literal is a constant, so it
+    /// is worth building once. The body emits unchanged under a build symbol
+    /// and the real symbol becomes a cache in front of it.
+    fn is_constant_body(decl: &FnDecl) -> bool {
+        fn literal(expr: &Expr) -> bool {
+            match expr {
+                Expr::Int(..) | Expr::Float(..) => true,
+                Expr::Str(parts, _) => parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))),
+                Expr::List(items, _) => items.iter().all(literal),
+                Expr::MapLit(pairs, _) => pairs.iter().all(|(k, v)| literal(k) && literal(v)),
+                _ => false,
+            }
+        }
+        match decl.body.as_slice() {
+            [Stmt::Expr(expr)] => literal(expr),
+            _ => false,
+        }
+    }
+
+    fn emit_frozen_constant(&mut self, name: &str, decls: &[&FnDecl]) -> Result<(), String> {
+        let sym = dsym(name, 0);
+        // a module-qualified name is quoted, so the suffix goes inside the quotes
+        let build = match sym.strip_suffix('"') {
+            Some(head) => format!("{head}_build\""),
+            None => format!("{sym}_build"),
+        };
+        self.emit_dispatcher_as(&build, name, 0, decls)?;
+        let cell = format!("caf_{}", self.caf_cells.len());
+        self.caf_cells.push(cell.clone());
+        // A bare load: no branch, no store. A store on this path is an
+        // alias-analysis barrier, and it sits inside the hottest dispatcher.
+        let _ = writeln!(
+            self.body,
+            "define tailcc %KValue @{sym}() {{\nentry:\n  %c = load %KValue, ptr @{cell}\n  ret %KValue %c\n}}\n"
+        );
+        self.caf_fills.push((cell.clone(), build));
+        Ok(())
+    }
+
+    fn emit_dispatcher_as(
+        &mut self,
+        sym_hdr: &str,
+        name: &str,
+        arity: usize,
+        decls: &[&FnDecl],
+    ) -> Result<(), String> {
         if let Some(disc) = Self::switch_shape(decls) {
             return self.emit_switch_dispatcher(name, arity, decls, disc);
         }
@@ -1298,7 +1368,6 @@ impl<'a> Backend<'a> {
         f.ret_ty = ret.to_string();
         f.group = name.to_string();
         f.arity = arity;
-        let sym_hdr = dsym(name, arity);
         let header = format!("define tailcc {ret} @{sym_hdr}({}) {{", params.join(", "));
         let (hop_name, _) = self.intern(&format!("{name}\0"));
         f.start_block("entry");
