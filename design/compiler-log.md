@@ -3299,3 +3299,59 @@ STILL OWED BEFORE BUILDING.
   - ch05 teaches the dot as `x . f is f x` and never mentions repositioning;
     the lambda is what that passage should show today and holes are what
     replace it.
+
+## 2026-07-25 — GAVEL (syntax): `&f` curries; `_` is a pipe-position marker only
+
+Clay's ruling, and it supersedes the hole proposal recorded above it, which was
+mine and which overloaded one glyph with two jobs.
+
+CURRYING IS `&`.
+
+    &add          add as a value
+    &add 2        add with its first argument supplied, awaiting the rest
+
+`&` is legal as long as some overload accepts the supplied arguments as a
+proper prefix. The arity is deliberately NOT named in the syntax, and that is
+the improvement over holes: the only thing overloading made undecidable was
+whether an application had ended, and `&` answers exactly that. Which arity
+was always decidable — it resolves when the remaining arguments arrive, since
+a partial accumulates rather than committing.
+
+The glyph is free: `&add` is `error[syntax]: expected an expression` today.
+
+`&` AND `()` ARE COMPLEMENTS, which closes a thread from earlier today. `&`
+supplies arguments without running; `()` runs without supplying. So
+`roll_7 = &roll 7` against a one-argument `roll` is the fully-applied-but-unrun
+value Clay asked for, and `roll_7()` is how it runs — the two halves of the
+nullary gavel meeting the currying one.
+
+PIPING IS UNCHANGED, AND `_` SERVES ONLY IT.
+
+    x . f          f x
+    x . f a b      f x a b     piped value first, written arguments after
+    x . f a _      f a x       `_` moves the piped value to that position
+
+Verified against the current engine rather than assumed: `7 . add 2` with
+`fn add a b -> a - b` evaluates to 5, so the piped value is already first and
+written arguments already follow. The rule adds nothing to the dot; it only
+names where `_` may appear.
+
+`_` therefore has no role in currying. In parameter position it discards; in
+an argument list it marks where the piped value lands. Two positions, two
+jobs, no overlap — which is cleaner than the reading I proposed, where a
+single glyph carried both partial application and repositioning.
+
+WITHDRAWN: the hole-based currying syntax recorded in the entry above
+(`roll 7 _`, `roll 7 _ _`, arity named by hole count). Holes survive only as
+the pipe-position marker.
+
+STILL OWED BEFORE BUILDING.
+
+  - `&f` applied to arguments no overload accepts as a prefix is an error, and
+    it needs a diagnostic that names the arities that do exist.
+  - Every `&` is a closure the strictness analysis has to see through, or the
+    faster-than-Rust bar pays a thunk per partial.
+  - `()` remains unbuilt and unparsed; the currying half depends on it for the
+    fully-applied-but-unrun case.
+  - ch05 teaches the dot as `x . f is f x` and mentions neither trailing
+    arguments nor `_`.
