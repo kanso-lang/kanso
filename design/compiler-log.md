@@ -2578,3 +2578,31 @@ arms.
 
 Two tests came out of the investigation and stay: encoding an empty list and
 an empty map. Both pass, which is what proved the guards hold.
+
+## 2026-07-24 — the strict index says what the guard already knew
+
+Four guarded lookups in json's encoder became strict, and the gated count
+falls from five to one. No arms were written and no checker was taught
+anything.
+
+    if (length xs == 0) (text/append acc "[]") (encode_list acc xs)
+    ...
+    encode_onto (text/append acc 91) xs[1]!
+
+The guard already proves the index is in bounds, so the lenient form was
+claiming a miss was possible when the author knew it was not. `!` states
+that knowledge, removes the none from what flows onward, and turns a broken
+invariant into an err at the exact index rather than a none wandering into
+an encoder.
+
+This is the rule Clay gave when the campaign started: either the none case
+needs handling, or it does not and the strict form lets an err bubble. The
+five sites left after the arms were all the second kind. Reading them as a
+checker deficiency was the wrong diagnosis — flow sensitivity would have
+been machinery bought to tolerate an under-specified spelling, when the
+language already had the specific one.
+
+Both cost goldens are unchanged and the decode checksum is intact, so the
+strict form costs nothing on the benchmark path.
+
+One report remains, on text/utf8 in the escape path. It wants the same look.
