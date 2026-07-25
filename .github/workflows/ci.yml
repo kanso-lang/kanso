@@ -139,14 +139,20 @@ jobs:
         run: |
           git config user.name "kanso-ci"
           git config user.email "ci@kanso-lang.dev"
-          git fetch origin perf-history:perf-history 2>/dev/null || git checkout --orphan perf-history
-          git checkout perf-history
-          git rm -rq --cached . 2>/dev/null || true
+          if git fetch origin perf-history 2>/dev/null; then
+            git checkout -B perf-history origin/perf-history
+          else
+            # first run: an orphan has no commit yet, so it cannot be checked
+            # out again — unstage the tree it inherits and start the file here
+            git checkout --orphan perf-history
+            git rm -rq --cached . 2>/dev/null || true
+            rm -f history.jsonl
+          fi
           [ -f history.jsonl ] || : > history.jsonl
           cat /tmp/record.json >> history.jsonl
           # keep the file bounded; the chart shows a trend, not an archive
           tail -n 500 history.jsonl > history.tmp && mv history.tmp history.jsonl
-          git add history.jsonl
+          git add -f history.jsonl
           git commit -m "perf: $(python3 -c "import json;print(json.load(open('/tmp/record.json'))['commit'])")" || exit 0
           git push origin perf-history
 
