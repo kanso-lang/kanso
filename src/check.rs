@@ -99,7 +99,7 @@ fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
         }
     };
 
-    let walk = |e: &Expr, diags: &mut Vec<Diagnostic>| {
+    let walk = |e: &Expr, diags: &mut Vec<Diagnostic>, owner: &str| {
         let Expr::App { head, args, piped: false, .. } = e else { return };
         let Expr::Ident(name, _) = head.as_ref() else { return };
         if !returns.contains_key(&(name.as_str(), args.len())) {
@@ -112,11 +112,14 @@ fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
             if *handles.get(&(name.as_str(), args.len(), pos)).unwrap_or(&false) {
                 continue;
             }
+            // an absolute path built from the binary's location tells a
+            // reader nothing; the module name is what they searched for
+            let short = owner.rsplit_once("/lib/").map(|(_, m)| m).unwrap_or(owner);
             diags.push(Diagnostic::new(
                 "exhaustive",
                 format!(
                     "this can be a none and `{name}` has no arm for it — resolve it \
-                     here, or give `{name}` a `none` arm"
+                     here, or give `{name}` a `none` arm (in {short})"
                 ),
                 arg.span(),
             ));
@@ -130,7 +133,7 @@ fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
             };
             let mut stack = vec![e];
             while let Some(cur) = stack.pop() {
-                walk(cur, diags);
+                walk(cur, diags, &decl.file);
                 stack.extend(crate::expr_children(cur));
             }
         }
