@@ -267,6 +267,13 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                 _ => BOOL | fails,
             }
         }
+        Expr::Guard { cond, early, rest, .. } => {
+            let c = eval_expr(ctx, cond, env);
+            let mut benv = env.clone();
+            let taken = eval_expr(ctx, early, env);
+            let not_taken = eval_body(ctx, rest, &mut benv);
+            (c & FAIL) | taken | not_taken
+        }
         // the join yields a description, a lone propagated failure, or an
         // accumulated err merged from both sides
         Expr::Join { lhs, rhs, .. } => {
@@ -441,6 +448,13 @@ fn desc_yield(e: &Expr) -> Set {
         Expr::Seq(_, b, _) => desc_yield(b),
         // a join yields nothing a continuation would see
         Expr::Join { .. } => 0,
+        Expr::Guard { early, rest, .. } => {
+            let rest_yield = match rest.last() {
+                Some(Stmt::Expr(e)) => desc_yield(e),
+                _ => TOP & !FAIL,
+            };
+            desc_yield(early) | rest_yield
+        }
         _ => TOP & !FAIL,
     }
 }

@@ -1,0 +1,4 @@
+fn half n
+  return n / 2
+
+pub play = print (half 42)

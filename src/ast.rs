@@ -25,6 +25,9 @@ pub enum Expr {
     Upcast { expr: Box<Expr>, ty: String, span: Span },
     /// The last expression freezes to an ordinary immutable value.
     Build(Vec<Stmt>, Span),
+    /// Everything below a fired guard is folded into the untaken branch,
+    /// so first-return-wins holds by unreachability.
+    Guard { cond: Box<Expr>, early: Box<Expr>, rest: Vec<Stmt>, span: Span },
 }
 
 #[derive(Clone, Debug)]
@@ -51,7 +54,8 @@ impl Expr {
             | Expr::Join { span: s, .. }
             | Expr::Block(_, s)
             | Expr::Upcast { span: s, .. }
-            | Expr::Build(_, s) => *s,
+            | Expr::Build(_, s)
+            | Expr::Guard { span: s, .. } => *s,
         }
     }
 }

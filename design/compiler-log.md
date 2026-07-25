@@ -2665,6 +2665,10 @@ follow arms rather than groups.
 
 Gavel BB's branch now builds against main after a rebase across a hundred
 and ninety-four commits, and the feature works:
+## 2026-07-24 — return guards land: gavel BB is in the language
+
+`return X if C` works on both engines, build blocks still work, and the
+suite is clean. The nine-day-old branch is merged rather than stranded.
 
     fn describe n
       return "below zero" if (n < 0)
@@ -2692,3 +2696,26 @@ That is a parser-level design question — where a guard may sit relative to a
 build block's statements, and which of the two bodies owns the tail — rather
 than an integration chore. Recording it here so the branch is picked up with
 the question already framed.
+The conflict was real and worth naming. The branch replaced parse_body with
+a version that splits a body into a leading run of bindings and returns,
+then an effect tail — written before build blocks existed. Its lead was
+parsed line by line, so a construct's indented children were orphaned: a
+build block's `[a b]` came back as a value nobody used, and an `if` with an
+`else` lost its second branch.
+
+The repair is that the lead groups exactly as the tail does. One helper walks
+the leading lines, gives a header its indented children, follows an `else`
+sitting at the header's own indent, and falls back to a flat statement for a
+chain-led continuation so the real diagnostic still stands alone. The
+boundary computation had to learn the same thing: skip a construct's
+children, and skip the `else` block that belongs to it.
+
+Two cleanups came out of the drift and stay. eval_stmts is now the one place
+a statement list is evaluated in expression position, shared by blocks,
+build blocks, and the tail a fired guard skips. emit_fn_body no longer takes
+a declaration it only read a name and arity from, both of which FnEmit
+already carries.
+
+The browser reports one fallback: guards are not in the wasm backend, which
+the differential law permits so long as the rejection is clear. Both cost
+goldens are unchanged and the decode checksum is intact.

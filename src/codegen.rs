@@ -1229,7 +1229,7 @@ impl<'a> Backend<'a> {
                     f.bind(pname, &format!("%x{i}"));
                 }
             }
-            self.emit_fn_body(&mut f, decl, &decl.body)?;
+            self.emit_fn_body(&mut f, &decl.body)?;
         }
         let _ = writeln!(self.body, "{header}
 {}}}
@@ -1333,7 +1333,7 @@ impl<'a> Backend<'a> {
                     }
                 }
             }
-            self.emit_fn_body(&mut f, decl, &decl.body)?;
+            self.emit_fn_body(&mut f, &decl.body)?;
             f.start_block(&fail);
         }
         for i in 0..arity {
@@ -1749,13 +1749,13 @@ impl<'a> Backend<'a> {
             .ok_or_else(|| format!("native backend: unknown type `{ty}`"))
     }
 
-    fn emit_fn_body(&mut self, f: &mut FnEmit, decl: &FnDecl, body: &[Stmt]) -> Result<(), String> {
+    fn emit_fn_body(&mut self, f: &mut FnEmit, body: &[Stmt]) -> Result<(), String> {
         let last = body.len() - 1;
         for (i, stmt) in body.iter().enumerate() {
             match stmt {
                 Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
-                    if self.demand.is_lazy_bind(&decl.name, decl.params.len(), i)
+                    if self.demand.is_lazy_bind(&f.group.clone(), f.arity, i)
                         && self.thunkable(f, expr) =>
                 {
                     let mut idents = Vec::new();
@@ -1915,6 +1915,9 @@ impl<'a> Backend<'a> {
                     }
                 }
                 Ok(value)
+            }
+            Expr::Guard { .. } => {
+                Err("native backend: a return guard sits only in tail position".to_string())
             }
             Expr::Int(n, _) => Ok(format!("{{ i64 0, i64 {n} }}")),
             Expr::Float(x, _) => {
@@ -2210,6 +2213,28 @@ impl<'a> Backend<'a> {
     /// Emit an expression in tail position: direct calls to kanso functions
     /// become guaranteed tail calls, and an if's branches stay tails.
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
+        if let Expr::Guard { cond, early, rest, .. } = expr {
+            let c = self.emit_expr(f, cond)?;
+            let ok = inline_not_failure(f, &c);
+            let check = f.label();
+            let bail = f.label();
+            f.line(&format!("br i1 {ok}, label %{check}, label %{bail}"));
+            f.start_block(&bail);
+            self.emit_ret(f, &c);
+            f.start_block(&check);
+            let tv = f.tmp();
+            f.line(&format!("{tv} = call i64 @k_truthy(%KValue {c})"));
+            let tb = f.tmp();
+            f.line(&format!("{tb} = icmp ne i64 {tv}, 0"));
+            let early_label = f.label();
+            let rest_label = f.label();
+            f.line(&format!("br i1 {tb}, label %{early_label}, label %{rest_label}"));
+            f.start_block(&early_label);
+            self.emit_tail(f, early)?;
+            f.start_block(&rest_label);
+            self.emit_fn_body(f, rest)?;
+            return Ok(());
+        }
         if let Expr::App { head, args, piped: false, .. } = expr {
             if let Expr::Ident(name, _) = head.as_ref() {
                 let bare = name.strip_prefix("builtin_").unwrap_or(name);
@@ -3185,6 +3210,17 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             collect_idents(lhs, out);
             collect_idents(rhs, out);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            collect_idents(cond, out);
+            collect_idents(early, out);
+            for stmt in rest {
+                match stmt {
+                    Stmt::Bind { expr, .. }
+                    | Stmt::Expr(expr)
+                    | Stmt::Set { value: expr, .. } => collect_idents(expr, out),
+                }
+            }
         }
     }
 }

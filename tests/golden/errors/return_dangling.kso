@@ -1,0 +1,4 @@
+fn check n
+  return "small" if (n < 10)
+
+pub play = print (check 3)

@@ -23,6 +23,7 @@ pub enum Tok {
     Op(&'static str),
     Underscore,
     KwFn,
+    KwReturn,
     KwType,
     KwPub,
     KwImport,
@@ -514,6 +515,7 @@ impl Scanner {
         Ok(match word.as_str() {
             "_" => Tok::Underscore,
             "fn" => Tok::KwFn,
+            "return" => Tok::KwReturn,
             "type" => Tok::KwType,
             "pub" => Tok::KwPub,
             "import" => Tok::KwImport,

@@ -1,0 +1,5 @@
+fn pick n
+  return if (n < 0) "neg" "pos" if (n != 0)
+  "zero"
+
+pub play = print (pick 3)

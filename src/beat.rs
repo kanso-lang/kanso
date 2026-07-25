@@ -777,6 +777,11 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
             expr_allocates(lhs, fn_names, allocating, seed_pass)
                 || expr_allocates(rhs, fn_names, allocating, seed_pass)
         }
+        Expr::Guard { cond, early, rest, .. } => {
+            expr_allocates(cond, fn_names, allocating, seed_pass)
+                || expr_allocates(early, fn_names, allocating, seed_pass)
+                || rest.iter().any(|s| expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass))
+        }
         Expr::Seq(a, b, _) => {
             expr_allocates(a, fn_names, allocating, seed_pass)
                 || expr_allocates(b, fn_names, allocating, seed_pass)
@@ -795,7 +800,20 @@ fn tail_exprs(last: Option<&Stmt>) -> Vec<&Expr> {
     out
 }
 
+fn guard_stmt_expr(s: &Stmt) -> &Expr {
+    match s {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+    }
+}
+
 fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
+    if let Expr::Guard { early, rest, .. } = e {
+        expand_tail(early, out);
+        if let Some(Stmt::Expr(last)) = rest.last() {
+            expand_tail(last, out);
+        }
+        return;
+    }
     if let Expr::App { head, args, piped, .. } = e {
         if !piped && matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 {
             expand_tail(&args[1], out);
@@ -895,6 +913,11 @@ fn value_use(e: &Expr, name: &str) -> bool {
         Expr::Index { base, index, .. } => value_use(base, name) || value_use(index, name),
         Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
             value_use(lhs, name) || value_use(rhs, name)
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            value_use(cond, name)
+                || value_use(early, name)
+                || rest.iter().any(|s| value_use(guard_stmt_expr(s), name))
         }
         Expr::Seq(a, b, _) => value_use(a, name) || value_use(b, name),
         Expr::Lambda { body, .. } => value_use(body, name),

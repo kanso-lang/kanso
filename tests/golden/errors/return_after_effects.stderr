@@ -1,0 +1,4 @@
+error[formatting]: a `return` sits with the bindings, before the effect chain
+  --> return_after_effects.kso:3:3
+   3 |   return "closed" if (1 < 2)
+         ^
