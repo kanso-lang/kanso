@@ -59,6 +59,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # book_check runs target/release/kanso directly
+      - run: cargo build --release
       - run: sh scripts/book_check.sh
 
   cost-goldens:
