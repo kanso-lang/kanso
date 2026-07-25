@@ -2606,3 +2606,30 @@ Both cost goldens are unchanged and the decode checksum is intact, so the
 strict form costs nothing on the benchmark path.
 
 One report remains, on text/utf8 in the escape path. It wants the same look.
+
+## 2026-07-24 — the enumerable's guarded lookups say so too
+
+The three length-guarded lookups in list take the strict index, matching
+json. fold_flat's element read, and the cursor and cycled arms of next, are
+all dominated by a length test, so the lenient spelling was claiming a miss
+the code had already ruled out.
+
+The cursor arm needed the same shape its cycled sibling already had — the
+successor bound to a local — because the added `!` pushed the line past
+eighty characters. The two arms now read alike, which they should have from
+the start.
+
+A second false zero appeared here and is worth recording next to the first.
+The count read zero while the over-long line was in place, because the file
+no longer parsed and a checker that never runs reports nothing. The suite
+caught it. That is twice in one session that a zero meant a broken build
+rather than a clean corpus, from two different causes — wrong arm order, and
+a line one character too long.
+
+One report survives, and it is not a guard artifact. escape_onto's chain
+bottoms out at text/find2_below, a builtin whose not-found answer is a none,
+so the none is real and reaches text/utf8 through escape_clean. That one
+wants a decision about what find2_below returns rather than a change of
+spelling.
+
+Both cost goldens unchanged, decode checksum intact.
