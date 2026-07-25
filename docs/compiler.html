@@ -691,6 +691,7 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
 .perf-panel td.n { text-align: right; }
 .perf-panel .delta-up { color: #c0392b; }
 .perf-panel .delta-down { color: var(--accent); }
+.perf-panel .perf-flat { color: var(--muted); font-size: 0.82rem; }
 .perf-panel .perf-when { color: var(--muted); font-size: 0.82rem; margin-top: 0.8rem; }
 .perf-spark { display: block; height: 30px; width: 110px; }
 </style>
@@ -720,20 +721,29 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
   const prev = rows.length > 1 ? rows[rows.length - 2] : null;
   const spark = (key) => {
     const series = rows.slice(-40).map((r) => r[key]).filter((v) => typeof v === 'number');
-    if (series.length < 2) return '';
-    const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo || 1;
+    if (series.length < 2) return '<span class="perf-flat">one commit so far</span>';
+    const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo;
+    // a run that never moved has no shape to show; draw it down the middle
+    // rather than pinned to the floor, where it reads as a missing chart
+    const y = (v) => (span === 0 ? 15 : 28 - ((v - lo) / span) * 26);
     const points = series
-      .map((v, i) => `${(i / (series.length - 1)) * 108 + 1},${28 - ((v - lo) / span) * 26}`)
+      .map((v, i) => `${(i / (series.length - 1)) * 108 + 1},${y(v)}`)
       .join(' ');
     return `<svg class="perf-spark" viewBox="0 0 110 30" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
   };
   const cells = WATCHED.filter(([key]) => typeof last[key] === 'number').map(([key, label]) => {
     const now = last[key];
-    let delta = '';
-    if (prev && typeof prev[key] === 'number' && prev[key] !== now) {
-      const up = now > prev[key];
-      const pct = prev[key] === 0 ? '' : ` (${up ? '+' : ''}${(((now - prev[key]) / prev[key]) * 100).toFixed(1)}%)`;
-      delta = `<span class="${up ? 'delta-up' : 'delta-down'}">${up ? '\u25b2' : '\u25bc'}${pct}</span>`;
+    let delta = '<span class="perf-flat">first record</span>';
+    if (prev && typeof prev[key] === 'number') {
+      if (prev[key] === now) {
+        // an unchanged counter is the normal case and the point of the panel;
+        // say so, or a blank cell reads as a number nobody measured
+        delta = '<span class="perf-flat">unchanged</span>';
+      } else {
+        const up = now > prev[key];
+        const pct = prev[key] === 0 ? '' : ` (${up ? '+' : ''}${(((now - prev[key]) / prev[key]) * 100).toFixed(1)}%)`;
+        delta = `<span class="${up ? 'delta-up' : 'delta-down'}">${up ? '\u25b2' : '\u25bc'}${pct}</span>`;
+      }
     }
     return `<tr><td>${label}</td><td class="n">${now.toLocaleString()}</td><td>${delta}</td><td>${spark(key)}</td></tr>`;
   });

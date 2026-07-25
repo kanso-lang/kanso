@@ -3126,3 +3126,16 @@ edge.
 A brand guide lands at /brand.html, linked in the footer: the ten colors with
 names, the three faces at working sizes, and the reasoning — one accent spent
 deliberately, space as the material, nothing decorative that cannot be run.
+
+## 2026-07-25 — a counter that did not move should say so
+
+The published panel read "2 commits recorded" with an empty delta column and a
+sparkline nobody could see. Both were literal-minded rendering of the normal
+case: the delta was emitted only when a value changed, and a flat series
+normalized to the floor of the viewBox, where a 1.5px stroke sits on the edge
+and reads as absent.
+
+An unchanged counter is the whole point of the panel — these are the numbers a
+noisy runner cannot move — so it now says "unchanged" rather than nothing, and
+a flat run draws down the middle. Blank cells read as unmeasured, which is the
+opposite of what this vein is for.
