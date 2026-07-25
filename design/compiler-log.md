@@ -2099,3 +2099,38 @@ This is also the first machinery the rest of the campaign rests on. The
 prohibition on none in collections and the exhaustiveness rule both need a
 place where a value is compared against a declared type; this is that place,
 holding one case.
+
+## 2026-07-24 — none campaign, step 3: exhaustiveness measured before it is imposed
+
+The gavel says a function receiving a none must state its disposition, and
+no arm is a compile error. Two facts were needed before writing that check
+for real, and both are now in hand.
+
+The mechanism already exists. `fn shout none` parses and dispatches today —
+a none arm is an ordinary nullary pattern, and a program with one prints
+from that arm. Exhaustiveness is therefore about *requiring* the arm, not
+about inventing a way to write it.
+
+The migration is large. An env-gated checker (KANSO_EXHAUSTIVE) runs
+whole-program inference and flags any group whose parameter can receive a
+none with no arm for it. Across examples it reports 127, and lib/list
+reports 12:
+
+    fanout 12, fn_value 1, fn_value_multiarg 2, generators 14, imports 13,
+    json_failure_door 34, lists 12, next_protocol 13, ordering 14,
+    std_list 12
+
+json's failure door alone accounts for 34, which is unsurprising — a parser
+built on auto-propagation is exactly the code that receives failures
+everywhere without naming them.
+
+So imposing exhaustiveness is a migration measured in scores of arms across
+the stdlib, the examples, the book samples, and the three sibling repos, not
+a step that lands with a checker. The checker ships gated and off, because
+that is the instrument the migration needs: turn it on, fix a batch, watch
+the count fall, and turn it on for real when it reaches zero.
+
+One caveat on the number. Inference joins argument sets over all call sites,
+so a group called once with a none and elsewhere with a value is flagged
+even where a particular caller resolves it. The 127 is an upper bound on
+work and a lower bound on nothing.
