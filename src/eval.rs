@@ -237,6 +237,32 @@ type Score = Vec<u8>;
 
 type EvalResult = Result<Value, RuntimeError>;
 
+/// Calling a closure that lives in another engine's table, by handle.
+pub type ForeignCall = fn(u32, Vec<Value>) -> EvalResult;
+
+thread_local! {
+    /// The browser backend compiles closures into a wasm table the
+    /// interpreter cannot reach on its own. It registers the way back in
+    /// here, so a description carrying such a continuation runs on the same
+    /// scheduler as every other description instead of needing a second one.
+    static FOREIGN_CALL: std::cell::RefCell<Option<ForeignCall>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+pub fn set_foreign_call(call: ForeignCall) {
+    FOREIGN_CALL.with(|slot| *slot.borrow_mut() = Some(call));
+}
+
+fn foreign_call(handle: u32, args: Vec<Value>, span: Span) -> EvalResult {
+    match FOREIGN_CALL.with(|slot| *slot.borrow()) {
+        Some(call) => call(handle, args),
+        None => Err(RuntimeError {
+            message: "a compiled closure escaped the engine that owns it".to_string(),
+            span,
+        }),
+    }
+}
+
 pub trait Executor {
     fn print(&mut self, text: &str);
     fn args(&mut self) -> Vec<String>;
@@ -853,6 +879,7 @@ impl<'a> Interp<'a> {
         match callee {
             Value::FnRef(name) => self.call_named(&name, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
+            Value::TableFn(handle) => foreign_call(handle, args, span),
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
                 message: format!("`{}` is not callable", render(&other, false)),

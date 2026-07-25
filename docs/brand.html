@@ -1,0 +1,199 @@
+---
+layout: default
+title: "the brand guide—kanso"
+description: "the palette, the type, and the reasoning behind them: how kanso looks, and why a language about elimination is drawn the way it is."
+---
+<style>
+.swatch-grid {
+  display: grid;
+  gap: 1.1rem;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  margin: 2rem 0 3rem;
+}
+.swatch { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.swatch-chip { height: 6.5rem; }
+.swatch-body { padding: 0.85rem 1rem 1rem; }
+.swatch-name {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.swatch-hex {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.swatch-note { color: var(--muted); font-size: 0.86rem; margin: 0.5rem 0 0; }
+.type-specimen { border-top: 1px solid var(--line); margin: 2.5rem 0 0; padding-top: 1.6rem; }
+.type-meta {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.type-line { margin: 0.7rem 0 0; }
+.scale-row { align-items: baseline; display: flex; gap: 1.2rem; margin-top: 0.9rem; }
+.scale-size {
+  color: var(--muted);
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  width: 3.5rem;
+}
+.pair { display: grid; gap: 1.5rem; grid-template-columns: 1fr 1fr; margin: 2rem 0; }
+@media (max-width: 700px) { .pair { grid-template-columns: 1fr; } }
+.do-dont { border-left: 2px solid var(--line); padding-left: 1.1rem; }
+.do-dont h4 { font-family: var(--font-display); font-size: 0.95rem; margin: 0 0 0.5rem; }
+</style>
+
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">the brand guide</span>
+<h1>how kanso is drawn</h1>
+
+<p>a language about removing what does not carry meaning cannot be dressed in decoration. everything here follows from that: one accent, one idea per surface, and a great deal of paper left blank on purpose. the palette is small enough to memorize, which is the point — a reader should recognize a kanso page before they read a word of it.</p>
+
+<h2>the palette</h2>
+
+<p>ten colors, and only one of them raises its voice. the neutrals do the work; the orange is spent, never spread.</p>
+
+<div class="swatch-grid">
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#fcfbf7"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">rice paper</div>
+      <div class="swatch-hex">#fcfbf7</div>
+      <p class="swatch-note">the page. warm enough that it never reads as a screen default, close enough to white that nothing competes with it.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#17161b"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">sumi</div>
+      <div class="swatch-hex">#17161b</div>
+      <p class="swatch-note">ink, and never quite black. the violet under it keeps long passages from going harsh.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#f03a00"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">torii</div>
+      <div class="swatch-hex">#f03a00</div>
+      <p class="swatch-note">the one loud thing. a gate is a single mark you can see from across a valley, and it works because there is only one.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#c93000"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">torii, pressed</div>
+      <div class="swatch-hex">#c93000</div>
+      <p class="swatch-note">the accent under a cursor. darker, not brighter — the surface gives way rather than lighting up.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#6a6871"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">slate tea</div>
+      <div class="swatch-hex">#6a6871</div>
+      <p class="swatch-note">secondary text. present when looked for, silent otherwise.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#e7e4dc"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">shoji</div>
+      <div class="swatch-hex">#e7e4dc</div>
+      <p class="swatch-note">every rule and border. a screen divides a room without closing it.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#101014"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">lacquer</div>
+      <div class="swatch-hex">#101014</div>
+      <p class="swatch-note">the code panel. deeper than the ink, so a listing reads as an object set on the page rather than a hole in it.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#6ccfa3"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">matcha</div>
+      <div class="swatch-hex">#6ccfa3</div>
+      <p class="swatch-note">strings. the only cool color in the set, and it appears exclusively inside code.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#f0c674"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">persimmon</div>
+      <div class="swatch-hex">#f0c674</div>
+      <p class="swatch-note">numbers. warm, adjacent to the accent, never mistaken for it.</p>
+    </div>
+  </div>
+  <div class="swatch">
+    <div class="swatch-chip" style="background:#7faff7"></div>
+    <div class="swatch-body">
+      <div class="swatch-name">indigo dusk</div>
+      <div class="swatch-hex">#7faff7</div>
+      <p class="swatch-note">types. the coldest thing on the site, for the most abstract thing in the language.</p>
+    </div>
+  </div>
+</div>
+
+<p>the dark theme is not a second palette. it is the same one with the paper and the ink exchanged, and the accent lifted to <span class="swatch-hex">#ff5a2e</span> so it survives a dark ground at the same apparent weight.</p>
+
+<h2>the type</h2>
+
+<p>three faces, each with one job, and none of them chosen to be interesting.</p>
+
+<div class="type-specimen">
+  <div class="type-meta">space grotesk · display · headings and the brand</div>
+  <p class="type-line" style="font-family:var(--font-display);font-size:2.6rem;font-weight:700;letter-spacing:-0.03em;line-height:1.1;margin-top:0.6rem">simplicity through elimination</p>
+  <p class="swatch-note">a grotesque with the corners left slightly unfinished. it has personality without ornament, which is the whole brief — the letterforms are plain, but they are not neutral, and at large sizes the tension shows.</p>
+  <div class="scale-row"><span class="scale-size">64</span><span style="font-family:var(--font-display);font-size:4rem;font-weight:700;letter-spacing:-0.035em">簡素</span></div>
+  <div class="scale-row"><span class="scale-size">32</span><span style="font-family:var(--font-display);font-size:2rem;font-weight:700;letter-spacing:-0.02em">guardrails, not lifetimes</span></div>
+  <div class="scale-row"><span class="scale-size">18</span><span style="font-family:var(--font-display);font-size:1.125rem;font-weight:700">the founding principle</span></div>
+</div>
+
+<div class="type-specimen">
+  <div class="type-meta">inter · text · everything you actually read</div>
+  <p class="type-line" style="font-size:1.05rem;line-height:1.75">the reader is smart. the job is to explain the material to them, not to perform it. inter disappears at reading size, which is the highest compliment a text face can be paid, and it holds up in the long technical passages the compiler page is made of.</p>
+  <div class="scale-row"><span class="scale-size">17</span><span style="font-size:1.0625rem">a value is computed when it is demanded, or never.</span></div>
+  <div class="scale-row"><span class="scale-size">14</span><span style="font-size:0.875rem">a value is computed when it is demanded, or never.</span></div>
+  <div class="scale-row"><span class="scale-size">12</span><span style="font-size:0.75rem">a value is computed when it is demanded, or never.</span></div>
+</div>
+
+<div class="type-specimen">
+  <div class="type-meta">jetbrains mono · code · listings, counters, and every number</div>
+  <p class="type-line" style="font-family:var(--font-mono);font-size:0.9rem;line-height:1.7">fn greet name<br>&nbsp;&nbsp;"hello, {name}"</p>
+  <p class="swatch-note">chosen for the tall x-height and the unmistakable zero. every measured number on this site is set in it, which is a quiet promise: if it is in mono, somebody ran it.</p>
+</div>
+
+<h2>the reasoning</h2>
+
+<div class="pair">
+  <div class="do-dont">
+    <h4>space is the material</h4>
+    <p class="swatch-note">a luxury brand is recognized by what it leaves out; so is this one. when a section feels thin, the answer is more room around it, not more in it.</p>
+  </div>
+  <div class="do-dont">
+    <h4>one accent, spent deliberately</h4>
+    <p class="swatch-note">torii marks the single most important thing on a screen. two accents on one page means neither is the most important thing, and the reader has to decide — which is work you were supposed to do for them.</p>
+  </div>
+  <div class="do-dont">
+    <h4>the machinery stays behind the panel</h4>
+    <p class="swatch-note">kanso is cool, not intimidating. the compiler page exists for anyone who wants the internals; every other page should read as though the internals are handled.</p>
+  </div>
+  <div class="do-dont">
+    <h4>nothing decorative that cannot be run</h4>
+    <p class="swatch-note">the sample on the landing page is not a picture of code — it executes. an illustration that could have been a demonstration is a missed one.</p>
+  </div>
+</div>
+
+<p>the enso is the mark: a circle drawn in one stroke, left open. it is the oldest visual argument for this language's thesis — the gap is not an omission, it is the part that makes it a drawing rather than a shape.</p>
+
+</article>

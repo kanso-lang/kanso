@@ -65,7 +65,10 @@ PROBE = """
 
 LANDING = """
 window.PAGE_PROBE = async (settled) => {
-  for (let i = 0; i < 40 && !window.KansoEngine; i++) await new Promise(r => setTimeout(r, 100));
+  for (let i = 0; i < 60 && !window.KansoEngine; i++) await new Promise(r => setTimeout(r, 100));
+  // the panel loads the engine lazily, so wait for it rather than racing the
+  // click against a megabyte of wasm
+  await window.KansoEngine.ready();
   document.getElementById('hero-run').click();
   return {out: await settled('hero-output', t => t === 'running…')};
 };
