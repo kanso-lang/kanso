@@ -136,41 +136,41 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <span class="eyebrow">the compiler</span>
 <h1>guardrails, not lifetimes</h1>
 
-<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds per decode — 2026-07-25, on a desktop sitting at a load average near 50. the four run interleaved so they all face the same weather. each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. shorter is faster.</p>
+<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds of cpu per decode — 2026-07-25, on a desktop sitting at a load average near 50. the four run interleaved so they all face the same weather, and each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. it is cpu time rather than wall time because at this load a stopwatch swings by more than the gaps being measured — the same binary timed twice ran 87% apart. shorter is faster.</p>
 
 <table class="bench-table">
   <thead>
-    <tr><th>decoder</th><th class="bar-cell"></th><th class="num">ms/decode</th><th class="num">median</th><th class="num">peak mem</th></tr>
+    <tr><th>decoder</th><th class="bar-cell"></th><th class="num">ms/decode</th><th class="num">peak mem</th></tr>
   </thead>
   <tbody>
     <tr class="win">
       <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:46%"></span></span></td>
-      <td class="num">0.95</td><td class="num">0.98</td><td class="num">6.2 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:34%"></span></span></td>
+      <td class="num">1.00</td><td class="num">5.6 mb</td>
     </tr>
     <tr>
       <td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:47%"></span></span></td>
-      <td class="num">0.97</td><td class="num">1.03</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:39%"></span></span></td>
+      <td class="num">1.16</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>reasonably-written rust</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:55%"></span></span></td>
-      <td class="num">1.12</td><td class="num">1.16</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:47%"></span></span></td>
+      <td class="num">1.38</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>go encoding/json</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">2.05</td><td class="num">2.17</td><td class="num">10.5 mb</td>
+      <td class="num">2.96</td><td class="num">10.8 mb</td>
     </tr>
   </tbody>
 </table>
 
-<p>kanso is the top line by a hair. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. against <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—it is a dead heat: two percent apart here, and in a second sitting the same afternoon the order between them flipped. it holds that pace at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails by about fifteen percent; go takes better than twice as long with its collector working.</p>
+<p>kanso is the top line. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. against <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—it now spends fourteen percent less cpu per decode, at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails by a quarter; go takes close to three times as long with its collector working.</p>
 
-<p>a pure, annotation-free language level with hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
+<p>a pure, annotation-free language ahead of hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
 
-<p>and the json table is now the <em>older</em> of the page's two scoreboards. kanso is a lazy language—a value is computed when it's demanded, or never—and on workloads where demand is conditional, the second scoreboard (§07) shows the clear kanso form fifteen times ahead of rust as naturally written and within thirty percent of rust hand-restructured to skip the same work, with counters proving 95% of the work was never born. the strict-tier story below and the lazy story in §07 are two halves of one design.</p>
+<p>and the json table is now the <em>older</em> of the page's two scoreboards. kanso is a lazy language—a value is computed when it's demanded, or never—and on workloads where demand is conditional, the second scoreboard (§07) shows the clear kanso form fifteen times ahead of rust as naturally written and within forty percent of rust hand-restructured to skip the same work, with counters proving 95% of the work was never born. the strict-tier story below and the lazy story in §07 are two halves of one design.</p>
 
 <h2 id="idea"><span class="sec-num">01</span>constraints buy freedom</h2>
 
@@ -486,7 +486,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <h3>the prototype's receipts</h3>
 
-<p>the cell design ran as an instrumented prototype before any engine work, every allocation and free counted. across every workload: <strong>21.1 million cells allocated, exactly one live at exit</strong>—the deliberately leaked knot. on the shipped engine that workload—100k items, 5% used—runs <strong>19x</strong> faster than a strict build of the same program, and within 28% of the rust programmer who restructured the code by hand. a thunk costs about <strong>23 ns</strong> to build and force—the price the strictness analysis erases wherever demand is provable. and with the free list and defunctionalized cells, a 10-million-element infinite stream runs at <strong>10.9 ns per element with two calls to the allocator, total</strong>: the first cell's memory becomes the third's, the third's becomes the fifth's, forever.</p>
+<p>the cell design ran as an instrumented prototype before any engine work, every allocation and free counted. across every workload: <strong>21.1 million cells allocated, exactly one live at exit</strong>—the deliberately leaked knot. on the shipped engine that workload—100k items, 5% used—runs <strong>18x</strong> faster than a strict build of the same program, and within 38% of the rust programmer who restructured the code by hand. a thunk costs about <strong>23 ns</strong> to build and force—the price the strictness analysis erases wherever demand is provable. and with the free list and defunctionalized cells, a 10-million-element infinite stream runs at <strong>10.9 ns per element with two calls to the allocator, total</strong>: the first cell's memory becomes the third's, the third's becomes the fifth's, forever.</p>
 
 <h3>proven work on idle cores</h3>
 
@@ -509,17 +509,17 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
     <tr class="win">
       <td>kanso, as written</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:5%"></span></span></td>
-      <td class="num">0.10</td><td class="num">the compiler moved it</td>
+      <td class="num">0.12</td><td class="num">the compiler moved it</td>
     </tr>
     <tr>
       <td>rust, as written</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:78%"></span></span></td>
-      <td class="num">1.54</td><td class="num">computes what you wrote</td>
+      <td class="num">1.73</td><td class="num">computes what you wrote</td>
     </tr>
     <tr>
       <td>kanso <code>--strict</code></td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">1.93</td><td class="num">the measured worst case</td>
+      <td class="num">2.15</td><td class="num">the measured worst case</td>
     </tr>
   </tbody>
 </table>
@@ -660,10 +660,10 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 
 <div class="code-panel">
   <div class="code-panel-title">the scoreboard—per-decode floors from one interleaved sitting, and how to reproduce it</div>
-  <pre><code><span class="c"># kanso, shipped default    ~0.95 ms   6.2 mb rss, flat  (arenas, §03)</span>
-<span class="c"># serde_json (hand-tuned)   ~0.97 ms   6.8 mb rss</span>
-<span class="c"># reasonably-written rust   ~1.12 ms   6.8 mb rss</span>
-<span class="c"># go encoding/json          ~2.05 ms   10.5 mb rss</span>
+  <pre><code><span class="c"># kanso, shipped default    ~1.00 ms   5.6 mb rss, flat  (arenas, §03)</span>
+<span class="c"># serde_json (hand-tuned)   ~1.16 ms   6.8 mb rss</span>
+<span class="c"># reasonably-written rust   ~1.38 ms   6.8 mb rss</span>
+<span class="c"># go encoding/json          ~2.96 ms   10.8 mb rss</span>
 
 cargo build --release
 bash bench/make_jsonbench.sh
