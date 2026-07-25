@@ -878,7 +878,7 @@ KValue k_str_n(const char* data, long long len) {
 
 static KValue k_str(const char* data) { return k_str_n(data, (long long)strlen(data)); }
 
-long long k_not_failure(KValue v) { return v.tag != K_ERR && v.tag != K_NONE; }
+long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
 static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
