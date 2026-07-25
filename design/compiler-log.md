@@ -2843,3 +2843,31 @@ same front end as any other, so it obeys the ordering rules; `main` before
 `pick` is why the guard spec first failed for a reason that had nothing to
 do with guards. And slicing a function out of the IR has to anchor on the
 `define` line, or the first call site of that function answers instead.
+
+## 2026-07-25 — a golden for what compiling costs
+
+bench/compile_golden.txt pins how much work the emitter does on five sample
+programs, counted rather than timed:
+
+    recursion   lines=374 calls=21 branches=15 defines=19
+    dispatch    lines=368 calls=22 branches=14 defines=19
+    guards      lines=367 calls=20 branches=15 defines=19
+    records     lines=415 calls=25 branches=18 defines=19
+    build_block lines=344 calls=14 branches=10 defines=18
+
+The samples cover recursion, dispatch over literals and types, a guard
+chain, record construction and destructuring, and a build block closing a
+cycle. Every number is text this compiler chose to write, so the file is
+exact on any machine and moves only when codegen does.
+
+This is the compile-side companion to the runtime cost goldens, and it works
+the same way. Wall time would have said more about the laptop than the
+compiler; a count says which change added the work. Losing forwarder
+elision, emitting a guard where inference used to prove one unnecessary, or
+un-inlining a predicate all land as a diff on a specific line rather than a
+slower afternoon nobody can reproduce.
+
+Verified by regression rather than by passing: an extra instruction injected
+into inline_not_failure moved four of the five programs and failed the
+golden, and removing it restored the file. cargo test already carries it, so
+CI gates it with no workflow change.
