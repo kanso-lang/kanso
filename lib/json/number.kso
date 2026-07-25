@@ -4,6 +4,9 @@ fn mark_from? cs p q
   if (p > q) false (mark_step? cs (cs[p]) p q)
 
 # float marks: . E e
+fn mark_step? _ none _ _
+  false
+
 fn mark_step? _ 46 _ _
   true
 

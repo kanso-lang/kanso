@@ -3,6 +3,9 @@ import "std/text"
 fn expect_char cs p c
   expect_check (cs[p]) p c
 
+fn expect_check none p c
+  fail p "expected `{text/utf8 [c]}`"
+
 fn expect_check found p c
   if (found == c) (p + 1) (fail p "expected `{text/utf8 [c]}`")
 

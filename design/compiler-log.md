@@ -2547,3 +2547,34 @@ suite would have caught it too, one step later.
 Worth keeping as a rule of thumb: a diagnostic count falling to zero after a
 one-line change deserves the same suspicion as a benchmark that suddenly
 doubles. Both are usually a broken measurement.
+
+## 2026-07-24 — three json arms, and the limit exhaustiveness runs into
+
+Three of json's eight receivers state their disposition now, and the gated
+count falls from eleven to five.
+
+mark_step? answers false, because a byte past the end of input is not a
+float mark. expect_check fails at the position, because input ending before
+the expected byte is the same outcome as the wrong byte arriving.
+hex_digit errs with the parser's own end-of-input wording, because a
+truncated \u escape has no digit to read.
+
+The five that remain are false positives, and finding that out is the point
+of the entry. Every one is a lenient index guarded by a length test one line
+above it:
+
+    if (length xs == 0) (text/append acc "[]") (encode_list acc xs)
+    if (length xs < i) acc (encode_items (elem_onto acc xs[i]) xs (i + 1))
+
+encode_list never sees an empty list, so its xs[1] is always in bounds.
+Inference does not track the guard, so it reports the index as a possible
+none and blames the receiver.
+
+Silencing those would mean writing arms for states the program cannot reach,
+in the library the benchmark numbers come from. That is dead code added to
+satisfy a checker, and the checker is the thing that is wrong. Exhaustiveness
+needs to see a guard before it can be turned on — flow sensitivity, not more
+arms.
+
+Two tests came out of the investigation and stay: encoding an empty list and
+an empty map. Both pass, which is what proved the guards hold.
