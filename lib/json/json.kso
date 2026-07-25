@@ -27,14 +27,14 @@ pub fn encode v
   text/utf8 (encode_onto (text/bytes "") v)
 
 fn encode_items acc xs i
-  if (length xs < i) acc (encode_items (elem_onto acc xs[i]) xs (i + 1))
+  if (length xs < i) acc (encode_items (elem_onto acc xs[i]!) xs (i + 1))
 
 fn encode_list acc xs
-  opened = encode_onto (text/append acc 91) xs[1]
+  opened = encode_onto (text/append acc 91) xs[1]!
   text/append (encode_items opened xs 2) 93
 
 fn encode_map acc es
-  opened = entry_onto (text/append acc 123) es[1]
+  opened = entry_onto (text/append acc 123) es[1]!
   text/append (encode_pairs opened es 2) 125
 
 fn encode_onto acc true
@@ -64,7 +64,7 @@ fn encode_onto acc m:json[string]
   if (length es == 0) (text/append acc "\{}") (encode_map acc es)
 
 fn encode_pairs acc es i
-  if (length es < i) acc (encode_pairs (pair_onto acc es[i]) es (i + 1))
+  if (length es < i) acc (encode_pairs (pair_onto acc es[i]!) es (i + 1))
 
 fn entry_onto acc (entry k v)
   keyed = encode_onto acc k
