@@ -2395,3 +2395,29 @@ a type name some path knew and another did not, and each was found only when
 a program happened to exercise the pair. The goldens now cover the construct
 rather than the instances, which is the difference between pinning a bug and
 pinning a feature.
+
+## 2026-07-24 — `any` excludes the absence channel, and a third copy of the failure test
+
+Gavel three holds in the engines. `any` accepts every value a slot may hold
+and rejects a none, so a field or parameter that wants anything-or-nothing
+spells it out as `any none`. The shipped none-is-a-value example does exactly
+that now.
+
+Reaching that turned up a bug in the demotion itself. The predicate that
+decides "does this abandon the computation" existed in three copies: the C
+function k_not_failure, an LLVM inline twin of it in the codegen preamble,
+and inline_not_failure, which emits the tag comparisons directly rather than
+calling either. The demotion changed the first. The other two still tested
+K_NONE, so native's inlined paths went on treating a none as a failure —
+including the field-typeset check, which is how the divergence surfaced.
+
+That is the same shape as the resolver duplication fixed an hour ago, and it
+is worth stating as a pattern rather than an incident: when one predicate has
+three implementations, changing its meaning is a three-site edit that nothing
+enforces. The counters and goldens caught neither copy, because the corpus
+never had a program where none-as-failure and none-as-value differ. The test
+that found it was a field typeset excluding none, which did not exist until
+today.
+
+Both cost goldens are unchanged, so removing a tag comparison from the
+hottest inlined predicate in the emitter costs nothing measurable.
