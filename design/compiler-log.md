@@ -2660,3 +2660,35 @@ per-group return cannot.
 That is the state exhaustiveness is in. Seventy-five reports became one, the
 one is understood, and turning the check on waits for return sets that
 follow arms rather than groups.
+
+## 2026-07-24 — return guards compile again, and where they still collide
+
+Gavel BB's branch now builds against main after a rebase across a hundred
+and ninety-four commits, and the feature works:
+
+    fn describe n
+      return "below zero" if (n < 0)
+      return "past a thousand" if (1000 < n)
+      "ordinary {n}"
+
+Native and the interpreter both print below zero, past a thousand, ordinary
+7. The branch is preserved as return-guards-revive.
+
+The drift was four real API changes and a dozen missing match arms. Two of
+the four are worth noting because they left the tree better. eval_body had
+become the inline body of the Block arm, so evaluating a statement list in
+expression position is now a method, eval_stmts, that the block, the build
+block, and a fired guard's tail all share. emit_fn_body took a decl only to
+read a name and an arity that FnEmit already carries, so the parameter is
+gone.
+
+What blocks the merge is not drift. The branch replaces parse_body wholesale
+with a version that finds the leading run of bindings and returns, and it
+was written before build blocks existed, so a build body no longer reaches
+parse_build_body. The mem golden catches it: the block's final `[a b]` is
+reported as a value that is never used.
+
+That is a parser-level design question — where a guard may sit relative to a
+build block's statements, and which of the two bodies owns the tail — rather
+than an integration chore. Recording it here so the branch is picked up with
+the question already framed.
