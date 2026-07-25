@@ -2237,3 +2237,28 @@ Goldens: none_is_a_value pins a record field holding a none through a build
 block; none_no_arm pins the no-arm operator error; build_set_err keeps the
 failure-propagation case with an err, which is still a failure, and moves to
 the runtime corpus because an unhandled err exits one.
+
+### The demotion is not finished until inference follows
+
+Re-running the exhaustiveness probe after the demotion returns the same
+forty-three sites it returned before. The reason is that only the runtime
+was demoted. infer.rs still defines FAIL as NONE | ERR and still threads it
+through the rules that model propagation, so the probe reads a world that no
+longer exists.
+
+That sharpens the earlier ordering note. Demoting first is right, but
+"demote" has to mean the runtime and the analysis together — the runtime
+decides what programs do, and inference decides what the checker can see
+them doing. Until the second one moves, no measurement of the new world is
+possible.
+
+The change is not merely cosmetic, which is why it is not bundled here.
+codegen consumes inference through set_of to elide tag checks on paths it
+believes cannot carry a failure, so narrowing FAIL changes what the emitter
+proves and therefore what it emits. It wants its own pass with the cost
+goldens watched.
+
+What was verified about the demotion in the meantime: codegen never consumes
+type_fields, so the `TOP & !FAIL` fallback for a destructured field cannot
+elide a guard, and a none stored in a field reads back correctly and errors
+correctly under arithmetic on both engines.
