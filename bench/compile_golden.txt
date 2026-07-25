@@ -1,0 +1,5 @@
+recursion lines=374 calls=21 branches=15 defines=19
+dispatch lines=368 calls=22 branches=14 defines=19
+guards lines=367 calls=20 branches=15 defines=19
+records lines=415 calls=25 branches=18 defines=19
+build_block lines=344 calls=14 branches=10 defines=18
