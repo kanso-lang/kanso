@@ -3180,3 +3180,59 @@ through to the copying push, so the cache is safe even if the linearity
 analysis wrongly believes it is uniquely owned. Belt and braces.
 
 Queued as technique 7 on the compiler page with these numbers. Not built.
+
+## 2026-07-25 — OPEN, UNBUILT: the nullary call form, and where currying would fit
+
+Recorded because it was found by running the compiler, not by reading it, and
+a finding that lives in a conversation is a finding nobody has.
+
+THE NULLARY GAVEL IS RATIFIED AND UNBUILT. `name()` — unit application, the
+form that distinguishes calling a zero-argument definition from referring to
+it — does not parse:
+
+    pub play = print "{roll_7()}"
+    error[syntax]: expected an expression
+
+What works today is the lazy binding: `roll_7 = roll 7` prints 8, because a
+constant binding is a value computed on demand. So there is currently no
+spelling for "call with no arguments", and the reference-versus-call
+distinction the gavel settled has no syntax behind it.
+
+UNDER-APPLICATION IS AN ARITY ERROR, WHICH MEANS THE SLOT IS FREE.
+
+    fn roll n sides
+    pub play = print "{roll 7}"
+    error[arity]: no 1-argument arm of `roll` (arms take 2)
+
+One name does carry several arities — with both `fn roll n` and
+`fn roll n sides` present, `roll 7` is 8 and `roll 7 2` is 9 — so the two
+readings never compete: either an arity-1 arm exists and claims the call, or
+none does and the call is currently rejected. Whole-program inference knows
+which. That makes bare under-application unambiguous exactly where it is an
+error today.
+
+THE SHAPE UNDER DISCUSSION (Clay's, not gaveled):
+
+  - bare under-application curries wherever it is currently an arity error
+  - holes reposition and disambiguate: `concat greeting _` puts the awaited
+    value second, `roll 7 _` picks the 2-arity arm when an arity-1 arm would
+    otherwise claim the call, `roll 7 _ _` picks the 3-arity one
+  - competing longer arms with no hole is a compile error, not a default
+  - `(roll 7)` as a passable, callable-with-`()` value is the piece that needs
+    the nullary form built first
+
+I argued against auto-currying on the grounds that dispatch gives no canonical
+argument order to curry along. That was wrong, and the arity test above is
+why: you are not currying a function, you are under-applying an arm set.
+
+TWO CONSEQUENCES TO WEIGH BEFORE RULING. `_` already means *discard* in
+parameter patterns and would mean *await* in argument position — unambiguous
+to parse, opposite in sense to read. And a partial application defers arm
+selection, not merely evaluation, since arms key on patterns across all
+arguments; the strictness analysis has to see through that or every partial
+costs a thunk.
+
+Also owed, from the same session: ch05 teaches the dot as `x . f is f x` and
+never mentions repositioning. ch06 uses `random 6 . (n -> ...)` and explains
+it as effect binding. Nothing teaches the lambda as the answer to "my value is
+not the first argument" — which is the technique holes would replace.
