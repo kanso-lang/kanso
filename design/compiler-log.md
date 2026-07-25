@@ -2161,3 +2161,30 @@ because err remains the failure.
 
 So the migration is roughly forty one-line arms, minus the false positives,
 rather than a rewrite of the library that best demonstrates the design.
+
+### The order was wrong: exhaustiveness cannot be measured before the demotion
+
+Starting the migration on lib/list turned up a reason the planned sequence
+is backwards. Take next's cursor arm:
+
+    if (length source < at) (done true) (step source[at] (cursor (at + 1) source))
+
+source[at] is a lenient index. Today, a none there propagates through the
+step constructor, so next returns a bare none and first_of receives a value
+matching none of its arms — which is exactly why first_of is flagged.
+
+After the demotion, none stops propagating. The step is built holding the
+none, first_of receives a step, and its existing `(step e _)` arm matches.
+The flag disappears with no arm written.
+
+So a large share of the forty-three are artifacts of the propagation being
+measured, not of the language the campaign is heading toward. Measuring
+exhaustiveness under current semantics measures the wrong world, and
+migrating against that list would add dead arms to the stdlib.
+
+The two steps are one piece of work. Demoting none changes which values
+arrive as whole arguments rather than as fields inside structures, and that
+is precisely what exhaustiveness reports on. The open question the demotion
+has to answer on its own is what an operation does when a none reaches it —
+`none + 1` propagates today and must mean something afterward — and that
+answer, not a pre-measured site list, is what the remaining work turns on.
