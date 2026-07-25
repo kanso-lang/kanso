@@ -1,0 +1,4 @@
+error[type]: `node`'s `id` holds int, not string
+  --> ctor_field_type.kso:5:25
+   5 | pub play = print "{node "hello" 5}"
+                               ^
