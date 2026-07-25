@@ -3391,3 +3391,51 @@ made on something other than deferral, and it has not been made here yet.
 
 The nullary gavel stands as ratified; what it is FOR is now the open question,
 which is a different and smaller one than whether it parses (it does not).
+
+## 2026-07-25 — CAF implementation reconnaissance: the mechanism, and the one obstacle
+
+Not built. Recording what the code says so the next pass starts from the
+mechanism rather than the idea.
+
+WHAT IS ALREADY THERE. `k_deep_copy(v, KCopy*)` is a cycle-safe deep copy with
+a pluggable allocator — `KCopy { KCarryBuf* buf; KMark* mark; int to_arena; }`
+— and `k_copy_size(v, mark)` sizes the destination first. The carry path at
+the beat boundary already does exactly the shape a CAF needs: size, malloc,
+copy with `to_arena = 0`. Two call sites, lines ~712 and ~752, are the
+template.
+
+It also already lands the value at exact capacity — the list arm sets
+`buf->cap = l->len ? l->len : 1` — which is the property that makes a shared
+constant safe from `k_b_push_mut`, since that mutates only when
+`l->len < buf->cap`.
+
+THE OBSTACLE. `k_deep_copy` opens with `if (k_survives(p, cp->mark)) return v`
+— it shares rather than copies anything that already outlives the rewind. With
+`mark = NULL`, `k_survives` compares against `k_blocks` and the live frontier
+`k_arena`, so a freshly built value is "surviving" by definition and the copy
+becomes a no-op that hands back arena memory. Caching that is precisely the
+unsoundness `k_alloc_perm`'s comment warns about: a rewind moves the bump
+pointer and the cache would point at reclaimed, since-reused storage.
+
+So freezing a CAF needs either a synthetic mark pinned at the bottom of the
+first block, so nothing counts as surviving, or a third mode on `KCopy` that
+copies unconditionally. The second is smaller and says what it means; the
+first reuses machinery but depends on block ordering that nothing else asks
+about.
+
+WHY I STOPPED HERE RATHER THAN GUESS. runtime.c is where a wrong answer is a
+heisenbug rather than a failing test, and "the copy silently shared arena
+memory" is exactly the failure that would survive the goldens for a while and
+then corrupt a value under a rewind. It wants a session that starts fresh on
+it.
+
+THE REST OF THE PLAN IS UNCHANGED. Detection is narrow on purpose: arity 0,
+one arm, body a literal with no calls — which also rules out a CAF freeze
+recursing into another and resetting the shared copy map mid-copy. Emission is
+a memoized wrapper around the existing body rather than an edit to it: rename
+the built function, add a global and a ready flag, freeze on first use.
+
+EXPECT THE COST GOLDEN TO MOVE, and say which way: allocs should fall by about
+937,500 of 14,799,465 on the decode workload, with `perm_allocs` rising by the
+number of constant definitions the program actually reaches. That is a
+deliberate regeneration, not a drift.
