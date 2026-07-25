@@ -2735,3 +2735,35 @@ nothing new.
 
 Both cost goldens are unchanged. The guard costs nothing on the compiled
 path because it compiles to the same instructions the equivalent `if` would.
+
+## 2026-07-24 — find gets its fast arm
+
+`sorted` is a type in list, and `find` has an arm for it that bisects
+instead of scanning. This is the shape Clay asked for: one generic find, and
+a supercharged version for a type whose storage rewards it, selected by
+dispatch rather than by a second name.
+
+    pub fn find (sorted items) pred
+      bisect items pred 1 (length items) none
+
+    pub fn find coll pred
+      unwrap_found (seek coll pred)
+
+The bisect is the first real customer of the guards that landed an hour ago:
+`return best if (hi < lo)` is the base case, flat above the halving step
+rather than nesting it. Six tests cover the head, the tail, the miss, the
+empty source, and agreement between the two arms — list had no tests at all
+before this.
+
+The contract is that the predicate is monotonic over the order, false for a
+prefix and true for the rest, which is what makes halving sound. That is
+written where the function is.
+
+Two things the work turned up. `place` had a parameter named `sorted`, which
+the new type made a collision — renamed to `run`. And a test file that
+imports its own module gets a second copy of every type, so a constructor
+pattern in the library never matches a value the test builds; the six tests
+failed until the self-import came out. json's tests never had one, which is
+why the pattern held there.
+
+Both cost goldens unchanged. Browser 45 passed, 0 fallback, 0 failed.
