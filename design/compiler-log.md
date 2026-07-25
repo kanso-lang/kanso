@@ -2767,3 +2767,27 @@ failed until the self-import came out. json's tests never had one, which is
 why the pattern held there.
 
 Both cost goldens unchanged. Browser 45 passed, 0 fallback, 0 failed.
+
+## 2026-07-24 — a module that imports itself now says so
+
+Adding tests to list cost an hour to a trap worth closing. A test file in a
+module that imports its own module compiles a second copy of it, so every
+type gets a twin, and a constructor pattern written in the library stops
+matching a value the test builds with what looks like the same constructor.
+The failure surfaces as `length takes a list or string` from deep inside a
+fold — nowhere near the import that caused it.
+
+The import now names it:
+
+    error: a module cannot import itself — `std/list` is this module, and
+    the second copy's types would not match this one's
+
+Both resolution paths carry the check, which is the part that took the
+digging. A std import of a shipped module does not go through
+resolve_import at all: an embedded table holds the source so the browser and
+a binary with no lib/ beside it can still load it, and that branch returns
+before any path comparison happens. Checking only the filesystem path left
+the trap fully intact for exactly the modules most likely to hit it.
+
+json's tests never had a self-import, which is why the convention looked
+fine until list grew tests of its own.

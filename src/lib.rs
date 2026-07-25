@@ -1027,6 +1027,16 @@ fn load_dependencies(
             _ => None,
         };
         if let Some((short, source)) = embedded {
+            // a module importing itself compiles a second copy, so every type
+            // gets a twin and a constructor pattern stops matching values the
+            // other half built — a confusing failure a long way from here
+            if base.file_name().is_some_and(|n| n == short) {
+                return Err(format!(
+                    "error: a module cannot import itself — `{path}` is this \
+                     module, and the second copy's types would not match this \
+                     one's\n"
+                ));
+            }
             let mut dep = compile(&format!("{path}/{short}.kso"), source, false)?;
             qualify(&mut dep, qual, &mut exports);
             dep_program.types.extend(dep.types);
@@ -1040,6 +1050,20 @@ fn load_dependencies(
             );
         }
         let dep_dir = resolve_import(base, path)?;
+        // importing one's own module compiles a second copy of it, so every
+        // type gets a twin and a constructor pattern stops matching values
+        // built by the other half — a confusing failure a long way from here
+        let same = std::fs::canonicalize(&dep_dir)
+            .ok()
+            .zip(std::fs::canonicalize(base).ok())
+            .is_some_and(|(a, b)| a == b);
+        if same {
+            return Err(format!(
+                "error: a module cannot import itself — `{path}` resolves to \
+                 this module, and the second copy's types would not match \
+                 this one's\n"
+            ));
+        }
         let mut dep = compile_module_inner(&dep_dir, false, visited)?;
         qualify(&mut dep, qual, &mut exports);
         dep_program.types.extend(dep.types);
