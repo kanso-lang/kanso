@@ -3,6 +3,7 @@
 fib.c
 fib.ll
 /jsonbench
+/encodebench
 jsonbench.ll
 bench/jsonbench/
 /kq
