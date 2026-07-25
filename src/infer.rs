@@ -23,7 +23,9 @@ pub const BYTES: Set = 1 << 12;
 /// only where this bit is present, so strict code pays nothing.
 pub const THUNK: Set = 1 << 13;
 pub const TOP: Set = (1 << 14) - 1;
-pub const FAIL: Set = NONE | ERR;
+/// What propagates on its own. A none is a value and stays where it is put;
+/// only an err abandons the computation that produced it.
+pub const FAIL: Set = ERR;
 pub const BOOL: Set = TRUE | FALSE;
 
 pub struct Inference {

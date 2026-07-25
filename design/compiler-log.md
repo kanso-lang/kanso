@@ -2262,3 +2262,32 @@ What was verified about the demotion in the meantime: codegen never consumes
 type_fields, so the `TOP & !FAIL` fallback for a destructured field cannot
 elide a guard, and a none stored in a field reads back correctly and errors
 correctly under arithmetic on both engines.
+
+## 2026-07-24 — inference follows the demotion, and a latent flake surfaces
+
+FAIL now means ERR. It named the set of things that propagate on their own,
+and after the runtime demotion a none is not one of them.
+
+The emitter follows for free. codegen consults FAIL to decide whether a
+binding or a parameter needs a k_not_failure guard, and that predicate had
+already narrowed to K_ERR, so guards that could no longer fire were still
+being emitted. Both cost goldens are byte-identical, so the removal costs
+nothing measurable and the paths that mattered were already tight.
+
+Re-measuring exhaustiveness returns forty-three again, but the coincidence
+hides the real result: the *set* changed substantially, exactly as the
+ordering note predicted. first_of, fold_go, skip_one, and the four next_*
+helpers all dropped off, because a none from a lenient index is now built
+into the step rather than propagated as a bare argument. New sites appeared
+where those field contents are later consumed — esc_byte, u_bytes,
+list/select among them. The nones moved rather than vanished, which is what
+the note said would happen and is now on the record as measured rather than
+argued.
+
+The change also surfaced a flake that had been latent. check_predicates
+iterated a HashMap, so a file with more than one naming diagnostic printed
+them in a different order every run. One diagnostic hid it; the sharper
+inference made three fire in a book sample and the golden began failing
+intermittently. Diagnostics now sort by span, which is both stable and the
+order a reader expects. This was a CI flake waiting for any change that
+widened a diagnostic set.

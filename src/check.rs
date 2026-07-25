@@ -511,6 +511,10 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
         let entry = groups.entry(decl.name.as_str()).or_insert((0, decl.span));
         entry.0 |= inference.returns[i];
     }
+    // a HashMap hands these back in a different order every run, which makes
+    // a multi-diagnostic file's output unstable; report in source order
+    let mut groups: Vec<_> = groups.into_iter().collect();
+    groups.sort_by_key(|(name, (_, span))| (span.line, span.col, *name));
     for (name, (set, span)) in groups {
         let short = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
         let is_question = short.ends_with('?');
