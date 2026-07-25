@@ -5,17 +5,46 @@ on:
   push:
     branches: [main]
 
+# One job per kind of check, so a red run names what broke on the PR page
+# instead of hiding it inside a single "test" job.
 jobs:
-  test:
+  lint:
+    name: lint (clippy, all targets)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo clippy -- -D warnings
+        with:
+          components: clippy
+      # --all-targets so the specs are linted too; without it the tests drift
+      # while the library stays clean.
+      - run: cargo clippy --all-targets -- -D warnings
+
+  specs:
+    name: specs (unit, golden, differential)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
-      - run: cargo run -- test lib/json
-      - name: json decoder end-to-end (native, 150 decodes)
-        run: |
+      - name: the shipped library's own tests
+        run: cargo run -- test lib/json
+
+  playground:
+    name: playground examples (every engine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --test playground
+
+  decoder:
+    name: json decoder end-to-end (native, 150 decodes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
           cargo build --release
           bash bench/make_jsonbench.sh
           ./target/release/kanso build bench/jsonbench --release
@@ -23,9 +52,28 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "checksum 24000" \
             || { echo "::error::native json decoder produced the wrong checksum"; exit 1; }
-      - name: book samples (every panel executed, outputs verified)
-        run: sh scripts/book_check.sh
-      - name: cost golden (deterministic performance ratchet, no clocks)
+
+  book:
+    name: book samples (every panel executed, outputs verified)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sh scripts/book_check.sh
+
+  cost-goldens:
+    name: cost goldens (deterministic ratchet, no clocks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: build the benchmarks
+        run: |
+          cargo build --release
+          bash bench/make_jsonbench.sh
+          ./target/release/kanso build bench/jsonbench --release
+          ./target/release/kanso build bench/encodebench --release >/dev/null
+      - name: decode counters
         run: |
           KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null
           diff bench/cost_golden.txt counters.txt || {
@@ -34,16 +82,8 @@ jobs:
             echo "::error::iterations). If intentional, update the golden in this PR."
             exit 1
           }
-      - name: browser differential (three engines, byte-identical, headless chrome)
+      - name: encode counters
         run: |
-          rustup target add wasm32-unknown-unknown
-          bash scripts/browser_differential.sh || {
-            echo "::error::the browser wasm engine diverged from the oracle."
-            exit 1
-          }
-      - name: encode cost golden (every kernel's presence counter, pinned)
-        run: |
-          ./target/release/kanso build bench/encodebench --release >/dev/null
           KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null
           diff bench/cost_golden_encode.txt counters_encode.txt || {
             echo "::error::encode counters diverged from cost_golden_encode.txt."
@@ -53,10 +93,24 @@ jobs:
             exit 1
           }
 
-  # Non-blocking: reports the kanso-vs-serde decode ratio (the optimization
-  # campaign's headline metric) to the run summary. CI runners are noisy, so
-  # this tracks the number for visibility rather than gating on it.
+  browser:
+    name: browser differential (three engines, byte-identical, headless chrome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          rustup target add wasm32-unknown-unknown
+          bash scripts/browser_differential.sh || {
+            echo "::error::the browser wasm engine diverged from the oracle."
+            exit 1
+          }
+
+  # Non-blocking: reports the kanso-vs-serde decode ratio to the run summary.
+  # CI runners are noisy, so this tracks the number for visibility rather than
+  # gating on it; the gating perf specs are the cost goldens above.
   benchmark:
+    name: benchmark (reported, not gated)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -89,5 +143,5 @@ jobs:
             echo "| kanso (native) | ${kanso_ms} ms |"
             echo "| serde_json | ${serde_line#serde mean over 150 decodes: } |"
             echo ""
-            echo "kanso passed serde on 2026-07-18 (25/25 interleaved rounds locally); runners are noisy, so this table informs rather than gates — the gating perf spec is the cost golden in the test job."
+            echo "Runners are noisy, so this table informs rather than gates. Under slope timing on a quiet-enough box the two are a dead heat; the gating perf specs are the cost goldens."
           } >> "$GITHUB_STEP_SUMMARY"

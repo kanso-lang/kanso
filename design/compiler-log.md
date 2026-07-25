@@ -2986,3 +2986,58 @@ binary 116 ms; optimized 635 ms, nearly all llvm at -O2. Go builds a
 2026-07-25, loaded desktop, best of seven. CLAUDE.md's done-checklist
 gains the surface and a standing rule: every change carries a perf check,
 not just perf PRs.
+
+## 2026-07-25 — the playground's examples become specs; the release build stops rebuilding the runtime
+
+Two asks after the fanout bug: specs that stop any playground example failing
+on any engine, and compilation that competes with `go build`.
+
+WHY FANOUT ESCAPED. The browser differential already runs in CI under headless
+Chrome, but its corpus was `examples/` plus `tests/golden/runtime/` — never the
+samples in play.js — and it skipped any program containing `import`, on the
+grounds that the browser has no filesystem. That rule outlived its reason:
+std/* resolves in the tab because the toolchain embeds it. fanout was outside
+the corpus twice over. The corpus now reads play.js and skips only relative
+imports; it went from 48 programs to 66.
+
+The widening exposed three pre-existing gaps, so gaps became explicit instead
+of silent: KNOWN_GAPS names each program the browser declines and the phrase it
+declines with. The harness fails if the phrase changes AND if an entry starts
+passing — delete it then. Standing: `examples/concurrency.kso` and the
+playground's own concurrency sample error with "a group joins descriptions"
+(the scheduler is not lowered to wasm, and a visitor picking that example sees
+the error), and `json_failure_door.kso` wants `std/json`, which is not in the
+shipped library.
+
+FANOUT IS NOW VERIFIED IN THE BROWSER, not merely argued. Chrome is present
+locally after all; 61 passed, 3 known gaps, 2 fallback, 0 failed.
+
+tests/playground.rs reads the same samples for the host engines: each runs on
+the interpreter, each agrees byte-for-byte with native, each survives the
+browser backend's encoder. KANSO_SEED pins the dice — without it the
+concurrency sample's rolls differ every run and the engines can only be
+observed disagreeing, never compared.
+
+tests/native.rs was not differential. It compared `kanso run` against a built
+binary, and `run` compiles native, so both sides were the same engine. It now
+passes --interp for the oracle side.
+
+COMPILE SPEED. Release recompiled runtime.c at -O3 -flto on every build,
+206ms of it, while dev had cached its object since the beginning. The cache is
+now keyed by profile and release uses it: **635 → 362 ms**, a 43% cut, with
+the runtime unchanged at +0.8% (noise). An intermediate measurement suggested
+an 85% runtime regression; that was my error — the binary I sampled was the
+-O0 dev build left on disk by the previous command. Isolating the two link
+forms directly showed 147.0 vs 145.3 ms, and prebuilt bitcode LTOs exactly as
+the source does.
+
+A ratchet holds it: two release builds in a row, and the cached object's mtime
+must not change. Deterministic, unlike a stopwatch.
+
+CI is one job per kind of check — lint, specs, playground, decoder, book,
+cost-goldens, browser, benchmark — so a red run names what broke on the PR page.
+clippy gains --all-targets; the specs were never linted before.
+
+OPEN: rustfmt would move 3384 lines, so it is owed its own mechanical PR
+rather than riding with logic. clippy::perf is already clean and stays denied
+by -D warnings; pedantic is 442 warnings and is not worth forcing wholesale.
