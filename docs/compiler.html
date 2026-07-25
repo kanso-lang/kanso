@@ -675,6 +675,74 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
 
 <p>a benchmark that drifts from one machine or one afternoon to the next isn't evidence of much. so the wins are pinned to counts that can't drift, not to wall-clock time. the 150-decode gauntlet is a deterministic program, so it performs the exact same number of allocations every run, on every machine, on both architectures. ci commits those counts to a golden file and diffs against it: <strong>14,799,465</strong> allocations, <strong>5</strong> arena blocks, <strong>151</strong> beat iterations—bit-identical on arm64 and x86_64. five arena blocks across 150 decodes is the flat-memory guarantee written as a constant; 151 beat iterations is one rewind per decode plus one for the program itself, on the record. a change that nudges any of those numbers fails the build before anyone has to squint at a flaky stopwatch, which is how the three ladder rungs stay put and how the next regression announces itself as a failing diff in the pull request that caused it.</p>
 
+<h3>what every commit costs</h3>
+
+<p>the numbers above were measured by hand on a named day. these are measured by ci on every push to main, and they are the deterministic ones: allocation counts, arena blocks, rewind iterations, fixpoint rounds. a noisy runner cannot move them, so a change in this panel is somebody's deliberate edit rather than weather.</p>
+
+<div class="perf-panel" id="perf-panel">
+  <p class="perf-loading">loading the history…</p>
+</div>
+
+<style>
+.perf-panel { border: 1px solid var(--line); border-radius: 10px; margin: 1.5rem 0; padding: 1.1rem 1.3rem; }
+.perf-panel table { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.9rem; width: 100%; }
+.perf-panel th { color: var(--muted); font-weight: 500; text-align: left; }
+.perf-panel td, .perf-panel th { padding: 0.3rem 0.6rem 0.3rem 0; }
+.perf-panel td.n { text-align: right; }
+.perf-panel .delta-up { color: #c0392b; }
+.perf-panel .delta-down { color: var(--accent); }
+.perf-panel .perf-when { color: var(--muted); font-size: 0.82rem; margin-top: 0.8rem; }
+.perf-spark { display: block; height: 30px; width: 110px; }
+</style>
+
+<script>
+(async function () {
+  const panel = document.getElementById('perf-panel');
+  const HISTORY = 'https://raw.githubusercontent.com/kanso-lang/kanso/perf-history/history.jsonl';
+  const WATCHED = [
+    ['allocs', 'allocations'],
+    ['arena_blocks', 'arena blocks'],
+    ['beat_iters', 'rewind iterations'],
+    ['el_parses', 'eisel\u2013lemire parses'],
+    ['compile_rounds', 'fixpoint rounds'],
+    ['compile_visits', 'expression visits'],
+  ];
+  let rows;
+  try {
+    const text = await (await fetch(HISTORY, { cache: 'no-store' })).text();
+    rows = text.trim().split('\n').filter(Boolean).map(JSON.parse);
+  } catch (e) {
+    panel.innerHTML = '<p class="perf-loading">the history is published by ci on push to main; it is not reachable from here right now.</p>';
+    return;
+  }
+  if (!rows.length) { panel.innerHTML = '<p class="perf-loading">no history recorded yet.</p>'; return; }
+  const last = rows[rows.length - 1];
+  const prev = rows.length > 1 ? rows[rows.length - 2] : null;
+  const spark = (key) => {
+    const series = rows.slice(-40).map((r) => r[key]).filter((v) => typeof v === 'number');
+    if (series.length < 2) return '';
+    const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo || 1;
+    const points = series
+      .map((v, i) => `${(i / (series.length - 1)) * 108 + 1},${28 - ((v - lo) / span) * 26}`)
+      .join(' ');
+    return `<svg class="perf-spark" viewBox="0 0 110 30" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
+  };
+  const cells = WATCHED.filter(([key]) => typeof last[key] === 'number').map(([key, label]) => {
+    const now = last[key];
+    let delta = '';
+    if (prev && typeof prev[key] === 'number' && prev[key] !== now) {
+      const up = now > prev[key];
+      const pct = prev[key] === 0 ? '' : ` (${up ? '+' : ''}${(((now - prev[key]) / prev[key]) * 100).toFixed(1)}%)`;
+      delta = `<span class="${up ? 'delta-up' : 'delta-down'}">${up ? '\u25b2' : '\u25bc'}${pct}</span>`;
+    }
+    return `<tr><td>${label}</td><td class="n">${now.toLocaleString()}</td><td>${delta}</td><td>${spark(key)}</td></tr>`;
+  });
+  panel.innerHTML =
+    `<table><thead><tr><th>counter</th><th class="n">now</th><th>since last</th><th>trend</th></tr></thead><tbody>${cells.join('')}</tbody></table>` +
+    `<p class="perf-when">${rows.length} commits recorded \u00b7 newest <code>${last.commit}</code> \u00b7 ${new Date(last.date).toISOString().slice(0, 10)}</p>`;
+})();
+</script>
+
 <h3>how fast it compiles</h3>
 
 <p>the front end is quick enough to sit inside an editor's save loop. <code>kanso check</code>—parse, whole-program inference, and every diagnostic—finishes kq in <strong>6.6&nbsp;ms</strong> and the json decoder in <strong>6.1&nbsp;ms</strong>. each figure covers the standard-library modules the program imports as well as its own source, about a thousand lines of kanso in kq's case, so the front end clears a hundred and fifty thousand lines a second. an unoptimized binary takes <strong>116&nbsp;ms</strong> end to end; a fully optimized one takes <strong>635&nbsp;ms</strong>, and llvm at -O2 is nearly all of that. for scale, go on the same box builds a 28-line program against its already-cached standard library in <strong>98&nbsp;ms</strong>. (2026-07-25, loaded desktop, best of seven.)</p>
