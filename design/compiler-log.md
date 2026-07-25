@@ -2791,3 +2791,25 @@ the trap fully intact for exactly the modules most likely to hit it.
 
 json's tests never had a self-import, which is why the convention looked
 fine until list grew tests of its own.
+
+## 2026-07-24 — the site catches up with the none model
+
+Two doc surfaces were claiming something no longer true.
+
+failure-kinds.html listed "automatic propagation ... none as dispatchable
+absence" as shipped, which bundles the two channels into one clause. After
+the demotion only err propagates, so the line now names the split and the
+obligation each side carries: an err propagates on its own and cannot be
+absorbed, because a function accepting one must return one; a none
+propagates nowhere, lives in a record field but never in a list or a map,
+and reaching an operation with no arm for it is an error.
+
+compiler.html's technique list gained the same result as an entry of its
+own, next to the birthday theorem. It belongs there for the same reason the
+theorem does: it is a rule the language enforces rather than a library
+convention, and it is what makes a lookup's not-found answer mean one thing
+nothing else can forge.
+
+No performance surface moved today — both cost goldens and the decode
+checksum have been identical through every change — so the number-bearing
+boards are current and were left alone.
