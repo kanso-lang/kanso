@@ -34,6 +34,10 @@ pub enum Value {
     /// value union; this is the same freedom, spelled for the wasm registry,
     /// so a closure can sit in a record field or a list like any other value.
     TableFn(u32),
+    /// `&f a` — a callee and the arguments supplied so far. Applying it
+    /// appends; dispatch fires when the count reaches an arity the callee
+    /// answers to, which is why the arity need not be named at the `&`.
+    Partial(Rc<Value>, Rc<Vec<Value>>),
     Desc(Rc<Desc>),
     Thunk(Rc<RefCell<ThunkState>>),
 }
@@ -661,6 +665,10 @@ impl<'a> Interp<'a> {
             }
             Expr::Str(parts, _) => self.eval_template(parts, env, frame),
             Expr::Ident(name, span) => self.eval_ident(name, *span, env),
+            Expr::Partial(name, span) => {
+                let callee = self.eval_ident(name, *span, env)?;
+                Ok(Value::Partial(Rc::new(callee), Rc::new(Vec::new())))
+            }
             Expr::List(items, _) => {
                 let values = items
                     .iter()
@@ -702,6 +710,25 @@ impl<'a> Interp<'a> {
                     )),
                     found => Ok(found),
                 }
+            }
+            // `&f a b` supplies without finishing: it never dispatches at the
+            // count it was written with, or `&` would be unreachable whenever
+            // a shorter arm exists — which is the case it exists for.
+            Expr::App { head, args, span, .. } if matches!(head.as_ref(), Expr::Partial(..)) => {
+                let Expr::Partial(name, name_span) = head.as_ref() else { unreachable!() };
+                let callee = self.eval_ident(name, *name_span, env)?;
+                if is_failure(&callee) {
+                    return Ok(callee);
+                }
+                let supplied = args
+                    .iter()
+                    .map(|a| self.eval(a, env, frame))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if let Some(bad) = supplied.iter().find(|v| is_failure(v)) {
+                    return Ok(bad.clone());
+                }
+                let _ = span;
+                Ok(Value::Partial(Rc::new(callee), Rc::new(supplied)))
             }
             Expr::App { head, args, span, piped } => {
                 if *piped && !args.is_empty() {
@@ -880,6 +907,11 @@ impl<'a> Interp<'a> {
             Value::FnRef(name) => self.call_named(&name, args, span, frame),
             Value::Closure(closure) => self.call_closure(&closure, args, span),
             Value::TableFn(handle) => foreign_call(handle, args, span),
+            Value::Partial(callee, supplied) => {
+                let mut all = supplied.as_ref().clone();
+                all.extend(args);
+                self.apply_partial(callee.as_ref().clone(), all, span, frame)
+            }
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
                 message: format!("`{}` is not callable", render(&other, false)),
@@ -907,6 +939,48 @@ impl<'a> Interp<'a> {
             env = bind(env, name, value);
         }
         self.eval(&closure.body, &env, &closure.frame)
+    }
+
+    /// Dispatch fires the moment the supplied count matches an arity the
+    /// callee answers to; short of that the partial simply grows. A count
+    /// past every arity is the error, and it names what was available.
+    fn apply_partial(
+        &self,
+        callee: Value,
+        args: Vec<Value>,
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
+        let arities: Vec<usize> = match &callee {
+            Value::FnRef(name) => {
+                let mut found: Vec<usize> = self
+                    .fns
+                    .get(name.as_ref())
+                    .map(|decls| decls.iter().map(|d| d.params.len()).collect())
+                    .unwrap_or_default();
+                found.sort_unstable();
+                found.dedup();
+                found
+            }
+            Value::Closure(c) => vec![c.params.len()],
+            _ => Vec::new(),
+        };
+        if arities.contains(&args.len()) {
+            return self.call(callee, args, span, frame);
+        }
+        if arities.iter().all(|a| *a < args.len()) && !arities.is_empty() {
+            let names: Vec<String> = arities.iter().map(usize::to_string).collect();
+            return Err(RuntimeError {
+                message: format!(
+                    "no {}-argument arm of `{}` (arms take {})",
+                    args.len(),
+                    render(&callee, false),
+                    names.join(" or ")
+                ),
+                span,
+            });
+        }
+        Ok(Value::Partial(Rc::new(callee), Rc::new(args)))
     }
 
     fn call_named(&self, name: &str, args: Vec<Value>, span: Span, frame: &Frame) -> EvalResult {
@@ -2212,7 +2286,7 @@ fn render_seen(
             }
         },
         Value::FnRef(name) => format!("<fn {name}>"),
-        Value::Closure(_) | Value::TableFn(_) => "<fn>".to_string(),
+        Value::Closure(_) | Value::TableFn(_) | Value::Partial(..) => "<fn>".to_string(),
         Value::Desc(_) => "<io>".to_string(),
     }
 }

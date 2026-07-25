@@ -251,7 +251,7 @@ impl<'a> Analysis<'a> {
     /// appears in a container, index, binop, lambda, or template.
     fn expr_safe_calls(&self, ty: &str, e: &Expr) -> bool {
         match e {
-            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
+            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
             Expr::Upcast { expr, .. } => self.expr_safe_calls(ty, expr),
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().all(|st| match st {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => self.expr_safe_calls(ty, expr),
@@ -386,7 +386,7 @@ impl<'a> Analysis<'a> {
     fn expr_mentions_ty(&self, ty: &str, e: &Expr) -> bool {
         // Conservative: ty appears anywhere in this (non-tail) expression.
         match e {
-            Expr::Ident(name, _) => name == ty,
+            Expr::Ident(name, _) | Expr::Partial(name, _) => name == ty,
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => self.expr_mentions_ty(ty, expr),
             }),

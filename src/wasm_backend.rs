@@ -513,6 +513,13 @@ impl<'a> WasmBackend<'a> {
 
     fn emit_expr(&mut self, ctx: &mut Ctx, expr: &Expr, tail: bool) -> Result<(), String> {
         match expr {
+            // the interpreter is the oracle for `&`; the browser backend
+            // declines it rather than lowering something that would diverge
+            Expr::Partial(name, _) => {
+                return Err(format!(
+                    "browser backend: `&{name}` (partial application) is not lowered yet"
+                ))
+            }
             Expr::Upcast { expr: inner, ty, .. } => {
                 self.emit_expr(ctx, inner, false)?;
                 let code = self.type_code(ty)?;
@@ -1118,7 +1125,7 @@ impl<'a> WasmBackend<'a> {
 
 fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
     match expr {
-        Expr::Ident(name, _) => visit(name),
+        Expr::Ident(name, _) | Expr::Partial(name, _) => visit(name),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {

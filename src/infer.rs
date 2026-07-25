@@ -199,6 +199,7 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
     work::visit();
     match expr {
         Expr::Int(..) => INT,
+        Expr::Partial(..) => TOP,
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             // a child scope: block binds stay local to the branch

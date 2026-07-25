@@ -3521,3 +3521,47 @@ its recipe block, its lazy table and the two prose figures around it;
 index.html panel and the two-engines paragraph; about.html prose; kq README
 and TRY.md. kanso-json carries no numbers. Every figure on the three site
 pages now reads 1.00 / 1.16 / 1.38 / 2.96 / 5.6, checked mechanically.
+
+## 2026-07-25 — SHIPPED (oracle): `&f` partial application on the interpreter
+
+The gavel's first half, built where the differential law says a feature starts.
+
+SURFACE. `&name` is an expression head; `&f a` supplies `a` and waits. The
+sigil hugs its name in the canonical spacing table, beside the dot and the
+strict-index bang, because it belongs to the name rather than sitting between
+two operands. Infix `&` keeps its existing diagnostic about parallel
+statements, so nothing was displaced.
+
+THE RULE THAT MATTERS, found by a failing test rather than by design. A
+`&`-marked application never dispatches at the count it was written with. The
+first cut resolved arities eagerly, so `&roll 4` against a program with both
+`fn roll n` and `fn roll n sides` completed at arity one and handed back 5,
+and `(&roll 4) 5` then died with "`5` is not callable". That is precisely the
+case Clay named when ruling the syntax necessary: with a shorter arm present,
+nothing implicit can reach the longer arm's partial. If `&` also completes
+early it cannot reach it either, and the sigil buys nothing. So `&f a b`
+builds the partial and stops; dispatch fires only when further arguments
+arrive and the total meets an arity.
+
+THE CALLEE IS A VALUE, NOT A NAME, which Clay's example forced and which the
+design is better for: `fn foo f` returning `&f 2` partially applies a
+parameter, so the arity is not knowable where the `&` is written.
+`(foo add) 5 7` is 14. `Value::Partial` therefore holds a callee value and the
+arguments so far, and applying it appends and re-asks.
+
+ENGINES. Interpreter only. Native and wasm reject it by name — "`&add`
+(partial application) is not lowered yet" — which is the escape hatch the
+differential law allows and the reason the reject is asserted by a test rather
+than assumed.
+
+TESTS, six, in tests/partial.rs: the plain carry, the partial of a parameter,
+one that grows through two applications before completing, one that completes
+against the arity its count reaches rather than the shortest arm, the
+over-application diagnostic naming the arities that exist, and the native
+refusal.
+
+OWED: `()` for zero-argument calls, still unparsed. `&f` with nothing supplied
+should be an error under the no-superfluous rule and currently is not. Native
+and wasm lowering. Inference does not yet type a partial — it reads as TOP —
+so the compiler cannot yet check, as Clay put it, "the validity of any
+invocation of foo and subsequent invocation of its return value".

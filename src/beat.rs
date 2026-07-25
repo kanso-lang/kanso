@@ -742,7 +742,7 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
         "to_int", "print",
     ];
     match e {
-        Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } => true,
+        Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } | Expr::Partial(..) => true,
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                 expr_allocates(expr, fn_names, allocating, seed_pass)
@@ -899,7 +899,7 @@ fn used_as_value(program: &Program, name: &str) -> bool {
 
 fn value_use(e: &Expr, name: &str) -> bool {
     match e {
-        Expr::Ident(n, _) => n == name,
+        Expr::Ident(n, _) | Expr::Partial(n, _) => n == name,
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
             Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => value_use(expr, name),
         }),

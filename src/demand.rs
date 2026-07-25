@@ -51,7 +51,7 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
         match e {
             Expr::Build(..) | Expr::Guard { .. } => false,
             Expr::Ident(id, _) if id == name => is_result,
-            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => true,
+            Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
             Expr::BinOp { lhs, rhs, .. } => {
                 (operand_is(lhs, name) || expr_safe(lhs, name, false))
                     && (operand_is(rhs, name) || expr_safe(rhs, name, false))
@@ -131,6 +131,7 @@ fn use_targets(
     out: &mut Vec<(String, usize, usize)>,
 ) {
     match expr {
+        Expr::Partial(..) => {}
         Expr::Guard { cond, early, rest, .. } => {
             use_targets(cond, name, out);
             use_targets(early, name, out);
@@ -234,8 +235,8 @@ fn collect_uses(
     uses: &mut Uses,
 ) {
     match expr {
-        Expr::Ident(id, _) if id == name => uses.demanding += 1,
-        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) => {}
+        Expr::Ident(id, _) | Expr::Partial(id, _) if id == name => uses.demanding += 1,
+        Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => {}
         Expr::Guard { cond, early, rest, .. } => {
             collect_uses(cond, name, discard, uses);
             collect_uses(early, name, discard, uses);
@@ -320,6 +321,7 @@ fn collect_uses(
 /// the cell, so it compiles strict.
 fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
     match expr {
+        Expr::Partial(..) => false,
         Expr::Guard { cond, early, rest, .. } => {
             expensive(cond, fns)
                 || expensive(early, fns)
