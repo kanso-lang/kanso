@@ -59,42 +59,79 @@ pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     diags
 }
 
-/// A parameter that can receive a none needs an arm that says so; a bare
-/// binding receives it without stating a disposition.
+/// The gavel makes a receiver responsible for a none it can be handed, and
+/// lets the caller discharge that by resolving first. The report belongs at
+/// the argument, because that is the line an author edits.
 fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
+    use crate::infer::NONE;
     let inference = crate::infer::infer(program);
-    let mut groups: std::collections::HashMap<(String, usize), Vec<usize>> = Default::default();
+
+    // group -> joined return set, and whether any arm names none at a position
+    let mut returns: std::collections::HashMap<(&str, usize), crate::infer::Set> =
+        Default::default();
+    let mut handles: std::collections::HashMap<(&str, usize, usize), bool> = Default::default();
     for (i, d) in program.fns.iter().enumerate() {
-        groups.entry((d.name.clone(), d.params.len())).or_default().push(i);
+        let key = (d.name.as_str(), d.params.len());
+        *returns.entry(key).or_insert(0) |= inference.returns[i];
+        for (pos, param) in d.params.iter().enumerate() {
+            let names_none = match param {
+                Pattern::Nullary(n, _) => n == "none",
+                Pattern::Annotated { ty, .. } => ty == "none",
+                _ => false,
+            };
+            *handles.entry((d.name.as_str(), d.params.len(), pos)).or_insert(false) |= names_none;
+        }
     }
-    for ((name, arity), idxs) in &groups {
-        for pos in 0..*arity {
-            // a set of TOP means inference lost the call sites — a function
-            // used as a value, most often — and a guess there is not evidence
-            let can_be_none = idxs.iter().any(|&i| {
-                inference
-                    .params
-                    .get(i)
-                    .and_then(|p| p.get(pos))
-                    .is_some_and(|s| *s != crate::infer::TOP && s & crate::infer::NONE != 0)
-            });
-            if !can_be_none {
+
+    // only what is provable: a lenient read, a literal none, or a call whose
+    // group's return set carries one
+    let yields_none = |e: &Expr| -> bool {
+        match e {
+            Expr::Index { strict: false, .. } => true,
+            Expr::Ident(name, _) => name == "none",
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _) => returns
+                    .get(&(name.as_str(), args.len()))
+                    .is_some_and(|s| s & NONE != 0),
+                _ => false,
+            },
+            _ => false,
+        }
+    };
+
+    let walk = |e: &Expr, diags: &mut Vec<Diagnostic>| {
+        let Expr::App { head, args, piped: false, .. } = e else { return };
+        let Expr::Ident(name, _) = head.as_ref() else { return };
+        if !returns.contains_key(&(name.as_str(), args.len())) {
+            return;
+        }
+        for (pos, arg) in args.iter().enumerate() {
+            if !yields_none(arg) {
                 continue;
             }
-            // both spellings state the disposition: a bare `none` arm and an
-            // `x:none` annotation
-            let handled = idxs.iter().any(|&i| match program.fns[i].params.get(pos) {
-                Some(Pattern::Nullary(n, _)) => n == "none",
-                Some(Pattern::Annotated { ty, .. }) => ty == "none",
-                _ => false,
-            });
-            if !handled {
-                let span = program.fns[idxs[0]].span;
-                diags.push(Diagnostic::new(
-                    "exhaustive",
-                    format!("`{name}` can receive a none at position {pos} with no arm for it"),
-                    span,
-                ));
+            if *handles.get(&(name.as_str(), args.len(), pos)).unwrap_or(&false) {
+                continue;
+            }
+            diags.push(Diagnostic::new(
+                "exhaustive",
+                format!(
+                    "this can be a none and `{name}` has no arm for it — resolve it \
+                     here, or give `{name}` a `none` arm"
+                ),
+                arg.span(),
+            ));
+        }
+    };
+
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            let mut stack = vec![e];
+            while let Some(cur) = stack.pop() {
+                walk(cur, diags);
+                stack.extend(crate::expr_children(cur));
             }
         }
     }
