@@ -1242,7 +1242,7 @@ impl<'a> Backend<'a> {
     /// The check call accepting one named type (chain-aware when the
     /// program declares subtypes). Shared by concrete annotations and
     /// typeset members.
-    fn type_check_call(&mut self, value: &str, ty: &str) -> Result<String, String> {
+    fn type_check_call(&self, value: &str, ty: &str) -> Result<String, String> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
             "any" => "add i64 1, 0".to_string(),
@@ -1736,24 +1736,10 @@ impl<'a> Backend<'a> {
         Ok(())
     }
 
+    /// A field typeset's member resolves exactly as a parameter annotation
+    /// does; keeping one resolver is what stops the two drifting apart.
     fn member_check_call(&self, value: &str, member: &str) -> Result<String, String> {
-        Ok(match member {
-            "any" => "add i64 1, 0".to_string(),
-            "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
-            "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
-            "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
-            "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
-            "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),
-            "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
-            other => {
-                let id = self
-                    .type_ids
-                    .get(other)
-                    .ok_or_else(|| format!("native backend: unknown type `{other}`"))?;
-                let nfields = self.field_count(other)?;
-                format!("call i64 @k_check_rec(%KValue {value}, i64 {id}, i64 {nfields})")
-            }
-        })
+        self.type_check_call(value, member)
     }
 
     fn field_count(&self, ty: &str) -> Result<usize, String> {

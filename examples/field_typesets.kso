@@ -1,9 +1,15 @@
 type count
   n:float64 int
 
+type money int
+
 type slot
   v:any none
+
+type wallet
+  amount:money none
 
 pub play =
   print "{slot none} {slot 7} {slot "text"}"
   >> print "{count 3} {count 2.5}"
+  >> print "{wallet (money 350)} {wallet none}"
