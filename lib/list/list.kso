@@ -280,6 +280,9 @@ fn underrank (missing _) x
 fn underrank m x
   if (x < m) x m
 
+fn unwrap_found none
+  none
+
 fn unwrap_found (missing _)
   none
 
