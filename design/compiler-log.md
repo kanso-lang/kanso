@@ -2470,3 +2470,31 @@ at the call site needs per-site sets, which inference does not keep.
 
 That is the difference between a measuring tool and a shipped diagnostic,
 and the probe stays gated until it can name the line a reader has to edit.
+
+## 2026-07-24 — exhaustiveness reports at the argument
+
+The gated checker now names the line an author edits. Instead of reporting
+that a group can receive a none somewhere, it reports the argument that
+carries one into a group with no arm for it:
+
+  this can be a none and `list/unwrap_found` has no arm for it — resolve it
+  here, or give `list/unwrap_found` a `none` arm
+
+It fires only on what is provable without per-expression inference: a
+lenient read, a literal none, or a call to a group whose joined return set
+carries one. Everything else stays quiet, so the report is evidence rather
+than suspicion.
+
+The real migration is smaller than any earlier count suggested and it lives
+in the standard library. Four sites in list and nineteen in json account for
+all of it; the per-example totals repeat those, once per importing program.
+Fixing the stdlib once leaves user code clean.
+
+One defect blocks turning this on, and it is not about none. A diagnostic
+whose span belongs to an imported module is attributed to the entry file:
+examples/std_list.kso is thirteen lines long and the report points at line
+one hundred fifty-five, which is a line of lib/list. The group-level form
+happened to dodge this by reporting at a declaration, where an existing
+mechanism appends the owning module. An argument span carries no such note.
+Until a reader can follow the pointer to the line that produced it, a
+compile error here would send people to the wrong file.
