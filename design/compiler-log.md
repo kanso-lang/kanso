@@ -3236,3 +3236,66 @@ Also owed, from the same session: ch05 teaches the dot as `x . f is f x` and
 never mentions repositioning. ch06 uses `random 6 . (n -> ...)` and explains
 it as effect binding. Nothing teaches the lambda as the answer to "my value is
 not the first argument" — which is the technique holes would replace.
+
+## 2026-07-25 — GAVEL: partial application is explicit, because overloading makes completeness undecidable
+
+Clay's argument, which supersedes both positions taken earlier today.
+
+With arity overloading, whether an application is complete or pending cannot be
+decided from the expression. `roll 7` must either dispatch now or defer, and
+which one is right depends on intent rather than on any fact the compiler can
+consult: a bare `roll 7` wants the eager reading, while `f = roll 7` followed
+later by `f 2` wants the deferred one. Both readings are live for the same
+text. That is the condition under which a language owes the programmer syntax,
+and no amount of whole-program knowledge substitutes for it.
+
+It also reaches a case an implicit scheme cannot express at all. When an
+arity-1 arm exists, nothing implicit can ever produce a partial of the arity-2
+arm, because the shorter arm claims the application first. That partial is
+simply unreachable.
+
+THE RULING.
+
+  - Bare application is always a call. `f a b` dispatches on the syntactic
+    argument count, exactly as today. A call short of every arm stays
+    `error[arity]`.
+  - Partial application is always written with holes: `roll 7 _`, `roll _ 3`,
+    `foo _ _`.
+  - Supplied plus holes is the arity, so the hole count names the group.
+    `roll 7 _` is the two-argument roll with its first fixed; `roll 7 _ _` is
+    the three-argument one. Arity picks the group, patterns pick the arm
+    within it — which is already how the emitter works, since dsym carries the
+    arity and d_roll_1 and d_roll_2 are separate functions that merely share a
+    name.
+  - Repositioning falls out of the same mechanism: `concat greeting _` puts
+    the awaited value second, which currying alone could never do because it
+    fills from the right.
+
+WHAT THIS BUYS BEYOND EXPRESSIVENESS. The arity is written at the call site, so
+adding `fn roll n` tomorrow cannot silently reinterpret an existing
+`roll 7 _`. Under an implicit scheme that same addition would convert every
+such partial into a completed call, across modules, with no diagnostic. The
+explicit form has no edit hazard.
+
+CORRECTIONS THIS SUPERSEDES, both mine, both from today. First I argued
+dispatch left no canonical argument order to curry along; the arity test
+disproved that — you under-apply an arm set, not a function. Then I accepted
+that currying was unambiguous because a partial need not commit to an arm set,
+which is true and beside the point: the undecidable thing was never which arm,
+it was whether the application had ended.
+
+`_` NOW CARRIES ONE IDEA, NOT TWO. In `fn roll _ sides` it is a position you
+do not care to name; in `roll 7 _` it is a position you cannot name yet.
+Either way it is a position without a name, and which side of the definition
+you stand on decides the flavour.
+
+STILL OWED BEFORE BUILDING.
+
+  - Every hole application is a closure, so the strictness analysis has to see
+    through it or the faster-than-Rust bar pays a thunk per partial.
+  - The nullary `name()` form is now decoupled from this: `roll_7 = roll 7 _`
+    is already a value you apply as `roll_7 2`, so `()` is owed only for
+    calling zero-argument definitions, which remains unbuilt and unparsed.
+  - ch05 teaches the dot as `x . f is f x` and never mentions repositioning;
+    the lambda is what that passage should show today and holes are what
+    replace it.
