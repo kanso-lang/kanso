@@ -580,11 +580,13 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     t
 }
 
-/// Only an err abandons a computation, so only its tag is tested here.
+/// Calls the alwaysinline twin rather than restating its tag test, so the
+/// emitter cannot drift from the definition it inlines.
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
-    let tag = inline_tag(f, value);
+    let r = f.tmp();
+    f.line(&format!("{r} = call i64 @k_not_failure(%KValue {value})"));
     let ok = f.tmp();
-    f.line(&format!("{ok} = icmp ne i64 {tag}, 5"));
+    f.line(&format!("{ok} = icmp ne i64 {r}, 0"));
     ok
 }
 

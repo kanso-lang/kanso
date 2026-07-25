@@ -2421,3 +2421,25 @@ today.
 
 Both cost goldens are unchanged, so removing a tag comparison from the
 hottest inlined predicate in the emitter costs nothing measurable.
+
+## 2026-07-24 — one failure test, and a golden that would have caught the drift
+
+The emitter no longer restates the failure predicate. inline_not_failure
+calls the alwaysinline twin instead of writing the tag comparison itself, so
+the three copies are two: the C function and the LLVM twin it mirrors. Both
+cost goldens are unchanged, because the twin is inlined at the same site the
+comparison used to sit.
+
+The two that remain cannot be merged — the twin exists because LTO declines
+to inline across the .ll/.o boundary, which is the whole reason it was
+written — so the drift risk is pinned instead. A structural spec reads the
+twin out of the emitted IR and asserts it tests the err tag and no other.
+Reintroducing the none test makes it fail, which was verified by putting the
+old body back and watching it go red.
+
+This is the golden that #217 needed and did not have. The demotion changed
+one of three copies, and the suite, both cost goldens, and the browser
+corpus were all green afterward, because nothing in the corpus separated
+none-as-failure from none-as-value. A behavior golden cannot catch a
+semantic change the corpus is blind to; a structural one reads the claim
+directly.

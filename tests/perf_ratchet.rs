@@ -79,3 +79,26 @@ fn linear_list_accumulator_pushes_in_place() {
          in-place reuse is un-wired"
     );
 }
+
+/// The failure predicate is written twice: once in C, once as the LLVM twin
+/// the emitter inlines. They must test the same tags, and nothing else in the
+/// suite notices when they drift — a program only sees the difference where a
+/// none meets a path that inlines. Pin the twin to err alone.
+#[test]
+fn the_failure_twin_tests_err_and_nothing_else() {
+    let ir = ir_for(RECURSIVE);
+    let body: String = ir
+        .lines()
+        .skip_while(|l| !l.contains("define internal i64 @k_not_failure("))
+        .take_while(|l| !l.starts_with('}'))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        body.contains("icmp ne i64 %tag, 5"),
+        "the twin no longer tests the err tag: {body}"
+    );
+    assert!(
+        !body.contains(", 4"),
+        "the twin tests the none tag again — a none is a value, not a failure: {body}"
+    );
+}
