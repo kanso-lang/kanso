@@ -69,14 +69,24 @@ fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
     for ((name, arity), idxs) in &groups {
         for pos in 0..*arity {
+            // a set of TOP means inference lost the call sites — a function
+            // used as a value, most often — and a guess there is not evidence
             let can_be_none = idxs.iter().any(|&i| {
-                inference.params.get(i).and_then(|p| p.get(pos)).is_some_and(|s| s & crate::infer::NONE != 0)
+                inference
+                    .params
+                    .get(i)
+                    .and_then(|p| p.get(pos))
+                    .is_some_and(|s| *s != crate::infer::TOP && s & crate::infer::NONE != 0)
             });
             if !can_be_none {
                 continue;
             }
-            let handled = idxs.iter().any(|&i| {
-                matches!(program.fns[i].params.get(pos), Some(Pattern::Nullary(n, _)) if n == "none")
+            // both spellings state the disposition: a bare `none` arm and an
+            // `x:none` annotation
+            let handled = idxs.iter().any(|&i| match program.fns[i].params.get(pos) {
+                Some(Pattern::Nullary(n, _)) => n == "none",
+                Some(Pattern::Annotated { ty, .. }) => ty == "none",
+                _ => false,
             });
             if !handled {
                 let span = program.fns[idxs[0]].span;

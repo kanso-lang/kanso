@@ -2443,3 +2443,30 @@ corpus were all green afterward, because nothing in the corpus separated
 none-as-failure from none-as-value. A behavior golden cannot catch a
 semantic change the corpus is blind to; a structural one reads the claim
 directly.
+
+## 2026-07-24 — the exhaustiveness probe gets honest
+
+Two sources of noise are gone from the gated checker and the count falls
+from forty-three to thirty.
+
+A parameter whose inferred set is TOP means inference lost the call sites,
+which happens whenever a function is used as a value. That is an absence of
+evidence rather than evidence of a none, and it accounted for twelve of the
+reports — including double, which is only ever called with a literal seven.
+
+The other fix is a plain bug in the probe. It recognized a bare `none` arm
+and not an `x:none` annotation, so it flagged the very example shipped an
+hour ago to demonstrate the annotation form. Both spellings state the
+disposition and both now count.
+
+What the remaining thirty show is a diagnostic-placement question the gavel
+leaves open. inference joins argument sets over every call site, so one
+caller passing a possibly-none taints the whole group: list/select is
+flagged at position zero because somewhere a collection that might be none
+reaches it. The gavel makes the callee responsible — an arm, or every caller
+resolves — so flagging the group is faithful. But the code that needs
+changing is usually the caller, and the message names the callee. Pointing
+at the call site needs per-site sets, which inference does not keep.
+
+That is the difference between a measuring tool and a shipped diagnostic,
+and the probe stays gated until it can name the line a reader has to edit.
