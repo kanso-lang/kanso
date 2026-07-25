@@ -3565,3 +3565,65 @@ should be an error under the no-superfluous rule and currently is not. Native
 and wasm lowering. Inference does not yet type a partial — it reads as TOP —
 so the compiler cannot yet check, as Clay put it, "the validity of any
 invocation of foo and subsequent invocation of its return value".
+
+## 2026-07-25 — OPEN: what makes `&f a` valid, and why it is a static question
+
+Clay, on the partial that just shipped: "`&roll 4` — that could only fail if
+there's no overload of roll that takes as its first argument something that 4
+could satisfy."
+
+That is the validity rule, and the shipped slice does not enforce it. Today
+`&anything 4` builds a partial and the failure, if any, waits for the
+application that completes it. The rule says the error belongs at the `&`,
+where the reader wrote it.
+
+WHAT IT REQUIRES. For each arm of the name, ask whether the supplied arguments
+could match that arm's leading patterns — literal arms by value, annotated
+arms by type, plain binders by anything. If no arm survives that filter, the
+partial can never complete and the `&` is an error naming what the arms do
+take. This is the same question dispatch already answers at a full call site,
+asked against a prefix instead of the whole argument list.
+
+It is also the piece that would let inference type a partial. Right now
+`Expr::Partial` reads as TOP, so nothing downstream knows what the value
+accepts or returns. Once the surviving arms are known, the partial's type is
+the set of their remaining parameter shapes, which is what makes Clay's larger
+point checkable: a compiler that can assess `foo` and the invocation of its
+return value together, statically, rather than discovering the mismatch when
+the last argument lands.
+
+Filed against the `&` task rather than the CAF one; it belongs with native and
+wasm lowering and the `()` form as the rest of that feature.
+
+## 2026-07-25 — GAVEL (extension): holes skip positions inside a `&`
+
+Clay: "you should also be able to do `&roll _ 4 _ _ "hello"` for instance.
+that's partial application currying but skipping positions."
+
+So `_` earns a place in currying after all, and it is not the place the
+withdrawn proposal gave it. `&` still marks the partial; a hole marks a
+position left open inside that application. `&roll _ 4 _ _ "hello"` supplies
+the second and fifth arguments of a five-argument `roll` and waits for the
+first, third and fourth.
+
+WHAT THIS SETTLES. Writing holes names the arity outright — five slots is the
+five-argument group — where a bare `&roll 4` leaves arity to resolve as
+arguments arrive. Both forms are wanted: the bare one for the common case of
+filling from the left, the hole form when the argument you have is not the one
+that comes first.
+
+REMAINING ARGUMENTS FILL HOLES LEFT TO RIGHT, which is the same rule the pipe
+form already uses, so `_` reads identically in both places: a position without
+a name that something later will fill. In a parameter list it still discards.
+Three positions, one idea, and the flavour comes from which side of the
+definition you are standing on.
+
+UNBUILT. The shipped slice takes `&f a b` only. Holes need the parser to
+accept `_` in argument position (currently a syntax error, which is why the
+slot was free), the partial to record which positions are open rather than
+just a count, and application to fill them in order.
+
+The validity question from the entry above gets sharper with holes, not
+harder: a hole constrains nothing, a supplied argument constrains its own
+position, and an arm survives if every supplied position could match. The
+arity is known outright in the hole form, so only one group needs asking.
