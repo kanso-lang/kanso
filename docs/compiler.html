@@ -31,6 +31,10 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
   border-color: var(--accent);
   color: var(--accent);
 }
+.status-declined {
+  opacity: 0.62;
+  text-decoration: line-through;
+}
 .bench-table {
   border-collapse: collapse;
   font-family: var(--font-mono);
@@ -132,7 +136,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <span class="eyebrow">the compiler</span>
 <h1>guardrails, not lifetimes</h1>
 
-<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds per decode, best of forty interleaved runs on one machine in one sitting — 2026-07-23, on a heavily loaded desktop, which is exactly why the runs interleave: every decoder faces the same weather, so the comparison stays fair while the absolute numbers carry the load (idle floors: kanso 0.89, serde 0.98; medians on a loaded box mostly measure the load). shorter is faster.</p>
+<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds per decode — 2026-07-25, on a desktop sitting at a load average near 50. the four run interleaved so they all face the same weather. each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. shorter is faster.</p>
 
 <table class="bench-table">
   <thead>
@@ -141,30 +145,30 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
   <tbody>
     <tr class="win">
       <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:30%"></span></span></td>
-      <td class="num">1.15</td><td class="num">3.30</td><td class="num">5.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:46%"></span></span></td>
+      <td class="num">0.95</td><td class="num">0.98</td><td class="num">6.2 mb</td>
     </tr>
     <tr>
       <td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:44%"></span></span></td>
-      <td class="num">1.67</td><td class="num">3.53</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:47%"></span></span></td>
+      <td class="num">0.97</td><td class="num">1.03</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>reasonably-written rust</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:41%"></span></span></td>
-      <td class="num">1.55</td><td class="num">3.89</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:55%"></span></span></td>
+      <td class="num">1.12</td><td class="num">1.16</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>go encoding/json</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">3.81</td><td class="num">7.40</td><td class="num">10.4 mb</td>
+      <td class="num">2.05</td><td class="num">2.17</td><td class="num">10.5 mb</td>
     </tr>
   </tbody>
 </table>
 
-<p>kanso is the top line. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. and it leads <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—by forty-five percent this sitting (ten percent at the idle floors; the vectorized utf-8 validation and eisel–lemire parsing both live on the decode path, and the gap has widened with each), at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails kanso by a third; go runs past treble with its collector working.</p>
+<p>kanso is the top line by a hair. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. against <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—it is a dead heat: two percent apart here, and in a second sitting the same afternoon the order between them flipped. it holds that pace at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails by about fifteen percent; go takes better than twice as long with its collector working.</p>
 
-<p>a pure, annotation-free language ahead of hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
+<p>a pure, annotation-free language level with hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
 
 <p>and the json table is now the <em>older</em> of the page's two scoreboards. kanso is a lazy language—a value is computed when it's demanded, or never—and on workloads where demand is conditional, the second scoreboard (§07) shows the clear kanso form fifteen times ahead of rust as naturally written and within thirty percent of rust hand-restructured to skip the same work, with counters proving 95% of the work was never born. the strict-tier story below and the lazy story in §07 are two halves of one design.</p>
 
@@ -430,11 +434,11 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p><strong>1. shortest-round-trip float rendering <span class="status status-shipped">shipped</span></strong> — ryū (adams, PLDI 2018). the digit core forms the half-ulp interval, scales it by a generated 125-bit power of five, and picks the shortest digit string inside — pure integer arithmetic, no probing, no dtoa; the format layer mirrors the old %g byte format exactly, and the interpreter renders through the same rules over rust's shortest digits, so all engines agree byte for byte (a latent large-exponent divergence found and closed on the way). fuzzed over fifty million doubles: zero failures, with the only divergences being 495 legal shortenings in the subnormal range — the true-shortest canon the probe could never reach. the dtoa family is gone from the encode profile entirely. dragonbox (jeon, 2020) stays queued behind a profile that shows rendering again.</p>
 
-<p><strong>2. float parsing at memory speed <span class="status status-planned">queued</span></strong> — the eisel–lemire algorithm (lemire, "number parsing at a gigabyte per second," 2021), now inside gcc, chrome, and rust's core. the decode mirror of the entry above, and the biggest known closer of the remaining serde gap on number-heavy documents.</p>
+<p><strong>2. float parsing at memory speed <span class="status status-shipped">shipped</span></strong> — the eisel–lemire algorithm (lemire, "number parsing at a gigabyte per second," 2021), now inside gcc, chrome, and rust's core. the decode mirror of the rendering entry, verified against an independently written reference over thirty million doubles, and pinned by a presence counter: <code>el_parses</code> reads 318450 on the decode board and 2123 on the encode one, so a change that drops the fast path turns ci red.</p>
 
 <p><strong>3. utf-8 validation in vector registers <span class="status status-shipped">shipped</span></strong> — the full keiser &amp; lemire algorithm ("validating utf-8 in less than one instruction per byte," 2021): three nibble lookups classify every two-byte window, a saturating compare pins the 3- and 4-byte continuation runs, all-ascii blocks skip classification entirely, and a trailing zero block makes truncation need no special case. spec-strict — overlongs, surrogates, beyond-U+10FFFF rejected — which also closed a latent divergence against the interpreter's strict validator, pinned by a differential golden. verified against an independent reference over seventy million boundary-crossing sequences at zero mismatches.</p>
 
-<p><strong>4. branchless map lookup <span class="status status-planned">measured, declined</span></strong> — eytzinger layout (khuong &amp; morin, "array layouts for comparison-based searching," 2017). built, benchmarked, and reverted: at json-realistic map sizes (tens of keys) the index costs slightly more than the binary search it replaces, and at ten thousand string keys the two tie — string comparison dominates and layout can't help it. the paper's regime is huge arrays of machine-word keys; kanso's maps aren't that. the measurement stays here so the idea doesn't get re-mined.</p>
+<p><strong>4. branchless map lookup <span class="status status-declined">measured, declined</span></strong> — eytzinger layout (khuong &amp; morin, "array layouts for comparison-based searching," 2017). built, benchmarked, and reverted: at json-realistic map sizes (tens of keys) the index costs slightly more than the binary search it replaces, and at ten thousand string keys the two tie — string comparison dominates and layout can't help it. the paper's regime is huge arrays of machine-word keys; kanso's maps aren't that. the measurement stays here so the idea doesn't get re-mined.</p>
 
 <p><strong>5. building results in their final place <span class="status status-planned">queued</span></strong> — tail recursion modulo context (leijen &amp; lorenzen, ICFP 2023). list building threads accumulators today; TRMC writes each cell into its final position directly. composes with the frontier-claim machinery rather than replacing it, and it is the static-reuse lineage — no counting anywhere.</p>
 
@@ -478,7 +482,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <h3>the prototype's receipts</h3>
 
-<p>the cell design ran as an instrumented prototype before any engine work, every allocation and free counted. across every workload: <strong>21.1 million cells allocated, exactly one live at exit</strong>—the deliberately leaked knot. conditional demand, 100k items with 5% used: <strong>17.8x</strong> faster than the eager version that computes everything, within 14% of the rust programmer who restructured the code by hand. a thunk costs about <strong>23 ns</strong> to build and force—the price the strictness analysis erases wherever demand is provable. and with the free list and defunctionalized cells, a 10-million-element infinite stream runs at <strong>10.9 ns per element with two calls to the allocator, total</strong>: the first cell's memory becomes the third's, the third's becomes the fifth's, forever.</p>
+<p>the cell design ran as an instrumented prototype before any engine work, every allocation and free counted. across every workload: <strong>21.1 million cells allocated, exactly one live at exit</strong>—the deliberately leaked knot. on the shipped engine that workload—100k items, 5% used—runs <strong>19x</strong> faster than a strict build of the same program, and within 28% of the rust programmer who restructured the code by hand. a thunk costs about <strong>23 ns</strong> to build and force—the price the strictness analysis erases wherever demand is provable. and with the free list and defunctionalized cells, a 10-million-element infinite stream runs at <strong>10.9 ns per element with two calls to the allocator, total</strong>: the first cell's memory becomes the third's, the third's becomes the fifth's, forever.</p>
 
 <h3>proven work on idle cores</h3>
 
@@ -506,12 +510,12 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
     <tr>
       <td>rust, as written</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:78%"></span></span></td>
-      <td class="num">1.70</td><td class="num">computes what you wrote</td>
+      <td class="num">1.54</td><td class="num">computes what you wrote</td>
     </tr>
     <tr>
       <td>kanso <code>--strict</code></td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">2.17</td><td class="num">the measured worst case</td>
+      <td class="num">1.93</td><td class="num">the measured worst case</td>
     </tr>
   </tbody>
 </table>
@@ -651,16 +655,16 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <p>none of the numbers on this page ask to be believed. here is the scoreboard and the recipe. every engine reads the file at runtime—an embedded constant would let llvm fold the decode away—and the kanso harness accumulates a checksum so the loop provably runs.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">the scoreboard—best-of-40 per decode, and how to reproduce it</div>
-  <pre><code><span class="c"># kanso, shipped default    ~0.89 ms   5.8 mb rss, flat  (arenas, §03)</span>
-<span class="c"># serde_json (hand-tuned)   ~0.98 ms   6.8 mb rss</span>
-<span class="c"># reasonably-written rust   ~0.99 ms   6.8 mb rss</span>
-<span class="c"># go encoding/json          ~1.69 ms   10.4 mb rss</span>
+  <div class="code-panel-title">the scoreboard—per-decode floors from one interleaved sitting, and how to reproduce it</div>
+  <pre><code><span class="c"># kanso, shipped default    ~0.95 ms   6.2 mb rss, flat  (arenas, §03)</span>
+<span class="c"># serde_json (hand-tuned)   ~0.97 ms   6.8 mb rss</span>
+<span class="c"># reasonably-written rust   ~1.12 ms   6.8 mb rss</span>
+<span class="c"># go encoding/json          ~2.05 ms   10.5 mb rss</span>
 
 cargo build --release
 bash bench/make_jsonbench.sh
 ./target/release/kanso build bench/jsonbench --release
-time ./jsonbench                                  <span class="c"># divide by 150</span>
+time ./jsonbench                                  <span class="c"># less ~3 ms startup, over 150</span>
 (cd bench/serde_bench && cargo build --release)
 ./bench/serde_bench/target/release/serde_bench bench/large.json
 (cd bench/naive_json && cargo build --release)
