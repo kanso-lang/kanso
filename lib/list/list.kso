@@ -107,7 +107,7 @@ pub fn fold coll init f
   fold_flat coll init f 1
 
 fn fold_flat coll acc f i
-  if (length coll < i) acc (fold_flat coll (f acc (coll[i])) f (i + 1))
+  if (length coll < i) acc (fold_flat coll (f acc (coll[i]!)) f (i + 1))
 
 fn fold_go (done _) acc _
   acc
@@ -176,11 +176,12 @@ pub fn next (counting at)
   step at (counting (at + 1))
 
 pub fn next (cursor at source)
-  if (length source < at) (done true) (step source[at] (cursor (at + 1) source))
+  onward = cursor (at + 1) source
+  if (length source < at) (done true) (step source[at]! onward)
 
 pub fn next (cycled at source)
   onward = cycled (at + 1) source
-  if (length source < at) (next (cycled 1 source)) (step source[at] onward)
+  if (length source < at) (next (cycled 1 source)) (step source[at]! onward)
 
 pub fn next (grown seed stretch)
   step seed (grown (stretch seed) stretch)
