@@ -2339,3 +2339,28 @@ of this. Opening the name without fixing that path would have bought a
 checker that accepts what an engine cannot build, which is the divergence
 this entry exists to remove. The field-typeset resolver wants its own pass,
 and gavel three, which asks a field to spell out `any none`, waits on it.
+
+## 2026-07-24 — field typesets work, and the duplication that broke them
+
+`v:any int` failed to compile on native with "unknown type `any`" while the
+interpreter accepted it, and `v:any none` failed the other way round once
+native was fixed. Both are now correct on all three engines, and a golden
+pins them.
+
+The cause is a near-duplicate. Native resolves a member of a *parameter*
+typeset through type_check_call and a member of a *field* typeset through
+member_check_call, and the two carried different sets of arms.
+member_check_call knew int, float64, string and bool; it had never learned
+any, none, or err. The interpreter had the mirror gap in type_match_depth,
+which knew none and err but not any, so it rejected an int in an `any`
+field. Two resolvers that must agree, drifting silently, with no golden
+covering the construct.
+
+Both are filled in and `any` now means what it says in every position. The
+duplication itself stays, which is worth naming: this class of bug is not
+fixed until one of the two resolvers calls the other, and the only reason
+they are separate is that one takes &mut self for interning while the other
+does not. That is a small refactor and a real one.
+
+`any` compiles to a constant true rather than a call, so the check costs
+nothing where it is trivially satisfied. Both cost goldens are unchanged.

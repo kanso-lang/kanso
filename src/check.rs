@@ -422,7 +422,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
 }
 
 /// Builtin type words legal as typeset members alongside declared types.
-const TYPESET_BUILTINS: [&str; 5] = ["any", "bool", "float64", "int", "string"];
+const TYPESET_BUILTINS: [&str; 6] = ["any", "bool", "float64", "int", "none", "string"];
 
 /// A multi-member field typeset enumerates concrete types: each member must
 /// name a declared type or a builtin type word.
