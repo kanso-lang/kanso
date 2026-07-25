@@ -2364,3 +2364,34 @@ does not. That is a small refactor and a real one.
 
 `any` compiles to a constant true rather than a call, so the check costs
 nothing where it is trivially satisfied. Both cost goldens are unchanged.
+
+## 2026-07-24 — one type-name resolver
+
+member_check_call now calls type_check_call. The duplicate is gone, and with
+it the mechanism behind six divergences found today: a type name that one
+resolver knew and another did not.
+
+The split was vestigial. type_check_call took &mut self and member_check_call
+took &self, which is the only reason they could not be the same function, and
+type_check_call never mutated anything — the &mut had simply never been
+narrowed. Changing it to &self let the field path delegate in one line.
+
+The merge is also a capability. Field typesets inherit subtype-awareness,
+which member_check_call never had, so a subtype now works as a member:
+
+    type money int
+
+    type wallet
+      amount:money none
+
+    wallet (money 350)   ->  wallet 350
+    wallet none          ->  wallet <none>
+
+Both engines agree and the golden covers it alongside the any, none, and
+numeric-typeset cases.
+
+Worth stating plainly, because the day produced six of these: every one was
+a type name some path knew and another did not, and each was found only when
+a program happened to exercise the pair. The goldens now cover the construct
+rather than the instances, which is the difference between pinning a bug and
+pinning a feature.
