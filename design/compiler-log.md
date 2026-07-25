@@ -2521,3 +2521,29 @@ feature.
 
 With the owner visible the migration reads clearly: sixty-four sites in
 list and eleven across json's four files. Those are the arms to write.
+
+## 2026-07-24 — the first exhaustiveness arm, and a zero that was a lie
+
+list/unwrap_found gained the forwarding arm the gavel asks for, and the
+gated checker falls from seventy-five reports to eleven. All sixty-four
+inside list clear on one line; the eleven that remain are json's.
+
+    fn unwrap_found none
+      none
+
+The function already behaved this way — a bare `found` parameter caught a
+none and returned it — but the gavel is explicit that a catch-all binding is
+not a stated disposition. The arm makes the absent case visible where a
+reader looks for it, which is the whole point of the rule.
+
+The first attempt reported zero, and the zero was false. Placing the arm
+after `(missing _)` violated the most-specific-first ordering, so every
+program importing std/list failed to compile and never reached the check.
+A checker that runs late reports nothing when the build breaks early, and
+nothing reads exactly like success. What caught it was asking whether the
+examples still produced their goldens rather than trusting the count — the
+suite would have caught it too, one step later.
+
+Worth keeping as a rule of thumb: a diagnostic count falling to zero after a
+one-line change deserves the same suspicion as a benchmark that suddenly
+doubles. Both are usually a broken measurement.
