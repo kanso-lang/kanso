@@ -26,6 +26,10 @@ test_decode_unicode = (decode "\"\\u00e9\"") == "é"
 
 test_decode_whitespace = (decode "  [ 1 , 2 ]  ") == [1 2]
 
+test_encode_empty_list = (encode []) == "[]"
+
+test_encode_empty_map = (encode {:}) == "\{}"
+
 test_encode_escapes = (encode "a\"b\nc") == "\"a\\\"b\\nc\""
 
 test_encode_nested =
