@@ -2813,3 +2813,33 @@ nothing else can forge.
 No performance surface moved today — both cost goldens and the decode
 checksum have been identical through every change — so the number-bearing
 boards are current and were left alone.
+
+## 2026-07-25 — three more specs on the compiled output, and a claim of mine they caught
+
+Asked what pins compilation itself, the answer was four structural specs and
+no golden holding the emitted text. A full IR dump would churn on every
+temporary rename and every llvm version, so the shape stays: assert the
+claims that matter and let the rest move.
+
+Three claims made this week were load-bearing and unpinned, so they are
+specs now. `any` emits a call that tests the tag. The strict index emits the
+erring form rather than the lenient one. A guard compiles to a conditional
+branch inside its own definition.
+
+Writing the first of those turned up a stale claim in this log. The entry
+for the field-typeset fix says `any` compiles to a constant true and costs
+nothing where it is trivially satisfied. That was accurate when written and
+stopped being so an hour later, when `any` had to start excluding none and
+became a real tag test. The log is append-only, so the correction lives
+here: `any` is a call, and the earlier sentence describes a compiler that no
+longer exists.
+
+Each spec was watched failing before being trusted — the `any` one against a
+codegen reverted to the constant, which is exactly the regression it exists
+to catch.
+
+Two smaller lessons from writing them. A spec program is compiled by the
+same front end as any other, so it obeys the ordering rules; `main` before
+`pick` is why the guard spec first failed for a reason that had nothing to
+do with guards. And slicing a function out of the IR has to anchor on the
+`define` line, or the first call site of that function answers instead.
