@@ -2633,3 +2633,30 @@ wants a decision about what find2_below returns rather than a change of
 spelling.
 
 Both cost goldens unchanged, decode checksum intact.
+
+## 2026-07-24 — what the last exhaustiveness report is, and is not
+
+The one surviving report is an inference artifact, not a none.
+
+The chain was worth tracing. text/utf8 is handed escape_onto's result, which
+is escape_clean's, which is either a text/append or escape_able's fold. The
+obvious suspect was text/find2_below, whose not-found answer would plausibly
+be a none — but its inferred set is `INT | fails`, and fails now carries err
+alone, so it never yields one.
+
+The none comes from the join. `fold` is a group of ten arms, one per
+enumerable shape, and a group's return set is the union of all of them. A
+none reachable in any single arm's path becomes part of what every call to
+fold appears to return, including the call escape_able makes with a plain
+list. json's suite passes and encoding escapes works, which is the runtime
+answer: no none is produced there.
+
+So the checker's two remaining imprecisions are now both identified and are
+different from each other. One was a guard it could not see, and the strict
+index removed the need for it. This one is a summary that is coarser than
+the dispatch it summarizes: per-arm returns would resolve it where a
+per-group return cannot.
+
+That is the state exhaustiveness is in. Seventy-five reports became one, the
+one is understood, and turning the check on waits for return sets that
+follow arms rather than groups.
