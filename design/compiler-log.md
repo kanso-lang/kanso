@@ -3482,3 +3482,42 @@ GOLDENS REGENERATED, deliberately and in this direction: both cost goldens
 (allocs down, perm_allocs up) and the compile golden (+5 lines and +1 define
 per sample — the `@k_caf_init` function, empty in samples with no constants;
 rounds and visits unchanged, since inference did not change).
+
+## 2026-07-25 — the boards move for the first real reason today: kanso passes serde
+
+Re-measured every surface after the CAF freeze, and the headline changed.
+
+DECODE, cpu-time slope, thirty interleaved reps, load ~50:
+
+    kanso        0.996 ms/decode   5.6 mb
+    serde_json   1.158             6.8 mb
+    naive rust   1.381             6.8 mb
+    go           2.961            10.8 mb
+
+kanso spends fourteen percent less cpu per decode than serde_json. This
+morning the same pair measured a dead heat, and the difference between those
+two sittings is the constant freeze, not the weather.
+
+THE INSTRUMENT CHANGED, and the page says so. This morning's board was a
+wall-clock slope; this one is cpu time from wait4. At load ~50 a stopwatch is
+useless — the same binary timed twice ran 87% apart, which is larger than every
+gap on the board. The two boards are therefore not comparable figure for
+figure, and the page states the instrument rather than implying continuity.
+
+LAZY BOARD, same sitting, same instrument: kanso 0.12s, rust hand-tuned 0.08,
+rust as written 1.73, kanso --strict 2.15. Fifteen times ahead of rust as
+naturally written holds; the gap to hand-restructured rust reads 38% under cpu
+time where it read 28% under wall, so the page now says forty rather than
+thirty.
+
+KQ, byte-identity gated per query: path 4.0/16.4 ms (1.57x/2.17x), pretty
+7.5/55.5 ms (2.26x/4.70x). The big-file pretty fell from 194.7 ms this morning
+to 55.5 — part CAF, part a quieter machine, and the honest split between those
+is unknown, which is why the sitting is dated rather than compared.
+
+SURFACES WALKED, all of them, per the checklist: compiler.html decode board
+(now two columns — the median column went, since a slope has no median),
+its recipe block, its lazy table and the two prose figures around it;
+index.html panel and the two-engines paragraph; about.html prose; kq README
+and TRY.md. kanso-json carries no numbers. Every figure on the three site
+pages now reads 1.00 / 1.16 / 1.38 / 2.96 / 5.6, checked mechanically.
