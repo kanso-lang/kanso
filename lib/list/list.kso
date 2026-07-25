@@ -39,6 +39,9 @@ pub type skipped
   burn:int
   source:any
 
+pub type sorted
+  items:any
+
 pub type step
   elem:any
   rest:any
@@ -48,6 +51,14 @@ pub fn all? coll pred
 
 pub fn any? coll pred
   fold coll false (hit x -> if (pred x) true hit)
+
+# the predicate must be monotonic over the order — false for a prefix,
+# true for the rest — which is what lets the range halve instead of walk
+fn bisect xs p lo hi best
+  return best if (hi < lo)
+  mid = lo + ((hi - lo) / 2)
+  here = xs[mid]!
+  if (p here) (bisect xs p lo (mid - 1) here) (bisect xs p (mid + 1) hi best)
 
 fn bump none
   1
@@ -63,6 +74,9 @@ pub fn cycle coll
 
 pub fn drop coll n
   skipped n (iter coll)
+
+pub fn find (sorted items) pred
+  bisect items pred 1 (length items) none
 
 pub fn find coll pred
   unwrap_found (seek coll pred)
@@ -238,9 +252,9 @@ fn pick_found (err e) _ _
 fn pick_found found _ _
   found
 
-fn place sorted x
-  under = to_list (select sorted (y -> y < x))
-  join_parts under x (reject sorted (y -> y < x))
+fn place run x
+  under = to_list (select run (y -> y < x))
+  join_parts under x (reject run (y -> y < x))
 
 pub fn reject coll pred
   sifted false (iter coll) pred
