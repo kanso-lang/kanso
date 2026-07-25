@@ -3594,3 +3594,36 @@ the last argument lands.
 
 Filed against the `&` task rather than the CAF one; it belongs with native and
 wasm lowering and the `()` form as the rest of that feature.
+
+## 2026-07-25 — GAVEL (extension): holes skip positions inside a `&`
+
+Clay: "you should also be able to do `&roll _ 4 _ _ "hello"` for instance.
+that's partial application currying but skipping positions."
+
+So `_` earns a place in currying after all, and it is not the place the
+withdrawn proposal gave it. `&` still marks the partial; a hole marks a
+position left open inside that application. `&roll _ 4 _ _ "hello"` supplies
+the second and fifth arguments of a five-argument `roll` and waits for the
+first, third and fourth.
+
+WHAT THIS SETTLES. Writing holes names the arity outright — five slots is the
+five-argument group — where a bare `&roll 4` leaves arity to resolve as
+arguments arrive. Both forms are wanted: the bare one for the common case of
+filling from the left, the hole form when the argument you have is not the one
+that comes first.
+
+REMAINING ARGUMENTS FILL HOLES LEFT TO RIGHT, which is the same rule the pipe
+form already uses, so `_` reads identically in both places: a position without
+a name that something later will fill. In a parameter list it still discards.
+Three positions, one idea, and the flavour comes from which side of the
+definition you are standing on.
+
+UNBUILT. The shipped slice takes `&f a b` only. Holes need the parser to
+accept `_` in argument position (currently a syntax error, which is why the
+slot was free), the partial to record which positions are open rather than
+just a count, and application to fill them in order.
+
+The validity question from the entry above gets sharper with holes, not
+harder: a hole constrains nothing, a supplied argument constrains its own
+position, and an arm survives if every supplied position could match. The
+arity is known outright in the hole form, so only one group needs asking.
