@@ -1,4 +1,4 @@
-error[formatting]: one `if` decides a return — parenthesize any inner `if`
-  --> return_two_ifs.kso:2:3
+error[formatting]: canonical form requires exactly one space here
+  --> return_two_ifs.kso:2:40
    2 |   return if (n < 0) "neg" "pos" if (n != 0)
-         ^
+                                              ^

@@ -1,4 +1,4 @@
 fn check n
   return "small" if (n < 10)
 
-main = print (check 3)
+pub play = print (check 3)

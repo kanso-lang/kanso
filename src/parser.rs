@@ -577,10 +577,36 @@ fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
 /// conditional — the body below a fired guard is unreachable, not skipped.
 fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_return = |line: &Line| matches!(line.tokens.first(), Some((Tok::KwReturn, _)));
-    let lead_end = body
-        .iter()
-        .position(|l| !is_return(l) && !matches!(parse_stmt(l), Ok(Stmt::Bind { .. })))
-        .unwrap_or(body.len());
+    // a construct owns the deeper lines beneath it, so the leading run is
+    // walked at the top indent and skips past a block's body
+    let lead_end = {
+        let mut i = 0;
+        loop {
+            if i >= body.len() {
+                break i;
+            }
+            let leads =
+                is_return(&body[i]) || matches!(parse_stmt(&body[i]), Ok(Stmt::Bind { .. }));
+            if !leads {
+                break i;
+            }
+            let base = body[i].indent;
+            i += 1;
+            while i < body.len() && body[i].indent > base {
+                i += 1;
+            }
+            // an `else` at the header's own indent belongs to the block above
+            let is_else_line = |l: &Line| {
+                matches!(l.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
+            };
+            if body.get(i).is_some_and(|l| l.indent == base && is_else_line(l)) {
+                i += 1;
+                while i < body.len() && body[i].indent > base {
+                    i += 1;
+                }
+            }
+        }
+    };
     if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
         return Err(Diagnostic::new(
             "formatting",
@@ -650,11 +676,64 @@ fn parse_return(line: &Line) -> Result<(Expr, Expr, Span), Diagnostic> {
 }
 
 fn parse_effect_body(body: &[Line], lead_binds: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let mut stmts: Vec<Stmt> =
-        lead_binds.iter().map(parse_stmt).collect::<Result<Vec<_>, _>>()?;
+    let mut stmts: Vec<Stmt> = parse_lead_stmts(lead_binds)?;
     let tail = parse_effect_tail(body)?;
     stmts.extend(tail);
     Ok(stmts)
+}
+
+/// The leading bindings, where a `build` or `if` header owns the indented
+/// lines beneath it exactly as it does in the effect tail — including the
+/// `else` at its own indent and the stray-continuation fallback.
+fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
+    let is_else = |line: &Line| {
+        matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
+    };
+    let mut out = Vec::new();
+    let mut idx = 0;
+    while idx < body.len() {
+        let base = body[idx].indent;
+        let mut j = idx + 1;
+        while j < body.len() && body[j].indent > base {
+            j += 1;
+        }
+        if j == idx + 1 {
+            out.push(parse_stmt(&body[idx])?);
+            idx = j;
+            continue;
+        }
+        let children = &body[idx + 1..j];
+        let head_is_block = matches!(body[idx].tokens.as_slice(), [(Tok::Ident(w), _), ..] if w == "if" || w == "build")
+            || matches!(
+                body[idx].tokens.as_slice(),
+                [(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _), ..] if w == "if" || w == "build"
+            );
+        if !head_is_block
+            && children
+                .iter()
+                .all(|c| matches!(c.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _))))
+        {
+            out.push(parse_stmt(&body[idx])?);
+            idx += 1;
+            continue;
+        }
+        let (else_children, end) = match j < body.len()
+            && body[j].indent == base
+            && is_else(&body[j])
+        {
+            true => {
+                let mut k = j + 1;
+                while k < body.len() && body[k].indent > base {
+                    k += 1;
+                }
+                (Some(&body[j + 1..k]), k)
+            }
+            false => (None, j),
+        };
+        out.push(parse_block_construct(&body[idx], children, else_children)?);
+        idx = end;
+    }
+    Ok(out)
 }
 
 fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {

@@ -1,4 +1,4 @@
 fn half n
   return n / 2
 
-main = print (half 42)
+pub play = print (half 42)
