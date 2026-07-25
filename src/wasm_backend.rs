@@ -580,8 +580,24 @@ impl<'a> WasmBackend<'a> {
                 self.emit_expr(ctx, rhs, false)?;
                 ctx.body.call(RT_JOIN);
             }
-            Expr::Guard { .. } => {
-                return Err("return guards not yet in the wasm backend".to_string())
+            Expr::Guard { cond, early, rest, .. } => {
+                // a fired guard makes the tail unreachable, which is exactly
+                // the untaken branch of a conditional
+                let c = ctx.body.local();
+                self.emit_expr(ctx, cond, false)?;
+                ctx.body.local_tee(c);
+                ctx.body.call(RT_IS_FAILURE);
+                ctx.body.if_i32();
+                ctx.body.local_get(c);
+                ctx.body.else_();
+                ctx.body.local_get(c);
+                ctx.body.call(RT_TRUTHY);
+                ctx.body.if_i32();
+                self.emit_expr(ctx, early, false)?;
+                ctx.body.else_();
+                self.emit_body(ctx, rest, false)?;
+                ctx.body.end();
+                ctx.body.end();
             }
             Expr::BinOp { op, lhs, rhs, span } => {
                 let armable = matches!(*op, "+" | "-" | "*" | "/" | "%")
