@@ -3139,3 +3139,44 @@ An unchanged counter is the whole point of the panel — these are the numbers a
 noisy runner cannot move — so it now says "unchanged" rather than nothing, and
 a flat run draws down the middle. Blank cells read as unmeasured, which is the
 opposite of what this vein is for.
+
+## 2026-07-25 — profiling the decode path: constants are being rebuilt per call
+
+Encode's profile went flat months ago; decode's had not been read since. It is
+not flat. Sampling 3000 decodes:
+
+    d_value_for_3     433    the decoder's value dispatcher
+    k_utf8_bad        357    the validator (named for what it looks for)
+    k_b_push_mut      175
+    _platform_memmove 122
+    d_str_char_4      116
+
+`d_value_for_3` looked like a dispatch cost and is not: the switch is already
+a jump table, and llvm folds the box/unbox of the raw discriminator so the
+comparisons run on the incoming register directly. What it does carry is a
+twelve-register prologue, because three of its arms make non-tail calls first.
+
+Those calls are the finding. `bytes_false = [102 97 108 115 101]` compiles to
+`d_bytes_false_0()`, which allocas five KValues and calls k_list_lit — a heap
+allocation — on every `false` the decoder meets. The gauntlet holds 2111
+`true`, 2088 `false`, 2051 `null`; across 150 decodes that is 937,500
+identical lists, 6.3% of the benchmark's 14,799,465 allocations, and the
+reason the hottest dispatcher needs a frame at all.
+
+A zero-argument definition is a constant. GHC calls these CAFs and evaluates
+them once for the life of the program; kanso rebuilds them per call.
+
+DESIGN. A memoized global per constant nullary definition, filled once into
+permanent storage. The runtime already caches interned single-character
+strings and zero-field marker records there, with the reason written on
+k_alloc_perm: an arena rewind moves the bump pointer, so permanent storage is
+the only cache that is sound across beats.
+
+SAFETY, which is the part that could have gone wrong. A shared constant that
+something pushes to in place would be corruption. k_b_push_mut mutates only
+when `buf->used == l->len && l->len < buf->cap` — a list with spare room at
+its frontier. A constant built at exact capacity fails that test and falls
+through to the copying push, so the cache is safe even if the linearity
+analysis wrongly believes it is uniquely owned. Belt and braces.
+
+Queued as technique 7 on the compiler page with these numbers. Not built.
