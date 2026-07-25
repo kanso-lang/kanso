@@ -3041,3 +3041,43 @@ clippy gains --all-targets; the specs were never linted before.
 OPEN: rustfmt would move 3384 lines, so it is owed its own mechanical PR
 rather than riding with logic. clippy::perf is already clean and stays denied
 by -D warnings; pedantic is 442 warnings and is not worth forcing wholesale.
+
+## 2026-07-25 — the landing sample runs; the engine wiring exists once; ci publishes the counters
+
+The landing page showed `examples/pipes.kso` and then quoted it wrong — the
+panel said `main = "kanso" . greet . print` while the file says
+`pub play = ...`. Nobody noticed because the panel was a picture of code. It
+is not a picture now: the sample is a real editor over the real engine, and
+the shape it displays is the shape the file has, because a wrong one no longer
+runs.
+
+ENGINE WIRING, ONCE. play.js held the tokenizer, the wasm load, and the
+compile-or-interpret decision. The landing page needs all three, and copying
+them would have put two copies of the engine contract in the tree. They live
+in docs/kanso-engine.js now; play.js keeps the playground's own DOM and
+landing-play.js is fifty lines of binding. The engine is a megabyte, so the
+landing page loads nothing until the visitor touches the panel — a reader who
+scrolls past still gets a static page.
+
+VERIFIED, NOT ASSUMED. scripts/site_smoke.py loads both pages in headless
+Chrome, clicks run, and requires the promised output. It caught two real
+failures on the way in: the misquoted sample, and kanso's exactly-one-trailing
+-newline rule, which a textarea does not supply on its own. It also pins
+fanout running in the playground UI — the #244 regression this page must never
+take again. New ci job, its own check.
+
+Chrome's --dump-dom hangs here, as the browser differential already found; the
+POST-a-report pattern is what works.
+
+WHAT EVERY COMMIT COSTS (compiler page §08). CI publishes the deterministic
+counters — allocations, arena blocks, rewind iterations, eisel-lemire parses,
+fixpoint rounds, expression visits — to an unprotected perf-history branch on
+every push to main, and the panel fetches and charts them. Deterministic only:
+a noisy runner cannot move these, so a change in that panel is somebody's
+deliberate edit. Wall-clock stays on the hand-measured board. Pages serves from
+main/docs and main requires review, which is why history cannot live in the
+tree with the page that reads it.
+
+NAV. about, playground, book, compiler, github — what it is, then try it, then
+learn it, then how it works. Go leads with why, rust with install and learn;
+both answer the question before offering the tool.

@@ -1,0 +1,68 @@
+/* The landing page's sample is the real thing: edit it, run it, and the
+   toolchain that answers is the one in your tab. The engine is a megabyte, so
+   nothing loads until you touch the panel — a visitor who only reads still
+   gets a static page. */
+'use strict';
+(function () {
+  const panel = document.getElementById('hero-play');
+  if (!panel) return;
+  const editor = document.getElementById('hero-editor');
+  const mirror = document.getElementById('hero-mirror');
+  const output = document.getElementById('hero-output');
+  const runButton = document.getElementById('hero-run');
+  const { ready, runSource, highlight } = window.KansoEngine;
+
+  const paint = () => {
+    mirror.innerHTML = highlight(editor.value) + '\n';
+  };
+
+  let woken = false;
+  const wake = () => {
+    if (woken) return;
+    woken = true;
+    runButton.textContent = 'waking the engine…';
+    ready().then(() => {
+      runButton.textContent = 'run';
+      runButton.disabled = false;
+    });
+  };
+
+  const run = async () => {
+    wake();
+    output.textContent = 'running…';
+    const result = await runSource(editor.value);
+    output.textContent = result.text || '(no output)';
+    output.classList.toggle('play-error', result.code !== 0);
+    panel.classList.add('has-run');
+  };
+
+  editor.addEventListener('input', () => {
+    paint();
+    wake();
+  });
+  editor.addEventListener('focus', wake, { once: true });
+  editor.addEventListener('keydown', (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      run();
+    }
+    if (event.key === 'Tab') {
+      event.preventDefault();
+      const at = editor.selectionStart;
+      editor.setRangeText('  ', at, editor.selectionEnd, 'end');
+      paint();
+    }
+  });
+  runButton.addEventListener('click', run);
+
+  // carry whatever the visitor typed into the full playground
+  document.getElementById('hero-open').addEventListener('click', () => {
+    try {
+      sessionStorage.setItem('kanso-carry', editor.value);
+    } catch (e) {
+      /* private mode: the playground just opens on its own example */
+    }
+  });
+
+  paint();
+})();

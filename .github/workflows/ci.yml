@@ -95,6 +95,18 @@ jobs:
             exit 1
           }
 
+  site:
+    name: site (landing sample and playground run in a browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: rebuild the engine the pages load
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sh scripts/build_wasm.sh
+      - run: python3 scripts/site_smoke.py
+
   browser:
     name: browser differential (three engines, byte-identical, headless chrome)
     runs-on: ubuntu-latest
@@ -107,6 +119,36 @@ jobs:
             echo "::error::the browser wasm engine diverged from the oracle."
             exit 1
           }
+
+  # Publishes the deterministic counters to an unprotected branch on every
+  # push to main; the compiler page charts them. Pages serves from main/docs
+  # and main requires review, so history cannot live there — it lives on
+  # perf-history and the panel fetches it.
+  perf-history:
+    name: perf history (published to the compiler page)
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: record this commit
+        run: python3 scripts/perf_record.py > /tmp/record.json
+      - name: append to the history branch
+        run: |
+          git config user.name "kanso-ci"
+          git config user.email "ci@kanso-lang.dev"
+          git fetch origin perf-history:perf-history 2>/dev/null || git checkout --orphan perf-history
+          git checkout perf-history
+          git rm -rq --cached . 2>/dev/null || true
+          [ -f history.jsonl ] || : > history.jsonl
+          cat /tmp/record.json >> history.jsonl
+          # keep the file bounded; the chart shows a trend, not an archive
+          tail -n 500 history.jsonl > history.tmp && mv history.tmp history.jsonl
+          git add history.jsonl
+          git commit -m "perf: $(python3 -c "import json;print(json.load(open('/tmp/record.json'))['commit'])")" || exit 0
+          git push origin perf-history
 
   # Non-blocking: reports the kanso-vs-serde decode ratio to the run summary.
   # CI runners are noisy, so this tracks the number for visibility rather than
