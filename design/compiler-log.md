@@ -2871,3 +2871,27 @@ Verified by regression rather than by passing: an extra instruction injected
 into inline_not_failure moved four of the five programs and failed the
 golden, and removing it restored the file. cargo test already carries it, so
 CI gates it with no workflow change.
+
+## 2026-07-25 — the compile golden counts the work, not just the writing
+
+The first version of this golden counted emitted text, which Clay pointed
+out measures the product rather than the process: a compiler can grind a
+long fixpoint and write three lines. So inference now counts what it does —
+rounds of the fixpoint, and expression visits inside them — and the golden
+carries both kinds of number.
+
+The samples show the two are not redundant. guards emits fewer lines than
+dispatch and costs nearly twice the visits; recursion is the only one whose
+fixpoint needs a third round. Output volume and effort genuinely diverge.
+
+Verified the way the twin spec was: an extra fixpoint round forced into
+inference moved every rounds and visits count while every emitted count
+stayed byte-identical. That is precisely the regression line counts alone
+could not see.
+
+The file now carries its policy in its head, because the policy is the
+subtle part. This is a watched trend, not a floor. Compilation and runtime
+trade against each other, and a feature may cost one to buy the other, so
+movement is expected and silence is the failure: regenerate deliberately,
+say which way it went and why, and write the reason down beside the number.
+The same sentence is in CLAUDE.md so it governs the runtime veins too.

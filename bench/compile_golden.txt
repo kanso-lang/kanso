@@ -1,5 +1,14 @@
-recursion lines=374 calls=21 branches=15 defines=19
-dispatch lines=368 calls=22 branches=14 defines=19
-guards lines=367 calls=20 branches=15 defines=19
-records lines=415 calls=25 branches=18 defines=19
-build_block lines=344 calls=14 branches=10 defines=18
+# What compiling these samples costs. rounds and visits are the work the
+# compiler did; lines, calls, branches and defines are what it wrote. The two
+# move independently — grinding a longer fixpoint to emit the same text shows
+# up here and nowhere else.
+#
+# This is a watched trend, not a hard floor. A feature may cost compile work
+# to buy runtime work, or the reverse. Movement is fine and silence is not:
+# regenerate deliberately and record which way it went, and why, in
+# design/compiler-log.md beside the runtime goldens.
+recursion lines=374 calls=21 branches=15 defines=19 rounds=3 visits=39
+dispatch lines=368 calls=22 branches=14 defines=19 rounds=2 visits=16
+guards lines=367 calls=20 branches=15 defines=19 rounds=2 visits=28
+records lines=415 calls=25 branches=18 defines=19 rounds=2 visits=26
+build_block lines=344 calls=14 branches=10 defines=18 rounds=2 visits=26

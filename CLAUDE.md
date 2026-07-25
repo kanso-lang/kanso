@@ -84,6 +84,18 @@ A clean grep is necessary, not sufficient — the families above are wider than 
   to the paths the change owns. (A stray repl experiment once rode into a
   PR and silently broke its CI for a day.)
 
+### Performance goldens are watched, not frozen
+- Two veins now: **runtime** (bench/cost_golden*.txt, tests/golden/mem/*.mem)
+  and **compilation** (bench/compile_golden.txt). The compile golden counts
+  both what the emitter wrote and what deciding it cost — fixpoint rounds and
+  expression visits — because the two move independently.
+- **The goal is improvement over time, not a frozen line.** A feature may
+  cost compile work to buy runtime work, or the reverse, and one metric
+  worsening while another improves is a trade to state, not a failure.
+- **Movement is fine; silence is not.** Regenerate deliberately, say which
+  way it went and why, and record it in the log beside the number. A number
+  that changes without a sentence is the thing to catch.
+
 ### Performance-PR definition of done
 1. Benchmarks re-run; **same-sitting interleaved numbers published
    immediately** — dated, conditions named — in the site docs and every
