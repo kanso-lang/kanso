@@ -1822,6 +1822,7 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
         return matches!(arg, Value::Map(_)).then_some(0);
     }
     let ok = match (ty, arg) {
+        ("any", Value::NoneV) => false,
         ("any", _) => true,
         ("int", Value::Int(_)) => true,
         ("float64", Value::Float(_)) => true,

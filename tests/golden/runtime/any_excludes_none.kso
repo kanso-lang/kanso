@@ -1,0 +1,4 @@
+type box
+  v:any int
+
+pub play = print "{box none}"

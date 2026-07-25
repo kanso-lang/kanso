@@ -126,9 +126,7 @@ define internal %KValue @k_none() alwaysinline {
 define internal i64 @k_not_failure(%KValue %v) alwaysinline {
   %tag = extractvalue %KValue %v, 0
   %ne = icmp ne i64 %tag, 5
-  %nn = icmp ne i64 %tag, 4
-  %ok = and i1 %ne, %nn
-  %r = zext i1 %ok to i64
+  %r = zext i1 %ne to i64
   ret i64 %r
 }
 define internal i64 @k_truthy(%KValue %v) alwaysinline {
@@ -180,6 +178,7 @@ declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
+declare i64 @k_check_any(%KValue)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -581,15 +580,12 @@ fn inline_payload(f: &mut FnEmit, value: &str) -> String {
     t
 }
 
+/// Only an err abandons a computation, so only its tag is tested here.
 fn inline_not_failure(f: &mut FnEmit, value: &str) -> String {
     let tag = inline_tag(f, value);
-    let a = f.tmp();
-    f.line(&format!("{a} = icmp ne i64 {tag}, 5"));
-    let b = f.tmp();
-    f.line(&format!("{b} = icmp ne i64 {tag}, 4"));
-    let both = f.tmp();
-    f.line(&format!("{both} = and i1 {a}, {b}"));
-    both
+    let ok = f.tmp();
+    f.line(&format!("{ok} = icmp ne i64 {tag}, 5"));
+    ok
 }
 
 impl<'a> Backend<'a> {
@@ -1245,7 +1241,7 @@ impl<'a> Backend<'a> {
     fn type_check_call(&self, value: &str, ty: &str) -> Result<String, String> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
-            "any" => "add i64 1, 0".to_string(),
+            "any" => format!("call i64 @k_check_any(%KValue {value})"),
             "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
             "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
             "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
