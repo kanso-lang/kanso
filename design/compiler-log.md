@@ -2075,3 +2075,27 @@ the primitive match — and wants a customer first, which refined lookup
 signals would provide.
 
 Browser differential now reads 40 passed, 0 fallback, 0 failed.
+
+## 2026-07-24 — none campaign, step 2: a field annotation starts meaning something
+
+Constructor arguments were never checked against field types. `node "hello" 5`
+against a type whose id is an int passed `check` and constructed happily,
+which is an invalid-state-representable hole with nothing to do with none.
+
+Full checking needs inferred types at check time, and inference currently
+runs in codegen, so wiring it in is an architectural move rather than a fix.
+What lands instead is the part that needs no inference at all: a literal
+argument's type is known from its syntax. An int, float, non-interpolated
+string, list, map, or boolean literal handed to a field annotated with a
+different concrete primitive is now a compile error naming both.
+
+The check is deliberately narrow. It stays silent unless the field declares
+exactly one concrete primitive and the argument is a literal, so `any`
+fields, typesets, records, subtypes, unannotated fields, and every computed
+expression pass untouched. It reports what is provably wrong and nothing
+else, which is what lets it land now rather than behind inference.
+
+This is also the first machinery the rest of the campaign rests on. The
+prohibition on none in collections and the exhaustiveness rule both need a
+place where a value is compared against a declared type; this is that place,
+holding one case.

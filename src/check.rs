@@ -59,6 +59,61 @@ pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     diags
 }
 
+/// A field annotation is a promise about what the field holds, and a literal
+/// argument is the one case where the compiler can keep it without knowing
+/// anything else about the program.
+fn check_ctor_literals(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let primitive = |e: &Expr| -> Option<&'static str> {
+        match e {
+            Expr::Int(..) => Some("int"),
+            Expr::Float(..) => Some("float64"),
+            Expr::Str(parts, _) => match parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))) {
+                true => Some("string"),
+                false => None,
+            },
+            Expr::List(..) => Some("list"),
+            Expr::MapLit(..) => Some("map"),
+            Expr::Ident(name, _) if name == "true" || name == "false" => Some("bool"),
+            _ => None,
+        }
+    };
+    let concrete = ["int", "float64", "string", "bool", "list", "map"];
+    let walk = |expr: &Expr, diags: &mut Vec<Diagnostic>| {
+        let Expr::App { head, args, .. } = expr else { return };
+        let Expr::Ident(name, _) = head.as_ref() else { return };
+        let Some(ty) = program.types.iter().find(|t| t.name == *name) else { return };
+        if ty.fields.len() != args.len() {
+            return;
+        }
+        for ((field, declared, _), arg) in ty.fields.iter().zip(args) {
+            let [want] = declared.as_slice() else { continue };
+            if !concrete.contains(&want.as_str()) {
+                continue;
+            }
+            let Some(got) = primitive(arg) else { continue };
+            if got != want {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("`{name}`'s `{field}` holds {want}, not {got}"),
+                    arg.span(),
+                ));
+            }
+        }
+    };
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            let mut stack = vec![e];
+            while let Some(cur) = stack.pop() {
+                walk(cur, diags);
+                stack.extend(crate::expr_children(cur));
+            }
+        }
+    }
+}
+
 /// The engines carry `none` as a tag rather than a declared type, so nothing
 /// can derive from it yet. Rejecting here keeps all three engines identical
 /// instead of one erroring and another silently dropping the subtype.
@@ -465,6 +520,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
+    check_ctor_literals(program, &mut diags);
     if require_main {
         check_main(program, &mut diags);
     }
