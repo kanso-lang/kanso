@@ -2188,3 +2188,20 @@ is precisely what exhaustiveness reports on. The open question the demotion
 has to answer on its own is what an operation does when a none reaches it —
 `none + 1` propagates today and must mean something afterward — and that
 answer, not a pre-measured site list, is what the remaining work turns on.
+
+## 2026-07-24 — GAVEL: an operation on a none is a dispatch question
+
+The open question the demotion turned on is answered: `none + 1` looks for a
+`+` arm taking a none and an int, and a compile error follows when no arm
+matches. Arithmetic needs no rule of its own.
+
+This closes the campaign's design. Operators are already dispatch groups —
+user arms for `+` ship on all three engines — so demoting none from the
+failure set does not leave arithmetic undefined. It leaves it dispatched,
+like everything else, and the missing-arm case is the same exhaustiveness
+rule applied at an operator rather than at a named function.
+
+The shape of the remaining work follows from that. There is no separate
+"what does none do in arithmetic" mechanism to build; there is one rule,
+which is that a value arriving where no arm accepts it is a compile error.
+Exhaustiveness is that rule, and it covers operators for free.
