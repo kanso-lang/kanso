@@ -50,6 +50,31 @@ struct Ctx<'a> {
     changed: bool,
 }
 
+/// What compiling actually did, as opposed to what it wrote. Emitted text
+/// measures the product; these count the process — the fixpoint rounds and
+/// the expression visits that produce it.
+pub mod work {
+    use std::cell::Cell;
+    thread_local! {
+        static ROUNDS: Cell<u64> = const { Cell::new(0) };
+        static VISITS: Cell<u64> = const { Cell::new(0) };
+    }
+    pub fn reset() {
+        ROUNDS.with(|c| c.set(0));
+        VISITS.with(|c| c.set(0));
+    }
+    pub fn round() {
+        ROUNDS.with(|c| c.set(c.get() + 1));
+    }
+    pub fn visit() {
+        VISITS.with(|c| c.set(c.get() + 1));
+    }
+    /// (fixpoint rounds, expression visits)
+    pub fn taken() -> (u64, u64) {
+        (ROUNDS.with(Cell::get), VISITS.with(Cell::get))
+    }
+}
+
 pub fn infer(program: &Program) -> Inference {
     let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
@@ -73,6 +98,7 @@ pub fn infer(program: &Program) -> Inference {
     while ctx.changed && rounds < 200 {
         ctx.changed = false;
         rounds += 1;
+        work::round();
         for i in 0..ctx.program.fns.len() {
             let decl = &ctx.program.fns[i];
             ctx.current = (decl.name.clone(), decl.params.len());
@@ -170,6 +196,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
 }
 
 fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, Set>) -> Set {
+    work::visit();
     match expr {
         Expr::Int(..) => INT,
         Expr::Upcast { expr: inner, .. } => eval_expr(ctx, inner, env),

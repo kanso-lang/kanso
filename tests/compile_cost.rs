@@ -1,13 +1,23 @@
-//! What compiling costs, counted rather than timed. Wall time says more
-//! about the machine than the compiler; these numbers are exactly what
-//! codegen chose to write, so a change that emits more work shows up as a
-//! diff instead of a slower afternoon nobody can reproduce.
+//! What compiling costs, counted rather than timed. Two kinds of number
+//! live here. The emitted counts say what codegen wrote; the work counts say
+//! what it took to decide — fixpoint rounds and expression visits — because
+//! a compiler can grind a long time and emit very little. Wall time would
+//! say more about the machine than about either.
 
 use std::fmt::Write as _;
 
 fn ir_for(source: &str) -> String {
     let program = kanso::compile("sample.kso", source, true).expect("sample compiles");
     kanso::codegen::emit_ir(&program).expect("sample lowers to IR")
+}
+
+/// The processing the emitted text cost: how many times the fixpoint went
+/// round, and how many expressions it looked at getting there.
+fn work_for(source: &str) -> (u64, u64) {
+    let program = kanso::compile("sample.kso", source, true).expect("sample compiles");
+    kanso::infer::work::reset();
+    let _ = kanso::infer::infer(&program);
+    kanso::infer::work::taken()
 }
 
 /// Counts that move only when the emitter's output does.
@@ -85,29 +95,48 @@ main =
     ),
 ];
 
-/// The golden lives beside the runtime cost goldens and is diffed the same
-/// way: regenerate deliberately, never to make a red build green.
+/// A watched number, not a line in the sand. Compilation and runtime trade
+/// against each other, and a language feature can cost one to buy the other,
+/// so the point is that nothing moves silently — a diff here asks for a
+/// reason, and the reason goes in the log next to the number.
 #[test]
 fn compile_cost_matches_the_golden() {
     let mut actual = String::new();
     for (name, source) in SAMPLES {
         let (lines, calls, branches, defines) = shape(&ir_for(source));
+        let (rounds, visits) = work_for(source);
         writeln!(
             actual,
-            "{name} lines={lines} calls={calls} branches={branches} defines={defines}"
+            "{name} lines={lines} calls={calls} branches={branches} \
+             defines={defines} rounds={rounds} visits={visits}"
         )
         .expect("string write");
     }
     let golden_path =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bench/compile_golden.txt");
     if std::env::var("KANSO_REGEN_COMPILE_GOLDEN").is_ok() {
-        std::fs::write(&golden_path, &actual).expect("golden writes");
+        let header = "\
+# What compiling these samples costs. rounds and visits are the work the
+# compiler did; lines, calls, branches and defines are what it wrote. The two
+# move independently — grinding a longer fixpoint to emit the same text shows
+# up here and nowhere else.
+#
+# This is a watched trend, not a hard floor. A feature may cost compile work
+# to buy runtime work, or the reverse. Movement is fine and silence is not:
+# regenerate deliberately and record which way it went, and why, in
+# design/compiler-log.md beside the runtime goldens.
+";
+        std::fs::write(&golden_path, format!("{header}{actual}")).expect("golden writes");
         return;
     }
-    let expected = std::fs::read_to_string(&golden_path).unwrap_or_default();
+    let stored = std::fs::read_to_string(&golden_path).unwrap_or_default();
+    // the file carries its own policy at the top; only the rows compare
+    let expected: String =
+        stored.lines().filter(|l| !l.starts_with('#')).map(|l| format!("{l}\n")).collect();
     assert_eq!(
         actual, expected,
-        "compile cost moved. if the change is intended, regenerate with \
-         KANSO_REGEN_COMPILE_GOLDEN=1 and say why in the PR"
+        "compile cost moved. that is allowed — say which way and why, then \
+         regenerate with KANSO_REGEN_COMPILE_GOLDEN=1. rounds and visits are \
+         what compiling did; lines, calls and branches are what it wrote"
     );
 }
