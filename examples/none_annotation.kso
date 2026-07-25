@@ -1,0 +1,10 @@
+fn describe x:none
+  "nothing at all: {x}"
+
+fn describe x:int
+  "the int {x}"
+
+pub play =
+  xs = [1 2]
+  print (describe xs[9])
+  >> print (describe 7)

@@ -2310,3 +2310,32 @@ The step-one example that pinned containers holding a none is gone, replaced
 by two error goldens. It recorded agreement between the engines on a
 behavior the design had already ruled out — correct as a differential fact
 at the time, wrong as a specimen of the language.
+
+## 2026-07-24 — `none` becomes a nameable type in an annotation
+
+`x:none` worked in the interpreter and failed to compile on native with
+"unknown type `none`", while the checker allowed it. That is the same family
+as the subtype-of-none divergence repaired in step one, which only covered
+`type X none` and left the annotation form alone.
+
+The engines now agree. codegen gains a `none` arm testing K_NONE alongside
+the other primitives, wasm takes check code seven, and the interpreter
+already matched. A dispatch group can now name the absent case directly:
+
+    fn describe x:none
+      "nothing at all: {x}"
+
+    fn describe x:int
+      "the int {x}"
+
+This is what a lookup's consumer has been unable to say. Feeding it `xs[9]`
+selects the first arm and `7` the second, byte-identically on all three
+engines.
+
+Field typesets stay closed. `v:int none` is still rejected at check time,
+because that construct resolves member names on a path native does not share
+with parameter annotations — and `any` fails there too, on main, before any
+of this. Opening the name without fixing that path would have bought a
+checker that accepts what an engine cannot build, which is the divergence
+this entry exists to remove. The field-typeset resolver wants its own pass,
+and gavel three, which asks a field to spell out `any none`, waits on it.

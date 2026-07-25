@@ -1254,6 +1254,7 @@ impl<'a> Backend<'a> {
             "bool" if subs => format!("call i64 @k_check_sub_bool(%KValue {value})"),
             "bool" => format!("call i64 @k_check_bool(%KValue {value})"),
             "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
+            "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
             other => match self.type_ids.get(other) {
                 Some(id) if self.sub_parents.contains_key(other) => {
                     format!("call i64 @k_check_sub_id(%KValue {value}, i64 {id})")
