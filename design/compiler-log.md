@@ -2134,3 +2134,30 @@ One caveat on the number. Inference joins argument sets over all call sites,
 so a group called once with a none and elsewhere with a value is flagged
 even where a particular caller resolves it. The 127 is an upper bound on
 work and a lower bound on nothing.
+
+### Correction — the exhaustiveness count was inflated about threefold
+
+The 127 recorded above is wrong. It summed per-file reports, and every
+example that imports std/list re-counted the same twelve stdlib functions.
+Deduplicating by (function, position) across the whole example corpus gives
+43: twelve in list, the rest local to json, text, and the examples
+themselves.
+
+The number is also an overestimate for a second reason, visible in the
+smallest case. fn_value reports `double` as able to receive a none, but
+double is only ever called as `twice 7` with a literal. It is flagged
+because `twice = double` uses the function as a value, so inference cannot
+see through the indirection and falls back to a set that includes none. Any
+function used as a value is flagged this way.
+
+The character of the work was also misdescribed. These are not sites that
+need rewriting away from auto-propagation. The scanner indexes leniently on
+purpose — `if (ws? (cs[p])) ...` relies on running off the end returning
+none, which is how end-of-input is detected — so what each site needs is a
+one-line arm naming that case (`fn ws? none` returning false). That makes
+explicit what the code already depends on, and err-propagation, which is
+what the json parser's no-plumbing property actually rests on, is untouched
+because err remains the failure.
+
+So the migration is roughly forty one-line arms, minus the false positives,
+rather than a rewrite of the library that best demonstrates the design.
