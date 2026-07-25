@@ -3627,3 +3627,39 @@ The validity question from the entry above gets sharper with holes, not
 harder: a hole constrains nothing, a supplied argument constrains its own
 position, and an arm survives if every supplied position could match. The
 arity is known outright in the hole form, so only one group needs asking.
+
+## 2026-07-25 — a book output that was never true, and the exemption that hid it
+
+Clay, reading appb: the `args` example claims that running `argv.kso` with no
+argument prints
+
+    error[endpoint]: unhandled err reached the executor: "missing index 1"
+      born in first at argv.kso:2
+
+It prints `<none>`. `xs[1]` answers an absent index with none, which is the
+whole none gavel; `xs[1]!` is the form that ends the run.
+
+HOW IT SURVIVED. The .out carried a sibling .manual, which exempts a golden the
+harness cannot replay, and its note read "output reconstructed from a real run
+with no argument" — reconstructed, in other words, by hand, from a run that
+predates the none model. The exemption was also backwards: the no-argument
+invocation is the *default* one and perfectly replayable, while the `-- clay`
+variant is the one the harness cannot supply. So the case that could have been
+checked was the one marked unbeatable.
+
+Swapped: argv.out is now the no-argument run, replayed and verified on every
+book check, and argv_witharg.out carries the exemption with an honest reason.
+The prose and the `args` description both said the index "fails, at the
+executor, on the same railway as any other err"; both now say it answers with
+none and point at `xs[i]!` for the other behaviour.
+
+AND A SECOND GAVEL FOUND UNBUILT. Reading `args → string[]` against the type
+gavel — `[]T`, Go's order — I converted the book to `[]string` and the harness
+went red on a code panel. Testing the compiler settles it: `fn total xs:int[]`
+parses, `fn total xs:[]int` does not, failing canonical spacing at the bracket.
+So `[]T` is ratified and unbuilt, exactly like `name()`, and the book was
+correctly documenting the compiler rather than the gavel. Reverted.
+
+The lesson is the one the exemption already taught: prose that cannot be
+replayed drifts, and a gavel that is only written down is not a fact about the
+language. Both are now recorded as unbuilt rather than assumed shipped.

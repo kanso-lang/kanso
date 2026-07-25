@@ -356,7 +356,7 @@ zero non-positive</code></pre>
 
 <h3 id="b-args"><code>args</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>args → string[]</code></p>
-<p>yields the command-line arguments—everything after <code>--</code> on the invocation—as a list of strings. because the list exists only at execution time, indexing past its end fails then, at the executor, on the same railway as any other <code>err</code>.</p>
+<p>yields the command-line arguments—everything after <code>--</code> on the invocation—as a list of strings. the list exists only at execution time, so an index past its end is answered the way every absent index is: with <code>none</code>, a value the caller dispatches on. reach for <code>xs[i]!</code> when the position must be there and its absence should end the run.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">argv.kso</div>
@@ -372,8 +372,7 @@ zero non-positive</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run argv.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
-  born in first at argv.kso:2</code></pre>
+    <pre><code>&lt;none&gt;</code></pre>
   </div>
 </div>
 
