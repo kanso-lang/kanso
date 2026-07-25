@@ -1,0 +1,4 @@
+error[none]: a map cannot hold a none: a lookup answers "not found" with one, so a value would be indistinguishable
+  --> none_in_map.kso:2:13
+   2 |   m = { "a":none "b":2 }
+                   ^

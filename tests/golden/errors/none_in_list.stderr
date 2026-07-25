@@ -1,0 +1,4 @@
+error[none]: a list cannot hold a none: a lookup answers "not found" with one, so an element would be indistinguishable
+  --> none_in_list.kso:2:11
+   2 |   xs = [1 none 3]
+                 ^
