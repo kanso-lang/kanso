@@ -1245,6 +1245,7 @@ impl<'a> Backend<'a> {
     fn type_check_call(&mut self, value: &str, ty: &str) -> Result<String, String> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
+            "any" => "add i64 1, 0".to_string(),
             "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
             "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
             "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
@@ -1737,6 +1738,9 @@ impl<'a> Backend<'a> {
 
     fn member_check_call(&self, value: &str, member: &str) -> Result<String, String> {
         Ok(match member {
+            "any" => "add i64 1, 0".to_string(),
+            "none" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_NONE})"),
+            "err" => format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"),
             "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
             "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),
             "string" => format!("call i64 @k_check_tag(%KValue {value}, i64 6)"),

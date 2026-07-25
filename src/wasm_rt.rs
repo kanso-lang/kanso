@@ -199,6 +199,7 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
             5 => matches!(v, Value::Map(_)),
             6 => matches!(v, Value::ErrV(_)),
             7 => matches!(v, Value::NoneV),
+            8 => true,
             tid => match v {
                 Value::Record { ty, .. } => {
                     type_index(ty).is_some_and(|i| i == (tid - 100) as usize)
