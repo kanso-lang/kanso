@@ -2941,3 +2941,48 @@ el_parses=318450. Eytzinger was tagged planned while its own text read
 "measured, declined"; it now carries its own class.
 
 OPEN: the idle-floor footnote is owed a quiet sitting.
+
+## 2026-07-25 — closures are data in the browser too; and compile speed becomes a published claim
+
+Clay hit `error[runtime]: a closure or bound description cannot be used
+as data here` running the fanout sample in the playground. Interp and
+native both run it.
+
+CAUSE. `wasm_rt` keeps compiled closures in `Slot::C`, outside `Value`,
+and every container — `rt_mkrec`, `rt_mklist`, `rt_mkmap` — funnels its
+members through `val()`, which accepted only `Slot::V`. std/list's
+`map coll f` is `mapped f (iter coll)`, so the closure becomes a record
+field and dies on the way in. Only `map` and `filter` had a bespoke
+closure guard, so every other enumerable adapter was broken in the
+browser while the other two engines ran it. The native engine tags
+closures inside its value union and has this freedom already.
+
+FIX. `Value::TableFn(u32)` names a closure by its registry handle;
+`val()` promotes `Slot::C` to it and `closure_slot()` resolves one hop
+back before asking whether a slot is callable, so a closure read out of a
+field is callable again. Handles stay valid because the registry only
+grows.
+
+VERIFICATION IS PARTIAL AND SAYS SO. wasm_rt is `#![cfg(target_arch =
+"wasm32")]`, so the host build never type-checks it — a first attempt at
+a unit test would have compiled away silently and read as coverage. It
+was removed. The fix is verified by the wasm32 build and by reading; the
+behavior itself is unverified locally, because there is no wasm host on
+this box and the browser extension is not connected. The browser
+differential harness still needs headless CI — this is the second bug it
+would have caught.
+
+PERF. Decode floor unchanged (144.4 → 142.4 ms per 150, inside noise);
+both cost goldens and the compile golden byte-identical. `Value` gains no
+size — every other variant already carries a pointer.
+
+COMPILE SPEED, now published (§08, "how fast it compiles"). `kanso check`
+— parse, whole-program inference, every diagnostic — finishes kq in
+6.6 ms and the json decoder in 6.1 ms, each covering the standard-library
+modules imported alongside the program's own source: about a thousand
+lines for kq, so the front end clears 150k lines/second. Unoptimized
+binary 116 ms; optimized 635 ms, nearly all llvm at -O2. Go builds a
+28-line program against its cached stdlib in 98 ms on the same box.
+2026-07-25, loaded desktop, best of seven. CLAUDE.md's done-checklist
+gains the surface and a standing rule: every change carries a perf check,
+not just perf PRs.

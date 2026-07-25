@@ -93,7 +93,9 @@ fn push(s: Slot) -> u32 {
 fn val(h: u32) -> Value {
     match slot(h) {
         Slot::V(v) => v,
-        _ => die("a closure or bound description cannot be used as data here".to_string()),
+        // a closure is data: it rides in records, lists and maps by handle
+        Slot::C { .. } => Value::TableFn(h),
+        _ => die("a bound description cannot be used as data here".to_string()),
     }
 }
 
@@ -127,6 +129,15 @@ thread_local! {
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
+/// A closure reached through a record field or list arrives as a value naming
+/// its handle, so resolve one hop before asking whether the slot is callable.
+fn closure_slot(h: u32) -> Slot {
+    match slot(h) {
+        Slot::V(Value::TableFn(inner)) => slot(inner),
+        other => other,
+    }
+}
+
 fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
     for &h in &arg_handles {
         if let Slot::V(v) = slot(h) {
@@ -135,7 +146,7 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
             }
         }
     }
-    let Slot::C { tidx, env } = slot(c_h) else {
+    let Slot::C { tidx, env } = closure_slot(c_h) else {
         let v = slot(c_h);
         if let Slot::V(value) = v {
             if is_failure(&value) {
@@ -579,7 +590,7 @@ pub extern "C" fn rt_builtin(name_lit: u32, n: u32) -> u32 {
     let name = name.strip_prefix("builtin_").map(str::to_string).unwrap_or(name);
     let handles = pop_args(n);
     if (name == "map" || name == "filter") && handles.len() == 2 {
-        if let Slot::C { .. } = slot(handles[1]) {
+        if let Slot::C { .. } = closure_slot(handles[1]) {
             return map_or_filter(&name, handles[0], handles[1]);
         }
     }
@@ -818,3 +829,4 @@ pub fn exec_main(h: u32) -> (i32, String) {
     text.push_str(&tail);
     (status, text)
 }
+

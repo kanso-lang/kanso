@@ -29,6 +29,11 @@ pub enum Value {
     Sub { ty: Rc<str>, inner: Rc<Value> },
     FnRef(Rc<str>),
     Closure(Rc<ClosureData>),
+    /// A closure the browser backend compiled into the module's table,
+    /// named by its slot handle. The native engine tags closures inside its
+    /// value union; this is the same freedom, spelled for the wasm registry,
+    /// so a closure can sit in a record field or a list like any other value.
+    TableFn(u32),
     Desc(Rc<Desc>),
     Thunk(Rc<RefCell<ThunkState>>),
 }
@@ -2180,7 +2185,7 @@ fn render_seen(
             }
         },
         Value::FnRef(name) => format!("<fn {name}>"),
-        Value::Closure(_) => "<fn>".to_string(),
+        Value::Closure(_) | Value::TableFn(_) => "<fn>".to_string(),
         Value::Desc(_) => "<io>".to_string(),
     }
 }
