@@ -4590,3 +4590,26 @@ Same shape, same discards; the carried type decides whether the rewind
 happens. Carry evacuation is supposed to copy exactly this across the
 boundary, so either the analysis is refusing a case it could take or the
 evacuation cost is judged too high somewhere. Recorded as an open thread.
+
+## 2026-07-26 — the ledger claimed a stack check that does not exist
+
+The techniques ledger read: "recursion without stack overflow — self-tail calls
+compile to loops; deep non-tail recursion is bounded by an explicit check, not
+a segfault." Half of that is true. Self-tail calls do compile to loops, which
+today's measurement confirms at twenty million frames. There is no explicit
+check anywhere: native takes SIGSEGV at roughly five hundred thousand non-tail
+frames and the interpreter aborts at about fifty-four thousand. The line
+promised a mechanism the compiler does not have.
+
+Corrected to say what is built — constant-stack self-tail calls, measured — and
+to name the gap plainly: non-tail recursion still ends the stack, the engines
+end it at different depths, and a bound they share is queued rather than
+shipped. The driver naming the cause is the only part of that which landed.
+
+The correction matters beyond accuracy. A reader deciding whether kanso is safe
+for a deeply recursive workload would have taken "bounded by an explicit check"
+as a guarantee and written code against it.
+
+SHIPPED WITH IT: the playground gains the containment example as
+`build: a cycle you can pass around`, so the claim the compiler page makes
+about cohorts is something a reader can run rather than read.
