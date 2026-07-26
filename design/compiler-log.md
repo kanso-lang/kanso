@@ -5747,3 +5747,20 @@ ALSO: the editor grammar had no rule for a user type in an annotation at all.
 left `person` plain. An `annotated-type` rule now scopes the name after a
 colon, ordered after the primitives so `int` keeps its own colour and after
 strings so a colon inside a string is never read as an annotation.
+
+## 2026-07-26 — thirteen compiled binaries rode into main on `git add -A`
+
+The rule is in CLAUDE.md and it names the mechanism exactly: "`git add -A`
+sweeps stray working-tree files into commits — scope adds to the paths the
+change owns. (A stray repl experiment once rode into a PR and silently broke
+its CI for a day.)" This afternoon it happened again, thirteen times over, in
+the commit that retired `some`. Roughly a megabyte of Mach-O.
+
+They are all build outputs. `kanso build <dir>` writes its binary beside the
+working directory, so an afternoon of measuring leaves `profbench`, `encprof`,
+`bytacc` and the rest sitting in the repo root looking exactly like files
+somebody meant to add.
+
+Untracked, and `.gitignore` now names them, which is the part that actually
+prevents a recurrence — the rule against `add -A` did not, because the rule
+depends on remembering it at the moment of typing and the ignore file does not.
