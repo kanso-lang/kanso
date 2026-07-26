@@ -3740,3 +3740,85 @@ function signatures.
 
 What changes is only the name, and one entry's worth of reasoning that ran the
 comparison against a baseline nobody writes.
+
+## 2026-07-25 — OPEN (not gaveled): `&` merges records, and why the committee's objection weakened
+
+Recording the trail because I argued both sides within an hour and the reasons
+matter more than the conclusion.
+
+CLAY'S CASE. A five-field `user`, and a nested function that wants two of those
+fields. Rather than invent an ad-hoc type or duplicate the pair, extract the
+pair as a type and use it in `user`'s definition. He has done this in
+typescript, where `&` makes it easy.
+
+THE COMMITTEE SAID NO FIRST. Hickey: merging lets you avoid naming the thing
+two records share, and that name is usually the missing concept. Beck: no case
+in the tree today, so prefer duplication until two real ones appear. Bernhardt:
+an intersection has no identity — it means whatever those two happened to
+contain — and kanso dispatches nominally, so a type's name should mean
+something.
+
+WHAT WEAKENED IT. Records carry no behaviour, so the diamond that makes
+multiple inheritance ugly largely evaporates: there is no method resolution
+order to define, only field names. Two paths contributing the same field at
+the same type dedup to one; the same name at different types is a compile
+error rather than a policy. The objection was borrowed from languages where
+inheritance carries code, and it does not transfer intact.
+
+AND MY COUNTER-PROPOSAL WAS WORSE. I offered record extension through the
+existing subtype relation — `type user identity` plus new fields — which the
+experiment shows is not what that form means today: a record subtype is a
+newtype WRAPPER (`user 30 "clay"` fails with "`user` wraps one identity
+value"), not an extension. More importantly extension is single-parent by
+nature, and real records have several natural groups — identity, contact,
+audit. Clay's case scaled up is exactly what a chain cannot serve.
+
+THE GLYPH OBJECTION IS WITHDRAWN. Clay: `&` is famously both reference and
+intersection and is unambiguous here. C++, rust and typescript all carry both
+senses without confusion, and the positions are disjoint.
+
+WHAT REMAINS TO SETTLE, and none of it is ruled yet:
+  - a `user` must be accepted where `identity` is expected, or the feature
+    misses the case; it stays nominal because the composition is declared
+  - collision: identical name and type dedups, differing types is an error
+  - named results only, matching the typeset gavel — `type foo bar & baz`,
+    never a bare `bar & baz` in a parameter position
+  - records only; `&` on typesets stays union, mixing rejected
+  - variance: whether `[]user` is acceptable as `[]identity`. The diamond's
+    absence does not help here. Safest answer is no — containers invariant.
+
+Unbuilt, and behind the parameter and binder work, which is itself unbuilt.
+
+## 2026-07-25 — the unboxing proof was computed and then dropped
+
+Reading the post-CAF decode profile, `d_value_for_3` still dominated, and its
+IR carried a tag test and a boxed `k_add` fallback around every `p + 1` — the
+position arithmetic the decoder does constantly. Twenty-five `k_add` call sites
+survived into the compiled dispatcher, so llvm had not folded them either.
+
+The fast path already existed. `emit_binop` takes an int-only route — the
+overflow intrinsic and a trap, no tag test, no call — when `set_of` says both
+operands are INT. It was not firing.
+
+The reason is that the proof was computed and then thrown away.
+`unboxed_param` returns true exactly when `group_param_set(name, arity, i) ==
+INT`; that is the condition for passing the slot as a raw i64 in the first
+place. But `rebox_params` reconstructed the KValue without recording the set,
+so the binop emitter looked the parameter up and found nothing. One `f.record`
+call carries the fact forward.
+
+MEASURED: every `k_add` gone from the dispatcher's IR, and per-decode cpu falls
+1.7% on floors, 0.4% on medians, thirty interleaved reps. Small, and strictly
+subtractive — the removed calls sat on cold paths llvm had already laid out
+well, so the win is instruction count and register pressure rather than
+branches taken.
+
+Both cost goldens byte-identical, which is the right answer for a pure codegen
+change: allocation behaviour did not move. The compile golden did not move
+either, because none of its samples do arithmetic on an unboxed int parameter.
+Suite green, browser differential 63 passed 0 failed.
+
+The general shape is worth remembering: an analysis result used for one purpose
+(deciding the ABI) was not visible to a second consumer (arithmetic lowering)
+that would have benefited from the same fact. Worth asking where else a proven
+set is dropped at a boundary.
