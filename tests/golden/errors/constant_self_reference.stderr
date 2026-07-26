@@ -1,0 +1,4 @@
+error[name]: `x` is defined in terms of itself, so it has no value
+  --> constant_self_reference.kso:1:1
+   1 | x = x
+       ^

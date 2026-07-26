@@ -4438,3 +4438,59 @@ wrong. A loaded box can be raced fairly — every decoder faces the same weather
 but only for a ratio between programs that degrade alike, which two parsers
 with different allocation behaviour do not. Idle floors are not a footnote to
 refresh when convenient; they are the measurement.
+
+## 2026-07-26 — MEASURED: arguments are eager today, and a self-referential constant now says so
+
+Clay pushed on a claim I made about `fib`: I said recursive `fib 22` allocates
+zero thunks because strictness analysis proves the arguments demanded, and he
+answered that nothing is demanded until something asks for `fib 10`. He is
+right, and the correction is larger than the wording.
+
+STRICTNESS IS CONDITIONAL. A function is strict when a bottom argument makes
+its result bottom — "if the result is demanded, the argument is." It never
+claims the function runs. Demand originates at the effect boundary; `print`
+asks for its argument, and strictness carries that inward, so under
+`print "{fib 22}"` the whole tree is demanded and no thunk is warranted.
+
+BUT THAT IS NOT WHY FIB HAD ZERO THUNKS. Measured, with a discarded argument:
+
+    fn second _ b
+      b
+
+    pub play = print "{second (fib N) "done"}"
+
+Nothing demands the first argument. It is computed anyway, and the cost tracks
+fib's growth — control 5.3ms, N=28 6.8ms, N=30 8.9ms, N=32 14.6ms (best of 5,
+CPU). The interpreter agrees and is merely slower (control 1.9ms, N=28 302.8ms,
+N=30 794.1ms). Both engines are call-by-value for function arguments. Thunks
+exist for the structured lazy constructs — the scoreboard allocates 100,000 —
+but an argument is not one of them. So `fib` allocated no thunks because
+nothing was going to thunk, not because an analysis proved anything. The
+engines agree, so the differential law is intact; the gap is between the
+ratified pervasive-laziness design and what is built, which is the
+structured side of the open pervasive-vs-structured gavel.
+
+WHAT THIS MEANS FOR CYCLES, which is what Clay was actually asking. Recursive
+`fib` cannot make one: it returns integers, and the recursion lives in the call
+graph, which is a stack that unwinds rather than a heap graph that points back.
+Under call-by-value that holds for every recursive function whose result is a
+value. The cycle question arrives with pervasive laziness, where a thunk
+captures its free variables and one of them can be the binding the thunk is
+computing — which is what confining cycles to `build` blocks is for, and what
+keeps reference counting complete.
+
+SHIPPED ALONGSIDE. The knot idiom was banned by crashing rather than by a
+checker. `x = x`, mutual `a = b` / `b = a`, and `ones = push ones 1` all
+recursed until the stack ended: the interpreter printed `stack overflow`, and
+the native binary took SIGSEGV, which the driver reported as a bare exit 1 with
+no output at all. A constant's references to other constants are a graph the
+front end can walk, so it does; a constant that reaches itself is now
+`error[name]: `x` is defined in terms of itself, so it has no value`, on both
+engines, exit 2, pinned by three error goldens.
+
+STILL OPEN. A cycle routed through a function body — `x = bump 1` with
+`fn bump n` returning `x + n` — is not caught, and should not be by this check:
+following calls would flag guarded recursion that terminates. That case is
+ordinary non-termination, which no language promises to catch. What is worth
+fixing is the reporting: the interpreter names the stack overflow and native
+dies silently. Same program, two diagnostics, one of them empty.

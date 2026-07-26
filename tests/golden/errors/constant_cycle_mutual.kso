@@ -1,0 +1,5 @@
+first = second
+
+second = first
+
+pub play = print "{first}"
