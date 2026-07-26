@@ -2,7 +2,7 @@
 
 Gaveled 2026-07-24. The design below is settled. Nothing here is built —
 kanso today has no user-defined parameterized types, and field types are
-bare names (`peers:list`). The rulings reserve the syntax so the constraint
+bare names (`peers:list`). The rulings reserve the syntax so the parameterization
 work has a shape to land in.
 
 ## The three forms
@@ -51,7 +51,7 @@ A `[` pressed against the identifier before it opens an argument list. A
 is the same tight-versus-spaced rule the lexer already uses to tell field
 access from the pipe.
 
-## The binder declares a constraint; the fields give its order
+## The binder declares a type parameter; the fields give its order
 
 A type declares its constraints up front, and uses them in its fields:
 
@@ -61,13 +61,20 @@ type <k>foo
   friend_names:k[]
 ```
 
-`<k>` says that `k` is a constraint — a name standing for whatever type
+`<k>` says that `k` is a type parameter — a name standing for whatever type
 arrives — and the fields then force every position mentioning it to agree.
 Give `foo[string]` and `name` is a string and `friend_names` is an array of
-strings. That agreement is the whole content of `k`; drop it for `any` in
-both fields and the type still compiles while the relation is gone.
+strings.
 
-The binder does not carry order. Order is the order the constraints first
+What `k` buys is generalization: one declaration standing for every element
+type, where without it you would write `name:string` and a second `foo` for
+every other type. The agreement among its occurrences is how that is
+achieved, not what it is for — which is why this is a parameter rather than
+a constraint. A *constraint* is a bound on such a parameter, like requiring
+`k` to be comparable. Kanso has no bounds yet, and the word stays free for
+them.
+
+The binder does not carry order. Order is the order the parameters first
 appear in the fields, so `type <k v>pair` with `first:k` and `second:v`
 takes `pair[string int]` and nothing has to be repeated.
 
@@ -120,7 +127,7 @@ position — the same rule that bans `_` in binding patterns and prefers
 keyed reads. A two-field positional value is as wrong as a five-field
 one, so there is no `tuple` and no positional `pair`.
 
-The stdlib does ship a two-field constrained record named `pair`, with fields
+The stdlib does ship a two-field parameterized record named `pair`, with fields
 `first` and `second`, because `zip` produces one and `to_h` consumes one.
 Ordinal field names are honest there and nowhere else: `zip` is
 domain-blind, so it cannot know what its two values mean. Application
