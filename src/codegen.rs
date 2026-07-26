@@ -720,6 +720,10 @@ impl<'a> Backend<'a> {
                 f.line(&format!(
                     "%x{i} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 %x{i}r, 1"
                 ));
+                // the unboxing condition is the proof: this slot is an int, and
+                // saying so lets arithmetic on it skip the tag test and the
+                // boxed fallback it guards
+                f.record(&format!("%x{i}"), INT);
             }
         }
     }

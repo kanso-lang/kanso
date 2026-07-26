@@ -3788,3 +3788,37 @@ WHAT REMAINS TO SETTLE, and none of it is ruled yet:
     absence does not help here. Safest answer is no — containers invariant.
 
 Unbuilt, and behind the parameter and binder work, which is itself unbuilt.
+
+## 2026-07-25 — the unboxing proof was computed and then dropped
+
+Reading the post-CAF decode profile, `d_value_for_3` still dominated, and its
+IR carried a tag test and a boxed `k_add` fallback around every `p + 1` — the
+position arithmetic the decoder does constantly. Twenty-five `k_add` call sites
+survived into the compiled dispatcher, so llvm had not folded them either.
+
+The fast path already existed. `emit_binop` takes an int-only route — the
+overflow intrinsic and a trap, no tag test, no call — when `set_of` says both
+operands are INT. It was not firing.
+
+The reason is that the proof was computed and then thrown away.
+`unboxed_param` returns true exactly when `group_param_set(name, arity, i) ==
+INT`; that is the condition for passing the slot as a raw i64 in the first
+place. But `rebox_params` reconstructed the KValue without recording the set,
+so the binop emitter looked the parameter up and found nothing. One `f.record`
+call carries the fact forward.
+
+MEASURED: every `k_add` gone from the dispatcher's IR, and per-decode cpu falls
+1.7% on floors, 0.4% on medians, thirty interleaved reps. Small, and strictly
+subtractive — the removed calls sat on cold paths llvm had already laid out
+well, so the win is instruction count and register pressure rather than
+branches taken.
+
+Both cost goldens byte-identical, which is the right answer for a pure codegen
+change: allocation behaviour did not move. The compile golden did not move
+either, because none of its samples do arithmetic on an unboxed int parameter.
+Suite green, browser differential 63 passed 0 failed.
+
+The general shape is worth remembering: an analysis result used for one purpose
+(deciding the ABI) was not visible to a second consumer (arithmetic lowering)
+that would have benefited from the same fact. Worth asking where else a proven
+set is dropped at a boundary.
