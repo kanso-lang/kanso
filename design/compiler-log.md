@@ -3975,3 +3975,62 @@ Relaxing is backward-compatible, since every sample in the tree already
 satisfies the stricter rule; tightening later would not be. Filed as its own
 task rather than changed here, because it is a language decision and Clay is
 asleep.
+
+## 2026-07-25 — a field rename silently rewires every constructor call
+
+Clay, on the ordering rule: "that makes sense where ordering is meaningless,
+like the keys you assign in a map. but perhaps the user really should be able
+to decide what order to set keys in a record type?"
+
+There is a sharper reason than taste, and it is a soundness hazard:
+
+    type point            type point
+      x:int        ->       y:int          x renamed to z
+      y:int                 z:int
+
+    (point 1 2).x = 1     (point 1 2).z = 2
+
+Same call, same types, no diagnostic — the 1 moved to a different field.
+Fields sort alphabetically, and field order IS the positional constructor's
+argument order, so renaming a field rewires every construction site silently.
+It is the same shape as the implicit-currying hazard: an unrelated later edit
+quietly changing what existing code means.
+
+Field order is load-bearing twice, in fact. The type-parameter gavel derives
+parameter order from first appearance in the fields, so a rename can reorder
+those too.
+
+THE CHOICE. Either the author controls field order — declaration order is the
+constructor order, renaming is safe, and the documentary grouping Clay wants
+comes free — or construction becomes keyed only (`point x:1 y:2`), after which
+order carries nothing and sorting it is harmless. The first is less disruptive
+and makes a thing that is already semantic explicit rather than derived from
+spelling.
+
+It also splits the ordering question cleanly: sort typeset members, because a
+union really is a set; do not sort record fields, and do not sort functions.
+
+## 2026-07-25 — DECLINED: go's `map[key]value`
+
+Clay: "we should just adopt go's map syntax map[key_type]value_type instead of
+map[key_type value_type]?"
+
+The type gavel's own words are the argument: a type is a name, a slice, or an
+application, and there is nothing else. `map[string int]` is `map` applied to
+two arguments, exactly like `pair[string int]` or `foo[k]`. Go's form adds a
+fourth shape that exists only for `map`, which makes the one type everybody
+uses the one type that is special.
+
+That matters more here than in go, and for a reason particular to each
+language. Go can afford `map[k]v` precisely because its users cannot write
+their own parameterized types with that shape — there is nothing for it to be
+inconsistent with. Kanso is heading toward user-defined parameterized types,
+and the day someone writes `cache[string int]` beside `map[string]int` the
+special case is visible.
+
+Borrowing `[]T` from go does not set a precedent for it: `[]T` is one of the
+three forms, not a carve-out for a particular type name.
+
+The honest counter is familiarity — `map[string]int` reads instantly to a go
+programmer and `map[string int]` costs a beat. One beat, spent once, against a
+special case carried forever.
