@@ -5825,3 +5825,48 @@ strings so a colon inside a string is never read as an annotation.
 Clay's own workaround for the cache is in editors/README.md now, because
 removing and re-adding the bundle is not always enough: untick, apply, tick,
 apply.
+## 2026-07-26 — CORRECTION: non-nullability is derived, not declared
+
+I wrote that retiring `some` left non-nullability "currently unstatable", and
+called it a capability gap. Clay: "well, no. the way it can never be none is if
+there's any place where the field is passed to a function that doesn't take
+none for that argument."
+
+That is the inference running in the direction I had not been thinking about.
+A field's type is not only what construction sites *put in* — it is also what
+use sites *require*. If `p.x` reaches a parameter that does not accept `none`,
+then `x` cannot be `none`, and a construction site that stores one is not a
+missing declaration, it is a conflict between two facts the program already
+states. Nothing was lost with `some`; the constraint moved from something a
+programmer writes and can forget or get wrong, to something the program means.
+
+WHAT EXISTS AND WHAT DOES NOT. `infer.rs` grows each field's set by every
+construction site's argument, to a fixpoint — the supply side, and it has been
+there all along. There is no read-side constraint anywhere: nothing records
+that a field flowed into a parameter requiring a string. So the compiler knows
+what fields receive and has never asked what their uses demand.
+
+THE MISSING HALF, stated so it can be built rather than admired. For each field
+collect the constraint its uses impose; compare against what construction sites
+supply; report the disagreement naming both sides. Grounding comes from
+annotations that remain — `fn shout s:string` — and from primitive operations,
+since `n * 2` requires a number whatever anyone wrote. Non-nullability needs no
+special case: a use requiring `string` excludes `none` because `none` is not a
+string, and the construction storing one is the conflict.
+
+The example that shows the compiler is currently silent:
+
+    type point
+      x
+      y
+
+    fn shout s:string
+      "{s}!"
+
+    pub play =
+      a = point 3 4
+      b = point "three" 4
+      print "{shout b.x} {a.x}"
+
+`x` receives both an int and a string, and one of them reaches a parameter that
+takes only strings. `kanso check` says `ok`.
