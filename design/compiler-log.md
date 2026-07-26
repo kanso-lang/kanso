@@ -5412,3 +5412,60 @@ plus the stalling that footprint causes.
 
 Recorded on the compiler page as entry 8, with the instrument added to the
 techniques ledger.
+
+## 2026-07-26 — CORRECTION: it is the accumulator, not the carried document
+
+The entry merged an hour ago said encode fails to rewind because it "carries
+the decoded document it is re-encoding" across each round. That is wrong, and
+running the analysis's own report rather than reasoning from the goldens says
+so plainly:
+
+    rounds/3         grow-only: another group tail-calls it (unbracketed entry)
+    encode_items/3   grow-only: argument 1 may carry heap across the iteration
+    encode_pairs/3   grow-only: argument 1 may carry heap across the iteration
+
+The benchmark's outer loop declines for an entirely different reason — an
+unbracketed entry — and the two loops that matter decline on argument 1. In
+all of them argument 1 is `acc`:
+
+    fn encode_items acc xs i
+      if (length xs < i) acc (encode_items (elem_onto acc xs[i]) xs (i + 1))
+
+The document `xs` threads from entry unchanged and is fine; `THREADED` already
+admits records, lists, strings and closures for exactly that reason. What
+crosses the boundary as fresh heap is the output buffer, born above the mark
+this iteration and required to outlive the rewind.
+
+KQ SAYS THE SAME THING, and it is the workload that matters: exactly one of its
+loops rewinds (`list/bisect`), while `encode_items`, `encode_pairs` and
+`indent_onto` — the whole pretty-print path — decline on their accumulator, and
+four more decline as unbracketed entries.
+
+WHY THE DISTINCTION IS THE OPPORTUNITY. The accumulator is genuinely live, and
+for a 1.9 mb document its output is a few megabytes. The process holds 211.9.
+The gap is everything else the iteration allocated, kept alive only because one
+slot needed to survive. The analysis already knows which slot that is — it
+names the position in the verdict.
+
+THE DESIGN IS ALREADY ON RECORD, from 2026-07-19: the fold-state shelf, giving
+the named slot survivor treatment at `k_beat_iter` so the cluster rewinds around
+it, with the note that the copy must be transitive over the accumulator's
+reachable graph and that the cost needs measuring before committing. That
+caution is right, and for this shape it points somewhere better than copying:
+the encode accumulator is a byte builder with one stable identity that grows by
+capacity doubling. Copying it down every iteration is quadratic; giving its
+buffer a home below the mark for its whole life is not. The general shelf and
+the byte-builder special case are different builds, and the second is both
+cheaper and the one the profile is asking for.
+
+WHAT THE CORRECTION CHANGES ON THE PAGE. Entry 8 now describes the accumulator
+rather than the document, keeps the measurements — which were right — and says
+what the fix would be rather than gesturing at "living below the mark" without
+saying which value.
+
+A NOTE ON METHOD. The wrong version came from reading two counters across two
+goldens and inferring a mechanism. The right version came from running
+`KANSO_BEAT_REPORT=1`, which prints the verdict per group and existed the whole
+time. A tool that answers the question directly beats an inference from
+aggregates, and this is the second time today that the aggregate reading was
+the wrong one.
