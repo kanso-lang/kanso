@@ -1,0 +1,4 @@
+error[type]: `person`'s `partner` holds int, not string
+  --> field_assign_wrong_type.kso:8:19
+   8 |     ada.partner = "not an int"
+                         ^
