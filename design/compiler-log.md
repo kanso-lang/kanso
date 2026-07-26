@@ -4034,3 +4034,38 @@ three forms, not a carve-out for a particular type name.
 The honest counter is familiarity — `map[string]int` reads instantly to a go
 programmer and `map[string int]` costs a beat. One beat, spent once, against a
 special case carried forever.
+
+## 2026-07-25 — correcting the map-syntax entry: the argument is arity, not inconsistency
+
+I read Clay's proposal as `map[k]v` for `map` alongside the application form
+for everything else, and argued the carve-out would look odd next to
+`cache[string int]`. He meant `map[k]v` as *the* form. The entry above answers
+a question he did not ask.
+
+THE ARGUMENT THAT SURVIVES IS SIMPLER AND STRONGER: the form does not
+generalize, and go proved it. `map[K]V` is builtin-only syntax that predates
+generics; when go added user-defined parameterized types in 1.18 it reached for
+`Pair[K, V]`. Go carries both, and the one it chose for the general case is the
+comma form — which is what kanso already has, minus the commas.
+
+A two-parameter type reads well as `map[k]v`. A three-parameter one has nowhere
+to go. Taking it as the general form means taking a form that works at arity
+two and needing a second form the moment something takes three.
+
+CLAY'S SHARPER QUESTION, which the entry above missed entirely: maybe
+multi-argument application is not needed at all.
+
+    type <t>pair:
+      first:t
+      second:t
+
+That is a homogeneous pair — one parameter, both fields the same type — and it
+applies as `pair[string]`. If most parameterized types take one parameter, the
+multi-argument form earns its keep on very few cases, and `map` might be the
+only genuine two-parameter type.
+
+I do not think it is. A cache keyed by one type holding another, a result
+carrying ok and err types, anything dictionary-shaped: those want two, and they
+are the same shape as `map` rather than special cases of it. Which is the
+uniformity argument stated properly — `map` is not privileged, it is the
+two-parameter type that happened to ship first.
