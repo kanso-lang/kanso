@@ -5028,3 +5028,39 @@ parameter ranks, which makes the pair above an error and leaves `:any` in the
 generic position working as before. Pinned by an error golden. No existing code
 moves: the only two `:any` uses in the tree are record fields, not dispatch
 arms.
+
+## 2026-07-26 — OPEN: rendering an io satisfies the check that exists to catch dropped intent
+
+Clay wrote `print (math/random 8)`, got `<io>`, and asked what happened. The
+draw never ran; `print` rendered the description instead of performing it.
+
+This is not a bug in the mechanism — ch05 teaches it deliberately: "interpolate
+an io into a string and you get its face, not its result. there is no result
+yet; nothing has run." Both engines agree, so the differential law is intact.
+
+But the paragraph immediately after that one is where it comes apart. ch05 also
+teaches that dropping intent is refused, and the compiler does refuse it:
+
+    goodbye = print "sayonara"
+    print "the goodbye never ran"           error[unused]: unused binding
+
+    goodbye = print "sayonara"
+    print "the goodbye never ran: {goodbye}"   accepted, prints <io>
+
+The second program drops the intent exactly as completely as the first. The
+sayonara never prints either way. Mentioning the binding inside a string
+satisfies the used-check while running nothing, so the rule that exists to
+catch dropped intent is discharged by an operation that drops it.
+
+THE ARGUMENT FOR CHANGING IT: rendering an io is not consuming it, so it
+should not count as use. An io that is rendered but never sequenced is the same
+mistake the unused-binding rule already names, and it is the mistake the
+language's own author made the first time he reached for `math/random` outside
+the pipe form. The only place the current behaviour is wanted is the ch05 panel
+that demonstrates the face, which is a teaching artifact rather than a use.
+
+THE COST: ch05's `render.kso` would stop compiling and would need another way
+to show what an io looks like — `--plan` already exists for that and is what
+the surrounding section uses.
+
+Clay's call, because it changes semantics the book teaches.
