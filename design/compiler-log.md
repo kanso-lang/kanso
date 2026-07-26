@@ -5290,3 +5290,35 @@ answer. The question is whether a field may *also* carry a stated constraint
 that inference checks against, and whether stating it is redundant when the
 program currently agrees. That is the flip-flop from the previous entry, and it
 is the same gavel.
+
+## 2026-07-26 — the dispatcher is not a dispatch cost, and SpecConstr buys source not speed
+
+Two findings that move the two largest remaining queue entries.
+
+THE 19.8% IS NOT DISPATCH. `d_value_for_3` tops the decode profile, and the
+obvious read is that dispatch is expensive. It is not. The IR function is 143
+lines and every arm ends in a `musttail call` to another function, so at the IR
+level the dispatcher is a switch and six jumps. The compiled symbol is 1,684
+bytes, and samples land as deep as offset 1536 — llvm inlined the callees back
+in. So the symbol's 19.8% is the whole value-parsing subtree wearing one name,
+and the dispatch itself is the entry plus the switch: the samples at offsets 1,
+2, 12, 28 and 36 come to about forty of the function's two hundred and
+forty-seven, or roughly 3% of the profile, for a single indexed jump. There is
+no dispatch tax to remove, which is what "dispatch as jump tables" already
+claimed and what this confirms.
+
+SPECCONSTR'S TARGET IS REAL BUT IT IS NOT A PERFORMANCE TARGET. The ledger
+names "the enumerable's hand-written typed fold arms, automated," and those
+arms exist: `lib/list/list.kso` carries nine `fold` arms, nine `iter` arms and
+nine `next` arms, one per adapter shape, each body identical modulo its
+constructor. The specialization SpecConstr would generate is therefore already
+present — written out by hand, and already fast. What the pass would buy is the
+twenty-seven arms, not the speed, and the ledger now says so.
+
+WHAT THAT LEAVES WORTH FIXING TODAY. Three parallel arm sets that must each
+gain an entry when an adapter is added, where forgetting one fails only when
+somebody folds that particular shape. All three currently agree — checked, no
+drift — but nothing was holding them together. `tests/enumerable_arms.rs` pins
+the sets against each other, and was watched failing with one `fold` arm
+removed. That is the cheap half of what the pass would guarantee, available
+now and costing a compiler pass nothing.
