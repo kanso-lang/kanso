@@ -3016,6 +3016,14 @@ KValue k_b_utf8(KValue lv, const char* origin) {
 
 static KValue k_utf8_bad(const char* data, long long len, const char* origin) {
     k_stat_utf8_bytes += len;
+    /* a document's keys and short values are ascii and shorter than one
+       vector, where the wide pass is nearly all setup: the table loads, and
+       two tail blocks each filled a byte at a time. */
+    if (len < 16) {
+        long long j = 0;
+        while (j < len && (uint8_t)data[j] < 0x80) j++;
+        if (j == len) return k_none();
+    }
 #if defined(__aarch64__)
     /* keiser & lemire, "validating utf-8 in less than one instruction per
        byte" (2021): three nibble lookups classify every two-byte window,
