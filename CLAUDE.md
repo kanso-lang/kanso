@@ -136,14 +136,24 @@ A clean grep is necessary, not sufficient — the families above are wider than 
   declaring the objective wrong without saying so.
 - **A rise is held, not banked.** When the number goes up, run `--set` in the
   same PR. A gain nobody ratchets is a gain the next change is free to spend.
-- **Improvement saturates; regression does not.** Each term's contribution is
-  `r / (r + 1)` where `r` is baseline over current, so successive doublings pay
-  less and less — a quarter-weight term gains 8.3 points for the first
-  doubling, 6.7 for the next, then 4.4, 2.6, 1.4. Past a point a program is
-  fast enough that halving its cost again buys almost nothing, and a straight
-  ratio would say otherwise. The curve is deliberately asymmetric: halving a
-  term's performance costs more than doubling it gains, so a regression cannot
-  be bought with a speculative win elsewhere.
+- **Improvement saturates, at a rate each term chooses.** A term contributes
+  `r / (r + satiation)` where `r` is baseline over current, so successive
+  doublings pay less and less, and how fast they stop paying is a property of
+  the dimension rather than of its importance. Compile cost satiates early
+  (0.5): a front end that already finishes in six milliseconds gains almost
+  nothing from three, and its doublings are worth 4.3, 2.9, 1.7, 0.9 points.
+  Runtime satiates late (2.0): a decoder that gets eight times faster is eight
+  times faster, and its doublings are worth 9.0, 9.0, 7.2, 4.8. **Weight says
+  how much a dimension matters; satiation says how long it keeps mattering.
+  They are different questions and a second of compile time is not a second of
+  runtime.**
+- **The curve is asymmetric, and most so where satiation is low.** Halving a
+  term costs more than doubling it gains. A doubling of compile rounds costs
+  5.4 points against a 0.15 weight, where a doubling of decode allocations
+  costs 7.2 against 0.25 — per unit of weight the satiated term loses more,
+  because a compiler that was imperceptible and is now noticeable has lost
+  something real, while a decoder that was already the expensive part has only
+  got worse at being expensive.
 - **The function is provisional and says so.** Seven deterministic terms are a
   model of what the project wants, not the thing itself; wall time is absent
   because it cannot be made deterministic, and what a model leaves out it

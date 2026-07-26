@@ -145,16 +145,6 @@
       "begin": "\"",
       "end": "\"",
       "name": "string.quoted.double.kanso",
-      "beginCaptures": {
-        "0": {
-          "name": "punctuation.definition.string.begin.kanso"
-        }
-      },
-      "endCaptures": {
-        "0": {
-          "name": "punctuation.definition.string.end.kanso"
-        }
-      },
       "patterns": [
         {
           "match": "\\\\[\"\\\\{ntr]",
@@ -164,16 +154,6 @@
           "begin": "\\{",
           "end": "\\}",
           "name": "meta.interpolation.kanso",
-          "beginCaptures": {
-            "0": {
-              "name": "punctuation.section.interpolation.begin.kanso"
-            }
-          },
-          "endCaptures": {
-            "0": {
-              "name": "punctuation.section.interpolation.end.kanso"
-            }
-          },
           "patterns": [
             {
               "include": "$self"

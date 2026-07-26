@@ -36,17 +36,29 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 FLOOR = ROOT / "bench/welfare_floor.json"
 
-# What the project is buying, and how much each part is worth. Runtime is
-# two thirds of it because that is the claim the front page makes; compile
-# cost is a third because a language nobody can iterate in is not fast.
-WEIGHTS = {
-    "decode_allocs": 0.25,
-    "decode_arena_blocks": 0.10,
-    "encode_allocs": 0.20,
-    "encode_arena_blocks": 0.10,
-    "compile_rounds": 0.15,
-    "compile_visits": 0.10,
-    "emitted_lines": 0.10,
+# What the project is buying. Each term carries two numbers, because weight
+# alone cannot say what a second is worth here.
+#
+#   weight    how much this dimension matters at all. Runtime carries two
+#             thirds because that is the claim the front page makes; compile
+#             cost carries a third, because a language nobody can iterate in
+#             is not fast either.
+#
+#   satiation how fast further improvement stops mattering, which differs by
+#             dimension and is not a matter of importance. A compiler that
+#             already finishes in six milliseconds gains almost nothing from
+#             finishing in three — nobody can tell. A decoder in a hot loop
+#             that gets eight times faster is eight times faster, and the
+#             eighth doubling still shows up in somebody's bill. Larger
+#             satiation means the term keeps paying for longer.
+TERMS = {
+    "decode_allocs": (0.25, 2.0),
+    "decode_arena_blocks": (0.10, 1.5),
+    "encode_allocs": (0.20, 2.0),
+    "encode_arena_blocks": (0.10, 1.5),
+    "compile_rounds": (0.15, 0.5),
+    "compile_visits": (0.10, 0.5),
+    "emitted_lines": (0.10, 0.5),
 }
 
 
@@ -81,43 +93,45 @@ def terms():
     }
 
 
-def satisfaction(ratio):
+def satisfaction(ratio, satiation):
     """How much a term being `ratio` times better than baseline is worth.
 
     A straight ratio says the tenth halving is worth as much as the first,
     which is false: past a point a program is fast enough that making it twice
-    as fast again buys almost nothing. A logarithm is the usual reach, and it
-    still pays every doubling equally. This saturates instead — each doubling
-    is worth less than the one before, and no single term can run away with
-    the score.
+    as fast again buys almost nothing. A logarithm is the usual reach and still
+    pays every doubling equally. This saturates instead, at a rate the term
+    chooses, so a dimension that stops mattering early can say so:
 
-        ratio  0.25   0.5    1     2     4     8    16     inf
-        value  0.20   0.33  0.50  0.67  0.80  0.89  0.94   1.00
+        ratio          0.5     1      2      4      8     inf
+        satiation 0.5  0.50   0.67   0.80   0.89   0.94   1.00   (compile)
+        satiation 2.0  0.20   0.33   0.50   0.67   0.80   1.00   (runtime)
 
-    It is deliberately asymmetric around the baseline. Halving a term's
-    performance costs more than doubling it gains, which is the right shape
-    for a ratchet: a project protecting what it has should not be able to buy
-    a regression with a speculative win somewhere else.
+    Both are asymmetric around the baseline — halving a term's performance
+    costs more than doubling it gains — which is the right shape for a ratchet.
+
+    Measured rather than assumed, the asymmetry is sharpest where satiation is
+    low. A doubling of compile rounds costs 5.4 points against a 0.15 weight,
+    while a doubling of decode allocations costs 7.2 against 0.25 — so per unit
+    of weight, the satiated term loses more. That reads oddly until you say it
+    in words: a compiler that already finishes imperceptibly and then takes
+    twice as long has moved from instant toward noticeable, which is a real
+    loss, while a decoder that was already the expensive part just got worse at
+    being expensive. Satiation cuts both ways, and it should.
     """
-    return ratio / (ratio + 1.0)
-
-
-# every term sits at exactly this when it matches baseline, so a project that
-# has changed nothing scores exactly 100
-BASELINE_SATISFACTION = 0.5
+    return ratio / (ratio + satiation)
 
 
 def score(now, base):
     """The one number. A weighted sum of per-term satisfaction, scaled so the
-    recorded baseline reads 100. Two hundred is the unreachable ceiling where
-    every term costs nothing."""
-    total = 0.0
-    for key, weight in WEIGHTS.items():
+    recorded baseline reads 100."""
+    total = at_baseline = 0.0
+    for key, (weight, satiation) in TERMS.items():
         # a term that reached zero is better than any baseline, and dividing
         # by it would say infinity rather than "as good as this gets"
         current = now[key] if now[key] else 0.5
-        total += weight * satisfaction(base[key] / current)
-    return 100.0 * total / BASELINE_SATISFACTION
+        total += weight * satisfaction(base[key] / current, satiation)
+        at_baseline += weight * satisfaction(1.0, satiation)
+    return 100.0 * total / at_baseline
 
 
 def main():
@@ -144,7 +158,7 @@ def main():
     value = score(now, held["baseline"])
     floor = held["floor"]
     print(f"welfare {value:.2f}   floor {floor:.2f}")
-    for key, weight in sorted(WEIGHTS.items()):
+    for key in sorted(TERMS):
         base, cur = held["baseline"][key], now[key]
         if base != cur:
             print(f"  {key:22} {base:>12,} -> {cur:>12,}   {100 * (base / (cur or 0.5) - 1):+6.1f}%")

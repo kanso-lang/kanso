@@ -10,6 +10,8 @@
 
 The bundled TextMate plugin must be enabled (it is by default). If `.kso` doesn't pick up, check Settings → Editor → File Types for a stale association.
 
+After the grammar changes, JetBrains keeps the old one cached. Removing and re-adding the bundle is not always enough — untick it, Apply, tick it again, Apply.
+
 ## vs code
 
 Symlink the bundle into your extensions directory and reload:
