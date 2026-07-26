@@ -5250,3 +5250,43 @@ restated annotations.
 
 Not built. The gavel is whether "inside out" means everywhere or only inside
 the boundary.
+
+## 2026-07-26 — hover answers the documentation objection, not the enforcement one
+
+Clay, on the inferred-fields thread: the language server will show the actual
+possible types when the developer hovers a field.
+
+THAT CONCEDES ONE OF THE THREE OBJECTIONS OUTRIGHT, and it should. "A
+declaration is documentation" was the weakest of them, and hover is strictly
+better documentation than a restated annotation: it shows what the field really
+holds across the whole program rather than what someone once wrote down and may
+since have been wrong about. It also softens the distance objection, because a
+widened field is visible at the place you would look.
+
+WHAT SURVIVES IS A DIFFERENT KIND OF THING. Hover tells the developer what the
+types *are*. It cannot tell them what the types are *supposed to be*, and only
+the second one catches this:
+
+    a field is meant to hold a name
+    somewhere a caller stores an int into it
+    nothing downstream requires a string, so nothing conflicts
+    inference derives {string, int}, the program compiles clean
+    hover shows `string | int` — to whoever thinks to hover
+
+Inference plus hover gives observability. A declaration gives enforcement. The
+bug above is invisible to the first and a compile error under the second,
+because `name:string` is a claim the store contradicts, while `{string, int}`
+is merely a fact the store helped produce.
+
+This is the schema criterion the project already holds — invalid states
+unrepresentable — and it needs somebody to have said which states are invalid.
+A domain fact ("a name is a string") is not derivable from code that never
+says so; inference can only ever report what the code does, and the code doing
+the wrong thing consistently is exactly the case at issue.
+
+SO THE QUESTION NARROWS, usefully. Not "declarations or inference" — inference
+should certainly run, report, and catch conflicts, and hover should show its
+answer. The question is whether a field may *also* carry a stated constraint
+that inference checks against, and whether stating it is redundant when the
+program currently agrees. That is the flip-flop from the previous entry, and it
+is the same gavel.
