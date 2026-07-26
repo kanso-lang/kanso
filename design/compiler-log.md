@@ -4133,3 +4133,41 @@ a cell outliving its frame, which means the count has to be owned by whatever
 holds the cell rather than by the frame that made it. That is the retain-on-
 store half of a real RC, and it is the piece the log has twice flagged as
 memory-unsafe to rush. The golden now exists to prove it when it lands.
+
+## 2026-07-25 — `<>` for application is viable: spacing already disambiguates it
+
+I argued against `pair<string>` on the turbofish precedent — that `<` is a
+comparison and type names appear in expression position as constructors, so
+`pair<string>` would be ambiguous the way `foo<bar>(baz)` is in c++. Clay: "i
+don't think we have ambiguity because space is meaningful."
+
+He is right, and the compiler settles it. Both collisions are already
+formatting errors:
+
+    a<b            error[formatting]: canonical form requires exactly one space
+    "a">>print     error[formatting]: canonical form requires exactly one space
+
+Comparisons must be spaced, so a TIGHT `<` cannot be one. The sequence operator
+must be spaced, so a tight `>>` cannot be one either — which means
+`foo<bar<t>>` nests without the problem c++ needed a language revision to fix.
+
+The precedent does not transfer because the languages differ where it counts:
+rust and c++ are whitespace-insensitive, and that is precisely why they needed
+disambiguation. Kanso already spends spacing as grammar in three places — the
+dot for field access against the pipe, the bang against its bracket, and now
+`&` against its name — so a fourth costs nothing new to learn.
+
+WHICH LEAVES THE CHOICE ON TASTE, and the taste argument now runs the other
+way from the gavel. The binder is `<k>`; applying with `pair[string]` uses a
+different bracket for the same concept, while `pair<string>` uses the same one
+for declaring and supplying. Against that, `[]` is already the type-and-
+collection bracket (`[]T`, `xs[i]`), so `<>` would be a second family.
+
+Not re-gaveled — recorded because the reason the gavel gave for `[]` was never
+ambiguity, and the reason I gave against `<>` was wrong.
+
+ALSO SETTLED IN PASSING: Clay, on inference supplying type arguments — "you
+could have ambiguous cases. i guess that would just be a compiler error." That
+matches how every other ambiguity in the language is ruled: competing arities
+under currying, and a merged type's field collisions. Ambiguity is an error
+rather than a default, and the rule is now consistent across three features.
