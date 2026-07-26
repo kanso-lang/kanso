@@ -116,6 +116,27 @@ kon kon</code></pre>
   </div>
 </div>
 
+<p>the dot does not stop at one argument. whatever follows the function is written after the piped value, which arrives first — so a function meant to be piped into takes its subject first and its settings after:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">pipe_args.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">clamp</span> n lo hi
+  <span class="k">return</span> lo <span class="k">if</span> (n <span class="o">&lt;</span> lo)
+  <span class="k">return</span> hi <span class="k">if</span> (hi <span class="o">&lt;</span> n)
+  n
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{4 . clamp 0 10}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code>10
+4</code></pre>
+  </div>
+</div>
+
+<p><code>12 . clamp 0 10</code> is <code>clamp 12 0 10</code>. read the arguments after the name as the ones you were always going to write, with the subject lifted out in front of them.</p>
+
 <p>now the interesting move: pipe out of an <em>io</em>. <code>read_file path</code> doesn't return a string—it returns an <code>io</code> describing the read, and the file's contents don't exist until the runtime performs it. so when you pipe an io into a function, kanso wires the function to receive the value <em>once it exists</em>. piping into an io is bind:</p>
 
 <div class="code-panel">
