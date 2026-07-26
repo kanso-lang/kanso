@@ -5354,3 +5354,61 @@ delta now falls back to the absolute count when the share rounds away, so that
 same move shows as `▼ -5,000`. Verified in a browser against fixture history
 rather than by reading the code: nineteen rows, three section headings,
 expansion toggling, no console errors.
+
+## 2026-07-26 — MEASURED: the carried value that blocks the rewind, and what it costs
+
+Clay asked whether kq and jq could be compared by operation cost rather than by
+a clock, then wondered whether that would miss real blocking. Both halves were
+right, and the third instrument turned up the largest unclaimed number on the
+compiler page.
+
+RETIRED INSTRUCTIONS ARE THE OBJECTIVE MEASURE. `/usr/bin/time -l` reports them
+on darwin with no privileges, they reproduce to between 0.08% and 0.65% run to
+run, and nothing else on the box can move them. kq against jq:
+
+    path 188 kb    kq  31.9M   jq  66.1M    2.08x less work
+    path 1.9 mb    kq 221.3M   jq 421.4M    1.90x less work
+    pretty 188 kb  kq  81.6M   jq 257.6M    3.16x less work
+    pretty 1.9 mb  kq 723.4M   jq 2,341M    3.24x less work
+
+READ BESIDE CYCLES IT SAYS SOMETHING A CLOCK CANNOT. On the largest row kq does
+3.24 times less work but takes only 2.79 times fewer cycles, because its
+instructions retire at 4.59 per cycle against jq's 5.33. Roughly a fifth of the
+algorithmic lead is spent stalling rather than banked.
+
+THE CAUSE IS MEMORY, and the numbers are not close:
+
+    peak footprint   kq 211.9 mb   jq 30.7 mb    kq holds 7x more
+    peak / input     kq   107.6x   jq   15.6x
+    page reclaims    kq   13,123   jq    2,097   kq faults 6x more
+
+A working set seven times larger is exactly what costs a fifth of the ipc.
+
+AND THE CAUSE OF THAT IS ONE COUNTER THE GOLDENS ALREADY CARRIED. The two
+boards differ in a way nobody had read across:
+
+    decode   beat_iters=151   arena_blocks=4
+    encode   beat_iters=1     arena_blocks=2205
+
+The same loop shape — a self-tail-recursive round with an accumulator — and one
+of them never rewinds. The difference is what the round carries. Decode keeps
+an int across the line; encode keeps the decoded document it is re-encoding.
+The beat analysis proves an iteration keeps nothing and rewinds; when it does
+keep something, carry evacuation copies it; and a value too big to copy leaves
+only one safe answer, which is to stop rewinding. Then memory grows with the
+work, which is the 2,205 blocks.
+
+This is the same cliff as this morning's string accumulator, where an int carry
+beat 200,000 times and a string carry beat zero. That was a two-node cycle in a
+test program; this is kq's real workload, and it is costing a seven-fold
+footprint and a fifth of the encode path's instruction efficiency.
+
+THE FIX IS VISIBLE IN THE MEASUREMENT, which is why this is a queue entry and
+not just a complaint. The carried document is read every iteration and never
+written. It does not need evacuating — it needs to live below the mark instead
+of above it. Distinguishing a carried value the iteration only reads from one
+the iteration produces is the analysis, and the payoff is most of the footprint
+plus the stalling that footprint causes.
+
+Recorded on the compiler page as entry 8, with the instrument added to the
+techniques ledger.
