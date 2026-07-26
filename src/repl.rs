@@ -157,7 +157,9 @@ impl Session {
                 self.units = candidate;
                 Ok(format!("deleted {name}"))
             }
-            Err(diag) => Err(format!("cannot delete `{name}` — the session still uses it:\n{diag}")),
+            Err(diag) => {
+                Err(format!("cannot delete `{name}` — the session still uses it:\n{diag}"))
+            }
         }
     }
 
@@ -189,7 +191,11 @@ impl Session {
         }
         let source = wrap_expression(&name, input);
         let mut candidate = self.units.clone();
-        candidate.push(Unit { name: name.clone(), arms: vec![(name.clone(), source)], is_type: false });
+        candidate.push(Unit {
+            name: name.clone(),
+            arms: vec![(name.clone(), source)],
+            is_type: false,
+        });
         let program = compile_units(&candidate)?;
         let interp = Interp::new(&program);
         let result = interp.run_named(&name).expect("just-committed constant resolves");
@@ -206,11 +212,7 @@ impl Session {
     }
 }
 
-fn execute(
-    interp: &Interp,
-    desc: &Desc,
-    executor: &mut dyn Executor,
-) -> Result<Outcome, String> {
+fn execute(interp: &Interp, desc: &Desc, executor: &mut dyn Executor) -> Result<Outcome, String> {
     match interp.execute(desc, executor) {
         Ok(Value::ErrV(info)) => Err(format!(
             "error[endpoint]: unhandled err reached the executor: {}\n{}",
@@ -230,10 +232,8 @@ fn compile_units(units: &[Unit]) -> Result<Program, String> {
     for decl in &mut program.fns {
         decl.file = "repl".to_string();
     }
-    let diags: Vec<diag::Diagnostic> = check::check(&mut program, false)
-        .into_iter()
-        .filter(|d| d.kind != "unused")
-        .collect();
+    let diags: Vec<diag::Diagnostic> =
+        check::check(&mut program, false).into_iter().filter(|d| d.kind != "unused").collect();
     match diags.is_empty() {
         true => Ok(program),
         false => Err(diag::render(&diags, "repl", &source)),
@@ -346,9 +346,7 @@ fn parse_fragment(chunk: &str) -> Result<Program, String> {
 /// anything is bound would otherwise define itself and recurse forever.
 /// Strings count too — interpolation makes them code.
 fn mentions(input: &str, name: &str) -> bool {
-    input
-        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .any(|word| word == name)
+    input.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')).any(|word| word == name)
 }
 
 fn wrap_expression(name: &str, input: &str) -> String {

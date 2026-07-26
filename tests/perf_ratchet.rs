@@ -93,10 +93,7 @@ fn the_failure_twin_tests_err_and_nothing_else() {
         .take_while(|l| !l.starts_with('}'))
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(
-        body.contains("icmp ne i64 %tag, 5"),
-        "the twin no longer tests the err tag: {body}"
-    );
+    assert!(body.contains("icmp ne i64 %tag, 5"), "the twin no longer tests the err tag: {body}");
     assert!(
         !body.contains(", 4"),
         "the twin tests the none tag again — a none is a value, not a failure: {body}"
@@ -157,10 +154,7 @@ fn a_guard_compiles_to_a_branch() {
         .take_while(|l| !l.starts_with('}'))
         .collect();
     let body = picks.join("\n");
-    assert!(
-        body.contains("br i1 "),
-        "a guard stopped compiling to a conditional branch: {body}"
-    );
+    assert!(body.contains("br i1 "), "a guard stopped compiling to a conditional branch: {body}");
 }
 
 /// A release build links a cached runtime object rather than recompiling

@@ -34,10 +34,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, file, source))?;
     stamp_file(&mut program, file);
-    let base = std::path::Path::new(file)
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default();
+    let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let ownership_diags = merge_ambient_arms(&mut program);
     if !ownership_diags.is_empty() {
         return Err(diag::render(&ownership_diags, file, source));
@@ -84,21 +81,23 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
     }
-    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new(), reexports: Vec::new() };
+    let mut merged = ast::Program {
+        fns: Vec::new(),
+        types: Vec::new(),
+        imports: Vec::new(),
+        reexports: Vec::new(),
+    };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
     let mut merged_diags = check::check_merged(&merged, true);
     check::check_unused_private(&merged, &used, &mut merged_diags);
-    let merged_diags: Vec<_> = merged_diags
-        .into_iter()
-        .filter(|d| d.kind != "unused")
-        .collect();
+    let merged_diags: Vec<_> = merged_diags.into_iter().filter(|d| d.kind != "unused").collect();
     match merged_diags.is_empty() {
         true => {
             canonicalize_types(&mut merged);
-    fuse_enumerable(&mut merged);
+            fuse_enumerable(&mut merged);
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
@@ -115,10 +114,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     if !ownership_diags.is_empty() {
         return Err(diag::render(&ownership_diags, file, source));
     }
-    let base = std::path::Path::new(file)
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default();
+    let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     // a play library may import like any module; the ambient module rides
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
@@ -162,10 +158,8 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    let merged_diags: Vec<_> = check::check_merged(&program, false)
-        .into_iter()
-        .filter(|d| d.kind != "unused")
-        .collect();
+    let merged_diags: Vec<_> =
+        check::check_merged(&program, false).into_iter().filter(|d| d.kind != "unused").collect();
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
@@ -202,10 +196,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     if !ownership_diags.is_empty() {
         return Err(diag::render(&ownership_diags, file, source));
     }
-    let base = std::path::Path::new(file)
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_default();
+    let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
@@ -248,10 +239,8 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    let merged_diags: Vec<_> = check::check_merged(&program, false)
-        .into_iter()
-        .filter(|d| d.kind != "unused")
-        .collect();
+    let merged_diags: Vec<_> =
+        check::check_merged(&program, false).into_iter().filter(|d| d.kind != "unused").collect();
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
@@ -298,9 +287,8 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
 /// anything else is relative to the importing module's directory.
 fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathBuf, String> {
     if let Some(rest) = path.strip_prefix("std/") {
-        let toolchain = std::env::var("KANSO_STD")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| {
+        let toolchain =
+            std::env::var("KANSO_STD").map(std::path::PathBuf::from).unwrap_or_else(|_| {
                 std::env::current_exe()
                     .ok()
                     .and_then(|p| p.parent().map(|d| d.join("../../lib")))
@@ -401,17 +389,13 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     if std::env::var_os("KANSO_NO_FUSE").is_some() {
         return;
     }
-    let mut shorts: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
+    let mut shorts: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let std_names: std::collections::HashSet<String> = program
         .fns
         .iter()
         .filter(|d| d.file.starts_with("std/list"))
         .map(|d| {
-            d.name
-                .rsplit_once('/')
-                .map(|(_, s)| s.to_string())
-                .unwrap_or_else(|| d.name.clone())
+            d.name.rsplit_once('/').map(|(_, s)| s.to_string()).unwrap_or_else(|| d.name.clone())
         })
         .collect();
     for d in &program.fns {
@@ -474,9 +458,7 @@ fn inline_single_use_chains(
             idx += 1;
             continue;
         };
-        let is_adapter = shorts
-            .get(aname.as_str())
-            .is_some_and(|s| ADAPTERS.contains(&s.as_str()));
+        let is_adapter = shorts.get(aname.as_str()).is_some_and(|s| ADAPTERS.contains(&s.as_str()));
         if !is_adapter {
             idx += 1;
             continue;
@@ -503,9 +485,7 @@ fn inline_single_use_chains(
         let Stmt::Bind { expr, .. } = body.remove(idx) else { unreachable!() };
         for later in body.iter_mut().skip(idx) {
             match later {
-                Stmt::Bind { expr: e, .. }
-                | Stmt::Expr(e)
-                | Stmt::Set { value: e, .. } => {
+                Stmt::Bind { expr: e, .. } | Stmt::Expr(e) | Stmt::Set { value: e, .. } => {
                     substitute_ident(e, &name, &expr);
                 }
             }
@@ -689,12 +669,7 @@ fn try_fuse(
         span,
     };
     let ident = |n: &str| Expr::Ident(n.to_string(), span);
-    let call = |h: Expr, a: Vec<Expr>| Expr::App {
-        head: Box::new(h),
-        args: a,
-        span,
-        piped: false,
-    };
+    let call = |h: Expr, a: Vec<Expr>| Expr::App { head: Box::new(h), args: a, span, piped: false };
     *counter += 1;
     let acc = format!("facc{counter}");
     let x = format!("felem{counter}");
@@ -704,12 +679,7 @@ fn try_fuse(
             Expr::Int(0u32.into(), span),
             lam(
                 vec![&acc, &x],
-                Expr::BinOp {
-                    op: "+",
-                    lhs: Box::new(ident(&acc)),
-                    rhs: Box::new(ident(&x)),
-                    span,
-                },
+                Expr::BinOp { op: "+", lhs: Box::new(ident(&acc)), rhs: Box::new(ident(&x)), span },
             ),
         ),
         ("to_list", 1) => (
@@ -791,7 +761,11 @@ fn try_fuse(
     Some(call(ident(fold_name), vec![source, init, reducer]))
 }
 
-fn qualify(dep: &mut ast::Program, qual: &str, exports: &mut std::collections::HashMap<String, bool>) {
+fn qualify(
+    dep: &mut ast::Program,
+    qual: &str,
+    exports: &mut std::collections::HashMap<String, bool>,
+) {
     let owned: std::collections::HashSet<String> = check::declared_names(dep);
     for ty in &mut dep.types {
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
@@ -1002,7 +976,12 @@ fn load_dependencies(
     imports: &[ast::Import],
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
 ) -> Result<(ast::Program, std::collections::HashMap<String, bool>), String> {
-    let mut dep_program = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new(), reexports: Vec::new() };
+    let mut dep_program = ast::Program {
+        fns: Vec::new(),
+        types: Vec::new(),
+        imports: Vec::new(),
+        reexports: Vec::new(),
+    };
     let mut exports = std::collections::HashMap::new();
     for import in imports {
         let path = &import.path;
@@ -1045,10 +1024,9 @@ fn load_dependencies(
             continue;
         }
         if path == "std/random" {
-            return Err(
-                "error: `std/random` moved — `random` lives in `std/math`
-".to_string()
-            );
+            return Err("error: `std/random` moved — `random` lives in `std/math`
+"
+            .to_string());
         }
         let dep_dir = resolve_import(base, path)?;
         // importing one's own module compiles a second copy of it, so every
@@ -1076,8 +1054,7 @@ fn load_dependencies(
     let renamed: std::collections::HashSet<String> = imports
         .iter()
         .flat_map(|import| {
-            let qual =
-                import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
+            let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
             import
                 .renames
                 .iter()
@@ -1119,10 +1096,7 @@ fn load_dependencies(
             }
             dep_program.types.extend(tclones);
             if !found {
-                return Err(format!(
-                    "error: `{}` exports no `{theirs}` to rename\n",
-                    import.path
-                ));
+                return Err(format!("error: `{}` exports no `{theirs}` to rename\n", import.path));
             }
         }
     }
@@ -1242,13 +1216,7 @@ fn unused_imports(
             let qual = i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string());
             !quals.contains(&qual)
         })
-        .map(|i| {
-            diag::Diagnostic::new(
-                "unused",
-                format!("unused import \"{}\"", i.path),
-                i.span,
-            )
-        })
+        .map(|i| diag::Diagnostic::new("unused", format!("unused import \"{}\"", i.path), i.span))
         .collect()
 }
 
@@ -1314,13 +1282,19 @@ fn private_uses(
     exports: &std::collections::HashMap<String, bool>,
     diags: &mut Vec<diag::Diagnostic>,
 ) {
-    fn walk(e: &ast::Expr, exports: &std::collections::HashMap<String, bool>, diags: &mut Vec<diag::Diagnostic>) {
+    fn walk(
+        e: &ast::Expr,
+        exports: &std::collections::HashMap<String, bool>,
+        diags: &mut Vec<diag::Diagnostic>,
+    ) {
         if let ast::Expr::Ident(name, span) = e {
             if let Some(false) = exports.get(name.as_str()) {
                 let (module, base) = name.rsplit_once('/').unwrap_or(("", name));
                 diags.push(diag::Diagnostic::new(
                     "opacity",
-                    format!("`{base}` is private to module `{module}` — only pub names cross an import"),
+                    format!(
+                        "`{base}` is private to module `{module}` — only pub names cross an import"
+                    ),
                     *span,
                 ));
             }
@@ -1515,10 +1489,7 @@ fn compile_module_inner(
 ) -> Result<ast::Program, String> {
     let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
     if !visited.insert(canon) {
-        return Err(format!(
-            "error: import cycle through {}\n",
-            dir.display()
-        ));
+        return Err(format!("error: import cycle through {}\n", dir.display()));
     }
     let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
         .map_err(|io| format!("error: cannot read {}: {io}\n", dir.display()))?
@@ -1655,7 +1626,12 @@ fn compile_module_inner(
             return Err(diag::render(&diags, file, source));
         }
     }
-    let mut merged = ast::Program { fns: Vec::new(), types: Vec::new(), imports: Vec::new(), reexports: Vec::new() };
+    let mut merged = ast::Program {
+        fns: Vec::new(),
+        types: Vec::new(),
+        imports: Vec::new(),
+        reexports: Vec::new(),
+    };
     merged.types.extend(dep_program.types);
     merged.fns.extend(dep_program.fns);
     for (_, _, program) in parsed {

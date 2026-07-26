@@ -8,6 +8,16 @@ on:
 # One job per kind of check, so a red run names what broke on the PR page
 # instead of hiding it inside a single "test" job.
 jobs:
+  format:
+    name: format (rustfmt, checked not applied)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
   lint:
     name: lint (clippy, all targets)
     runs-on: ubuntu-latest

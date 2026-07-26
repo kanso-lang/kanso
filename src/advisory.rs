@@ -8,12 +8,8 @@ use std::collections::{HashMap, HashSet};
 pub fn door_advisories(program: &Program) -> Vec<String> {
     // bare-enrollment clones are dispatch conveniences, not surface facts —
     // the door analysis reasons about the real declarations only
-    let type_names: HashSet<&str> = program
-        .types
-        .iter()
-        .filter(|t| !t.synthetic)
-        .map(|t| t.name.as_str())
-        .collect();
+    let type_names: HashSet<&str> =
+        program.types.iter().filter(|t| !t.synthetic).map(|t| t.name.as_str()).collect();
     let mut groups: HashMap<&str, Vec<usize>> = HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
         if decl.synthetic {
@@ -22,12 +18,8 @@ pub fn door_advisories(program: &Program) -> Vec<String> {
         groups.entry(decl.name.as_str()).or_default().push(i);
     }
     let returns = return_type_names(program, &type_names, &groups);
-    let pub_names: HashSet<&str> = program
-        .fns
-        .iter()
-        .filter(|d| d.is_pub && !d.synthetic)
-        .map(|d| d.name.as_str())
-        .collect();
+    let pub_names: HashSet<&str> =
+        program.fns.iter().filter(|d| d.is_pub && !d.synthetic).map(|d| d.name.as_str()).collect();
     let accepted = accepted_types(program, &pub_names, &groups);
     let mut advisories = Vec::new();
     let mut seen = HashSet::new();
@@ -159,11 +151,8 @@ fn accepted_types<'a>(
     pub_names: &HashSet<&str>,
     groups: &HashMap<&'a str, Vec<usize>>,
 ) -> HashSet<&'a str> {
-    let mut surface_groups: HashSet<&str> = pub_names
-        .iter()
-        .copied()
-        .filter(|n| !n.contains('/'))
-        .collect();
+    let mut surface_groups: HashSet<&str> =
+        pub_names.iter().copied().filter(|n| !n.contains('/')).collect();
     for decl in &program.fns {
         if !surface_groups.contains(decl.name.as_str()) {
             continue;

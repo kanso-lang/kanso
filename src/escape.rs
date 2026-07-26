@@ -33,9 +33,7 @@ impl EscapeInfo {
     }
 
     pub fn carries_ty(&self, name: &str, arity: usize, param: usize) -> Option<&str> {
-        self.carries
-            .get(&(name.to_string(), arity, param))
-            .map(String::as_str)
+        self.carries.get(&(name.to_string(), arity, param)).map(String::as_str)
     }
 }
 
@@ -67,10 +65,7 @@ fn analyze_inner(program: &Program) -> EscapeInfo {
         if let Some(decl) = program.types.iter().find(|t| &t.name == ty) {
             field_count.insert(ty.clone(), decl.fields.len());
         }
-        let mut analysis = Analysis {
-            program,
-            returns_ty: HashSet::new(),
-        };
+        let mut analysis = Analysis { program, returns_ty: HashSet::new() };
         analysis.compute_returns_ty(ty);
         for key in analysis.returns_ty {
             returns.insert(key, ty.clone());
@@ -83,11 +78,7 @@ fn analyze_inner(program: &Program) -> EscapeInfo {
             }
         }
     }
-    EscapeInfo {
-        field_count,
-        returns,
-        carries,
-    }
+    EscapeInfo { field_count, returns, carries }
 }
 
 /// Record type names that may be returned by value. A type qualifies when:
@@ -99,23 +90,12 @@ fn analyze_inner(program: &Program) -> EscapeInfo {
 ///    tail of a T-returning function, an `if` branch in tail position, or an
 ///    argument whose callee destructures that parameter as `(T ...)`.
 pub fn register_returnable(program: &Program) -> HashSet<String> {
-    let ctors: HashSet<&str> = program
-        .types
-        .iter()
-        .filter(|t| !t.fields.is_empty())
-        .map(|t| t.name.as_str())
-        .collect();
+    let ctors: HashSet<&str> =
+        program.types.iter().filter(|t| !t.fields.is_empty()).map(|t| t.name.as_str()).collect();
 
-    let analysis = Analysis {
-        program,
-        returns_ty: HashSet::new(),
-    };
+    let analysis = Analysis { program, returns_ty: HashSet::new() };
 
-    ctors
-        .iter()
-        .filter(|ty| analysis.clone().returnable(ty))
-        .map(|ty| ty.to_string())
-        .collect()
+    ctors.iter().filter(|ty| analysis.clone().returnable(ty)).map(|ty| ty.to_string()).collect()
 }
 
 #[derive(Clone)]
@@ -254,18 +234,22 @@ impl<'a> Analysis<'a> {
             Expr::Int(..) | Expr::Float(..) | Expr::Ident(..) | Expr::Partial(..) => true,
             Expr::Upcast { expr, .. } => self.expr_safe_calls(ty, expr),
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().all(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => self.expr_safe_calls(ty, expr),
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    self.expr_safe_calls(ty, expr)
+                }
             }),
             Expr::Field { base, .. } => {
                 !self.produces_ty(ty, base) && self.expr_safe_calls(ty, base)
             }
             Expr::Str(parts, _) => parts.iter().all(|p| match p {
                 crate::ast::TemplatePart::Lit(_) => true,
-                crate::ast::TemplatePart::Interp(x) => !self.produces_ty(ty, x) && self.expr_safe_calls(ty, x)
+                crate::ast::TemplatePart::Interp(x) => {
+                    !self.produces_ty(ty, x) && self.expr_safe_calls(ty, x)
+                }
             }),
-            Expr::List(items, _) => items
-                .iter()
-                .all(|x| !self.produces_ty(ty, x) && self.expr_safe_calls(ty, x)),
+            Expr::List(items, _) => {
+                items.iter().all(|x| !self.produces_ty(ty, x) && self.expr_safe_calls(ty, x))
+            }
             Expr::MapLit(pairs, _) => pairs.iter().all(|(k, v)| {
                 !self.produces_ty(ty, k)
                     && !self.produces_ty(ty, v)
@@ -303,12 +287,16 @@ impl<'a> Analysis<'a> {
                     && self.expr_safe_calls(ty, a)
                     && self.expr_safe_calls(ty, b)
             }
-            Expr::Lambda { body, .. } => !self.produces_ty(ty, body) && self.expr_safe_calls(ty, body),
+            Expr::Lambda { body, .. } => {
+                !self.produces_ty(ty, body) && self.expr_safe_calls(ty, body)
+            }
             Expr::App { head, args, .. } => {
                 let Expr::Ident(name, _) = head.as_ref() else {
                     // higher-order head: any ty inside is unsafe
                     return !self.produces_ty(ty, head)
-                        && args.iter().all(|a| !self.produces_ty(ty, a) && self.expr_safe_calls(ty, a));
+                        && args
+                            .iter()
+                            .all(|a| !self.produces_ty(ty, a) && self.expr_safe_calls(ty, a));
                 };
                 if name == "if" && args.len() == 3 {
                     return !self.produces_ty(ty, &args[0])
@@ -359,12 +347,8 @@ impl<'a> Analysis<'a> {
     /// arm, a literal, a different constructor) — never captured as a variable
     /// it could leak through. Var/Annotated/Keyed bind generically and escape.
     fn callee_destructures(&self, _ty: &str, name: &str, arity: usize, i: usize) -> bool {
-        let members: Vec<&FnDecl> = self
-            .program
-            .fns
-            .iter()
-            .filter(|f| f.name == name && f.params.len() == arity)
-            .collect();
+        let members: Vec<&FnDecl> =
+            self.program.fns.iter().filter(|f| f.name == name && f.params.len() == arity).collect();
         !members.is_empty()
             && members.iter().all(|f| match f.params.get(i) {
                 Some(Pattern::Var(..))
@@ -388,7 +372,9 @@ impl<'a> Analysis<'a> {
         match e {
             Expr::Ident(name, _) | Expr::Partial(name, _) => name == ty,
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => self.expr_mentions_ty(ty, expr),
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    self.expr_mentions_ty(ty, expr)
+                }
             }),
             Expr::Field { base, .. } => self.expr_mentions_ty(ty, base),
             Expr::Upcast { expr, .. } => self.expr_mentions_ty(ty, expr),
@@ -453,6 +439,9 @@ mod tests {
     fn construct_then_destructure_is_returnable() {
         let src = "type pair\n  a:int\n  b:int\n\nfn add (pair x y)\n  x + y\n\nmain = print \"{add (mk 5)}\"\n\nfn mk n\n  pair n n\n";
         let program = crate::compile("test.kso", src, true).unwrap();
-        assert!(register_returnable(&program).contains("pair"), "pair is construct-then-destructure");
+        assert!(
+            register_returnable(&program).contains("pair"),
+            "pair is construct-then-destructure"
+        );
     }
 }

@@ -183,22 +183,23 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 Err(d) => diags.push(d),
             },
             // `pub name` / `pub theirs:yours` — a re-export, nothing else
-            Some((Tok::Ident(_), _)) if head_idx == 1 => {
-                match parse_reexport(line, body) {
-                    Ok(reexport) => reexports.push(reexport),
-                    Err(d) => diags.push(d),
-                }
-            }
+            Some((Tok::Ident(_), _)) if head_idx == 1 => match parse_reexport(line, body) {
+                Ok(reexport) => reexports.push(reexport),
+                Err(d) => diags.push(d),
+            },
             _ => diags.push(Diagnostic::new(
                 "syntax",
-                "a top-level line must begin with `fn`, `type`, or a constant binding"
-                    .to_string(),
+                "a top-level line must begin with `fn`, `type`, or a constant binding".to_string(),
                 head_span(line),
             )),
         }
         i = body_end;
     }
-    if diags.is_empty() { Ok(Program { fns, types, imports, reexports }) } else { Err(diags) }
+    if diags.is_empty() {
+        Ok(Program { fns, types, imports, reexports })
+    } else {
+        Err(diags)
+    }
 }
 
 /// `import "path"` — one string, nothing else, no body.
@@ -212,11 +213,7 @@ fn parse_import(line: &Line, body: &[Line]) -> Result<Import, Diagnostic> {
     }
     let plain_path = |parts: &[crate::lexer::StrPart], span: Span| match parts {
         [crate::lexer::StrPart::Lit(text)] => Ok(text.clone()),
-        _ => Err(Diagnostic::new(
-            "syntax",
-            "an import path is a plain string".to_string(),
-            span,
-        )),
+        _ => Err(Diagnostic::new("syntax", "an import path is a plain string".to_string(), span)),
     };
     match line.tokens.as_slice() {
         [(Tok::KwImport, _), (Tok::Str(parts), span)] => {
@@ -377,17 +374,19 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
         }
     }
     for pair in lexed.lines.windows(2) {
-        let blanks =
-            lexed.blank_lines.iter().filter(|b| **b > pair[0].number && **b < pair[1].number).count();
+        let blanks = lexed
+            .blank_lines
+            .iter()
+            .filter(|b| **b > pair[0].number && **b < pair[1].number)
+            .count();
         let both_imports = matches!(pair[0].tokens.first(), Some((Tok::KwImport, _)))
             && matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
-        let decl_start = matches!(
-            pair[1].tokens.first(),
-            Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _))
-        ) || matches!(
-            (pair[1].tokens.first(), pair[1].tokens.get(1)),
-            (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
-        );
+        let decl_start =
+            matches!(pair[1].tokens.first(), Some((Tok::KwFn | Tok::KwType | Tok::KwPub, _)))
+                || matches!(
+                    (pair[1].tokens.first(), pair[1].tokens.get(1)),
+                    (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
+                );
         let required = match pair[1].indent {
             // the import block stacks; one blank closes it
             0 if both_imports => 0,
@@ -437,32 +436,27 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         ));
     }
     if body.is_empty() {
-        return Err(Diagnostic::new(
-            "syntax",
-            format!("function `{name}` has no body"),
-            span,
-        ));
+        return Err(Diagnostic::new("syntax", format!("function `{name}` has no body"), span));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new() ,
-        synthetic: false,})
+    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new(), synthetic: false })
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let is_pub = matches!(header.tokens.first(), Some((Tok::KwPub, _)));
     let off = usize::from(is_pub);
     let Some((Tok::Ident(name), span)) = header.tokens.get(off) else {
-        return Err(Diagnostic::new("syntax", "expected a constant name".to_string(), head_span(header)));
+        return Err(Diagnostic::new(
+            "syntax",
+            "expected a constant name".to_string(),
+            head_span(header),
+        ));
     };
     let name = name.clone();
     let span = *span;
     if header.tokens.len() == off + 2 {
         if body.is_empty() {
-            return Err(Diagnostic::new(
-                "syntax",
-                format!("constant `{name}` has no value"),
-                span,
-            ));
+            return Err(Diagnostic::new("syntax", format!("constant `{name}` has no value"), span));
         }
         if body.len() == 1 {
             return Err(Diagnostic::new(
@@ -472,8 +466,15 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             ));
         }
         let stmts = parse_body(body)?;
-        return Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: stmts, file: String::new() ,
-        synthetic: false,});
+        return Ok(FnDecl {
+            name,
+            is_pub,
+            span,
+            params: Vec::new(),
+            body: stmts,
+            file: String::new(),
+            synthetic: false,
+        });
     }
     if !body.is_empty() {
         return Err(Diagnostic::new(
@@ -485,8 +486,15 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let mut p = P::new(&header.tokens[off + 2..], &header.end_cols[off + 2..], header.number);
     let expr = p.parse_expr()?;
     p.expect_done()?;
-    Ok(FnDecl { name, is_pub, span, params: Vec::new(), body: vec![Stmt::Expr(expr)], file: String::new() ,
-        synthetic: false,})
+    Ok(FnDecl {
+        name,
+        is_pub,
+        span,
+        params: Vec::new(),
+        body: vec![Stmt::Expr(expr)],
+        file: String::new(),
+        synthetic: false,
+    })
 }
 
 fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
@@ -543,7 +551,16 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
     }
     p.expect_done()?;
     let fields = body.iter().map(parse_field).collect::<Result<Vec<_>, _>>()?;
-    Ok(TypeDecl { name, is_pub, span, synthetic: false, origin: None, parent: None, members: Vec::new(), fields })
+    Ok(TypeDecl {
+        name,
+        is_pub,
+        span,
+        synthetic: false,
+        origin: None,
+        parent: None,
+        members: Vec::new(),
+        fields,
+    })
 }
 
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
@@ -596,9 +613,8 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 i += 1;
             }
             // an `else` at the header's own indent belongs to the block above
-            let is_else_line = |l: &Line| {
-                matches!(l.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
-            };
+            let is_else_line =
+                |l: &Line| matches!(l.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
             if body.get(i).is_some_and(|l| l.indent == base && is_else_line(l)) {
                 i += 1;
                 while i < body.len() && body[i].indent > base {
@@ -635,12 +651,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             ));
         }
         let rest = std::mem::take(&mut cont);
-        let guard = Expr::Guard {
-            cond: Box::new(cond),
-            early: Box::new(early),
-            rest,
-            span,
-        };
+        let guard = Expr::Guard { cond: Box::new(cond), early: Box::new(early), rest, span };
         cont = vec![Stmt::Expr(guard)];
     }
     Ok(cont)
@@ -686,9 +697,8 @@ fn parse_effect_body(body: &[Line], lead_binds: &[Line]) -> Result<Vec<Stmt>, Di
 /// lines beneath it exactly as it does in the effect tail — including the
 /// `else` at its own indent and the stray-continuation fallback.
 fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let is_else = |line: &Line| {
-        matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
-    };
+    let is_else =
+        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
     let mut out = Vec::new();
     let mut idx = 0;
     while idx < body.len() {
@@ -717,19 +727,17 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             idx += 1;
             continue;
         }
-        let (else_children, end) = match j < body.len()
-            && body[j].indent == base
-            && is_else(&body[j])
-        {
-            true => {
-                let mut k = j + 1;
-                while k < body.len() && body[k].indent > base {
-                    k += 1;
+        let (else_children, end) =
+            match j < body.len() && body[j].indent == base && is_else(&body[j]) {
+                true => {
+                    let mut k = j + 1;
+                    while k < body.len() && body[k].indent > base {
+                        k += 1;
+                    }
+                    (Some(&body[j + 1..k]), k)
                 }
-                (Some(&body[j + 1..k]), k)
-            }
-            false => (None, j),
-        };
+                false => (None, j),
+            };
         out.push(parse_block_construct(&body[idx], children, else_children)?);
         idx = end;
     }
@@ -738,9 +746,8 @@ fn parse_lead_stmts(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
 
 fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_wall = |line: &Line| matches!(line.tokens.as_slice(), [(Tok::SeqOp, _)]);
-    let is_else = |line: &Line| {
-        matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
-    };
+    let is_else =
+        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
     // group lines into units: a wall line, or a statement that may own the
     // deeper lines under it (an if/else block construct)
     enum Unit<'a> {
@@ -789,26 +796,24 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             idx += 1;
             continue;
         }
-        let (else_children, end) = match j < body.len()
-            && body[j].indent == base
-            && is_else(&body[j])
-        {
-            true => {
-                let mut k = j + 1;
-                while k < body.len() && body[k].indent > base {
-                    k += 1;
+        let (else_children, end) =
+            match j < body.len() && body[j].indent == base && is_else(&body[j]) {
+                true => {
+                    let mut k = j + 1;
+                    while k < body.len() && body[k].indent > base {
+                        k += 1;
+                    }
+                    if k == j + 1 {
+                        return Err(Diagnostic::new(
+                            "syntax",
+                            "`else` opens a branch: indent its statements beneath it".to_string(),
+                            head_span(&body[j]),
+                        ));
+                    }
+                    (Some(&body[j + 1..k]), k)
                 }
-                if k == j + 1 {
-                    return Err(Diagnostic::new(
-                        "syntax",
-                        "`else` opens a branch: indent its statements beneath it".to_string(),
-                        head_span(&body[j]),
-                    ));
-                }
-                (Some(&body[j + 1..k]), k)
-            }
-            false => (None, j),
-        };
+                false => (None, j),
+            };
         units.push(Unit::Parsed(parse_block_construct(line, children, else_children)?));
         idx = end;
     }
@@ -873,8 +878,7 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                 continue;
             }
         };
-        let fused = matches!(line.tokens.first(), Some((Tok::SeqOp, _)))
-            && line.tokens.len() > 1;
+        let fused = matches!(line.tokens.first(), Some((Tok::SeqOp, _))) && line.tokens.len() > 1;
         let span = line.tokens[0].1;
         if segments.last().is_some_and(Vec::is_empty) {
             return Err(Diagnostic::new(
@@ -914,8 +918,7 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
         if !fused && segments[i + 1].len() == 1 {
             return Err(Diagnostic::new(
                 "formatting",
-                "a one-step stage fuses with its wall: write `>> step` on one line"
-                    .to_string(),
+                "a one-step stage fuses with its wall: write `>> step` on one line".to_string(),
                 wall_spans[i],
             ));
         }
@@ -1019,15 +1022,13 @@ fn parse_block_construct(
                 if !matches!(stmts.last(), Some(Stmt::Expr(_))) {
                     return Err(Diagnostic::new(
                         "syntax",
-                        "a branch ends with its result expression, not a binding"
-                            .to_string(),
+                        "a branch ends with its result expression, not a binding".to_string(),
                         head_span(lines.last().expect("branches are non-empty")),
                     ));
                 }
             }
-            let plain = |stmts: &[Stmt]| {
-                stmts.len() == 1 && matches!(stmts.first(), Some(Stmt::Expr(_)))
-            };
+            let plain =
+                |stmts: &[Stmt]| stmts.len() == 1 && matches!(stmts.first(), Some(Stmt::Expr(_)));
             if plain(&then_stmts) && plain(&else_stmts) {
                 return Err(Diagnostic::new(
                     "formatting",
@@ -1080,18 +1081,16 @@ fn parse_build(
     }
     let build = Expr::Build(stmts, head_span(head));
     match head.tokens.as_slice() {
-        [(Tok::Ident(name), nspan), (Tok::Bind, _), _] => Ok(Stmt::Bind {
-            pattern: Pattern::Var(name.clone(), *nspan),
-            expr: build,
-        }),
+        [(Tok::Ident(name), nspan), (Tok::Bind, _), _] => {
+            Ok(Stmt::Bind { pattern: Pattern::Var(name.clone(), *nspan), expr: build })
+        }
         _ => Ok(Stmt::Expr(build)),
     }
 }
 
 fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
-    let is_else = |line: &Line| {
-        matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
-    };
+    let is_else =
+        |line: &Line| matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else");
     let mut stmts = Vec::new();
     let mut idx = 0;
     while idx < body.len() {
@@ -1116,7 +1115,8 @@ fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             continue;
         }
         let inner = &body[idx + 1..j];
-        let (else_lines, end) = match j < body.len() && body[j].indent == base && is_else(&body[j]) {
+        let (else_lines, end) = match j < body.len() && body[j].indent == base && is_else(&body[j])
+        {
             true => {
                 let mut k = j + 1;
                 while k < body.len() && body[k].indent > base {
@@ -1134,9 +1134,7 @@ fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
 
 /// Lifting only here keeps the name `set` free everywhere else.
 fn lift_set(stmt: Stmt, line: &Line) -> Result<Stmt, Diagnostic> {
-    let is_set_app = |e: &Expr| {
-        matches!(e, Expr::App { head, .. } if matches!(&**head, Expr::Ident(w, _) if w == "set"))
-    };
+    let is_set_app = |e: &Expr| matches!(e, Expr::App { head, .. } if matches!(&**head, Expr::Ident(w, _) if w == "set"));
     match stmt {
         Stmt::Expr(e) if is_set_app(&e) => {
             let Expr::App { args, span, .. } = e else { unreachable!() };
@@ -1147,16 +1145,12 @@ fn lift_set(stmt: Stmt, line: &Line) -> Result<Stmt, Diagnostic> {
                     head_span(line),
                 )
             };
-            let [target_e, field_e, value] = <[Expr; 3]>::try_from(args).map_err(|_| shape_err())?;
+            let [target_e, field_e, value] =
+                <[Expr; 3]>::try_from(args).map_err(|_| shape_err())?;
             let (Expr::Ident(target, _), Expr::Ident(field, _)) = (&target_e, &field_e) else {
                 return Err(shape_err());
             };
-            Ok(Stmt::Set {
-                target: target.clone(),
-                field: field.clone(),
-                value,
-                span,
-            })
+            Ok(Stmt::Set { target: target.clone(), field: field.clone(), value, span })
         }
         Stmt::Bind { expr, .. } if is_set_app(&expr) => Err(Diagnostic::new(
             "syntax",
@@ -1194,11 +1188,7 @@ fn reject_never_effect(e: &Expr, is_final: bool) -> Result<(), Diagnostic> {
                  an effect joining the group"
             }
         };
-        return Err(Diagnostic::new(
-            "unused",
-            message.to_string(),
-            expr_span(e),
-        ));
+        return Err(Diagnostic::new("unused", message.to_string(), expr_span(e)));
     }
     Ok(())
 }
@@ -1532,12 +1522,9 @@ impl<'a> P<'a> {
                             args.insert(0, expr);
                             Expr::App { head, args, span, piped: true }
                         }
-                        atom => Expr::App {
-                            head: Box::new(atom),
-                            args: vec![expr],
-                            span,
-                            piped: true,
-                        },
+                        atom => {
+                            Expr::App { head: Box::new(atom), args: vec![expr], span, piped: true }
+                        }
                     };
                 }
                 Some(Tok::SeqOp) => {
@@ -1662,8 +1649,7 @@ impl<'a> P<'a> {
             if matches!(self.peek(), Some(Tok::Dot)) {
                 let span = self.span_here();
                 self.pos += 1;
-                let Some(Tok::Ident(name)) = self.toks.get(self.pos).map(|(t, _)| t.clone())
-                else {
+                let Some(Tok::Ident(name)) = self.toks.get(self.pos).map(|(t, _)| t.clone()) else {
                     return Err(self.err("a field name follows the dot".to_string()));
                 };
                 self.pos += 1;
@@ -1767,9 +1753,9 @@ impl<'a> P<'a> {
             Some(Tok::LBracket) => {
                 self.pos += 1;
                 if matches!(self.peek(), Some(Tok::Colon)) {
-                    return Err(self.err(
-                        "maps use curly braces: `{:}` is the empty map".to_string(),
-                    ));
+                    return Err(
+                        self.err("maps use curly braces: `{:}` is the empty map".to_string())
+                    );
                 }
                 if matches!(self.peek(), Some(Tok::RBracket)) {
                     self.pos += 1;
@@ -1777,9 +1763,7 @@ impl<'a> P<'a> {
                 }
                 let first = self.parse_atom()?;
                 if matches!(self.peek(), Some(Tok::Colon)) {
-                    return Err(self.err(
-                        "maps use curly braces: `{key: value}`".to_string(),
-                    ));
+                    return Err(self.err("maps use curly braces: `{key: value}`".to_string()));
                 }
                 let mut items = vec![first];
                 while !matches!(self.peek(), Some(Tok::RBracket)) {

@@ -124,12 +124,9 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
             stdout: executor.stdout,
             thunk_stats,
         },
-        Ok(_) => Evaluation {
-            status: 0,
-            stderr: String::new(),
-            stdout: executor.stdout,
-            thunk_stats,
-        },
+        Ok(_) => {
+            Evaluation { status: 0, stderr: String::new(), stdout: executor.stdout, thunk_stats }
+        }
         Err(runtime) => Evaluation {
             status: 1,
             stderr: format!("error[runtime]: {}\n", runtime.message),
@@ -168,10 +165,8 @@ fn mem_corpus_interp_matches_the_semantic_counters() {
 /// Compiles under the bare file name, as the CLI is invoked from the case's
 /// directory, so err origins in traces name the file identically.
 fn compile_case(program: &Path) -> kanso::ast::Program {
-    let file = program
-        .file_name()
-        .and_then(|name| name.to_str())
-        .expect("kso files have utf-8 names");
+    let file =
+        program.file_name().and_then(|name| name.to_str()).expect("kso files have utf-8 names");
     let source = std::fs::read_to_string(program).expect("case source reads");
     // the corpora hold all three program shapes: play-libraries, entry files,
     // and (never here) pure libraries — route exactly as the cli does

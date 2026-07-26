@@ -259,9 +259,9 @@ fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usiz
             if let Expr::App { head: ah, args: aargs, .. } = &args[position] {
                 if let Expr::Ident(op, _) = ah.as_ref() {
                     let extends_self = EXTENDING.contains(&op.as_str())
-                        && aargs.first().is_some_and(|a| {
-                            matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own)
-                        });
+                        && aargs.first().is_some_and(
+                            |a| matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own),
+                        );
                     if extends_self {
                         return true;
                     }
@@ -303,9 +303,7 @@ fn crossing_positions(
 }
 
 /// Groups belonging to any multi-group tail cycle.
-fn tail_cycles(
-    edges: &[(Group, Group)],
-) -> Vec<Vec<Group>> {
+fn tail_cycles(edges: &[(Group, Group)]) -> Vec<Vec<Group>> {
     let nodes: Vec<Group> = {
         let mut set = HashSet::new();
         for (a, b) in edges {
@@ -316,8 +314,7 @@ fn tail_cycles(
         v.sort();
         v
     };
-    let index: HashMap<&Group, usize> =
-        nodes.iter().enumerate().map(|(i, n)| (n, i)).collect();
+    let index: HashMap<&Group, usize> = nodes.iter().enumerate().map(|(i, n)| (n, i)).collect();
     let mut adj = vec![Vec::new(); nodes.len()];
     for (a, b) in edges {
         adj[index[a]].push(index[b]);
@@ -337,16 +334,10 @@ fn tail_cycles(
 /// would free it under a live register — so threading is a fixpoint: a slot
 /// keeps its threaded standing only while every edge feeding it passes a
 /// bare parameter from a slot that kept its own.
-fn eligible_clusters(
-    program: &Program,
-    inference: &infer::Inference,
-) -> Vec<ClusterCarry> {
+fn eligible_clusters(program: &Program, inference: &infer::Inference) -> Vec<ClusterCarry> {
     let groups: Vec<(String, usize)> = {
-        let set: HashSet<(String, usize)> = program
-            .fns
-            .iter()
-            .map(|d| (d.name.clone(), d.params.len()))
-            .collect();
+        let set: HashSet<(String, usize)> =
+            program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
         let mut v: Vec<_> = set.into_iter().collect();
         v.sort();
         v
@@ -373,9 +364,8 @@ fn eligible_clusters(
             continue; // self-loops stay on the proven path
         }
         let members: HashSet<usize> = scc.iter().copied().collect();
-        let tail_entry = edges
-            .iter()
-            .any(|(from, to, _, _)| members.contains(to) && !members.contains(from));
+        let tail_entry =
+            edges.iter().any(|(from, to, _, _)| members.contains(to) && !members.contains(from));
         if tail_entry {
             continue;
         }
@@ -385,9 +375,7 @@ fn eligible_clusters(
         if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
             continue;
         }
-        if let Some(carried) =
-            cluster_edges_ok(program, inference, &groups, &members, &edges)
-        {
+        if let Some(carried) = cluster_edges_ok(program, inference, &groups, &members, &edges) {
             out.push((scc.iter().map(|&g| groups[g].clone()).collect(), carried));
         }
     }
@@ -472,9 +460,9 @@ fn cluster_edges_ok(
                         _ => None,
                     });
                     let extends_self = ["concat", "push", "put"].contains(&op.as_str())
-                        && aargs.first().is_some_and(|a| {
-                            matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own)
-                        });
+                        && aargs.first().is_some_and(
+                            |a| matches!(a, Expr::Ident(n, _) if Some(n.as_str()) == own),
+                        );
                     if extends_self {
                         return None;
                     }
@@ -565,10 +553,8 @@ fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
 /// the toolchain under KANSO_BEAT_REPORT so a real workload can be measured
 /// before the next rung is built.
 pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
-    let demoted: HashSet<Group> = demotable_entries(program, inference)
-        .into_iter()
-        .map(|(callee, _, _)| callee)
-        .collect();
+    let demoted: HashSet<Group> =
+        demotable_entries(program, inference).into_iter().map(|(callee, _, _)| callee).collect();
     let clustered: HashSet<Group> = eligible_clusters(program, inference)
         .into_iter()
         .flat_map(|(members, _)| members)
@@ -588,14 +574,15 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
         .map(|(name, arity, v)| {
             let fate = match v {
                 Verdict::Beat => "beat: rewinds every iteration".to_string(),
-                Verdict::PureLoop => "pure loop: no iteration allocates, nothing to rewind".to_string(),
+                Verdict::PureLoop => {
+                    "pure loop: no iteration allocates, nothing to rewind".to_string()
+                }
                 Verdict::ArgCrosses { position } => format!(
                     "grow-only: argument {} may carry heap across the iteration",
                     position + 1
                 ),
                 Verdict::CarryBeat { positions } => {
-                    let list: Vec<String> =
-                        positions.iter().map(|p| (p + 1).to_string()).collect();
+                    let list: Vec<String> = positions.iter().map(|p| (p + 1).to_string()).collect();
                     format!(
                         "carry beat: rewinds every iteration, evacuating argument {}",
                         list.join(", ")
@@ -616,19 +603,15 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
 fn classify_all(program: &Program, inference: &infer::Inference) -> Vec<(String, usize, Verdict)> {
     let allocating = alloc_groups(program);
     let mut groups: Vec<(String, usize)> = {
-        let set: HashSet<(String, usize)> = program
-            .fns
-            .iter()
-            .map(|d| (d.name.clone(), d.params.len()))
-            .collect();
+        let set: HashSet<(String, usize)> =
+            program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
         set.into_iter().collect()
     };
     groups.sort();
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            classify(program, inference, &allocating, &name, arity)
-                .map(|v| (name, arity, v))
+            classify(program, inference, &allocating, &name, arity).map(|v| (name, arity, v))
         })
         .collect()
 }
@@ -719,7 +702,12 @@ fn alloc_groups(program: &Program) -> HashSet<&str> {
     }
 }
 
-fn stmt_allocates(stmt: &Stmt, fn_names: &HashSet<&str>, allocating: &HashSet<&str>, seed_pass: bool) -> bool {
+fn stmt_allocates(
+    stmt: &Stmt,
+    fn_names: &HashSet<&str>,
+    allocating: &HashSet<&str>,
+    seed_pass: bool,
+) -> bool {
     let e = match stmt {
         Stmt::Bind { expr, .. } => expr,
         Stmt::Expr(e) => e,
@@ -732,14 +720,38 @@ fn stmt_allocates(stmt: &Stmt, fn_names: &HashSet<&str>, allocating: &HashSet<&s
 /// count (builders, interpolation, allocating builtins, constructors — any
 /// call that is neither a known-pure builtin nor a user group). On fixpoint
 /// passes a call to an already-allocating group counts too.
-fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>, seed_pass: bool) -> bool {
+fn expr_allocates(
+    e: &Expr,
+    fn_names: &HashSet<&str>,
+    allocating: &HashSet<&str>,
+    seed_pass: bool,
+) -> bool {
     const ALLOCATING: &[&str] = &[
-        "chars", "concat", "entries", "err", "filter", "from_code", "join", "map",
-        "push", "put", "slice", "sort", "utf8",
+        "chars",
+        "concat",
+        "entries",
+        "err",
+        "filter",
+        "from_code",
+        "join",
+        "map",
+        "push",
+        "put",
+        "slice",
+        "sort",
+        "utf8",
     ];
     const PURE: &[&str] = &[
-        "at", "bytes", "char_code", "find2", "if", "length", "sum", "to_float",
-        "to_int", "print",
+        "at",
+        "bytes",
+        "char_code",
+        "find2",
+        "if",
+        "length",
+        "sum",
+        "to_float",
+        "to_int",
+        "print",
     ];
     match e {
         Expr::List(..) | Expr::MapLit(..) | Expr::Lambda { .. } | Expr::Partial(..) => true,
@@ -765,7 +777,8 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
                 }
                 other => expr_allocates(other, fn_names, allocating, seed_pass),
             };
-            head_allocates || args.iter().any(|a| expr_allocates(a, fn_names, allocating, seed_pass))
+            head_allocates
+                || args.iter().any(|a| expr_allocates(a, fn_names, allocating, seed_pass))
         }
         Expr::Field { base, .. } => expr_allocates(base, fn_names, allocating, seed_pass),
         Expr::Upcast { expr, .. } => expr_allocates(expr, fn_names, allocating, seed_pass),
@@ -780,7 +793,9 @@ fn expr_allocates(e: &Expr, fn_names: &HashSet<&str>, allocating: &HashSet<&str>
         Expr::Guard { cond, early, rest, .. } => {
             expr_allocates(cond, fn_names, allocating, seed_pass)
                 || expr_allocates(early, fn_names, allocating, seed_pass)
-                || rest.iter().any(|s| expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass))
+                || rest
+                    .iter()
+                    .any(|s| expr_allocates(guard_stmt_expr(s), fn_names, allocating, seed_pass))
         }
         Expr::Seq(a, b, _) => {
             expr_allocates(a, fn_names, allocating, seed_pass)
@@ -850,10 +865,7 @@ fn arg_ok(
     arg: &Expr,
 ) -> bool {
     if let Expr::Ident(p, _) = arg {
-        let own = decl
-            .params
-            .iter()
-            .position(|pat| matches!(pat, Pattern::Var(n, _) if n == p));
+        let own = decl.params.iter().position(|pat| matches!(pat, Pattern::Var(n, _) if n == p));
         if let Some(j) = own {
             let set = inference.params[decl_index][j];
             if set & !FAIL & !THREADED == 0 {
@@ -901,7 +913,9 @@ fn value_use(e: &Expr, name: &str) -> bool {
     match e {
         Expr::Ident(n, _) | Expr::Partial(n, _) => n == name,
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => value_use(expr, name),
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                value_use(expr, name)
+            }
         }),
         Expr::App { head, args, .. } => {
             let head_is_plain_name = matches!(head.as_ref(), Expr::Ident(..));
@@ -922,7 +936,9 @@ fn value_use(e: &Expr, name: &str) -> bool {
         Expr::Seq(a, b, _) => value_use(a, name) || value_use(b, name),
         Expr::Lambda { body, .. } => value_use(body, name),
         Expr::List(items, _) => items.iter().any(|i| value_use(i, name)),
-        Expr::MapLit(pairs, _) => pairs.iter().any(|(k, v)| value_use(k, name) || value_use(v, name)),
+        Expr::MapLit(pairs, _) => {
+            pairs.iter().any(|(k, v)| value_use(k, name) || value_use(v, name))
+        }
         Expr::Str(parts, _) => parts.iter().any(|p| match p {
             TemplatePart::Interp(inner) => value_use(inner, name),
             TemplatePart::Lit(_) => false,
@@ -977,7 +993,8 @@ mod tests {
         let beats = super::beat_loops(&program, &inference);
 
         assert_eq!(beats.carried.get(&("spin".to_string(), 2)), Some(&vec![1]));
-    }#[test]
+    }
+    #[test]
     fn tail_entry_from_acyclic_caller_is_demoted() {
         // go tail-calls into spin's loop, but go is acyclic: the entry is
         // demoted to a plain call (one bounded frame) and spin brackets.
@@ -986,9 +1003,7 @@ mod tests {
         let beats = super::beat_loops(&program, &inference);
 
         assert!(beats.ids.contains_key(&("spin".to_string(), 2)));
-        assert!(beats
-            .demoted
-            .contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
+        assert!(beats.demoted.contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
     }
 
     #[test]
@@ -1040,9 +1055,7 @@ mod tests {
         let inference = infer::infer(&program);
         let beats = beat_loops(&program, &inference);
 
-        assert!(beats
-            .demoted
-            .contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
+        assert!(beats.demoted.contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
     }
 
     #[test]
@@ -1068,13 +1081,13 @@ mod tests {
     fn json_decode_loops_stay_conservative() {
         // kanso-json's scanners are mutually recursive and thread record
         // accumulators — v1 must leave all of them alone.
-        let program =
-            crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
+        let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference);
         assert!(
             loops.ids.is_empty() && loops.demoted.is_empty(),
-            "json's folds thread lists/maps and must stay ineligible, got {:?}", loops.ids
+            "json's folds thread lists/maps and must stay ineligible, got {:?}",
+            loops.ids
         );
     }
 }

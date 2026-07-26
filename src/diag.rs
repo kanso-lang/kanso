@@ -31,8 +31,8 @@ pub fn paint(plain: &str) -> String {
 }
 
 fn vermillion() -> &'static str {
-    let truecolor = std::env::var("COLORTERM")
-        .is_ok_and(|v| v.contains("truecolor") || v.contains("24bit"));
+    let truecolor =
+        std::env::var("COLORTERM").is_ok_and(|v| v.contains("truecolor") || v.contains("24bit"));
     match truecolor {
         true => "\x1b[38;2;240;58;0m",
         false => "\x1b[38;5;202m",

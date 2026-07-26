@@ -129,7 +129,8 @@ fn bind_pattern<'a>(
         Pattern::Var(name, _) => {
             env.insert(name, joined & !FAIL);
         }
-        Pattern::Wildcard(_) | Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => {}
+        Pattern::Wildcard(_) | Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => {
+        }
         Pattern::Annotated { name, ty, .. } => {
             let set = match ty.as_str() {
                 "int" => INT,
@@ -213,7 +214,13 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                             Pattern::Var(name, _) => {
                                 env.insert(name, value);
                             }
-                            _ => bind_pattern(pattern, value, &ctx.type_fields, &ctx.type_names, &mut env),
+                            _ => bind_pattern(
+                                pattern,
+                                value,
+                                &ctx.type_fields,
+                                &ctx.type_names,
+                                &mut env,
+                            ),
                         }
                     }
                     Stmt::Expr(expr) => result = eval_expr(ctx, expr, &mut env),
@@ -349,13 +356,8 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
                 let i = decls[0];
                 return ctx.returns[i];
             }
-            let arities: Vec<usize> = ctx
-                .program
-                .fns
-                .iter()
-                .filter(|d| d.name == name)
-                .map(|d| d.params.len())
-                .collect();
+            let arities: Vec<usize> =
+                ctx.program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
             for (i, decl) in ctx.program.fns.iter().enumerate() {
                 if decl.name == name {
                     for p in 0..decl.params.len() {

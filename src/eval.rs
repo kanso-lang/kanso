@@ -23,10 +23,16 @@ pub enum Value {
     NoneV,
     ErrV(Rc<ErrInfo>),
     List(Rc<Vec<Value>>),
-    Record { ty: Rc<str>, fields: Rc<RefCell<Vec<Value>>> },
+    Record {
+        ty: Rc<str>,
+        fields: Rc<RefCell<Vec<Value>>>,
+    },
     /// A nominal subtype wrapper: `post_body s`. Transparent — every
     /// consumer unwraps to the base; dispatch sees the chain.
-    Sub { ty: Rc<str>, inner: Rc<Value> },
+    Sub {
+        ty: Rc<str>,
+        inner: Rc<Value>,
+    },
     FnRef(Rc<str>),
     Closure(Rc<ClosureData>),
     /// A closure the browser backend compiled into the module's table,
@@ -46,7 +52,11 @@ pub enum Value {
 /// computation and its captures, replaced by the value at first force.
 #[derive(Clone, Debug)]
 pub enum ThunkState {
-    Pending { expr: Expr, env: Option<Rc<Env>>, frame: Frame },
+    Pending {
+        expr: Expr,
+        env: Option<Rc<Env>>,
+        frame: Frame,
+    },
     /// Under evaluation — a re-entrant force is a <<loop>>.
     Blackhole,
     Forced(Value),
@@ -384,9 +394,7 @@ pub struct ThunkStats {
 impl ThunkStats {
     pub fn render(&self) -> String {
         let (allocs, forces, evals) = (self.allocs.get(), self.forces.get(), self.evals.get());
-        format!(
-            "thunk_allocs={allocs}\nthunk_forces={forces}\nthunk_evals={evals}\n"
-        )
+        format!("thunk_allocs={allocs}\nthunk_forces={forces}\nthunk_evals={evals}\n")
     }
 }
 
@@ -452,65 +460,56 @@ impl<'a> Interp<'a> {
 
     /// A statement list in expression position: a branch body, a build
     /// block, or the tail a fired guard skipped past.
-    fn eval_stmts(
-        &self,
-        stmts: &[Stmt],
-        env: &Option<Rc<Env>>,
-        frame: &Frame,
-    ) -> EvalResult {
-                let mut env = env.clone();
-                let mut result = Value::NoneV;
-                for stmt in stmts {
-                    match stmt {
-                        Stmt::Bind { pattern, expr } => {
-                            let mut value = self.eval(expr, &env, frame)?;
-                            if !matches!(pattern, Pattern::Var(..)) {
-                                value = self.force_thunk(value)?;
-                            }
-                            env = self.destructure(pattern, value, env, expr.span())?;
-                        }
-                        Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
-                        Stmt::Set { target, field, value, span } => {
-                            let current = lookup(&env, target).ok_or_else(|| {
-                                RuntimeError {
-                                    message: format!("`set` target `{target}` is not bound"),
-                                    span: *span,
-                                }
-                            })?;
-                            let current = self.force_thunk(current)?;
-                            // a constructor given a failure handed the failure
-                            // back, so the target is not a record to write to
-                            if is_failure(&current) {
-                                continue;
-                            }
-                            let Value::Record { ty, fields } = &current else {
-                                return Err(RuntimeError {
-                                    message: format!(
-                                        "`set` writes a record field, not {}",
-                                        render(&current, true)
-                                    ),
-                                    span: *span,
-                                });
-                            };
-                            let decl =
-                                self.type_decl(ty).expect("constructed types are declared");
-                            let position =
-                                decl.fields.iter().position(|(f, _, _)| f == field);
-                            let Some(position) = position else {
-                                return Err(RuntimeError {
-                                    message: format!("`{ty}` has no field `{field}`"),
-                                    span: *span,
-                                });
-                            };
-                            let new = self.eval(value, &env, frame)?;
-                            if is_failure(&new) {
-                                return Ok(new);
-                            }
-                            fields.borrow_mut()[position] = new;
-                        }
+    fn eval_stmts(&self, stmts: &[Stmt], env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
+        let mut env = env.clone();
+        let mut result = Value::NoneV;
+        for stmt in stmts {
+            match stmt {
+                Stmt::Bind { pattern, expr } => {
+                    let mut value = self.eval(expr, &env, frame)?;
+                    if !matches!(pattern, Pattern::Var(..)) {
+                        value = self.force_thunk(value)?;
                     }
+                    env = self.destructure(pattern, value, env, expr.span())?;
                 }
-                Ok(result)
+                Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
+                Stmt::Set { target, field, value, span } => {
+                    let current = lookup(&env, target).ok_or_else(|| RuntimeError {
+                        message: format!("`set` target `{target}` is not bound"),
+                        span: *span,
+                    })?;
+                    let current = self.force_thunk(current)?;
+                    // a constructor given a failure handed the failure
+                    // back, so the target is not a record to write to
+                    if is_failure(&current) {
+                        continue;
+                    }
+                    let Value::Record { ty, fields } = &current else {
+                        return Err(RuntimeError {
+                            message: format!(
+                                "`set` writes a record field, not {}",
+                                render(&current, true)
+                            ),
+                            span: *span,
+                        });
+                    };
+                    let decl = self.type_decl(ty).expect("constructed types are declared");
+                    let position = decl.fields.iter().position(|(f, _, _)| f == field);
+                    let Some(position) = position else {
+                        return Err(RuntimeError {
+                            message: format!("`{ty}` has no field `{field}`"),
+                            span: *span,
+                        });
+                    };
+                    let new = self.eval(value, &env, frame)?;
+                    if is_failure(&new) {
+                        return Ok(new);
+                    }
+                    fields.borrow_mut()[position] = new;
+                }
+            }
+        }
+        Ok(result)
     }
 
     fn eval_body_in(
@@ -547,7 +546,6 @@ impl<'a> Interp<'a> {
         }
         Ok(result)
     }
-
 
     fn destructure(
         &self,
@@ -599,8 +597,7 @@ impl<'a> Interp<'a> {
                 }
                 let mut env = env;
                 for entry in entries {
-                    let position =
-                        decl.fields.iter().position(|(name, _, _)| *name == entry.field);
+                    let position = decl.fields.iter().position(|(name, _, _)| *name == entry.field);
                     let Some(position) = position else {
                         return Err(RuntimeError {
                             message: format!("`{ty}` has no field `{}`", entry.field),
@@ -637,18 +634,14 @@ impl<'a> Interp<'a> {
                         Value::Sub { inner, .. } => cur = (*inner).clone(),
                         _ => {
                             return Err(RuntimeError {
-                                message: format!(
-                                    "`:{ty}` widens; this value is not a {ty}"
-                                ),
+                                message: format!("`:{ty}` widens; this value is not a {ty}"),
                                 span: *span,
                             })
                         }
                     }
                 }
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
-                self.eval_stmts(stmts, env, frame)
-            }
+            Expr::Block(stmts, _) | Expr::Build(stmts, _) => self.eval_stmts(stmts, env, frame),
             Expr::Float(x, _) => Ok(Value::Float(*x)),
             Expr::MapLit(pairs, span) => {
                 let mut entries = BTreeMap::new();
@@ -720,10 +713,8 @@ impl<'a> Interp<'a> {
                 if is_failure(&callee) {
                     return Ok(callee);
                 }
-                let supplied = args
-                    .iter()
-                    .map(|a| self.eval(a, env, frame))
-                    .collect::<Result<Vec<_>, _>>()?;
+                let supplied =
+                    args.iter().map(|a| self.eval(a, env, frame)).collect::<Result<Vec<_>, _>>()?;
                 if let Some(bad) = supplied.iter().find(|v| is_failure(v)) {
                     return Ok(bad.clone());
                 }
@@ -786,9 +777,7 @@ impl<'a> Interp<'a> {
                     return Ok(right);
                 }
                 match (left, right) {
-                    (Value::Desc(a), Value::Desc(b)) => {
-                        Ok(Value::Desc(Rc::new(Desc::Seq(a, b))))
-                    }
+                    (Value::Desc(a), Value::Desc(b)) => Ok(Value::Desc(Rc::new(Desc::Seq(a, b)))),
                     _ => Err(RuntimeError {
                         message: "`>>` sequences two effect descriptions".to_string(),
                         span: *span,
@@ -854,7 +843,10 @@ impl<'a> Interp<'a> {
         }
         if let Some(decl) = self.type_decl(name) {
             if decl.parent.is_none() && decl.members.is_empty() && decl.fields.is_empty() {
-                return Ok(Value::Record { ty: Rc::from(name), fields: Rc::new(RefCell::new(Vec::new())) });
+                return Ok(Value::Record {
+                    ty: Rc::from(name),
+                    fields: Rc::new(RefCell::new(Vec::new())),
+                });
             }
         }
         match name {
@@ -993,19 +985,14 @@ impl<'a> Interp<'a> {
             return Ok(err_value(reason, origin_at(frame, span)));
         }
         if let Some(ty) = self.type_decl(name) {
-            let args = args
-                .into_iter()
-                .map(|a| self.force_thunk(a))
-                .collect::<Result<Vec<_>, _>>()?;
+            let args =
+                args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
             return self.construct(ty, args, span);
         }
         if let Some(overloads) = self.fns.get(name) {
             return self.dispatch(name, overloads, args, span);
         }
-        let args = args
-            .into_iter()
-            .map(|a| self.force_thunk(a))
-            .collect::<Result<Vec<_>, _>>()?;
+        let args = args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
         self.call_builtin(name, args, span, frame)
     }
 
@@ -1054,11 +1041,7 @@ impl<'a> Interp<'a> {
         for ((field, tys, _), arg) in ty.fields.iter().zip(&args) {
             if tys.len() >= 2 && !tys.iter().any(|t| type_matches(t, arg)) {
                 return Err(RuntimeError {
-                    message: format!(
-                        "field `{field}` of `{}` takes {}",
-                        ty.name,
-                        tys.join(" ")
-                    ),
+                    message: format!("field `{field}` of `{}` takes {}", ty.name, tys.join(" ")),
                     span,
                 });
             }
@@ -1173,7 +1156,10 @@ impl<'a> Interp<'a> {
                     }
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
-                        message: format!("sleep takes milliseconds (an int), got {}", render(&other, false)),
+                        message: format!(
+                            "sleep takes milliseconds (an int), got {}",
+                            render(&other, false)
+                        ),
                         span,
                     }),
                 }
@@ -1187,7 +1173,10 @@ impl<'a> Interp<'a> {
                     }
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
-                        message: format!("random takes a bound (an int), got {}", render(&other, false)),
+                        message: format!(
+                            "random takes a bound (an int), got {}",
+                            render(&other, false)
+                        ),
                         span,
                     }),
                 }
@@ -1203,9 +1192,7 @@ impl<'a> Interp<'a> {
                             return Ok(other);
                         }
                         match self.render_interpolated(other)? {
-                            Ok(rendered) => {
-                                Ok(Value::Desc(Rc::new(Desc::Print(rendered, span))))
-                            }
+                            Ok(rendered) => Ok(Value::Desc(Rc::new(Desc::Print(rendered, span)))),
                             Err(failure) => Ok(failure),
                         }
                     }
@@ -1243,10 +1230,7 @@ impl<'a> Interp<'a> {
             "entries" => {
                 let [map] = arity(args, name, span)?;
                 let Value::Map(map_entries) = &map else {
-                    return Err(RuntimeError {
-                        message: "entries takes a map".to_string(),
-                        span,
-                    });
+                    return Err(RuntimeError { message: "entries takes a map".to_string(), span });
                 };
                 let list = map_entries
                     .iter()
@@ -1266,10 +1250,7 @@ impl<'a> Interp<'a> {
             "bytes" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {
-                    return Err(RuntimeError {
-                        message: "bytes takes a string".to_string(),
-                        span,
-                    });
+                    return Err(RuntimeError { message: "bytes takes a string".to_string(), span });
                 };
                 let list = text.bytes().map(|b| Value::Int(BigInt::from(b))).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -1326,10 +1307,7 @@ impl<'a> Interp<'a> {
             "chars" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {
-                    return Err(RuntimeError {
-                        message: "chars takes a string".to_string(),
-                        span,
-                    });
+                    return Err(RuntimeError { message: "chars takes a string".to_string(), span });
                 };
                 let list = text.chars().map(|c| Value::Str(c.to_string())).collect();
                 Ok(Value::List(Rc::new(list)))
@@ -1411,8 +1389,7 @@ impl<'a> Interp<'a> {
                     Value::Int(_) => out.push(x.clone()),
                     _ => {
                         return Err(RuntimeError {
-                            message: "append takes bytes and a string, bytes, or byte"
-                                .to_string(),
+                            message: "append takes bytes and a string, bytes, or byte".to_string(),
                             span,
                         })
                     }
@@ -1460,10 +1437,7 @@ impl<'a> Interp<'a> {
                 let (Value::List(items), Value::Int(from), Value::Int(a), Value::Int(b)) =
                     (&cs, &from, &a, &b)
                 else {
-                    return Err(RuntimeError {
-                        message: "find2 takes bytes".to_string(),
-                        span,
-                    });
+                    return Err(RuntimeError { message: "find2 takes bytes".to_string(), span });
                 };
                 let len = items.len();
                 let start = usize::try_from(from.clone()).unwrap_or(1).max(1);
@@ -1696,10 +1670,7 @@ impl<'a> Interp<'a> {
             Value::False => self.force(else_branch),
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
-                message: format!(
-                    "an if condition is true or false, got {}",
-                    render(&other, false)
-                ),
+                message: format!("an if condition is true or false, got {}", render(&other, false)),
                 span,
             }),
         }
@@ -1820,15 +1791,13 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
                 Some(0)
             }
         },
-        (Pattern::Annotated { name, ty, .. }, _) => {
-            match type_match_depth(ty, arg) {
-                Some(depth) => {
-                    binds.push((name.clone(), arg.clone()));
-                    Some(depth)
-                }
-                None => None,
+        (Pattern::Annotated { name, ty, .. }, _) => match type_match_depth(ty, arg) {
+            Some(depth) => {
+                binds.push((name.clone(), arg.clone()));
+                Some(depth)
             }
-        }
+            None => None,
+        },
         (Pattern::Keyed { .. }, _) => None,
         (Pattern::Ctor { ty, fields }, Value::ErrV(info)) if ty == "err" => {
             match fields.len() == 1 {
@@ -1932,9 +1901,7 @@ fn type_matches_exact(ty: &str, arg: &Value) -> bool {
 /// the immediate parent 1, and so on — the dispatch score prefers nearer.
 fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
     let member_hit = TYPESETS.with(|t| {
-        t.borrow().get(ty).map(|members| {
-            members.iter().any(|m| type_match_depth(m, arg).is_some())
-        })
+        t.borrow().get(ty).map(|members| members.iter().any(|m| type_match_depth(m, arg).is_some()))
     });
     if let Some(hit) = member_hit {
         return hit.then_some(TYPESET_DEPTH);
@@ -1992,10 +1959,7 @@ fn int_f(n: &BigInt) -> f64 {
 
 fn div_float(a: f64, b: f64, frame: &Frame, span: Span) -> EvalResult {
     match b == 0.0 {
-        true => Ok(err_value(
-            Value::Str("division by zero".to_string()),
-            origin_at(frame, span),
-        )),
+        true => Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span))),
         false => Ok(Value::Float(a / b)),
     }
 }
@@ -2014,10 +1978,7 @@ pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
             (Value::Desc(a), Value::Desc(b)) => {
                 Ok(Value::Desc(Rc::new(Desc::Join(a.clone(), b.clone()))))
             }
-            _ => Err(RuntimeError {
-                message: "a group joins descriptions".to_string(),
-                span,
-            }),
+            _ => Err(RuntimeError { message: "a group joins descriptions".to_string(), span }),
         },
     }
 }
@@ -2026,23 +1987,16 @@ pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
 /// both reasons; a `none` adds nothing to an err; two nones stay none.
 fn accumulate_failures(left: Value, right: Value) -> Value {
     match (&left, &right) {
-        (Value::ErrV(a), Value::ErrV(b)) => err_value(
-            Value::List(Rc::new(vec![a.reason.clone(), b.reason.clone()])),
-            None,
-        ),
+        (Value::ErrV(a), Value::ErrV(b)) => {
+            err_value(Value::List(Rc::new(vec![a.reason.clone(), b.reason.clone()])), None)
+        }
         (Value::ErrV(_), _) => left,
         (_, Value::ErrV(_)) => right,
         _ => left,
     }
 }
 
-pub fn eval_binop(
-    op: &str,
-    left: Value,
-    right: Value,
-    span: Span,
-    frame: &Frame,
-) -> EvalResult {
+pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame) -> EvalResult {
     if is_failure(&left) {
         return Ok(left);
     }
@@ -2061,34 +2015,26 @@ pub fn eval_binop(
         ("-", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
         ("*", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
         ("/", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => Ok(err_value(
-                Value::Str("division by zero".to_string()),
-                origin_at(frame, span),
-            )),
+            true => {
+                Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span)))
+            }
             false => Ok(Value::Int(a / b)),
         },
         ("%", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => Ok(err_value(
-                Value::Str("modulo by zero".to_string()),
-                origin_at(frame, span),
-            )),
+            true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
             false => Ok(Value::Int(a % b)),
         },
         ("+", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
         ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
         ("/", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => Ok(err_value(
-                Value::Str("division by zero".to_string()),
-                origin_at(frame, span),
-            )),
+            true => {
+                Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span)))
+            }
             false => Ok(Value::Float(a / b)),
         },
         ("%", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => Ok(err_value(
-                Value::Str("modulo by zero".to_string()),
-                origin_at(frame, span),
-            )),
+            true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
             false => Ok(Value::Float(a % b)),
         },
         // int meets float: the int widens (as if cast `x:float`), result float
@@ -2112,10 +2058,7 @@ pub fn eval_binop(
                 span,
             }),
         },
-        _ => Err(RuntimeError {
-            message: format!("`{op}` is not defined for these values"),
-            span,
-        }),
+        _ => Err(RuntimeError { message: format!("`{op}` is not defined for these values"), span }),
     }
 }
 
@@ -2148,16 +2091,15 @@ fn values_equal_seen(
         (Value::Float(x), Value::Float(y)) => x.total_cmp(y).is_eq(),
         (Value::Map(x), Value::Map(y)) => {
             x.len() == y.len()
-                && x.iter().zip(y.iter()).all(|((ka, va), (kb, vb))| {
-                    ka == kb && values_equal_seen(va, vb, seen)
-                })
+                && x.iter()
+                    .zip(y.iter())
+                    .all(|((ka, va), (kb, vb))| ka == kb && values_equal_seen(va, vb, seen))
         }
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::True, Value::True) | (Value::False, Value::False) => true,
         (Value::NoneV, Value::NoneV) => true,
         (Value::List(x), Value::List(y)) => {
-            x.len() == y.len()
-                && x.iter().zip(y.iter()).all(|(a, b)| values_equal_seen(a, b, seen))
+            x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_equal_seen(a, b, seen))
         }
         (Value::Record { ty: tx, fields: fx }, Value::Record { ty: ty_, fields: fy }) => {
             if tx != ty_ {
@@ -2203,9 +2145,8 @@ fn render_float(x: f64) -> String {
     }
     if x10 >= 0 {
         let ip = (x10 + 1) as usize;
-        let whole: String = (0..ip)
-            .map(|i| digits.as_bytes().get(i).map(|b| *b as char).unwrap_or('0'))
-            .collect();
+        let whole: String =
+            (0..ip).map(|i| digits.as_bytes().get(i).map(|b| *b as char).unwrap_or('0')).collect();
         let frac = if (k as usize) > ip { format!(".{}", &digits[ip..]) } else { String::new() };
         return format!("{sign}{whole}{frac}");
     }
@@ -2352,11 +2293,8 @@ impl<'a> Interp<'a> {
         let mut fibers = Vec::new();
         flatten_join(join, &mut fibers);
         // (wake_time, spawn_index, remaining work)
-        let mut ready: Vec<(u64, usize, Rc<Desc>)> = fibers
-            .into_iter()
-            .enumerate()
-            .map(|(i, d)| (0u64, i, d))
-            .collect();
+        let mut ready: Vec<(u64, usize, Rc<Desc>)> =
+            fibers.into_iter().enumerate().map(|(i, d)| (0u64, i, d)).collect();
         let mut now = 0u64;
         // wall-credit: real time spent computing counts against a pending
         // wait, so compute overlaps sleeps in wall-clock. the transcript
@@ -2365,9 +2303,8 @@ impl<'a> Interp<'a> {
         let wall_start = std::time::Instant::now();
         let mut failures: Vec<Value> = Vec::new();
         while !ready.is_empty() {
-            let pick = (0..ready.len())
-                .min_by_key(|&i| (ready[i].0, ready[i].1))
-                .expect("non-empty");
+            let pick =
+                (0..ready.len()).min_by_key(|&i| (ready[i].0, ready[i].1)).expect("non-empty");
             let (wake, idx, desc) = ready.remove(pick);
             if wake > now {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -2390,10 +2327,7 @@ impl<'a> Interp<'a> {
                 Step::Blocked(ms, cont) => ready.push((now + ms, idx, cont)),
             }
         }
-        Ok(failures
-            .into_iter()
-            .reduce(accumulate_failures)
-            .unwrap_or(Value::NoneV))
+        Ok(failures.into_iter().reduce(accumulate_failures).unwrap_or(Value::NoneV))
     }
 
     /// Advance one fiber until it finishes (`Done`) or hits a `sleep`

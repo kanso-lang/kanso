@@ -198,10 +198,12 @@ impl<'a> WasmBackend<'a> {
                     .iter()
                     .map(|p| match p {
                         Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 3000,
-                        Pattern::Annotated { ty, .. } => match typeset_names.contains(ty.as_str()) {
-                            true => 1000,
-                            false => 2000 + depth_of(ty),
-                        },
+                        Pattern::Annotated { ty, .. } => {
+                            match typeset_names.contains(ty.as_str()) {
+                                true => 1000,
+                                false => 2000 + depth_of(ty),
+                            }
+                        }
                         Pattern::Ctor { .. } | Pattern::Keyed { .. } => 2000,
                         Pattern::Var(..) | Pattern::Wildcard(..) => 0,
                     })
@@ -290,7 +292,12 @@ impl<'a> WasmBackend<'a> {
 
     /// Emits the checks for one dispatch-arm pattern; a mismatch branches to
     /// the enclosing arm block (depth 0 — checks stay flat).
-    fn emit_pattern(&mut self, ctx: &mut Ctx, value_local: u32, pattern: &Pattern) -> Result<(), String> {
+    fn emit_pattern(
+        &mut self,
+        ctx: &mut Ctx,
+        value_local: u32,
+        pattern: &Pattern,
+    ) -> Result<(), String> {
         match pattern {
             Pattern::IntLit(n, _) => {
                 let lit = self.lit(LitKey::Int(n.clone()), || Lit::Int(n.clone()));
@@ -416,10 +423,7 @@ impl<'a> WasmBackend<'a> {
             "err" => 6,
             "none" => 7,
             _ => {
-                let tid = self
-                    .type_ids
-                    .get(ty)
-                    .ok_or_else(|| format!("unknown type `{ty}`"))?;
+                let tid = self.type_ids.get(ty).ok_or_else(|| format!("unknown type `{ty}`"))?;
                 100 + tid
             }
         })
@@ -609,9 +613,8 @@ impl<'a> WasmBackend<'a> {
             Expr::BinOp { op, lhs, rhs, span } => {
                 let armable = matches!(*op, "+" | "-" | "*" | "/" | "%")
                     && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
-                if let Some(idx) = armable
-                    .then(|| self.dispatchers.get(&(op.to_string(), 2)).copied())
-                    .flatten()
+                if let Some(idx) =
+                    armable.then(|| self.dispatchers.get(&(op.to_string(), 2)).copied()).flatten()
                 {
                     let a = ctx.body.local();
                     let b = ctx.body.local();
@@ -892,11 +895,7 @@ impl<'a> WasmBackend<'a> {
             return Ok(());
         }
         if let Some(tid) = self.type_ids.get(name.as_str()).copied() {
-            let is_sub = self
-                .program
-                .types
-                .iter()
-                .any(|t| t.name == *name && t.parent.is_some());
+            let is_sub = self.program.types.iter().any(|t| t.name == *name && t.parent.is_some());
             if is_sub {
                 if args.len() != 1 {
                     return Err(format!("wasm backend: `{name}` wraps one value"));
@@ -1003,8 +1002,7 @@ impl<'a> WasmBackend<'a> {
         }
         ctx.body.eqz();
         ctx.body.if_void();
-        let msg =
-            self.str_lit(&format!("field `{field}` of `{ty_name}` takes {}", tys.join(" ")));
+        let msg = self.str_lit(&format!("field `{field}` of `{ty_name}` takes {}", tys.join(" ")));
         ctx.body.i32_const(msg as i64);
         ctx.body.call(RT_DIE);
         ctx.body.unreachable();
@@ -1036,9 +1034,7 @@ impl<'a> WasmBackend<'a> {
         self.emit_expr(ctx, &args[0], false)?;
         ctx.body.local_set(piped_local);
         let closure: Result<(), String> = match head {
-            Expr::Ident(name, _)
-                if self.dispatchers.contains_key(&(name.clone(), args.len())) =>
-            {
+            Expr::Ident(name, _) if self.dispatchers.contains_key(&(name.clone(), args.len())) => {
                 let target = self.dispatchers[&(name.clone(), args.len())];
                 let rest = args.len() - 1;
                 let fn_idx = self.module.declare(2);
@@ -1067,10 +1063,8 @@ impl<'a> WasmBackend<'a> {
             Expr::Ident(name, _) if crate::check::BUILTINS.contains(&name.as_str()) => {
                 let rest = args.len() - 1;
                 let name_lit = self.str_lit(name);
-                let fallible = matches!(
-                    name.as_str(),
-                    "to_int" | "to_float" | "utf8" | "from_code"
-                );
+                let fallible =
+                    matches!(name.as_str(), "to_int" | "to_float" | "utf8" | "from_code");
                 let origin = match fallible {
                     true => Some(self.origin_lit(&ctx.prefix, span)),
                     false => None,
@@ -1129,7 +1123,9 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => free_idents(expr, visit),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        free_idents(expr, visit)
+                    }
                 }
             }
         }
@@ -1179,9 +1175,9 @@ fn free_idents(expr: &Expr, visit: &mut dyn FnMut(&str)) {
             free_idents(early, visit);
             for stmt in rest {
                 match stmt {
-                    Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. } => free_idents(expr, visit),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        free_idents(expr, visit)
+                    }
                 }
             }
         }

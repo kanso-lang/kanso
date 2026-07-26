@@ -7,8 +7,7 @@
 use std::process::Command;
 
 fn run(name: &str, source: &str) -> String {
-    let dir =
-        std::env::temp_dir().join(format!("kanso_regreturn_{}_{name}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("kanso_regreturn_{}_{name}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("temp dir");
     let path = dir.join("prog.kso");
     std::fs::write(&path, source).expect("write fixture");
@@ -18,11 +17,7 @@ fn run(name: &str, source: &str) -> String {
         .current_dir(&dir)
         .output()
         .expect("kanso binary runs");
-    assert!(
-        output.status.success(),
-        "run failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "run failed:\n{}", String::from_utf8_lossy(&output.stderr));
     String::from_utf8_lossy(&output.stdout).to_string()
 }
 

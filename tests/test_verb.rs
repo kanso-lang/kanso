@@ -20,8 +20,5 @@ fn test_runs_a_lone_library_files_tests() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(
-        String::from_utf8_lossy(&output.stdout),
-        "test_greet ... ok\n1 passed, 0 failed\n"
-    );
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "test_greet ... ok\n1 passed, 0 failed\n");
 }

@@ -5,11 +5,11 @@
 //! call back into the program module through `k_callback`.
 #![cfg(target_arch = "wasm32")]
 use crate::ast::Program;
-use crate::eval::{
-    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render, trace_lines, Desc,
-    Executor, ErrInfo, Interp, Value,
-};
 use crate::diag::Span;
+use crate::eval::{
+    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render, trace_lines,
+    Desc, ErrInfo, Executor, Interp, Value,
+};
 use crate::wasm_backend::Lit;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -25,7 +25,10 @@ enum Slot {
     /// A list of raw handles: closure environments and callback argument packs.
     E(Rc<Vec<u32>>),
     /// A closure compiled into the program module's table.
-    C { tidx: u32, env: u32 },
+    C {
+        tidx: u32,
+        env: u32,
+    },
     Seq(u32, u32),
     Bind(u32, u32),
 }
@@ -266,10 +269,7 @@ pub extern "C" fn rt_keyed_check(h: u32, entries: u32) -> u32 {
         die("cannot read fields of this value; keyed reads take a record".to_string());
     };
     let Value::Record { ty, .. } = &value else {
-        die(format!(
-            "cannot read fields of {}; keyed reads take a record",
-            render(&value, true)
-        ));
+        die(format!("cannot read fields of {}; keyed reads take a record", render(&value, true)));
     };
     let declared = TYPES.with(|t| {
         let types = t.borrow();
@@ -462,9 +462,18 @@ pub extern "C" fn rt_upcast(inner: u32, code: u32) -> u32 {
     if is_failure(&v) {
         return inner;
     }
-    let want_name = if code >= 100 { type_name(code as usize - 100) } else {
-        match code { 0 => "int", 1 => "float64", 2 => "string", 3 => "bool", 6 => "err", _ => "" }
-            .to_string()
+    let want_name = if code >= 100 {
+        type_name(code as usize - 100)
+    } else {
+        match code {
+            0 => "int",
+            1 => "float64",
+            2 => "string",
+            3 => "bool",
+            6 => "err",
+            _ => "",
+        }
+        .to_string()
     };
     loop {
         match &v {
@@ -497,7 +506,10 @@ pub extern "C" fn rt_mkrec(tid: u32, n: u32) -> u32 {
         fields.push(v);
     }
     let name = TYPES.with(|t| t.borrow()[tid as usize].0.clone());
-    push(Slot::V(Value::Record { ty: Rc::from(name.as_str()), fields: Rc::new(RefCell::new(fields)) }))
+    push(Slot::V(Value::Record {
+        ty: Rc::from(name.as_str()),
+        fields: Rc::new(RefCell::new(fields)),
+    }))
 }
 
 #[no_mangle]
@@ -852,4 +864,3 @@ pub fn exec_main(h: u32) -> (i32, String) {
     text.push_str(&tail);
     (status, text)
 }
-

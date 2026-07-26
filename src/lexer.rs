@@ -53,7 +53,8 @@ pub struct Lexed {
     pub blank_lines: Vec<usize>,
 }
 
-const OPS: [&str; 14] = ["&&", "||", ">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&"];
+const OPS: [&str; 14] =
+    ["&&", "||", ">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&"];
 
 pub const MAX_WIDTH: usize = 80;
 
@@ -159,12 +160,11 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                         if head == "build"
                 )
         };
-        let block_child = lines.last().is_some_and(|p: &Line| {
-            is_block_header(p) && indent == p.indent + 2
-        });
-        let sibling_or_dedent = lines.last().is_some_and(|p: &Line| {
-            indent > 2 && indent % 2 == 0 && indent <= p.indent
-        });
+        let block_child =
+            lines.last().is_some_and(|p: &Line| is_block_header(p) && indent == p.indent + 2);
+        let sibling_or_dedent = lines
+            .last()
+            .is_some_and(|p: &Line| indent > 2 && indent % 2 == 0 && indent <= p.indent);
         if block_child || sibling_or_dedent {
             match lex_line(content, number, indent + 1) {
                 Ok(lexed_line) => {
@@ -235,7 +235,11 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         check_needless_continuation(line, &mut diags);
         check_partial_chain(line, &mut diags);
     }
-    if diags.is_empty() { Ok(Lexed { lines, blank_lines }) } else { Err(diags) }
+    if diags.is_empty() {
+        Ok(Lexed { lines, blank_lines })
+    } else {
+        Err(diags)
+    }
 }
 
 /// A statement wrapped across `>>` continuation lines gives every step its
@@ -320,11 +324,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             break;
         }
         if c == '/' && s.peek(1) == Some('/') {
-            return Err(Diagnostic::new(
-                "formatting",
-                "comments are `#`".to_string(),
-                span,
-            ));
+            return Err(Diagnostic::new("formatting", "comments are `#`".to_string(), span));
         }
         if c.is_ascii_digit() {
             tokens.push((s.lex_int()?, span));
@@ -396,13 +396,11 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
                 // a dot pressed tight against both neighbors reads a field
                 // (u.name); with air around it, it is the pipe
                 let tight_left = s.pos > 0
-                    && s.chars
-                        .get(s.pos - 1)
-                        .is_some_and(|p| p.is_ascii_alphanumeric() || *p == '_' || *p == ')' || *p == ']');
-                let tight_right = s
-                    .chars
-                    .get(s.pos + 1)
-                    .is_some_and(|n| n.is_ascii_lowercase() || *n == '_');
+                    && s.chars.get(s.pos - 1).is_some_and(|p| {
+                        p.is_ascii_alphanumeric() || *p == '_' || *p == ')' || *p == ']'
+                    });
+                let tight_right =
+                    s.chars.get(s.pos + 1).is_some_and(|n| n.is_ascii_lowercase() || *n == '_');
                 Some(if tight_left && tight_right { Tok::Dot } else { Tok::Pipe })
             }
             _ => None,
@@ -432,7 +430,8 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             continue;
         }
         let two = [c, s.peek(1).unwrap_or(' ')].iter().collect::<String>();
-        if let Some(op) = OPS.iter().find(|op| **op == two || (op.len() == 1 && op.starts_with(c))) {
+        if let Some(op) = OPS.iter().find(|op| **op == two || (op.len() == 1 && op.starts_with(c)))
+        {
             s.pos += op.len();
             tokens.push((Tok::Op(op), span));
             end_cols.push(s.span().col);
@@ -457,8 +456,8 @@ impl Scanner {
         while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
             self.pos += 1;
         }
-        let is_float = self.peek(0) == Some('.')
-            && self.peek(1).is_some_and(|c| c.is_ascii_digit());
+        let is_float =
+            self.peek(0) == Some('.') && self.peek(1).is_some_and(|c| c.is_ascii_digit());
         if is_float {
             self.pos += 1;
             while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
@@ -485,21 +484,14 @@ impl Scanner {
             // (json/decode); division between named values breathes, like the
             // pipe and unlike nothing else
             if self.chars.get(self.pos) == Some(&'/')
-                && self
-                    .chars
-                    .get(self.pos + 1)
-                    .is_some_and(|n| n.is_ascii_lowercase() || *n == '_')
+                && self.chars.get(self.pos + 1).is_some_and(|n| n.is_ascii_lowercase() || *n == '_')
             {
                 self.pos += 1;
             }
         }
         // the naming sigils, one each, terminal only: `!` marks the strict
         // variant (errs where the plain form is lenient), `?` a predicate
-        if self
-            .chars
-            .get(self.pos)
-            .is_some_and(|c| *c == '!' || *c == '?')
-        {
+        if self.chars.get(self.pos).is_some_and(|c| *c == '!' || *c == '?') {
             self.pos += 1;
         }
         let word: String = self.chars[start..self.pos].iter().collect();
@@ -530,7 +522,11 @@ impl Scanner {
         let mut lit = String::new();
         loop {
             let Some(c) = self.peek(0) else {
-                return Err(Diagnostic::new("syntax", "unterminated string".to_string(), open_span));
+                return Err(Diagnostic::new(
+                    "syntax",
+                    "unterminated string".to_string(),
+                    open_span,
+                ));
             };
             match c {
                 '"' => {

@@ -13,25 +13,61 @@ pub enum Expr {
     /// any arm takes, it is the only spelling for a partial.
     Partial(String, Span),
     List(Vec<Expr>, Span),
-    App { head: Box<Expr>, args: Vec<Expr>, span: Span, piped: bool },
-    Field { base: Box<Expr>, name: String, span: Span },
-    Index { base: Box<Expr>, index: Box<Expr>, strict: bool, span: Span },
+    App {
+        head: Box<Expr>,
+        args: Vec<Expr>,
+        span: Span,
+        piped: bool,
+    },
+    Field {
+        base: Box<Expr>,
+        name: String,
+        span: Span,
+    },
+    Index {
+        base: Box<Expr>,
+        index: Box<Expr>,
+        strict: bool,
+        span: Span,
+    },
     Seq(Box<Expr>, Box<Expr>, Span),
-    Lambda { params: Vec<(String, Span)>, body: Box<Expr>, span: Span },
-    BinOp { op: &'static str, lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
-    Join { lhs: Box<Expr>, rhs: Box<Expr>, span: Span },
+    Lambda {
+        params: Vec<(String, Span)>,
+        body: Box<Expr>,
+        span: Span,
+    },
+    BinOp {
+        op: &'static str,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
+    Join {
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+        span: Span,
+    },
     /// A bind-bearing branch body — fn-body statements in expression
     /// position. Exists only where evaluation is deferred (an `if` arm),
     /// so sequencing never braids into ordinary application.
     Block(Vec<Stmt>, Span),
     /// `(expr):type` — the upcast: strips a subtype value to the named
     /// ancestor. Widening only; construction is the downward direction.
-    Upcast { expr: Box<Expr>, ty: String, span: Span },
+    Upcast {
+        expr: Box<Expr>,
+        ty: String,
+        span: Span,
+    },
     /// The last expression freezes to an ordinary immutable value.
     Build(Vec<Stmt>, Span),
     /// Everything below a fired guard is folded into the untaken branch,
     /// so first-return-wins holds by unreachability.
-    Guard { cond: Box<Expr>, early: Box<Expr>, rest: Vec<Stmt>, span: Span },
+    Guard {
+        cond: Box<Expr>,
+        early: Box<Expr>,
+        rest: Vec<Stmt>,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -96,10 +132,18 @@ impl Pattern {
 
 #[derive(Clone, Debug)]
 pub enum Stmt {
-    Bind { pattern: Pattern, expr: Expr },
+    Bind {
+        pattern: Pattern,
+        expr: Expr,
+    },
     Expr(Expr),
     /// Identity-preserving: rebinding cannot close a cycle.
-    Set { target: String, field: String, value: Expr, span: Span },
+    Set {
+        target: String,
+        field: String,
+        value: Expr,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug)]
