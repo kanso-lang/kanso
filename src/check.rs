@@ -559,7 +559,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
 }
 
 /// Builtin type words legal as typeset members alongside declared types.
-const TYPESET_BUILTINS: [&str; 6] = ["any", "bool", "float64", "int", "none", "string"];
+const TYPESET_BUILTINS: [&str; 6] = ["bool", "float64", "int", "none", "some", "string"];
 
 /// A multi-member field typeset enumerates concrete types: each member must
 /// name a declared type or a builtin type word.
@@ -626,6 +626,7 @@ pub fn check_file_shadow(
     check_fn_order(program, &mut diags);
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
+    check_retired_any(program, &mut diags);
     check_set_literals(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
@@ -903,6 +904,37 @@ fn constant_refs<'a>(expr: &'a Expr, known: &HashSet<&str>, out: &mut Vec<&'a st
 /// definition asks for the answer it is meant to produce. Undetected, it
 /// recurses until the stack ends, which reports the machine's limit rather
 /// than the program's mistake.
+/// `any` was the old name for the type that accepts every value except
+/// `none`, which is what it never said. An unannotated field or parameter is
+/// the unconstrained one.
+fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let retired = |ty: &str, span, diags: &mut Vec<Diagnostic>| {
+        if ty == "any" {
+            diags.push(Diagnostic::new(
+                "type",
+                "`any` is spelled `some`, which accepts every value except `none`; \
+                 for the unconstrained one, leave the annotation off"
+                    .to_string(),
+                span,
+            ));
+        }
+    };
+    for ty in &program.types {
+        for (_, declared, span) in &ty.fields {
+            for name in declared {
+                retired(name, *span, diags);
+            }
+        }
+    }
+    for decl in &program.fns {
+        for param in &decl.params {
+            if let Pattern::Annotated { ty, span, .. } = param {
+                retired(ty, *span, diags);
+            }
+        }
+    }
+}
+
 fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();

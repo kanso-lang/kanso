@@ -1,0 +1,7 @@
+type person
+  name:string
+  partner
+
+pub play =
+  p = person "ada" none
+  print "{p.name} / {p.partner}"

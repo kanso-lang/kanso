@@ -419,7 +419,7 @@ impl<'a> WasmBackend<'a> {
             "float64" => 1,
             "string" => 2,
             "bool" => 3,
-            "any" => 8,
+            "some" => 8,
             "err" => 6,
             "none" => 7,
             _ => {

@@ -1,4 +1,4 @@
-fn label x:any
+fn label x:some
   "any arm sees {x}"
 
 fn label x:int

@@ -179,7 +179,7 @@ declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
-declare i64 @k_check_any(%KValue)
+declare i64 @k_check_some(%KValue)
 declare %KValue @k_err_inner(%KValue)
 declare i64 @k_check_rec(%KValue, i64, i64)
 declare i64 @k_check_str(%KValue, ptr, i64)
@@ -1261,7 +1261,7 @@ impl<'a> Backend<'a> {
     fn type_check_call(&self, value: &str, ty: &str) -> Result<String, String> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
-            "any" => format!("call i64 @k_check_any(%KValue {value})"),
+            "some" => format!("call i64 @k_check_some(%KValue {value})"),
             "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
             "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
             "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
