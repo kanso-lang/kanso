@@ -1,4 +1,0 @@
-error[formatting]: function declarations appear in alphabetical order: `play` before `zeta`
-  --> order_check.kso:4:5
-   4 | pub play = print "{zeta 1}"
-           ^

@@ -131,7 +131,7 @@ extra_css: /book/book.css
 
 <h2>error[formatting]—order and separation</h2>
 
-<p>a file has a fixed shape: types come first, then functions and constants, and inside each group the declarations are alphabetical. this protects the reader's ability to <em>find</em> things—a name is always where its spelling says it will be—and it protects the diff, because a new declaration lands in exactly one legal place. put a type after a function and the compiler tells you which way it must move:</p>
+<p>a file has a fixed shape: types come first, then functions and constants. within those groups the order is yours to choose, so a helper can sit beside the thing it helps and the entry point can stay where a reader will look for it. put a type after a function and the compiler tells you which way it must move:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">type_order_check.kso</div>
@@ -151,39 +151,10 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>within the function group, alphabetical order is enforced by name. <code>main</code> sorts before <code>zeta</code>, so <code>main</code> must come first:</p>
 
-<div class="code-panel">
-  <div class="code-panel-title">fn_order_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
-  <span class="f">x</span>
-
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check fn_order_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: function declarations appear in alphabetical order: `main` before `zeta`
-<span class="c">  --&gt; fn_order_check.kso:4:1</span>
-   4 | main = print "{zeta 1}"
-       <span class="k">^</span></code></pre>
-  </div>
 </div>
 
-<p>the ordering law reaches inside a type, too: its fields are alphabetical:</p>
 
-<div class="code-panel">
-  <div class="code-panel-title">field_order_check.kso</div>
-  <pre><code><span class="k">type</span> user
-  name:string
-  admin:bool
-
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check field_order_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: fields appear in alphabetical order: `admin` before `name`
-<span class="c">  --&gt; field_order_check.kso:3:3</span>
-   3 |   admin: bool
-         <span class="k">^</span></code></pre>
-  </div>
 </div>
 
 <p>between two top-level declarations there is exactly one blank line—never zero, never two. run two declarations together and the second is flagged:</p>

@@ -23,22 +23,22 @@ fn digit? none
 fn digit? c
   (47 < c) && (c < 58)
 
-fn is_ws 9
+fn is_ws? 9
   true
 
-fn is_ws 10
+fn is_ws? 10
   true
 
-fn is_ws 13
+fn is_ws? 13
   true
 
-fn is_ws 32
+fn is_ws? 32
   true
 
-fn is_ws none
+fn is_ws? none
   false
 
-fn is_ws _
+fn is_ws? _
   false
 
 pub play =
@@ -53,7 +53,7 @@ fn show v
   "ok: {v}"
 
 fn skip_ws cs p
-  if (is_ws (cs[p])) (skip_ws cs (p + 1)) p
+  if (is_ws? (cs[p])) (skip_ws cs (p + 1)) p
 
 fn trailing cs p v
   if (p > (length cs)) v (fail p "unexpected trailing characters")

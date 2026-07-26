@@ -1,4 +1,0 @@
-fn zeta x
-  x
-
-pub play = print "{zeta 1}"

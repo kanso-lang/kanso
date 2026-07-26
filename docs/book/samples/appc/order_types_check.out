@@ -2,7 +2,3 @@ error[formatting]: canonical order places type declarations before functions; mo
   --> order_types_check.kso:4:6
    4 | type thing
             ^
-error[formatting]: function declarations appear in alphabetical order: `play` before `use_it`
-  --> order_types_check.kso:7:5
-   7 | pub play = print "x"
-           ^

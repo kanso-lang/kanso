@@ -1,5 +1,0 @@
-type user
-  name:string
-  admin:bool
-
-pub play = print "x"
