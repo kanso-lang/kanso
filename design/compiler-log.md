@@ -4222,3 +4222,53 @@ is a function.
 
 Verified by rendering three snippets in headless chrome and comparing against
 the markup in the pages, rather than by eye.
+
+## 2026-07-25 — GAVEL: `&` merges named bundles only
+
+Clay: "yes named bundles only."
+
+    type user identity & passwordable
+
+    NOT:
+    type user identity
+      email:string
+      role:string
+
+A merged type is exactly the union of named parts. No inline fields alongside a
+parent, which is the shape that would let you skip naming the thing you are
+adding.
+
+WHY THIS IS THE STRONGER FORM. The committee's objection to merging was
+Hickey's: it lets you avoid naming the concept two records share, and that name
+is usually the missing piece. Requiring named bundles answers the objection in
+the syntax rather than by discipline — you cannot express the unnamed case, so
+the concept always gets a name. The email-and-role pair becomes a type with a
+name someone had to choose, which is the outcome the objection wanted.
+
+`&` is also what distinguishes a merge from a typeset, which the bare form
+already takes: `type baz bar foo` compiles today and means "bar or foo". Merge
+and union are opposites and would otherwise be spelled identically.
+
+STILL OPEN, unchanged from the earlier entry: whether a `user` is accepted
+where an `identity` is expected (it must be, or the feature misses its case);
+the collision rule (identical dedups, differing is an error); records only,
+with `&` on typesets staying union; and variance, where the safe answer is that
+containers are invariant.
+
+## 2026-07-25 — what the function-ordering rule actually enforces
+
+Demonstrated rather than described, since the rule is what Clay did not
+recognise as his:
+
+    fn zebra … then fn alpha        error: `alpha` before `zebra`
+    fn f … fn g … fn f              error: `f` before `g`  (overloads split)
+    fn bump … pub play … fn zap     accepted (b < p < z)
+
+So: every top-level declaration name must appear in alphabetical order, and
+overloads of one name must be adjacent. Constants are not exempt — a constant
+binding is a zero-arity fn, so `main` and `play` sort among the functions,
+which is why a two-function test program has to be arranged around its own
+entry point.
+
+That last consequence is the one worth weighing. An entry point is the thing a
+reader looks for first, and the rule can place it in the middle of the file.
