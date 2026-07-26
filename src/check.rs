@@ -559,7 +559,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
 }
 
 /// Builtin type words legal as typeset members alongside declared types.
-const TYPESET_BUILTINS: [&str; 6] = ["bool", "float64", "int", "none", "some", "string"];
+const TYPESET_BUILTINS: [&str; 5] = ["bool", "float64", "int", "none", "string"];
 
 /// A multi-member field typeset enumerates concrete types: each member must
 /// name a declared type or a builtin type word.
@@ -912,8 +912,8 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
         if ty == "any" {
             diags.push(Diagnostic::new(
                 "type",
-                "`any` is spelled `some`, which accepts every value except `none`; \
-                 for the unconstrained one, leave the annotation off"
+                "there is no `any` type; leave the annotation off for a field or \
+                 parameter that accepts anything"
                     .to_string(),
                 span,
             ));

@@ -1,5 +1,5 @@
-fn label x:some
-  "any arm sees {x}"
+fn label x
+  "generic arm sees {x}"
 
 fn label x:int
   "int arm sees {x}"

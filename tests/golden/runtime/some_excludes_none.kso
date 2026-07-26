@@ -1,4 +1,0 @@
-type box
-  v:int some
-
-pub play = print "{box none}"

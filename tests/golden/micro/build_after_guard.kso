@@ -1,6 +1,6 @@
 type cell
   tag:string
-  link:some
+  link
 
 fn tie n
   return none if (n < 1)
