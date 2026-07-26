@@ -4959,3 +4959,39 @@ being built on spec.
 Still genuinely open, in the order the profile ranks them: call-pattern
 specialization against the dispatcher at 19.8%, and the in-place/fully-in-place
 family against buffer copying at 14.4%.
+
+## 2026-07-26 — CORRECTION: a rendering technique was judged on a decode profile
+
+Clay asked why 1.8% is not a win. It is one, and the entry that said otherwise
+was wrong twice over.
+
+FIRST, THE WRONG PROFILE. Dragonbox renders floats. The 1.8% I cited was float
+*parsing*, measured on the decode board, where rendering never runs at all —
+`ryu_renders` reads 0 there, which the cost golden has been saying the whole
+time. Measuring the path the technique actually lives on, 4,177 samples of the
+encode benchmark:
+
+    d_encode_onto_2   565  13.5%
+    k_b_append        454  10.9%
+    memmove           358   8.6%
+    k_b_find2_below   189   4.5%
+    render_ryu        160   3.8%
+
+So the ceiling is 3.8%, not 1.8%, and dragonbox's usual margin over ryū — a
+fifth to a third — puts the realistic capture near one percent of encode.
+
+SECOND, THE 1.8% WAS ALREADY SPENT. Eisel-lemire is shipped and has been since
+before this sweep; `el_parses` reads 318450 on the decode board. So 1.8% is
+what float parsing costs *after* the optimization, not an amount available to
+win. Quoting it as a reason to decline the technique that produced it inverts
+the evidence. The techniques list still carried it as "queued" — the third time
+that entry has drifted from the section above it — and now states what the
+counter proves.
+
+THE FRAMING WAS WRONG TOO. "Cannot pay" is not a thing a percentage says. A
+number gives a ceiling, and ceilings rank; the only honest reason to leave one
+alone is that another line is bigger. Today's utf-8 work is the argument
+against dismissing small numbers: 15.2% of the decode profile yielded 10.9% of
+total cpu, which is most of the line, and nothing about that was predictable
+from the size of the number alone. The ledger now says ranked rather than
+declined, and says what it ranks behind.
