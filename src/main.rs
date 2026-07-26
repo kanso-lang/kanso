@@ -70,7 +70,12 @@ fn main() -> ExitCode {
 
 fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let command = args.first()?.clone();
-    if command != "run" && command != "check" && command != "test" && command != "build" && command != "play" {
+    if command != "run"
+        && command != "check"
+        && command != "test"
+        && command != "build"
+        && command != "play"
+    {
         return None;
     }
     let file = args.get(1)?.clone();

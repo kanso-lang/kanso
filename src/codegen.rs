@@ -322,10 +322,7 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
         let Expr::Ident(callee, _) = head.as_ref() else { continue };
         let Some(target) = callee.strip_prefix("builtin_") else { continue };
         let all_forwarded = args.len() == params.len()
-            && args
-                .iter()
-                .zip(&params)
-                .all(|(a, p)| matches!(a, Expr::Ident(n, _) if n == p));
+            && args.iter().zip(&params).all(|(a, p)| matches!(a, Expr::Ident(n, _) if n == p));
         if all_forwarded {
             out.insert((d.name.clone(), d.params.len()), target.to_string());
         }
@@ -357,12 +354,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     // the scanner's `_parsed`: exactly two fields, a small int position packed
     // into the tag word and a non-failure value in the payload word. Any other
     // register-returnable record keeps the heap representation.
-    let type_index: HashMap<&str, usize> = program
-        .types
-        .iter()
-        .enumerate()
-        .map(|(i, t)| (t.name.as_str(), i))
-        .collect();
+    let type_index: HashMap<&str, usize> =
+        program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
     escape.field_count.retain(|ty, n| {
         *n == 2
             && type_index.get(ty.as_str()).is_some_and(|&i| {
@@ -455,9 +448,7 @@ fn release_cells(f: &mut FnEmit, value: &str) -> String {
     let mut v = value.to_string();
     for cell in cells {
         let t = f.tmp();
-        f.line(&format!(
-            "{t} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {v})"
-        ));
+        f.line(&format!("{t} = call %KValue @k_thunk_release_unless(%KValue {cell}, %KValue {v})"));
         v = t;
     }
     v
@@ -501,7 +492,8 @@ impl FnEmit {
             ret_ty: "%KValue".to_string(),
             group: String::new(),
             arity: 0,
-         lazy_cells: Vec::new(), }
+            lazy_cells: Vec::new(),
+        }
     }
 
     fn tmp(&mut self) -> String {
@@ -615,9 +607,7 @@ impl<'a> Backend<'a> {
     }
 
     fn group_return_set(&self, name: &str, arity: usize) -> Set {
-        self.group_indices(name, arity)
-            .iter()
-            .fold(0, |acc, i| acc | self.inference.returns[*i])
+        self.group_indices(name, arity).iter().fold(0, |acc, i| acc | self.inference.returns[*i])
     }
 
     /// A parameter proven to be exactly `int` crosses the tailcc boundary as a
@@ -842,7 +832,8 @@ impl<'a> Backend<'a> {
             let mut loads = String::new();
             let mut args: Vec<String> = Vec::new();
             for i in 0..*argc {
-                let _ = writeln!(loads, "  %s{site}a{i}p = getelementptr %KValue, ptr %args, i64 {i}");
+                let _ =
+                    writeln!(loads, "  %s{site}a{i}p = getelementptr %KValue, ptr %args, i64 {i}");
                 let _ = writeln!(loads, "  %s{site}a{i} = load %KValue, ptr %s{site}a{i}p");
                 args.push(format!("%KValue %s{site}a{i}"));
             }
@@ -950,7 +941,8 @@ impl<'a> Backend<'a> {
             let _ = writeln!(fills, "  %f{i} = call %KValue @k_caf_freeze(%KValue %v{i})");
             let _ = writeln!(fills, "  store %KValue %f{i}, ptr @{cell}");
         }
-        let _ = writeln!(self.body, "define void @k_caf_init() {{\nentry:\n{fills}  ret void\n}}\n");
+        let _ =
+            writeln!(self.body, "define void @k_caf_init() {{\nentry:\n{fills}  ret void\n}}\n");
         self.body.push_str(
             "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
              @d_main_0()\n  ret %KValue %r\n}\n",
@@ -1195,16 +1187,16 @@ impl<'a> Backend<'a> {
             Some(k) => format!("arm{k}"),
             None => "nomatch".to_string(),
         };
-        let cases: Vec<String> = int_cases
-            .iter()
-            .map(|(n, l)| format!("    i64 {n}, label %{l}"))
-            .collect();
+        let cases: Vec<String> =
+            int_cases.iter().map(|(n, l)| format!("    i64 {n}, label %{l}")).collect();
         f.line(&format!(
             "switch i64 {payload}, label %{generic_label} [
 {}
   ]",
-            cases.join("
-")
+            cases.join(
+                "
+"
+            )
         ));
         f.start_block(&not_int);
         // nullary tags, then generic (non-failure) or propagation
@@ -1253,9 +1245,13 @@ impl<'a> Backend<'a> {
             }
             self.emit_fn_body(&mut f, &decl.body)?;
         }
-        let _ = writeln!(self.body, "{header}
+        let _ = writeln!(
+            self.body,
+            "{header}
 {}}}
-", f.out);
+",
+            f.out
+        );
         Ok(())
     }
 
@@ -1310,7 +1306,12 @@ impl<'a> Backend<'a> {
         })
     }
 
-    fn emit_dispatcher(&mut self, name: &str, arity: usize, decls: &[&FnDecl]) -> Result<(), String> {
+    fn emit_dispatcher(
+        &mut self,
+        name: &str,
+        arity: usize,
+        decls: &[&FnDecl],
+    ) -> Result<(), String> {
         if arity == 0 && decls.len() == 1 && Self::is_constant_body(decls[0]) {
             return self.emit_frozen_constant(name, decls);
         }
@@ -1420,9 +1421,7 @@ impl<'a> Backend<'a> {
             f.line(&format!("br i1 {ok}, label %{next}, label %{ret_label}"));
             f.start_block(&ret_label);
             let hopped = f.tmp();
-            f.line(&format!(
-                "{hopped} = call %KValue @k_err_hop(%KValue {val}, ptr @{hop_name})"
-            ));
+            f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {val}, ptr @{hop_name})"));
             self.emit_ret_failure(&mut f, name, arity, &hopped);
             f.start_block(&next);
         }
@@ -1854,10 +1853,7 @@ impl<'a> Backend<'a> {
                         captures.len()
                     ));
                     f.record(&t, crate::infer::TOP);
-                    let in_beat = self
-                        .beat
-                        .ids
-                        .contains_key(&(f.group.clone(), f.arity));
+                    let in_beat = self.beat.ids.contains_key(&(f.group.clone(), f.arity));
                     if !in_beat && self.demand.is_releasable(&f.group, f.arity, i) {
                         f.lazy_cells.push(t.clone());
                     }
@@ -2158,9 +2154,7 @@ impl<'a> Backend<'a> {
                 let b = self.emit_expr(f, base)?;
                 let (label, _) = self.intern(&format!("{name}\0"));
                 let t = f.tmp();
-                f.line(&format!(
-                    "{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"
-                ));
+                f.line(&format!("{t} = call %KValue @k_b_field(%KValue {b}, ptr @{label})"));
                 f.record(&t, TOP);
                 Ok(t)
             }
@@ -2187,9 +2181,7 @@ impl<'a> Backend<'a> {
                 let b = self.emit_expr(f, rhs)?;
                 let b = self.maybe_force(f, b);
                 let t = f.tmp();
-                f.line(&format!(
-                    "{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"
-                ));
+                f.line(&format!("{t} = call %KValue @k_desc_join(%KValue {a}, %KValue {b})"));
                 f.record(&t, (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL) | DESC | ERR);
                 Ok(t)
             }
@@ -2278,10 +2270,7 @@ impl<'a> Backend<'a> {
                     f.line(&format!("store %KValue {value}, ptr {slot}"));
                 }
                 let t = f.tmp();
-                f.line(&format!(
-                    "{t} = call %KValue @k_map_lit(i64 {}, ptr {arr})",
-                    pairs.len()
-                ));
+                f.line(&format!("{t} = call %KValue @k_map_lit(i64 {}, ptr {arr})", pairs.len()));
                 f.record(&t, MAP);
                 Ok(t)
             }
@@ -2317,9 +2306,7 @@ impl<'a> Backend<'a> {
             if let Expr::Ident(name, _) = head.as_ref() {
                 let bare = name.strip_prefix("builtin_").unwrap_or(name);
                 if self.forwarders.contains_key(&(bare.to_string(), args.len()))
-                    || self
-                        .forwarders
-                        .contains_key(&(name.to_string(), args.len()))
+                    || self.forwarders.contains_key(&(name.to_string(), args.len()))
                 {
                     let value = self.emit_expr(f, expr)?;
                     self.emit_ret(f, &value);
@@ -2347,9 +2334,7 @@ impl<'a> Backend<'a> {
                         f.line(&format!("{is_desc} = icmp eq i64 {tag}, 8"));
                         let desc_path = f.label();
                         let check = f.label();
-                        f.line(&format!(
-                            "br i1 {is_desc}, label %{desc_path}, label %{check}"
-                        ));
+                        f.line(&format!("br i1 {is_desc}, label %{desc_path}, label %{check}"));
                         f.start_block(&desc_path);
                         let t = f.tmp();
                         let closure = self.emit_expr(f, head)?;
@@ -2416,10 +2401,7 @@ impl<'a> Backend<'a> {
                 let outside_cluster = self.beat.ids.contains_key(&target)
                     && !self.beat.same_cluster(&target, &(f.group.clone(), f.arity));
                 if outside_cluster
-                    || self
-                        .beat
-                        .demoted
-                        .contains(&((f.group.clone(), f.arity), target))
+                    || self.beat.demoted.contains(&((f.group.clone(), f.arity), target))
                 {
                     let value = self.emit_expr(f, expr)?;
                     self.emit_ret(f, &value);
@@ -2451,9 +2433,7 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, n);
                     let same_ret = callee_ret == f.ret_ty;
                     if same_ret
-                        && self
-                            .beat
-                            .same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
+                        && self.beat.same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
                     {
                         match self.beat.carried.get(&(name.clone(), n)) {
                             Some(positions) => {
@@ -2464,9 +2444,7 @@ impl<'a> Backend<'a> {
                                 f.line("call void @k_carry_reset()");
                                 for &j in positions {
                                     let a = &emitted[j];
-                                    f.line(&format!(
-                                        "call void @k_carry_stage(%KValue {a})"
-                                    ));
+                                    f.line(&format!("call void @k_carry_stage(%KValue {a})"));
                                 }
                                 f.line("call void @k_beat_iter_carry()");
                                 for (slot, &j) in positions.iter().enumerate() {
@@ -2500,9 +2478,7 @@ impl<'a> Backend<'a> {
                         let cells = f.lazy_cells.clone();
                         for cell in cells {
                             if args_ir.iter().any(|a| a.ends_with(cell.as_str())) {
-                                f.line(&format!(
-                                    "call void @k_thunk_note_escape(%KValue {cell})"
-                                ));
+                                f.line(&format!("call void @k_thunk_note_escape(%KValue {cell})"));
                             } else {
                                 let d = f.tmp();
                                 f.line(&format!(
@@ -2521,7 +2497,7 @@ impl<'a> Backend<'a> {
                         // can't musttail across the type change, so call and wrap.
                         f.line(&format!(
                             "{t} = call tailcc {callee_ret} @{}({})",
-                dsym(name, n),
+                            dsym(name, n),
                             args_ir.join(", ")
                         ));
                         self.emit_ret(f, &t);
@@ -2570,13 +2546,8 @@ impl<'a> Backend<'a> {
             f.line(&format!("br label %{merge}"));
             f.start_block(&merge);
             let t = f.tmp();
-            f.line(&format!(
-                "{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"
-            ));
-            f.record(
-                &t,
-                f.set_of(&bv) | self.group_return_set(op, 2) | (f.set_of(a) & FAIL),
-            );
+            f.line(&format!("{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"));
+            f.record(&t, f.set_of(&bv) | self.group_return_set(op, 2) | (f.set_of(a) & FAIL));
             return Ok(t);
         }
         self.emit_binop_builtin(f, op, a, b, span)
@@ -2638,7 +2609,9 @@ impl<'a> Backend<'a> {
                     let trap = f.label();
                     f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
                     f.start_block(&trap);
-                    let (m, _) = self.intern("integer overflow (int64 native build; spec int is arbitrary precision) ");
+                    let (m, _) = self.intern(
+                        "integer overflow (int64 native build; spec int is arbitrary precision) ",
+                    );
                     f.line(&format!("call void @k_die(ptr @{m})"));
                     f.line("unreachable");
                     f.start_block(&ok);
@@ -2702,9 +2675,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!("br i1 {overflow}, label %{slow}, label %{fast_ok}"));
                 f.start_block(&fast_ok);
                 let v = f.tmp();
-                f.line(&format!(
-                    "{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"
-                ));
+                f.line(&format!("{v} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {sum}, 1"));
                 (v, fast_ok)
             }
             _ => {
@@ -2788,9 +2759,7 @@ impl<'a> Backend<'a> {
             let wide = f.tmp();
             f.line(&format!("{wide} = zext i8 {byte} to i64"));
             let hit = f.tmp();
-            f.line(&format!(
-                "{hit} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"
-            ));
+            f.line(&format!("{hit} = insertvalue %KValue {{ i64 0, i64 undef }}, i64 {wide}, 1"));
             f.line(&format!("br label %{merge}"));
             f.start_block(&miss);
             let miss_value = if strict {
@@ -2885,8 +2854,7 @@ impl<'a> Backend<'a> {
         if piped && !args.is_empty() {
             let piped_value = self.emit_expr(f, &args[0])?;
             if f.set_of(&piped_value) & DESC != 0 {
-                let mut body_args: Vec<Expr> =
-                    vec![Expr::Ident("__piped".to_string(), span)];
+                let mut body_args: Vec<Expr> = vec![Expr::Ident("__piped".to_string(), span)];
                 body_args.extend(args[1..].iter().cloned());
                 let lambda = Expr::Lambda {
                     params: vec![("__piped".to_string(), span)],
@@ -2915,8 +2883,7 @@ impl<'a> Backend<'a> {
                 let fail_from = f.cur_label.clone();
                 f.line(&format!("br i1 {ok}, label %{docall}, label %{merge}"));
                 f.start_block(&docall);
-                let called =
-                    self.emit_call_rest(f, head, args, Some(piped_value.clone()), span)?;
+                let called = self.emit_call_rest(f, head, args, Some(piped_value.clone()), span)?;
                 let call_from = f.cur_label.clone();
                 f.line(&format!("br label %{merge}"));
                 f.start_block(&merge);
@@ -2976,8 +2943,7 @@ impl<'a> Backend<'a> {
                     "native backend: a function value takes 1 to 4 arguments, got {n}"
                 ));
             }
-            let arg_ir: String =
-                arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();
+            let arg_ir: String = arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_call{n}(%KValue {callee}{arg_ir})"));
             f.record(&t, TOP);
@@ -3018,10 +2984,7 @@ impl<'a> Backend<'a> {
                 "{t} = phi %KValue [ {cond}, %{fail_from} ], [ {then_value}, %{then_from} ], \
                  [ {else_value}, %{else_from} ]"
             ));
-            f.record(
-                &t,
-                f.set_of(&then_value) | f.set_of(&else_value) | (f.set_of(&cond) & FAIL),
-            );
+            f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | (f.set_of(&cond) & FAIL));
             return Ok(t);
         }
         let mut emitted = Vec::new();
@@ -3112,11 +3075,8 @@ impl<'a> Backend<'a> {
         }
         if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
             let n = emitted.len();
-            let args_ir: Vec<String> = emitted
-                .iter()
-                .enumerate()
-                .map(|(i, e)| self.call_arg(f, name, n, i, e))
-                .collect();
+            let args_ir: Vec<String> =
+                emitted.iter().enumerate().map(|(i, e)| self.call_arg(f, name, n, i, e)).collect();
             let callee_ret = self.ret_ty(name, n);
             let beat_entry = self.beat.ids.contains_key(&(name.to_string(), n));
             if beat_entry {
@@ -3152,10 +3112,7 @@ impl<'a> Backend<'a> {
         // inline twins). The rename lives INSIDE this branch only — it must
         // never leak into user-group dispatch, whose per-site specialized
         // signatures the renamed identity would not match.
-        let forwarded = self
-            .forwarders
-            .get(&(name.to_string(), emitted.len()))
-            .cloned();
+        let forwarded = self.forwarders.get(&(name.to_string(), emitted.len())).cloned();
         let name: &str = match &forwarded {
             Some(target) => target.as_str(),
             None => name,
@@ -3168,8 +3125,7 @@ impl<'a> Backend<'a> {
             // gated force emits nothing when the set proves it can't be one)
             let emitted: Vec<String> =
                 emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
-            let mut args_ir: Vec<String> =
-                emitted.iter().map(|e| format!("%KValue {e}")).collect();
+            let mut args_ir: Vec<String> = emitted.iter().map(|e| format!("%KValue {e}")).collect();
             // builtins that can give birth to an err take the site's origin
             if matches!(name, "to_int" | "to_float" | "utf8" | "from_code") {
                 args_ir.push(self.origin_arg(f, span));
@@ -3177,9 +3133,7 @@ impl<'a> Backend<'a> {
             // A push the linearity analysis proved unique extends its list in
             // place instead of allocating a fresh header.
             let sym = if name == "push"
-                && self
-                    .in_place_pushes
-                    .contains(&(f.file.clone(), span.line, span.col))
+                && self.in_place_pushes.contains(&(f.file.clone(), span.line, span.col))
             {
                 "push_mut"
             } else if name == "length" {
@@ -3223,13 +3177,9 @@ impl<'a> Backend<'a> {
             f.bind(p, &format!("%a{i}"));
         }
         self.emit_tail(&mut f, body)?;
-        let sig: String =
-            (0..params.len()).map(|i| format!(", %KValue %a{i}")).collect();
-        let _ = writeln!(
-            self.body,
-            "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n",
-            f.out
-        );
+        let sig: String = (0..params.len()).map(|i| format!(", %KValue %a{i}")).collect();
+        let _ =
+            writeln!(self.body, "define tailcc %KValue @{lifted}(ptr %env{sig}) {{\n{}}}\n", f.out);
         let _ = writeln!(
             self.body,
             "define %KValue @w_{lifted}(ptr %env{sig}) {{\nentry:\n  %r = call \
@@ -3245,7 +3195,9 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => collect_idents(expr, out),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        collect_idents(expr, out)
+                    }
                 }
             }
         }
@@ -3294,9 +3246,9 @@ fn collect_idents(expr: &Expr, out: &mut Vec<String>) {
             collect_idents(early, out);
             for stmt in rest {
                 match stmt {
-                    Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. } => collect_idents(expr, out),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        collect_idents(expr, out)
+                    }
                 }
             }
         }

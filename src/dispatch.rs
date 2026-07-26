@@ -19,7 +19,10 @@ use std::collections::HashSet;
 
 /// (function name, arity, discriminator index) triples whose discriminator can
 /// be passed and switched as a raw i64 (byte value, or 256 for none).
-pub fn byte_dispatched(program: &Program, inference: &Inference) -> HashSet<(String, usize, usize)> {
+pub fn byte_dispatched(
+    program: &Program,
+    inference: &Inference,
+) -> HashSet<(String, usize, usize)> {
     let mut out = HashSet::new();
     let mut seen: HashSet<(&str, usize)> = HashSet::new();
     for decl in &program.fns {
@@ -35,7 +38,8 @@ pub fn byte_dispatched(program: &Program, inference: &Inference) -> HashSet<(Str
         let Some(disc) = switch_disc(&group) else {
             continue;
         };
-        if group_param_set(program, inference, &decl.name, decl.params.len(), disc) != (INT | NONE) {
+        if group_param_set(program, inference, &decl.name, decl.params.len(), disc) != (INT | NONE)
+        {
             continue;
         }
         if all_calls_feed_at(program, &decl.name, decl.params.len(), disc) {

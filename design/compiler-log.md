@@ -4069,3 +4069,26 @@ carrying ok and err types, anything dictionary-shaped: those want two, and they
 are the same shape as `map` rather than special cases of it. Which is the
 uniformity argument stated properly — `map` is not privileged, it is the
 two-parameter type that happened to ship first.
+
+## 2026-07-25 — the tree is rustfmt-clean, and the check gates
+
+Mechanical, and kept apart from logic on purpose: 28 files, 727 insertions,
+899 deletions, zero behaviour change. Both cost goldens byte-identical, 15
+suites green, clippy clean at --all-targets.
+
+rustfmt.toml carries two settings rather than the defaults: max_width 100 and
+use_small_heuristics "Max". Defaults would have moved 6099 lines instead of
+3419, mostly by exploding struct-variant declarations and short call chains
+that the house style keeps on one line. The settings were chosen to match what
+the tree already looked like, not to impose a new shape.
+
+CI gains a `format` job — its own check, so a red run says "format" rather than
+burying it inside lint. That makes twelve jobs; the required-contexts list
+needs the new name or the check runs without gating, which is the trap the
+job-rename hit earlier today.
+
+On the wider linter question: clippy already runs --all-targets with -D
+warnings as of this morning, and the perf group is clean. pedantic is 442
+warnings, which is not worth forcing wholesale — the useful move is enabling
+individual pedantic lints as they come clean, rather than a blanket allow list
+that nobody revisits.

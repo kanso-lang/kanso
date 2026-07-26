@@ -35,14 +35,7 @@ pub const BUILTINS: [&str; 28] = [
 
 /// The bare-name subset: what resolves without an import. Everything else
 /// in BUILTINS is internal, reached only through std wrapper modules.
-pub const AMBIENT: [&str; 6] = [
-    "entries",
-    "if",
-    "length",
-    "print",
-    "push",
-    "put",
-];
+pub const AMBIENT: [&str; 6] = ["entries", "if", "length", "print", "push", "put"];
 
 pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
@@ -90,9 +83,9 @@ fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
             Expr::Index { strict: false, .. } => true,
             Expr::Ident(name, _) => name == "none",
             Expr::App { head, args, piped: false, .. } => match head.as_ref() {
-                Expr::Ident(name, _) => returns
-                    .get(&(name.as_str(), args.len()))
-                    .is_some_and(|s| s & NONE != 0),
+                Expr::Ident(name, _) => {
+                    returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & NONE != 0)
+                }
                 _ => false,
             },
             _ => false,
@@ -473,9 +466,7 @@ fn check_marker_calls(expr: &Expr, markers: &HashSet<String>, diags: &mut Vec<Di
             check_marker_calls(early, markers, diags);
             for stmt in rest {
                 match stmt {
-                    Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. } => {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
                         check_marker_calls(expr, markers, diags)
                     }
                 }
@@ -607,7 +598,8 @@ pub fn check_unused_private(
 fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
     use crate::infer::{ERR, FALSE, TRUE};
     let inference = crate::infer::infer(program);
-    let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> = std::collections::HashMap::new();
+    let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> =
+        std::collections::HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
@@ -634,8 +626,7 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
         // static absence checker lands, a none-bearing `?` set becomes a
         // compile error; until then a none-polluted set is simply not
         // provably boolean and the unmarked direction stays quiet.
-        let boolish =
-            set != 0 && set & !(TRUE | FALSE | ERR) == 0 && set & (TRUE | FALSE) != 0;
+        let boolish = set != 0 && set & !(TRUE | FALSE | ERR) == 0 && set & (TRUE | FALSE) != 0;
         // the marked direction fires only on a provable lie: a `?` group
         // whose set cannot contain a boolean at all. generic drivers widen
         // honest predicates to TOP, and TOP still holds bool.
@@ -702,9 +693,7 @@ fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diag
         for stmt in stmts {
             match stmt {
                 Stmt::Bind { pattern, expr } => {
-                    if let (Pattern::Var(name, _), true) =
-                        (pattern, constructs(expr, type_names))
-                    {
+                    if let (Pattern::Var(name, _), true) = (pattern, constructs(expr, type_names)) {
                         born.insert(name);
                     }
                 }
@@ -918,7 +907,9 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         (Pattern::Nullary(x, _), Pattern::Nullary(y, _)) => x == y,
         (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => x == y,
         (Pattern::Ctor { ty: x, .. }, Pattern::Ctor { ty: y, .. }) => x == y,
-        (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => true,
+        (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => {
+            true
+        }
         _ => false,
     })
 }

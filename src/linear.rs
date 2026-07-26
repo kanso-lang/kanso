@@ -41,11 +41,8 @@ impl<'a> Analysis<'a> {
         // returns a unique list, then remove any the code disproves. Removal is
         // monotone, so it converges, and a value stays "unique" only if nothing
         // ever aliases it — the sound direction for an in-place mutation.
-        let mut a = Analysis {
-            program,
-            linear_params: HashSet::new(),
-            returns_unique: HashSet::new(),
-        };
+        let mut a =
+            Analysis { program, linear_params: HashSet::new(), returns_unique: HashSet::new() };
         for decl in &program.fns {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
             for i in 0..decl.params.len() {
@@ -73,9 +70,9 @@ impl<'a> Analysis<'a> {
                 .returns_unique
                 .iter()
                 .filter(|(name, arity)| {
-                    !self.group(name, *arity).iter().all(|d| {
-                        matches!(d.body.last(), Some(Stmt::Expr(e)) if self.unique_list(e, d))
-                    })
+                    !self.group(name, *arity).iter().all(
+                        |d| matches!(d.body.last(), Some(Stmt::Expr(e)) if self.unique_list(e, d)),
+                    )
                 })
                 .cloned()
                 .collect();
@@ -90,11 +87,7 @@ impl<'a> Analysis<'a> {
     }
 
     fn group(&self, name: &str, arity: usize) -> Vec<&'a FnDecl> {
-        self.program
-            .fns
-            .iter()
-            .filter(|d| d.name == name && d.params.len() == arity)
-            .collect()
+        self.program.fns.iter().filter(|d| d.name == name && d.params.len() == arity).collect()
     }
 
     fn param_is_linear(&self, name: &str, arity: usize, i: usize) -> bool {
@@ -127,14 +120,7 @@ impl<'a> Analysis<'a> {
 
     /// True unless some call to `name`/`arity` in `e` passes a non-unique list
     /// at position `i`.
-    fn callsites_unique(
-        &self,
-        ctx: &FnDecl,
-        e: &Expr,
-        name: &str,
-        arity: usize,
-        i: usize,
-    ) -> bool {
+    fn callsites_unique(&self, ctx: &FnDecl, e: &Expr, name: &str, arity: usize, i: usize) -> bool {
         if let Expr::App { head, args, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == name)
                 && args.len() == arity
@@ -143,9 +129,7 @@ impl<'a> Analysis<'a> {
                 return false;
             }
         }
-        child_exprs(e)
-            .into_iter()
-            .all(|c| self.callsites_unique(ctx, c, name, arity, i))
+        child_exprs(e).into_iter().all(|c| self.callsites_unique(ctx, c, name, arity, i))
     }
 
     /// Does `e` evaluate to a freshly-owned list (refcount would be one)?
@@ -179,12 +163,10 @@ impl<'a> Analysis<'a> {
         if count_uses(var, &ctx.body) > 1 {
             return false;
         }
-        if let Some(idx) = ctx.params.iter().position(
-            |p| matches!(p, Pattern::Var(n, _) if n == var),
-        ) {
-            return self
-                .linear_params
-                .contains(&(ctx.name.clone(), ctx.params.len(), idx));
+        if let Some(idx) =
+            ctx.params.iter().position(|p| matches!(p, Pattern::Var(n, _) if n == var))
+        {
+            return self.linear_params.contains(&(ctx.name.clone(), ctx.params.len(), idx));
         }
         // a local binding `var = e`
         for stmt in &ctx.body {
@@ -196,7 +178,6 @@ impl<'a> Analysis<'a> {
         }
         false
     }
-
 }
 
 /// Collect in-place push sites in `body`: a `push` whose list argument is a
@@ -217,12 +198,7 @@ fn collect_pushes(
     }
 }
 
-fn walk_for_push(
-    a: &Analysis,
-    decl: &FnDecl,
-    e: &Expr,
-    out: &mut HashSet<(String, usize, usize)>,
-) {
+fn walk_for_push(a: &Analysis, decl: &FnDecl, e: &Expr, out: &mut HashSet<(String, usize, usize)>) {
     if let Expr::App { head, args, span, .. } = e {
         if matches!(head.as_ref(), Expr::Ident(n, _) if n == "push")
             && args.len() == 2
@@ -322,9 +298,6 @@ mod tests {
         // place would corrupt the other reference. Must stay allocating.
         let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  push a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
         let program = crate::compile("test.kso", src, true).unwrap();
-        assert!(
-            in_place_pushes(&program).is_empty(),
-            "aliased pushes must not be marked in-place"
-        );
+        assert!(in_place_pushes(&program).is_empty(), "aliased pushes must not be marked in-place");
     }
 }

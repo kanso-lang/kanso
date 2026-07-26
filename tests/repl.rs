@@ -57,10 +57,7 @@ fn a_new_signature_overloads_instead_of_clobbering() {
     let mut session = Session::new();
     let _ = value(&mut session, "fn foo name:string\n  \"{name} is a string\"");
 
-    assert_eq!(
-        value(&mut session, "fn foo name:int\n  \"{name} is an int\""),
-        "overloaded foo"
-    );
+    assert_eq!(value(&mut session, "fn foo name:int\n  \"{name} is an int\""), "overloaded foo");
     assert_eq!(value(&mut session, "foo 42"), "\"42 is an int\"");
     assert_eq!(value(&mut session, "foo \"clay\""), "\"clay is a string\"");
 }

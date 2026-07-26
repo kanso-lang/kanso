@@ -22,13 +22,11 @@ pub struct DemandInfo {
 
 impl DemandInfo {
     pub fn is_lazy_bind(&self, fn_name: &str, arity: usize, stmt_index: usize) -> bool {
-        self.lazy_binds
-            .contains(&(fn_name.to_string(), arity, stmt_index))
+        self.lazy_binds.contains(&(fn_name.to_string(), arity, stmt_index))
     }
 
     pub fn is_releasable(&self, fn_name: &str, arity: usize, stmt_index: usize) -> bool {
-        self.releasable
-            .contains(&(fn_name.to_string(), arity, stmt_index))
+        self.releasable.contains(&(fn_name.to_string(), arity, stmt_index))
     }
 
     pub fn lazy_bind_count(&self) -> usize {
@@ -68,13 +66,12 @@ fn param_stays_local(body: &[Stmt], name: &str) -> bool {
             }),
             Expr::Block(stmts, _) => param_stays_local_at(stmts, name, is_result),
             Expr::App { head, args, .. } => {
-                expr_safe(head, name, false)
-                    && args.iter().all(|a| expr_safe(a, name, false))
+                expr_safe(head, name, false) && args.iter().all(|a| expr_safe(a, name, false))
             }
             Expr::List(items, _) => items.iter().all(|a| expr_safe(a, name, false)),
-            Expr::MapLit(entries, _) => entries
-                .iter()
-                .all(|(k, v)| expr_safe(k, name, false) && expr_safe(v, name, false)),
+            Expr::MapLit(entries, _) => {
+                entries.iter().all(|(k, v)| expr_safe(k, name, false) && expr_safe(v, name, false))
+            }
             Expr::Field { base, .. } => expr_safe(base, name, false),
             Expr::Upcast { expr, .. } => expr_safe(expr, name, false),
             Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
@@ -125,11 +122,7 @@ fn safe_position(program: &Program, group: &str, arity: usize, position: usize) 
 /// The (group, arity, position) targets a binding's uses flow into. The
 /// demand rule already guarantees every use is a direct argument; this
 /// records where.
-fn use_targets(
-    expr: &Expr,
-    name: &str,
-    out: &mut Vec<(String, usize, usize)>,
-) {
+fn use_targets(expr: &Expr, name: &str, out: &mut Vec<(String, usize, usize)>) {
     match expr {
         Expr::Partial(..) => {}
         Expr::Guard { cond, early, rest, .. } => {
@@ -137,9 +130,9 @@ fn use_targets(
             use_targets(early, name, out);
             for st in rest {
                 match st {
-                    Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. } => use_targets(expr, name, out),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        use_targets(expr, name, out)
+                    }
                 }
             }
         }
@@ -161,7 +154,9 @@ fn use_targets(
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => use_targets(expr, name, out),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        use_targets(expr, name, out)
+                    }
                 }
             }
         }
@@ -242,9 +237,9 @@ fn collect_uses(
             collect_uses(early, name, discard, uses);
             for st in rest {
                 match st {
-                    Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. } => collect_uses(expr, name, discard, uses),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        collect_uses(expr, name, discard, uses)
+                    }
                 }
             }
         }
@@ -326,13 +321,15 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
             expensive(cond, fns)
                 || expensive(early, fns)
                 || rest.iter().any(|st| match st {
-                    Stmt::Bind { expr, .. }
-                    | Stmt::Expr(expr)
-                    | Stmt::Set { value: expr, .. } => expensive(expr, fns),
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        expensive(expr, fns)
+                    }
                 })
         }
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts.iter().any(|st| match st {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expensive(expr, fns),
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                expensive(expr, fns)
+            }
         }),
         Expr::App { head, args, .. } => {
             if let Expr::Ident(callee, _) = head.as_ref() {
@@ -346,7 +343,9 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
             expensive(lhs, fns) || expensive(rhs, fns)
         }
         Expr::List(items, _) => items.iter().any(|a| expensive(a, fns)),
-        Expr::MapLit(entries, _) => entries.iter().any(|(k, v)| expensive(k, fns) || expensive(v, fns)),
+        Expr::MapLit(entries, _) => {
+            entries.iter().any(|(k, v)| expensive(k, fns) || expensive(v, fns))
+        }
         Expr::Str(parts, _) => parts.iter().any(|p| match p {
             TemplatePart::Interp(e) => expensive(e, fns),
             TemplatePart::Lit(_) => false,
@@ -381,12 +380,15 @@ pub fn analyze(program: &Program) -> DemandInfo {
             let mut uses = Uses::default();
             for later in &f.body[i + 1..] {
                 let e = match later {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        expr
+                    }
                 };
                 collect_uses(e, name, &discard, &mut uses);
             }
             let Stmt::Bind { expr, .. } = stmt else { unreachable!() };
-            if !rebound && uses.deferrable > 0 && uses.demanding == 0 && expensive(expr, &fn_names) {
+            if !rebound && uses.deferrable > 0 && uses.demanding == 0 && expensive(expr, &fn_names)
+            {
                 lazy_binds.insert((f.name.clone(), f.params.len(), i));
             }
         }
@@ -408,21 +410,18 @@ pub fn analyze(program: &Program) -> DemandInfo {
             let mut targets = Vec::new();
             for later in &decl.body[i + 1..] {
                 let e = match later {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        expr
+                    }
                 };
                 use_targets(e, name, &mut targets);
             }
-            let ok = targets
-                .iter()
-                .all(|(g, a, p)| safe_position(program, g, *a, *p));
+            let ok = targets.iter().all(|(g, a, p)| safe_position(program, g, *a, *p));
             let slot = verdicts.entry(key).or_insert(true);
             *slot = *slot && ok;
         }
     }
-    let releasable = verdicts
-        .into_iter()
-        .filter_map(|(key, ok)| ok.then_some(key))
-        .collect();
+    let releasable = verdicts.into_iter().filter_map(|(key, ok)| ok.then_some(key)).collect();
     DemandInfo { lazy_binds, releasable }
 }
 
@@ -443,7 +442,10 @@ mod tests {
              pub play =\n  expensive = burn 2000 0\n  print \"picked: {pick false expensive}\"\n",
         );
         let info = analyze(&p);
-        assert!(info.is_lazy_bind("play", 0, 0), "expensive flows only to pick's discard-capable slot");
+        assert!(
+            info.is_lazy_bind("play", 0, 0),
+            "expensive flows only to pick's discard-capable slot"
+        );
     }
 
     #[test]

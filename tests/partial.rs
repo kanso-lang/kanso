@@ -76,10 +76,7 @@ fn a_partial_completes_against_the_arity_its_count_reaches() {
 /// Past every arity is the error, and it says which arities existed.
 #[test]
 fn too_many_arguments_names_the_arities_that_exist() {
-    let out = interp(
-        "over",
-        "fn add a b\n  a + b\n\npub play = print \"{(&add 1) 2 3}\"\n",
-    );
+    let out = interp("over", "fn add a b\n  a + b\n\npub play = print \"{(&add 1) 2 3}\"\n");
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("arms take 2"), "diagnostic was: {stderr}");
