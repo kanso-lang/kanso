@@ -619,6 +619,21 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
         .collect()
 }
 
+/// A byte accumulator whose buffer the runtime shelves outside the arena is
+/// cheap to carry: the rewind cannot reach the bytes, so the carry copies the
+/// header alone. Without the shelf the same carry deep-copies the whole buffer
+/// every iteration, which measured thirty times slower on eleven kilobytes.
+fn shelvable_bytes(
+    program: &Program,
+    inference: &infer::Inference,
+    name: &str,
+    arity: usize,
+    position: usize,
+) -> bool {
+    std::env::var("KANSO_SHELF").is_ok()
+        && group_param_set(program, inference, name, arity, position) & BYTES != 0
+}
+
 /// Every reason a group declines, not only the first one found.
 ///
 /// `classify` stops at the first blocker because codegen asks one question —
@@ -727,7 +742,9 @@ fn classify(
         // ever assumed cheap to carry
         if let Some(&position) = crossing.iter().find(|&&p| {
             let set = group_param_set(program, inference, name, arity, p);
-            accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+            accumulator_grows(program, name, arity, p) && !shelvable_bytes(program, inference, name, arity, p)
+                || set == 0
+                || (set & BYTES != 0 && !shelvable_bytes(program, inference, name, arity, p))
         }) {
             return Some(Verdict::ArgCrosses { position });
         }

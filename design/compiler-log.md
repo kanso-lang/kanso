@@ -5621,3 +5621,49 @@ surviving, cheap to test membership in — the block-walk it does today would be
 O(blocks) in a path that runs per iteration, which is how the quadratic gets
 back in through the other door. Byte-builder buffers for a loop's declining
 position allocate there, and `k_beat_pop` transfers or frees.
+
+## 2026-07-26 — the shelf works; the next quadratic is the cache sweep
+
+Built the byte-builder shelf behind `KANSO_SHELF` and measured it. Three
+findings, each one only reachable by building the previous.
+
+ONE: SHELVING ALONE BUYS ALMOST NOTHING. Moving a growing accumulator's buffer
+out of the arena, without also letting the loop beat, took kq's peak footprint
+from 211.9 mb to 207.1 — 2.3%. Obvious in hindsight: the buffer was never the
+bulk, and if the loop still declines nothing is reclaimed either way. Both
+halves are needed or neither is worth having.
+
+TWO: THE CARRY LOSES THE ACCUMULATOR'S CAPACITY. With the exclusion lifted and
+the shelf on, kq still hung. `k_deep_copy` sets `nb->cap = 0` on a copied byte
+value — correct in general, because two headers must not both claim one
+buffer's frontier, and fatal here: after every carry the accumulator had no
+spare capacity, so the next append reallocated and copied the whole thing. That
+is the quadratic reappearing through a door I had not looked at. A shelved
+buffer has exactly one claimant, because the header the copy replaces dies in
+the rewind that follows, so the capacity is safe to keep. With that, all sizes
+complete and every output is byte-identical.
+
+THREE: AND THEN THE COST MOVED SOMEWHERE ELSE ENTIRELY. Correct, and still
+2,722 ms on the 188 kb board against a 5.5 ms baseline. Profiled rather than
+guessed: `k_cache_reg_sweep` is 1,596 samples of roughly 1,600 — effectively
+the whole program. It runs before every rewind, and it is linear in the number
+of registered sorted-view caches, so a loop that now beats twenty thousand
+times pays it twenty thousand times. The loops were never charged for it
+before because they never rewound.
+
+So the shelf is not wrong, it is blocked behind a different cost. The order is
+now: make the cache sweep cheap enough to run per iteration, then the shelf and
+the exclusion lift together, then measure the footprint. Guessing at that order
+is exactly what produced the two false starts above.
+
+I ALSO WALKED INTO THE TRAP I HAD WRITTEN DOWN. The design note from earlier
+today said the membership test has to be cheap because "the block-walk it does
+today would be O(blocks) in a path that runs per iteration, which is how the
+quadratic gets back in through the other door" — and then the first version
+scanned every shelf slot on every `k_survives` call. The fix (one address range
+as a two-comparison reject) barely moved the number, which is how the cache
+sweep got found. Writing a hazard down is not the same as avoiding it.
+
+The branch is pushed and not merged. It is off unless `KANSO_SHELF` is set, the
+default path is verified unchanged, and it is worth keeping because the two
+corrections above are real and hard-won — but it buys nothing today.

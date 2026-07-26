@@ -281,6 +281,63 @@ static void k_cache_reg_sweep(KMark* mark);
 static KMark k_beat_stack[K_BEAT_MAX];
 static int k_beat_depth = 0;
 
+/* The byte-builder shelf. A growing accumulator's buffer is the one value a
+   loop must keep across a rewind, and copying it every iteration is quadratic
+   in its final length — measured at thirty times slower on eleven kilobytes of
+   kq input. Shelved buffers live outside the arena instead, so the rewind
+   cannot reach them and the carry copies only the twenty-four-byte header.
+   Doubling growth means a loop leaves at most a logarithmic number of them,
+   and the whole shelf is released when the loop ends. Off unless
+   KANSO_SHELF names it, while the freeing rules are still being proven. */
+#define K_SHELF_MAX 40
+typedef struct { void* p; size_t n; } KShelfSlot;
+static KShelfSlot k_shelf[K_BEAT_MAX][K_SHELF_MAX];
+static int k_shelf_n[K_BEAT_MAX];
+static int k_shelf_on = -1;
+
+static int k_shelf_enabled(void) {
+    if (k_shelf_on < 0) k_shelf_on = getenv("KANSO_SHELF") != NULL;
+    return k_shelf_on;
+}
+
+/* Set while the result of a loop is being copied out. A shelved buffer
+   survives every rewind but not the release that ends the loop, so the copy
+   that carries a result past that point has to duplicate the bytes rather
+   than keep the pointer. */
+static int k_shelf_opaque = 0;
+
+/* Does this pointer sit on a shelf? Bounded by depth times slots, and both
+   are small — the walk the arena does over its blocks would grow with the
+   very allocation this exists to avoid. */
+/* One address range covering every shelved buffer. Nearly every pointer the
+   copy asks about is outside it, and rejecting those in two comparisons is
+   what keeps this off the hot path — a scan over the slots on every question
+   would grow with the loop, which is the cost this whole mechanism exists to
+   remove. */
+static const char* k_shelf_lo = (const char*)-1;
+static const char* k_shelf_hi = NULL;
+
+static int k_shelved(const void* q) {
+    if (k_shelf_opaque) return 0;
+    const char* c = (const char*)q;
+    if (c < k_shelf_lo || c >= k_shelf_hi) return 0;
+    for (int d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++) {
+        for (int i = 0; i < k_shelf_n[d]; i++) {
+            const char* base = (const char*)k_shelf[d][i].p;
+            if (c >= base && c < base + k_shelf[d][i].n) return 1;
+        }
+    }
+    return 0;
+}
+
+/* Release one loop's shelf. Called where the loop ends, by which point a
+   result that reached into it has been copied out. */
+static void k_shelf_release(int depth) {
+    if (depth < 0 || depth >= K_BEAT_MAX) return;
+    for (int i = 0; i < k_shelf_n[depth]; i++) free(k_shelf[depth][i].p);
+    k_shelf_n[depth] = 0;
+}
+
 static void k_beat_rewind(KMark* m) {
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
@@ -341,6 +398,8 @@ static long long k_carry_n = 0;
    pop's copy-out wants. */
 static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
+    /* a shelved buffer is outside the arena, so no rewind can reach it */
+    if (k_shelf_on > 0 && k_shelved(p)) return 1;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
     for (; b; b = b->next) {
@@ -581,7 +640,12 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KBytes* nb = k_copy_alloc(cp, sizeof(KBytes));
             k_copy_map_put(p, nb);
             nb->len = b->len;
-            nb->cap = 0;
+            /* Dropping the capacity is what stops two headers claiming one
+               buffer's frontier. A shelved buffer has no second claimant —
+               the header this one replaces dies in the rewind that follows —
+               and keeping the capacity is what makes the append after a carry
+               land in place instead of reallocating the whole accumulator. */
+            nb->cap = (k_shelf_on > 0 && k_shelved(b->data)) ? b->cap : 0;
             if (k_survives(b->data, cp->mark)) {
                 nb->data = b->data;
             } else {
@@ -705,15 +769,21 @@ KValue k_beat_pop(KValue r) {
         k_beat_depth--;
         if (k_beat_depth < K_BEAT_MAX) {
             KCarry* c = &k_carries[k_beat_depth];
+            int shelved = k_shelf_on > 0 && k_shelf_n[k_beat_depth] > 0;
             if (!k_is_heap(r.tag)) {
                 k_cache_reg_sweep(&k_beat_stack[k_beat_depth]);
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
-            } else if (c->used_flag) {
+            } else if (c->used_flag || shelved) {
+                /* the result may reach into the shelf, which is about to go,
+                   so the copy is made opaque to it and duplicates the bytes */
+                k_shelf_opaque = shelved;
                 KCopy cp = { NULL, NULL, 1 };
                 k_ptrmap_begin(&k_copy_map);
                 k_copy_map_live = 0;
                 r = k_deep_copy(r, &cp);
+                k_shelf_opaque = 0;
             }
+            k_shelf_release(k_beat_depth);
             c->used_flag = 0;
         }
     }
@@ -3414,6 +3484,25 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
    onto a bytes accumulator. The accumulator owns a KBuf-headed buffer and
    claims its frontier exactly as list push does, so a fold of appends is
    amortized linear while every intermediate value stays a real value. */
+/* Where a growing accumulator's buffer goes. Inside a loop it goes on the
+   shelf so the rewind cannot free it; everywhere else the arena is right, and
+   is cheaper. Falling back to the arena when a shelf is full keeps the loop
+   correct — it merely stops rewinding, which is today's behaviour. */
+static void* k_bytes_grow_alloc(size_t n) {
+    int d = k_beat_depth - 1;
+    if (!k_shelf_enabled() || d < 0 || d >= K_BEAT_MAX || k_shelf_n[d] >= K_SHELF_MAX) {
+        return k_alloc(n);
+    }
+    void* p = malloc(n);
+    if (!p) { fputs("out of memory\n", stderr); exit(1); }
+    k_shelf[d][k_shelf_n[d]].p = p;
+    k_shelf[d][k_shelf_n[d]].n = n;
+    k_shelf_n[d]++;
+    if ((const char*)p < k_shelf_lo) k_shelf_lo = (const char*)p;
+    if ((const char*)p + n > k_shelf_hi) k_shelf_hi = (const char*)p + n;
+    return p;
+}
+
 static KValue k_bytes_owned(long long len, const unsigned char* data, long long cap) {
     KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
@@ -3458,7 +3547,7 @@ KValue k_b_append(KValue acc, KValue x) {
     k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;
-    KBuf* buf = k_alloc(sizeof(KBuf) + (size_t)cap);
+    KBuf* buf = k_bytes_grow_alloc(sizeof(KBuf) + (size_t)cap);
     buf->cap = cap;
     buf->used = a->len + n;
     unsigned char* data = (unsigned char*)(buf + 1);
