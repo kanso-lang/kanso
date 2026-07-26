@@ -6,6 +6,6 @@ pub play =
   ring = build
     a = node 1 none
     b = node 2 0
-    set a peer b
+    a.peer = b
     a
   print "{ring}"

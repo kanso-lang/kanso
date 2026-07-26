@@ -1110,7 +1110,7 @@ fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             j += 1;
         }
         if j == idx + 1 {
-            stmts.push(lift_set(parse_stmt(line)?, line)?);
+            stmts.push(parse_stmt(line)?);
             idx = j;
             continue;
         }
@@ -1130,35 +1130,6 @@ fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
         idx = end;
     }
     Ok(stmts)
-}
-
-/// Lifting only here keeps the name `set` free everywhere else.
-fn lift_set(stmt: Stmt, line: &Line) -> Result<Stmt, Diagnostic> {
-    let is_set_app = |e: &Expr| matches!(e, Expr::App { head, .. } if matches!(&**head, Expr::Ident(w, _) if w == "set"));
-    match stmt {
-        Stmt::Expr(e) if is_set_app(&e) => {
-            let Expr::App { args, span, .. } = e else { unreachable!() };
-            let shape_err = || {
-                Diagnostic::new(
-                    "syntax",
-                    "`set` writes one field: `set target field value`".to_string(),
-                    head_span(line),
-                )
-            };
-            let [target_e, field_e, value] =
-                <[Expr; 3]>::try_from(args).map_err(|_| shape_err())?;
-            let (Expr::Ident(target, _), Expr::Ident(field, _)) = (&target_e, &field_e) else {
-                return Err(shape_err());
-            };
-            Ok(Stmt::Set { target: target.clone(), field: field.clone(), value, span })
-        }
-        Stmt::Bind { expr, .. } if is_set_app(&expr) => Err(Diagnostic::new(
-            "syntax",
-            "`set` is a statement, not an expression — it returns nothing to bind".to_string(),
-            head_span(line),
-        )),
-        other => Ok(other),
-    }
 }
 
 /// A bare line in an effect group must at least plausibly be a description.
@@ -1247,6 +1218,14 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
         p.expect_done()?;
         return Ok(Stmt::Expr(expr));
     };
+    // `a.next = b` writes a field. Mutation lives in a build block and nowhere
+    // else, which the checker enforces exactly as it does for the older form.
+    if let [(Tok::Ident(target), _), (Tok::Dot, _), (Tok::Ident(field), span)] = &line.tokens[..i] {
+        let mut rhs = P::new(&line.tokens[i + 1..], &line.end_cols[i + 1..], line.number);
+        let value = rhs.parse_expr()?;
+        rhs.expect_done()?;
+        return Ok(Stmt::Set { target: target.clone(), field: field.clone(), value, span: *span });
+    }
     let mut lhs = P::new(&line.tokens[..i], &line.end_cols[..i], line.number);
     let pattern = lhs.parse_bind_target()?;
     lhs.expect_done()?;

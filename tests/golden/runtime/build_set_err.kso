@@ -6,6 +6,6 @@ pub play =
   collapsed = build
     a = node 1 (err "no id")
     b = node 2 0
-    set a peer b
+    a.peer = b
     a
   print "{collapsed}"

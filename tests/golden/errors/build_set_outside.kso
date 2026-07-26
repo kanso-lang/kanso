@@ -4,5 +4,5 @@ type node
 
 pub play =
   a = node 1 []
-  set a peers []
+  a.peers = []
   print "{a}"
