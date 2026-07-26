@@ -4494,3 +4494,52 @@ following calls would flag guarded recursion that terminates. That case is
 ordinary non-termination, which no language promises to catch. What is worth
 fixing is the reporting: the interpreter names the stack overflow and native
 dies silently. Same program, two diagnostics, one of them empty.
+
+## 2026-07-26 — MEASURED: recursion depth diverges between the engines, and native died silently
+
+Following the constant-cycle work, the same afternoon's question — what happens
+when recursion does not terminate — turned up a divergence that predates any of
+today's changes.
+
+MEASURED, `fn countdown n` returning `countdown (n - 1)` past a base case:
+
+    depth        interpreter   native
+    10,000       ok            ok
+    50,000       ok            ok
+    100,000      DIED          ok
+    1,000,000    DIED          ok
+    20,000,000   DIED          ok
+
+The interpreter's edge is between 53,125 and 54,687, bisected. Native does not
+have one, because the recursive call is in tail position and LLVM turns it into
+a jump. That is an accident of the backend, not a promise the language makes.
+
+Non-tail recursion, `n + total (n - 1)`, shows the other half:
+
+    depth        interpreter   native
+    50,000       DIED          ok
+    100,000      DIED          ok
+    500,000      DIED          DIED
+
+So there is a band — roughly 50,000 to 400,000 for non-tail shapes, and every
+depth for tail shapes — where a program runs natively and dies in the
+interpreter. The oracle is the engine that fails first, which is the wrong way
+round: the interpreter defines the semantics, so it should be the one that can
+express whatever native can run.
+
+TWO QUESTIONS FOR THE GAVEL, neither of which this entry decides.
+
+  - Are proper tail calls a promise? Native has them by accident today. Making
+    them a guarantee means the interpreter needs a trampoline, and it makes the
+    shape of a recursive definition semantically load-bearing.
+  - Is there a stated depth limit both engines enforce? A shared limit turns
+    stack exhaustion into a diagnostic instead of a crash, at the cost of a
+    counter on every call in the hot path.
+
+SHIPPED, because it settles no semantics: the driver reports the death. A
+program the operating system kills carries no exit code, and the driver passed
+that through as a bare `ExitCode::FAILURE` with nothing written to stderr at
+all — a 500,000-deep recursion produced exit 1 and total silence. It now names
+the cause: `error[runtime]: the program ran out of stack: recursion went deeper
+than the stack holds`, with the signal number for anything that is not SIGSEGV.
+Pinned by a spec that was watched failing against the old path (empty stderr).

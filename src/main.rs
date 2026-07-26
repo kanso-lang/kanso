@@ -477,13 +477,37 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
     match status {
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
-            None => ExitCode::FAILURE,
+            None => {
+                eprintln!("{}", ended_by_signal(&code));
+                ExitCode::FAILURE
+            }
         },
         Err(io) => {
             eprintln!("error: cannot execute {}: {io}", binary.display());
             ExitCode::FAILURE
         }
     }
+}
+
+/// A program the operating system killed has no exit code to report, and
+/// saying nothing leaves the reader with a bare failure and no cause.
+#[cfg(unix)]
+fn ended_by_signal(status: &std::process::ExitStatus) -> String {
+    use std::os::unix::process::ExitStatusExt;
+    const SIGSEGV: i32 = 11;
+    match status.signal() {
+        Some(SIGSEGV) => {
+            "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds"
+                .to_string()
+        }
+        Some(other) => format!("error[runtime]: the program was ended by signal {other}"),
+        None => "error[runtime]: the program ended without an exit code".to_string(),
+    }
+}
+
+#[cfg(not(unix))]
+fn ended_by_signal(_status: &std::process::ExitStatus) -> String {
+    "error[runtime]: the program ended without an exit code".to_string()
 }
 
 fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
