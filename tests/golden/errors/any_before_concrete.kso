@@ -1,0 +1,7 @@
+fn label x:any
+  "any arm sees {x}"
+
+fn label x:int
+  "int arm sees {x}"
+
+pub play = print "{label 5}"
