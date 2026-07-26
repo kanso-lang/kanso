@@ -98,6 +98,13 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 scripts/welfare.py
 
+  grammar:
+    name: editor grammar (types, strings and comments still painted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/grammar_check.py
+
   book:
     name: book samples (every panel executed, outputs verified)
     runs-on: ubuntu-latest

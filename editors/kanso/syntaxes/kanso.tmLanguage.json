@@ -45,10 +45,10 @@
       "include": "#builtin"
     },
     {
-      "include": "#primitive-type"
+      "include": "#annotated-type"
     },
     {
-      "include": "#annotated-type"
+      "include": "#primitive-type"
     },
     {
       "include": "#sigil-name"
@@ -184,7 +184,7 @@
     },
     "primitive-type": {
       "match": "\\b(bool|bytes|float64|int|io|string)\\b",
-      "name": "support.type.primitive.kanso"
+      "name": "entity.name.type.kanso"
     },
     "sigil-name": {
       "match": "\\b[a-z_][a-z0-9_]*[!?]",
@@ -246,15 +246,8 @@
       }
     },
     "annotated-type": {
-      "match": "(:)([a-z][a-z0-9_]*)",
-      "captures": {
-        "1": {
-          "name": "punctuation.separator.type.kanso"
-        },
-        "2": {
-          "name": "entity.name.type.kanso"
-        }
-      }
+      "match": "(?<=:)([a-z][a-z0-9_]*(?:\\[\\])?)",
+      "name": "entity.name.type.kanso"
     }
   }
 }

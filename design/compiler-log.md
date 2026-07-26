@@ -5870,3 +5870,42 @@ The example that shows the compiler is currently silent:
 
 `x` receives both an int and a string, and one of them reaches a parameter that
 takes only strings. `kanso check` says `ok`.
+
+## 2026-07-26 — the field's colon ate the type rule
+
+Clay, after the quote fix landed: "string fixed but types still don't
+highlight. again, i want it to be like the web site."
+
+Reading the site's tokenizer settles what "like the web site" means, and it is
+simpler than the grammar had it. `highlightLine` paints the word after `type`
+with class `t`, and paints *any* ascribed type with the same class `t` —
+`string` and `person` are not distinguished. One class, one colour, whatever
+the type is.
+
+The grammar had two faults and both had to go.
+
+FIRST, THE COLON. `field` matches `^  ([a-z][a-z0-9_]*)(:)`, consuming the
+name and the colon. `annotated-type` was written as `(:)([a-z][a-z0-9_]*)`,
+needing a colon that had already been eaten, so it could never fire on the
+line it was written for. A lookbehind fixes it — `(?<=:)([a-z][a-z0-9_]*...)`
+is zero-width, so it does not care who consumed the colon.
+
+SECOND, THE SPLIT SCOPE. Primitives were `support.type.primitive` and records
+were `entity.name.type`. A colour scheme that maps one and not the other paints
+half the types and looks like nothing works. The site draws no such
+distinction, so neither does this now: both are `entity.name.type`.
+
+AND A SPEC THAT FAILS WITHOUT THE FIX, which is the rule added to CLAUDE.md
+this afternoon getting its first use. `scripts/grammar_check.py` asserts the
+painting rather than the rules — for each line, which words come out as types
+— so a rule can be rewritten however it likes as long as the reader's answer is
+unchanged. Against the old grammar:
+
+    FAIL  '  name:string': 'string' is not painted as a type (types: [])
+    FAIL  '  partner:person': 'person' is not painted as a type
+    FAIL  '  peers:person[]': 'person[]' is not painted as a type
+
+Three of the six lines, and they are the three Clay reported. It runs in ci,
+because the failure mode here is silence: nothing breaks when a rule stops
+matching, the colour just goes away, and the person who finds out is whoever
+opens a file weeks later.
