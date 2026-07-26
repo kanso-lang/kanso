@@ -4309,3 +4309,31 @@ regenerated where a secondary diagnostic disappeared, and four passages
 rewritten — ch01, appa, and appc twice — that described the rules as they were.
 
 15 suites green, book verified, browser differential 73 passed 0 failed.
+
+## 2026-07-25 — the technique ledger reconciled against the counters
+
+Clay: "you have a multitude of optimizations discussed in the compiler page and
+i don't know if they're current with what's already shipped or discarded or
+still pending."
+
+Audited every entry against evidence rather than memory. Three claims of
+"shipped" all hold, each with a live counter in a CI-diffed golden: ryū at
+ryu_renders=849200 on the encode board, eisel–lemire at el_parses=318450 on the
+decode board, vectorized utf-8 at utf8_bytes on both. Constants-not-recomputed
+is shipped as of today, with perm_allocs=5 in both goldens.
+
+TWO DEFECTS FOUND.
+
+Numbering: adding the constants entry left two items numbered 7. Maximal
+sharing becomes 8 and the cheap experiments 9.
+
+TRMC was listed as queued, and the log closed it on 2026-07-23: "TRMC's regime
+is cons-cell construction; kanso's flat arrays with frontier push already sit
+at its endpoint." Read and closed, not built and not pending. It now reads
+"already won" and the entry says why, so the next person does not spend the
+slot rediscovering it.
+
+The ledger now reads: three kernels shipped, one measured and declined
+(eytzinger), one already won (TRMC), one shipped today (constants), and three
+genuinely open — in-place as a guarantee, maximal sharing, and the cheap
+experiments.
