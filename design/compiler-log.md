@@ -5152,3 +5152,101 @@ half the compiler thinks is wrong. That is buildable, and it is what turns the
 proposal from global inference's usual ergonomics into something better than
 either alternative. Whether a bare field should then be inferred rather than
 unconstrained is the gavel; the answer changes a default that landed today.
+
+## 2026-07-26 — `some` is redundant with dispatch ordering, and the analysis Clay named is built
+
+Two observations from Clay, hours after `some` shipped. Both hold, and together
+they point at removing it.
+
+FIRST: `some` CARRIES NO USABLE INFORMATION AS A PARAMETER TYPE. `foo arg:some`
+tells the reader only that arg is not none, which is not a type. Measured, with
+a `:none` arm above it:
+
+    fn kind x:none    "nothing, and x is <none>"
+    fn kind x:some    "something: 5"
+
+    fn kind x:none    "nothing, and x is <none>"
+    fn kind x         "something: 5"
+
+Identical. Dispatch already tries the more specific arm first, so a bare arm
+below a `:none` arm catches exactly the non-none values — which is the whole
+content of `some`. Its only non-redundant use is *rejecting* none where no
+`:none` arm exists, and there the diagnostic is "no overload of `kind` matches
+these arguments", which never mentions none. A constraint whose violation
+cannot be named is not carrying its weight.
+
+Where it looks defensible is as a field type, where it means non-nullable — a
+real integrity constraint, and what the stdlib's fourteen uses are. But see
+below.
+
+SECOND: THE AVAILABILITY ANALYSIS IS ALREADY THERE. Clay said the compiler can
+already answer "what types would satisfy every use of this field", and it can.
+`infer.rs` grows each field's set by every construction site's argument, to a
+fixpoint:
+
+    let refined = *slot | (*argset & !FAIL);
+    if refined != *slot { *slot = refined; ctx.changed = true; }
+
+The whole-program fact is computed today. What is missing is that it only
+widens — nothing checks the result against the declared type, and nothing
+checks it against what read sites require. The compiler derives the answer and
+discards its diagnostic value.
+
+WHERE THIS LANDS. If the analysis reports rather than only widens, it derives
+both the type set and whether none ever reaches the field. Then `some` is
+inferred too, and nobody writes it — including on the stdlib fields where it
+looked defensible. The end state is bare everywhere, inference deriving type
+and nullability, and conflicts reported naming both sites. That is a smaller
+language than the one that shipped this afternoon, and the expensive half of it
+already exists.
+
+That is Clay's call, and it retires a keyword that landed hours ago. Nothing
+here is built.
+
+## 2026-07-26 — OPEN: rejecting redundant annotations, and the flip-flop in the rule as stated
+
+Clay: the compiler should fail for any redundant type information, inside out.
+If a leaf declares `fn foo s:string`, a caller that annotates a type the leaf
+already forces — or one loose enough to permit non-strings — is an error,
+because the fact was already known.
+
+The principle is consistent with what the language already does. Formatting,
+declaration order and typeset ordering are all enforced rather than
+recommended, and "no needless annotations" is already gaveled. Neither case is
+flagged today; both `fn relay t:string` calling `shout s:string` and the same
+program with a bare `t` compile clean.
+
+THE EDGE, which shows up wherever an annotation's job is to constrain rather
+than to restate. Redundancy is defined against what inference derives, and
+inference *widens* as violating code is added. Take a field:
+
+  - Correct program: every store into `name` is a string, inference derives
+    {string}, so `name:string` is redundant and must be deleted.
+  - Someone adds `p.name = 42`: inference derives {string, int}, so
+    `name:string` is no longer redundant — it is tighter — and becomes legal,
+    and now catches the int.
+
+The annotation is illegal exactly while the program is correct, and becomes
+legal only once somebody breaks it. A guard cannot be put in place before the
+violation it guards against, which is the whole purpose of a guard. The same
+holds for a public function's parameter: the signature is a promise to callers
+that should hold whether or not any caller currently tests it.
+
+THE LINE THAT REPAIRS IT is the one haskell and rust already draw, for this
+reason:
+
+  - contract positions — record fields, exported signatures — an annotation is
+    a requirement. Always allowed, and checked against what inference derives;
+    a conflict names both sides.
+  - local positions — inside a body, a private helper whose callers are all
+    visible — an annotation restates what inference has already settled, and
+    is redundant. Reject.
+
+That keeps the intent ("stop restating what the compiler knows") without making
+a correct program's guards illegal. It also matches what Clay has already
+accepted elsewhere: the language server exists precisely because inferred types
+are omitted from source, so the reader gets them from the tool rather than from
+restated annotations.
+
+Not built. The gavel is whether "inside out" means everywhere or only inside
+the boundary.
