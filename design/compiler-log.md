@@ -5152,3 +5152,53 @@ half the compiler thinks is wrong. That is buildable, and it is what turns the
 proposal from global inference's usual ergonomics into something better than
 either alternative. Whether a bare field should then be inferred rather than
 unconstrained is the gavel; the answer changes a default that landed today.
+
+## 2026-07-26 — `some` is redundant with dispatch ordering, and the analysis Clay named is built
+
+Two observations from Clay, hours after `some` shipped. Both hold, and together
+they point at removing it.
+
+FIRST: `some` CARRIES NO USABLE INFORMATION AS A PARAMETER TYPE. `foo arg:some`
+tells the reader only that arg is not none, which is not a type. Measured, with
+a `:none` arm above it:
+
+    fn kind x:none    "nothing, and x is <none>"
+    fn kind x:some    "something: 5"
+
+    fn kind x:none    "nothing, and x is <none>"
+    fn kind x         "something: 5"
+
+Identical. Dispatch already tries the more specific arm first, so a bare arm
+below a `:none` arm catches exactly the non-none values — which is the whole
+content of `some`. Its only non-redundant use is *rejecting* none where no
+`:none` arm exists, and there the diagnostic is "no overload of `kind` matches
+these arguments", which never mentions none. A constraint whose violation
+cannot be named is not carrying its weight.
+
+Where it looks defensible is as a field type, where it means non-nullable — a
+real integrity constraint, and what the stdlib's fourteen uses are. But see
+below.
+
+SECOND: THE AVAILABILITY ANALYSIS IS ALREADY THERE. Clay said the compiler can
+already answer "what types would satisfy every use of this field", and it can.
+`infer.rs` grows each field's set by every construction site's argument, to a
+fixpoint:
+
+    let refined = *slot | (*argset & !FAIL);
+    if refined != *slot { *slot = refined; ctx.changed = true; }
+
+The whole-program fact is computed today. What is missing is that it only
+widens — nothing checks the result against the declared type, and nothing
+checks it against what read sites require. The compiler derives the answer and
+discards its diagnostic value.
+
+WHERE THIS LANDS. If the analysis reports rather than only widens, it derives
+both the type set and whether none ever reaches the field. Then `some` is
+inferred too, and nobody writes it — including on the stdlib fields where it
+looked defensible. The end state is bare everywhere, inference deriving type
+and nullability, and conflicts reported naming both sites. That is a smaller
+language than the one that shipped this afternoon, and the expensive half of it
+already exists.
+
+That is Clay's call, and it retires a keyword that landed hours ago. Nothing
+here is built.
