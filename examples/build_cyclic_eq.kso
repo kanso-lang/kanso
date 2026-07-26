@@ -1,6 +1,6 @@
 type node
   id:int
-  peer:any
+  peer:node
 
 pub play =
   ring1 = build

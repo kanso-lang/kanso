@@ -144,7 +144,7 @@ pub play =
 # the cycle is ordinary immutable data.
 type person
   name:string
-  partner:any
+  partner:person
 
 pub play =
   couple = build
@@ -163,7 +163,7 @@ pub play =
 # collector, and peak memory does not move with the count.
 type node
   name:string
-  peer:any
+  peer:node
 
 fn tie label
   build
