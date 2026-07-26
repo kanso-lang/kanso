@@ -4885,3 +4885,38 @@ today stops being a separate rule. The exit is just another program point where
 every field must be assigned. One analysis, two uses.
 
 Awaiting Clay on the marker's spelling and on whether write-once is gaveled.
+
+## 2026-07-26 — the book denied a feature that shipped, and never taught the one that matters
+
+Working the docs half of the sweep, checked what the book claims against what
+the compiler does. Two findings in ch03, which is where records are taught.
+
+IT DENIED DOT ACCESS. The chapter read: "records have no field-access
+syntax—no `song.title`, no getter." Dot access shipped in #194 through #196
+and works on both engines today. A reader following the book would have
+written a binding pattern for every single-field read and never learned the
+form the language actually offers. Corrected to teach both, with the rule for
+choosing: a binding pattern when the whole record is about to be used and its
+parts want names, a dot when one value is wanted. And the honest boundary —
+reading is where the dot stops, because a record is a value.
+
+IT NEVER TAUGHT BUILD BLOCKS. `build` appears in no chapter, though it is the
+construct that makes cyclic data ordinary and the reason the memory model
+needs no collector. A new section, "two records that point at each other",
+teaches the knot from the problem in: neither half can be built first, most
+languages answer with a nullable field or a patching second pass, and kanso
+gives it a construct where assignment is legal and a freeze that ends it. The
+sample walks the ring twice to show the cycle is real, and is verified like
+every other panel.
+
+The old ch03 `records.kso` sample is deleted rather than left orphaned; the
+panel that used it now names `reading.kso`, which shows both read forms in one
+program. ch02 keeps its own `records.kso`, which is a different file.
+
+WHAT THIS SAYS ABOUT THE DOCS CHECKS. `scripts/book_check.sh` verifies that
+every sample still runs and still prints what the book says it prints, which
+is why the panels have never drifted. Nothing verifies the *prose* against the
+language, so a sentence asserting a feature does not exist can outlive the
+feature's arrival indefinitely. That is the gap worth closing next, and the
+cheapest form is a list of claims the book makes about what kanso lacks, each
+paired with a program that must fail to compile.

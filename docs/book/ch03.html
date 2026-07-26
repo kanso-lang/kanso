@@ -14,7 +14,7 @@ extra_css: /book/book.css
 <p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical—enforced, like everything else other languages leave to code review. each field carries a type, because a declaration has no body the compiler could infer from. construction is positional, using the type name as the constructor and passing fields in that same alphabetical order:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">records.kso</div>
+  <div class="code-panel-title">reading.kso</div>
   <pre><code><span class="k">type</span> track
   artist:string
   minutes:int
@@ -23,14 +23,19 @@ extra_css: /book/book.css
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
   <span class="f">track</span> artist minutes title <span class="o">=</span> <span class="f">song</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{artist}</span>—<span class="i">{minutes}</span> minutes"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{artist}</span>—<span class="i">{minutes}</span> minutes"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"or just the one field: <span class="i">{song.title}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>long season, by fishmans—6 minutes</code></pre>
   </div>
 </div>
 
-<p>the third line is the other half of the story. records have no field-access syntax—no <code>song.title</code>, no getter. you read a record by writing its constructor shape on the left of <code>=</code> and letting every field bind to a name. that is a <em>binding pattern</em>: the same shape you built with, running in reverse. one spelling for construction, one for its inverse, and nothing in between to learn.</p>
+<p>the third line is the other half of the story. you read a record by writing its constructor shape on the left of <code>=</code> and letting every field bind to a name. that is a <em>binding pattern</em>: the same shape you built with, running in reverse.</p>
+
+<p>when one field is all you want, a dot reads it: <code>song.title</code>. the two forms answer different questions. a binding pattern says you are about to use the whole record and want its parts named; a dot says you want one value and are done. reach for the pattern when you would otherwise write three dots in a row.</p>
+
+<p>reading is where the dot stops. there is no <code>song.title = "…"</code> outside the one construct in the next section, because a record is a value and a value does not change under you. if you want a track with a different title, you build a track with a different title.</p>
 
 <h2>taking a record apart</h2>
 
@@ -97,6 +102,36 @@ extra_css: /book/book.css
 </div>
 
 <p>that parameter pattern is doing something bigger than convenience, and the rest of the chapter is about what.</p>
+
+<h2>two records that point at each other</h2>
+
+<p>ada's partner is bob and bob's partner is ada. neither can be built first, because each one needs the other to already exist. most languages answer this by making the field nullable and checking it forever after, or by building both halves empty and patching the links in a second pass.</p>
+
+<p>kanso gives the knot its own construct. inside a <code>build</code> block, and nowhere else, a field can be assigned after its record exists:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">knot.kso</div>
+  <pre><code><span class="k">type</span> person
+  name:string
+  partner:person
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  couple <span class="o">=</span> <span class="f">build</span>
+    ada <span class="o">=</span> <span class="f">person</span> <span class="s">"ada"</span> none
+    bob <span class="o">=</span> <span class="f">person</span> <span class="s">"bob"</span> ada
+    <span class="f">ada</span><span class="o">.</span>partner <span class="o">=</span> <span class="f">bob</span>
+    <span class="f">ada</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{couple.name}</span> and <span class="i">{(couple.partner).name}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{((couple.partner).partner).name}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">output</div>
+    <pre><code></code></pre>
+  </div>
+</div>
+
+<p><code>none</code> holds ada's place while she waits for bob, and the assignment on the fourth line closes the loop. when the block ends the whole group freezes: nothing in it can be assigned again. what leaves the block is ordinary immutable data that happens to contain a cycle, so you can walk the ring as far as you like—<code>((couple.partner).partner)</code> is ada again—and no code downstream has to defend against a half-built record, because a half-built record never leaves.</p>
+
+<p>the freeze earns its keep twice. it is what lets the type say <code>partner:person</code> instead of some nullable stand-in, and it is what keeps the memory model simple, which ch10 returns to: everything a block creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
 
 <h2>the only switch</h2>
 
