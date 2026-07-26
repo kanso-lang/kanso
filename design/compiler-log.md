@@ -3663,3 +3663,47 @@ correctly documenting the compiler rather than the gavel. Reverted.
 The lesson is the one the exemption already taught: prose that cannot be
 replayed drifts, and a gavel that is only written down is not a fact about the
 language. Both are now recorded as unbuilt rather than assumed shipped.
+
+## 2026-07-25 — GAVEL (amendment): the binder stays, and they are constraints rather than generics
+
+Clay, on the type-syntax gavel's no-binder ruling: "of course there's a k
+binder. it has nothing to do with order, it's about enforcing that two types
+have to be the same."
+
+    type <k>foo
+      name:k
+      friend_names:k[]
+
+WHY THE ORIGINAL RULING WAS WRONG. It rejected `<k>` as superfluous, on the
+grounds that the fields already say what the binder would. The fields say
+*order* — which name appears first — and the ruling was right about that much,
+so order still comes from first appearance and the binder does not carry it.
+What the fields cannot say is that `k` is a *variable*. Without the binder,
+`first:k` reads as a constraint only because no type named `k` happens to
+exist, so a declaration's meaning depends on the global set of type names, and
+adding a type called `k` later silently converts a constraint into a concrete
+annotation. That is the same shape as the currying hazard Clay caught earlier
+today: a later, unrelated addition quietly changing what existing code means.
+The binder states variable-ness outright, which is the one fact nothing else
+carries, so it is not superfluous.
+
+THE NAME. They are type CONSTRAINTS, not generics. `k`'s entire content is the
+relation it forces: drop it for `any` in both fields and the type still
+compiles while the agreement is gone. "Generic" names a mechanism borrowed
+from languages that also want variance, bounds and higher-kinded parameters,
+none of which kanso is buying, and the word promises them.
+
+The vocabulary now: a binder DECLARES a constraint, fields USE it to force
+positions to agree, and `foo[string]` APPLIES it — application being the term
+the type gavel already settled. Three words, each doing one job.
+
+A CORRECTION OF MY OWN, from the same conversation. I had argued that the
+relating job was gone from kanso entirely and only acceptability remained.
+That is wrong, and Clay's example is the counterexample. Relating is gone from
+FUNCTION signatures — usage tells you, inference derives it — and it lives on
+in TYPE declarations, where nothing else could express it: `k` in `pair` cannot
+be inferred from usage, because the declaration is what usage gets checked
+against.
+
+Still unbuilt, both halves. `type <k>foo` does not parse, and neither does the
+parameterization the gavel reserves.

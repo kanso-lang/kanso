@@ -2,7 +2,7 @@
 
 Gaveled 2026-07-24. The design below is settled. Nothing here is built —
 kanso today has no user-defined parameterized types, and field types are
-bare names (`peers:list`). The rulings reserve the syntax so the generics
+bare names (`peers:list`). The rulings reserve the syntax so the constraint
 work has a shape to land in.
 
 ## The three forms
@@ -51,21 +51,34 @@ A `[` pressed against the identifier before it opens an argument list. A
 is the same tight-versus-spaced rule the lexer already uses to tell field
 access from the pipe.
 
-## No type-parameter binders
+## The binder declares a constraint; the fields give its order
 
-There is no `<k>` form, on a type or anywhere else. A type's parameter
-order is the order its variables first appear in its fields:
+A type declares its constraints up front, and uses them in its fields:
 
 ```
-type pair
-  first:k
-  second:v
+type <k>foo
+  name:k
+  friend_names:k[]
 ```
 
-`k` appears first, so `pair[string int]` binds `string` to `k`. Writing
-`<k v>` on top of that repeats what the fields already say, and kanso
-rejects superfluous syntax. A parameter that appears in no field would
-need a binder, and kanso has no such parameter.
+`<k>` says that `k` is a constraint — a name standing for whatever type
+arrives — and the fields then force every position mentioning it to agree.
+Give `foo[string]` and `name` is a string and `friend_names` is an array of
+strings. That agreement is the whole content of `k`; drop it for `any` in
+both fields and the type still compiles while the relation is gone.
+
+The binder does not carry order. Order is the order the constraints first
+appear in the fields, so `type <k v>pair` with `first:k` and `second:v`
+takes `pair[string int]` and nothing has to be repeated.
+
+The binder is not superfluous, which an earlier ruling had it. Fields say
+which positions share a name; they cannot say that the name is a variable
+rather than a type. Without the binder, `first:k` means a constraint only
+because no type named `k` happens to exist — so a declaration's meaning
+would depend on the global set of type names, and adding a type called `k`
+later would silently turn a constraint into a concrete annotation. The
+binder states variable-ness outright, which is the one fact the fields
+cannot carry.
 
 ## Functions carry no type parameters, and no needless annotations
 
@@ -107,7 +120,7 @@ position — the same rule that bans `_` in binding patterns and prefers
 keyed reads. A two-field positional value is as wrong as a five-field
 one, so there is no `tuple` and no positional `pair`.
 
-The stdlib does ship a two-field generic record named `pair`, with fields
+The stdlib does ship a two-field constrained record named `pair`, with fields
 `first` and `second`, because `zip` produces one and `to_h` consumes one.
 Ordinal field names are honest there and nowhere else: `zip` is
 domain-blind, so it cannot know what its two values mean. Application
