@@ -4337,3 +4337,33 @@ The ledger now reads: three kernels shipped, one measured and declined
 (eytzinger), one already won (TRMC), one shipped today (constants), and three
 genuinely open — in-place as a guarantee, maximal sharing, and the cheap
 experiments.
+
+## 2026-07-25 — MEASURED, DECLINED: profile-guided optimization
+
+The first of the cheap experiments, and it does not pay here.
+
+Instrumented the decode gauntlet with -fprofile-instr-generate, replayed it,
+merged with llvm-profdata, and rebuilt with -fprofile-instr-use. Sixty
+interleaved cpu-time runs against the same binary built without it:
+
+    floor    137.7 -> 136.3 ms   (-1.1%)
+    p25      167.1 -> 164.8      (-1.4%)
+    median   173.0 -> 172.0      (-0.6%)
+
+All three agree on direction and none of them is larger than the noise on this
+box. An earlier thirty-run pass had the floor going the other way (+4.6%) with
+the median improving, which is the shape of a measurement that has not
+converged; the sixty-run numbers are what the entry rests on.
+
+WHY IT SHOULD HAVE BEEN EXPECTED. Pgo pays where branch prediction is losing —
+long if-else chains, virtual dispatch, cold paths inlined into hot ones. The
+decoder's dispatch is already a jump table, the arms are already inlined, and
+the inner loops are already vectorized. There is not much left for a profile to
+tell the compiler that the shape of the code does not.
+
+THE COST IS NOT ZERO. Two-pass builds, a profile artifact checked in and going
+stale, and a compile story that currently fits in one pass and was published
+this morning as such. A percent does not buy that.
+
+Recorded on the compiler page beside the technique so the idea stays declined,
+and so the next person reaching for the obvious free win finds the numbers.
