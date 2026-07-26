@@ -5764,3 +5764,64 @@ somebody meant to add.
 Untracked, and `.gitignore` now names them, which is the part that actually
 prevents a recurrence — the rule against `add -A` did not, because the rule
 depends on remembering it at the moment of typing and the ignore file does not.
+
+## 2026-07-26 — a second of compile time is not a second of runtime
+
+Clay, on the saturating welfare curve: "the different metrics have totally
+different intrinsic utility, e.g. taking a second longer to compile is not the
+same thing as running a second slower."
+
+Weight alone cannot say that. Weight answers how much a dimension matters;
+what differs here is how fast further improvement stops mattering, and that is
+a separate question. A front end that already finishes in six milliseconds
+gains almost nothing from three, because nobody can tell. A decoder in a hot
+loop that gets eight times faster is eight times faster, and the eighth
+doubling still shows up in somebody's bill.
+
+Each term now carries a satiation as well as a weight — `r / (r + satiation)`,
+where a small satiation means the term is near its ceiling already. Compile
+terms sit at 0.5, runtime allocations at 2.0, footprint between. What
+successive doublings are worth, in points:
+
+    decode_allocs    (0.25, 2.0)    9.0  9.0  7.2  4.8
+    encode_allocs    (0.20, 2.0)    7.2  7.2  5.8  3.8
+    compile_rounds   (0.15, 0.5)    4.3  2.9  1.7  0.9
+    emitted_lines    (0.10, 0.5)    2.9  1.9  1.1  0.6
+
+AND THE MEASUREMENT CORRECTED THE PROSE I HAD WRITTEN AROUND IT. The comment
+claimed a runtime regression should hurt more than a compile-time one of the
+same ratio. Measured, it is the other way: doubling compile rounds costs 5.4
+points against a 0.15 weight, while doubling decode allocations costs 7.2
+against 0.25 — per unit of weight the satiated term loses more. That reads
+oddly until it is said in words: a compiler that was imperceptible and is now
+noticeable has lost something real, while a decoder that was already the
+expensive part has only got worse at being expensive. Satiation cuts both
+ways, and it should. The comment now says the measured thing.
+
+## 2026-07-26 — the string quotes were painted as punctuation
+
+Clay reported that types and quotes were not highlighting, then narrowed it
+himself in the way that solved it: "the string content is colored but not the
+quotes."
+
+That is not a missing rule, it is one rule too many. The grammar scoped the
+opening and closing quote as `punctuation.definition.string.begin/end`, which
+sits *on top of* the span's own `string.quoted.double`. A vs code theme paints
+that scope the same colour as the string and nobody notices; a jetbrains colour
+scheme paints punctuation separately, so the two quote characters dropped out
+of the string's colour. Removing the captures lets them inherit the span, which
+is what both editors then show.
+
+The same shape was found on the interpolation braces and left in two more
+places where the separator genuinely is punctuation between two differently
+coloured things — a field's colon and an annotation's colon.
+
+AND A REAL GAP, separately: there was no rule for a user type in an annotation
+at all. `name:string` was coloured because `string` is a primitive; nothing
+matched `partner:person`. An `annotated-type` rule now scopes the name after a
+colon, ordered after the primitives so `int` keeps its own colour and after
+strings so a colon inside a string is never read as an annotation.
+
+Clay's own workaround for the cache is in editors/README.md now, because
+removing and re-adding the bundle is not always enough: untick, apply, tick,
+apply.
