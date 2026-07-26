@@ -4762,3 +4762,38 @@ handed to anything until the block closes. Values from outside stay ordinary,
 and the constructor itself has to remain callable or nothing can be built.
 
 Both halves wait on Clay.
+## 2026-07-26 — asset digests, because a query stamp only narrows the window
+
+Clay asked for the rails technique rather than the build-time query that went
+in with the run-button fix, and he is right that it is the stronger form. A
+query narrows the window in which a browser can hold `play.js` from before a
+deploy and `kanso-engine.js` from after; a digest in the filename closes it,
+because the two names cannot both resolve unless they were built together. It
+also stops charging visitors for deploys that did not touch the assets: an
+unchanged file keeps its name and stays cached.
+
+`scripts/fingerprint.py` runs against the built site. The ordering is the part
+that needed care — the engine fetches the module by name, so `kanso.wasm` is
+digested first, the engine's reference to it is rewritten, and only then is the
+engine hashed. Hashing the engine first would have shipped a digest that names
+a stale module. Then every html and js reference is rewritten, query and all.
+
+    style.css        -> style-ece04f22ef7b7087.css
+    kanso.wasm       -> kanso-88205d38323c7772.wasm
+    play.js          -> play-699a4fde906a7972.js
+    landing-play.js  -> landing-play-52e4851252adbf40.js
+    kanso-engine.js  -> kanso-engine-e6854120e4e81928.js
+
+Verified by running the digested site in a browser rather than by reading the
+rewrites: the page loads the digested engine, the engine fetches the digested
+module, and editing the source and pressing run prints the new program, with
+no console errors.
+
+THE BUILD MOVES to `.github/workflows/pages.yml`, because github's own jekyll
+build has no step where a digest could be taken. The workflow builds with the
+same `jekyll-build-pages` action, digests, asserts that no undigested reference
+survived, and deploys. Ci gains the same assertion so the fingerprinting cannot
+rot between deploys.
+
+The query stamp is removed in the same change; keeping both would leave two
+mechanisms for one job, and the weaker one would be the one nobody maintains.

@@ -1,10 +1,6 @@
 'use strict';
 
 (function () {
-/* the module and this file are deployed as a pair and must agree, so the
-   script tag's own version travels to the fetch. currentScript reads only
-   while this file is executing, which is why it is captured here. */
-const BUILD_VERSION = new URL(document.currentScript.src, location.href).search;
 /* The kanso engine in the tab: the real toolchain compiled to wasm, plus the
    tokenizer that paints it. Shared by the playground and the landing page's
    live sample so the wiring exists once. */
@@ -153,7 +149,7 @@ const TAILCALL_PROBE = new Uint8Array([
 const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
 
 async function loadWasm() {
-  const response = await fetch('kanso.wasm' + BUILD_VERSION);
+  const response = await fetch('kanso.wasm');
   const imports = { env: { k_callback: (t, e, a) => programTable.get(t)(e, a) } };
   const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
   wasm = instance.exports;

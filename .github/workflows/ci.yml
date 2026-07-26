@@ -70,6 +70,25 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 scripts/utf8_differential.py
 
+  fingerprints:
+    name: asset digests (every reference rewritten, site still runs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+      - run: python3 scripts/fingerprint.py ./_site
+      - name: no undigested reference survives
+        run: |
+          if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then
+            echo "::error::an undigested script reference survived"; exit 1
+          fi
+          if grep -rn "fetch('kanso.wasm')" ./_site --include=*.js; then
+            echo "::error::the engine still fetches the undigested module"; exit 1
+          fi
+
   book:
     name: book samples (every panel executed, outputs verified)
     runs-on: ubuntu-latest
