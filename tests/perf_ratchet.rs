@@ -214,3 +214,26 @@ fn a_release_build_reuses_the_cached_runtime() {
         .collect();
     assert_eq!(stamps, after, "the second release build recompiled the runtime");
 }
+
+/// `(a b -> f a b)` is `f`. Building a closure for it puts a call hop between
+/// the caller and the work on every element it folds over, so the emitter
+/// hands back the function value the eta-expansion was hiding — but only where
+/// the value ABI can carry it, since a builtin or a byte-discriminating group
+/// still needs the closure.
+#[test]
+fn a_lambda_that_only_forwards_becomes_the_function_itself() {
+    let ir = ir_for(
+        "fn bump a b\n  a + b\n\n\
+         main = print \"{use_it (a b -> bump a b) 1 2}\"\n\n\
+         fn use_it f a b\n  f a b\n",
+    );
+
+    assert!(
+        ir.contains("k_fnref(ptr @w_bump_2)"),
+        "the forwarding lambda did not reduce to the function value"
+    );
+    assert!(
+        !ir.contains("musttail call tailcc %KValue @d_bump_2(%KValue %a0, %KValue %a1)"),
+        "a forwarding closure was still emitted"
+    );
+}

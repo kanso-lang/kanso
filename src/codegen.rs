@@ -627,6 +627,24 @@ impl<'a> Backend<'a> {
     /// extract we emit here — so only a raw i64 travels the musttail edge LLVM
     /// cannot otherwise see through. Sound because inference forces every param
     /// of a function used as a first-class value to TOP, never a bare `int`.
+    /// The name a lambda merely forwards to: its body is a call to that name
+    /// passing exactly its own parameters, in order, and nothing else. Such a
+    /// lambda denotes the function itself.
+    fn eta_reducible(params: &[(String, Span)], body: &Expr) -> Option<String> {
+        let Expr::App { head, args, piped, .. } = body else { return None };
+        if *piped || args.len() != params.len() {
+            return None;
+        }
+        let Expr::Ident(name, _) = head.as_ref() else { return None };
+        if params.iter().any(|(p, _)| p == name) {
+            return None;
+        }
+        let forwards = args.iter().zip(params).all(|(arg, (p, _))| {
+            matches!(arg, Expr::Ident(a, _) if a == p)
+        });
+        forwards.then(|| name.clone())
+    }
+
     fn unboxed_param(&self, name: &str, arity: usize, param: usize) -> bool {
         self.group_param_set(name, arity, param) == INT
     }
@@ -2200,9 +2218,33 @@ impl<'a> Backend<'a> {
                 let b = self.maybe_force(f, b);
                 self.emit_binop(f, op, &a, &b, *span)
             }
-            Expr::Lambda { params, body, .. } => {
+            Expr::Lambda { params, body, span } => {
                 if params.is_empty() || params.len() > 4 {
                     return Err("native backend: a lambda takes 1 to 4 parameters".to_string());
+                }
+                // `(a b -> f a b)` is `f`. Building a closure for it costs a
+                // call hop on every element the caller folds over, so hand
+                // back the function value the eta-expansion was hiding.
+                if let Some(name) = Self::eta_reducible(params, body) {
+                    // only where the target really is a function value: a
+                    // builtin, or a group the value ABI cannot carry, still
+                    // needs the closure the lambda was providing
+                    let arities: Vec<usize> = {
+                        let mut seen = Vec::new();
+                        for d in self.program.fns.iter().filter(|d| d.name == name) {
+                            if !seen.contains(&d.params.len()) {
+                                seen.push(d.params.len());
+                            }
+                        }
+                        seen
+                    };
+                    if f.lookup(&name).is_none()
+                        && arities == [params.len()]
+                        && self.simple_fn_value(&name, params.len())
+                    {
+                        let inner = Expr::Ident(name, *span);
+                        return self.emit_expr(f, &inner);
+                    }
                 }
                 let param_names: Vec<String> = params.iter().map(|(n, _)| n.clone()).collect();
                 let mut idents = Vec::new();

@@ -3822,3 +3822,41 @@ The general shape is worth remembering: an analysis result used for one purpose
 (deciding the ABI) was not visible to a second consumer (arithmetic lowering)
 that would have benefited from the same fact. Worth asking where else a proven
 set is dropped at a boundary.
+
+## 2026-07-25 — eta-reduction, and an honest note that it does not pay here
+
+The encode profile showed `w_klam29` at 47 samples — a boxing wrapper in front
+of `klam29`, which musttail-calls `d_esc_byte_2` and ignores its environment
+entirely. Two hops of pure indirection. The source is
+`list/fold bs acc (a b -> esc_byte a b)`: a textbook eta-expansion, a lambda
+that forwards its parameters to a named function and does nothing else.
+
+BUILT. A lambda whose body is a call to a name, passing exactly its own
+parameters in order, with the name neither shadowed nor one of the parameters,
+now emits the function value instead of a closure.
+
+IT DOES NOT FIRE ON THE CASE THAT MOTIVATED IT. `esc_byte` dispatches on a
+literal byte in its second parameter, and a byte discriminator crosses the ABI
+as a raw i64 with the 256-is-none convention, which `simple_fn_value` refuses.
+So the lambda that costs 47 samples is exactly the one the value ABI cannot
+carry — which is *why* a closure was there in the first place. The 47 samples
+stay.
+
+MEASURED WHERE IT DOES FIRE: two allocations out of 12,924,473 on the decode
+gauntlet, and 48 bytes. A one-time closure saving, not a per-element one. The
+cost golden moves by that much and nothing else does.
+
+I nearly shipped a regression on the way. The first version reduced any
+forwarding lambda, including `(a b -> push a b)`, and `push` is a builtin with
+no function-value form — so a program that compiled before stopped compiling.
+The guard is now explicit: one arity, matching, and `simple_fn_value` true.
+
+SO WHY KEEP IT. It is strictly less code emitted wherever it applies, it costs
+nothing at runtime, and a forwarding lambda is a common idiom in user code that
+the profile just showed carries two hops. But it is not a win on these
+benchmarks and the entry says so rather than implying otherwise.
+
+THE REAL TARGET IS NOW NAMED. Making byte-discriminating groups carriable as
+function values would collect those 47 samples. That is an ABI change — the
+value wrapper would need to unbox the discriminator — and it is the shape
+SpecConstr was queued for. Recorded as the next encode-side lead.
