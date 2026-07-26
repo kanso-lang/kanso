@@ -4664,3 +4664,60 @@ code — so the picker path passed while a plain edit-then-run could be broken.
 It now types a program into the editor and presses the button, then does it
 again through ⌘⏎, which is a separate listener. Both probes were watched
 failing against a stubbed click handler before the change went in.
+## 2026-07-26 — SHIPPED: the utf-8 validator was paying vector setup on five-byte keys
+
+Started the ledger sweep with a profile rather than a guess: four thousand
+decodes of the 188 kb benchmark, sampled five seconds, 1,246 samples. The flat
+leaf distribution named a surprise.
+
+    d_value_for_3   247  19.8%   the value dispatcher
+    k_utf8_bad      189  15.2%   utf-8 validation
+    k_b_push_mut    102   8.2%
+    _platform_memmove 77  6.2%
+    ...
+    k_b_to_float     22   1.8%   float parsing
+
+Fifteen percent in utf-8 validation, for a kernel the ledger describes as fully
+vectorized — and it is; the keiser & lemire structure is all there and correct.
+The cost is that it runs at all on short input. `nblocks = (len + 15) / 16 + 1`
+means a five-byte object key runs two blocks, and both take the tail path that
+fills a sixteen-byte buffer one byte at a time, after loading three lookup
+tables. A json document is mostly short keys and short strings, so the setup is
+the work.
+
+THE FIX is four lines: below sixteen bytes, scan for a byte with the high bit
+set, and return valid if there is none. Ascii is valid utf-8 by definition, so
+the early return needs no other condition, and anything non-ascii falls through
+to the wide path unchanged.
+
+MEASURED, interleaved, best of nine, cpu:
+
+    baseline    0.8443 ms/decode
+    fast path   0.7525 ms/decode      -10.9%
+
+And on the published board, slope-timed (450-run floor minus 150-run floor over
+the extra 300, which cancels startup and the file read for all four alike):
+
+    kanso   0.7559 ms   5.6 mb
+    serde   0.8621 ms   6.7 mb
+    naive   0.9949 ms   6.9 mb
+    go      2.0007 ms  10.5 mb        (1.6888 ms wall)
+
+The lead over serde moves from 4.6% to 12.3%. Peak footprint does not move.
+
+THE HARNESS CAME FIRST, per the standing rule, and it is now checked in as
+`scripts/utf8_differential.py` with a CI job. It extracts the validator's real
+text out of runtime.c — never a copy, so it cannot drift — rewrites the two
+returns into a bool, and compares it against a scalar reference written
+straight from the rfc 3629 grammar. Exhaustive over every string of three bytes
+or fewer, then twenty million sampled strings across the lengths that straddle
+the vector boundary: 36,843,009 cases, 0 mismatches. The harness was watched
+failing first — loosening the fast path's threshold from 0x80 to 0xC0 produces
+10,153,871 mismatches — so the zero means something.
+
+WHAT THE PROFILE SAYS ABOUT THE REST OF THE QUEUE. Float parsing is 1.8% of
+decode, so the queued eisel-lemire mirror and dragonbox cannot pay much here;
+they stay queued behind a workload that is actually float-heavy. The dispatcher
+at 19.8% is the largest single target left, and it is what call-pattern
+specialization exists to attack. Buffer copying — push_mut plus memmove — is
+another 14.4%, which is the in-place and TRMC territory.

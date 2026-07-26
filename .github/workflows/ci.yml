@@ -63,6 +63,13 @@ jobs:
           echo "$out" | grep -q "checksum 24000" \
             || { echo "::error::native json decoder produced the wrong checksum"; exit 1; }
 
+  utf8:
+    name: utf-8 validator (differential vs an independent reference)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/utf8_differential.py
+
   book:
     name: book samples (every panel executed, outputs verified)
     runs-on: ubuntu-latest
