@@ -1,0 +1,56 @@
+name: pages
+
+# The site is built here rather than by github's own jekyll so the assets can
+# be content-digested before they ship: kanso-engine.js and play.js are
+# separate downloads that must agree, and a digest in the filename is the only
+# thing that makes holding half of a pair impossible.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build the site and digest its assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+      - name: the jekyll container owns _site, so take it back
+        run: sudo chown -R "$USER" ./_site
+      - name: content-digest the assets
+        run: python3 scripts/fingerprint.py ./_site
+      - name: every reference names a digested file
+        run: |
+          if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then
+            echo "::error::an undigested script reference survived fingerprinting"; exit 1
+          fi
+          if grep -rn "fetch('kanso.wasm')" ./_site --include=*.js; then
+            echo "::error::the engine still fetches the undigested module"; exit 1
+          fi
+      - uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
