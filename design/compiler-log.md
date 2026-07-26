@@ -5503,3 +5503,64 @@ difference between an ordering hunch and an ordering fact.
 
 Pinned by a spec that constructs a loop with both blockers and fails if the
 report names only one; watched failing against the old behaviour first.
+
+## 2026-07-26 — DESIGN (not built): shelve the byte builder's buffer, not its bytes
+
+Following the corrected entry 8, worked out what the fix actually costs. The
+answer is smaller than the general fold-state shelf, and the machinery is
+mostly already there.
+
+WHAT EXISTS. `k_beat_iter_carry` is a shelf already: it deep-copies the staged
+carry slots into a malloc'd buffer outside the arena, rewinds, and swaps. The
+`CarryBeat` verdict routes loops through it. Byte accumulators are excluded by
+one line in `classify`, and the comment says why — "a byte builder rebuilt each
+iteration would deep-copy its whole buffer at every rewind". That exclusion is
+correct arithmetic: copying a growing buffer once per iteration is quadratic in
+its final length, which on kq's 1.9 mb pretty-print would be far worse than the
+grow-only arena it avoids.
+
+WHAT MAKES IT AVOIDABLE. The value is already split:
+
+    typedef struct { long long len; const unsigned char* data; long long cap; } KBytes;
+
+The header is three words and a pointer; the bytes live behind `data`. Carrying
+the accumulator across a rewind does not require moving the bytes — it requires
+the bytes not to be in the region being rewound. So: for a loop whose declining
+position the analysis has identified as a byte accumulator, allocate that
+builder's `data` outside the arena and let the header be copied as any other
+carry slot. The per-iteration cost falls from the buffer's length to twenty-four
+bytes, and `CarryBeat` can accept the loop.
+
+The shape is already proven twice over in this runtime. `k_carry_iter`'s own
+`c->to` is a malloc'd region that survives rewinds; and the zero-copy finish
+already hands a builder-owned buffer out as the result string in place, so
+ownership transfer at the end of a builder's life is a path that exists.
+
+WHAT NEEDS ADVERSARIAL CARE BEFORE IT IS BUILT, and why this is a design note
+rather than a branch.
+
+  - Ownership at exit. `k_beat_pop` already distinguishes a heap result from a
+    scalar one and deep-copies the former out. A shelved buffer handed out as
+    the result must transfer rather than copy, and must not be freed by the pop
+    that returns it.
+  - Aliasing. The uniqueness analysis is what licenses in-place appends, and the
+    counters say it holds on this path — 42,312,800 in-place appends against
+    5,200 regrowths on the encode board. But "unique enough to append into" and
+    "unique enough to live outside the arena for the whole loop" are not the
+    same claim, and the second needs its own argument.
+  - Failure paths. `k_beat_iter_carry` returns early when a slot holds a
+    failure, leaving the arena unrewound. A shelved buffer must be freed on
+    that path too, or an err inside a loop leaks the accumulator.
+  - The escape hatch. A builder that escapes into a structure that outlives the
+    loop cannot be shelved. The escape analysis already computes this.
+
+THE PAYOFF, measured rather than estimated: kq holds 211.9 mb pretty-printing a
+1.9 mb document against jq's 30.7, while the output it accumulates is a few
+megabytes. Most of that gap is per-iteration garbage pinned by one surviving
+slot. The instruction-efficiency half follows from the same change — 4.59
+instructions per cycle against jq's 5.33 is a working-set symptom.
+
+Not built. It touches the allocator, the carry path and the escape analysis at
+once, on the value the whole encode path is threaded through, and the log's own
+standing advice for this rung is to spec it with adversarial care and measure
+before committing. Clay's call on whether it goes next.
