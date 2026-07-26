@@ -4092,3 +4092,44 @@ warnings as of this morning, and the perf group is clean. pedantic is 442
 warnings, which is not worth forcing wholesale — the useful move is enabling
 individual pedantic lints as they come clean, rather than a blanket allow list
 that nobody revisits.
+
+## 2026-07-25 — RC, step one: the leak is now pinned instead of described
+
+Clay asked for value-level reference counting next. Before touching allocation
+behaviour, established where the current scheme actually stands, because the
+last entry on it is stale in both directions.
+
+WHAT IS ALREADY BUILT, contrary to the earlier audit: `k_thunk_new` reuses from
+the free list and retains nested cells (`->rc++` on a K_THUNK argument);
+`k_thunk_release_cell` decrements, drops args recursively, recycles, and counts
+`thunk_frees`; and codegen does emit drops — `k_thunk_release_unless` at a
+releasable binding's frame epilogue, which returns the result untouched when
+the result IS the cell. So retain, release, recycle and drop-insertion all
+exist.
+
+WHAT DOES NOT HAPPEN, measured on the flagship lazy workload:
+
+    lazybench: thunk_allocs=100000  frees=0  escaped=100000  live_exit=100000
+
+Every cell escapes and none is recycled. The release site cannot fire because
+a cell handed onward in a tail call outlives the frame whose epilogue would
+have released it — which the runtime comment already says, and counts rather
+than frees. The cells are malloc'd while the structures referencing them live
+in the arena, so a rewind drops the references without releasing the cells.
+
+THE HARNESS HOLE THAT LET THIS SIT. Every .mem golden holds at most one cell:
+seven of the eight have thunk_allocs of 0 or 1, and the vein's freeing cases
+(force_path, skip_unused, skipped_err) all free exactly one. Nothing pinned the
+accumulating shape, so "cells are recycled" was true of every case under test
+and false of the case that matters.
+
+tests/golden/mem/many_cells.kso closes it: forty cells in a tail-recursive
+walk, five demanded, and the golden records allocs=40, frees=0, escaped=40,
+live_exit=40. It fails the day any of those move, which is the point — the
+number to beat is written down before the work starts rather than after.
+
+NEXT, and deliberately not attempted tonight: the release site needs to survive
+a cell outliving its frame, which means the count has to be owned by whatever
+holds the cell rather than by the frame that made it. That is the retain-on-
+store half of a real RC, and it is the piece the log has twice flagged as
+memory-unsafe to rush. The golden now exists to prove it when it lands.
