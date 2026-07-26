@@ -153,6 +153,39 @@ pub play =
   a = couple[1]!
   print "{a.name} <-> {(a.partner).name} <-> {((a.partner).partner).name}"
 `,
+  contained: `# the same knot, but crossing call boundaries and then thrown away in
+# bulk. tie hands the cycle out as an ordinary return value, round_trip
+# walks two hops of it as an ordinary argument, and the loop builds two
+# thousand of them and keeps none. a build block's cohort is born and dies
+# inside one iteration, so the arena rewinds it whole -- no counting, no
+# collector, and peak memory does not move with the count.
+type node
+  name:string
+  peer:any
+
+fn tie label
+  build
+    here = node label none
+    there = node "pong" none
+    here.peer = there
+    there.peer = here
+    here
+
+fn round_trip n
+  n.peer.peer.name
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + length (round_trip (tie "ping")))
+
+pub play =
+  knot = tie "ping"
+  print "one hop: {knot.peer.name}"
+  >> print "back home: {round_trip knot}"
+  >> print "two thousand more, all discarded: {spin 2000 0}"
+`,
   join: `# two effects with no order between them -- parallel is the default, so
 # plain lines say it. the >> is the wall: serving happens only after both.
 # failures accumulate: if both sides err you get both reasons.

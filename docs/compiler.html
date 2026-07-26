@@ -635,7 +635,7 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <li><strong>shortest-round-trip float rendering</strong> — ryū (adams, PLDI 2018): generated 125-bit tables, the half-ulp interval walk, fifty-million-double fuzz at zero failures; dtoa left the building. dragonbox (jeon, 2020) queued behind a profile that needs it.</li>
 <li><strong>small-integer fast paths</strong> — arbitrary precision that costs nothing until used: word-sized arithmetic with overflow checks, the bignum path behind them.</li>
 <li><strong>register-return abi</strong> — two-word values pass in registers across the tailcc boundary; the canonical destructure costs no memory traffic.</li>
-<li><strong>recursion without stack overflow</strong> — self-tail calls compile to loops; deep non-tail recursion is bounded by an explicit check, not a segfault.</li>
+<li><strong>self-tail calls compile to loops</strong> — a tail-recursive walk runs in constant stack, measured to twenty million deep. non-tail recursion still ends the stack, and the two engines end it at different depths, so a bound both engines share is queued rather than shipped; today the driver names the cause instead of exiting silently.</li>
 <li><strong>the deterministic green-thread scheduler</strong> — cooperative description execution with a logical clock; transcripts are pure functions of the program.</li>
 <li><strong>wall-credit sleep accounting</strong> — real compute time credits against pending sleeps, so wall-clock honesty never leaks into the logical transcript.</li>
 <li><strong>work-ahead scheduling</strong> — original to kanso (designed): io stalls fill with proven-needed work first, speculative work only when the proven queue is dry.</li>
