@@ -1,0 +1,16 @@
+# a binding the taken arm ignores is never computed
+fn burn 0 acc
+  acc
+
+fn burn n acc
+  burn (n - 1) (acc + n)
+
+fn pick false _
+  "skipped"
+
+fn pick true chosen
+  "used {chosen}"
+
+pub play =
+  expensive = burn 100 0
+  print "{pick false expensive}"

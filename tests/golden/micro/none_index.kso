@@ -1,0 +1,8 @@
+# an absent index answers with none, which is a value a later arm can take
+fn describe none
+  "absent"
+
+fn describe _
+  "present"
+
+pub play = print "{describe [1 2][5]} {describe [1 2][1]}"

@@ -1,0 +1,2 @@
+# the strict index answers a present position and would end the run otherwise
+pub play = print "{[10 20 30][2]!}"

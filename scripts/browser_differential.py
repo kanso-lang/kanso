@@ -178,7 +178,7 @@ def local_import(source):
 
 
 def corpus():
-    dirs = [ROOT / "examples", ROOT / "tests/golden/runtime"]
+    dirs = [ROOT / "examples", ROOT / "tests/golden/runtime", ROOT / "tests/golden/micro"]
     paths = [path for d in dirs for path in sorted(d.glob("*.kso"))]
     paths += playground_examples()
     runnable, skipped = [], []

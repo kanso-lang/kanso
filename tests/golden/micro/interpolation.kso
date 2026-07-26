@@ -1,0 +1,4 @@
+# interpolation renders a value into a string without a call
+pub play =
+  n = 6
+  print "n is {n}, twice is {n * 2}"

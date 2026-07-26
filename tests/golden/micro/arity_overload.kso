@@ -1,0 +1,8 @@
+# one name carries two arities; the count at the call site picks the group
+fn area w
+  w * w
+
+fn area w h
+  w * h
+
+pub play = print "{area 3} {area 3 4}"

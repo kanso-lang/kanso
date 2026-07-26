@@ -1,0 +1,11 @@
+# dispatch selects an arm by a literal int, and the catch-all takes the rest
+fn name 0
+  "zero"
+
+fn name 1
+  "one"
+
+fn name _
+  "many"
+
+pub play = print "{name 0} {name 1} {name 7}"
