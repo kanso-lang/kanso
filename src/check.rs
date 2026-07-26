@@ -306,7 +306,8 @@ fn demand_conflicts(
     args: &[Expr],
     diags: &mut Vec<Diagnostic>,
 ) {
-    let Some(target) = program.fns.iter().find(|d| d.name == callee && d.params.len() == args.len())
+    let Some(target) =
+        program.fns.iter().find(|d| d.name == callee && d.params.len() == args.len())
     else {
         return;
     };
