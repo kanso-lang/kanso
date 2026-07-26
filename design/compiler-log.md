@@ -5098,3 +5098,57 @@ The stdlib's fourteen `:any` fields became `:some` rather than bare, because
 that preserves their meaning exactly; a bare field would have widened them to
 admit `none`, which none of them wants. The two examples that wrote `:any none`
 became bare, because that is what they were spelling out.
+
+## 2026-07-26 — OPEN: should a bare field be inferred rather than unconstrained?
+
+Clay, immediately after the bare-field gavel landed: why declare field types at
+all? If `person.name` flows into a function that takes a string, and somewhere
+else an int is stored into `person.name`, the compiler can say those two facts
+conflict.
+
+IT IS FEASIBLE HERE, more than in most languages. Kanso compiles a closed
+world, already runs whole-program inference, and already monomorphizes one copy
+of the code per concrete value shape that reaches it. Field types are exactly
+the kind of fact that machinery derives. Nothing about the proposal is beyond
+the compiler as it stands.
+
+AND IT SHARPENS INTO A THIRD OPTION, which is the part worth noticing. Today a
+bare field means unconstrained — it accepts anything and checks nothing.
+Clay's proposal would make a bare field mean *inferred*: the compiler collects
+every store and every read, and reports a conflict. That is strictly more
+checking than what shipped this afternoon, on precisely the fields whose author
+did not bother to annotate them. If it is adopted, the vocabulary becomes
+
+    name           inferred from use, conflicts reported
+    name:some      explicitly unconstrained (still excluding none)
+    name:string    declared
+
+and the default moves from "checks nothing" to "checks everything it can",
+which is the better default by the project's own lights.
+
+THREE COSTS, and the third is the one that decides it.
+
+  - Error locality. A conflict has two sites and neither is wrong by itself, so
+    the compiler must choose where to point. This is the standing complaint
+    against global inference, and it is why haskell recommends top-level
+    signatures it does not require and rust demands them on items.
+  - A declaration is a checkable statement of intent. Inferred from use, the
+    code defines the schema, so there is nothing independent left to check it
+    against: a program that consistently stores the wrong thing is consistent.
+    "Invalid states unrepresentable" needs someone to have *stated* which
+    states are valid, and a domain fact — a name is a string — is not
+    discoverable from code that never says so.
+  - Distance. This is Clay's own reasoning from the `&` gavel, where implicit
+    partial application was rejected because "adding `fn roll n` tomorrow
+    cannot silently reinterpret an existing `roll 7 _`". Inferred field types
+    have the same shape: a new store in a distant module widens or breaks a
+    field with no diagnostic at the line that changed, and the failure surfaces
+    wherever the older use lives.
+
+WHAT WOULD SETTLE IT. The distance objection weakens considerably if the
+conflict report names both sites rather than one — "field `name` is a string at
+A and an int at B" is a diagnostic the reader can act on without deciding which
+half the compiler thinks is wrong. That is buildable, and it is what turns the
+proposal from global inference's usual ergonomics into something better than
+either alternative. Whether a bare field should then be inferred rather than
+unconstrained is the gavel; the answer changes a default that landed today.
