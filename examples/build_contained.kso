@@ -1,6 +1,6 @@
 type node
   name:string
-  peer:any
+  peer:node
 
 fn tie label
   build

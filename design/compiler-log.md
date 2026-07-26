@@ -4721,3 +4721,44 @@ they stay queued behind a workload that is actually float-heavy. The dispatcher
 at 19.8% is the largest single target left, and it is what call-pattern
 specialization exists to attack. Buffer copying — push_mut plus memmove — is
 another 14.4%, which is the in-place and TRMC territory.
+
+## 2026-07-26 — OPEN: a record field's declared type is not enforced anywhere
+
+Clay asked for the knot examples to say `partner:person` rather than
+`partner:any`, on the grounds that a build block should defer type checking
+rather than require the escape hatch. The examples now say it, and they run —
+but testing why they run turned up that the declared type is not checked at
+all.
+
+    type person
+      name:string
+      partner:person
+
+    ada = person "ada" none      accepted
+    ada.partner = 42             accepted
+    print "{odd.partner}"        prints 42
+
+No check at construction, none on assignment, and none when the block closes. A
+`none` left in a `person` field survives to the outside and prints as `<none>`.
+The declared type is decoration on this path.
+
+CLAY'S PROPOSED RULE, recorded for the gavel rather than built. Construction
+inside a build block goes unchecked, so a field may hold a provisional value
+while the knot is being tied; assignment is checked, because by the time you
+assign the real value it exists; and when the block closes, every value it
+created is checked, so nothing provisional escapes. That is coherent, and it
+needs no new syntax: `none` is already the provisional marker, and the exit
+check is what makes writing it safe. It also restores the invariant the
+schema criterion asks for — outside a build block, an invalid state is
+unrepresentable.
+
+THE SECOND HALF HE RAISED — whether a value can be passed to a function or a
+lambda before it leaves the block — is the same invariant seen from the other
+side. While a record is provisional its declared type is a lie, and a function
+taking a `person` would receive one whose `partner` is `none`. A blanket ban on
+calls inside a block is broader than the problem: the restriction that matches
+it is on values *created in this block*, which may be assigned and read but not
+handed to anything until the block closes. Values from outside stay ordinary,
+and the constructor itself has to remain callable or nothing can be built.
+
+Both halves wait on Clay.
