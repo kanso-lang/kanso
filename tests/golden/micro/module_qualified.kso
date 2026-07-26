@@ -1,0 +1,5 @@
+# a module-qualified name, whose symbol the emitter has to quote — the shape
+# that broke once when a suffix landed outside the quotes
+import "std/list"
+
+pub play = print "{list/fold [1 2 3] 0 (a b -> a + b)}"

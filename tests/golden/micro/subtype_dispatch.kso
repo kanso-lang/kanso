@@ -1,0 +1,10 @@
+# a subtype is its own arm, and dispatch sees the chain to the base
+type num int
+
+fn kind i:int
+  "int {i}"
+
+fn kind i:num
+  "num {i}"
+
+pub play = print "{kind 3} {kind (num 3)}"

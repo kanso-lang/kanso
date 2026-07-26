@@ -133,6 +133,26 @@ fn strict_mode_thunks_nothing_with_identical_output() {
     );
 }
 
+/// One construct per program, so a failure names the construct rather than
+/// telling you that something in a fifteen-feature example broke. Both engines
+/// run each one and must agree: these are the differential law at its smallest
+/// useful size.
+#[test]
+fn micro_corpus_agrees_across_engines() {
+    for program in kso_files(&manifest_dir().join("tests/golden/micro")) {
+        for extra in [&[][..], &["--interp"][..]] {
+            let output = run_kanso(&program, extra);
+
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                expected(&program, "out"),
+                "stdout mismatch for {program:?} (extra {extra:?})"
+            );
+            assert_eq!(output.status.code(), Some(0), "{program:?} (extra {extra:?}) exits 0");
+        }
+    }
+}
+
 #[test]
 fn runtime_corpus_reports_endpoint_violations() {
     for program in kso_files(&manifest_dir().join("tests/golden/runtime")) {

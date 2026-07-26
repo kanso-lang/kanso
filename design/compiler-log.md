@@ -4171,3 +4171,30 @@ could have ambiguous cases. i guess that would just be a compiler error." That
 matches how every other ambiguity in the language is ruled: competing arities
 under currying, and a merged type's field collisions. Ambiguity is an error
 rather than a default, and the rule is now consistent across three features.
+
+## 2026-07-25 — micro-specs: one construct per program
+
+Clay: "you probably want more specs based on micro code snippets that exercise
+a particular language feature in an isolated way."
+
+The corpus was 46 examples touching eleven to eighteen constructs apiece, so a
+failure told you something broke, not which construct. Worse, coverage was
+accidental: today's `dsym` quoting bug — a `_build` suffix landing outside the
+quotes of a module-qualified symbol — was caught only because
+`examples/json_failure_door.kso` happens to use a module-qualified constant.
+Nothing was aiming at that shape.
+
+tests/golden/micro holds ten programs, one construct each: dispatch on literal
+ints, one name at two arities, the pipe's trailing arguments, a return guard,
+an absent index answering none, the strict index, interpolation, a subtype
+dispatching against its base, a binding the taken arm never computes, and a
+module-qualified name — the shape that broke.
+
+They feed three harnesses. tests/golden.rs runs each on both engines and
+requires identical stdout, which is the differential law at its smallest useful
+size. The browser differential picked them up by adding one directory to its
+corpus, taking it from 63 programs to 73, all passing.
+
+The smallest one earns its place best. `module_qualified.kso` is four lines and
+would have named this morning's bug directly instead of leaving it to an
+unrelated example's incidental imports.

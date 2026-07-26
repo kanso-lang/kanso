@@ -1,0 +1,5 @@
+# the piped value lands first and written arguments follow it
+fn gap a b
+  a - b
+
+pub play = print "{7 . gap 2}"
