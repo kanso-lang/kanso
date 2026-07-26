@@ -5712,3 +5712,38 @@ point. Seven terms are a model of what the project wants, not the thing itself.
 Wall time is absent because it cannot be made deterministic, and whatever a
 model leaves out it weights at zero — so arguing the model is the intended way
 to change it, not a workaround.
+## 2026-07-26 — `some` is retired, having been a rename of a type that should not exist
+
+Clay: "there is no `some` construct as i already stated. that was nonsensical."
+
+He had said so. Hours earlier he wrote that `foo arg:some` loses type
+information — all you know is that the argument is not `none` — and I measured
+that the type is redundant with dispatch ordering, wrote it up, concluded it
+should go, and then left it shipped. That gap between agreeing and acting is
+the failure here; the analysis was already right.
+
+REMOVED. `some` is no longer a spelled type. The stdlib's fourteen annotated
+fields are bare, the typeset builtins lose it, `Pattern::rank`'s special case
+goes with it, and `k_check_some` — the runtime helper whose body was
+`v.tag != K_NONE` — has no caller left. The retired-spelling diagnostic now
+says what is true: there is no `any` type, leave the annotation off.
+
+ONE CAPABILITY GOES WITH IT, and it should be said out loud rather than
+discovered later. `v:int some` was a typeset meaning "an int, and never none",
+and it was the only way to state that a field cannot hold `none` — a runtime
+golden pinned exactly that rejection. With `some` gone, `v:int` accepts `none`
+at construction, as every typed field already did. So non-nullability is
+currently unstatable.
+
+That is the right outcome under the direction Clay has been pushing all day:
+non-nullability is a fact about what reaches a field, which the availability
+analysis already computes at every construction site. It should be inferred and
+reported, not spelled. The golden that pinned the old rejection is deleted
+rather than rewritten, because the behaviour it described is gone and a golden
+asserting a fiction is worse than none.
+
+ALSO: the editor grammar had no rule for a user type in an annotation at all.
+`name:string` was coloured because `string` is a primitive; `partner:person`
+left `person` plain. An `annotated-type` rule now scopes the name after a
+colon, ordered after the primitives so `int` keeps its own colour and after
+strings so a colon inside a string is never read as an annotation.

@@ -48,6 +48,9 @@
       "include": "#primitive-type"
     },
     {
+      "include": "#annotated-type"
+    },
+    {
       "include": "#sigil-name"
     },
     {
@@ -200,7 +203,7 @@
       "name": "support.function.builtin.kanso"
     },
     "primitive-type": {
-      "match": "\\b(bool|bytes|float64|int|io|some|string)\\b",
+      "match": "\\b(bool|bytes|float64|int|io|string)\\b",
       "name": "support.type.primitive.kanso"
     },
     "sigil-name": {
@@ -256,6 +259,17 @@
       "captures": {
         "1": {
           "name": "keyword.operator.upcast.kanso"
+        },
+        "2": {
+          "name": "entity.name.type.kanso"
+        }
+      }
+    },
+    "annotated-type": {
+      "match": "(:)([a-z][a-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "punctuation.separator.type.kanso"
         },
         "2": {
           "name": "entity.name.type.kanso"

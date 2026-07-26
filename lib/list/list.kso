@@ -1,50 +1,50 @@
 pub type capped
   left:int
-  source:some
+  source
 
 pub type counting
   at:int
 
 pub type cursor
   at:int
-  source:some
+  source
 
 pub type cycled
   at:int
-  source:some
+  source
 
 pub type done
   drained:bool
 
 pub type grown
-  seed:some
-  stretch:some
+  seed
+  stretch
 
 pub type mapped
-  shape:some
-  source:some
+  shape
+  source
 
 type missing
   unfound:bool
 
 pub type repeated
-  value:some
+  value
 
 pub type sifted
   keep:bool
-  source:some
-  test:some
+  source
+  test
 
 pub type skipped
   burn:int
-  source:some
+  source
 
 pub type sorted
-  items:some
+  items
 
 pub type step
-  elem:some
-  rest:some
+  elem
+  rest
 
 pub fn all? coll pred
   fold coll true (ok x -> if (pred x) ok false)

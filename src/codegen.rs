@@ -1261,8 +1261,7 @@ impl<'a> Backend<'a> {
     fn type_check_call(&self, value: &str, ty: &str) -> Result<String, String> {
         let subs = !self.sub_parents.is_empty();
         Ok(match ty {
-            "some" => format!("call i64 @k_check_some(%KValue {value})"),
-            "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
+                "int" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 0)"),
             "int" => format!("call i64 @k_check_tag(%KValue {value}, i64 0)"),
             "float64" if subs => format!("call i64 @k_check_sub_tag(%KValue {value}, i64 1)"),
             "float64" => format!("call i64 @k_check_tag(%KValue {value}, i64 1)"),

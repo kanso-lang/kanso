@@ -1,4 +1,4 @@
 error[formatting]: overloads of `label` appear most-specific first: literal, then concrete type, then generic
-  --> any_before_concrete.kso:4:4
+  --> generic_before_concrete.kso:4:4
    4 | fn label x:int
           ^

@@ -1,6 +1,6 @@
 type node
   id:int
-  peer:some
+  peer
 
 pub play =
   collapsed = build

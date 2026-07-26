@@ -1,4 +1,4 @@
-error[type]: `any` is spelled `some`, which accepts every value except `none`; for the unconstrained one, leave the annotation off
+error[type]: there is no `any` type; leave the annotation off for a field or parameter that accepts anything
   --> retired_any.kso:3:3
    3 |   partner:any
          ^

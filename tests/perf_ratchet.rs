@@ -100,24 +100,6 @@ fn the_failure_twin_tests_err_and_nothing_else() {
     );
 }
 
-const SOME_FIELD: &str = "type box
-  v:int some
-
-main = print \"{box 7}\"
-";
-
-/// `some` accepts every value except the absence channel, so its check is a
-/// call that tests the tag rather than a constant true.
-#[test]
-fn some_tests_the_tag_rather_than_passing_everything() {
-    let ir = ir_for(SOME_FIELD);
-    assert!(
-        ir.contains("call i64 @k_check_some("),
-        "a `some` member no longer calls k_check_some, so it either passes a \
-         none or stopped being checked at all"
-    );
-}
-
 const STRICT_INDEX: &str = "main =
   xs = [1 2]
   print \"{xs[1]!}\"

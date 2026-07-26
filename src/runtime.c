@@ -905,7 +905,6 @@ static KValue k_str(const char* data) { return k_str_n(data, (long long)strlen(d
 long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
 /* `any` is every value a slot may hold; the absence channel is disjoint */
-long long k_check_some(KValue v) { return v.tag != K_NONE; }
 
 static KErrBox* k_err_box(KValue v) { return (KErrBox*)(intptr_t)v.payload; }
 
