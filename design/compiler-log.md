@@ -4797,3 +4797,91 @@ rot between deploys.
 
 The query stamp is removed in the same change; keeping both would leave two
 mechanisms for one job, and the weaker one would be the one nobody maintains.
+
+## 2026-07-26 — CORRECTION and FIX: assignment was the only unchecked field write
+
+An earlier entry today said a record field's declared type is enforced
+"precisely never." That was wrong, and the correction narrows the defect to
+something worth fixing rather than something to despair at. Measured at each
+site:
+
+    person "a string" 42      into name:int      rejected, all engines
+    person "ada" none         into partner:int   accepted  (none is a value)
+    ada.partner = "a string"  into partner:int   ACCEPTED  <- the hole
+    p.partner = ... outside a build block        rejected as a build violation
+
+Construction is checked inside a build block exactly as it is outside; the
+constructor check simply never learned about the other way a field gets
+written. So the promise held until the knot was tied and then stopped holding,
+which is the worst of the two options.
+
+`check_set_literals` closes it on the same terms the constructor check uses: a
+literal value, a field whose declared type is concrete, and a target whose type
+is knowable from a local binding straight to a constructor. It descends into
+build blocks, because that is the only place assignment is legal. Pinned by an
+error golden.
+
+## 2026-07-26 — OPEN: unset markers, write-once fields, and what is actually decidable
+
+Clay's refinement: create with an unset marker rather than a stand-in value,
+assign each field exactly once, and then perhaps allow passing a value to a
+function inside the block, since the compiler could tell whether the field has
+been set — except under a conditional, where he expects something like the
+halting problem. Working through it, in the order the pieces bite.
+
+THE MARKER CANNOT BE `_`. Under the partial-application gavel, supplied plus
+holes is the arity, so `person "ada" _` is already the two-argument `person`
+with its second position held open — a function awaiting one argument, not a
+record with an unset field. Both readings are live for the same text, and the
+`&` gavel's own reasoning was that exactly this condition is when a language
+owes the programmer distinct syntax. So the idea survives, the spelling does
+not. `none` cannot serve either: a field may legitimately hold `none` forever,
+and the whole point of the marker is that it must not survive.
+
+WRITE-ONCE IS THE RIGHT SHAPE, and it is Clay's own rule from elsewhere —
+where a fact must be denormalized, make it write-once so it cannot drift. It
+also keeps the value a value: a build block becomes a two-step construction
+rather than a window of mutation, so nothing ever observes the same record
+holding two different things.
+
+THE DECIDABILITY QUESTION HAS A BETTER ANSWER THAN THE HALTING PROBLEM. "Is
+this field assigned on every path reaching this point" is definite assignment
+analysis: a forward must-analysis over the control-flow graph, where a join
+keeps only what every incoming edge agrees on. It is decidable and cheap, and
+it is what java does for final fields, c# for locals, and rust for a deferred
+`let`. What is undecidable is the fuller question — does this program in fact
+assign the field, accounting for which conditions can actually hold — and every
+language answers it the same way: use the decidable approximation and reject
+the residue. So
+
+    if (c)
+      ada.peer = bob
+    else
+      ada.peer = bob
+
+passes, while
+
+    if (0 < x)
+      ada.peer = bob
+    if (x < 1)
+      ada.peer = bob
+
+is rejected although a reader can see it always assigns. That is conservative
+rejection, not undecidability, and the ergonomics of it are well travelled.
+
+THE RULE FOR PASSING A VALUE OUT IS TRANSITIVE, which is the part the question
+does not yet reach. `ada` having every field assigned is not enough if
+`ada.peer` is `bob` and `bob` is still incomplete — the callee can walk one hop
+and find the hole. The condition is that everything reachable from `ada` among
+the block's own values is assigned, and in a knot that reachable set is the
+whole cohort. So the honest rule is: a value created in a build block may be
+passed to a function once its cohort is complete. For the knot idiom that is
+the moment after the last assignment, which is usually the line before the
+block ends — so the practical gain over "wait for the block" is small, but the
+rule is principled rather than arbitrary, and it is checkable.
+
+WHAT FALLS OUT: with definite assignment, the block-exit check proposed earlier
+today stops being a separate rule. The exit is just another program point where
+every field must be assigned. One analysis, two uses.
+
+Awaiting Clay on the marker's spelling and on whether write-once is gaveled.

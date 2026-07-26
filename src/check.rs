@@ -181,6 +181,89 @@ fn check_none_in_collections(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Whatever `primitive` a literal expression is, by the same rule the
+/// constructor check uses.
+fn literal_type(e: &Expr) -> Option<&'static str> {
+    match e {
+        Expr::Int(..) => Some("int"),
+        Expr::Float(..) => Some("float64"),
+        Expr::Str(parts, _) => match parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))) {
+            true => Some("string"),
+            false => None,
+        },
+        Expr::List(..) => Some("list"),
+        Expr::MapLit(..) => Some("map"),
+        Expr::Ident(name, _) if name == "true" || name == "false" => Some("bool"),
+        _ => None,
+    }
+}
+
+/// The constructor check keeps a field's promise where the value is written
+/// out; assignment is the other place a field is written, and only a `build`
+/// block may do it. Without this the promise holds until the knot is tied and
+/// then stops holding, which is the worst of both.
+fn check_set_literals(program: &Program, diags: &mut Vec<Diagnostic>) {
+    const CONCRETE: [&str; 6] = ["int", "float64", "string", "bool", "list", "map"];
+
+    fn walk(program: &Program, stmts: &[Stmt], diags: &mut Vec<Diagnostic>) {
+        // a local binding straight to a constructor is the one case where the
+        // target's type is knowable without knowing anything else
+        let mut built: HashMap<&str, &str> = HashMap::new();
+        for stmt in stmts {
+            if let Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::App { head, .. } } =
+                stmt
+            {
+                if let Expr::Ident(ty, _) = head.as_ref() {
+                    if program.types.iter().any(|t| t.name == *ty) {
+                        built.insert(name.as_str(), ty.as_str());
+                    }
+                }
+            }
+            if let Stmt::Set { target, field, value, .. } = stmt {
+                if let Some(ty_name) = built.get(target.as_str()) {
+                    if let Some(ty) = program.types.iter().find(|t| t.name == **ty_name) {
+                        if let Some((_, declared, _)) =
+                            ty.fields.iter().find(|(f, _, _)| f == field)
+                        {
+                            if let [want] = declared.as_slice() {
+                                if CONCRETE.contains(&want.as_str()) {
+                                    if let Some(got) = literal_type(value) {
+                                        if got != want {
+                                            diags.push(Diagnostic::new(
+                                                "type",
+                                                format!(
+                                                    "`{ty_name}`'s `{field}` holds {want}, not {got}"
+                                                ),
+                                                value.span(),
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // a build block carries its own statements, and they are where
+            // assignment actually happens
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            let mut stack = vec![expr];
+            while let Some(cur) = stack.pop() {
+                if let Expr::Build(inner, _) | Expr::Block(inner, _) = cur {
+                    walk(program, inner, diags);
+                }
+                stack.extend(crate::expr_children(cur));
+            }
+        }
+    }
+
+    for decl in &program.fns {
+        walk(program, &decl.body, diags);
+    }
+}
+
 /// A field annotation is a promise about what the field holds, and a literal
 /// argument is the one case where the compiler can keep it without knowing
 /// anything else about the program.
@@ -543,6 +626,7 @@ pub fn check_file_shadow(
     check_fn_order(program, &mut diags);
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
+    check_set_literals(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
     let mut fn_arities: std::collections::HashMap<String, Vec<usize>> =
@@ -655,6 +739,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
+    check_set_literals(program, &mut diags);
     check_predicates(program, &mut diags);
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
