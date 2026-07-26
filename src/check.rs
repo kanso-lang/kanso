@@ -767,32 +767,7 @@ fn check_type_order(program: &Program, diags: &mut Vec<Diagnostic>) {
             ));
         }
     }
-    for pair in program.types.windows(2) {
-        if pair[0].name >= pair[1].name {
-            diags.push(Diagnostic::new(
-                "formatting",
-                format!(
-                    "type declarations appear in alphabetical order: `{}` before `{}`",
-                    pair[1].name, pair[0].name
-                ),
-                pair[1].span,
-            ));
-        }
-    }
     for ty in &program.types {
-        for pair in ty.fields.windows(2) {
-            let (prev_name, _, _) = &pair[0];
-            let (next_name, _, next_span) = &pair[1];
-            if prev_name >= next_name {
-                diags.push(Diagnostic::new(
-                    "formatting",
-                    format!(
-                        "fields appear in alphabetical order: `{next_name}` before `{prev_name}`"
-                    ),
-                    *next_span,
-                ));
-            }
-        }
         for (_, tys, span) in &ty.fields {
             for pair in tys.windows(2) {
                 if pair[0] >= pair[1] {
@@ -808,47 +783,9 @@ fn check_type_order(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// Declaration order is the author's. What survives here is the ranking rule,
+/// which is about which arm dispatch picks rather than about where the arms sit.
 fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let mut group_names: Vec<&str> = Vec::new();
-    for decl in &program.fns {
-        match group_names.last() {
-            Some(last) if *last == decl.name => {}
-            _ => group_names.push(&decl.name),
-        }
-    }
-    let mut seen: HashSet<&str> = HashSet::new();
-    for name in &group_names {
-        if !seen.insert(name) {
-            let decl = program
-                .fns
-                .iter()
-                .rev()
-                .find(|d| d.name == *name)
-                .expect("group name comes from decls");
-            diags.push(Diagnostic::new(
-                "formatting",
-                format!("overloads of `{name}` must be adjacent"),
-                decl.span,
-            ));
-        }
-    }
-    for pair in group_names.windows(2) {
-        if pair[0] >= pair[1] {
-            let decl = program
-                .fns
-                .iter()
-                .find(|d| d.name == pair[1])
-                .expect("group name comes from decls");
-            diags.push(Diagnostic::new(
-                "formatting",
-                format!(
-                    "function declarations appear in alphabetical order: `{}` before `{}`",
-                    pair[1], pair[0]
-                ),
-                decl.span,
-            ));
-        }
-    }
     check_overload_ranks(program, diags);
 }
 

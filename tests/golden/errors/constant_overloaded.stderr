@@ -2,7 +2,3 @@ error[dispatch]: `size` is a constant (arity 0); a constant admits no overloads
   --> constant_overloaded.kso:3:4
    3 | fn size x
           ^
-error[formatting]: function declarations appear in alphabetical order: `play` before `size`
-  --> constant_overloaded.kso:6:5
-   6 | pub play = print "{size 1}"
-           ^

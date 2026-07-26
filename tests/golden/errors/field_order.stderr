@@ -1,4 +1,0 @@
-error[formatting]: fields appear in alphabetical order: `admin` before `name`
-  --> field_order.kso:3:3
-   3 |   admin:bool
-         ^

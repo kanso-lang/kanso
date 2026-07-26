@@ -80,23 +80,9 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
   </div>
 </div>
 
-<p>read the declaration heads top to bottom: the type <code>receipt</code>, then <code>checkout</code>, <code>line</code>, <code>main</code>, <code>price</code>, <code>service</code>—alphabetical, with constants, functions, and <code>main</code> itself all interleaved by name into one sorted list. definition order is not scope: <code>checkout</code> calls <code>line</code> and <code>main</code> reads <code>service</code>, both defined below them, and it all resolves. the two <code>price</code> overloads stay together as one group, because an overload set is a single declaration split across arms.</p>
+<p>read the declaration heads top to bottom: the type <code>receipt</code>, then <code>checkout</code>, <code>line</code>, <code>main</code>, <code>price</code>, <code>service</code>. that is the order the author chose, and the compiler has nothing to say about it. definition order is not scope either: <code>checkout</code> calls <code>line</code> and <code>main</code> reads <code>service</code>, both defined below them, and it all resolves.</p>
 
-<p>type the same file with two functions out of order and the compiler stops you:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">order_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">zeta</span> x
-  <span class="f">x</span>
-
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{zeta 1}</span>"</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">kanso check order_check.kso</div>
-    <pre><code>error[formatting]: function declarations appear in alphabetical order: `dango` before `taiyaki`
-  --&gt; order_check.kso:4:4
-   4 | fn dango n
-          ^</code></pre>
-  </div>
+<p>so put a helper beside the thing it helps, and keep the entry point wherever a reader will look for it. the two <code>price</code> arms sit together here because reading them together is the point, not because anything requires it — an overload set is one declaration split across arms, and the arms may be written wherever they read best.</p>
 </div>
 
 <p>there is no formatter to run and no debate to have in review. a program has one canonical rendering, and non-canonical order is a syntax error the same way a stray brace would be. the payoff shows up when you split a real module by topic: alphabetical order inside each file stops being a constraint and becomes an index—you always know where a name will be before you look.</p>

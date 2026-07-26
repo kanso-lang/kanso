@@ -4272,3 +4272,40 @@ entry point.
 
 That last consequence is the one worth weighing. An entry point is the thing a
 reader looks for first, and the rule can place it in the middle of the file.
+
+## 2026-07-25 — GAVEL, IMPLEMENTED: declaration order is the author's
+
+Clay, for what he notes is not the first time: "declarations don't have to be
+alphabetical. and overloads don't need to be adjacent. it's fine for typeset
+members, yes. it's good for keys in a map assignment too."
+
+REMOVED: type declarations alphabetical, record fields alphabetical, function
+declaration groups alphabetical, and the requirement that overloads of one name
+be adjacent.
+
+KEPT: typeset members alphabetical and duplicate-free, keyed reads listing
+fields alphabetically, imports alphabetical, and types-before-functions. Each
+of those is a place where order genuinely carries nothing — a union is a set, a
+keyed read names fields rather than positions, imports are a set — which is the
+line Clay drew.
+
+WHAT IT FIXES BEYOND TASTE. Field order is the positional constructor's
+argument order, so alphabetical fields meant renaming a field silently rewired
+every construction site. Now `type point` with `y` first makes `(point 1 2).y`
+equal 1, and a rename moves nothing. The hazard recorded this afternoon is
+closed by the same change that answers the complaint.
+
+WHAT THE CHANGE SURFACED, which is the argument for goldens. Removing the rules
+turned four book samples green that had been pinned as failures, and one of
+them was hiding a second bug: `docs/book/samples/ch08/positions.kso` is
+described by its chapter as a sample that runs, and its golden had been pinning
+a compile error the whole time. Under the ordering diagnostic sat a naming one
+— `is_ws` needed to be `is_ws?`. Fixed, and the sample now prints what the
+chapter promises: ok at 42, then two failure positions.
+
+Four obsolete samples deleted with their prose (appa and appc each carried a
+field-order and a declaration-order demonstration, ch07 a third), two goldens
+regenerated where a secondary diagnostic disappeared, and four passages
+rewritten — ch01, appa, and appc twice — that described the rules as they were.
+
+15 suites green, book verified, browser differential 73 passed 0 failed.
