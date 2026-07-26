@@ -4636,3 +4636,31 @@ module directly rather than through `runSource`. That is exactly the shape a
 load-order slip breaks in isolation. `scripts/site_smoke.py` now submits
 `2 + 3` and waits for the answer's own line, and the check was watched failing
 against the old handler before the fix went in.
+
+## 2026-07-26 — the run button and the repl broke the same way: a half-cached pair
+
+Clay reported the run button dead after the repl. Driven headlessly against
+current main, and then against the live assets fetched from kanso-lang.dev,
+both work: editing the source and clicking run prints the new program, and so
+does ⌘⏎. The breakage is not in the code that is deployed.
+
+It is in how the code is deployed. The playground loads `kanso-engine.js` and
+`play.js` as two separate assets that must agree, at `max-age=600`. Every time
+the pair changes together — and the repl fix changed exactly that seam — there
+is a ten-minute window where a browser can hold one file from before the deploy
+and fetch the other from after. A `play.js` that destructures names the engine
+did not export yet, or the reverse, fails at load, and everything downstream of
+the failed line is dead. That is both symptoms from one cause, which is why
+they arrived one after the other.
+
+The pair is now stamped: the script tags carry the build time, and the version
+on the engine's own tag travels to its `kanso.wasm` fetch, so the module cannot
+be half a deploy behind either. `document.currentScript` reads only while the
+file is executing, so it is captured at load rather than at fetch.
+
+THE TEST HOLE, which is the part worth keeping. The smoke test drove the run
+button only through the example picker, and switching examples runs its own
+code — so the picker path passed while a plain edit-then-run could be broken.
+It now types a program into the editor and presses the button, then does it
+again through ⌘⏎, which is a separate listener. Both probes were watched
+failing against a stubbed click handler before the change went in.
