@@ -4198,3 +4198,27 @@ corpus, taking it from 63 programs to 73, all passing.
 The smallest one earns its place best. `module_qualified.kso` is four lines and
 would have named this morning's bug directly instead of leaving it to an
 unrelated example's incidental imports.
+
+## 2026-07-25 — the two renderings of kanso on one site now agree
+
+Clay: the highlighter "has a different look for types and strings for
+instance." Two real discrepancies, both between the tokenizer in
+kanso-engine.js and the hand-marked panels the site's prose pages carry.
+
+STRINGS. The site nests the interpolation inside the string and colours the
+braces with it:
+
+    <span class="s">"failed: <span class="i">{reason}</span>"</span>
+
+The tokenizer emitted three siblings instead — a closed `s`, then `{` as an
+operator, the name as `i`, `}` as an operator, then a fresh `s`. On screen the
+literal came apart into pieces and the braces took the operator colour. It now
+emits the site's shape: one `s` wrapping, with the braces inside the `i`.
+
+TYPES. `fn` set a flag so the next name renders as a function; `type` set
+nothing, so a declared type name fell through to plain text while the site
+marks it `t`. A declared type is a type for the same reason a declared function
+is a function.
+
+Verified by rendering three snippets in headless chrome and comparing against
+the markup in the pages, rather than by eye.

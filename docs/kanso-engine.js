@@ -46,8 +46,11 @@ function highlightString(line, start) {
         i += 1;
         continue;
       }
-      html += span('s', run);
-      html += span('o', '{') + span('i', line.slice(i + 1, close)) + span('o', '}');
+      /* the site's hand-marked panels nest the interpolation inside the
+         string and colour the braces with it, so the literal reads as one
+         object rather than three; match that or the two renderings of kanso
+         on one site disagree */
+      html += esc(run) + span('i', line.slice(i, close + 1));
       run = '';
       i = close + 1;
       continue;
@@ -55,13 +58,14 @@ function highlightString(line, start) {
     run += ch;
     i += 1;
   }
-  return [html + span('s', run), i];
+  return [`<span class="s">${html}${esc(run)}</span>`, i];
 }
 
 function highlightLine(line) {
   let html = '';
   let i = 0;
   let afterFn = false;
+  let afterType = false;
   while (i < line.length) {
     const rest = line.slice(i);
     const hash = rest.match(/^#.*/);
@@ -82,9 +86,13 @@ function highlightLine(line) {
       if (KEYWORDS.has(name)) {
         html += span('k', name);
         afterFn = name === 'fn';
+        afterType = name === 'type';
       } else if (afterFn) {
         html += span('f', name);
         afterFn = false;
+      } else if (afterType) {
+        html += span('t', name);
+        afterType = false;
       } else if (ascription) {
         const type = line.slice(i + name.length + 1).match(/^[a-z0-9_\[\]]*/)[0];
         html += esc(name) + span('o', ':') + span('t', type);
