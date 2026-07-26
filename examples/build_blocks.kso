@@ -1,6 +1,6 @@
 type node
-  id:string
-  peers:list
+  id
+  peers
 
 pub play =
   graph = build

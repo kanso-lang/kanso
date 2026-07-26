@@ -11,14 +11,16 @@ extra_css: /book/book.css
 
 <h2>records</h2>
 
-<p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical—enforced, like everything else other languages leave to code review. each field carries a type, because a declaration has no body the compiler could infer from. construction is positional, using the type name as the constructor and passing fields in that same alphabetical order:</p>
+<p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical—enforced, like everything else other languages leave to code review. a field is just a name; its type is whatever the program puts in it and asks of it, which the compiler works out for itself. construction is positional, using the type name as the constructor and passing fields in that same alphabetical order:</p>
+
+<p>you can write a type down if you want it as a promise rather than a description—<code>name:string</code> is legal and is checked—but the compiler already knows, and a written type is one more thing that can disagree with the code around it. when it does, the error names both sides, because neither line is wrong on its own and you are the one who knows which you meant.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">reading.kso</div>
   <pre><code><span class="k">type</span> track
-  artist:string
-  minutes:int
-  title:string
+  <span class="f">artist</span>
+  <span class="f">minutes</span>
+  <span class="f">title</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
@@ -44,9 +46,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">keyed.kso</div>
   <pre><code><span class="k">type</span> track
-  artist:string
-  minutes:int
-  title:string
+  <span class="f">artist</span>
+  <span class="f">minutes</span>
+  <span class="f">title</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
@@ -63,9 +65,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">peek_check.kso</div>
   <pre><code><span class="k">type</span> track
-  artist:string
-  minutes:int
-  title:string
+  <span class="f">artist</span>
+  <span class="f">minutes</span>
+  <span class="f">title</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
@@ -85,9 +87,9 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">credit.kso</div>
   <pre><code><span class="k">type</span> track
-  artist:string
-  minutes:int
-  title:string
+  <span class="f">artist</span>
+  <span class="f">minutes</span>
+  <span class="f">title</span>
 
 <span class="k">fn</span> <span class="f">credit</span> (<span class="f">track</span> artist _ title)
   <span class="s">"<span class="i">{title}</span>—<span class="i">{artist}</span>"</span>
@@ -112,8 +114,8 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">knot.kso</div>
   <pre><code><span class="k">type</span> person
-  name:string
-  partner:person
+  <span class="f">name</span>
+  <span class="f">partner</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   couple <span class="o">=</span> <span class="f">build</span>
@@ -268,7 +270,7 @@ coming soon</code></pre>
   <pre><code><span class="k">type</span> missing
 
 <span class="k">type</span> post
-  body:string
+  <span class="f">body</span>
   title:missing string
 
 <span class="k">fn</span> <span class="f">headline</span> (<span class="f">post</span> _ title)
@@ -418,14 +420,14 @@ thanks: 800 yen</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">events.kso</div>
   <pre><code><span class="k">type</span> joined
-  who:string
+  <span class="f">who</span>
 
 <span class="k">type</span> left
-  who:string
+  <span class="f">who</span>
 
 <span class="k">type</span> renamed
-  after:string
-  before:string
+  <span class="f">after</span>
+  <span class="f">before</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> (<span class="f">render</span> (<span class="f">joined</span> <span class="s">"clay"</span>))

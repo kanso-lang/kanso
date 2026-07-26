@@ -1,6 +1,6 @@
 type point
-  x:int
-  y:int
+  x
+  y
 
 pub play =
   nums = [1 2 3] == [1 2 3]

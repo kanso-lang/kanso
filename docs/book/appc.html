@@ -16,7 +16,7 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">ordered.kso</div>
   <pre><code><span class="k">type</span> circle
-  r:float64
+  <span class="f">r</span>
 
 <span class="k">fn</span> <span class="f">area</span> (<span class="f">circle</span> r)
   r <span class="o">*</span> r <span class="o">*</span> <span class="n">3.14159</span>
@@ -137,7 +137,7 @@ extra_css: /book/book.css
   <span class="f">t</span>
 
 <span class="k">type</span> thing
-  size:int
+  <span class="f">size</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
@@ -158,8 +158,8 @@ extra_css: /book/book.css
 <div class="code-panel">
   <div class="code-panel-title">keyed_order_check.kso</div>
   <pre><code><span class="k">type</span> user
-  admin:bool
-  name:string
+  <span class="f">admin</span>
+  <span class="f">name</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   { name admin } <span class="o">=</span> <span class="f">user</span> false <span class="s">"clay"</span>

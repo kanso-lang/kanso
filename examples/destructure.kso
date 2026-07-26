@@ -1,7 +1,7 @@
 type post
-  author:string
-  body:string
-  title:string
+  author
+  body
+  title
 
 pub play =
   hello = post "clay" "a language of only decisions" "hello kanso"

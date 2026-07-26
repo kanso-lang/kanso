@@ -113,8 +113,8 @@ parse failed at byte 10: invalid literal</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">type</span> parse_failure
-  position:int
-  reason:string
+  <span class="f">position</span>
+  <span class="f">reason</span>
 
 bytes_false <span class="o">=</span> [<span class="n">102</span> <span class="n">97</span> <span class="n">108</span> <span class="n">115</span> <span class="n">101</span>]
 
@@ -398,8 +398,8 @@ float64 6000.0</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">type</span> parse_failure
-  position:int
-  reason:string
+  <span class="f">position</span>
+  <span class="f">reason</span>
 
 <span class="k">fn</span> <span class="f">decode_int</span> s
   cs <span class="o">=</span> <span class="f">text/bytes</span> s

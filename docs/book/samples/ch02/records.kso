@@ -1,6 +1,6 @@
 type user
-  age:int
-  name:string
+  age
+  name
 
 pub play =
   clay = user 47 "clay"

@@ -3,7 +3,7 @@
 # reach user arms. semantic equivalence stays a named convention (`eq`);
 # `==` is structural identity, closed.
 type money
-  cents:int
+  cents
 
 fn + (money a) (money b)
   money (a + b)

@@ -202,6 +202,142 @@ fn literal_type(e: &Expr) -> Option<&'static str> {
 /// out; assignment is the other place a field is written, and only a `build`
 /// block may do it. Without this the promise holds until the knot is tied and
 /// then stops holding, which is the worst of both.
+/// "an int", "a string" — a diagnostic that fumbles its own grammar reads as
+/// carelessness about everything else in it.
+fn article(word: &str) -> String {
+    match word.starts_with(['a', 'e', 'i', 'o', 'u']) {
+        true => format!("an {word}"),
+        false => format!("a {word}"),
+    }
+}
+
+/// What every construction site puts into each field of each type, as the set
+/// of literal kinds seen there. This is the supply side of a field's type,
+/// and with no annotation it is all the compiler is told.
+fn field_supply(program: &Program) -> HashMap<(&str, &str), Vec<(&'static str, Span)>> {
+    let mut supply: HashMap<(&str, &str), Vec<(&'static str, Span)>> = HashMap::new();
+    for decl in &program.fns {
+        let mut stack: Vec<&Expr> = Vec::new();
+        for stmt in &decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            stack.push(expr);
+        }
+        while let Some(cur) = stack.pop() {
+            if let Expr::App { head, args, .. } = cur {
+                if let Expr::Ident(name, _) = head.as_ref() {
+                    if let Some(ty) = program.types.iter().find(|t| t.name == *name) {
+                        if ty.fields.len() == args.len() {
+                            for ((field, _, _), arg) in ty.fields.iter().zip(args) {
+                                if let Some(kind) = literal_type(arg) {
+                                    supply
+                                        .entry((ty.name.as_str(), field.as_str()))
+                                        .or_default()
+                                        .push((kind, arg.span()));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stack.extend(crate::expr_children(cur));
+        }
+    }
+    supply
+}
+
+/// A field's type is not only what construction sites put in — it is also what
+/// its uses require. Reading `p.name` into a parameter declared `string` says
+/// the field holds strings, and a construction site that put an int there is
+/// not a missing annotation but a disagreement between two things the program
+/// already states. Reporting it names both, because neither line is wrong on
+/// its own and the author is the one who knows which they meant.
+fn check_field_conflicts(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let supply = field_supply(program);
+
+    // a local bound straight to a constructor is where a field read's owning
+    // type is knowable without knowing anything else, the same footing the
+    // assignment check stands on
+    for decl in &program.fns {
+        let mut built: HashMap<&str, &str> = HashMap::new();
+        for stmt in &decl.body {
+            if let Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::App { head, .. } } =
+                stmt
+            {
+                if let Expr::Ident(ty, _) = head.as_ref() {
+                    if program.types.iter().any(|t| t.name == *ty) {
+                        built.insert(name.as_str(), ty.as_str());
+                    }
+                }
+            }
+        }
+        if built.is_empty() {
+            continue;
+        }
+        let mut stack: Vec<&Expr> = Vec::new();
+        for stmt in &decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            stack.push(expr);
+        }
+        while let Some(cur) = stack.pop() {
+            if let Expr::App { head, args, .. } = cur {
+                if let Expr::Ident(callee, _) = head.as_ref() {
+                    demand_conflicts(program, &supply, &built, callee, args, diags);
+                }
+            }
+            stack.extend(crate::expr_children(cur));
+        }
+    }
+}
+
+/// One call: for each argument that reads a field off a local whose type is
+/// known, compare what the callee's parameter demands against what the field
+/// is actually given anywhere in the program.
+fn demand_conflicts(
+    program: &Program,
+    supply: &HashMap<(&str, &str), Vec<(&'static str, Span)>>,
+    built: &HashMap<&str, &str>,
+    callee: &str,
+    args: &[Expr],
+    diags: &mut Vec<Diagnostic>,
+) {
+    let Some(target) = program.fns.iter().find(|d| d.name == callee && d.params.len() == args.len())
+    else {
+        return;
+    };
+    for (param, arg) in target.params.iter().zip(args) {
+        let Pattern::Annotated { ty: demanded, .. } = param else { continue };
+        let Expr::Field { base, name: field, span } = arg else { continue };
+        let Expr::Ident(local, _) = base.as_ref() else { continue };
+        let Some(owner) = built.get(local.as_str()) else { continue };
+        let Some(given) = supply.get(&(*owner, field.as_str())) else { continue };
+        for (kind, where_) in given {
+            if kind != demanded {
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!(
+                        "`{owner}`'s `{field}` is {} here, and `{callee}` takes {} — these \
+                         two cannot both hold",
+                        article(kind),
+                        article(demanded)
+                    ),
+                    *where_,
+                ));
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("...and this is where it is read as {}", article(demanded)),
+                    *span,
+                ));
+            }
+        }
+    }
+}
+
 fn check_set_literals(program: &Program, diags: &mut Vec<Diagnostic>) {
     const CONCRETE: [&str; 6] = ["int", "float64", "string", "bool", "list", "map"];
 
@@ -628,6 +764,7 @@ pub fn check_file_shadow(
     check_constant_cycles(program, &mut diags);
     check_retired_any(program, &mut diags);
     check_set_literals(program, &mut diags);
+    check_field_conflicts(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
     let mut fn_arities: std::collections::HashMap<String, Vec<usize>> =

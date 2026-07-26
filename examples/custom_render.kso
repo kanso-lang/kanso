@@ -1,5 +1,5 @@
 type money
-  cents:int
+  cents
 
 pub play =
   price = money 350

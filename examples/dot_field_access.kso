@@ -1,10 +1,10 @@
 type point
-  x:int
-  y:int
+  x
+  y
 
 type segment
-  head:point
-  tail:point
+  head
+  tail
 
 pub play =
   s = segment (point 1 2) (point 3 4)

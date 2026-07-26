@@ -1,8 +1,8 @@
 import "std/text"
 
 type parse_failure
-  position:int
-  reason:string
+  position
+  reason
 
 fn decode_int s
   cs = text/bytes s

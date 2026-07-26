@@ -1,12 +1,12 @@
 import "std/time"
 
 type deposit
-  amount:int
+  amount
 
 type logger
 
 type withdraw
-  amount:int
+  amount
 
 fn drive store actions i sub out
   step store actions i sub out (actions[i])
