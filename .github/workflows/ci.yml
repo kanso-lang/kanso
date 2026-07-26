@@ -91,6 +91,13 @@ jobs:
             echo "::error::the engine still fetches the undigested module"; exit 1
           fi
 
+  welfare:
+    name: welfare (one number over runtime and compile cost, ratcheted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/welfare.py
+
   book:
     name: book samples (every panel executed, outputs verified)
     runs-on: ubuntu-latest
