@@ -5469,3 +5469,37 @@ goldens and inferring a mechanism. The right version came from running
 time. A tool that answers the question directly beats an inference from
 aggregates, and this is the second time today that the aggregate reading was
 the wrong one.
+
+## 2026-07-26 — the beat report was hiding the blocker that decides the plan
+
+A note from 2026-07-19 read: "the OutsideTailCall verdict MASKS ArgCrosses
+(classify priority) — report should surface both; minor, note for the next
+pass." It is not minor, and this is the pass.
+
+`classify` returns at the first blocker it finds, which is right for codegen —
+codegen asks one question, is this `Beat`, and every other answer means the
+same thing to it. The report inherited that shortcut and so could name one
+reason while a second waited behind it. `blockers` now collects them all and
+the report says what else is there. Codegen is untouched; the goldens do not
+move (allocs 12,924,473, arena_blocks 4, beat_iters 151, unchanged).
+
+WHAT WAS HIDDEN, on kq:
+
+    list/fold_flat/4   unbracketed entry   (argument 2 also carries heap)
+    list/fold_go/3     unbracketed entry   (argument 2 also carries heap)
+    list/next_skipped/2 unbracketed entry  (argument 1 also carries heap)
+    list/next/1        unbracketed entry
+    list/bisect/5      beats               (also an unbracketed entry)
+
+THIS CHANGES THE PLAN. Three of the four loops blocked on an unbracketed entry
+are *also* blocked on a carried accumulator. Bracketing entries — the rung the
+log has queued as the next step for these — would unblock exactly one of them,
+`list/next/1`. The fold path needs the accumulator work regardless of whether
+entry bracketing ever lands, which inverts the order the two were queued in.
+
+The 2026-07-19 entry had guessed at this ("rung B is necessary but NOT
+sufficient"). It is now measured per loop rather than assumed, which is the
+difference between an ordering hunch and an ordering fact.
+
+Pinned by a spec that constructs a loop with both blockers and fails if the
+report names only one; watched failing against the old behaviour first.

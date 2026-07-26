@@ -595,9 +595,63 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
                     "grow-only: used as a function value (unbracketed entry)".to_string()
                 }
             };
-            format!("{name}/{arity}: {fate}")
+            // classify stops at the first blocker; say what else is waiting,
+            // so a fix aimed at one reason is not a surprise when it lands
+            let allocating = alloc_groups(program);
+            let also: Vec<String> = blockers(program, inference, &allocating, name, *arity)
+                .into_iter()
+                .filter(|b| b != v)
+                .map(|b| match b {
+                    Verdict::ArgCrosses { position } => {
+                        format!("argument {} also carries heap", position + 1)
+                    }
+                    Verdict::OutsideTailCall => "also an unbracketed entry".to_string(),
+                    Verdict::UsedAsValue => "also used as a function value".to_string(),
+                    _ => String::new(),
+                })
+                .filter(|line| !line.is_empty())
+                .collect();
+            match also.is_empty() {
+                true => format!("{name}/{arity}: {fate}"),
+                false => format!("{name}/{arity}: {fate} ({})", also.join("; ")),
+            }
         })
         .collect()
+}
+
+/// Every reason a group declines, not only the first one found.
+///
+/// `classify` stops at the first blocker because codegen asks one question —
+/// is this `Beat`? — and any other answer means the same thing to it. The
+/// report wants the whole picture, because a loop unblocked for one reason
+/// may still decline for another, and knowing that before building the fix
+/// is the difference between an optimisation that pays and one that does not.
+fn blockers(
+    program: &Program,
+    inference: &infer::Inference,
+    allocating: &HashSet<&str>,
+    name: &str,
+    arity: usize,
+) -> Vec<Verdict> {
+    let mut found = Vec::new();
+    if outside_tails(program, name, arity) {
+        found.push(Verdict::OutsideTailCall);
+    }
+    if used_as_value(program, name) {
+        found.push(Verdict::UsedAsValue);
+    }
+    // a loop that allocates nothing has nothing the others could cost it
+    if !allocating.contains(name) {
+        return found;
+    }
+    let crossing = crossing_positions(program, inference, name, arity);
+    if let Some(&position) = crossing.iter().find(|&&p| {
+        let set = group_param_set(program, inference, name, arity, p);
+        accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
+    }) {
+        found.push(Verdict::ArgCrosses { position });
+    }
+    found
 }
 
 fn classify_all(program: &Program, inference: &infer::Inference) -> Vec<(String, usize, Verdict)> {
@@ -616,6 +670,34 @@ fn classify_all(program: &Program, inference: &infer::Inference) -> Vec<(String,
         .collect()
 }
 
+/// Does any arm of this group tail-call the group itself?
+fn has_self_tail(program: &Program, name: &str, arity: usize) -> bool {
+    tail_calls_to(program, name, arity).any(|in_group| in_group)
+}
+
+/// Does anything *outside* the group tail-call it? Such an entry never passes
+/// through the loop's bracket, so the loop cannot rewind.
+fn outside_tails(program: &Program, name: &str, arity: usize) -> bool {
+    tail_calls_to(program, name, arity).any(|in_group| !in_group)
+}
+
+/// Every tail call to `name`/`arity`, paired with whether the caller is the
+/// group itself.
+fn tail_calls_to<'a>(
+    program: &'a Program,
+    name: &'a str,
+    arity: usize,
+) -> impl Iterator<Item = bool> + 'a {
+    program.fns.iter().flat_map(move |decl| {
+        let in_group = decl.name == name && decl.params.len() == arity;
+        tail_exprs(decl.body.last()).into_iter().filter_map(move |tail| {
+            let Expr::App { head, args, piped: false, .. } = tail else { return None };
+            let Expr::Ident(callee, _) = head.as_ref() else { return None };
+            (callee == name && args.len() == arity).then_some(in_group)
+        })
+    })
+}
+
 /// The verdict for one group, or None when it has no self-tail-call (not a
 /// loop, nothing to say).
 fn classify(
@@ -625,27 +707,10 @@ fn classify(
     name: &str,
     arity: usize,
 ) -> Option<Verdict> {
-    let mut has_self_tail = false;
-    let mut outside_tail = false;
-    for decl in program.fns.iter() {
-        let in_group = decl.name == name && decl.params.len() == arity;
-        for tail in tail_exprs(decl.body.last()) {
-            let Expr::App { head, args, piped: false, .. } = tail else { continue };
-            let Expr::Ident(callee, _) = head.as_ref() else { continue };
-            if callee != name || args.len() != arity {
-                continue;
-            }
-            if !in_group {
-                outside_tail = true;
-                continue;
-            }
-            has_self_tail = true;
-        }
-    }
-    if !has_self_tail {
+    if !has_self_tail(program, name, arity) {
         return None;
     }
-    if outside_tail {
+    if outside_tails(program, name, arity) {
         return Some(Verdict::OutsideTailCall);
     }
     if used_as_value(program, name) {
@@ -963,6 +1028,23 @@ mod tests {
         let program = crate::compile("test.kso", src, true).unwrap();
         let inference = infer::infer(&program);
         beat_loops(&program, &inference).ids.into_keys().collect()
+    }
+
+    /// The report exists to say why a loop keeps the grow-only arena, and a
+    /// loop can decline for more than one reason at once. Reporting only the
+    /// first sends the next optimisation after a blocker that was never the
+    /// whole story.
+    #[test]
+    fn a_second_blocker_is_reported_not_masked() {
+        let src = "fn feed acc\n  step acc\n\nfn step acc\n  step (push acc 1)\n\nmain = print \"{feed []}\"\n";
+        let (program, inference) = compiled(src);
+        let lines = super::report(&program, &inference);
+        let step = lines.iter().find(|l| l.starts_with("step/1")).expect("step is reported");
+
+        assert!(
+            step.contains("unbracketed entry") && step.contains("also carries heap"),
+            "the report named one blocker and hid the other: {step}"
+        );
     }
 
     #[test]
