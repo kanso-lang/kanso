@@ -200,7 +200,7 @@
       "name": "support.function.builtin.kanso"
     },
     "primitive-type": {
-      "match": "\\b(any|bool|bytes|float64|int|io|string)\\b",
+      "match": "\\b(bool|bytes|float64|int|io|some|string)\\b",
       "name": "support.type.primitive.kanso"
     },
     "sigil-name": {

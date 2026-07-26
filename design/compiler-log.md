@@ -5621,3 +5621,58 @@ surviving, cheap to test membership in — the block-walk it does today would be
 O(blocks) in a path that runs per iteration, which is how the quadratic gets
 back in through the other door. Byte-builder buffers for a loop's declining
 position allocate there, and `k_beat_pop` transfers or frees.
+
+## 2026-07-26 — a welfare number, and a ratchet under it
+
+Clay: "we want to come out of this session with more of a mindset of ironclad
+ratchets, so that performance gets generally better, not worse, except where
+there are clear tradeoffs... a rigid utility function that combines compile
+speed and memory with performance speed and memory."
+
+WHY THE GOLDENS DO NOT ALREADY DO THIS. Each pins one counter, which catches a
+regression in that counter and says nothing about a trade across counters. A
+change that spends fixpoint rounds to buy allocations passes every golden while
+leaving the project better or worse, and today the only way to say which was an
+argument. Two of them happened in this session.
+
+`scripts/welfare.py` weighs seven deterministic terms into one score against a
+recorded baseline: decode allocations and arena blocks, encode allocations and
+arena blocks, fixpoint rounds, expression visits, emitted lines. Runtime carries
+two thirds of the weight because that is what the front page claims; compile
+cost carries a third because a language nobody can iterate in is not fast. A
+hundred is the reference point, higher is better, and every term is a count
+rather than a clock, so a busy runner cannot move it.
+
+    welfare 100.00   floor 100.00
+
+Both directions checked rather than assumed. Doubling encode allocations:
+
+    welfare 90.00   floor 100.00
+      encode_allocs   68,640,508 -> 137,281,016   -50.0%
+      FAIL  welfare fell 10.00 below the floor.
+
+And taking decode allocations down to ten million reads 107.31 with a note to
+run `--set`. The failure message names the term that paid, because the number
+alone would say a change is bad without saying what to look at.
+
+THE RULES, now in CLAUDE.md. A fall stops the change but does not veto it —
+name the term, name what bought it, then move the floor deliberately. A feature
+that costs performance is allowed; one that costs performance quietly is not. A
+rise is ratcheted in the same pull request, because a gain nobody holds is a
+gain the next change is free to spend. And this does not replace the goldens:
+they catch a kernel being deleted, welfare catches a trade being made.
+
+ALSO IN THIS CHANGE. `CLAUDE.md` gains the rule Clay asked for twice today —
+every fix ships the smallest program that fails without it, watched failing for
+the right reason before it passes, asserting what a program does rather than
+how the compiler reached it. The byte-accumulator spec that passed with its
+rule removed *and* with the replacement removed is written into the rule as the
+worked example, because the lesson is specifically that a spec aimed at an
+internal verdict goes green exactly when the decomposition it pinned moves.
+
+And the editor grammar's primitive-type list still read `any`, which stopped
+being a type this afternoon. It reads `some` now. The grammar itself is
+complete — strings, type names and fields all carry scopes — so an editor
+showing them unhighlighted is not reading this file: `editors/kanso` is a vs
+code extension, and jetbrains needs it registered under Editor → TextMate
+Bundles pointing at that directory.

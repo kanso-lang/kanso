@@ -1,0 +1,12 @@
+{
+  "baseline": {
+    "decode_allocs": 12924473,
+    "decode_arena_blocks": 4,
+    "encode_allocs": 68640508,
+    "encode_arena_blocks": 2205,
+    "compile_rounds": 11,
+    "compile_visits": 135,
+    "emitted_lines": 1893
+  },
+  "floor": 100.0
+}

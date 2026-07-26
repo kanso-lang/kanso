@@ -55,6 +55,36 @@ A clean grep is necessary, not sufficient — the families above are wider than 
 - **Counters changed → regenerate every vein in the same PR**: all .mem
   files, both cost goldens, the ch10 sample, then book panels.
 
+### Every fix answers a failing spec
+
+- **A fix ships with the smallest program that fails without it.** Not a
+  description of the bug, not a log entry — a fixture the size of a postcard
+  that goes red on the old code and green on the new. If the bug cannot be
+  reduced to one, that is information: either the diagnosis is wrong or the
+  reproduction is not understood yet.
+- **Watch it fail, for the right reason, before it passes.** Break the fix,
+  run the spec, read the message, restore. This is not optional and it is not
+  a formality — a spec written after a fix and never seen red is a guess about
+  what the code does, and this log has caught more than one that could not
+  fail at all. A green suite that proves nothing is worse than a red one,
+  because it stops anybody looking.
+- **Assert what a program does, not how the compiler reached it.** Prefer the
+  observable end: output bytes, a diagnostic a user sees, a counter the cost
+  golden already pins, peak memory that does or does not grow with the input.
+  A spec written against an internal verdict — a classifier's answer, a pass's
+  intermediate — pins the current decomposition and goes green the moment that
+  decomposition moves, which is exactly when you needed it to speak. When a
+  byte-accumulator spec was written against the beat report, it passed with the
+  rule removed *and* with its replacement removed; a spec asserting that peak
+  memory stays flat as the input grows could not have.
+- **Enter where a user enters.** Run the program, read the output. Hand-built
+  intermediate state asserts a fiction: the spec passes forever on inputs the
+  real pipeline never produces.
+- **The reduced fixture belongs in the corpus, not the commit message.** Error
+  goldens for diagnostics, micro goldens for one construct, the mem vein for
+  allocation shape. A bug that had no home in those is a gap in the corpus,
+  and adding the home is part of the fix.
+
 ### The differential law
 - The interpreter is the oracle. Every engine that speaks a feature is
   byte-identical on it, pinned by differential goldens. A feature may land
@@ -83,6 +113,26 @@ A clean grep is necessary, not sufficient — the families above are wider than 
 - `git add -A` sweeps stray working-tree files into commits — scope adds
   to the paths the change owns. (A stray repl experiment once rode into a
   PR and silently broke its CI for a day.)
+
+### The welfare number only goes up
+
+- **One scalar covers runtime and compile cost together**, because the
+  per-counter goldens cannot see a trade. `scripts/welfare.py` weighs decode
+  allocations and arena blocks, encode allocations and arena blocks, fixpoint
+  rounds, expression visits and emitted lines into a single score against a
+  recorded baseline; a hundred is the reference and higher is better. Every
+  term is deterministic, so the number moves only when somebody changes the
+  compiler. CI fails when it drops.
+- **A fall is not automatically a veto, but it is automatically a stop.** Say
+  which term paid, what bought it, and why the trade is worth taking — then
+  move the floor deliberately with `welfare.py --set`. A language feature that
+  costs performance is allowed; a language feature that costs performance
+  quietly is not.
+- **A rise is held, not banked.** When the number goes up, run `--set` in the
+  same PR. A gain nobody ratchets is a gain the next change is free to spend.
+- **This does not replace the per-counter goldens.** They say which kernel
+  moved; welfare says whether the project came out ahead. The first catches a
+  deletion, the second catches a trade.
 
 ### Performance goldens are watched, not frozen
 - Two veins now: **runtime** (bench/cost_golden*.txt, tests/golden/mem/*.mem)
