@@ -5202,3 +5202,51 @@ already exists.
 
 That is Clay's call, and it retires a keyword that landed hours ago. Nothing
 here is built.
+
+## 2026-07-26 — OPEN: rejecting redundant annotations, and the flip-flop in the rule as stated
+
+Clay: the compiler should fail for any redundant type information, inside out.
+If a leaf declares `fn foo s:string`, a caller that annotates a type the leaf
+already forces — or one loose enough to permit non-strings — is an error,
+because the fact was already known.
+
+The principle is consistent with what the language already does. Formatting,
+declaration order and typeset ordering are all enforced rather than
+recommended, and "no needless annotations" is already gaveled. Neither case is
+flagged today; both `fn relay t:string` calling `shout s:string` and the same
+program with a bare `t` compile clean.
+
+THE EDGE, which shows up wherever an annotation's job is to constrain rather
+than to restate. Redundancy is defined against what inference derives, and
+inference *widens* as violating code is added. Take a field:
+
+  - Correct program: every store into `name` is a string, inference derives
+    {string}, so `name:string` is redundant and must be deleted.
+  - Someone adds `p.name = 42`: inference derives {string, int}, so
+    `name:string` is no longer redundant — it is tighter — and becomes legal,
+    and now catches the int.
+
+The annotation is illegal exactly while the program is correct, and becomes
+legal only once somebody breaks it. A guard cannot be put in place before the
+violation it guards against, which is the whole purpose of a guard. The same
+holds for a public function's parameter: the signature is a promise to callers
+that should hold whether or not any caller currently tests it.
+
+THE LINE THAT REPAIRS IT is the one haskell and rust already draw, for this
+reason:
+
+  - contract positions — record fields, exported signatures — an annotation is
+    a requirement. Always allowed, and checked against what inference derives;
+    a conflict names both sides.
+  - local positions — inside a body, a private helper whose callers are all
+    visible — an annotation restates what inference has already settled, and
+    is redundant. Reject.
+
+That keeps the intent ("stop restating what the compiler knows") without making
+a correct program's guards illegal. It also matches what Clay has already
+accepted elsewhere: the language server exists precisely because inferred types
+are omitted from source, so the reader gets them from the tool rather than from
+restated annotations.
+
+Not built. The gavel is whether "inside out" means everywhere or only inside
+the boundary.
