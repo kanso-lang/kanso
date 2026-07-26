@@ -135,6 +135,24 @@ pub play =
   cheapest = first (sort quotes)
   print "four lookups fanned out, one answer fanned in: {cheapest} yen"
 `,
+  build: `# two objects that point at each other. in most languages this needs a
+# nullable field you check forever after, or a second pass that patches the
+# link once both halves exist. a build block lets the knot be tied, then
+# freezes the whole cohort -- once the block ends nothing can be rewritten, so
+# the cycle is ordinary immutable data.
+type person
+  name:string
+  partner:any
+
+pub play =
+  couple = build
+    ada = person "ada" none
+    bob = person "bob" ada
+    ada.partner = bob
+    [ada bob]
+  a = couple[1]!
+  print "{a.name} <-> {(a.partner).name} <-> {((a.partner).partner).name}"
+`,
   join: `# two effects with no order between them -- parallel is the default, so
 # plain lines say it. the >> is the wall: serving happens only after both.
 # failures accumulate: if both sides err you get both reasons.
