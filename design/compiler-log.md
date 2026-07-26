@@ -5564,3 +5564,60 @@ Not built. It touches the allocator, the carry path and the escape analysis at
 once, on the value the whole encode path is threaded through, and the log's own
 standing advice for this rung is to spec it with adversarial care and measure
 before committing. Clay's call on whether it goes next.
+
+## 2026-07-26 — BUILT, MEASURED, DECLINED IN THIS FORM: the naive byte carry
+
+Clay, on the design note that preceded this: "just build and measure. you
+shouldn't have stopped here." Right on both counts — whether to build it was my
+call and the way to make it was to look at the number.
+
+WHAT WAS BUILT. The one line in `classify` that keeps a byte accumulator out of
+the carry was removed. All three of kq's pretty-print loops immediately
+reclassified:
+
+    encode_items/3   carry beat: rewinds every iteration, evacuating argument 1
+    encode_pairs/3   carry beat: rewinds every iteration, evacuating argument 1
+    indent_onto/2    carry beat: rewinds every iteration, evacuating argument 1
+
+WHAT IT COST, on kq against the previous binary, byte-identical output at every
+size:
+
+    input      with carry    without
+    2,923 B       7.9 ms      5.7 ms
+    5,703 B       8.6 ms      5.3 ms
+    11,419 B    138.8 ms      4.7 ms
+
+At eleven kilobytes it is thirty times slower and climbing steeply — the shape
+of a quadratic. The 188 kb board never finished; the comparison had to be
+killed. `k_beat_iter_carry` deep-copies each staged slot before rewinding, and
+for a growing buffer that is the whole buffer, once per iteration.
+
+So the exclusion is right, its comment was right, and the arithmetic behind it
+is now measured rather than asserted. Reverted.
+
+WHAT THE MEASUREMENT SETTLES. The copy is the entire problem, so the fix cannot
+be "let bytes take the existing path" — it has to be "stop the buffer being
+copied". `k_deep_copy` already declines to copy a byte buffer when
+`k_survives(b->data, m)` holds:
+
+    if (k_survives(b->data, cp->mark)) { nb->data = b->data; }
+
+The header is copied either way and costs twenty-four bytes. So the whole build
+reduces to putting the accumulator's buffer somewhere `k_survives` reports as
+surviving — and today it reports 1 only for pointers inside an arena block at
+or below the mark, which a `malloc` is not, so `k_alloc_perm` memory would
+still be copied.
+
+NO SPEC PINS THIS, deliberately. A test was written and then deleted: the
+obvious small program — a `text/append` fold over a `text/bytes ""` seed —
+declines through `set == 0` rather than the bytes rule, because inference
+cannot type its accumulator, so it passed with the exclusion lifted *and* with
+both clauses removed. A green test that cannot fail is the fake coverage this
+log has caught before. kq is what exercises the rule, and pinning it needs a
+program with kq's shape rather than a toy.
+
+NEXT, and now scoped rather than sketched: a region `k_survives` treats as
+surviving, cheap to test membership in — the block-walk it does today would be
+O(blocks) in a path that runs per iteration, which is how the quadratic gets
+back in through the other door. Byte-builder buffers for a loop's declining
+position allocate there, and `k_beat_pop` transfers or frees.
