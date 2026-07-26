@@ -3937,3 +3937,41 @@ notices `w_klam29` in a profile finds this entry instead of rediscovering it.
 The encode-side lead that remains is unchanged: those 47 samples are a wrapper
 hop into a byte-discriminating group, and collecting them needs the value ABI
 to carry such a group — an ABI change, not a rewrite.
+
+## 2026-07-25 — the ordering rule enforces more than its author remembers
+
+Clay, on being told a test program needed its declarations in alphabetical
+order: "that sounds like something you made up. record type arguments are the
+only thing alphabetical, and i suppose import statements."
+
+It is not made up, and the gap is worth naming. check.rs enforces five
+ordering rules: type declarations alphabetical, record fields alphabetical,
+typeset members alphabetical and duplicate-free, overloads of one name
+adjacent, and *function declaration groups alphabetical*. Constants fall under
+the last one, since a constant binding is a zero-arity fn — which is why
+`main` sorts in among the functions and why a two-function test program has to
+be arranged around it.
+
+The rule Clay recognises is a subset: fields, and imports.
+
+THIS WAS ALREADY FLAGGED. From an earlier entry in this same log: "alphabetical
+order scatters cohesion. the sixteen tests sort into the middle of the
+implementation, and helper families stay adjacent only because we *named* them
+into adjacency (str_char, str_chars, str_escape...). developers will name-game
+the ordering rule; that's a signal... the rule deserves a second look with this
+evidence in hand."
+
+So the author's instinct now and the evidence recorded then agree, and only the
+implementation dissents.
+
+THE ARGUMENT SPLITS CLEANLY. A record is a set of fields, so declaration order
+carries no information and sorting it removes a meaningless degree of freedom —
+same for typeset members. A file of functions is not a set: order carries
+narrative, helpers want to sit beside what they help, and the tree already
+shows the workaround, which is naming things into adjacency rather than placing
+them there.
+
+Relaxing is backward-compatible, since every sample in the tree already
+satisfies the stricter rule; tightening later would not be. Filed as its own
+task rather than changed here, because it is a language decision and Clay is
+asleep.

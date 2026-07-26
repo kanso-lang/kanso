@@ -17,3 +17,4 @@ docs/book/samples/ch05/order.txt
 HN_DRAFT.md
 /lazybench
 /imports
+bench/naive_json/Cargo.lock
