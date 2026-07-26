@@ -83,7 +83,18 @@ window.PAGE_PROBE = async (settled) => {
   await new Promise(r => setTimeout(r, 300));
   document.getElementById('run').click();
   const second = await settled('output', t => t === first || t === 'running…');
-  return {out: first, fanout: second};
+  // the repl reaches into the wasm module directly rather than through
+  // runSource, so it is the one surface a load-order slip can silently break
+  const log = document.getElementById('repl-log');
+  document.getElementById('repl-input').value = '2 + 3';
+  document.getElementById('repl-form').dispatchEvent(
+    new Event('submit', {cancelable: true, bubbles: true}));
+  // the echo lands first and the answer follows, so wait for the answer's
+  // own line rather than for the log to change at all
+  for (let i = 0; i < 80 && !log.querySelector('.repl-out'); i++)
+    await new Promise(r => setTimeout(r, 100));
+  const answer = log.querySelector('.repl-out');
+  return {out: first, fanout: second, repl: answer ? answer.textContent : ''};
 };
 """
 
@@ -159,6 +170,10 @@ def main():
     # not do until Value::TableFn — the regression this page must never take
     if "650 yen" not in (playground.get("fanout") or ""):
         failures.append(f"fanout did not run in the playground: {playground}")
+    # the repl calls the module directly, so it breaks independently of the
+    # run button and needs its own probe
+    if "5" not in (playground.get("repl") or ""):
+        failures.append(f"the repl did not answer: {playground.get('repl')!r}")
 
     for line in failures:
         print(f"FAIL  {line}")

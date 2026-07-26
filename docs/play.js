@@ -60,15 +60,17 @@ function replEcho(cls, text) {
   replLog.scrollTop = replLog.scrollHeight;
 }
 
-replForm.addEventListener('submit', (event) => {
+replForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (!wasm) return;
   const input = replInput.value;
   if (!input.trim()) return;
+  replInput.value = '';
   replEcho('repl-in', '» ' + input);
+  /* callKanso reaches into the module directly, so unlike runSource it has
+     no load of its own to wait on */
+  await ready();
   const { code, text } = callKanso('kanso_repl_eval', input);
   if (text) replEcho(code === 0 ? 'repl-out' : 'repl-out play-error', text.trimEnd());
-  replInput.value = '';
 });
 
 /* ---------- examples ---------- */

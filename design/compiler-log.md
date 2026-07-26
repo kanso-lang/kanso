@@ -4613,3 +4613,26 @@ as a guarantee and written code against it.
 SHIPPED WITH IT: the playground gains the containment example as
 `build: a cycle you can pass around`, so the claim the compiler page makes
 about cohorts is something a reader can run rather than read.
+
+## 2026-07-26 — the playground repl could not submit, and nothing watched it
+
+Clay reported the repl strip taking no input. The handler opened with
+`if (!wasm) return;`, and `wasm` is not a name play.js has. It was left behind
+when the engine moved into kanso-engine.js, which exposes the module through
+`window.KansoEngine` rather than a file-level binding. play.js runs under
+`'use strict'`, so the bare identifier did not read as undefined — it threw a
+ReferenceError, and the throw aborted the handler before a single line was
+echoed. Every submit did nothing, silently.
+
+The gate was the wrong shape anyway. `runSource` awaits `ready()` itself, which
+is why the run button survived the same refactor; the repl calls `callKanso`
+directly and had no load of its own to wait on. It now awaits `ready()` in the
+same place, so it works whether or not a megabyte of wasm has arrived.
+
+WHY NOTHING CAUGHT IT. The browser smoke test drives the run button and the
+example picker, and the playground spec runs every sample on every engine —
+none of them touches the repl, which is the one surface that reaches into the
+module directly rather than through `runSource`. That is exactly the shape a
+load-order slip breaks in isolation. `scripts/site_smoke.py` now submits
+`2 + 3` and waits for the answer's own line, and the check was watched failing
+against the old handler before the fix went in.
