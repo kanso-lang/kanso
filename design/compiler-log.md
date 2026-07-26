@@ -5322,3 +5322,35 @@ drift — but nothing was holding them together. `tests/enumerable_arms.rs` pins
 the sets against each other, and was watched failing with one `fold` arm
 removed. That is the cheap half of what the pass would guarantee, available
 now and costing a compiler pass nothing.
+
+## 2026-07-26 — the metrics panel says what the metrics mean
+
+Clay asked for ten to twenty counters on the ci-maintained panel rather than
+six, each with a summary a reader can expand — "what is arena_blocks or
+rewind_iterations and why should i care?" The question answers itself: a wall
+of counters nobody can interpret is decoration, and the panel had six of them
+labelled and none of them explained.
+
+TWENTY NOW, in three sections, because the veins measure different things and
+mixing them made the list read as one undifferentiated column:
+
+  - decoding, eight counters: allocations, bytes, arena blocks, frozen
+    constants, rewind iterations, eisel-lemire parses, utf-8 bytes, simd scans
+  - encoding, six: allocations, arena blocks, ryū renders, in-place appends,
+    buffer regrowths, strings copied once
+  - compiling, six: fixpoint rounds, expression visits, and the four emission
+    counts — lines, calls, branches, defines
+
+`perf_record.py` grew the encode vein, which it had never read, and the
+emission counts, which the compile golden already carried. Every row expands to
+a sentence or two on what the counter is and what its moving would mean —
+arena blocks are peak memory written as a constant, rewind iterations are the
+mechanism behind it, eisel-lemire's count is a presence check that exists
+because a merge once deleted the algorithm and nothing noticed.
+
+ONE RENDERING BUG FOUND WHILE TESTING IT. A five-thousand allocation change
+against twelve million rounds to `-0.0%`, which reads as no change at all. The
+delta now falls back to the absolute count when the share rounds away, so that
+same move shows as `▼ -5,000`. Verified in a browser against fixture history
+rather than by reading the code: nineteen rows, three section headings,
+expansion toggling, no console errors.
