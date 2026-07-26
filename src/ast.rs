@@ -124,6 +124,10 @@ impl Pattern {
     pub fn rank(&self) -> u8 {
         match self {
             Pattern::IntLit(..) | Pattern::StrLit(..) | Pattern::Nullary(..) => 0,
+            // `any` accepts whatever an unnamed parameter accepts, so it ranks
+            // where one does; ranking it as a concrete type would let a
+            // catch-all sit above the arms it swallows
+            Pattern::Annotated { ty, .. } if ty == "any" => 2,
             Pattern::Annotated { .. } | Pattern::Ctor { .. } => 1,
             Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. } => 2,
         }

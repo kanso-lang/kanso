@@ -4995,3 +4995,72 @@ against dismissing small numbers: 15.2% of the decode profile yielded 10.9% of
 total cpu, which is most of the line, and nothing about that was predictable
 from the size of the number alone. The ledger now says ranked rather than
 declined, and says what it ranks behind.
+
+## 2026-07-26 — `any` outranked the arms it swallows, and it does not mean "any"
+
+Clay ruled that a bare record field should mean what a bare parameter means,
+and that the word `any` is not needed. Testing what `any` actually does turned
+up two things, one of which is a bug independent of the ruling.
+
+IT DOES NOT MEAN ANY. Measured with a single catch-all arm:
+
+    fn kind x:any    called with none  ->  error: no overload matches
+    fn kind x        called with none  ->  bare arm: <none>
+
+`("any", Value::NoneV) => false` in the dispatcher is the rule. So `any` means
+every value except `none`, which is why `v:any none` exists as a field typeset:
+it is how you say "anything, or none". A bare field would say that on its own.
+Clay's second ruling follows from this — if the constraint is "anything except
+none" then it should be called `some`, and the current name is a lie the reader
+has no way to catch.
+
+IT ALSO OUTRANKED WHAT IT SWALLOWS. `Pattern::rank` scored every annotated
+parameter as a concrete type, so `x:any` sat at rank 1 while a bare `x` sits at
+2. The consequence:
+
+    fn label x:any     accepted, and it swallowed `label 5`
+    fn label x:int     never reached
+
+while the same pair written with a bare parameter first is rejected by the
+specificity rule. A catch-all wearing a type annotation walked past the ordering
+rule that exists to stop exactly this. `any` now ranks where an unnamed
+parameter ranks, which makes the pair above an error and leaves `:any` in the
+generic position working as before. Pinned by an error golden. No existing code
+moves: the only two `:any` uses in the tree are record fields, not dispatch
+arms.
+
+## 2026-07-26 — OPEN: rendering an io satisfies the check that exists to catch dropped intent
+
+Clay wrote `print (math/random 8)`, got `<io>`, and asked what happened. The
+draw never ran; `print` rendered the description instead of performing it.
+
+This is not a bug in the mechanism — ch05 teaches it deliberately: "interpolate
+an io into a string and you get its face, not its result. there is no result
+yet; nothing has run." Both engines agree, so the differential law is intact.
+
+But the paragraph immediately after that one is where it comes apart. ch05 also
+teaches that dropping intent is refused, and the compiler does refuse it:
+
+    goodbye = print "sayonara"
+    print "the goodbye never ran"           error[unused]: unused binding
+
+    goodbye = print "sayonara"
+    print "the goodbye never ran: {goodbye}"   accepted, prints <io>
+
+The second program drops the intent exactly as completely as the first. The
+sayonara never prints either way. Mentioning the binding inside a string
+satisfies the used-check while running nothing, so the rule that exists to
+catch dropped intent is discharged by an operation that drops it.
+
+THE ARGUMENT FOR CHANGING IT: rendering an io is not consuming it, so it
+should not count as use. An io that is rendered but never sequenced is the same
+mistake the unused-binding rule already names, and it is the mistake the
+language's own author made the first time he reached for `math/random` outside
+the pipe form. The only place the current behaviour is wanted is the ch05 panel
+that demonstrates the face, which is a teaching artifact rather than a use.
+
+THE COST: ch05's `render.kso` would stop compiling and would need another way
+to show what an io looks like — `--plan` already exists for that and is what
+the surrounding section uses.
+
+Clay's call, because it changes semantics the book teaches.
