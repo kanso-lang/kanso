@@ -4,7 +4,7 @@ type count
 type money int
 
 type slot
-  v:any none
+  v
 
 type wallet
   amount:money none

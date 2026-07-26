@@ -428,8 +428,8 @@ impl<'a> Interp<'a> {
             synthetic: false,
             origin: None,
             fields: vec![
-                ("key".to_string(), vec!["any".to_string()], origin),
-                ("value".to_string(), vec!["any".to_string()], origin),
+                ("key".to_string(), vec!["some".to_string()], origin),
+                ("value".to_string(), vec!["some".to_string()], origin),
             ],
         };
         let demand = crate::demand::analyze(program);
@@ -1919,8 +1919,8 @@ fn type_match_depth(ty: &str, arg: &Value) -> Option<u8> {
         return matches!(arg, Value::Map(_)).then_some(0);
     }
     let ok = match (ty, arg) {
-        ("any", Value::NoneV) => false,
-        ("any", _) => true,
+        ("some", Value::NoneV) => false,
+        ("some", _) => true,
         ("int", Value::Int(_)) => true,
         ("float64", Value::Float(_)) => true,
         ("string", Value::Str(_)) => true,

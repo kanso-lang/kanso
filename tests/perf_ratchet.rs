@@ -100,21 +100,20 @@ fn the_failure_twin_tests_err_and_nothing_else() {
     );
 }
 
-const ANY_FIELD: &str = "type box
-  v:any int
+const SOME_FIELD: &str = "type box
+  v:int some
 
 main = print \"{box 7}\"
 ";
 
-/// `any` accepts every value except the absence channel, so its check is a
-/// call that tests the tag — not the constant true it was before `none`
-/// became a value the set had to exclude.
+/// `some` accepts every value except the absence channel, so its check is a
+/// call that tests the tag rather than a constant true.
 #[test]
-fn any_tests_the_tag_rather_than_passing_everything() {
-    let ir = ir_for(ANY_FIELD);
+fn some_tests_the_tag_rather_than_passing_everything() {
+    let ir = ir_for(SOME_FIELD);
     assert!(
-        ir.contains("call i64 @k_check_any("),
-        "an `any` member no longer calls k_check_any, so it either passes a \
+        ir.contains("call i64 @k_check_some("),
+        "a `some` member no longer calls k_check_some, so it either passes a \
          none or stopped being checked at all"
     );
 }

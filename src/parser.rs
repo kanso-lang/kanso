@@ -566,6 +566,11 @@ fn parse_type(header: &Line, body: &[Line]) -> Result<TypeDecl, Diagnostic> {
 fn parse_field(line: &Line) -> Result<(String, Vec<String>, Span), Diagnostic> {
     let mut p = P::new(&line.tokens, &line.end_cols, line.number);
     let (name, span) = p.expect_ident("a field name")?;
+    // an unannotated field is unconstrained, the same thing an unnamed
+    // parameter's absent annotation says
+    if p.done() {
+        return Ok((name, Vec::new(), span));
+    }
     let colon_span = p.span_here();
     p.expect_colon()?;
     let ty_span = p.span_here();

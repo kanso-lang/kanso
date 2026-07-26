@@ -1,4 +1,4 @@
 type box
-  v:any int
+  v:int some
 
 pub play = print "{box none}"

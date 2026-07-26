@@ -5064,3 +5064,37 @@ to show what an io looks like — `--plan` already exists for that and is what
 the surrounding section uses.
 
 Clay's call, because it changes semantics the book teaches.
+
+## 2026-07-26 — GAVEL, IMPLEMENTED: a bare field is unconstrained, and `any` is `some`
+
+Two rulings from Clay, in sequence. First: a bare record field should mean what
+a bare parameter means, and the word `any` is not needed. Second, after the
+measurement below: if the type means "anything except none" then it should be
+called `some`.
+
+WHAT THE MEASUREMENT SHOWED. With a single catch-all arm:
+
+    fn kind x:any    called with none  ->  error: no overload matches
+    fn kind x        called with none  ->  bare arm: <none>
+
+`("any", Value::NoneV) => false` is the rule in the dispatcher. So the type
+named `any` accepts every value except `none` — which is why `v:any none`
+existed as a field typeset. It was the long way of saying unconstrained, and a
+bare field says it directly.
+
+BUILT. `parse_field` returns an empty type list when the line holds only a
+name. `any` is `some` through the checker, the interpreter, both backends and
+the runtime symbol (`k_check_some`, whose body was already `v.tag != K_NONE`,
+so the old name was lying there too). The retired spelling gets a diagnostic
+that names the replacement and the alternative rather than failing as an
+unknown type.
+
+WHAT THE RENAME DISTURBED, which is worth recording because it will happen
+again: typeset members are alphabetical, and `any` sorted before almost
+everything while `some` sorts after most things. `v:any int` had to become
+`v:int some`. Two samples and one golden moved.
+
+The stdlib's fourteen `:any` fields became `:some` rather than bare, because
+that preserves their meaning exactly; a bare field would have widened them to
+admit `none`, which none of them wants. The two examples that wrote `:any none`
+became bare, because that is what they were spelling out.

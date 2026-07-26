@@ -81,7 +81,7 @@ fn shift (point x y)
         "build_block",
         "type node
   id:int
-  peer:any
+  peer:some
 
 main =
   ring = build
