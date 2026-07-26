@@ -4569,10 +4569,13 @@ lines, handing each non-return unit to the same `parse_lead_stmts` the other
 path uses. One grouping rule, two callers.
 
 MEASURED WHILE THERE, because the example needed to claim something true.
-Twenty thousand two-node cycles built inside a loop, each passed through a
-function that walks it and then discarded:
+Two-node cycles built inside a loop, each passed through a function that walks
+it and then discarded — two thousand in the shipped example, because the
+interpreter's debug build overflows its stack past about five thousand frames
+and CI runs the corpus in debug:
 
-    allocs=160027  arena_blocks=1  beat_iters=20000
+    n=2000    allocs=16027   arena_blocks=1  beat_iters=2000
+    n=20000   allocs=160027  arena_blocks=1  beat_iters=20000
 
 Flat, which is the claim the example makes: a cycle crosses call boundaries
 like any other argument, and the cohort dies with its iteration.

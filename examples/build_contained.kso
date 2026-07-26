@@ -23,4 +23,4 @@ pub play =
   knot = tie "ping"
   print "one hop: {knot.peer.name}"
   >> print "back home: {round_trip knot}"
-  >> print "twenty thousand more, all discarded: {spin 20000 0}"
+  >> print "two thousand more, all discarded: {spin 2000 0}"
