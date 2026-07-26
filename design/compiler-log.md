@@ -4403,3 +4403,38 @@ one of which now tests the assignment form's own diagnostic rather than the
 unknown-name path it used to ride.
 
 15 suites, the book, and 73 browser-differential programs all green.
+
+## 2026-07-26 — the fourteen percent was the load, not the lead
+
+The board published yesterday claimed kanso spends fourteen percent less cpu
+per decode than serde_json. That measurement was taken at load average fifty.
+On a quiet box — load under five, the sitting the board had owed since the
+morning — both instruments agree the lead is about four percent:
+
+    cpu slope    kanso 0.832   serde 0.872   naive 1.004   go 1.922
+    wall slope   kanso 0.843   serde 0.867   naive 1.004   go 1.745
+
+kanso/serde is 4.6% by cpu and 2.8% by wall. The fourteen was an artifact of
+measuring two programs while a browser held three cores: they do not degrade
+alike under contention, and the gap between them widened by more than the gap
+itself. Corrected everywhere — the board, the recipe, the landing panel, the
+about prose.
+
+WHICH INSTRUMENT, now that the box is quiet and they can be compared. Clay
+prefers cpu time: "precise, even if less accurate by some holistic wall clock
+measurement." That is the right call and the numbers show why — cpu counts only
+what the process spent, so a passing background task cannot inflate it, while
+wall clock swung 87% between runs of the same binary yesterday.
+
+It carries one caveat worth stating on the page rather than burying: cpu time
+bills every thread. Go's collector runs on other cores, so go costs 1.92 by cpu
+and 1.75 by wall, and the difference is real work rather than measurement
+error. A single-threaded runtime compared against a parallel one by cpu time is
+being flattered. The page now says so.
+
+THE LESSON IS ABOUT WHEN, NOT WHAT. Yesterday's numbers were honestly measured
+with a defensible instrument and were still wrong, because the sitting was
+wrong. A loaded box can be raced fairly — every decoder faces the same weather —
+but only for a ratio between programs that degrade alike, which two parsers
+with different allocation behaviour do not. Idle floors are not a footnote to
+refresh when convenient; they are the measurement.

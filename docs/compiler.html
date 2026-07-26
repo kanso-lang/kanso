@@ -136,7 +136,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <span class="eyebrow">the compiler</span>
 <h1>guardrails, not lifetimes</h1>
 
-<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds of cpu per decode — 2026-07-25, on a desktop sitting at a load average near 50. the four run interleaved so they all face the same weather, and each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. it is cpu time rather than wall time because at this load a stopwatch swings by more than the gaps being measured — the same binary timed twice ran 87% apart. shorter is faster.</p>
+<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds of cpu per decode — 2026-07-26, on a quiet desktop, load average under five. the four run interleaved, and each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. cpu time rather than wall time because it is the precise instrument — it counts only what the process spent, so a passing background task cannot inflate it. one caveat it carries: cpu time bills every thread, so go's collector threads count against it, and go's wall figure is 1.75 rather than 1.92. shorter is faster.</p>
 
 <table class="bench-table">
   <thead>
@@ -145,28 +145,28 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
   <tbody>
     <tr class="win">
       <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:34%"></span></span></td>
-      <td class="num">1.00</td><td class="num">5.6 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:43%"></span></span></td>
+      <td class="num">0.83</td><td class="num">5.6 mb</td>
     </tr>
     <tr>
       <td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:39%"></span></span></td>
-      <td class="num">1.16</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:45%"></span></span></td>
+      <td class="num">0.87</td><td class="num">6.7 mb</td>
     </tr>
     <tr>
       <td>reasonably-written rust</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:47%"></span></span></td>
-      <td class="num">1.38</td><td class="num">6.8 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:52%"></span></span></td>
+      <td class="num">1.00</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>go encoding/json</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">2.96</td><td class="num">10.8 mb</td>
+      <td class="num">1.92</td><td class="num">10.7 mb</td>
     </tr>
   </tbody>
 </table>
 
-<p>kanso is the top line. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. against <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—it now spends fourteen percent less cpu per decode, at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails by a quarter; go takes close to three times as long with its collector working.</p>
+<p>kanso is the top line. it has no garbage collector to pause it and no borrow checker to argue with. the person who wrote that decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. against <code>serde_json</code>—the parser a rust team hand-tunes and actually ships—it spends about five percent less cpu per decode, at the smallest, flattest footprint on the board. a reasonably-written rust parser running the same algorithm trails by a fifth; go takes better than twice as long with its collector working.</p>
 
 <p>a pure, annotation-free language ahead of hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and a recipe at the bottom you can run yourself. the claim is just what it sounds like. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
 
@@ -662,10 +662,10 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 
 <div class="code-panel">
   <div class="code-panel-title">the scoreboard—per-decode floors from one interleaved sitting, and how to reproduce it</div>
-  <pre><code><span class="c"># kanso, shipped default    ~1.00 ms   5.6 mb rss, flat  (arenas, §03)</span>
-<span class="c"># serde_json (hand-tuned)   ~1.16 ms   6.8 mb rss</span>
-<span class="c"># reasonably-written rust   ~1.38 ms   6.8 mb rss</span>
-<span class="c"># go encoding/json          ~2.96 ms   10.8 mb rss</span>
+  <pre><code><span class="c"># kanso, shipped default    ~0.83 ms   5.6 mb rss, flat  (arenas, §03)</span>
+<span class="c"># serde_json (hand-tuned)   ~0.87 ms   6.7 mb rss</span>
+<span class="c"># reasonably-written rust   ~1.00 ms   6.8 mb rss</span>
+<span class="c"># go encoding/json          ~1.92 ms   10.7 mb rss</span>
 
 cargo build --release
 bash bench/make_jsonbench.sh
