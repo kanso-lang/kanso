@@ -1,6 +1,6 @@
 use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const BUILTINS: [&str; 28] = [
     "append",
@@ -542,6 +542,7 @@ pub fn check_file_shadow(
     check_type_order(program, &mut diags);
     check_fn_order(program, &mut diags);
     check_constants(program, &mut diags);
+    check_constant_cycles(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
     let mut fn_arities: std::collections::HashMap<String, Vec<usize>> =
@@ -653,6 +654,7 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
 pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
+    check_constant_cycles(program, &mut diags);
     check_predicates(program, &mut diags);
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
@@ -798,6 +800,55 @@ fn check_type_order(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// which is about which arm dispatch picks rather than about where the arms sit.
 fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
     check_overload_ranks(program, diags);
+}
+
+/// Every constant this expression mentions by name.
+fn constant_refs<'a>(expr: &'a Expr, known: &HashSet<&str>, out: &mut Vec<&'a str>) {
+    if let Expr::Ident(name, _) | Expr::Partial(name, _) = expr {
+        if known.contains(name.as_str()) {
+            out.push(name);
+        }
+    }
+    for child in crate::expr_children(expr) {
+        constant_refs(child, known, out);
+    }
+}
+
+/// A constant defined in terms of itself has no value to compute: the
+/// definition asks for the answer it is meant to produce. Undetected, it
+/// recurses until the stack ends, which reports the machine's limit rather
+/// than the program's mistake.
+fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
+    let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
+    let mut refs: HashMap<&str, Vec<&str>> = HashMap::new();
+    for decl in &constants {
+        let out = refs.entry(decl.name.as_str()).or_default();
+        for stmt in &decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            constant_refs(expr, &names, out);
+        }
+    }
+    for decl in &constants {
+        let mut seen: HashSet<&str> = HashSet::new();
+        let mut stack: Vec<&str> = refs.get(decl.name.as_str()).cloned().unwrap_or_default();
+        while let Some(cur) = stack.pop() {
+            if cur == decl.name {
+                diags.push(Diagnostic::new(
+                    "name",
+                    format!("`{}` is defined in terms of itself, so it has no value", decl.name),
+                    decl.span,
+                ));
+                break;
+            }
+            if seen.insert(cur) {
+                stack.extend(refs.get(cur).into_iter().flatten());
+            }
+        }
+    }
 }
 
 fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {

@@ -1,0 +1,3 @@
+ones = push ones 1
+
+pub play = print "{ones}"

@@ -1,0 +1,4 @@
+error[name]: `ones` is defined in terms of itself, so it has no value
+  --> constant_knot.kso:1:1
+   1 | ones = push ones 1
+       ^
