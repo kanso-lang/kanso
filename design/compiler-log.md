@@ -3822,3 +3822,118 @@ The general shape is worth remembering: an analysis result used for one purpose
 (deciding the ABI) was not visible to a second consumer (arithmetic lowering)
 that would have benefited from the same fact. Worth asking where else a proven
 set is dropped at a boundary.
+
+## 2026-07-25 — eta-reduction, and an honest note that it does not pay here
+
+The encode profile showed `w_klam29` at 47 samples — a boxing wrapper in front
+of `klam29`, which musttail-calls `d_esc_byte_2` and ignores its environment
+entirely. Two hops of pure indirection. The source is
+`list/fold bs acc (a b -> esc_byte a b)`: a textbook eta-expansion, a lambda
+that forwards its parameters to a named function and does nothing else.
+
+BUILT. A lambda whose body is a call to a name, passing exactly its own
+parameters in order, with the name neither shadowed nor one of the parameters,
+now emits the function value instead of a closure.
+
+IT DOES NOT FIRE ON THE CASE THAT MOTIVATED IT. `esc_byte` dispatches on a
+literal byte in its second parameter, and a byte discriminator crosses the ABI
+as a raw i64 with the 256-is-none convention, which `simple_fn_value` refuses.
+So the lambda that costs 47 samples is exactly the one the value ABI cannot
+carry — which is *why* a closure was there in the first place. The 47 samples
+stay.
+
+MEASURED WHERE IT DOES FIRE: two allocations out of 12,924,473 on the decode
+gauntlet, and 48 bytes. A one-time closure saving, not a per-element one. The
+cost golden moves by that much and nothing else does.
+
+I nearly shipped a regression on the way. The first version reduced any
+forwarding lambda, including `(a b -> push a b)`, and `push` is a builtin with
+no function-value form — so a program that compiled before stopped compiling.
+The guard is now explicit: one arity, matching, and `simple_fn_value` true.
+
+SO WHY KEEP IT. It is strictly less code emitted wherever it applies, it costs
+nothing at runtime, and a forwarding lambda is a common idiom in user code that
+the profile just showed carries two hops. But it is not a win on these
+benchmarks and the entry says so rather than implying otherwise.
+
+THE REAL TARGET IS NOW NAMED. Making byte-discriminating groups carriable as
+function values would collect those 47 samples. That is an ABI change — the
+value wrapper would need to unbox the discriminator — and it is the shape
+SpecConstr was queued for. Recorded as the next encode-side lead.
+
+## 2026-07-25 — correcting the eta-reduction entry: it pays in memory, not time, and my measurement lied twice
+
+The entry above says the reduction does not fire on the case that motivated it
+and moves two allocations. Both halves were measured against a working tree
+that had silently lost the commit.
+
+WHAT HAPPENED. After a merge attempt failed I ran `git reset --hard
+origin/main` while standing on the feature branch, which reset the branch to
+main and discarded the change locally; the commit survived only on the remote.
+Every measurement after that point compiled a tree without the optimization,
+so "encode counters unchanged" was comparing a build to itself. The tell was
+there and I read past it: the golden in the branch disagreed with a fresh
+build in the direction of the change, which cannot happen if the change is
+absent.
+
+THE REAL NUMBERS, with the commit actually present:
+
+    encode allocs        68,640,508 -> 67,222,108   (-1,418,400, -2.1%)
+    encode alloc_bytes    2,288,262,416 -> 2,254,220,816   (-34 MB)
+    encode arena_blocks         2,205 -> 2,165
+    decode allocs        12,924,473 -> 12,924,471
+
+So it does fire on the encode path, and `esc_byte` is reducible after all —
+`simple_fn_value` refuses byte *discriminators*, and esc_byte's literal-byte
+arms do not make its parameters unboxed here, so the group qualifies.
+
+AND IT DOES NOT MAKE ENCODE FASTER. Twenty interleaved cpu-time runs: +0.5% on
+floors, +0.8% on medians — noise, and if anything the wrong sign. Removing 1.4
+million allocations bought no time because an arena allocation is a bump
+pointer; the cost was never the allocating. What it buys is 34 MB of
+allocation volume and forty fewer arena blocks, which is peak-memory pressure
+rather than throughput.
+
+That is worth having and worth stating precisely. The compiler page's memory
+claims live on the same footing as its speed claims, and this moves one and
+not the other.
+
+## 2026-07-25 — BUILT, MEASURED, DECLINED: eta-reduction is not semantics-preserving here
+
+Reverted. The reason is better than the optimization was.
+
+`(a b -> f a b)` denotes `f` in most languages, so replacing the closure with
+the function value looks free. In kanso it is not, because an `err` records a
+hop for every function it passes through, and the eta-expanded lambda is a
+function. Removing it changes the provenance the trace prints.
+
+The book harness caught it on ch05's welcome sample:
+
+    native:       born in first at welcome.kso:4
+                  passed through greet
+    interpreter:  born in first at welcome.kso:4
+
+Native and the oracle disagreeing is the one thing the differential law does
+not permit, and no amount of speed would buy it. The interpreter does not do
+this rewrite, and teaching it to would mean changing the semantics of error
+provenance to suit a codegen optimization — the oracle defines the semantics,
+not the other way round.
+
+Worth noting which trace is *truer*: the value really does pass through
+`greet`, so the native line is arguably the honest one and the lambda was
+hiding a real hop. That is a semantics question about what a hop means, and it
+belongs to a gavel rather than to an optimization's side effects.
+
+WHAT IT WOULD HAVE BOUGHT, measured with the change actually present:
+encode allocs 68,640,508 -> 67,222,108 (-2.1%), alloc_bytes -34 MB,
+arena_blocks 2205 -> 2165. And no time at all: +0.5% on floors over twenty
+interleaved cpu runs. An arena allocation is a bump pointer, so removing 1.4
+million of them buys allocation volume and peak pressure, never throughput.
+
+So the ledger reads: a memory-only win, forbidden by the differential law,
+declined. Recorded so the idea stays declined, and so the next person who
+notices `w_klam29` in a profile finds this entry instead of rediscovering it.
+
+The encode-side lead that remains is unchanged: those 47 samples are a wrapper
+hop into a byte-discriminating group, and collecting them needs the value ABI
+to carry such a group — an ABI change, not a rewrite.
