@@ -79,6 +79,8 @@ jobs:
         with:
           source: ./docs
           destination: ./_site
+      - name: the jekyll container owns _site, so take it back
+        run: sudo chown -R "$USER" ./_site
       - run: python3 scripts/fingerprint.py ./_site
       - name: no undigested reference survives
         run: |
