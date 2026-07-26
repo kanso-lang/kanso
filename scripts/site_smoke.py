@@ -94,7 +94,21 @@ window.PAGE_PROBE = async (settled) => {
   for (let i = 0; i < 80 && !log.querySelector('.repl-out'); i++)
     await new Promise(r => setTimeout(r, 100));
   const answer = log.querySelector('.repl-out');
-  return {out: first, fanout: second, repl: answer ? answer.textContent : ''};
+  // the button against edited source: the picker path can pass while a plain
+  // edit-then-run is broken, because switching examples runs its own code
+  const editor = document.getElementById('editor');
+  editor.value = 'print \"edited then run {6 * 7}\"\\n';
+  editor.dispatchEvent(new Event('input'));
+  const beforeRun = document.getElementById('output').textContent;
+  document.getElementById('run').click();
+  const edited = await settled('output', t => t === beforeRun || t === 'running…');
+  // and the keyboard path, which is a listener of its own
+  editor.value = 'print \"keys then run {2 + 3}\"\\n';
+  editor.dispatchEvent(new Event('input'));
+  editor.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', metaKey: true, bubbles: true}));
+  const keyed = await settled('output', t => t === edited || t === 'running…');
+  return {out: first, fanout: second, repl: answer ? answer.textContent : '',
+          edited, keyed};
 };
 """
 
@@ -174,6 +188,11 @@ def main():
     # run button and needs its own probe
     if "5" not in (playground.get("repl") or ""):
         failures.append(f"the repl did not answer: {playground.get('repl')!r}")
+    # the run button against source the visitor typed, and the ⌘⏎ listener
+    if "edited then run 42" not in (playground.get("edited") or ""):
+        failures.append(f"the run button did not run edited source: {playground.get('edited')!r}")
+    if "keys then run 5" not in (playground.get("keyed") or ""):
+        failures.append(f"⌘⏎ did not run edited source: {playground.get('keyed')!r}")
 
     for line in failures:
         print(f"FAIL  {line}")
