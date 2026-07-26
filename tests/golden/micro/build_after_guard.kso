@@ -1,0 +1,14 @@
+type cell
+  tag:string
+  link:any
+
+fn tie n
+  return none if (n < 1)
+  pair = build
+    a = cell "a" none
+    b = cell "b" a
+    a.link = b
+    a
+  pair.link.tag
+
+pub play = print "{tie 1}"

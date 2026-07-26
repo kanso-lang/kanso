@@ -596,6 +596,9 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     let is_return = |line: &Line| matches!(line.tokens.first(), Some((Tok::KwReturn, _)));
     // a construct owns the deeper lines beneath it, so the leading run is
     // walked at the top indent and skips past a block's body
+    // each unit is a leading line plus whatever it owns beneath it, so a
+    // `build` or `if` header travels with its body rather than alone
+    let mut units: Vec<std::ops::Range<usize>> = Vec::new();
     let lead_end = {
         let mut i = 0;
         loop {
@@ -607,6 +610,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
             if !leads {
                 break i;
             }
+            let start = i;
             let base = body[i].indent;
             i += 1;
             while i < body.len() && body[i].indent > base {
@@ -621,6 +625,7 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                     i += 1;
                 }
             }
+            units.push(start..i);
         }
     };
     if let Some(stray) = body[lead_end..].iter().find(|l| is_return(l)) {
@@ -634,10 +639,12 @@ fn parse_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
         return parse_effect_body(&body[lead_end..], &body[..lead_end]);
     }
     let mut cont = parse_effect_body(&body[lead_end..], &[])?;
-    for line in body[..lead_end].iter().rev() {
+    for unit in units.iter().rev() {
+        let lines = &body[unit.clone()];
+        let line = &lines[0];
         if !is_return(line) {
-            let stmt = parse_stmt(line)?;
-            cont.insert(0, stmt);
+            let stmts = parse_lead_stmts(lines)?;
+            cont.splice(0..0, stmts);
             continue;
         }
         let (cond, early, span) = parse_return(line)?;

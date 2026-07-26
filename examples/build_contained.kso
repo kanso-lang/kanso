@@ -1,0 +1,26 @@
+type node
+  name:string
+  peer:any
+
+fn tie label
+  build
+    here = node label none
+    there = node "pong" none
+    here.peer = there
+    there.peer = here
+    here
+
+fn round_trip n
+  n.peer.peer.name
+
+fn spin 0 acc
+  acc
+
+fn spin n acc
+  spin (n - 1) (acc + length (round_trip (tie "ping")))
+
+pub play =
+  knot = tie "ping"
+  print "one hop: {knot.peer.name}"
+  >> print "back home: {round_trip knot}"
+  >> print "twenty thousand more, all discarded: {spin 20000 0}"
