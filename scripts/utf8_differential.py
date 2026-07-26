@@ -10,6 +10,7 @@ Exhaustive over every string of three bytes or fewer, then sampled over the
 lengths that straddle the sixteen-byte vector boundary.
 """
 import pathlib
+import platform
 import re
 import subprocess
 import sys
@@ -50,8 +51,13 @@ def main():
         work = pathlib.Path(work)
         (work / "extracted.h").write_text(extracted(source))
         binary = work / "harness"
+        # the validator's x86 path is written in ssse3 intrinsics, which clang
+        # refuses to compile unless the target is told it has them
+        arch = platform.machine()
+        flags = ["-mssse3"] if arch in ("x86_64", "AMD64") else []
         build = subprocess.run(
-            ["clang", "-O2", "-o", str(binary), str(ROOT / "scripts/utf8/harness.c"), f"-I{work}"],
+            ["clang", "-O2", *flags, "-o", str(binary),
+             str(ROOT / "scripts/utf8/harness.c"), f"-I{work}"],
             capture_output=True,
             text=True,
         )
