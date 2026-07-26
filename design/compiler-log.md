@@ -3707,3 +3707,36 @@ against.
 
 Still unbuilt, both halves. `type <k>foo` does not parse, and neither does the
 parameterization the gavel reserves.
+
+## 2026-07-25 — CORRECTION: `<k>` generalizes, so it is a parameter and "constraint" stays free
+
+Clay, an hour after the previous gavel: "`<>` isn't even a type 'constraint',
+it's the opposite. it is more like a 'generic'. you don't have to name a
+specific type, you just generalize to some rule/pattern."
+
+He is right, and the error in the entry above is a baseline error. I compared
+`<k>` against writing `name:any, friend_names:any[]` — and against that, `k`
+does constrain, because it forces the two to agree. But nobody writes that.
+The real alternative is `name:string, friend_names:string[]`, and against that
+`k` generalizes: one declaration standing for every element type, where
+otherwise you write a second `foo` for every type you need. Generalization is
+what it is for; the agreement among occurrences is how it is achieved.
+
+THE PRACTICAL REASON THE WORDS SHOULD NOT BE SWAPPED. A constraint, in the
+ordinary sense every reader arrives with, is a *bound on* a parameter — `k`
+must be comparable, `k` must render. Kanso has no bounds today. If it ever
+grows them, that is what they will be called, and the vocabulary should not
+already be spent on the parameter itself.
+
+SO: `<k>` declares a type PARAMETER. `foo[string]` applies it. A future bound
+on `k` would be a constraint, and the word is reserved for that.
+
+WHAT SURVIVES FROM THE PREVIOUS ENTRY, unchanged and still argued: the binder
+stays. Fields say which positions share a name; they cannot say the name is a
+variable rather than a type, and without that a later type called `k` would
+silently convert a parameter into a concrete annotation. Order still comes
+from first appearance. Relating still lives in type declarations and not in
+function signatures.
+
+What changes is only the name, and one entry's worth of reasoning that ran the
+comparison against a baseline nobody writes.
