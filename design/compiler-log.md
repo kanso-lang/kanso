@@ -3897,3 +3897,43 @@ rather than throughput.
 That is worth having and worth stating precisely. The compiler page's memory
 claims live on the same footing as its speed claims, and this moves one and
 not the other.
+
+## 2026-07-25 — BUILT, MEASURED, DECLINED: eta-reduction is not semantics-preserving here
+
+Reverted. The reason is better than the optimization was.
+
+`(a b -> f a b)` denotes `f` in most languages, so replacing the closure with
+the function value looks free. In kanso it is not, because an `err` records a
+hop for every function it passes through, and the eta-expanded lambda is a
+function. Removing it changes the provenance the trace prints.
+
+The book harness caught it on ch05's welcome sample:
+
+    native:       born in first at welcome.kso:4
+                  passed through greet
+    interpreter:  born in first at welcome.kso:4
+
+Native and the oracle disagreeing is the one thing the differential law does
+not permit, and no amount of speed would buy it. The interpreter does not do
+this rewrite, and teaching it to would mean changing the semantics of error
+provenance to suit a codegen optimization — the oracle defines the semantics,
+not the other way round.
+
+Worth noting which trace is *truer*: the value really does pass through
+`greet`, so the native line is arguably the honest one and the lambda was
+hiding a real hop. That is a semantics question about what a hop means, and it
+belongs to a gavel rather than to an optimization's side effects.
+
+WHAT IT WOULD HAVE BOUGHT, measured with the change actually present:
+encode allocs 68,640,508 -> 67,222,108 (-2.1%), alloc_bytes -34 MB,
+arena_blocks 2205 -> 2165. And no time at all: +0.5% on floors over twenty
+interleaved cpu runs. An arena allocation is a bump pointer, so removing 1.4
+million of them buys allocation volume and peak pressure, never throughput.
+
+So the ledger reads: a memory-only win, forbidden by the differential law,
+declined. Recorded so the idea stays declined, and so the next person who
+notices `w_klam29` in a profile finds this entry instead of rediscovering it.
+
+The encode-side lead that remains is unchanged: those 47 samples are a wrapper
+hop into a byte-discriminating group, and collecting them needs the value ABI
+to carry such a group — an ABI change, not a rewrite.

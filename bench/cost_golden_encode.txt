@@ -1,6 +1,6 @@
-allocs=67222108
-alloc_bytes=2254220816
-arena_blocks=2165
+allocs=68640508
+alloc_bytes=2288262416
+arena_blocks=2205
 perm_allocs=5
 beat_iters=1
 thunk_allocs=0
