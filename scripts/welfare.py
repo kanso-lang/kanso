@@ -81,16 +81,43 @@ def terms():
     }
 
 
+def satisfaction(ratio):
+    """How much a term being `ratio` times better than baseline is worth.
+
+    A straight ratio says the tenth halving is worth as much as the first,
+    which is false: past a point a program is fast enough that making it twice
+    as fast again buys almost nothing. A logarithm is the usual reach, and it
+    still pays every doubling equally. This saturates instead — each doubling
+    is worth less than the one before, and no single term can run away with
+    the score.
+
+        ratio  0.25   0.5    1     2     4     8    16     inf
+        value  0.20   0.33  0.50  0.67  0.80  0.89  0.94   1.00
+
+    It is deliberately asymmetric around the baseline. Halving a term's
+    performance costs more than doubling it gains, which is the right shape
+    for a ratchet: a project protecting what it has should not be able to buy
+    a regression with a speculative win somewhere else.
+    """
+    return ratio / (ratio + 1.0)
+
+
+# every term sits at exactly this when it matches baseline, so a project that
+# has changed nothing scores exactly 100
+BASELINE_SATISFACTION = 0.5
+
+
 def score(now, base):
-    """Weighted ratio of baseline to current, as a percentage. A term that
-    halves doubles its contribution; one that doubles halves it."""
+    """The one number. A weighted sum of per-term satisfaction, scaled so the
+    recorded baseline reads 100. Two hundred is the unreachable ceiling where
+    every term costs nothing."""
     total = 0.0
     for key, weight in WEIGHTS.items():
         # a term that reached zero is better than any baseline, and dividing
         # by it would say infinity rather than "as good as this gets"
         current = now[key] if now[key] else 0.5
-        total += weight * (base[key] / current)
-    return 100.0 * total
+        total += weight * satisfaction(base[key] / current)
+    return 100.0 * total / BASELINE_SATISFACTION
 
 
 def main():
