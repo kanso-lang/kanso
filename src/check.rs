@@ -680,6 +680,17 @@ fn check_build_blocks(program: &Program, diags: &mut Vec<Diagnostic>) {
 }
 
 fn build_walk_stmt(stmt: &Stmt, type_names: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    // a `Set` reached here is one no `build` block enclosed: writing a field is
+    // the one mutation the language has, and it lives in a build block only
+    if let Stmt::Set { target, field, span, .. } = stmt {
+        diags.push(Diagnostic::new(
+            "build",
+            format!(
+                "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
+            ),
+            *span,
+        ));
+    }
     match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
             build_walk_expr(expr, type_names, diags);
@@ -697,13 +708,13 @@ fn build_walk_expr(expr: &Expr, type_names: &HashSet<&str>, diags: &mut Vec<Diag
                         born.insert(name);
                     }
                 }
-                Stmt::Set { target, span, .. } if !born.contains(target.as_str()) => {
+                Stmt::Set { target, field, span, .. } if !born.contains(target.as_str()) => {
                     diags.push(Diagnostic::new(
                         "build",
                         format!(
-                            "`set` writes only block-born values: `{target}` is not a \
-                             construction made in this `build` block, so it stays \
-                             immutable"
+                            "`{target}.{field} = ...` writes only block-born values: \
+                             `{target}` is not a construction made in this `build` \
+                             block, so it stays immutable"
                         ),
                         *span,
                     ));
@@ -1202,7 +1213,7 @@ impl Resolver<'_> {
             false if name == "set" => {
                 self.diags.push(Diagnostic::new(
                     "name",
-                    "`set` lives inside `build` — mutation does not parse anywhere else"
+                    "a field is written by assignment inside a `build` block: `target.field = value`"
                         .to_string(),
                     span,
                 ));

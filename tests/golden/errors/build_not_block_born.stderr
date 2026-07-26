@@ -1,4 +1,4 @@
-error[build]: `set` writes only block-born values: `n` is not a construction made in this `build` block, so it stays immutable
-  --> build_not_block_born.kso:8:5
-   8 |     set n peers [a]
-           ^
+error[build]: `n.peers = ...` writes only block-born values: `n` is not a construction made in this `build` block, so it stays immutable
+  --> build_not_block_born.kso:8:7
+   8 |     n.peers = [a]
+             ^

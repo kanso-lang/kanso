@@ -4367,3 +4367,39 @@ this morning as such. A percent does not buy that.
 
 Recorded on the compiler page beside the technique so the idea stays declined,
 and so the next person reaching for the obvious free win finds the numbers.
+
+## 2026-07-25 — GAVEL, IMPLEMENTED: a field is written by assignment
+
+Clay: "i think it would read better to just use assignment in the build block.
+that's the one place you can do mutation."
+
+    pair = build
+      a = node "a" none
+      b = node "b" a
+      a.next = b
+      [a b]
+
+WHAT MOVED. `a.next = b` parses as the field write; `set a next b` is gone, and
+the name `set` returns to being an ordinary identifier. The old form was
+application-shaped so that the name stayed free elsewhere, which was a real
+reason, but it left the language reading a field one way and writing it
+another: `a.next` to read, `set a next` to write. Two spellings for one idea,
+which the no-superfluous rule does not allow once a single one exists.
+
+THE ASYMMETRY IS WHAT PROMPTED IT. Dot field access shipped after `set` was
+designed (#194-#196), and that is what made the mismatch visible — before it,
+there was no dotted read for the write to disagree with.
+
+WHAT THE CHECKER STILL ENFORCES, and had to be taught the new shape. A write
+outside a `build` block is rejected: the old rejection rode on `set` being an
+unknown name, which an assignment has no way to trigger, so an assignment
+outside a block reached the interpreter and hit an unreachable. It now
+diagnoses at check time — "`a.next = ...` writes a field, and only a `build`
+block may do that" — and the block-born rule reports in the same vocabulary.
+
+MIGRATED: five .kso files across examples, the mem golden, the runtime and
+error corpora, and the compile-cost sample. Three error goldens regenerated,
+one of which now tests the assignment form's own diagnostic rather than the
+unknown-name path it used to ride.
+
+15 suites, the book, and 73 browser-differential programs all green.

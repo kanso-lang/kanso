@@ -6,20 +6,20 @@ pub play =
   ring1 = build
     a = node 1 0
     b = node 2 0
-    set a peer b
-    set b peer a
+    a.peer = b
+    b.peer = a
     a
   twin = build
     c = node 1 0
     d = node 2 0
-    set c peer d
-    set d peer c
+    c.peer = d
+    d.peer = c
     c
   other = build
     e = node 1 0
     f = node 99 0
-    set e peer f
-    set f peer e
+    e.peer = f
+    f.peer = e
     e
   print "{ring1 == twin}"
   >> print "{ring1 == other}"

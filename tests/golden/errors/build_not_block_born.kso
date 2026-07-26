@@ -5,7 +5,7 @@ type node
 fn mutate n
   build
     a = node 9 []
-    set n peers [a]
+    n.peers = [a]
     a
 
 pub play =

@@ -87,8 +87,8 @@ main =
   ring = build
     a = node 1 0
     b = node 2 0
-    set a peer b
-    set b peer a
+    a.peer = b
+    b.peer = a
     a
   print \"{ring}\"
 ",
