@@ -2,10 +2,13 @@
 """One line of the performance history the compiler page charts.
 
 Only machine-invariant numbers go in. The counters are algorithm-level events
-and the compile golden counts fixpoint rounds and expression visits, so a
-noisy runner cannot move them — a change here is somebody's deliberate edit,
-which is exactly the trend worth publishing. Wall-clock belongs on the board
-Clay measures by hand, not here.
+and the compile golden counts fixpoint rounds and expression visits, so a noisy
+runner cannot move them — a change here is somebody's deliberate edit, which is
+exactly the trend worth publishing. Wall-clock belongs on the board Clay
+measures by hand, not here.
+
+Three veins feed it: what decoding costs, what encoding costs, and what
+deciding and emitting cost the compiler.
 """
 import json
 import subprocess
@@ -14,27 +17,52 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# The counters worth a chart: the flat-memory guarantee, the rewind count, and
-# each kernel's presence. The rest of the golden stays in the golden.
-WATCHED = ("allocs", "alloc_bytes", "arena_blocks", "beat_iters", "el_parses", "utf8_bytes")
+# Decode: the flat-memory guarantee, the rewind count, and each kernel's
+# presence. A kernel silently dropped in a merge turns one of these to zero.
+DECODE = (
+    "allocs",
+    "alloc_bytes",
+    "arena_blocks",
+    "perm_allocs",
+    "beat_iters",
+    "el_parses",
+    "utf8_bytes",
+    "find2_calls",
+)
+
+# Encode: the write path, where the builder and the float renderer live.
+ENCODE = (
+    "allocs",
+    "arena_blocks",
+    "ryu_renders",
+    "append_fast",
+    "append_grow",
+    "utf8_zerocopy",
+)
 
 
-def counters(path):
+def counters(path, watched):
     pairs = (line.split("=", 1) for line in path.read_text().splitlines() if "=" in line)
-    return {k: int(v) for k, v in pairs if k in WATCHED}
+    return {k: int(v) for k, v in pairs if k in watched}
 
 
 def compile_work(path):
     """Totals across the samples: what deciding cost, and what got written."""
-    rounds = visits = lines = 0
+    totals = dict.fromkeys(("rounds", "visits", "lines", "calls", "branches", "defines"), 0)
     for line in path.read_text().splitlines():
         if line.startswith("#") or "=" not in line:
             continue
         fields = dict(f.split("=", 1) for f in line.split() if "=" in f)
-        rounds += int(fields.get("rounds", 0))
-        visits += int(fields.get("visits", 0))
-        lines += int(fields.get("lines", 0))
-    return {"compile_rounds": rounds, "compile_visits": visits, "emitted_lines": lines}
+        for key in totals:
+            totals[key] += int(fields.get(key, 0))
+    return {
+        "compile_rounds": totals["rounds"],
+        "compile_visits": totals["visits"],
+        "emitted_lines": totals["lines"],
+        "emitted_calls": totals["calls"],
+        "emitted_branches": totals["branches"],
+        "emitted_defines": totals["defines"],
+    }
 
 
 def main():
@@ -47,7 +75,11 @@ def main():
     ).stdout.strip()
     sha, when, subject = head.split(" ", 2)
     record = {"commit": sha, "date": when, "subject": subject}
-    record.update(counters(ROOT / "bench/cost_golden.txt"))
+    record.update(counters(ROOT / "bench/cost_golden.txt", DECODE))
+    # the encode vein shares counter names with the decode one, so it is
+    # prefixed rather than merged
+    encode = counters(ROOT / "bench/cost_golden_encode.txt", ENCODE)
+    record.update({f"encode_{k}": v for k, v in encode.items()})
     record.update(compile_work(ROOT / "bench/compile_golden.txt"))
     json.dump(record, sys.stdout)
     print()
