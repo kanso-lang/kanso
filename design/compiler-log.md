@@ -4543,3 +4543,50 @@ all — a 500,000-deep recursion produced exit 1 and total silence. It now names
 the cause: `error[runtime]: the program ran out of stack: recursion went deeper
 than the stack holds`, with the signal number for anything that is not SIGSEGV.
 Pinned by a spec that was watched failing against the old path (empty stderr).
+
+## 2026-07-26 — a `build` block after a guard was read as a bare name
+
+Writing the containment example Clay asked for turned up a parser hole. This
+fails:
+
+    fn spin n acc
+      return acc if (n < 1)
+      pair = build
+        ...
+
+with `error[name]: unknown name `build``, while the same block without the
+guard line above it parses. The cause is in `parse_body`: when the leading run
+contains a `return`, the fold that wraps the guards walked the lead lines one
+at a time and called `parse_stmt` on each. A block header owns the indented
+lines beneath it, and a per-line parse cannot see them, so `pair = build`
+became a binding of the identifier `build`. The no-guard path never had the bug
+because it hands the whole lead run to `parse_lead_stmts`, which groups
+correctly.
+
+The lead run is now grouped into units — a line plus whatever it owns — at the
+point where `lead_end` is computed, and the guard fold walks units instead of
+lines, handing each non-return unit to the same `parse_lead_stmts` the other
+path uses. One grouping rule, two callers.
+
+MEASURED WHILE THERE, because the example needed to claim something true.
+Two-node cycles built inside a loop, each passed through a function that walks
+it and then discarded — two thousand in the shipped example, because the
+interpreter's debug build overflows its stack past about five thousand frames
+and CI runs the corpus in debug:
+
+    n=2000    allocs=16027   arena_blocks=1  beat_iters=2000
+    n=20000   allocs=160027  arena_blocks=1  beat_iters=20000
+
+Flat, which is the claim the example makes: a cycle crosses call boundaries
+like any other argument, and the cohort dies with its iteration.
+
+ONE CLIFF FOUND, not yet chased. The same loop carrying a *string* accumulator
+instead of an integer does not beat at all:
+
+    int carry:     arena_blocks=1   beat_iters=200000
+    string carry:  arena_blocks=37  beat_iters=0
+
+Same shape, same discards; the carried type decides whether the rewind
+happens. Carry evacuation is supposed to copy exactly this across the
+boundary, so either the analysis is refusing a case it could take or the
+evacuation cost is judged too high somewhere. Recorded as an open thread.
