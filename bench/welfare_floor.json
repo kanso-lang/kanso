@@ -8,5 +8,11 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 100.0
+  "floor": 100.0,
+  "history": [
+    {
+      "floor": 100.0,
+      "why": "baseline established at the utf-8 short-ascii fast path"
+    }
+  ]
 }

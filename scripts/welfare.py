@@ -19,8 +19,15 @@ point and higher is better. The weights say what the project is buying:
 runtime speed and footprint dominate, compile cost matters and matters less.
 
 Usage:
-    welfare.py                 print the current score against the floor
-    welfare.py --set           record the current score as the new floor
+    welfare.py                    print the current score against the floor
+    welfare.py --set "why"        record the score as the new floor, with the
+                                  reason it moved
+
+The sum is the objective. A term getting worse while the sum rises is the
+trade the weights exist to license, so the per-term breakdown below the score
+says where a move came from and never excuses one. A sum that falls means the
+change is worse by the weights as written — the argument to have is whether
+the weights are right, not whether this term deserves a pass.
 """
 import json
 import pathlib
@@ -74,16 +81,43 @@ def terms():
     }
 
 
+def satisfaction(ratio):
+    """How much a term being `ratio` times better than baseline is worth.
+
+    A straight ratio says the tenth halving is worth as much as the first,
+    which is false: past a point a program is fast enough that making it twice
+    as fast again buys almost nothing. A logarithm is the usual reach, and it
+    still pays every doubling equally. This saturates instead — each doubling
+    is worth less than the one before, and no single term can run away with
+    the score.
+
+        ratio  0.25   0.5    1     2     4     8    16     inf
+        value  0.20   0.33  0.50  0.67  0.80  0.89  0.94   1.00
+
+    It is deliberately asymmetric around the baseline. Halving a term's
+    performance costs more than doubling it gains, which is the right shape
+    for a ratchet: a project protecting what it has should not be able to buy
+    a regression with a speculative win somewhere else.
+    """
+    return ratio / (ratio + 1.0)
+
+
+# every term sits at exactly this when it matches baseline, so a project that
+# has changed nothing scores exactly 100
+BASELINE_SATISFACTION = 0.5
+
+
 def score(now, base):
-    """Weighted ratio of baseline to current, as a percentage. A term that
-    halves doubles its contribution; one that doubles halves it."""
+    """The one number. A weighted sum of per-term satisfaction, scaled so the
+    recorded baseline reads 100. Two hundred is the unreachable ceiling where
+    every term costs nothing."""
     total = 0.0
     for key, weight in WEIGHTS.items():
         # a term that reached zero is better than any baseline, and dividing
         # by it would say infinity rather than "as good as this gets"
         current = now[key] if now[key] else 0.5
-        total += weight * (base[key] / current)
-    return 100.0 * total
+        total += weight * satisfaction(base[key] / current)
+    return 100.0 * total / BASELINE_SATISFACTION
 
 
 def main():
@@ -95,9 +129,15 @@ def main():
             return 0
         held = json.loads(FLOOR.read_text())
         value = score(now, held["baseline"])
+        reasons = [a for a in sys.argv[1:] if a != "--set"]
+        if not reasons:
+            print("--set records why the objective moved: welfare.py --set \"reason\"",
+                  file=sys.stderr)
+            return 2
         held["floor"] = value
+        held.setdefault("history", []).append({"floor": round(value, 2), "why": " ".join(reasons)})
         FLOOR.write_text(json.dumps(held, indent=2) + "\n")
-        print(f"floor raised to {value:.2f}")
+        print(f"floor moved to {value:.2f}: {' '.join(reasons)}")
         return 0
 
     held = json.loads(FLOOR.read_text())
@@ -112,8 +152,9 @@ def main():
     # leaves room for a term that rounds
     if value < floor - 0.01:
         print(f"\nFAIL  welfare fell {floor - value:.2f} below the floor.")
-        print("A trade may still be right — say which term paid and why, then")
-        print("run welfare.py --set to move the floor deliberately.")
+        print("The sum is the objective, so this change is worse by the weights as")
+        print("written. Either it goes, or the argument is that the weights are wrong —")
+        print("make that argument, then welfare.py --set \"the reason\".")
         return 1
     if value > floor + 0.01:
         print(f"\nwelfare is {value - floor:.2f} above the floor; run --set to hold the gain.")

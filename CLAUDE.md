@@ -123,13 +123,33 @@ A clean grep is necessary, not sufficient — the families above are wider than 
   recorded baseline; a hundred is the reference and higher is better. Every
   term is deterministic, so the number moves only when somebody changes the
   compiler. CI fails when it drops.
-- **A fall is not automatically a veto, but it is automatically a stop.** Say
-  which term paid, what bought it, and why the trade is worth taking — then
-  move the floor deliberately with `welfare.py --set`. A language feature that
-  costs performance is allowed; a language feature that costs performance
-  quietly is not.
+- **The sum is the objective; the terms are diagnostics.** A term getting worse
+  is not a problem to defend if the sum went up — that trade is precisely what
+  the weights are for, and refusing it would be optimising a part against the
+  whole. The per-term breakdown exists to say *where* a move came from, never
+  to excuse one.
+- **A fall means the change is worse by the project's own stated preferences.**
+  There is nothing to argue about the term that paid. Either the change goes,
+  or the claim is that the *weights* are wrong — and that is a real argument,
+  made about the weights, recorded, and settled before the floor moves. Moving
+  the floor to accommodate a change while leaving the weights alone is
+  declaring the objective wrong without saying so.
 - **A rise is held, not banked.** When the number goes up, run `--set` in the
   same PR. A gain nobody ratchets is a gain the next change is free to spend.
+- **Improvement saturates; regression does not.** Each term's contribution is
+  `r / (r + 1)` where `r` is baseline over current, so successive doublings pay
+  less and less — a quarter-weight term gains 8.3 points for the first
+  doubling, 6.7 for the next, then 4.4, 2.6, 1.4. Past a point a program is
+  fast enough that halving its cost again buys almost nothing, and a straight
+  ratio would say otherwise. The curve is deliberately asymmetric: halving a
+  term's performance costs more than doubling it gains, so a regression cannot
+  be bought with a speculative win elsewhere.
+- **The function is provisional and says so.** Seven deterministic terms are a
+  model of what the project wants, not the thing itself; wall time is absent
+  because it cannot be made deterministic, and what a model leaves out it
+  implicitly weights at zero. Arguing the model is the intended way to change
+  it. Every `--set` records why, so the history of the objective is readable
+  beside the history of the code.
 - **This does not replace the per-counter goldens.** They say which kernel
   moved; welfare says whether the project came out ahead. The first catches a
   deletion, the second catches a trade.
