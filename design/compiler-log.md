@@ -4920,3 +4920,42 @@ language, so a sentence asserting a feature does not exist can outlive the
 feature's arrival indefinitely. That is the gap worth closing next, and the
 cheapest form is a list of claims the book makes about what kanso lacks, each
 paired with a program that must fail to compile.
+
+## 2026-07-26 — MEASURED, DECLINED: maximal sharing, and the redundancy is somewhere else
+
+Next off the queue. The entry's premise was that real-world json is deeply
+repetitive, so the repetition got counted before anything got built.
+`scripts/json_redundancy.py` counts the three kinds separately, because they
+call for different techniques:
+
+    subtrees        5,513 occurrences   5,210 distinct    5.5% redundant    2,831 B ( 1.5%)
+    object keys     8,361 occurrences     500 distinct   94.0% redundant   38,537 B (20.4%)
+    string values   2,114 occurrences   2,114 distinct    0.0% redundant        0 B ( 0.0%)
+
+Hash-consing's target is the first row, and it is nearly empty: only 65 of the
+5,210 distinct subtrees appear more than once, and sharing every one of them
+saves 1.5% of the file. The three largest repeats are `[true]`, `[null]` and
+`[false]`, six bytes each. Paying a hash over every subtree during decode to
+recover that is a straight loss, so the technique is declined on the numbers
+rather than on taste.
+
+The repetition is real, it just does not live where the technique looks. It is
+entirely in object keys — 94% redundant, a fifth of the file — while string
+values repeat exactly zero times. So the shape that would pay is key interning,
+not subtree sharing. Its prize is not the copying, which is trivial against an
+arena bump, but pointer-compare map lookups, and the profile bounds map work
+at roughly 3%. Not built either; noted as the honest version of the idea.
+
+QUEUE STATUS AFTER THIS PASS. Shipped and verified this sitting: dispatch as
+jump tables (the emitted `d_value_for_3` is a real `switch`, six literal-byte
+arms, 32 such switches in the module). Declined with numbers: maximal sharing
+(here), eytzinger (earlier), profile-guided optimization (earlier), and tail
+recursion modulo context, which was already closed as "already won" because
+kanso builds with flat arrays and a frontier push rather than cons cells.
+Declined by profile: eisel-lemire's decode mirror and dragonbox, since float
+parsing is 1.8% of decode — they wait for a float-heavy workload rather than
+being built on spec.
+
+Still genuinely open, in the order the profile ranks them: call-pattern
+specialization against the dispatcher at 19.8%, and the in-place/fully-in-place
+family against buffer copying at 14.4%.
