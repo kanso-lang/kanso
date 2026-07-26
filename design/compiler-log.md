@@ -3740,3 +3740,51 @@ function signatures.
 
 What changes is only the name, and one entry's worth of reasoning that ran the
 comparison against a baseline nobody writes.
+
+## 2026-07-25 — OPEN (not gaveled): `&` merges records, and why the committee's objection weakened
+
+Recording the trail because I argued both sides within an hour and the reasons
+matter more than the conclusion.
+
+CLAY'S CASE. A five-field `user`, and a nested function that wants two of those
+fields. Rather than invent an ad-hoc type or duplicate the pair, extract the
+pair as a type and use it in `user`'s definition. He has done this in
+typescript, where `&` makes it easy.
+
+THE COMMITTEE SAID NO FIRST. Hickey: merging lets you avoid naming the thing
+two records share, and that name is usually the missing concept. Beck: no case
+in the tree today, so prefer duplication until two real ones appear. Bernhardt:
+an intersection has no identity — it means whatever those two happened to
+contain — and kanso dispatches nominally, so a type's name should mean
+something.
+
+WHAT WEAKENED IT. Records carry no behaviour, so the diamond that makes
+multiple inheritance ugly largely evaporates: there is no method resolution
+order to define, only field names. Two paths contributing the same field at
+the same type dedup to one; the same name at different types is a compile
+error rather than a policy. The objection was borrowed from languages where
+inheritance carries code, and it does not transfer intact.
+
+AND MY COUNTER-PROPOSAL WAS WORSE. I offered record extension through the
+existing subtype relation — `type user identity` plus new fields — which the
+experiment shows is not what that form means today: a record subtype is a
+newtype WRAPPER (`user 30 "clay"` fails with "`user` wraps one identity
+value"), not an extension. More importantly extension is single-parent by
+nature, and real records have several natural groups — identity, contact,
+audit. Clay's case scaled up is exactly what a chain cannot serve.
+
+THE GLYPH OBJECTION IS WITHDRAWN. Clay: `&` is famously both reference and
+intersection and is unambiguous here. C++, rust and typescript all carry both
+senses without confusion, and the positions are disjoint.
+
+WHAT REMAINS TO SETTLE, and none of it is ruled yet:
+  - a `user` must be accepted where `identity` is expected, or the feature
+    misses the case; it stays nominal because the composition is declared
+  - collision: identical name and type dedups, differing types is an error
+  - named results only, matching the typeset gavel — `type foo bar & baz`,
+    never a bare `bar & baz` in a parameter position
+  - records only; `&` on typesets stays union, mixing rejected
+  - variance: whether `[]user` is acceptable as `[]identity`. The diamond's
+    absence does not help here. Safest answer is no — containers invariant.
+
+Unbuilt, and behind the parameter and binder work, which is itself unbuilt.
