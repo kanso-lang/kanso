@@ -5676,3 +5676,39 @@ complete — strings, type names and fields all carry scopes — so an editor
 showing them unhighlighted is not reading this file: `editors/kanso` is a vs
 code extension, and jetbrains needs it registered under Editor → TextMate
 Bundles pointing at that directory.
+
+## 2026-07-26 — CORRECTION: the sum is the objective, not a scoreboard of terms
+
+Clay, on the welfare function shipped an hour ago: "seven deterministic terms
+is not the final welfare function, because it may be a utility increase for one
+of them to get worse if another gets better by a compensatory amount. utility
+is the one single summed Thing To Optimize."
+
+The arithmetic was already right — the score is a weighted sum, so compensatory
+trades are exactly what it licenses. What was wrong is the rule written around
+it. "A fall stops the change; say which term paid and why the trade is worth
+taking" treats individual terms as things to defend, which is optimising a part
+against the whole. If the sum is the objective then a term getting worse while
+the sum rises needs no defence at all, and a sum that falls is not a trade to
+justify — it is a change that is worse by the project's own stated preferences.
+
+WHAT THE RULE SAYS NOW. The per-term breakdown is diagnostic: it says where a
+move came from and never excuses one. When the sum falls there is nothing to
+argue about the term that paid; either the change goes, or the claim is that
+the *weights* are wrong, and that argument is made about the weights, recorded,
+and settled before the floor moves. Moving the floor to fit a change while
+leaving the weights alone declares the objective wrong without saying so.
+
+Verified on a compensatory trade rather than asserted: decode allocations down
+thirty percent against encode allocations up twenty reads 107.57 and passes,
+with the encode row shown as diagnosis and no complaint attached to it.
+
+`--set` now requires a reason and records it, so the history of the objective
+is readable beside the history of the code. The first entry names the sitting
+the baseline was taken at.
+
+AND THE FUNCTION SAYS IT IS PROVISIONAL, which is the other half of Clay's
+point. Seven terms are a model of what the project wants, not the thing itself.
+Wall time is absent because it cannot be made deterministic, and whatever a
+model leaves out it weights at zero — so arguing the model is the intended way
+to change it, not a workaround.

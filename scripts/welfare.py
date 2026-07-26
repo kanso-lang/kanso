@@ -19,8 +19,15 @@ point and higher is better. The weights say what the project is buying:
 runtime speed and footprint dominate, compile cost matters and matters less.
 
 Usage:
-    welfare.py                 print the current score against the floor
-    welfare.py --set           record the current score as the new floor
+    welfare.py                    print the current score against the floor
+    welfare.py --set "why"        record the score as the new floor, with the
+                                  reason it moved
+
+The sum is the objective. A term getting worse while the sum rises is the
+trade the weights exist to license, so the per-term breakdown below the score
+says where a move came from and never excuses one. A sum that falls means the
+change is worse by the weights as written — the argument to have is whether
+the weights are right, not whether this term deserves a pass.
 """
 import json
 import pathlib
@@ -95,9 +102,15 @@ def main():
             return 0
         held = json.loads(FLOOR.read_text())
         value = score(now, held["baseline"])
+        reasons = [a for a in sys.argv[1:] if a != "--set"]
+        if not reasons:
+            print("--set records why the objective moved: welfare.py --set \"reason\"",
+                  file=sys.stderr)
+            return 2
         held["floor"] = value
+        held.setdefault("history", []).append({"floor": round(value, 2), "why": " ".join(reasons)})
         FLOOR.write_text(json.dumps(held, indent=2) + "\n")
-        print(f"floor raised to {value:.2f}")
+        print(f"floor moved to {value:.2f}: {' '.join(reasons)}")
         return 0
 
     held = json.loads(FLOOR.read_text())
@@ -112,8 +125,9 @@ def main():
     # leaves room for a term that rounds
     if value < floor - 0.01:
         print(f"\nFAIL  welfare fell {floor - value:.2f} below the floor.")
-        print("A trade may still be right — say which term paid and why, then")
-        print("run welfare.py --set to move the floor deliberately.")
+        print("The sum is the objective, so this change is worse by the weights as")
+        print("written. Either it goes, or the argument is that the weights are wrong —")
+        print("make that argument, then welfare.py --set \"the reason\".")
         return 1
     if value > floor + 0.01:
         print(f"\nwelfare is {value - floor:.2f} above the floor; run --set to hold the gain.")
