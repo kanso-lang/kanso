@@ -3860,3 +3860,40 @@ THE REAL TARGET IS NOW NAMED. Making byte-discriminating groups carriable as
 function values would collect those 47 samples. That is an ABI change — the
 value wrapper would need to unbox the discriminator — and it is the shape
 SpecConstr was queued for. Recorded as the next encode-side lead.
+
+## 2026-07-25 — correcting the eta-reduction entry: it pays in memory, not time, and my measurement lied twice
+
+The entry above says the reduction does not fire on the case that motivated it
+and moves two allocations. Both halves were measured against a working tree
+that had silently lost the commit.
+
+WHAT HAPPENED. After a merge attempt failed I ran `git reset --hard
+origin/main` while standing on the feature branch, which reset the branch to
+main and discarded the change locally; the commit survived only on the remote.
+Every measurement after that point compiled a tree without the optimization,
+so "encode counters unchanged" was comparing a build to itself. The tell was
+there and I read past it: the golden in the branch disagreed with a fresh
+build in the direction of the change, which cannot happen if the change is
+absent.
+
+THE REAL NUMBERS, with the commit actually present:
+
+    encode allocs        68,640,508 -> 67,222,108   (-1,418,400, -2.1%)
+    encode alloc_bytes    2,288,262,416 -> 2,254,220,816   (-34 MB)
+    encode arena_blocks         2,205 -> 2,165
+    decode allocs        12,924,473 -> 12,924,471
+
+So it does fire on the encode path, and `esc_byte` is reducible after all —
+`simple_fn_value` refuses byte *discriminators*, and esc_byte's literal-byte
+arms do not make its parameters unboxed here, so the group qualifies.
+
+AND IT DOES NOT MAKE ENCODE FASTER. Twenty interleaved cpu-time runs: +0.5% on
+floors, +0.8% on medians — noise, and if anything the wrong sign. Removing 1.4
+million allocations bought no time because an arena allocation is a bump
+pointer; the cost was never the allocating. What it buys is 34 MB of
+allocation volume and forty fewer arena blocks, which is peak-memory pressure
+rather than throughput.
+
+That is worth having and worth stating precisely. The compiler page's memory
+claims live on the same footing as its speed claims, and this moves one and
+not the other.
