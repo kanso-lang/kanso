@@ -7951,3 +7951,39 @@ money 350 before the merge landed), and the sentinel arm dies with
 error[ownership] at exit 2. One open design question recorded in
 render-plan.md: dependency modules' arms stay qualified and never join
 the root group — whether they should is a surface question for Clay.
+
+## 2026-07-27 — the dance learns its own weight (kq submodule: built, measured, declined)
+
+The standing goal is kq beating jq on every row, and the cohort looked
+like the missing piece: vendoring denies kq the boundary, so a
+decode-submodule restructure (kq's own light decoder behind a local
+import) was built and raced. Hash-identical output; the peak went the
+wrong way — 47.5 to 72 MB on the full print, 26.6 to 58.7 on the path
+query. The decomposition taught four things about the dance itself,
+each now fixed in the runtime:
+
+1. The carry pair is a per-depth static sized for loops that stage
+   again; a cohort stages once, so a 13 MB survivor left 26 MB of carry
+   buffers live for the rest of the process. Cohort pops free the pair.
+2. Rewound blocks sit in the spare chain for hot-loop reuse; a one-shot
+   boundary has no hot loop coming, and the malloc'd print builder
+   cannot use arena spare. Cohort pops release spare beyond two blocks.
+3. The ratio guard priced reclaim against copy but not the dance's
+   transient peak: evacuating a survivor much larger than the threshold
+   scale makes the carry buffers the peak. A survivor cap (4x the block
+   threshold, 2 MB) refuses those dances.
+4. The guard's own sizing pass walked the whole survivor and fed a
+   seen-map proportional to it — 13 MB of measurement to decide not to
+   act. The pass now carries a budget and stops at the verdict.
+
+With all four, the kq submodule build reads 29.8 / 49.5 MB against
+main's 26.6 / 47.5 — the cohort correctly refuses to fire on
+live-data-dominated workloads, and the residual is module overhead
+plus the bounded guard walk. The restructure is DECLINED (branch
+kq:decode-submodule preserved with the numbers); the shelf finding
+stands — kq's remaining gap is the live document and the output, and
+no free-the-garbage scheme touches it. The oneshot fire is unchanged
+(survivor under the cap, garbage-dominated), veins byte-identical.
+What this bought is armor: any root program handing a large document
+across a licensed boundary would have paid the 2x dance; now it
+cannot.

@@ -243,6 +243,24 @@ static void k_stats_dump(void) {
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
 }
 
+/* A one-shot boundary returns its garbage to the allocator. A cohort
+   rewind's spare blocks have no hot loop waiting to recycle them, and
+   megabytes of dead pages held in spare are exactly the peak the license
+   exists to cut. Hot-loop rewinds never call this; they keep their warm
+   pages. */
+static void k_spare_release(int keep) {
+    KBlock** link = &k_spare;
+    for (KBlock* b = *link; b; b = *link) {
+        if (keep > 0) {
+            keep--;
+            link = &b->next;
+            continue;
+        }
+        *link = b->next;
+        free(b);
+    }
+}
+
 static void k_arena_push(size_t need) {
     KBlock** link = &k_spare;
     while (*link && (*link)->cap < need) link = &(*link)->next;
@@ -541,13 +559,23 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
 
 static size_t k_copy_size(KValue v, KMark* m);
 
+/* The cohort guard sizes a survivor only until the verdict is settled: a
+   walk past the budget already means "keep", and the seen-map the walk
+   feeds would otherwise grow with the whole survivor. Zero disables the
+   budget (the carry's own full-size pass). */
+static size_t k_copy_size_budget = 0;
+static size_t k_copy_size_spent = 0;
+
 static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
     (void)p;
-    return (n + 15) & ~(size_t)15;
+    size_t rounded = (n + 15) & ~(size_t)15;
+    k_copy_size_spent += rounded;
+    return rounded;
 }
 
 static size_t k_copy_size(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
+    if (k_copy_size_budget && k_copy_size_spent > k_copy_size_budget) return 0;
     const void* p = (const void*)(intptr_t)v.payload;
     if (k_survives(p, m)) return 0;
     if (k_copy_seen_check(p)) return 0;
@@ -833,6 +861,7 @@ KValue k_cohort_pop(KValue r) {
         k_beat_depth--;
         k_cache_reg_sweep(m);
         k_beat_rewind(m);
+        k_spare_release(2);
         k_stat_cohort_frees++;
         return r;
     }
@@ -843,8 +872,17 @@ KValue k_cohort_pop(KValue r) {
        the region when it exceeds half the reclaim. */
     k_ptrmap_begin(&k_copy_seen);
     k_copy_seen_live = 0;
+    size_t cap = (size_t)(4 << 19);
+    size_t half = (size_t)(grown / 2);
+    k_copy_size_budget = cap < half ? cap : half;
+    k_copy_size_spent = 0;
     size_t survivor = k_copy_size(r, m);
-    if ((long long)(2 * survivor) > grown) {
+    k_copy_size_budget = 0;
+    /* two refusals: a copy that exceeds half the reclaim buys too little,
+       and a survivor much larger than the threshold scale makes the carry
+       buffers themselves the peak — the dance transiently holds the copy
+       twice on top of the garbage it frees */
+    if ((long long)(2 * survivor) > grown || survivor > cap) {
         if (__builtin_expect(k_stats_on > 0, 0)) k_stat_cohort_kept++;
         k_beat_depth--;
         k_chunkreg_migrate(k_beat_depth);
@@ -856,7 +894,19 @@ KValue k_cohort_pop(KValue r) {
     k_stat_beat_iters--; /* the dance is a free, not a loop iteration */
     k_stat_cohort_frees++;
     r = k_carry_take(0);
-    return k_beat_pop(r);
+    r = k_beat_pop(r);
+    /* the carry pair is sized for a loop that will stage again; a cohort
+       stages exactly once, and for a large evacuated result the pair holds
+       megabytes nothing will reuse */
+    if (k_beat_depth >= 0 && k_beat_depth < K_BEAT_MAX) {
+        KCarry* done = &k_carries[k_beat_depth];
+        free(done->from.data);
+        free(done->to.data);
+        done->from = (KCarryBuf){ NULL, 0, 0 };
+        done->to = (KCarryBuf){ NULL, 0, 0 };
+    }
+    k_spare_release(2);
+    return r;
 }
 
 void k_carry_reset(void) { k_carry_n = 0; }
