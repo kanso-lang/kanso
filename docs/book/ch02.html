@@ -110,7 +110,7 @@ scoops <span class="o">=</span> <span class="n">3</span>
 
 <h2>lists</h2>
 
-<p>a list is an ordered sequence, written with brackets and—like everything in kanso—no commas between the elements. the workhorse verbs come with the language: <code>map</code> transforms every element, <code>filter</code> keeps the ones that pass, <code>sort</code> orders them, <code>sum</code> and <code>length</code> reduce them to a number. indexing is a tight <code>[i]</code>, and it is <strong>1-based</strong>: <code>xs[1]</code> is the first element.</p>
+<p>a list is an ordered sequence, written with brackets and—like everything in kanso—no commas between the elements. the workhorse verbs live one import away in <code>std/list</code>: <code>list/map</code> transforms every element, <code>list/select</code> keeps the ones a predicate approves, <code>list/sort</code> orders them, and <code>list/sum</code> reduces them to a number. <code>length</code> is ambient—no import. indexing is a tight <code>[i]</code>, and it is <strong>1-based</strong>: <code>xs[1]</code> is the first element.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lists.kso</div>
@@ -298,7 +298,7 @@ tau <span class="o">=</span> <span class="n">3</span>
 <ol class="exercises">
   <li>build a map from three product names to their prices, then print the price of one product and the full list of entries. add a fourth product with <code>put</code> and print the entries again—note where it lands in the order.</li>
   <li>declare a <code>type rectangle</code> with <code>height</code> and <code>width</code> fields. construct one, destructure it positionally, and print its area. remember the fields construct in alphabetical order.</li>
-  <li>start from a list of five numbers. in one program, print the list sorted, the list with every element doubled (<code>map</code>), the elements above a threshold (<code>filter</code>), and the total (<code>sum</code>).</li>
+  <li>start from a list of five numbers. in one program, print the list sorted, the list with every element doubled (<code>list/map</code>), the elements above a threshold (<code>list/select</code>), and the total (<code>list/sum</code>).</li>
   <li>reproduce the "unused binding" error on purpose: bind a name, rebind it without reading the first value, and run <code>kanso check</code>. then fix it two ways—once by using the first value, once by deleting the first line—and confirm both check clean.</li>
 </ol>
 
