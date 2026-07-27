@@ -43,6 +43,9 @@ struct Ctx<'a> {
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
     current: (String, usize),
     groups: HashMap<(&'a str, usize), Vec<usize>>,
+    /// What a desc-valued local would yield to a bind, tracked through one
+    /// binding level so `x = io/read_file p` then `x . f` gives f the STR.
+    yields: HashMap<&'a str, Set>,
     type_names: HashMap<&'a str, usize>,
     params: Vec<Vec<Set>>,
     returns: Vec<Set>,
@@ -86,6 +89,7 @@ pub fn infer(program: &Program) -> Inference {
         demand: crate::demand::analyze(program),
         current: (String::new(), 0),
         groups,
+        yields: HashMap::new(),
         type_names,
         params: program.fns.iter().map(|d| vec![0; d.params.len()]).collect(),
         returns: vec![0; program.fns.len()],
@@ -102,6 +106,7 @@ pub fn infer(program: &Program) -> Inference {
         for i in 0..ctx.program.fns.len() {
             let decl = &ctx.program.fns[i];
             ctx.current = (decl.name.clone(), decl.params.len());
+            ctx.yields.clear();
             let mut env: HashMap<&str, Set> = HashMap::new();
             let param_sets = ctx.params[i].clone();
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
@@ -182,6 +187,10 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
                 }
                 match pattern {
                     Pattern::Var(name, _) => {
+                        if value & DESC != 0 {
+                            let y = desc_yield_of(ctx, expr);
+                            ctx.yields.insert(name, y);
+                        }
                         env.insert(name, value);
                     }
                     _ => bind_pattern(pattern, value, &ctx.type_fields, &ctx.type_names, env),
@@ -397,7 +406,7 @@ fn eval_call<'a>(
         // DESC rides along too — dropping it once let a downstream pipe
         // direct-apply a real description as if it were the yield.
         piped_bits = (arg_sets[0] & FAIL) | DESC;
-        arg_sets[0] = (arg_sets[0] & !DESC & !FAIL) | desc_yield(&args[0]);
+        arg_sets[0] = (arg_sets[0] & !DESC & !FAIL) | desc_yield_of(ctx, &args[0]);
     }
     let piped_bits = piped_bits;
     // an applied lambda is a binding in disguise — the fusion pass emits
@@ -478,12 +487,33 @@ fn eval_call<'a>(
 /// the yield of the lexical description expression, failures stripped (the
 /// bind skips them before the continuation runs). Anything unrecognized is
 /// conservatively any-non-failure.
+/// desc_yield with one level of binding lookthrough: an ident that names a
+/// tracked desc-valued local answers with that local's recorded yield.
+fn desc_yield_of(ctx: &Ctx, e: &Expr) -> Set {
+    if let Expr::Ident(name, _) = e {
+        if let Some(y) = ctx.yields.get(name.as_str()) {
+            return *y;
+        }
+    }
+    desc_yield(e)
+}
+
 fn desc_yield(e: &Expr) -> Set {
     fn base(n: &str) -> &str {
         let n = n.strip_prefix("builtin_").unwrap_or(n);
         n.rsplit('/').next().unwrap_or(n)
     }
     match e {
+        // the io constants referenced bare: stdin yields the input string,
+        // args the argument list
+        Expr::Ident(n, _) if base(n) == "stdin" => STR,
+        Expr::Ident(n, _) if base(n) == "args" => LIST,
+        // an `if` yields whichever branch runs
+        Expr::App { head, args, piped: false, .. }
+            if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
+        {
+            desc_yield(&args[1]) | desc_yield(&args[2])
+        }
         Expr::App { head, piped: false, .. } => match head.as_ref() {
             Expr::Ident(n, _) if matches!(base(n), "read_file" | "stdin") => STR,
             Expr::Ident(n, _) if base(n) == "args" => LIST,

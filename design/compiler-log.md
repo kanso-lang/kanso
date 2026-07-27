@@ -7724,3 +7724,32 @@ Second, the cohort threshold's interaction with warm blocks and the bind
 executor needs the mechanism traced before the license earns wider trust
 — the one-shot bench proves the pop works; kq's shape proves the trigger
 has a blind spot.
+
+## 2026-07-27 — the cohort license learns to see through bindings and branches
+
+The kq zero was three defects stacked, each found by instrumenting the
+question the last answer raised. First, inference's pipe-yield tracking
+was purely syntactic: `source = if (...) (io/read_file f) io/stdin` then
+`source . report` handed report a TOP-shaped parameter, because
+desc_yield saw an identifier and gave up — and its `if` arm, added
+mid-hunt, sat dead below the general App arm that shadowed it. Yields now
+track through one binding level (a per-body map in the inference context),
+`if` yields the union of its branches, and the io constants referenced
+bare answer their yields directly. Second, the license's "user code"
+test read a file-path prefix that filesystem-resolved modules never
+carry; it now reads what actually distinguishes the root module — an
+unqualified group name — with bare enrollment clones excluded by their
+synthetic flag, so library plumbing wearing a bare name no longer wraps.
+Third, a caller that appears in the beat ids only as a demoted entry is
+not a rewinding loop, and no longer forfeits the wrap.
+
+Pinned by tests/golden/mem/cohort_bound.kso — the branch-chosen, bound,
+piped decode fires the cohort (cohort_frees=1, peak four megabytes;
+watched red at zero with the yield tracking stashed). Every existing
+golden held byte-identical: the fixes add reach only in shapes nothing
+had pinned. On kq's declined draft the cohort now fires too — peak
+11,534,336 falls to 9,437,184, output hash unchanged — which softens
+nothing about the verdict (the vendored decoder still wins at 3.1) but
+proves the mechanism where it was first seen failing. The welfare header
+now names its ratchet era, so a score is read inside its model version —
+the confusion Clay hit reading 62-then-59 across a recalibration.

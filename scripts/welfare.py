@@ -176,7 +176,11 @@ def main():
     held = json.loads(FLOOR.read_text())
     value = score(now, held["baseline"])
     floor = held["floor"]
-    print(f"welfare {value:.2f}   floor {floor:.2f}   (ceiling 100)")
+    # the era: recalibrations reshuffle the scale, so a score is only
+    # comparable within its model version — say which one this is
+    era = len(held.get("history", [])) + 1
+    last = held.get("history", [{}])[-1].get("why", "initial model")
+    print(f"welfare {value:.2f}   floor {floor:.2f}   (ceiling 100, ratchet {era}: {last[:52]}…)")
     worse = []
     for key in sorted(TERMS):
         base, cur = held["baseline"][key], now[key]
