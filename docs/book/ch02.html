@@ -91,7 +91,7 @@ mixed <span class="o">=</span> <span class="n">3</span> <span class="o">+</span>
   </div>
 </div>
 
-<p>two rules, both visible in one line. <code>7 / 2</code> keeps whole-number arithmetic and drops the remainder to give <code>3</code>. <code>7 / 2.0</code> and <code>3 + 0.5</code> each mix the two types, so the int widens and the answer is a float, printed with its point. widening only ever runs one direction—int to float, never a float quietly rounded to an int—because that direction loses nothing. when you want the reverse, you ask for it by name: <code>to_int</code>, <code>to_float</code>, <code>round</code>, and <code>sqrt</code> are the conversions, and each states exactly what it does to the value.</p>
+<p>two rules, both visible in one line. <code>7 / 2</code> keeps whole-number arithmetic and drops the remainder to give <code>3</code>. <code>7 / 2.0</code> and <code>3 + 0.5</code> each mix the two types, so the int widens and the answer is a float, printed with its point. widening only ever runs one direction—int to float, never a float quietly rounded to an int—because that direction loses nothing. when you want the reverse, you ask for it by name: <code>text/to_int</code>, <code>text/to_float</code>, <code>math/round</code>, and <code>math/sqrt</code> are the conversions—imported from std modules you will meet properly in chapter 07—and each states exactly what it does to the value.</p>
 
 <h2>strings interpolate</h2>
 
