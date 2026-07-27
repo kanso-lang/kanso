@@ -6227,3 +6227,24 @@ Also raised and not built: a pixel-art avatar for each influence. It would be
 charming and it is a real design job — eight portraits that read at sixteen
 pixels and survive both themes — rather than something to sneak in beside a
 compiler change. Recorded so it stays on the list.
+
+## 2026-07-26 — CLARIFICATION: the influences page is not the language committee
+
+Clay: "i didn't say she joins the language committee but she goes on the
+influences page to be clear."
+
+Worth writing down because the two share a word and the previous entry blurred
+them. The influences page is a page of debts — the people whose work shaped
+kanso, acknowledged in the past tense, none of whom have endorsed anything. The
+language committee is a working tool: the Bernhardt, Hickey and Beck lenses
+convened against a specific design question when a gavel is pending, as they
+were against the day's language changes earlier.
+
+Kondo is on the first and not the second. The elimination test she contributes
+is a good one and it is already applied all over this repository, but a design
+review needs lenses that answer a compiler question — what is complected, what
+is speculative, what does the suite actually pin — and hers does not.
+
+The page's own heading calls the influences "the committee", which is where the
+confusion comes from. Left alone: it reads correctly in place, and renaming it
+to serve a distinction only the log makes would be worse writing.
