@@ -7090,3 +7090,34 @@ storage is live, not leaked, and there is nothing to free. The utf8_zerocopy
 counter had been read across two different builds, and the stale reading is
 what made a leak seem to exist. Reverted whole; the counter comparison that
 would have caught it in one step is the one this log now records.
+
+## 2026-07-27 — the full-print footprint, accounted to the megabyte
+
+A leaks census (192 unreachable bytes — the runtime does not leak) and a
+mid-run vmmap close the decomposition of kq's remaining 47.5 mb:
+
+    arena high water        ~26 mb   decode-side garbage the scan loops hold
+    encode builder           9.2     4.6 of output, 4.6 of doubling slack
+    sorted views             3.3     malloc'd memos, live until exit
+    shared library code      ~6      every process pays it; jq pays the same
+    allocator retention      ~2      one cached empty MALLOC_LARGE region
+    metadata and guards      ~1
+
+Nothing is unattributed. What each remaining piece needs:
+
+The arena's 26 against ~9 of live data is the decode garbage, and it is the
+one that matters. The scan loops thread lists and records — values that hold
+pointers — so the bytes-only chain license cannot reach them, and reclaiming
+mid-decode is exactly the cohort-freeing / value-RC question already parked
+dialog-first. The measurement gives that dialog its number: seventeen
+megabytes on this document, the whole distance between kq's 47.5 and the
+low thirties.
+
+The builder's 4.6 of slack resists the easy fix — gentler growth measured
+7.7 mb worse. What would work is a final-size hint from the encoder (the
+input's size bounds the output's within a small factor), which is a stdlib
+surface question rather than a runtime trick.
+
+The views' 3.3 dies with RC or with a rebuild-per-read encode mode that
+trades a second sort per map for the residency. Declined for now: the wall
+clock is the row kq wins hardest, and 3.3 mb is not worth taxing it.
