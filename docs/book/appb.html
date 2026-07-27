@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "appendix b—builtin reference"
-description: "every kanso builtin: signature shape, behavior, and failure behavior, each with a worked example run through the real interpreter—numbers, text, lists, maps, bytes, control, and the effect descriptions."
+description: "the whole standard surface: the six ambient names, the std modules, and the 33-verb list vocabulary—signature, behavior, and failure semantics, each with a worked example run through the real interpreter."
 extra_css: /book/book.css
 ---
 <style>
@@ -40,61 +40,60 @@ extra_css: /book/book.css
 <span class="eyebrow">appendix b</span>
 <h1>builtin reference</h1>
 
-<p>kanso keeps its standard library small enough to hold in your head. there are thirty builtins, and they come in two shapes. most are ordinary pure functions—<code>sort</code> takes a list and returns a sorted one, <code>sqrt</code> takes a number and returns its root, with no trace left behind. seven are <em>descriptions</em>: <code>print</code>, <code>read_file</code>, <code>write_file</code>, <code>args</code>, <code>stdin</code>, <code>sleep</code>, and <code>random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
+<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. six names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>length</code>, and <code>entries</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. seven are <em>descriptions</em>: <code>print</code>, <code>io/read_file</code>, <code>io/write_file</code>, <code>io/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
 
-<p>every builtin follows the same failure convention. an <code>err</code> or <code>none</code> handed to a builtin passes straight through, unlooked-at, so failures ride the railway from chapter 04 without special cases. a genuine type mismatch—<code>sum</code> on a list containing a string, <code>sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the builtin does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
+<p>every function here follows the same failure convention. an <code>err</code> or <code>none</code> handed in passes straight through, unlooked-at, so failures ride the railway from chapter 04 without special cases. a genuine type mismatch—<code>list/sum</code> on a list containing a string, <code>math/sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the function does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
 
 <div class="builtin-index" aria-label="alphabetical index">
-<a href="#b-args"><code>args</code></a>
-<a href="#b-at"><code>at</code></a>
-<a href="#b-bytes"><code>bytes</code></a>
-<a href="#b-char_code"><code>char_code</code></a>
-<a href="#b-chars"><code>chars</code></a>
-<a href="#b-concat"><code>concat</code></a>
+<a href="#b-args"><code>io/args</code></a>
+<a href="#b-at"><code>xs[k]</code></a>
+<a href="#b-bytes"><code>text/bytes</code></a>
+<a href="#b-char_code"><code>text/char_code</code></a>
+<a href="#b-chars"><code>text/chars</code></a>
+<a href="#b-concat"><code>text/concat</code></a>
 <a href="#b-entries"><code>entries</code></a>
-<a href="#b-filter"><code>filter</code></a>
-<a href="#b-find2"><code>find2</code></a>
-<a href="#b-from_code"><code>from_code</code></a>
+<a href="#b-find2"><code>text/find2</code></a>
+<a href="#b-from_code"><code>text/from_code</code></a>
 <a href="#b-if"><code>if</code></a>
-<a href="#b-join"><code>join</code></a>
+<a href="#b-join"><code>text/join</code></a>
 <a href="#b-length"><code>length</code></a>
-<a href="#b-map"><code>map</code></a>
+<a href="#b-vocabulary"><code>list/…</code></a>
 <a href="#b-print"><code>print</code></a>
 <a href="#b-push"><code>push</code></a>
 <a href="#b-put"><code>put</code></a>
-<a href="#b-random"><code>random</code></a>
-<a href="#b-read_file"><code>read_file</code></a>
-<a href="#b-round"><code>round</code></a>
-<a href="#b-slice"><code>slice</code></a>
-<a href="#b-sleep"><code>sleep</code></a>
-<a href="#b-sort"><code>sort</code></a>
-<a href="#b-sqrt"><code>sqrt</code></a>
-<a href="#b-stdin"><code>stdin</code></a>
-<a href="#b-sum"><code>sum</code></a>
-<a href="#b-to_float"><code>to_float</code></a>
-<a href="#b-to_int"><code>to_int</code></a>
-<a href="#b-utf8"><code>utf8</code></a>
-<a href="#b-write_file"><code>write_file</code></a>
+<a href="#b-random"><code>math/random</code></a>
+<a href="#b-read_file"><code>io/read_file</code></a>
+<a href="#b-round"><code>math/round</code></a>
+<a href="#b-slice"><code>text/slice</code></a>
+<a href="#b-sleep"><code>time/sleep</code></a>
+<a href="#b-sqrt"><code>math/sqrt</code></a>
+<a href="#b-stdin"><code>io/stdin</code></a>
+<a href="#b-to_float"><code>text/to_float</code></a>
+<a href="#b-to_int"><code>text/to_int</code></a>
+<a href="#b-utf8"><code>text/utf8</code></a>
+<a href="#b-write_file"><code>io/write_file</code></a>
 </div>
 
-<p>the sections that follow group the builtins by what they operate on—numbers, text, lists, maps, bytes, choosing, and effects—and end each group with one program that exercises the lot. within a group the entries are alphabetical; the index above is the fast path when you know the name.</p>
+<p>the sections that follow group the functions by what they operate on—numbers, text, lists, maps, bytes, choosing, and effects—and end each group with one program that exercises the lot. within a group the entries are alphabetical; the index above is the fast path when you know the name. the list section carries the largest surface, the thirty-three verbs of <code>std/list</code>, and gives them a reference of their own.</p>
 
 <h2>numbers</h2>
 
-<h3 id="b-round"><code>round</code></h3>
-<p class="builtin-sig"><code>round number → int</code></p>
-<p>rounds a float to the nearest integer, ties away from zero (<code>2.5</code> becomes <code>3</code>). an <code>int</code> passes through unchanged, so <code>round</code> is safe to call on a value you already believe is whole. a non-number argument is a runtime error.</p>
+<p>the numeric helpers live in <code>std/math</code>; the two parsers live in <code>std/text</code>, beside the rest of the string-to-value work.</p>
 
-<h3 id="b-sqrt"><code>sqrt</code></h3>
-<p class="builtin-sig"><code>sqrt number → float64</code></p>
-<p>the square root, always a float—an <code>int</code> argument widens before the root is taken, so <code>sqrt 9</code> is <code>3.0</code>, not <code>3</code>. a non-number argument is a runtime error.</p>
+<h3 id="b-round"><code>math/round</code></h3>
+<p class="builtin-sig"><code>math/round number → int</code></p>
+<p>rounds a float to the nearest integer, ties away from zero (<code>2.5</code> becomes <code>3</code>). an <code>int</code> passes through unchanged, so <code>math/round</code> is safe to call on a value you already believe is whole. a non-number argument is a runtime error.</p>
 
-<h3 id="b-to_float"><code>to_float</code></h3>
-<p class="builtin-sig"><code>to_float (string | int | float) → float64 | err</code></p>
+<h3 id="b-sqrt"><code>math/sqrt</code></h3>
+<p class="builtin-sig"><code>math/sqrt number → float64</code></p>
+<p>the square root, always a float—an <code>int</code> argument widens before the root is taken, so <code>math/sqrt 9</code> is <code>3.0</code>, not <code>3</code>. a non-number argument is a runtime error.</p>
+
+<h3 id="b-to_float"><code>text/to_float</code></h3>
+<p class="builtin-sig"><code>text/to_float (string | int | float) → float64 | err</code></p>
 <p>parses text into a float. an <code>int</code> widens and a <code>float</code> passes through, so the one function covers both parsing and numeric widening. text that isn't a number returns an <code>err</code> value carrying the offending string—a failure you can dispatch on, not a crash.</p>
 
-<h3 id="b-to_int"><code>to_int</code></h3>
-<p class="builtin-sig"><code>to_int (string | int) → int | err</code></p>
+<h3 id="b-to_int"><code>text/to_int</code></h3>
+<p class="builtin-sig"><code>text/to_int (string | int) → int | err</code></p>
 <p>parses text into an integer; an <code>int</code> passes through unchanged. unparseable text returns an <code>err</code>. because that <code>err</code> is a value, it rides the railway: interpolate it, or pipe it, and it propagates to the endpoint rather than being silently swallowed.</p>
 
 <div class="code-panel">
@@ -138,28 +137,28 @@ to_float-int 5.0</code></pre>
 
 <h2>text and characters</h2>
 
-<h3 id="b-char_code"><code>char_code</code></h3>
-<p class="builtin-sig"><code>char_code string → int</code></p>
-<p>the unicode code point of a one-character string—<code>char_code "A"</code> is <code>65</code>. the argument must be exactly one character; anything longer or shorter is a runtime error. its inverse is <code>from_code</code>.</p>
+<h3 id="b-char_code"><code>text/char_code</code></h3>
+<p class="builtin-sig"><code>text/char_code string → int</code></p>
+<p>the unicode code point of a one-character string—<code>char_code "A"</code> is <code>65</code>. the argument must be exactly one character; anything longer or shorter is a runtime error. its inverse is <code>text/from_code</code>.</p>
 
-<h3 id="b-chars"><code>chars</code></h3>
-<p class="builtin-sig"><code>chars string → string[]</code></p>
+<h3 id="b-chars"><code>text/chars</code></h3>
+<p class="builtin-sig"><code>text/chars string → string[]</code></p>
 <p>splits a string into its characters, each a one-character string, one per unicode scalar. accented letters count once—<code>chars "café"</code> has four elements, not five. a non-string argument is a runtime error.</p>
 
-<h3 id="b-from_code"><code>from_code</code></h3>
-<p class="builtin-sig"><code>from_code int → string | err</code></p>
+<h3 id="b-from_code"><code>text/from_code</code></h3>
+<p class="builtin-sig"><code>text/from_code int → string | err</code></p>
 <p>the one-character string for a code point—<code>from_code 233</code> is <code>"é"</code>. an integer that is not a unicode scalar value returns an <code>err</code>, so surrogate halves and out-of-range numbers fail as values rather than producing garbage.</p>
 
-<h3 id="b-join"><code>join</code></h3>
-<p class="builtin-sig"><code>join string[] string → string</code></p>
+<h3 id="b-join"><code>text/join</code></h3>
+<p class="builtin-sig"><code>text/join string[] string → string</code></p>
 <p>joins a list of strings with a separator between them—the counterpart to splitting. a failure inside the list propagates; a non-string element is a runtime error.</p>
 
 <h3 id="b-length"><code>length</code></h3>
 <p class="builtin-sig"><code>length (string | list | map) → int</code></p>
 <p>a count: characters of a string, elements of a list, entries of a map. one function serves all three because "how many" means the same thing across them. anything else is a runtime error.</p>
 
-<h3 id="b-slice"><code>slice</code></h3>
-<p class="builtin-sig"><code>slice (string | list) int int → (string | list)</code></p>
+<h3 id="b-slice"><code>text/slice</code></h3>
+<p class="builtin-sig"><code>text/slice (string | list) int int → (string | list)</code></p>
 <p>a sub-range by 1-based inclusive positions—<code>slice "kanso" 2 4</code> is <code>"ans"</code>, and the same call shape works on lists. out-of-range or inverted bounds yield an empty result rather than a failure, so slicing never surprises you with a <code>none</code> to handle.</p>
 
 <div class="code-panel">
@@ -188,33 +187,34 @@ concat [1 2 3 4]</code></pre>
 
 <h2>lists</h2>
 
-<h3 id="b-at"><code>at</code></h3>
-<p class="builtin-sig"><code>at (list | string | map) index → value | none</code></p>
-<p>indexing. a list or string is indexed by a 1-based position; a map is indexed by its key. <code>at</code> is what the subscript form <code>xs[i]</code> desugars to. a missing position or absent key returns <code>none</code>—a dispatchable value, not an exception—so the caller decides what "not there" means. (an out-of-range subscript with <code>xs[i]</code> instead <em>raises</em>; <code>at</code> is the soft form.)</p>
+<p>two list operations are ambient—the subscript and <code>push</code>—because building a list and reading one position appear in nearly every program. everything else is the <code>std/list</code> vocabulary, covered as a group after the two.</p>
 
-<h3 id="b-concat"><code>concat</code></h3>
-<p class="builtin-sig"><code>concat list list → list</code></p>
-<p>appends two lists into one. both arguments must be lists; the result is a new list and neither input is disturbed.</p>
+<h3 id="b-at"><code>xs[k]</code></h3>
+<p class="builtin-sig"><code>(list | string | map)[index] → value | none</code></p>
+<p>indexing. a list or string is indexed by a 1-based position; a map is indexed by its key. a missing position or absent key returns <code>none</code>—a dispatchable value, not an exception—so the caller decides what "not there" means. the strict form <code>xs[i]!</code> instead <em>raises</em> on a miss, for the position that must be there. there is no bare function spelling; the subscript is the surface.</p>
 
-<h3 id="b-filter"><code>filter</code></h3>
-<p class="builtin-sig"><code>filter list (value → bool) → list</code></p>
-<p>keeps the elements for which the predicate returns <code>true</code>. the predicate must answer <code>true</code> or <code>false</code>; any other result is a runtime error, which catches a predicate that forgot to return a boolean.</p>
-
-<h3 id="b-map"><code>map</code></h3>
-<p class="builtin-sig"><code>map list (value → value) → list</code></p>
-<p>applies a function to every element and collects the results in order. the function is any callable—a named function, a lambda, a builtin.</p>
+<h3 id="b-concat"><code>text/concat</code></h3>
+<p class="builtin-sig"><code>text/concat (list | string) (list | string) → (list | string)</code></p>
+<p>appends two lists—or two strings—into one. it lives in <code>std/text</code> beside <code>slice</code> because the pair work the same way on both shapes; the result is new and neither input is disturbed.</p>
 
 <h3 id="b-push"><code>push</code></h3>
 <p class="builtin-sig"><code>push list value → list</code></p>
 <p>a new list with one value appended. it is functional: the original list is unchanged, and the value's type is unconstrained. under the hood the runtime reuses the buffer in place when the list is uniquely owned, so the value semantics cost nothing when nobody else is looking.</p>
 
-<h3 id="b-sort"><code>sort</code></h3>
-<p class="builtin-sig"><code>sort list → list</code></p>
-<p>ascending order. the elements must be mutually comparable—all ints, all strings—and a list mixing types is a runtime error, because there is no honest order across types. sorting is stable and returns a new list.</p>
+<h3 id="b-vocabulary">the <code>std/list</code> vocabulary</h3>
+<p class="builtin-sig"><code>import "std/list"</code> — 33 verbs, all subject-first</p>
 
-<h3 id="b-sum"><code>sum</code></h3>
-<p class="builtin-sig"><code>sum list → int</code></p>
-<p>adds up a list of integers, empty list summing to <code>0</code>. a failure in the list propagates; a non-integer element is a runtime error.</p>
+<p>the vocabulary divides by what a verb returns. an <em>adapter</em> returns a lazy sequence: nothing is computed when you write <code>list/map xs f</code>, and each element flows through the whole chain one at a time when a consumer finally pulls. a <em>consumer</em> forces the sequence and returns an ordinary value. the split is why <code>xs . list/map f . list/select p . list/sum</code> allocates no intermediate list—the compiler fuses the chain into a single scan. every verb takes its subject first, which is what lets the pipe thread a collection through a chain without placeholders (chapter 05).</p>
+
+<p><strong>adapters</strong> — <code>map coll f</code> transforms each element. <code>select coll pred</code> keeps the elements the predicate approves; <code>reject coll pred</code> drops them—the two are deliberate complements, and there is no <code>filter</code>. <code>take coll n</code> stops after n elements and <code>drop coll n</code> skips the first n—both are what make the infinite generators usable. <code>zip a b</code> pairs two sequences element by element, ending with the shorter.</p>
+
+<p><strong>generators</strong> — infinite sequences, bounded by whatever consumes them. <code>naturals</code> counts 1, 2, 3, …; <code>repeat value</code> yields the same value forever; <code>cycle coll</code> loops a list end over end; <code>iterate seed stretch</code> yields seed, stretch seed, stretch (stretch seed), …. an unbounded consumer on an unbounded generator runs forever, which in kanso is a legal program, not an error—cap with <code>take</code> when you want an end.</p>
+
+<p><strong>consumers</strong> — <code>fold coll init f</code> is the root the others are built on: it threads an accumulator through every element. <code>sum</code> adds numbers (empty list is <code>0</code>); <code>mean</code> averages as a float; <code>count coll pred</code> counts approvals; <code>range</code> is the statistical spread, <code>max</code> minus <code>min</code>. <code>all? coll pred</code> and <code>any? coll pred</code> answer a question about the whole—the <code>?</code> suffix marks every predicate in the language. <code>find coll pred</code> yields the first element the predicate approves, <code>first</code> and <code>last</code> take the ends, <code>max</code> and <code>min</code> the extremes, and <code>argmax coll key</code> / <code>argmin coll key</code> the element whose <em>key</em> is extreme. <code>sort</code> orders mutually comparable elements. <code>to_list</code> realizes an adapter chain into a plain list—the usual last step before printing. every empty-sequence extreme (<code>max</code>, <code>min</code>, <code>find</code>, <code>first</code>, <code>last</code>, <code>argmax</code>, <code>argmin</code>, <code>range</code>) answers <code>none</code>, a value you dispatch on.</p>
+
+<p><strong>map builders</strong> — consumers whose result is a map. <code>tally coll</code> counts occurrences. <code>group_by coll key</code> files each element under its key, values in list buckets. <code>index_by coll key</code> keeps one element per key; <code>to_h pairs</code> builds a map from two-element pairs; <code>transform_keys m f</code> and <code>transform_values m f</code> rebuild a map through a function on each side of its entries. where two entries land on one key, the last write wins—the same rule <code>put</code> follows.</p>
+
+<p>beneath the vocabulary sits one primitive: <code>next</code>, the pull protocol every adapter answers and every consumer drives. you only meet it when defining a sequence shape of your own; the other thirty-two verbs are built from it.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lists.kso</div>
@@ -223,9 +223,15 @@ concat [1 2 3 4]</code></pre>
 
 xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <span class="n">2</span>]
 <span class="f">print</span> <span class="s">"map <span class="i">{list/to_list (list/map xs (n -&gt; n * 10))}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"filter <span class="i">{list/to_list (list/select xs (n -&gt; n &gt; 1))}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"select <span class="i">{list/to_list (list/select xs (n -&gt; n &gt; 1))}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sort <span class="i">{list/sort xs}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum xs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"fold <span class="i">{list/fold xs 10 (acc n -&gt; acc * n)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"take <span class="i">{list/to_list (list/take list/naturals 4)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zip <span class="i">{list/to_list (list/zip xs [</span>"</span>a<span class="s">" "</span>b<span class="s">" "</span>c<span class="s">"])}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"tally <span class="i">{list/tally [</span>"</span>oat<span class="s">" "</span>oat<span class="s">" "</span>soy<span class="s">"]}"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"group_by <span class="i">{list/group_by [1 2 3 4] (n -&gt; n - n / 2 * 2)}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"range <span class="i">{list/range xs}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"push <span class="i">{push xs 4}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{xs[2]}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length xs}</span>"</span>
@@ -234,9 +240,15 @@ xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <
   <div class="code-output">
     <div class="code-panel-title">kanso run lists.kso</div>
     <pre><code>map [30 10 20]
-filter [3 2]
+select [3 2]
 sort [1 2 3]
 sum 6
+fold 60
+take [1 2 3 4]
+zip [[3 "a"] [1 "b"] [2 "c"]]
+tally { "oat":2 "soy":1 }
+group_by { 0:[2 4] 1:[1 3] }
+range 2
 push [3 1 2 4]
 at 1
 length 3
@@ -245,7 +257,7 @@ concat [3 1 2 9]</code></pre>
   </div>
 </div>
 
-<p>note <code>at xs 2</code> is <code>1</code>—position two of <code>[3 1 2]</code>, one-based. when the position is absent, <code>at</code> hands back <code>none</code>, and because <code>none</code> is a value you dispatch on it. two overloads of <code>describe</code>—one that matches <code>none</code>, one that matches anything—turn "missing" into an ordinary branch:</p>
+<p>note <code>xs[2]</code> is <code>1</code>—position two of <code>[3 1 2]</code>, one-based. when the position is absent, the subscript hands back <code>none</code>, and because <code>none</code> is a value you dispatch on it. two overloads of <code>describe</code>—one that matches <code>none</code>, one that matches anything—turn "missing" into an ordinary branch:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">missing.kso</div>
@@ -266,13 +278,13 @@ missing: index out of range</code></pre>
   </div>
 </div>
 
-<p>the direct call <code>describe (at …)</code> is deliberate. the pipe <code>.</code> short-circuits a failure before it reaches the function, so <code>at … . describe</code> would propagate the <code>none</code> untouched; to dispatch on <code>none</code> you hand it to the function as an argument, where the <code>none</code> overload can match it.</p>
+<p>the direct call <code>describe xs[9]</code> is deliberate. the pipe <code>.</code> short-circuits a failure before it reaches the function, so <code>xs[9] . describe</code> would propagate the <code>none</code> untouched; to dispatch on <code>none</code> you hand it to the function as an argument, where the <code>none</code> overload can match it.</p>
 
 <h2>maps</h2>
 
 <h3 id="b-entries"><code>entries</code></h3>
 <p class="builtin-sig"><code>entries map → entry[]</code></p>
-<p>the key–value pairs of a map, each an <code>entry key value</code> record, returned in sorted key order. the order is deterministic, always—iteration over a map never depends on insertion history. to read a single value by key, use <code>at</code>.</p>
+<p>the key–value pairs of a map, each an <code>entry key value</code> record, returned in sorted key order. the order is deterministic, always—iteration over a map never depends on insertion history. to read a single value by key, use the subscript <code>m[k]</code>.</p>
 
 <h3 id="b-put"><code>put</code></h3>
 <p class="builtin-sig"><code>put map key value → map</code></p>
@@ -301,17 +313,17 @@ empty {:}</code></pre>
 
 <h2>bytes and encoding</h2>
 
-<h3 id="b-bytes"><code>bytes</code></h3>
-<p class="builtin-sig"><code>bytes string → int[]</code></p>
+<h3 id="b-bytes"><code>text/bytes</code></h3>
+<p class="builtin-sig"><code>text/bytes string → int[]</code></p>
 <p>the utf-8 encoding of a string as a list of byte values (0–255). an ascii string gives one byte per character; <code>"café"</code> gives five bytes, because <code>é</code> takes two. this is the entry point to byte-level work—scanning, chunking, decoding—used heavily by the json library in chapter 08.</p>
 
-<h3 id="b-find2"><code>find2</code></h3>
-<p class="builtin-sig"><code>find2 int[] int int int → int</code></p>
+<h3 id="b-find2"><code>text/find2</code></h3>
+<p class="builtin-sig"><code>text/find2 int[] int int int → int</code></p>
 <p>scans a byte list from a 1-based start index for the first byte equal to <em>either</em> of two targets—hence the <code>2</code>—and returns its 1-based position. when neither target is found it returns <code>length + 1</code>, one past the end, a sentinel you can compare against without a branch. it is the hot primitive behind tokenizers that stop at "the next comma or brace".</p>
 
-<h3 id="b-utf8"><code>utf8</code></h3>
-<p class="builtin-sig"><code>utf8 int[] → string | err</code></p>
-<p>the inverse of <code>bytes</code>: decodes a list of byte values back into a string. a value outside 0–255, or a byte sequence that isn't valid utf-8, returns an <code>err</code>—decoding untrusted bytes fails as a value you can handle, never as a crash.</p>
+<h3 id="b-utf8"><code>text/utf8</code></h3>
+<p class="builtin-sig"><code>text/utf8 int[] → string | err</code></p>
+<p>the inverse of <code>text/bytes</code>: decodes a list of byte values back into a string. a value outside 0–255, or a byte sequence that isn't valid utf-8, returns an <code>err</code>—decoding untrusted bytes fails as a value you can handle, never as a crash.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">bytes.kso</div>
@@ -354,8 +366,8 @@ zero non-positive</code></pre>
 
 <p>the seven builtins in this group return <em>descriptions</em>, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.</code> pipes the value a description will yield into a function.</p>
 
-<h3 id="b-args"><code>args</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>args → string[]</code></p>
+<h3 id="b-args"><code>io/args</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>io/args → string[]</code></p>
 <p>yields the command-line arguments—everything after <code>--</code> on the invocation—as a list of strings. the list exists only at execution time, so an index past its end is answered the way every absent index is: with <code>none</code>, a value the caller dispatches on. reach for <code>xs[i]!</code> when the position must be there and its absence should end the run.</p>
 
 <div class="code-panel">
@@ -397,12 +409,12 @@ third</code></pre>
   </div>
 </div>
 
-<h3 id="b-random"><code>random</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>random int → int</code></p>
+<h3 id="b-random"><code>math/random</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>math/random int → int</code></p>
 <p>a description that yields an integer in the half-open range <code>[0, bound)</code>. the scheduler's generator is deterministic, so a program's rolls are reproducible run to run—random enough for a simulation, repeatable enough for a test. pipe the yielded value into a function with <code>.</code>.</p>
 
-<h3 id="b-sleep"><code>sleep</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>sleep int → description</code></p>
+<h3 id="b-sleep"><code>time/sleep</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>time/sleep int → description</code></p>
 <p>a description of pausing for a number of milliseconds. under the deterministic scheduler it advances virtual time rather than wall-clock time, so a program that "sleeps" is still instant to test. sequence it with <code>&gt;&gt;</code>.</p>
 
 <div class="code-panel">
@@ -426,12 +438,12 @@ third</code></pre>
 
 <p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." that is the visible seam between <code>&gt;&gt;</code>, which lists every step, and <code>.</code>, which threads a not-yet-known value forward.</p>
 
-<h3 id="b-read_file"><code>read_file</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>read_file string → string</code></p>
+<h3 id="b-read_file"><code>io/read_file</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>io/read_file string → string</code></p>
 <p>a description that yields the contents of a file as a string. a missing or unreadable path fails at execution time—at the executor, when the read is actually attempted—rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
 
-<h3 id="b-write_file"><code>write_file</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>write_file string string → description</code></p>
+<h3 id="b-write_file"><code>io/write_file</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>io/write_file string string → description</code></p>
 <p>a description of writing a string to a path, replacing any existing contents. it yields nothing useful, so it is normally sequenced with <code>&gt;&gt;</code> before the next step. here one program writes a file and then reads it straight back:</p>
 
 <div class="code-panel">
@@ -445,8 +457,8 @@ third</code></pre>
   </div>
 </div>
 
-<h3 id="b-stdin"><code>stdin</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>stdin → string</code></p>
+<h3 id="b-stdin"><code>io/stdin</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>io/stdin → string</code></p>
 <p>a description that yields all of standard input as a single string. pipe it into a function to process what was fed on the pipe:</p>
 
 <div class="code-panel">
@@ -467,18 +479,18 @@ third</code></pre>
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
 <span class="tip-who">err</span>
-<p>hand me to a builtin and i pass straight through—<code>sort</code>, <code>map</code>, <code>sum</code>, none of them inspect me, they just return me. a <em>type</em> mistake is different: <code>sum</code> on a list with a string in it is a bug in your program, and that raises where it happens. failures flow; bugs stop.</p>
+<p>hand me to a builtin and i pass straight through—<code>list/sort</code>, <code>list/map</code>, <code>list/sum</code>, none of them inspect me, they just return me. a <em>type</em> mistake is different: <code>list/sum</code> on a list with a string in it is a bug in your program, and that raises where it happens. failures flow; bugs stop.</p>
 </div>
 </div>
 
-<p>that is the whole surface. thirty names, two shapes, one failure convention. you now have the signature, the behavior, and the failure mode of every builtin kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right primitive instead of hand-rolling it. the chapters build real programs on exactly these thirty; the json library of chapter 08 is little more than <code>bytes</code>, <code>find2</code>, and <code>slice</code> worn smooth.</p>
+<p>that is the whole surface: six ambient names, a handful of std modules, two shapes, one failure convention. (std/json, the decoder the book builds by hand in chapter 08, ships ready-made too.) you now have the signature, the behavior, and the failure mode of everything kanso offers—enough to read any program in this book without guessing what a call does, and enough to reach for the right verb instead of hand-rolling it. the chapters build real programs on exactly this surface; the json library of chapter 08 is little more than <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code> worn smooth.</p>
 
 <h2>exercises</h2>
 <ol>
-<li>write a program that reads a file of numbers, one per line, and prints their sum. you will need <code>read_file</code>, <code>chars</code> or a split, <code>to_int</code>, and <code>sum</code>—decide how a non-numeric line should behave, and make that behavior visible in the output.</li>
-<li>using only <code>bytes</code>, <code>find2</code>, and <code>slice</code>, split a string on its first comma into a "before" and an "after". confirm with <code>--plan</code> that no i/o happens until you print the two halves.</li>
-<li><code>at</code> returns <code>none</code> for a missing index while the subscript <code>xs[i]</code> raises an <code>err</code>. write one small program that shows both on the same out-of-range access, and explain in a comment which you would choose for a lookup that is <em>expected</em> to miss.</li>
-<li>write a two-overload <code>label</code> function—one arm matching <code>none</code>, one matching a value—and drive it from a <code>random</code> roll that indexes into a short list. run it a few times and note that the roll is the same each run.</li>
+<li>write a program that reads a file of numbers, one per line, and prints their sum. you will need <code>io/read_file</code>, <code>text/chars</code> or a split, <code>text/to_int</code>, and <code>list/sum</code>—decide how a non-numeric line should behave, and make that behavior visible in the output.</li>
+<li>using only <code>text/bytes</code>, <code>text/find2</code>, and <code>text/slice</code>, split a string on its first comma into a "before" and an "after". confirm with <code>--plan</code> that no i/o happens until you print the two halves.</li>
+<li>the lenient subscript <code>xs[i]</code> answers a missing index with <code>none</code> while the strict form <code>xs[i]!</code> raises an <code>err</code>. write one small program that shows both on the same out-of-range access, and explain in a comment which you would choose for a lookup that is <em>expected</em> to miss.</li>
+<li>write a two-overload <code>label</code> function—one arm matching <code>none</code>, one matching a value—and drive it from a <code>math/random</code> roll that indexes into a short list. run it a few times and note that the roll is the same each run.</li>
 </ol>
 
 <nav class="chapter-nav">
