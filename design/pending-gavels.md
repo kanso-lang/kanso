@@ -33,10 +33,27 @@ The two-universes rule, mechanized without provenance tracking:
   there is no "handleable by me only" state, which is exactly the
   state the rule exists to ban.
 
-Sub-questions needing one word each: (a) std counts as foreign to user
-code? (proposed: yes) (b) bare-err re-err carries the original as a
-wrapped cause on the trace? (proposed: yes) (c) re-exporting a foreign
-err type transfers ownership? (proposed: no — it stays theirs).
+SETTLED (Clay, 2026-07-27): (a) std is foreign to user code — std
+exceptions are absolutely rescuable. And **subtype matching** (Clay's
+ruling, the Ruby rescue model made order-independent): an arm naming a
+reason type catches every descendant, and the dispatch ladder gains
+one rung — a subtype ascription is more specific than its ancestor's.
+A value's ancestor chain is a line, so matching ascriptions are
+totally ordered and subtype matching can never tie (shrinks the
+tie-rejection gavel's surface). Consequence, accepted into the
+proposal: **unstoppable refines to "no pub ancestor"** — a private
+leaf under a pub root is trappable through the root, so a package can
+publish one coarse root ("everything of mine you may handle") while
+keeping leaves private and refinable; a truly unstoppable failure
+gets a reason chain that is private top to bottom. This structurally
+reproduces Ruby's StandardError/Exception split — handleable things
+under a published root, defects rooted outside it — with pub doing
+the work Ruby's inheritance convention does.
+
+Still needing one word each: (b) bare-err re-err carries the original
+as a wrapped cause on the trace? (proposed: yes) (c) re-exporting a
+foreign err type transfers ownership? (proposed: no — it stays
+theirs).
 `design/err-migration.md` holds the migration plan.
 
 ## 1b. Foreign structure access — PROPOSED AMENDMENT to modules-plan
