@@ -7604,3 +7604,27 @@ it. Nothing in the twenty-seven merges since (#349 through #375) moved
 either series — the history diff shows both flat from that commit to
 head. The lesson repeats itself: an entry that records a trade must name
 both sides, because the chart shows both.
+
+## 2026-07-27 — a worsened counter demands a written why: the trend gate
+
+Clay named the seam after reading the chart: the welfare scalar is the
+objective and its gate is two-sided, but the deeper breakdowns — permanent
+slots, ir lines — can worsen inside a banked win and nobody owes a
+sentence. The literal-interning entry did exactly that. His ask: a
+worsening breakdown should force reflection, especially uncompensated;
+how to operationalize it.
+
+The operationalization: the reflection IS the sentence, and the machine
+only refuses silence. scripts/trend_gate.py diffs every golden counter the
+branch changed against main's copy, classifies each move by a direction
+table, and looks for each worsened counter's name in the branch's
+compiler-log delta. Worsened and named: priced. Worsened and unnamed:
+UNPRICED, listed loudly. Improvements pass free, so the check never taxes
+a win, and mechanical sum-compensation stays welfare's job — this gate
+deliberately doesn't duplicate it.
+
+Report-only to start: the ci step prints verdicts and exits clean, so the
+friction is measured on real pull requests before it gates. The flip is
+one line, and it is Clay's to flip. Probed all three ways before shipping:
+a simulated perm_allocs rise with no sentence lists as UNPRICED, the same
+rise with a naming sentence prices, and a clean branch is clean.

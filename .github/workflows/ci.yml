@@ -140,6 +140,10 @@ jobs:
             echo "::error::iterations). If intentional, update the golden in this PR."
             exit 1
           }
+      - name: a worsened counter names its why (report-only)
+        run: |
+          git fetch origin main --depth 1
+          python3 scripts/trend_gate.py origin/main
       - name: encode counters
         run: |
           KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null
