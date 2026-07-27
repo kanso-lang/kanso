@@ -6565,3 +6565,49 @@ keeps them there. The open question is not the copy any more, it is the exit —
 who frees a malloc'd buffer when the loop ends, what happens on the failure
 path, and what happens to a builder that escapes. `list/fold_go/3` carries a
 second reason (an unbracketed entry) and would need that fixed too.
+
+## 2026-07-26 — the carry path cannot be the shelf, measured
+
+Built a throwaway probe to find the shelf's ceiling before building the shelf:
+byte-builder headers and buffers allocated with malloc instead of from the
+arena, `k_survives` extended to answer yes for a pointer in no arena block at
+all, and the BYTES exclusion lifted from the carry gate. All three behind an
+environment variable, none of it committed.
+
+The compiler took it. All three encode loops turned from
+
+    encode_items/3: grow-only: argument 1 may carry heap across the iteration
+
+into
+
+    encode_items/3: carry beat: rewinds every iteration, evacuating argument 1
+
+and the output stayed byte-identical to jq. Then the measurement:
+
+    input      baseline        probe
+    189 kb      13.9 mb      6,795.7 mb
+    204 kb       7.0 mb      1,349.5 mb
+    845 kb      24.1 mb     21,060.8 mb
+    1.9 mb     139.9 mb      killed (out of memory)
+
+Four hundred and ninety times worse, with the right answer. The counters say
+where it went: `append_grow` 14 -> 28,126 and allocated bytes 12 mb -> 6.5 gb on
+the 189 kb document.
+
+The cause is one line in the copier. `k_deep_copy` sets `nb->cap = 0` on a
+copied byte value, so a builder that has been through a carry arrives with no
+spare capacity; the next append fails `if (a->cap)` and grows, allocating twice
+the current length. Every carried iteration is then a copy followed by a
+doubling, which is the quadratic the BYTES exclusion was written to avoid — and
+it is not a tuning bug, since exact capacity is what stops a copied constant
+being mutated in place by `push_mut`.
+
+So the carry path is the wrong mechanism, and lifting its exclusion is not the
+missing step. A hoisted builder has to be invisible to the carry rather than
+carried cheaply by it: outside the arena for the loop's whole duration, never
+staged, never copied at a boundary, with one copy out at `k_beat_pop` where the
+runtime already does exactly that for a heap result. The probe also showed the
+exit is not optional — it leaked every buffer, and that alone killed the 1.9 mb
+run.
+
+Recorded as declined-as-built rather than open: the carry route is closed.
