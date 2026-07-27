@@ -1,0 +1,7 @@
+import "std/list"
+
+pub play =
+  firsts = list/to_list (list/take list/naturals 5)
+  squares = list/map list/naturals (n -> n * n)
+  print "{firsts}"
+  >> print "{list/to_list (list/take squares 4)}"

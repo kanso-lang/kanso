@@ -1,0 +1,13 @@
+import "std/list"
+
+fn build 0 acc
+  acc
+
+fn build n acc
+  build (n - 1) (push acc n)
+
+pub play =
+  xs = build 1000 []
+  tripled = list/map xs (n -> n * 3)
+  big = list/select tripled (n -> n > 150)
+  print "kept {list/sum big}"

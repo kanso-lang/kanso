@@ -1,0 +1,2 @@
+the recipe: list/mapped <fn> list/cursor 1 [1 2 3]
+the result: [10 20 30]
