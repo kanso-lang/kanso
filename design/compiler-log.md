@@ -7504,3 +7504,32 @@ Found while measuring, already on the record elsewhere: the interpreter
 overflows on a 100k-deep fold with or without this change — the known
 depth limit, waiting on the tail-call gavel. The differential holds at
 corpus scale.
+
+## 2026-07-27 — the oracle stops being the engine that fails first
+
+The recursion-depth entry measured the wrong asymmetry and named it: tail
+recursion ran unbounded natively (musttail turns it into a jump) while the
+interpreter overflowed near 54,000 frames, so programs existed that the
+compiled engine ran and the semantics oracle could not. The dispatcher now
+trampolines: a body whose tail position is a call to a named group — spelled
+directly, through either branch of an `if`, or through a pipe — hands the
+call back to dispatch_loop, which rebinds and continues instead of
+recursing. Self-recursion and mutual recursion alike run in constant
+interpreter stack; a million-hop ping/pong answers on both engines,
+byte-identical, and the 100k-element fold that overflowed the interpreter
+during the pipe-fusion measurement now completes and agrees with native.
+
+The tail evaluator mirrors eval's resolution exactly — env-bound values,
+types, err, and builtins all decline the trampoline and evaluate as before;
+only a Value::FnRef naming a real group loops. Failure hops still accrue
+per dispatch iteration, so err traces are unchanged. Pinned by
+tests/golden/micro/deep_tail.kso: 200,000 mutual hops on both engines,
+watched red on the old interpreter (stack overflow, SIGABRT).
+
+What this deliberately does not settle: the gavel's question. Whether
+proper tail calls are a PROMISE of the language — a thing the book may
+teach and programs may lean on — is still Clay's to rule; nothing here adds
+that sentence to the docs. What it settles is the differential law's side:
+the oracle now runs everything the native engine runs at these depths,
+instead of defining semantics it cannot itself execute. Non-tail recursion
+keeps its stack bound on both engines, as it must.

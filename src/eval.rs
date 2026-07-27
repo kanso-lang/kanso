@@ -263,6 +263,13 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+/// What a body's tail handed back: a finished value, or a named-group call
+/// for the dispatcher to loop on instead of growing the stack.
+enum Flow {
+    Done(Value),
+    Tail(Rc<str>, Vec<Value>, Span),
+}
+
 pub fn set_foreign_call(call: ForeignCall) {
     FOREIGN_CALL.with(|slot| *slot.borrow_mut() = Some(call));
 }
@@ -439,6 +446,124 @@ impl<'a> Interp<'a> {
     /// Evaluate a declaration's body with its lazy bind sites in view.
     fn eval_body_of(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> EvalResult {
         self.eval_body_in(decl, &decl.body, env, &frame_of(decl))
+    }
+
+    /// A body run whose final expression may hand back a tail call for the
+    /// dispatcher's loop instead of recursing. Everything before the last
+    /// statement evaluates exactly as eval_body_in does.
+    fn eval_body_flow(&self, decl: &FnDecl, env: Option<Rc<Env>>) -> Result<Flow, RuntimeError> {
+        let frame = frame_of(decl);
+        let body = &decl.body;
+        let Some((Stmt::Expr(last), lead)) = body.split_last() else {
+            return Ok(Flow::Done(self.eval_body_in(decl, body, env, &frame)?));
+        };
+        let mut env = env;
+        for (index, stmt) in lead.iter().enumerate() {
+            match stmt {
+                Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
+                Stmt::Bind { pattern: Pattern::Var(name, _), expr }
+                    if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
+                {
+                    self.thunk_stats.allocs.set(self.thunk_stats.allocs.get() + 1);
+                    let cell = Rc::new(RefCell::new(ThunkState::Pending {
+                        expr: expr.clone(),
+                        env: env.clone(),
+                        frame: frame.clone(),
+                    }));
+                    env = bind(env, name, Value::Thunk(cell));
+                }
+                Stmt::Bind { pattern, expr } => {
+                    let mut value = self.eval(expr, &env, &frame)?;
+                    if !matches!(pattern, Pattern::Var(..)) {
+                        value = self.force_thunk(value)?;
+                    }
+                    env = self.destructure(pattern, value, env, expr.span())?;
+                }
+                Stmt::Expr(expr) => {
+                    let _ = self.eval(expr, &env, &frame)?;
+                }
+            }
+        }
+        self.eval_tail(last, &env, &frame)
+    }
+
+    /// The tail-position evaluator: a call to a named group in tail position
+    /// — directly, or through either branch of an `if` — returns the call
+    /// for the dispatcher to loop on. Every other shape evaluates as `eval`
+    /// would, callee and arguments included, so resolution order and
+    /// failure behavior stay identical.
+    fn eval_tail(
+        &self,
+        expr: &Expr,
+        env: &Option<Rc<Env>>,
+        frame: &Frame,
+    ) -> Result<Flow, RuntimeError> {
+        let Expr::App { head, args, span, piped } = expr else {
+            return Ok(Flow::Done(self.eval(expr, env, frame)?));
+        };
+        if matches!(head.as_ref(), Expr::Partial(..)) {
+            return Ok(Flow::Done(self.eval(expr, env, frame)?));
+        }
+        let group_of = |callee: &Value| -> Option<Rc<str>> {
+            let Value::FnRef(n) = callee else { return None };
+            let plain = &**n != "err" && &**n != "if" && self.type_decl(n).is_none();
+            (plain && self.fns.contains_key(&**n)).then(|| n.clone())
+        };
+        if *piped && !args.is_empty() {
+            let piped_value = self.eval(&args[0], env, frame)?;
+            if is_failure(&piped_value) {
+                return Ok(Flow::Done(piped_value));
+            }
+            if let Value::Desc(inner) = piped_value {
+                let mut body_args: Vec<Expr> = vec![Expr::Ident("__piped".to_string(), *span)];
+                body_args.extend(args[1..].iter().cloned());
+                let closure = Value::Closure(Rc::new(ClosureData {
+                    params: vec!["__piped".to_string()],
+                    body: Expr::App {
+                        head: head.clone(),
+                        args: body_args,
+                        span: *span,
+                        piped: false,
+                    },
+                    env: env.clone(),
+                    frame: frame.clone(),
+                }));
+                return Ok(Flow::Done(Value::Desc(Rc::new(Desc::Bind(inner, closure)))));
+            }
+            let callee = self.eval(head, env, frame)?;
+            let mut values = vec![piped_value];
+            for arg in &args[1..] {
+                values.push(self.eval(arg, env, frame)?);
+            }
+            return match group_of(&callee) {
+                Some(name) => Ok(Flow::Tail(name, values, *span)),
+                None => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
+            };
+        }
+        let callee = self.eval(head, env, frame)?;
+        if matches!(&callee, Value::FnRef(n) if &**n == "if") && args.len() == 3 {
+            let cond = self.force(self.eval(&args[0], env, frame)?)?;
+            return match cond {
+                Value::True => self.eval_tail(&args[1], env, frame),
+                Value::False => self.eval_tail(&args[2], env, frame),
+                bad if is_failure(&bad) => Ok(Flow::Done(bad)),
+                other => Err(RuntimeError {
+                    message: format!(
+                        "an if condition is true or false, got {}",
+                        render(&other, false)
+                    ),
+                    span: *span,
+                }),
+            };
+        }
+        let mut values = Vec::new();
+        for arg in args {
+            values.push(self.eval(arg, env, frame)?);
+        }
+        match group_of(&callee) {
+            Some(name) => Ok(Flow::Tail(name, values, *span)),
+            None => Ok(Flow::Done(self.call(callee, values, *span, frame)?)),
+        }
     }
 
     fn type_decl(&self, name: &str) -> Option<&TypeDecl> {
@@ -1057,55 +1182,87 @@ impl<'a> Interp<'a> {
         args: Vec<Value>,
         span: Span,
     ) -> EvalResult {
-        let args_len = args.len();
-        // A position is scrutinized when any arity-matching arm inspects it
-        // (anything but a bare Var/Wildcard); thunks force before matching.
+        self.dispatch_loop(name.to_string(), overloads.to_vec(), args, span)
+    }
+
+    /// The dispatcher's trampoline: a tail call to a named group re-enters
+    /// arm selection here instead of growing the Rust stack, so deep tail
+    /// recursion — self or mutual — runs in constant interpreter stack, the
+    /// way the native engine's musttail already made it run in constant
+    /// machine stack. The oracle should not be the engine that fails first.
+    fn dispatch_loop(
+        &self,
+        name: String,
+        overloads: Vec<&FnDecl>,
+        args: Vec<Value>,
+        span: Span,
+    ) -> EvalResult {
+        let mut name = name;
+        let mut overloads = overloads;
         let mut args = args;
-        for (i, arg) in args.iter_mut().enumerate() {
-            if !matches!(arg, Value::Thunk(_)) {
-                continue;
-            }
-            let scrutinized = overloads.iter().any(|decl| {
-                decl.params.len() == args_len
-                    && !matches!(
-                        decl.params.get(i),
-                        Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_))
-                    )
-            });
-            if scrutinized {
-                let taken = std::mem::replace(arg, Value::NoneV);
-                *arg = self.force_thunk(taken)?;
-            }
-        }
-        let mut best: Option<(Score, &FnDecl, Bindings)> = None;
-        for decl in overloads {
-            if decl.params.len() != args.len() {
-                continue;
-            }
-            let Some((score, binds)) = match_params(&decl.params, &args) else { continue };
-            let replace = match &best {
-                Some((best_score, ..)) => score > *best_score,
-                None => true,
-            };
-            if replace {
-                best = Some((score, decl, binds));
-            }
-        }
-        match best {
-            Some((_, decl, binds)) => {
-                let mut env = None;
-                for (bind_name, value) in binds {
-                    env = bind(env, &bind_name, value);
+        let mut span = span;
+        loop {
+            let args_len = args.len();
+            // A position is scrutinized when any arity-matching arm inspects
+            // it (anything but a bare Var/Wildcard); thunks force before
+            // matching.
+            for (i, arg) in args.iter_mut().enumerate() {
+                if !matches!(arg, Value::Thunk(_)) {
+                    continue;
                 }
-                self.eval_body_of(decl, env)
+                let scrutinized = overloads.iter().any(|decl| {
+                    decl.params.len() == args_len
+                        && !matches!(
+                            decl.params.get(i),
+                            Some(Pattern::Var(..)) | Some(Pattern::Wildcard(_))
+                        )
+                });
+                if scrutinized {
+                    let taken = std::mem::replace(arg, Value::NoneV);
+                    *arg = self.force_thunk(taken)?;
+                }
             }
-            None => match args.into_iter().find(is_failure) {
-                Some(bad) => Ok(hop(bad, name)),
-                None => Err(RuntimeError {
-                    message: format!("no overload of `{name}` matches these arguments"),
-                    span,
-                }),
-            },
+            let mut best: Option<(Score, &FnDecl, Bindings)> = None;
+            for decl in &overloads {
+                if decl.params.len() != args.len() {
+                    continue;
+                }
+                let Some((score, binds)) = match_params(&decl.params, &args) else { continue };
+                let replace = match &best {
+                    Some((best_score, ..)) => score > *best_score,
+                    None => true,
+                };
+                if replace {
+                    best = Some((score, decl, binds));
+                }
+            }
+            match best {
+                Some((_, decl, binds)) => {
+                    let mut env = None;
+                    for (bind_name, value) in binds {
+                        env = bind(env, &bind_name, value);
+                    }
+                    match self.eval_body_flow(decl, env)? {
+                        Flow::Done(value) => return Ok(value),
+                        Flow::Tail(next, next_args, next_span) => {
+                            overloads =
+                                self.fns.get(&*next).expect("tails name real groups").clone();
+                            name = next.to_string();
+                            args = next_args;
+                            span = next_span;
+                        }
+                    }
+                }
+                None => {
+                    return match args.into_iter().find(is_failure) {
+                        Some(bad) => Ok(hop(bad, &name)),
+                        None => Err(RuntimeError {
+                            message: format!("no overload of `{name}` matches these arguments"),
+                            span,
+                        }),
+                    };
+                }
+            }
         }
     }
 

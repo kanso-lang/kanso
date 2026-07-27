@@ -1,0 +1,16 @@
+# tail recursion runs in constant stack on every engine: two hundred
+# thousand hops through a pair of mutually tail-calling arms, a depth
+# that overflows any engine still spending a stack frame per hop.
+fn ping 0 total
+  total
+
+fn ping n total
+  pong (n - 1) (total + 1)
+
+fn pong 0 total
+  total
+
+fn pong n total
+  ping (n - 1) (total + 1)
+
+pub play = print "hops: {ping 200000 0}"
