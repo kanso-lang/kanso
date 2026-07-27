@@ -6205,3 +6205,25 @@ the goldens caught it. Deduplicating the registry with a flag on the map worked
 and cost a word per map, which took the decode board from four arena blocks to
 five with no win to pay for it — reverted on the ratchet's own terms, since a
 regression without evidence of benefit is just a regression.
+
+## 2026-07-26 — marie kondo joins the committee
+
+Clay: "it would be hilarious to put marie kondo in our influences page at the
+very end."
+
+She earns the place on more than the joke, which is why the entry argues rather
+than winks. Every other name on that page argued for removing things and each
+had a technical case — coupling, duplication, incidental complexity. Kondo made
+the same argument to people with too many jumpers and made it sharper: the
+question is not whether a thing *could* be useful, since almost anything could,
+but whether you would choose it again today. That test disposes of far more.
+
+The entry then cashes it against this repository rather than gesturing: a type
+whose name was a lie, an annotation the compiler could already infer, four
+ordering rules nobody could justify, and a benchmark figure that did not
+reproduce. None were broken. All were kept out of habit.
+
+Also raised and not built: a pixel-art avatar for each influence. It would be
+charming and it is a real design job — eight portraits that read at sixteen
+pixels and survive both themes — rather than something to sneak in beside a
+compiler change. Recorded so it stays on the list.
