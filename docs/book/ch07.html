@@ -99,7 +99,12 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
 
 <p>look again at <code>menu.kso</code>: three of its four declarations are bare, and one wears <code>pub</code>. that single keyword is the entire visibility system. a top-level name is module-private unless marked—<code>base_price</code> is the module's own business, and nothing spells that out but its absence of ceremony. there is no export list to maintain and no visibility matrix to memorize. <code>pub</code> sits on the declaration, so every reader sees the surface exactly where the thing is defined: <code>price</code> and <code>checkout</code> are api; <code>base_price</code>, <code>line</code>, and <code>service</code> are interior.</p>
 
-<p>today <code>pub</code> parses on every kind of declaration—<code>pub fn</code>, <code>pub type</code>, and <code>pub</code> on a constant—and it documents the contract. the boundary it describes bites once cross-module <code>import</code> ships: an importer will see only <code>pub</code> names, and everything else becomes invisible outside its own directory. until then the keyword is you telling future readers, and the toolchain, where the module's edge is—writing down the decision now so enforcement has nothing to infer later.</p>
+<p><code>pub</code> sits on every kind of declaration—<code>pub fn</code>, <code>pub type</code>, and <code>pub</code> on a constant—and the boundary it draws is enforced at every import. an importer sees only <code>pub</code> names; reach for anything else and the compiler answers with <code>error[opacity]</code>, naming the module whose interior you touched. the keyword is the whole contract, checked where the module's edge is crossed:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso check main.kso</div>
+  <pre><code>dango costs 370</code></pre>
+</div>
 
 <h2>tests are constants</h2>
 
@@ -152,22 +157,38 @@ test_unknown_item_fails ... ok
 </div>
 </div>
 
-<h2>what arrives with import</h2>
+<h2>importing another module</h2>
 
-<p>one thing is still missing from this picture: a module can talk to its own files freely, but it can't yet reach another module. cross-module <code>import</code> is designed and gaveled—it just hasn't shipped—and it lands together with the two changes it implies. that is worth stating plainly rather than pretending the present tense is the whole language.</p>
-
-<p>today a program's entrypoint is a file whose <code>main</code> constant the toolchain runs. <code>main</code> is an ordinary constant—the program's description of what to do—and nothing else at the top level is allowed to <em>do</em> anything. a bare statement outside a declaration is a syntax error right now:</p>
+<p>one directory is one module; a program grows by putting modules side by side. an <code>import</code> names a sibling directory, and every <code>pub</code> name inside arrives under the module's own name as a qualifier—<code>teahouse/price</code>, spelled where it is used, so a reader never wonders where a name came from:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">entry_check.kso</div>
-  <pre><code><span class="f">print</span> <span class="s">"hello from the top level"</span></code></pre>
+  <div class="code-panel-title">shop/main.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"teahouse"</span>
+
+<span class="f">print</span> <span class="s">"dango costs <span class="i">{teahouse/price "dango"}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso check entry_check.kso</div>
-    <pre><code>entry_check.kso: ok</code></pre>
+    <div class="code-panel-title">kanso run main.kso</div>
+    <pre><code>dango costs 370</code></pre>
   </div>
 </div>
 
-<p>the settled future is the opposite: an entry file is <em>statements only</em>—<code>import "std/json"</code> lines at the top, alphabetized, then the program's descriptions written directly, no wrapping constant. at that point <code>main</code> dissolves; the file itself is the description the toolchain runs. and the same release that gives <code>import</code> a name to resolve gives <code>pub</code> its teeth: an importer sees your public surface and nothing behind it. the keyword you're already writing is the contract that boundary will enforce. this book teaches the language you can run today; where the road is drawn but not yet paved, it says so.</p>
+<p>the boundary works in both directions. inside the teahouse, <code>base_price</code> is an ordinary name any file of the module may read; from outside, it does not exist, and asking for it is a compile error rather than a discouraged convention:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shady/peek_check.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"teahouse"</span>
+
+<span class="f">print</span> <span class="s">"the wholesale number is <span class="i">{teahouse/base_price}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check peek_check.kso</div>
+    <pre><code><span class="k">error[opacity]</span>: `base_price` is private to module `teahouse` — only pub names cross an import
+<span class="c">  --&gt; peek_check.kso:3:33</span>
+   3 | print "the wholesale number is {teahouse/base_price}"
+                                       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>bare spellings work too: an imported pub also joins the short-name overload space, so <code>price "dango"</code> dispatches alongside any local arms of the same name. the qualified spelling is the one this book prefers, because it reads as documentation. either way, what crosses the boundary is exactly the surface the module marked—nothing to configure, nothing to forget.</p>
 
 <h2>what you can do now</h2>
 
@@ -179,7 +200,7 @@ test_unknown_item_fails ... ok
   <li>split the teahouse further. add a third file <code>service.kso</code> holding a <code>pub fn total</code> that takes a list of item names, prices each through <code>price</code>, and sums them—calling into <code>menu.kso</code> across the file boundary. add a <code>test_</code> constant for a two-item order and run <code>kanso test teahouse</code>.</li>
   <li>trigger the canonical-order error on purpose in three ways: two functions out of alphabetical order, a <code>type</code> placed below a <code>fn</code>, and <code>main</code> after a constant that sorts before it. read each <code>error[formatting]</code> and predict the fix before you make it.</li>
   <li>write a test that must fail—assert something you know is wrong—and read the runner's report. then make it pass by fixing the <em>assertion</em>, not the code, and watch the count flip.</li>
-  <li>take <code>base_price</code> and mark it <code>pub</code>. nothing breaks today, because import enforcement hasn't shipped. write a sentence describing what <em>will</em> change the day it does, and which callers outside the module gain access.</li>
+  <li>from a file <em>outside</em> the teahouse module, import it and try to read <code>base_price</code>. read the <code>error[opacity]</code> you get back. then mark <code>base_price</code> as <code>pub</code>, watch the error disappear, and decide whether you meant it—widening a surface is a one-word edit, which is exactly why the compiler makes the narrow default free.</li>
 </ol>
 
 <nav class="chapter-nav">

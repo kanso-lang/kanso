@@ -1,0 +1,3 @@
+import "teahouse"
+
+print "the wholesale number is {teahouse/base_price}"
