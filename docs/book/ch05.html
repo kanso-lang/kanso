@@ -16,10 +16,9 @@ extra_css: /book/book.css
   <pre><code><span class="f">print</span> <span class="s">"brewing"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"steeping"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run brew.kso --plan</div>
-    <pre><code>plan:
-  print "brewing"    <span class="c"># from line 1</span>
-  print "steeping"    <span class="c"># from line 1</span>
-  print "pouring"    <span class="c"># from line 1</span></code></pre>
+    <pre><code>brewing
+steeping
+pouring</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run brew.kso</div>
@@ -40,7 +39,7 @@ pouring</code></pre>
   <pre><code><span class="n">6</span> <span class="o">*</span> <span class="n">7</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run quiet.kso --plan</div>
-    <pre><code><span class="k">error</span>: main is not an io; there is no plan to show</code></pre>
+    <pre><code></code></pre>
   </div>
 </div>
 
@@ -55,10 +54,9 @@ pouring</code></pre>
 <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span> <span class="o">&gt;&gt;</span> <span class="f">knock</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run knock.kso --plan</div>
-    <pre><code>plan:
-  print "kon kon"    <span class="c"># from line 1</span>
-  print "kon kon"    <span class="c"># from line 1</span>
-  print "kon kon"    <span class="c"># from line 1</span></code></pre>
+    <pre><code>kon kon
+kon kon
+kon kon</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run knock.kso</div>
@@ -92,9 +90,9 @@ kon kon</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check dropped_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding `goodbye`
-  --&gt; dropped_check.kso:2:3
-   2 |   goodbye = print "sayonara"
-         ^</code></pre>
+<span class="c">  --&gt; dropped_check.kso:1:1</span>
+   1 | goodbye = print "sayonara"
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -163,10 +161,7 @@ hojicha</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run count.kso --plan</div>
-    <pre><code>plan:
-  read_file "flavors.txt"
-  . &lt;continuation&gt;
-  . &lt;continuation&gt;</code></pre>
+    <pre><code>flavors.txt has 3 lines</code></pre>
   </div>
 </div>
 
@@ -192,7 +187,8 @@ hojicha</code></pre>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run currying.kso</div>
-    <pre><code></code></pre>
+    <pre><code>250 becomes 270
+and again: 108</code></pre>
   </div>
 </div>
 
@@ -212,10 +208,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="f">io/write_file</span> <span class="s">"order.txt"</span> order <span class="o">&gt;&gt;</span> <span class="f">io/read_file</span> <span class="s">"order.txt"</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso --plan</div>
-    <pre><code>plan:
-  write_file "order.txt"
-  read_file "order.txt"
-  . &lt;continuation&gt;</code></pre>
+    <pre><code>one taiyaki, extra custard</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run save.kso</div>
@@ -240,7 +233,8 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run welcome.kso -- clay</div>
-    <pre><code>irasshaimase, clay</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
+  born in first at welcome.kso:4</code></pre>
   </div>
 </div>
 
@@ -278,7 +272,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   <div class="code-output">
     <div class="code-panel-title">kanso run welcome.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
-  born in first at welcome.kso:2</code></pre>
+  born in first at welcome.kso:4</code></pre>
   </div>
 </div>
 
