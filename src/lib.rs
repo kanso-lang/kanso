@@ -669,6 +669,23 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
     else {
         return;
     };
+    // private std/list helpers the generated reducers lean on (bump,
+    // file_under), resolved to whatever qualified spelling the module
+    // graph produced — privacy is a check-time property, and fusion runs
+    // after the check
+    let helpers: std::collections::HashMap<String, String> = program
+        .fns
+        .iter()
+        .filter(|d| d.file.starts_with("std/list") && !d.synthetic)
+        .map(|d| {
+            let short = d
+                .name
+                .rsplit_once('/')
+                .map(|(_, s)| s.to_string())
+                .unwrap_or_else(|| d.name.clone());
+            (short, d.name.clone())
+        })
+        .collect();
     let mut counter = 0usize;
     for decl in &mut program.fns {
         if decl.file.starts_with("std/") {
@@ -678,7 +695,7 @@ pub fn fuse_enumerable(program: &mut ast::Program) {
         for stmt in &mut decl.body {
             match stmt {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    fuse_expr(expr, &shorts, &fold_name, &mut counter);
+                    fuse_expr(expr, &shorts, &fold_name, &helpers, &mut counter);
                 }
             }
         }
@@ -842,63 +859,64 @@ fn fuse_expr(
     e: &mut ast::Expr,
     shorts: &std::collections::HashMap<String, String>,
     fold_name: &str,
+    helpers: &std::collections::HashMap<String, String>,
     counter: &mut usize,
 ) {
     use ast::Expr;
     match e {
         Expr::App { head, args, .. } => {
-            fuse_expr(head, shorts, fold_name, counter);
+            fuse_expr(head, shorts, fold_name, helpers, counter);
             for a in args.iter_mut() {
-                fuse_expr(a, shorts, fold_name, counter);
+                fuse_expr(a, shorts, fold_name, helpers, counter);
             }
         }
-        Expr::Lambda { body, .. } => fuse_expr(body, shorts, fold_name, counter),
+        Expr::Lambda { body, .. } => fuse_expr(body, shorts, fold_name, helpers, counter),
         Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
             for stmt in stmts {
                 match stmt {
                     ast::Stmt::Bind { expr, .. }
                     | ast::Stmt::Expr(expr)
                     | ast::Stmt::Set { value: expr, .. } => {
-                        fuse_expr(expr, shorts, fold_name, counter)
+                        fuse_expr(expr, shorts, fold_name, helpers, counter)
                     }
                 }
             }
         }
         Expr::Seq(a, b, _) | Expr::Join { lhs: a, rhs: b, .. } => {
-            fuse_expr(a, shorts, fold_name, counter);
-            fuse_expr(b, shorts, fold_name, counter);
+            fuse_expr(a, shorts, fold_name, helpers, counter);
+            fuse_expr(b, shorts, fold_name, helpers, counter);
         }
         Expr::List(items, _) => {
             for i in items {
-                fuse_expr(i, shorts, fold_name, counter);
+                fuse_expr(i, shorts, fold_name, helpers, counter);
             }
         }
         Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
-                fuse_expr(k, shorts, fold_name, counter);
-                fuse_expr(v, shorts, fold_name, counter);
+                fuse_expr(k, shorts, fold_name, helpers, counter);
+                fuse_expr(v, shorts, fold_name, helpers, counter);
             }
         }
         Expr::Index { base, index, .. } => {
-            fuse_expr(base, shorts, fold_name, counter);
-            fuse_expr(index, shorts, fold_name, counter);
+            fuse_expr(base, shorts, fold_name, helpers, counter);
+            fuse_expr(index, shorts, fold_name, helpers, counter);
         }
-        Expr::Field { base, .. } => fuse_expr(base, shorts, fold_name, counter),
-        Expr::Upcast { expr, .. } => fuse_expr(expr, shorts, fold_name, counter),
+        Expr::Field { base, .. } => fuse_expr(base, shorts, fold_name, helpers, counter),
+        Expr::Upcast { expr, .. } => fuse_expr(expr, shorts, fold_name, helpers, counter),
         Expr::BinOp { lhs, rhs, .. } => {
-            fuse_expr(lhs, shorts, fold_name, counter);
-            fuse_expr(rhs, shorts, fold_name, counter);
+            fuse_expr(lhs, shorts, fold_name, helpers, counter);
+            fuse_expr(rhs, shorts, fold_name, helpers, counter);
         }
         Expr::Str(parts, _) => {
             for p in parts {
                 if let ast::TemplatePart::Interp(inner) = p {
-                    fuse_expr(inner, shorts, fold_name, counter);
+                    fuse_expr(inner, shorts, fold_name, helpers, counter);
                 }
             }
         }
         _ => {}
     }
-    if let Some(rewritten) = try_fuse(e, shorts, fold_name, counter) {
+    if let Some(rewritten) = try_fuse(e, shorts, fold_name, helpers, counter) {
         *e = rewritten;
     }
 }
@@ -907,6 +925,7 @@ fn try_fuse(
     e: &ast::Expr,
     shorts: &std::collections::HashMap<String, String>,
     fold_name: &str,
+    helpers: &std::collections::HashMap<String, String>,
     counter: &mut usize,
 ) -> Option<ast::Expr> {
     use ast::Expr;
@@ -926,6 +945,28 @@ fn try_fuse(
     let x = format!("felem{counter}");
     let (init, reducer) = match (consumer.as_str(), args.len()) {
         ("fold", 3) => (args[1].clone(), args[2].clone()),
+        ("tally", 1) => {
+            let bump = helpers.get("bump")?;
+            let seen = Expr::Index {
+                base: Box::new(ident(&acc)),
+                index: Box::new(ident(&x)),
+                strict: false,
+                span,
+            };
+            let bumped = call(ident(bump), vec![seen]);
+            (
+                Expr::MapLit(Vec::new(), span),
+                lam(vec![&acc, &x], call(ident("put"), vec![ident(&acc), ident(&x), bumped])),
+            )
+        }
+        ("group_by", 2) => {
+            let file_under = helpers.get("file_under")?;
+            let keyed = call(args[1].clone(), vec![ident(&x)]);
+            (
+                Expr::MapLit(Vec::new(), span),
+                lam(vec![&acc, &x], call(ident(file_under), vec![ident(&acc), keyed, ident(&x)])),
+            )
+        }
         ("sum", 1) => (
             Expr::Int(0u32.into(), span),
             lam(

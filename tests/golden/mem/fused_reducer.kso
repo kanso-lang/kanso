@@ -1,0 +1,16 @@
+# a fused adapter chain must cost nothing per element: the composed
+# reducer's inner redexes emit inline, so the whole map/select/sum runs
+# as one flat loop with no closure and no dynamic call in it. the alloc
+# count pins that — per-element closures would put it in the thousands.
+import "std/list"
+
+fn build_up 0 acc
+  acc
+
+fn build_up n acc
+  build_up (n - 1) (push acc n)
+
+pub play =
+  tripled = list/map (build_up 1000 []) (n -> n * 3)
+  big = list/select tripled (n -> n > 150)
+  print "kept: {list/sum big}"

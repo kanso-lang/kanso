@@ -3011,6 +3011,65 @@ impl<'a> Backend<'a> {
         span: Span,
     ) -> Result<String, String> {
         let call_arity = args.len() + first.is_some() as usize;
+        // A literal lambda applied on the spot is a binding, not a value:
+        // bind the arguments and emit the body here, instead of building a
+        // closure and dispatching through k_callN. The fusion pass composes
+        // adapter chains out of exactly these redexes, so without this step
+        // a fused reducer pays two closures and two dynamic calls per
+        // element. Failing arguments short-circuit first, as k_callN would.
+        if let Expr::Lambda { params, body, .. } = head {
+            if params.len() == call_arity {
+                let mut vals: Vec<String> = Vec::new();
+                if let Some(v) = first.clone() {
+                    vals.push(v);
+                }
+                for a in args {
+                    vals.push(self.emit_expr(f, a)?);
+                }
+                let mut bails: Vec<(String, String)> = Vec::new();
+                let merge = f.label();
+                for v in &vals {
+                    if f.set_of(v) & FAIL == 0 {
+                        continue;
+                    }
+                    let ok = inline_not_failure(f, v);
+                    let bail_from = f.cur_label.clone();
+                    let cont = f.label();
+                    f.line(&format!("br i1 {ok}, label %{cont}, label %{merge}"));
+                    bails.push((v.clone(), bail_from));
+                    f.start_block(&cont);
+                }
+                let saved: Vec<(String, Option<String>)> =
+                    params.iter().map(|(p, _)| (p.clone(), f.lookup(p))).collect();
+                for ((p, _), v) in params.iter().zip(&vals) {
+                    f.bind(p, v);
+                }
+                let out = self.emit_expr(f, body)?;
+                for (p, old) in saved {
+                    match old {
+                        Some(v) => f.bind(&p, &v),
+                        None => {
+                            f.versions.remove(&p);
+                        }
+                    }
+                }
+                if bails.is_empty() {
+                    return Ok(out);
+                }
+                let body_from = f.cur_label.clone();
+                let out_set = f.set_of(&out);
+                let fail_bits: Set = bails.iter().fold(0, |acc, (v, _)| acc | (f.set_of(v) & FAIL));
+                f.line(&format!("br label %{merge}"));
+                f.start_block(&merge);
+                let t = f.tmp();
+                let mut sources: Vec<String> =
+                    bails.iter().map(|(v, from)| format!("[ {v}, %{from} ]")).collect();
+                sources.push(format!("[ {out}, %{body_from} ]"));
+                f.line(&format!("{t} = phi %KValue {}", sources.join(", ")));
+                f.record(&t, out_set | fail_bits);
+                return Ok(t);
+            }
+        }
         let computed_head = match head {
             // A local binding is a value. So is a top-level constant (a nullary
             // group) invoked with arguments and no arm at that arity: it holds a

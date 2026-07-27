@@ -7207,3 +7207,65 @@ in inference, making the promise true, not in the gate.
 Measured: encode arena flattens 5 -> 4 blocks (beat_iters +400 — one more
 loop licensed), decode unchanged, kq spec suite and both its ratchets green
 byte-identical, welfare 62.22 -> 62.23, banked.
+
+## 2026-07-27 — a fused reducer stops paying per element: redexes now emit inline
+
+Two ledger sweeps and one build. First the sweep that closed a stale thread:
+the shelf campaign left "tail cycles stay grow-only" as the next structural
+win, and measuring it found it already built and pinned — a fresh 200k
+even/odd mutual-tail chain beats every iteration at constant allocs, matching
+the beat_cycle.kso pin (beat_iters=400) that landed with the cycle work. vse
+itself runs at arena_blocks=1, beat_iters=20000. The memory saying otherwise
+was older than the code.
+
+Then the measurement that turned into the build. The enumerable's fusion
+pass composes an adapter chain into one fold whose reducer nests the steps
+as applied lambdas, and the emitter treated every applied lambda as a value:
+build the closure, dispatch through k_callN. For `sum (map xs f)` over 100k
+elements that meant two fresh zero-capture closures and two dynamic calls
+per element — 400,002 allocations over the flat-fold baseline, with
+KANSO_NO_FUSE within noise of fused. The composition was real and the
+flattening was missing.
+
+emit_call_rest now steps the beta: a literal lambda head whose params match
+the call arity binds its arguments as locals (save/shadow/restore on the
+flat versions map) and emits its body inline, with failing arguments
+short-circuiting through a phi first, exactly as k_callN would have. The
+same chain now runs at the build-only baseline — zero allocations per
+element — and the composed-reducer klam is gone from the IR entirely.
+Pinned by tests/golden/mem/fused_reducer.kso: allocs=12 for a
+1000-element map/select/sum; watched red without the inline step
+(allocs=7912, "allocator counters drifted").
+
+Everything else held still: 17 suites, book corpus, kq spec suite and both
+its ratchets byte-identical, cost goldens and welfare flat at 62.23 — the
+bench programs carry no redexes, so the ratchets rightly saw nothing.
+
+STILL QUEUED from the enumerable spec: take/drop bounds in the fused scan,
+first/find early-exit fusion, tally/group_by reducers — the remaining
+400k excess in the four-chain measurement is exactly those unfused shapes.
+
+## 2026-07-27 — tally and group_by join the fused consumers; the map log is quadratic
+
+Two of the queued reducers were a small extension once the inline-beta step
+landed: try_fuse now emits tally as `put m x (bump m[x])` and group_by as
+`file_under acc (key x) x`, resolving the private std/list helpers by
+qualified name the same way it resolves fold — privacy is a check-time
+property and fusion runs after the check. Pinned by
+tests/golden/mem/fused_tally.kso (allocs=1590 fused; 5118 without the
+arms, watched red). Still queued: take/drop bounds and first/find
+early-exit, which need a fold that can stop — a different mechanism, not
+more arms.
+
+OPEN, found by the measurement: building a map under repeated keys is
+quadratic at runtime. k_b_put and k_b_put_mut both append to the pair log
+unconditionally — an existing key still grows len by one — and every read
+resolves duplicates by sorting the whole log. A 10k-element tally over 17
+distinct keys allocates 2.0 GB and runs seconds; 30k runs half a minute;
+the scaling is n². This is not the fusion's doing — KANSO_NO_FUSE times
+within noise — it is the cost model of dedup-on-read meeting an
+accumulator that writes the same keys forever. Any tally, index_by, or
+put-loop over few distinct keys pays it. The fix wants design attention
+(compact the log when duplicates cross a threshold? resolve on put_mut at
+proven-unique sites?) because the frontier-append trick is load-bearing
+for the build-block shapes that never repeat a key.
