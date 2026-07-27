@@ -7139,3 +7139,30 @@ zero, and under a deliberately type-only fixpoint it reads 80 against the
 pinned zero. Every golden elsewhere is unchanged to the byte — kq no longer
 needs its rewrite, and programs shaped like it no longer need to know the
 trick.
+
+## 2026-07-27 — the enumerable fills in: zip, argmax, argmin, group_by, transform_values
+
+The ratified vocabulary (design/enumerable.md) was closer to built than its
+own status line said — twenty-three verbs existed with fusion; eleven were
+missing, and four of those wait on open gavels (range's name collision;
+to_h / index_by / transform_keys, which all hang on the one map-collision
+policy). The other five land here, spec-first, in the house shapes: zip is a
+paired iterator with its next and fold arms — the lazy pull proven by zipping
+naturals against a two-element list — argmax and argmin ride the missing-
+shape fold like max and min, group_by never collides so it needed no gavel,
+and transform_values folds entries through put.
+
+Found on the way, for the deferred list rather than silent fixing:
+
+- the spec's naming law says "all/any, no ? suffix" but the compiler
+  enforces the opposite — error[naming] requires ? on predicates, and the
+  shipped verbs are all?/any?. The spec drifted from a later naming gavel;
+  the document needs the amendment, not the code.
+- indexing a map by a bool key is a runtime error while putting one is not —
+  group_by with a boolean key function hits it. The asymmetry between put
+  and at wants one answer.
+
+Every consumer dispatches per shape, so a new shape must bring its fold arm:
+zip's first draft forgot and the catch-all treated a paired as a plain list.
+The differential harness caught it in one run, both engines agreeing on the
+same wrong error, which is the system working.
