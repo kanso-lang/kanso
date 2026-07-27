@@ -386,32 +386,49 @@ fn eval_call<'a>(
     piped: bool,
 ) -> Set {
     let mut arg_sets: Vec<Set> = args.iter().map(|a| eval_expr(ctx, a, env)).collect();
-    let mut piped_fail: Set = 0;
+    let mut piped_bits: Set = 0;
     if piped && !arg_sets.is_empty() && arg_sets[0] & DESC != 0 {
         // a description piped into a continuation: the executor runs it and
         // hands the continuation its YIELD, never the description itself —
         // and never a failure, which the bind skips before the call. the
         // piped value's own failure bits short-circuit at the call site, so
-        // they reach the result directly.
-        piped_fail = arg_sets[0] & FAIL;
+        // they reach the result directly. and the pipe expression's own value
+        // is then a description (the bind chain the executor later runs), so
+        // DESC rides along too — dropping it once let a downstream pipe
+        // direct-apply a real description as if it were the yield.
+        piped_bits = (arg_sets[0] & FAIL) | DESC;
         arg_sets[0] = (arg_sets[0] & !DESC & !FAIL) | desc_yield(&args[0]);
     }
-    let piped_fail = piped_fail;
+    let piped_bits = piped_bits;
+    // an applied lambda is a binding in disguise — the fusion pass emits
+    // these — and skipping its body hid every call inside it from the param
+    // fixpoint, which is how a list-taking callee once "proved" int-only and
+    // crossed the ABI as a smuggled pointer. Step the beta: bind the
+    // argument sets and walk the body.
+    if let Expr::Lambda { params, body, .. } = head {
+        let mut inner = env.clone();
+        for ((p, _), set) in params.iter().zip(&arg_sets) {
+            inner.insert(p, *set & !FAIL);
+        }
+        let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
+        return eval_expr(ctx, body, &mut inner) | fails | piped_bits;
+    }
     let Expr::Ident(name, _) = head else {
-        return TOP | piped_fail;
+        let _ = eval_expr(ctx, head, env);
+        return TOP | piped_bits;
     };
     if env.contains_key(name.as_str()) {
-        return TOP | piped_fail; // calling a local function value
+        return TOP | piped_bits; // calling a local function value
     }
     if name == "if" {
         let cond_fail = arg_sets[0] & FAIL;
-        return arg_sets[1] | arg_sets[2] | cond_fail | piped_fail;
+        return arg_sets[1] | arg_sets[2] | cond_fail | piped_bits;
     }
     if name == "err" {
-        return ERR | piped_fail;
+        return ERR | piped_bits;
     }
     if name == "print" {
-        return DESC | (arg_sets[0] & FAIL) | piped_fail;
+        return DESC | (arg_sets[0] & FAIL) | piped_bits;
     }
     if let Some(&idx) = ctx.type_names.get(name.as_str()) {
         // constructing a declared type: grow each field's set by this arg's,
@@ -427,11 +444,11 @@ fn eval_call<'a>(
             }
         }
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
-        return REC | fails | piped_fail;
+        return REC | fails | piped_bits;
     }
     if name == "entry" {
         let fails: Set = arg_sets.iter().fold(0, |acc, s| acc | (s & FAIL));
-        return REC | fails | piped_fail;
+        return REC | fails | piped_bits;
     }
     if let Some(decls) = ctx.groups.get(&(name.as_str(), args.len())) {
         let decls = decls.clone();
@@ -452,9 +469,9 @@ fn eval_call<'a>(
             }
             out |= ctx.returns[i];
         }
-        return out | piped_fail;
+        return out | piped_bits;
     }
-    builtin_set(name, &arg_sets) | piped_fail
+    builtin_set(name, &arg_sets) | piped_bits
 }
 
 /// What a description's execution hands a bound continuation, syntactically:

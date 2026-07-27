@@ -1,8 +1,8 @@
 allocs=16259944
 alloc_bytes=853335616
-arena_blocks=5
+arena_blocks=4
 perm_allocs=12
-beat_iters=5032001
+beat_iters=5032401
 thunk_allocs=0
 thunk_forces=0
 thunk_evals=0
