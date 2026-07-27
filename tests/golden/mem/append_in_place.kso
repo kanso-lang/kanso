@@ -1,0 +1,9 @@
+import "std/text"
+
+fn build_onto acc 0
+  acc
+
+fn build_onto acc n
+  build_onto (text/append acc "xx") (n - 1)
+
+pub play = print "{text/utf8 (build_onto (text/bytes "") 40)}"

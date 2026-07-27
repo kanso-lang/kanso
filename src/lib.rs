@@ -9,6 +9,7 @@ pub mod dispatch;
 pub mod escape;
 pub mod eval;
 pub mod infer;
+pub mod inline;
 pub mod lexer;
 pub mod linear;
 pub mod parser;
@@ -23,6 +24,7 @@ pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Prog
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_main);
+    inline::inline_builtin_wrappers(&mut program);
     match diags.is_empty() {
         true => Ok(program),
         false => Err(diag::render(&diags, file, source)),
@@ -93,6 +95,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     merged.fns.extend(program.fns);
     let mut merged_diags = check::check_merged(&merged, true);
     check::check_unused_private(&merged, &used, &mut merged_diags);
+    inline::inline_builtin_wrappers(&mut merged);
     let merged_diags: Vec<_> = merged_diags.into_iter().filter(|d| d.kind != "unused").collect();
     match merged_diags.is_empty() {
         true => {
@@ -1640,6 +1643,7 @@ fn compile_module_inner(
     }
     let mut diags = check::check_merged(&merged, require_main);
     check::check_unused_private(&merged, &used, &mut diags);
+    inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
         let file = dir.to_string_lossy();
         let rendered: Vec<String> = diags

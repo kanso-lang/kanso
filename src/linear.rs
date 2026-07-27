@@ -136,8 +136,23 @@ impl<'a> Analysis<'a> {
     fn unique_list(&self, e: &Expr, ctx: &FnDecl) -> bool {
         match e {
             Expr::List(..) => true,
+            // a conditional yields a unique value when every arm does; the
+            // encode loop returns `if done acc (step acc)` and neither arm
+            // aliases, but an unknown head would have read it as opaque
+            Expr::App { head, args, .. }
+                if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
+            {
+                self.unique_list(&args[1], ctx) && self.unique_list(&args[2], ctx)
+            }
+            Expr::Guard { early, rest, .. } => {
+                let tail = matches!(rest.last(), Some(Stmt::Expr(e)) if self.unique_list(e, ctx));
+                self.unique_list(early, ctx) && tail
+            }
             Expr::App { head, args, .. } => match head.as_ref() {
-                Expr::Ident(n, _) if n == "push" && args.len() == 2 => {
+                Expr::Ident(n, _)
+                    if matches!(n.as_str(), "push" | "append" | "builtin_append")
+                        && args.len() == 2 =>
+                {
                     self.unique_list(&args[0], ctx)
                 }
                 // `concat` always allocates a fresh list (k_b_concat), so its
@@ -145,6 +160,15 @@ impl<'a> Analysis<'a> {
                 Expr::Ident(n, _)
                     if matches!(n.as_str(), "concat" | "text/concat" | "builtin_concat")
                         && args.len() == 2 =>
+                {
+                    true
+                }
+                // and a byte builder is born fresh — it is the seed the whole
+                // encode chain is threaded from, so without it every
+                // accumulator downstream fails to prove unique at the root
+                Expr::Ident(n, _)
+                    if matches!(n.as_str(), "bytes" | "text/bytes" | "builtin_bytes")
+                        && args.len() == 1 =>
                 {
                     true
                 }
@@ -200,7 +224,9 @@ fn collect_pushes(
 
 fn walk_for_push(a: &Analysis, decl: &FnDecl, e: &Expr, out: &mut HashSet<(String, usize, usize)>) {
     if let Expr::App { head, args, span, .. } = e {
-        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "push")
+        // push extends a list, append extends a byte builder, and each writes
+        // into its own frontier when nobody else holds the value
+        if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
             && args.len() == 2
             && a.unique_list(&args[0], decl)
         {
@@ -226,8 +252,38 @@ fn count_uses(var: &str, body: &[Stmt]) -> usize {
     n
 }
 
+/// How many times `var` is used on the busiest path through `e`.
+///
+/// Summing every occurrence counts a conditional's branches as if both ran,
+/// which reads a threaded accumulator as aliased and stops it being extended
+/// in place. `encode_items` is the shape that matters — an `if` whose base
+/// case returns the accumulator and whose step passes it on. `acc` appears
+/// twice there and is used once — the base case returns it or the step
+/// passes it on, never both. Taking the larger branch rather than their sum is
+/// what a move actually is, and it is still conservative: no path uses the
+/// value more often than the number this returns.
 fn count_in_expr(var: &str, e: &Expr) -> usize {
     let here = matches!(e, Expr::Ident(n, _) if n == var) as usize;
+    // `if c a b`: the condition always runs, exactly one arm follows it
+    if let Expr::App { head, args, .. } = e {
+        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 {
+            let cond = count_in_expr(var, &args[0]);
+            let taken = count_in_expr(var, &args[1]).max(count_in_expr(var, &args[2]));
+            return here + cond + taken;
+        }
+    }
+    // `return early if cond` — the guard fires or the rest runs
+    if let Expr::Guard { cond, early, rest, .. } = e {
+        let after: usize = rest
+            .iter()
+            .map(|st| match st {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    count_in_expr(var, expr)
+                }
+            })
+            .sum();
+        return here + count_in_expr(var, cond) + count_in_expr(var, early).max(after);
+    }
     here + child_exprs(e).into_iter().map(|c| count_in_expr(var, c)).sum::<usize>()
 }
 

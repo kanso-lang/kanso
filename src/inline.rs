@@ -1,0 +1,121 @@
+//! Inlining the wrappers that hide a builtin behind a name.
+//!
+//! `pub fn append acc x` whose whole body is `builtin_append acc x` is a
+//! rename, not a function. Left alone it compiles to a real call, and every
+//! analysis downstream sees a user function where the program meant a
+//! primitive — the uniqueness analysis in particular, which decides whether an
+//! append can extend its accumulator in place. It cannot decide that inside
+//! the wrapper, because there the accumulator is a parameter whose ownership
+//! belongs to a caller one frame away. On the encode board that hid forty-two
+//! million appends behind three call sites.
+//!
+//! So the rename is undone before anything looks: a call to such a wrapper
+//! becomes the call it stands for, at the site that made it.
+
+use crate::ast::*;
+use std::collections::HashMap;
+
+/// Wrapper name and arity, mapped to the builtin it stands for. A wrapper
+/// qualifies only when its body is exactly one call to a builtin, passing its
+/// own parameters in their own order and nothing else — anything more and
+/// inlining would be a decision rather than a rename.
+fn aliases(program: &Program) -> HashMap<(String, usize), String> {
+    let mut found = HashMap::new();
+    for decl in &program.fns {
+        let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
+            continue;
+        };
+        let Expr::Ident(callee, _) = head.as_ref() else { continue };
+        if !callee.starts_with("builtin_") || args.len() != decl.params.len() {
+            continue;
+        }
+        let mut threads = true;
+        for (param, arg) in decl.params.iter().zip(args) {
+            let (Pattern::Var(name, _), Expr::Ident(passed, _)) = (param, arg) else {
+                threads = false;
+                break;
+            };
+            if name != passed {
+                threads = false;
+                break;
+            }
+        }
+        if threads {
+            found.insert((decl.name.clone(), decl.params.len()), callee.clone());
+        }
+    }
+    found
+}
+
+/// Rewrite every call to a qualifying wrapper into the call it stands for.
+pub fn inline_builtin_wrappers(program: &mut Program) {
+    let alias = aliases(program);
+    if alias.is_empty() {
+        return;
+    }
+    for decl in &mut program.fns {
+        for stmt in &mut decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            rewrite(expr, &alias);
+        }
+    }
+}
+
+fn rewrite(expr: &mut Expr, alias: &HashMap<(String, usize), String>) {
+    if let Expr::App { head, args, .. } = expr {
+        if let Expr::Ident(name, span) = head.as_ref() {
+            if let Some(builtin) = alias.get(&(name.clone(), args.len())) {
+                **head = Expr::Ident(builtin.clone(), *span);
+            }
+        }
+    }
+    for child in children_mut(expr) {
+        rewrite(child, alias);
+    }
+}
+
+fn children_mut(expr: &mut Expr) -> Vec<&mut Expr> {
+    match expr {
+        Expr::App { head, args, .. } => {
+            let mut out: Vec<&mut Expr> = vec![head.as_mut()];
+            out.extend(args.iter_mut());
+            out
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
+            vec![lhs.as_mut(), rhs.as_mut()]
+        }
+        Expr::Field { base, .. } | Expr::Upcast { expr: base, .. } => vec![base.as_mut()],
+        Expr::Index { base, index, .. } => vec![base.as_mut(), index.as_mut()],
+        Expr::Lambda { body, .. } => vec![body.as_mut()],
+        Expr::List(items, _) => items.iter_mut().collect(),
+        Expr::Guard { cond, early, rest, .. } => {
+            let mut out: Vec<&mut Expr> = vec![cond.as_mut(), early.as_mut()];
+            for stmt in rest.iter_mut() {
+                out.push(match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                });
+            }
+            out
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => stmts
+            .iter_mut()
+            .map(|s| match s {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            })
+            .collect(),
+        Expr::Str(parts, _) => parts
+            .iter_mut()
+            .filter_map(|p| match p {
+                TemplatePart::Interp(e) => Some(e),
+                TemplatePart::Lit(_) => None,
+            })
+            .collect(),
+        Expr::MapLit(pairs, _) => pairs.iter_mut().flat_map(|(k, v)| [k, v]).collect(),
+        _ => Vec::new(),
+    }
+}

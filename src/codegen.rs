@@ -237,6 +237,7 @@ declare %KValue @k_b_length(%KValue)
 declare %KValue @k_b_map(%KValue, %KValue)
 declare %KValue @k_b_push(%KValue, %KValue)
 declare %KValue @k_b_push_mut(%KValue, %KValue)
+declare %KValue @k_b_append_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
@@ -3202,10 +3203,11 @@ impl<'a> Backend<'a> {
             }
             // A push the linearity analysis proved unique extends its list in
             // place instead of allocating a fresh header.
-            let sym = if name == "push"
-                && self.in_place_pushes.contains(&(f.file.clone(), span.line, span.col))
-            {
+            let in_place = self.in_place_pushes.contains(&(f.file.clone(), span.line, span.col));
+            let sym = if name == "push" && in_place {
                 "push_mut"
+            } else if name == "append" && in_place {
+                "append_mut"
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"
