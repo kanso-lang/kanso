@@ -7207,3 +7207,40 @@ in inference, making the promise true, not in the gate.
 Measured: encode arena flattens 5 -> 4 blocks (beat_iters +400 — one more
 loop licensed), decode unchanged, kq spec suite and both its ratchets green
 byte-identical, welfare 62.22 -> 62.23, banked.
+
+## 2026-07-27 — a fused reducer stops paying per element: redexes now emit inline
+
+Two ledger sweeps and one build. First the sweep that closed a stale thread:
+the shelf campaign left "tail cycles stay grow-only" as the next structural
+win, and measuring it found it already built and pinned — a fresh 200k
+even/odd mutual-tail chain beats every iteration at constant allocs, matching
+the beat_cycle.kso pin (beat_iters=400) that landed with the cycle work. vse
+itself runs at arena_blocks=1, beat_iters=20000. The memory saying otherwise
+was older than the code.
+
+Then the measurement that turned into the build. The enumerable's fusion
+pass composes an adapter chain into one fold whose reducer nests the steps
+as applied lambdas, and the emitter treated every applied lambda as a value:
+build the closure, dispatch through k_callN. For `sum (map xs f)` over 100k
+elements that meant two fresh zero-capture closures and two dynamic calls
+per element — 400,002 allocations over the flat-fold baseline, with
+KANSO_NO_FUSE within noise of fused. The composition was real and the
+flattening was missing.
+
+emit_call_rest now steps the beta: a literal lambda head whose params match
+the call arity binds its arguments as locals (save/shadow/restore on the
+flat versions map) and emits its body inline, with failing arguments
+short-circuiting through a phi first, exactly as k_callN would have. The
+same chain now runs at the build-only baseline — zero allocations per
+element — and the composed-reducer klam is gone from the IR entirely.
+Pinned by tests/golden/mem/fused_reducer.kso: allocs=12 for a
+1000-element map/select/sum; watched red without the inline step
+(allocs=7912, "allocator counters drifted").
+
+Everything else held still: 17 suites, book corpus, kq spec suite and both
+its ratchets byte-identical, cost goldens and welfare flat at 62.23 — the
+bench programs carry no redexes, so the ratchets rightly saw nothing.
+
+STILL QUEUED from the enumerable spec: take/drop bounds in the fused scan,
+first/find early-exit fusion, tally/group_by reducers — the remaining
+400k excess in the four-chain measurement is exactly those unfused shapes.
