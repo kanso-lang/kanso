@@ -1,0 +1,7 @@
+# write puts bytes on stdout with no newline; print ends the line
+import "std/io"
+
+pub play =
+  io/write "a"
+  >> io/write "b"
+  >> print "c"

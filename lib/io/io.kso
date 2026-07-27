@@ -5,5 +5,8 @@ pub fn read_file path
 
 pub stdin = builtin_stdin
 
+pub fn write content
+  builtin_write content
+
 pub fn write_file path content
   builtin_write_file path content

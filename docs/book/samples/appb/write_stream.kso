@@ -1,0 +1,6 @@
+import "std/io"
+
+pub play =
+  io/write "no newline "
+  >> io/write "between these"
+  >> print "; print ends the line"

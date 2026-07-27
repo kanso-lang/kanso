@@ -51,6 +51,10 @@ impl Executor for BrowserExecutor {
         self.stdout.push('\n');
     }
 
+    fn write(&mut self, text: &str) {
+        self.stdout.push_str(text);
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         next_random(n)
     }

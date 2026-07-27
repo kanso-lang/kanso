@@ -1,0 +1,19 @@
+import "std/io"
+import "std/text"
+
+fn chunk n
+  text/utf8 (grow (text/bytes "") 8 n)
+
+fn grow acc 0 _
+  acc
+
+fn grow acc k n
+  grow (text/append acc "line {n};") (k - 1) n
+
+fn stream 0
+  print "done"
+
+fn stream n
+  io/write (chunk n) . (_ -> stream (n - 1))
+
+pub play = stream 200
