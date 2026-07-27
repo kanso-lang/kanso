@@ -7563,3 +7563,28 @@ view-size cap so group_by-shaped many-distinct builds don't trade quadratic
 time for quadratic memory — a policy cliff that deserves a ruling rather
 than an interim constant. Until one lands, the 2.0 GB tally stands, and
 this entry is the map of the terrain.
+
+## 2026-07-27 — MEASURED, DECLINED: the next protocol cannot open from std's side
+
+The closed-protocol thread looked like a missing dispatch discriminator,
+and the discriminators turn out to exist — `x:some[]` matches exactly
+lists, `x:some[some]` exactly maps, `x:string` strings, all verified on
+both engines — so std/list's fold and iter catch-alls were split to route
+unknown shapes through `next` while keeping list, string, and map behavior
+byte-identical. Built, and the user sequence still failed, for the reason
+that actually closes the road: qualification. A user's `pub fn next` and
+std's internal `next coll` call are different groups the moment the module
+graph is merged — the internal call rewrites to `list/next`, and an
+importer's arms can never join a dependency's group, because import
+visibility points one way. No arrangement of std arms changes that.
+
+What opening the protocol actually requires is open dispatch groups across
+the import direction — the coherence question every language meets
+(typeclass instances, trait impls, the orphan rule), and exactly the
+territory of the import-incarnation gavel. Reverted rather than shipped:
+the split arms alone bought nothing except a worse diagnostic for the
+failing case (`no overload of list/next matches`, leaking a std internal,
+where today's `length takes a list, string, or map` at least names surface
+vocabulary). The terrain: user-defined sequences wait on a coherence
+ruling, and when it lands, the annotated-arm split in this entry is the
+five-minute half of the work.
