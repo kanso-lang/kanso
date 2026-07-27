@@ -188,6 +188,23 @@ pub play =
   >> print "back home: {round_trip knot}"
   >> print "two thousand more, all discarded: {spin 2000 0}"
 `,
+  currying: `# & holds a function's first arguments and waits for the rest.
+# tax is a two-argument function; &tax 8 fixes the rate and hands back
+# something that still wants a price. that is an ordinary value -- bind it,
+# name it, pass it to another function -- with no lambda and no wrapper.
+fn tax rate price
+  price + (price * rate / 100)
+
+fn quote pricer amount
+  "{amount} becomes {pricer amount}"
+
+pub play =
+  local = &tax 8
+  luxury = &tax 20
+  print "one rate:  {quote local 250}"
+  >> print "the other: {quote luxury 250}"
+  >> print "and the same partial again: {local 100}"
+`,
   join: `# two effects with no order between them -- parallel is the default, so
 # plain lines say it. the >> is the wall: serving happens only after both.
 # failures accumulate: if both sides err you get both reasons.

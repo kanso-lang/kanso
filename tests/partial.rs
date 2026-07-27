@@ -82,14 +82,31 @@ fn too_many_arguments_names_the_arities_that_exist() {
     assert!(stderr.contains("arms take 2"), "diagnostic was: {stderr}");
 }
 
-/// The differential law's escape hatch: an engine may cover less, but it says
-/// so. Silence here would be a program that prints one thing natively and
-/// another in the interpreter.
+/// The differential law wants both engines to agree, not merely to coexist.
+/// Native lowers a partial as the lambda it is equivalent to, so this runs the
+/// same program through both and compares the bytes.
 #[test]
-fn the_native_backend_declines_a_partial_out_loud() {
+fn native_and_the_interpreter_agree_on_a_partial() {
+    let source = "fn add a b\n  a + b\n\nfn apply_five f\n  f 5\n\npub play = print \"{apply_five (&add 2)}\"\n";
+    let program = written("agree", source);
+
+    let native = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", program.to_str().expect("utf-8")])
+        .output()
+        .expect("kanso runs");
+
+    assert_eq!(stdout(&native), stdout(&interp("agree_interp", source)));
+    assert_eq!(stdout(&native), "7");
+}
+
+/// Two arities and one partial: `&roll 4` could be waiting for one argument or
+/// two, and only the arriving arguments decide. The interpreter defers that;
+/// a lambda cannot, so native says so rather than guessing an arity.
+#[test]
+fn native_refuses_a_partial_whose_arity_is_ambiguous() {
     let program = written(
-        "declined",
-        "fn add a b\n  a + b\n\nfn apply_five f\n  f 5\n\npub play = print \"{apply_five (&add 2)}\"\n",
+        "ambiguous",
+        "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\npub play = print \"{(&roll 4) 5}\"\n",
     );
 
     let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
@@ -99,6 +116,6 @@ fn the_native_backend_declines_a_partial_out_loud() {
         .expect("kanso runs");
 
     let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success(), "native silently accepted a partial");
-    assert!(stderr.contains("partial application"), "diagnostic was: {stderr}");
+    assert!(!out.status.success(), "native guessed at an ambiguous arity");
+    assert!(stderr.contains("ambiguous"), "diagnostic was: {stderr}");
 }

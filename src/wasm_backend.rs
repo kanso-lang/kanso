@@ -127,6 +127,46 @@ pub struct WasmBackend<'a> {
     tailcalls: bool,
 }
 
+/// A partial application, as the lambda it is equivalent to: `&add 2` becomes
+/// `(x -> add 2 x)`. Shared in shape with the native backend, and refusing the
+/// same case for the same reason — with two arities live, only the arriving
+/// arguments decide which one a partial is waiting for, and a lambda has to
+/// commit to a parameter count before they arrive.
+fn partial_lambda(
+    program: &Program,
+    name: &str,
+    supplied: &[Expr],
+    span: crate::diag::Span,
+) -> Result<Expr, String> {
+    let mut arities: Vec<usize> = program
+        .fns
+        .iter()
+        .filter(|d| d.name == name && d.params.len() > supplied.len())
+        .map(|d| d.params.len())
+        .collect();
+    arities.sort_unstable();
+    arities.dedup();
+    let [arity] = arities.as_slice() else {
+        return match arities.is_empty() {
+            true => Err(format!(
+                "browser backend: `&{name}` supplies {} argument(s), and no `{name}` takes more",
+                supplied.len()
+            )),
+            false => Err(format!(
+                "browser backend: `&{name}` with {} argument(s) has an ambiguous arity",
+                supplied.len()
+            )),
+        };
+    };
+    let params: Vec<(String, crate::diag::Span)> =
+        (0..arity - supplied.len()).map(|i| (format!("k#partial{i}"), span)).collect();
+    let mut args = supplied.to_vec();
+    args.extend(params.iter().map(|(n, s)| Expr::Ident(n.clone(), *s)));
+    let head = Expr::Ident(name.to_string(), span);
+    let body = Expr::App { head: Box::new(head), args, piped: false, span };
+    Ok(Expr::Lambda { params, body: Box::new(body), span })
+}
+
 pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
@@ -517,12 +557,9 @@ impl<'a> WasmBackend<'a> {
 
     fn emit_expr(&mut self, ctx: &mut Ctx, expr: &Expr, tail: bool) -> Result<(), String> {
         match expr {
-            // the interpreter is the oracle for `&`; the browser backend
-            // declines it rather than lowering something that would diverge
-            Expr::Partial(name, _) => {
-                return Err(format!(
-                    "browser backend: `&{name}` (partial application) is not lowered yet"
-                ))
+            Expr::Partial(name, span) => {
+                let lambda = partial_lambda(self.program, name, &[], *span)?;
+                return self.emit_expr(ctx, &lambda, false);
             }
             Expr::Upcast { expr: inner, ty, .. } => {
                 self.emit_expr(ctx, inner, false)?;
@@ -651,6 +688,12 @@ impl<'a> WasmBackend<'a> {
                     ctx.body.i32_const(origin as i64);
                     ctx.body.call(RT_ERR_STAMP);
                 }
+            }
+            Expr::App { head, args, piped, span } if matches!(head.as_ref(), Expr::Partial(..)) => {
+                let Expr::Partial(name, _) = head.as_ref() else { unreachable!() };
+                let _ = (piped, span);
+                let lambda = partial_lambda(self.program, name, args, *span)?;
+                return self.emit_expr(ctx, &lambda, false);
             }
             Expr::App { head, args, piped, span } => {
                 self.emit_app(ctx, head, args, *piped, tail, *span)?
