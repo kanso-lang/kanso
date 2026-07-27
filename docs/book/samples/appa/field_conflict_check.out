@@ -1,0 +1,8 @@
+error[type]: `box`'s `held` is a string here, and `double` takes an int — these two cannot both hold
+  --> field_conflict_check.kso:8:11
+   8 |   b = box "words"
+                 ^
+error[type]: ...and this is where it is read as an int
+  --> field_conflict_check.kso:9:19
+   9 |   print "{double b.held}"
+                         ^

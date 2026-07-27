@@ -1,0 +1,9 @@
+type box
+  held
+
+fn double n:int
+  n * 2
+
+pub play =
+  b = box "words"
+  print "{double b.held}"
