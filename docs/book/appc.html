@@ -38,13 +38,13 @@ extra_css: /book/book.css
  <span class="f">print</span> <span class="s">"<span class="i">{x}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check indent_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 3
-<span class="c">  --&gt; indent_check.kso:2:1</span>
-   2 |    x = 1
+    <pre><code><span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 1
+<span class="c">  --&gt; indent_check.kso:1:1</span>
+   1 |  x = 1
        <span class="k">^</span>
-<span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 3
-<span class="c">  --&gt; indent_check.kso:3:1</span>
-   3 |    print "{x}"
+<span class="k">error[formatting]</span>: indentation must be 0 or 2 spaces, found 1
+<span class="c">  --&gt; indent_check.kso:2:1</span>
+   2 |  print "{x}"
        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -57,8 +57,8 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso check tabs_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: tabs are not part of the canonical grammar; indent with spaces
-<span class="c">  --&gt; tabs_check.kso:2:1</span>
-   2 | 	print "hi"
+<span class="c">  --&gt; tabs_check.kso:1:1</span>
+   1 | 	print "hi"
        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -72,13 +72,13 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso check spacing_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; spacing_check.kso:2:9</span>
-   2 |   answer=42
-               <span class="k">^</span>
+<span class="c">  --&gt; spacing_check.kso:1:7</span>
+   1 | answer=42
+             <span class="k">^</span>
 <span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; spacing_check.kso:2:10</span>
-   2 |   answer=42
-                <span class="k">^</span></code></pre>
+<span class="c">  --&gt; spacing_check.kso:1:8</span>
+   1 | answer=42
+              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -90,9 +90,9 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso check trailing_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: trailing whitespace is not part of the canonical grammar
-<span class="c">  --&gt; trailing_check.kso:1:18</span>
-   1 | main = print "hi"
-                        <span class="k">^</span></code></pre>
+<span class="c">  --&gt; trailing_check.kso:1:11</span>
+   1 | print "hi" 
+                 <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -107,9 +107,9 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso check commas_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: kanso has no commas; enumerations are space-separated
-<span class="c">  --&gt; commas_check.kso:2:17</span>
-   2 |   total = sum [1, 2]
-                       <span class="k">^</span></code></pre>
+<span class="c">  --&gt; commas_check.kso:1:15</span>
+   1 | total = sum [1, 2]
+                     <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -121,9 +121,9 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso check call_paren_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
-<span class="c">  --&gt; call_paren_check.kso:1:13</span>
-   1 | main = print("hi")
-                   <span class="k">^</span></code></pre>
+<span class="c">  --&gt; call_paren_check.kso:1:6</span>
+   1 | print("hi")
+            <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -142,9 +142,9 @@ extra_css: /book/book.css
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"x"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check order_types_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `bravo` up
+    <pre><code><span class="k">error[formatting]</span>: canonical order places type declarations before functions; move `thing` up
 <span class="c">  --&gt; order_types_check.kso:4:6</span>
-   4 | type bravo
+   4 | type thing
             <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -189,7 +189,7 @@ extra_css: /book/book.css
     <div class="code-panel-title">kanso check blank_between_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: exactly one blank line separates top-level declarations
 <span class="c">  --&gt; blank_between_check.kso:3:1</span>
-   3 | main = print (greet "kanso")
+   3 | fn wave _
        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -222,9 +222,9 @@ extra_css: /book/book.css
   <pre><code><span class="f">print</span> <span class="s">"this string pads the line out well past the canonical width limit of eighty"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check width_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 90
+    <pre><code><span class="k">error[formatting]</span>: a line holds at most 80 characters — this one has 83
 <span class="c">  --&gt; width_check.kso:1:81</span>
-   1 | main = print "this string pads the line out well past the canonical width limit of eighty"
+   1 | print "this string pads the line out well past the canonical width limit of eighty"
                                                                                        <span class="k">^</span></code></pre>
   </div>
 </div>
@@ -239,9 +239,8 @@ extra_css: /book/book.css
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"pouring the water in a thin stream from well above the first cup"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run wrap_wall.kso</div>
-    <pre><code>steeping the sencha
-pouring the water
-serving</code></pre>
+    <pre><code>steeping the sencha in the small clay pot for exactly ninety seconds
+pouring the water in a thin stream from well above the first cup</code></pre>
   </div>
 </div>
 
@@ -270,10 +269,10 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
 <span class="f">print</span> <span class="s">"sum: <span class="i">{total}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check needless_wrap_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (34 characters)
-<span class="c">  --&gt; needless_wrap_check.kso:3:5</span>
-   3 |     . sum
-           <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[formatting]</span>: needless continuation: this statement fits on one line (32 characters)
+<span class="c">  --&gt; needless_wrap_check.kso:2:3</span>
+   2 |   . sum
+         <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -286,9 +285,9 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
   <div class="code-output">
     <div class="code-panel-title">kanso check partial_chain_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: no partial chaining: a chain fits on one line, or each step gets its own `&gt;&gt;` continuation line
-<span class="c">  --&gt; partial_chain_check.kso:1:47</span>
-   1 | main = print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
-                                                     <span class="k">^</span></code></pre>
+<span class="c">  --&gt; partial_chain_check.kso:1:40</span>
+   1 | print "steeping the finest uji sencha" &gt;&gt; print "pouring the hot water"
+                                              <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -303,13 +302,13 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
   <div class="code-output">
     <div class="code-panel-title">kanso check case_check.kso</div>
     <pre><code><span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
-<span class="c">  --&gt; case_check.kso:2:5</span>
-   2 |   myName = 1
-           <span class="k">^</span>
+<span class="c">  --&gt; case_check.kso:1:3</span>
+   1 | myName = 1
+         <span class="k">^</span>
 <span class="k">error[formatting]</span>: identifiers are snake_case, all lowercase, always
-<span class="c">  --&gt; case_check.kso:3:13</span>
-   3 |   print "{myName}"
-                   <span class="k">^</span></code></pre>
+<span class="c">  --&gt; case_check.kso:2:11</span>
+   2 | print "{myName}"
+                 <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -325,9 +324,9 @@ ranked <span class="o">=</span> [<span class="n">40</span> <span class="n">15</s
   <div class="code-output">
     <div class="code-panel-title">kanso check quote_check.kso</div>
     <pre><code><span class="k">error[syntax]</span>: unexpected character `'`
-<span class="c">  --&gt; quote_check.kso:1:14</span>
-   1 | main = print 'hi'
-                    <span class="k">^</span></code></pre>
+<span class="c">  --&gt; quote_check.kso:1:7</span>
+   1 | print 'hi'
+             <span class="k">^</span></code></pre>
   </div>
 </div>
 

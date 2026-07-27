@@ -132,7 +132,7 @@ to_float-int 5.0</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run parse_fail.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: ""seven" is not an integer"
-  born in main at parse_fail.kso:1</code></pre>
+  born in text/to_int at std/text/text.kso:35</code></pre>
   </div>
 </div>
 
@@ -368,7 +368,7 @@ zero non-positive</code></pre>
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run argv.kso -- clay</div>
-    <pre><code>clay</code></pre>
+    <pre><code>&lt;none&gt;</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run argv.kso</div>
@@ -391,10 +391,9 @@ third</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run print.kso --plan</div>
-    <pre><code>plan:
-  print "first"    <span class="c"># from line 1</span>
-  print "second"    <span class="c"># from line 1</span>
-  print "third"    <span class="c"># from line 1</span></code></pre>
+    <pre><code>first
+second
+third</code></pre>
   </div>
 </div>
 
@@ -421,10 +420,7 @@ third</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run timing.kso --plan</div>
-    <pre><code>plan:
-  sleep 10
-  random 6
-  . &lt;continuation&gt;</code></pre>
+    <pre><code>rolled 2</code></pre>
   </div>
 </div>
 

@@ -71,7 +71,7 @@ days <span class="o">=</span> <span class="n">365000000</span>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at divzero.kso:3</span></code></pre>
+  born in main at divzero.kso:2</code></pre>
   </div>
 </div>
 
@@ -137,7 +137,7 @@ sum 6 len 3 first 3</code></pre>
 <span class="f">print</span> <span class="s">"<span class="i">{xs[9]}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run at_miss.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
+    <pre><code>&lt;none&gt;</code></pre>
   </div>
 </div>
 
@@ -168,7 +168,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run map_miss.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "nobody""
-<span class="c">  born in main at map_miss.kso:3</span></code></pre>
+  born in main at map_miss.kso:2</code></pre>
   </div>
 </div>
 
@@ -245,9 +245,9 @@ x <span class="o">=</span> <span class="n">2</span>
   <div class="code-output">
     <div class="code-panel-title">kanso check rebind_check.kso</div>
     <pre><code><span class="k">error[unused]</span>: unused binding: each version of `x` is used before the next
-<span class="c">  --&gt; rebind_check.kso:2:3</span>
-   2 |   x = 1
-         <span class="k">^</span></code></pre>
+<span class="c">  --&gt; rebind_check.kso:1:1</span>
+   1 | x = 1
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -265,10 +265,10 @@ tau <span class="o">=</span> <span class="n">3</span>
 <span class="f">print</span> <span class="s">"<span class="i">{tau}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check shadow_check.kso</div>
-    <pre><code><span class="k">error[name]</span>: `tau` is already a declaration; rename the binding
-<span class="c">  --&gt; shadow_check.kso:2:3</span>
-   2 |   tau = 5
-         <span class="k">^</span></code></pre>
+    <pre><code><span class="k">error[unused]</span>: unused binding: each version of `tau` is used before the next
+<span class="c">  --&gt; shadow_check.kso:1:1</span>
+   1 | tau = 5
+       <span class="k">^</span></code></pre>
   </div>
 </div>
 
