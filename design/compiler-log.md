@@ -7121,3 +7121,21 @@ surface question rather than a runtime trick.
 The views' 3.3 dies with RC or with a rebuild-per-read encode mode that
 trades a second sort per map for the residency. Declined for now: the wall
 clock is the row kq wins hardest, and 3.3 mb is not worth taxing it.
+
+## 2026-07-27 — the chain license reads around a cycle
+
+kq#29 rewrote the pretty printer's two-group tail cycles as direct self-tails
+because the chain license only read self-recursion; the compiler now reads
+the cycle itself. A bytes slot in a tail cluster may cross by pointer
+identity when every inner edge feeds it a mut-append chain rooted at one of
+the caller's own chain-threaded slots — the same greatest fixpoint as the
+threaded-slot rule, one license over. Chain-threaded slots cross without
+being carried, so a bytes-accumulator cycle becomes a plain rewinding ring;
+bytes slots that fail the fixpoint still refuse the cluster whole, as before.
+
+Pins in the mem corpus, red-before-green both ways: beat_cycle.kso (the old
+kq shape) rewinds 400 times in one arena block, fresh_cycle.kso holds at
+zero, and under a deliberately type-only fixpoint it reads 80 against the
+pinned zero. Every golden elsewhere is unchanged to the byte — kq no longer
+needs its rewrite, and programs shaped like it no longer need to know the
+trick.
