@@ -431,6 +431,25 @@ x <span class="o">=</span> <span class="n">2</span>
   </div>
 </div>
 
+<h2>error[naming]—a question mark answers questions</h2>
+
+<p>a function that can only answer <code>true</code> or <code>false</code> is a predicate, and its name must say so with a trailing <code>?</code>—the convention every verb in <code>std/list</code> follows (<code>all?</code>, <code>any?</code>). the rule cuts both ways: a <code>?</code> name that returns anything besides a boolean is refused too, so the suffix is a promise the compiler keeps for you rather than a style you remember:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">bare_predicate_check.kso</div>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{fresh 3}</span>"</span>
+
+<span class="k">fn</span> <span class="f">fresh</span> n
+  n <span class="o">&lt;</span> <span class="n">10</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check bare_predicate_check.kso</div>
+    <pre><code><span class="k">error[naming]</span>: `fresh` answers only true or false: name it `fresh?`
+<span class="c">  --&gt; bare_predicate_check.kso:3:4</span>
+   3 | fn fresh n
+          <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <h2>error[dispatch]—one name, disjoint shapes</h2>
 
 <p>kanso dispatches a call by the shape of its arguments, so several functions can share a name as long as their signatures never collide. the <code>dispatch</code> family guards that arrangement. first, a constant is a function of no arguments, and a zero-argument name admits no overloads—there is nothing to dispatch on. declaring <code>fn size x</code> alongside the constant <code>size</code> is a contradiction the compiler names outright:</p>
@@ -469,6 +488,25 @@ size <span class="o">=</span> <span class="n">9</span>
 <span class="c">  --&gt; overlap_check.kso:6:4</span>
    6 | fn same y
           <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>error[arity]—every call names an arm that exists</h2>
+
+<p>overloads make the argument count part of a function's name: <code>greet</code> with two parameters and <code>greet</code> with three are different arms of one group. a call whose count matches no arm can never dispatch, and the world is closed, so the compiler says which counts the group actually offers:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wrong_arity_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">greet</span> name mood
+  <span class="s">"hello <span class="i">{name}</span>, feeling <span class="i">{mood}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">greet</span> <span class="s">"mai"</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check wrong_arity_check.kso</div>
+    <pre><code><span class="k">error[arity]</span>: no 1-argument arm of `greet` (arms take 2)
+<span class="c">  --&gt; wrong_arity_check.kso:4:19</span>
+   4 | pub play = print (greet "mai")
+                         <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -539,6 +577,24 @@ size <span class="o">=</span> <span class="n">9</span>
   </div>
 </div>
 
+<h2>error[none]—absence lives in slots, never in collections</h2>
+
+<p><code>none</code> answers a lookup that found nothing. a list or map that <em>held</em> one would break that answer—an element that is <code>none</code> and a miss would be indistinguishable—so absence is refused at the point of construction. a record field may hold <code>none</code>, because a field is a named slot with no lookup to confuse:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">none_element_check.kso</div>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  xs <span class="o">=</span> [<span class="n">1</span> none <span class="n">3</span>]
+  <span class="f">print</span> <span class="s">"<span class="i">{xs}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check none_element_check.kso</div>
+    <pre><code><span class="k">error[none]</span>: a list cannot hold a none: a lookup answers "not found" with one, so an element would be indistinguishable
+<span class="c">  --&gt; none_element_check.kso:2:11</span>
+   2 |   xs = [1 none 3]
+                 <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <h2>error[signature]—markers carry no fields</h2>
 
 <p>a type with no fields is a marker: its bare name <em>is</em> its only value, the way <code>none</code> is a value and not a constructor waiting for arguments. applying a marker to an argument treats a value as if it were a function, and the <code>signature</code> family catches the confusion:</p>
@@ -556,6 +612,29 @@ size <span class="o">=</span> <span class="n">9</span>
 <span class="c">  --&gt; marker_args_check.kso:4:9</span>
    4 |   bad = null true
                <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<h2>error[build]—a field write belongs to a build block</h2>
+
+<p>values do not mutate. the one place a field assignment is legal is inside a <code>build</code> block, where a record is under construction and no one else can see it yet (chapter 03 introduces the block). a field write anywhere else would be mutation of a finished value, and the compiler stops it where it stands:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">field_outside_build_check.kso</div>
+  <pre><code><span class="k">type</span> cart
+  <span class="f">owner</span>
+  <span class="f">items</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  basket <span class="o">=</span> <span class="f">cart</span> <span class="s">"mai"</span> []
+  <span class="f">basket</span><span class="o">.</span>items <span class="o">=</span> [<span class="s">"dango"</span>]
+  <span class="f">print</span> <span class="s">"<span class="i">{basket}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check field_outside_build_check.kso</div>
+    <pre><code><span class="k">error[build]</span>: `basket.items = ...` writes a field, and only a `build` block may do that
+<span class="c">  --&gt; field_outside_build_check.kso:7:10</span>
+   7 |   basket.items = ["dango"]
+                <span class="k">^</span></code></pre>
   </div>
 </div>
 
@@ -578,6 +657,27 @@ size <span class="o">=</span> <span class="n">9</span>
 </div>
 
 <p>the fix is never on the caller's side of the boundary. either the module meant to export the name—one <code>pub</code>, where the thing is defined—or the caller is asking for something the module deliberately kept, and the error is doing its job.</p>
+
+<h2>error[ownership]—render what you define</h2>
+
+<p>interpolation renders every value the same way for everyone, which is what makes <code>&lt;none&gt;</code> and <code>&lt;io&gt;</code> dependable sentinels. an overload of <code>to_string</code> may therefore only match types this module defines—an arm on a primitive or a sentinel would quietly change what other people's output looks like. wrap the value in a type of your own and render that:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">foreign_render_check.kso</div>
+  <pre><code>xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span>]
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"n: <span class="i">{xs[5]}</span>"</span>
+
+<span class="k">fn</span> <span class="f">to_string</span> none
+  <span class="s">"MISSING"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check foreign_render_check.kso</div>
+    <pre><code><span class="k">error[ownership]</span>: an arm of `to_string` must match on a type this module defines — rendering of primitives and sentinels is fixed; wrap the value in your own type
+<span class="c">  --&gt; foreign_render_check.kso:5:4</span>
+   5 | fn to_string none
+          <span class="k">^</span></code></pre>
+  </div>
+</div>
 
 <h2>error[syntax]—shapes the grammar won't parse</h2>
 
@@ -602,6 +702,19 @@ size <span class="o">=</span> <span class="n">9</span>
 </div>
 
 <p>the fix is the keyed read from the previous section: <code>{ name } = user false "clay"</code> takes the field you want and leaves the rest, no wildcard required.</p>
+
+<h2>error[runtime]—the type mistake that outlives check</h2>
+
+<p>a handful of mistakes are visible only when a value arrives: a builtin handed the wrong shape entirely. these end the run at the point of the call with a message naming the contract, the same words on every engine. they are bugs to fix, never values to handle—the failure that <em>is</em> a value rides the railway instead, and the endpoint family below reports it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">runtime_mismatch.kso</div>
+  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{length 5}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run runtime_mismatch.kso</div>
+    <pre><code><span class="k">error[runtime]</span>: length takes a list, string, or map</code></pre>
+  </div>
+</div>
 
 <h2>error[endpoint]—the failures compilation can't catch</h2>
 
@@ -640,7 +753,7 @@ xs[<span class="n">9</span>]</code></pre>
 </div>
 </div>
 
-<p>read the tags again as a set—<code>formatting</code>, <code>unused</code>, <code>name</code>, <code>dispatch</code>, <code>signature</code>, <code>syntax</code>, <code>endpoint</code>—and you have the whole surface on which a kanso program can be wrong. six of the seven never survive <code>check</code>; the seventh is the small, honest residue that only running can reveal. there is no separate linter, no formatter, no style argument to have, because every one of those disputes has already been answered by a diagnostic on this page. you can now recognize any error kanso will hand you, name the family it belongs to, and know before you run whether it will greet you at <code>check</code> or at the endpoint.</p>
+<p>read the tags again as a set—<code>formatting</code>, <code>naming</code>, <code>unused</code>, <code>name</code>, <code>dispatch</code>, <code>arity</code>, <code>type</code>, <code>none</code>, <code>signature</code>, <code>build</code>, <code>opacity</code>, <code>ownership</code>, <code>syntax</code>, and then <code>runtime</code> and <code>endpoint</code>—and you have the whole surface on which a kanso program can be wrong. thirteen of the fifteen never survive <code>check</code>; the last two are the small, honest residue that only running can reveal. there is no separate linter, no formatter, no style argument to have, because every one of those disputes has already been answered by a diagnostic on this page. you can now recognize any error kanso will hand you, name the family it belongs to, and know before you run whether it will greet you at <code>check</code> or at the endpoint.</p>
 
 <h2>exercises</h2>
 

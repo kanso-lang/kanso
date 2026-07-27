@@ -1577,7 +1577,7 @@ impl<'a> Interp<'a> {
                     Value::Str(s) => Ok(Value::Int(BigInt::from(s.chars().count()))),
                     Value::Map(entries) => Ok(Value::Int(BigInt::from(entries.len()))),
                     _ => Err(RuntimeError {
-                        message: "length takes a list or string".to_string(),
+                        message: "length takes a list, string, or map".to_string(),
                         span,
                     }),
                 }

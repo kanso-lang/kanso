@@ -1,0 +1,4 @@
+error[arity]: no 1-argument arm of `greet` (arms take 2)
+  --> wrong_arity_check.kso:4:19
+   4 | pub play = print (greet "mai")
+                         ^

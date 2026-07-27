@@ -3530,7 +3530,7 @@ KValue k_b_length(KValue v) {
         for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
         return k_int(count);
     }
-    k_die("length takes a list or string");
+    k_die("length takes a list, string, or map");
     return k_none();
 }
 

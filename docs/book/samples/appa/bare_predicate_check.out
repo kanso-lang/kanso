@@ -1,0 +1,4 @@
+error[naming]: `fresh` answers only true or false: name it `fresh?`
+  --> bare_predicate_check.kso:3:4
+   3 | fn fresh n
+          ^
