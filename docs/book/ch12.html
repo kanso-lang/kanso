@@ -162,3 +162,11 @@ kept 1497675</code></pre>
 <li><code>list/to_list</code> realizes a recipe. reach for it when a chain's result needs to be a plain list—usually right before printing.</li>
 <li>a nested chain ending in a consumer fuses into one flat loop. the counters can prove it to you.</li>
 </ul>
+
+<h2>exercises</h2>
+<ol>
+<li>build a two-stage recipe—a <code>select</code> over a <code>map</code>—bind it, and predict what the print will show before you run it. check your prediction against the rendered value, and find both of your functions in it.</li>
+<li>using only <code>list/find</code> and <code>list/naturals</code>, compute the first triangular number greater than 100. (the nth triangular number is <code>n * (n + 1) / 2</code>.) confirm the program terminates, and explain in one sentence why it must.</li>
+<li>change <code>fused.kso</code>'s loop count from <code>1000</code> to <code>2000</code> and rerun under <code>KANSO_COUNTERS=1</code>. from the two <code>allocs</code> readings, work out how much of the cost belongs to building the source and how much to the chain.</li>
+<li><code>group_by</code> and <code>index_by</code> take the same arguments. run both over the same list with a key function that sends every element to one key, and explain the two results using the collision rule each follows.</li>
+</ol>
