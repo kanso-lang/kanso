@@ -559,6 +559,26 @@ size <span class="o">=</span> <span class="n">9</span>
   </div>
 </div>
 
+<h2>error[opacity]—only pub crosses an import</h2>
+
+<p>a module's unmarked names are its own business, and the <code>opacity</code> family is what makes the claim true rather than polite. reaching past an import for a name the module kept private is a compile error that names the module whose interior you touched:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">shady/peek_check.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"teahouse"</span>
+
+<span class="f">print</span> <span class="s">"the wholesale number is <span class="i">{teahouse/base_price}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check peek_check.kso</div>
+    <pre><code><span class="k">error[opacity]</span>: `base_price` is private to module `teahouse` — only pub names cross an import
+<span class="c">  --&gt; peek_check.kso:3:33</span>
+   3 | print "the wholesale number is {teahouse/base_price}"
+                                       <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the fix is never on the caller's side of the boundary. either the module meant to export the name—one <code>pub</code>, where the thing is defined—or the caller is asking for something the module deliberately kept, and the error is doing its job.</p>
+
 <h2>error[syntax]—shapes the grammar won't parse</h2>
 
 <p>a handful of constructs are simply not in the grammar, and the <code>syntax</code> family names them so you reach for the real spelling. the wildcard <code>_</code>, borrowed from languages with positional destructuring, is one: kanso omits fields by <em>naming</em> the ones you want in a keyed read, not by placeholder-ing the ones you don't:</p>
