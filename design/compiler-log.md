@@ -7384,3 +7384,35 @@ exercises in the same premise-checked style, and ch09's claim that "the
 builtins give it map, at" joins the qualified world. Every exercise premise
 on both pages was run before it shipped; one drafted exercise died in
 verification, which is the point of verifying.
+
+## 2026-07-27 — the failure story diverges three ways, and only a gavel can close it
+
+The book-premise sweep reached ch04 and found the flagship claim half-true.
+"no arm can catch it" holds for ordinary arms: an err rides past the whole
+overload group including the catch-all, exactly as unhandled.kso pins. But
+an explicit `(err e)` pattern arm CATCHES — measured: `fn classify (err e)`
+over `10 / 0` returns "caught division by zero" on both engines — while the
+same chapter says "no function gets to turn one back into a value. not a
+helper, not a library, not main."
+
+The three positions on record disagree. The book teaches gavel B, the full
+ban, as design/err-migration.md planned it (Clay-ruled 2026-07-19: err arms
+become a compile error, one PR, library migrations enumerated). The machine
+implements pre-B semantics: pattern_catches in infer and dispatch both
+honor err arms, and lib code still carries them. And Clay's latest word —
+seeing an err arm returning a plain value, "this should be impossible ...
+oh, unless it crosses a package boundary. i was wrong" — reopens B with a
+carve-out whose semantics need the package system that is not built yet.
+
+Nothing here is implementable autonomously: the full ban contradicts the
+retraction, and the carve-out has no definition of the boundary it names.
+The book edit is deliberately withheld too — ch04's prose states the ruled
+design of 07-19, and rewriting it to today's machine would document
+semantics the gavel may be about to remove. The migration doc's plan is
+ready the day the rule is settled. Until then this entry is the record that
+the language's central promise is not yet one thing.
+
+Also verified in the same sweep, all green: field-annotation refusal (ch03),
+the endpoint rule (ch04), arity-short calls (ch05), the bare-line effect
+check (ch06), and canonical form as grammar (appc, backed by the 26
+formatting fixtures).
