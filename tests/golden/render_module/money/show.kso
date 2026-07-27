@@ -1,0 +1,8 @@
+pub fn go _
+  print "{money 350}"
+
+pub fn to_string (money c)
+  "${c / 100}.{pad (c % 100)}"
+
+fn pad r
+  if (r < 10) "0{r}" "{r}"

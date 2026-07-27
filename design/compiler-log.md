@@ -7930,3 +7930,24 @@ never lands). The benches are untouched — oneshot still fires its
 garbage-heavy decode (survivor well under half), gauntlet and encode
 unchanged, welfare flat at 62.70. This is a correctness-of-the-trade
 change: the license reaches further and can no longer overpay.
+
+## 2026-07-27 — directory modules join the render group
+
+Probing the render campaign's "remaining" list found its items either
+quietly done (single-file library verbs render custom arms; ch02/ch04
+teach the sentinel model) or wrong in a new direction: the DIRECTORY
+module path — the shape every real program uses — never called the
+ambient merge at all. A custom to_string arm on an owned type silently
+failed to join the group (both engines printed the structural form),
+and an arm on a sentinel was silently outranked instead of rejected.
+The single-file paths did both correctly, so the book's money example
+worked while the same code in a real module did not.
+
+The fix runs the merge once per root module with ownership counting a
+type defined in any of the module's files — an arm in show.kso matches
+a type in types.kso. Pins in tests/render_module.rs: the split-file
+money module renders $3.50 on both engines (watched red: both printed
+money 350 before the merge landed), and the sentinel arm dies with
+error[ownership] at exit 2. One open design question recorded in
+render-plan.md: dependency modules' arms stay qualified and never join
+the root group — whether they should is a surface question for Clay.

@@ -1303,8 +1303,17 @@ fn enroll_bare(
 /// user's `fn to_string (money cents)` is an arm of render/to_string —
 /// arming your own types needs no import (the ratified Ruby-shaped rule).
 fn merge_ambient_arms(program: &mut ast::Program) -> Vec<diag::Diagnostic> {
-    let local_types: std::collections::HashSet<&str> =
-        program.types.iter().map(|t| t.name.as_str()).collect();
+    let local_types: std::collections::HashSet<String> =
+        program.types.iter().map(|t| t.name.clone()).collect();
+    merge_ambient_arms_with(program, &local_types)
+}
+
+/// The same merge for a module spread over files: ownership counts a type
+/// defined in any of them.
+fn merge_ambient_arms_with(
+    program: &mut ast::Program,
+    local_types: &std::collections::HashSet<String>,
+) -> Vec<diag::Diagnostic> {
     let mut diags = Vec::new();
     for decl in &mut program.fns {
         if decl.name == "to_string" {
@@ -1313,8 +1322,8 @@ fn merge_ambient_arms(program: &mut ast::Program) -> Vec<diag::Diagnostic> {
             // does own. Re-arming a primitive or the sentinels is reserved
             // to the stdlib; wrap the value in your own type instead.
             let owns_a_type = decl.params.iter().any(|p| match p {
-                ast::Pattern::Ctor { ty, .. } => local_types.contains(ty.as_str()),
-                ast::Pattern::Annotated { ty, .. } => local_types.contains(ty.as_str()),
+                ast::Pattern::Ctor { ty, .. } => local_types.contains(ty),
+                ast::Pattern::Annotated { ty, .. } => local_types.contains(ty),
                 _ => false,
             });
             if !owns_a_type {
@@ -1901,6 +1910,14 @@ fn compile_module_inner(
     let root = AMBIENT_ROOT.with(|c| c.replace(false));
     if root && !dir.ends_with("render") {
         ambient_imports(&mut import_list);
+        let module_types: std::collections::HashSet<String> =
+            parsed.iter().flat_map(|(_, _, p)| p.types.iter().map(|t| t.name.clone())).collect();
+        for (file, source, program) in &mut parsed {
+            let ownership_diags = merge_ambient_arms_with(program, &module_types);
+            if !ownership_diags.is_empty() {
+                return Err(diag::render(&ownership_diags, file, source));
+            }
+        }
     }
     let (mut dep_program, exports) = load_dependencies(dir, &import_list, visited)?;
     // A module's surface is its own. Dependency pubs demote at this
