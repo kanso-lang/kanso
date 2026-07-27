@@ -27,6 +27,10 @@ pub type mapped
 type missing
   unfound
 
+pub type paired
+  left
+  right
+
 pub type repeated
   value
 
@@ -51,6 +55,12 @@ pub fn all? coll pred
 
 pub fn any? coll pred
   fold coll false (hit x -> if (pred x) true hit)
+
+pub fn argmax coll key
+  unwrap_found (fold coll (missing true) (m x -> outrank_by m x key))
+
+pub fn argmin coll key
+  unwrap_found (fold coll (missing true) (m x -> underrank_by m x key))
 
 # the predicate must be monotonic over the order — false for a prefix,
 # true for the rest — which is what lets the range halve instead of walk
@@ -108,6 +118,9 @@ pub fn fold (grown seed stretch) init f
 pub fn fold (mapped shape source) init f
   fold_go (next (mapped shape source)) init f
 
+pub fn fold (paired left right) init f
+  fold_go (next (paired left right)) init f
+
 pub fn fold (repeated value) init f
   fold_go (next (repeated value)) init f
 
@@ -129,6 +142,18 @@ fn fold_go (done _) acc _
 fn fold_go (step e rest) acc f
   fold_go (next rest) (f acc e) f
 
+fn bucket none
+  []
+
+fn bucket xs
+  xs
+
+pub fn group_by coll key
+  fold coll {:} (acc x -> file_under acc (key x) x)
+
+fn file_under acc k x
+  put acc k (push (bucket acc[k]) x)
+
 fn iter (capped left source)
   capped left source
 
@@ -140,6 +165,9 @@ fn iter (cycled at source)
 
 fn iter (grown seed stretch)
   grown seed stretch
+
+fn iter (paired left right)
+  paired left right
 
 fn iter (repeated value)
   repeated value
@@ -203,6 +231,9 @@ pub fn next (grown seed stretch)
 pub fn next (mapped shape source)
   next_mapped shape (next source)
 
+pub fn next (paired left right)
+  next_paired (next left) right
+
 pub fn next (repeated value)
   step value (repeated value)
 
@@ -224,6 +255,12 @@ fn next_mapped _ (done d)
 fn next_mapped shape (step e rest)
   step (shape e) (mapped shape rest)
 
+fn next_paired (done d) _
+  done d
+
+fn next_paired (step x lrest) right
+  next_zip x lrest (next right)
+
 fn next_sifted _ _ (done d)
   done d
 
@@ -239,6 +276,12 @@ fn outrank (missing _) x
 
 fn outrank m x
   if (m < x) x m
+
+fn outrank_by (missing _) x _
+  x
+
+fn outrank_by m x key
+  if (key m < key x) x m
 
 fn pick_found (missing _) true x
   x
@@ -295,6 +338,12 @@ fn underrank (missing _) x
 fn underrank m x
   if (x < m) x m
 
+fn underrank_by (missing _) x _
+  x
+
+fn underrank_by m x key
+  if (key x < key m) x m
+
 fn unwrap_found none
   none
 
@@ -303,3 +352,18 @@ fn unwrap_found (missing _)
 
 fn unwrap_found found
   found
+
+pub fn transform_values m f
+  fold (entries m) {:} (acc e -> put_shaped acc e f)
+
+fn put_shaped acc (entry k v) f
+  put acc k (f v)
+
+pub fn zip a b
+  paired (iter a) (iter b)
+
+fn next_zip _ _ (done d)
+  done d
+
+fn next_zip x lrest (step y rrest)
+  step [x y] (paired lrest rrest)
