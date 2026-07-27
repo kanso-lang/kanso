@@ -6075,3 +6075,49 @@ remain are load-bearing for a packing decision rather than for typing. Teaching
 `returnable` to read the inferred set instead of the written one would free
 those too, which is the same "teach the analyses to consume inference" thread
 the earlier entry named.
+
+## 2026-07-26 — CORRECTION: several live arms are not an ambiguity
+
+Clay, on the partial-application entry: "i've explained to you before, that's
+nonsense. if there's still a form remaining that could take that many args,
+it's fine to curry like that. only when you execute it, will you dispatch as if
+you had passed those exact arguments at that point with no currying."
+
+He is right, and the oracle says so plainly:
+
+    fn roll n / roll n sides / roll n sides bonus
+
+    (&roll 4) 5     -> 20     dispatches the two-argument arm
+    (&roll 4) 5 6   -> 26     dispatches the three-argument arm
+
+The `&` chooses nothing. Dispatch happens where the arguments arrive, on the
+total count, exactly as if they had all been written at once. So several live
+arms are not an ambiguity to refuse — the entry that shipped an hour ago
+invented a defect the language does not have, and the diagnostic saying "the
+arity is ambiguous here" was describing my lowering rather than the design.
+
+WHAT THE ONE REAL ERROR IS, in Clay's words: "you'd get an exception if there
+was no match for the extent you're already currying to." Holding more arguments
+than any arm takes is the only thing nothing can finish, and that is now the
+only thing refused.
+
+WHAT THE LOWERING SHOULD HAVE DONE, and now does. `(&roll 4) 5` is a single
+application seen whole at emit time — the partial and the arguments finishing
+it are both in the same expression — so it lowers to the call it means. Both
+backends flatten it, and `(&roll 4) 5 6` reaches the three-argument arm
+natively, matching the interpreter byte for byte.
+
+WHAT IS STILL NOT LOWERED, stated honestly rather than dressed as a language
+property. A partial that *escapes* as a value — bound to a name, handed to
+another function — has to become a closure, and a closure fixes its parameter
+count when it is written. With one arm still able to finish it that count is
+forced and the lowering is exact. With several, the count is decided by
+arguments that have not arrived, which a closure cannot wait for, and the
+backends say so in those terms. The fix is a partial value in the runtime that
+accumulates and dispatches on the total, which is what `Value::Partial` already
+does in the interpreter.
+
+Also worth recording because it was the other half of Clay's correction:
+lambdas do not overload. Only functions do. A lambda committing to a parameter
+count is therefore a fact about lambdas, and says nothing about whether `&f`
+is ambiguous — which is precisely where the reasoning went wrong.

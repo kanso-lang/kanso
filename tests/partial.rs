@@ -99,15 +99,29 @@ fn native_and_the_interpreter_agree_on_a_partial() {
     assert_eq!(stdout(&native), "7");
 }
 
-/// Two arities and one partial: `&roll 4` could be waiting for one argument or
-/// two, and only the arriving arguments decide. The interpreter defers that;
-/// a lambda cannot, so native says so rather than guessing an arity.
+/// Dispatch happens where the arguments arrive, not at the `&`. With three
+/// arms live, `(&roll 4) 5` reaches the two-argument one and `(&roll 4) 5 6`
+/// reaches the three-argument one — the `&` chooses nothing, which is why
+/// several live arms are not an ambiguity.
 #[test]
-fn native_refuses_a_partial_whose_arity_is_ambiguous() {
-    let program = written(
-        "ambiguous",
-        "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\npub play = print \"{(&roll 4) 5}\"\n",
-    );
+fn a_partial_dispatches_on_the_total_count_not_at_the_ampersand() {
+    let source = "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\npub play = print \"{(&roll 4) 5}\" >> print \"{(&roll 4) 5 6}\"\n";
+    let program = written("total_count", source);
+
+    let native = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", program.to_str().expect("utf-8")])
+        .output()
+        .expect("kanso runs");
+
+    assert_eq!(stdout(&native), stdout(&interp("total_count_interp", source)));
+    assert_eq!(stdout(&native), "20\n26");
+}
+
+/// Currying past every arm is the one thing nothing can finish.
+#[test]
+fn holding_more_arguments_than_any_arm_takes_is_refused() {
+    let program =
+        written("overheld", "fn add a b\n  a + b\n\npub play = print \"{(&add 1 2 3)}\"\n");
 
     let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .args(["build", program.to_str().expect("utf-8")])
@@ -115,7 +129,5 @@ fn native_refuses_a_partial_whose_arity_is_ambiguous() {
         .output()
         .expect("kanso runs");
 
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(!out.status.success(), "native guessed at an ambiguous arity");
-    assert!(stderr.contains("ambiguous"), "diagnostic was: {stderr}");
+    assert!(!out.status.success(), "a partial past every arity was accepted");
 }

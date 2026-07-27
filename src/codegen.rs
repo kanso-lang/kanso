@@ -1963,24 +1963,27 @@ impl<'a> Backend<'a> {
             seen.dedup();
             seen
         };
-        let [arity] = arities.as_slice() else {
-            return match arities.is_empty() {
-                true => Err(format!(
-                    "native backend: `&{name}` supplies {} argument(s), and no `{name}` takes more",
-                    supplied.len()
-                )),
-                false => Err(format!(
-                    "native backend: `&{name}` with {} argument(s) could be waiting for {} — \
-                     the arity is ambiguous here",
-                    supplied.len(),
-                    arities
-                        .iter()
-                        .map(|a| (a - supplied.len()).to_string())
-                        .collect::<Vec<_>>()
-                        .join(" or ")
-                )),
-            };
-        };
+        // Currying past every arm is the one real error: nothing can finish it.
+        if arities.is_empty() {
+            return Err(format!(
+                "native backend: `&{name}` holds {} argument(s), and no `{name}` takes more",
+                supplied.len()
+            ));
+        }
+        // A partial that escapes as a value has to become a closure, and a
+        // closure fixes its parameter count when it is written. That is fine
+        // when one arm can still finish it; with several, the count is decided
+        // by the arguments that arrive, which a closure cannot wait for. The
+        // shape that needs it is a partial bound to a name and later applied
+        // with more arguments than the shortest arm wants.
+        let Some(&arity) = arities.first() else { unreachable!("checked non-empty") };
+        if arities.len() > 1 {
+            return Err(format!(
+                "native backend: `&{name}` escapes as a value while {} arms could still finish \
+                 it, and lowering it needs a partial the runtime does not have yet",
+                arities.len()
+            ));
+        }
         let waiting = arity - supplied.len();
         let params: Vec<(String, Span)> =
             (0..waiting).map(|i| (format!("k#partial{i}"), span)).collect();
@@ -2198,6 +2201,19 @@ impl<'a> Backend<'a> {
             Expr::App { head, args, piped, span } => {
                 // `&f a` supplies a and waits; the arity it waits for is the
                 // one the gavel names — supplied plus holes picks the group
+                // `(&roll 4) 5` is one application seen whole: the partial and
+                // the arguments finishing it are both here, so it lowers to the
+                // call it means. Dispatch then happens on the total count, which
+                // is what the oracle does and what makes `(&roll 4) 5 6` reach
+                // the three-argument arm rather than any arm chosen at the `&`.
+                if let Expr::App { head: inner, args: held, .. } = head.as_ref() {
+                    if let Expr::Partial(name, nspan) = inner.as_ref() {
+                        let mut all = held.clone();
+                        all.extend(args.iter().cloned());
+                        let callee = Expr::Ident(name.clone(), *nspan);
+                        return self.emit_call_full(f, &Box::new(callee), &all, *piped, *span);
+                    }
+                }
                 if let Expr::Partial(name, _) = head.as_ref() {
                     let lambda = self.partial_lambda(name, args, *span)?;
                     return self.emit_expr(f, &lambda);
