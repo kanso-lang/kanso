@@ -478,6 +478,10 @@ struct FnEmit {
     /// Dispatcher group being emitted, for recognizing self-tail-calls.
     group: String,
     arity: usize,
+    /// Whether the current arm is a bare enrollment clone: library plumbing
+    /// wearing an unqualified name, which the cohort license must not read
+    /// as user code.
+    synthetic: bool,
     /// Registers of releasable lazy cells born in this body; every return
     /// path releases each unless the result aliases it.
     lazy_cells: Vec<String>,
@@ -497,6 +501,7 @@ impl FnEmit {
             file: String::new(),
             ret_ty: "%KValue".to_string(),
             group: String::new(),
+            synthetic: false,
             arity: 0,
             lazy_cells: Vec::new(),
         }
@@ -1273,6 +1278,7 @@ impl<'a> Backend<'a> {
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
             f.file = decl.file.clone();
+            f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {
                 if let Pattern::Var(pname, _) = pattern {
                     f.bind(pname, &format!("%x{i}"));
@@ -1429,6 +1435,7 @@ impl<'a> Backend<'a> {
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", decl.name, decl.file);
             f.file = decl.file.clone();
+            f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {
                 match self.escape.carries_ty(name, arity, i) {
                     Some(ty) => {
@@ -3250,10 +3257,20 @@ impl<'a> Backend<'a> {
             // caller already inside a beat cluster lets its rewind do the
             // reclaiming instead.
             let heapish: Set = BYTES | LIST | MAP | REC | DESC | infer::FN | crate::infer::THUNK;
+            // the caller must be the root module's own code (unqualified
+            // group name — imports arrive qualified), and a caller that is
+            // itself a rewinding loop member keeps its own tier. a group
+            // that appears in the beat ids only as a demoted entry is not a
+            // loop: its bracket never rewinds mid-body, so the cohort wrap
+            // still applies inside it.
+            let caller = (f.group.clone(), f.arity);
+            let caller_loops = self.beat.ids.contains_key(&caller)
+                && !self.beat.demoted.iter().any(|(_, callee)| *callee == caller);
             let cohort_entry = !beat_entry
                 && name.contains('/')
-                && !f.file.starts_with("std/")
-                && !self.beat.ids.contains_key(&(f.group.clone(), f.arity))
+                && !f.group.contains('/')
+                && !f.synthetic
+                && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & heapish == 0);
             if beat_entry || cohort_entry {
                 // entering a beat loop or a cohort: mark the frontier; args
