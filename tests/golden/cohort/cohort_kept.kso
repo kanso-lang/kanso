@@ -1,0 +1,16 @@
+import "std/text"
+
+fn grow acc 0
+  acc
+
+fn grow acc n
+  grow (text/append acc "0123456789abcdef") (n - 1)
+
+fn stamp bs
+  length (text/utf8 bs)
+
+fn trimmed _
+  bulk = grow (text/bytes "") 150000
+  text/slice bulk 1 2400000
+
+pub play = print "chars {stamp (trimmed 0)}"
