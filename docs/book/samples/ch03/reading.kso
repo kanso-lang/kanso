@@ -1,7 +1,7 @@
 type track
-  artist:string
-  minutes:int
-  title:string
+  artist
+  minutes
+  title
 
 pub play =
   song = track "fishmans" 6 "long season"

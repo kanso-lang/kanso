@@ -1,6 +1,6 @@
 type person
-  name:string
-  partner:person
+  name
+  partner
 
 pub play =
   couple = build

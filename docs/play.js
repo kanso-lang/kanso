@@ -143,8 +143,8 @@ pub play =
 # freezes the whole cohort -- once the block ends nothing can be rewritten, so
 # the cycle is ordinary immutable data.
 type person
-  name:string
-  partner:person
+  name
+  partner
 
 pub play =
   couple = build
@@ -162,8 +162,8 @@ pub play =
 # inside one iteration, so the arena rewinds it whole -- no counting, no
 # collector, and peak memory does not move with the count.
 type node
-  name:string
-  peer:node
+  name
+  peer
 
 fn tie label
   build
@@ -219,12 +219,12 @@ rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
   redux: `import "std/time"
 
 type deposit
-  amount:int
+  amount
 
 type logger
 
 type withdraw
-  amount:int
+  amount
 
 fn drive store actions i sub out
   step store actions i sub out (actions[i])

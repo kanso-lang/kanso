@@ -1,0 +1,8 @@
+error[type]: `point`'s `x` is an int here, and `shout` takes a string — these two cannot both hold
+  --> field_type_conflict.kso:9:13
+   9 |   a = point 3 4
+                   ^
+error[type]: ...and this is where it is read as a string
+  --> field_type_conflict.kso:11:18
+  11 |   print "{shout b.x} {a.y}"
+                        ^

@@ -1,7 +1,7 @@
 type missing
 
 type post
-  body:string
+  body
   title:missing string
 
 fn headline (post _ title)

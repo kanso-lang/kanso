@@ -5909,3 +5909,49 @@ Three of the six lines, and they are the three Clay reported. It runs in ci,
 because the failure mode here is silence: nothing breaks when a rule stops
 matching, the colour just goes away, and the person who finds out is whoever
 opens a file weeks later.
+
+## 2026-07-26 — field types are inferred, conflicts are reported, and the stdlib keeps its annotations
+
+Clay: "get the inference done and drop types on record fields, in the compiler
+and all the examples."
+
+BUILT: THE DEMAND SIDE. `infer.rs` has always grown each field's set from
+construction sites — what a field is *given*. Nothing asked what its uses
+*require*, and `Expr::Field` typed as TOP, so a field read carried no
+information at all. `check_field_conflicts` closes the loop on the same footing
+the assignment check already stands on: a local bound straight to a constructor
+is where a field read's owning type is knowable, and a call whose parameter
+carries a declared type is where a demand is stated. Where supply and demand
+disagree, both sites are named:
+
+    error[type]: `point`'s `x` is an int here, and `shout` takes a string —
+                 these two cannot both hold
+      --> field_type_conflict.kso:9:13
+       9 |   a = point 3 4
+    error[type]: ...and this is where it is read as a string
+      --> field_type_conflict.kso:11:18
+      11 |   print "{shout b.x} {a.y}"
+
+Naming both is the point. Neither line is wrong on its own, and the author is
+the one who knows which they meant.
+
+DROPPED: twenty-eight annotations across `examples/`, and every field
+annotation in the book's samples, with ch03's prose rewritten — it had said
+"each field carries a type, because a declaration has no body the compiler
+could infer from", which is now false, and a chapter asserting the compiler
+cannot do what it does is worse than an out-of-date example. The whole suite
+stays green: every example runs and prints exactly what it printed before.
+
+NOT DROPPED, AND THIS IS THE FINDING. A symlink under `docs/book/samples/ch08`
+points into `lib/json`, so the sweep stripped the standard library's json
+module too — and the escape analysis broke. `parsed` stopped being
+register-returnable, which is not a checking regression but a *codegen* one: a
+two-word value that was returned in registers would go back to memory traffic.
+
+So field annotations are load-bearing beyond diagnostics. The escape analysis
+reads them, and inference does not yet derive enough to replace what it reads.
+That is a real constraint on how far "drop the types" can go today, and the
+order it implies is: teach the analyses to consume inferred field types, then
+drop the annotations from performance-critical code — not the other way around.
+`lib/` keeps its annotations until then, and the welfare ratchet would not have
+caught this on its own, because the cost goldens had not been regenerated.

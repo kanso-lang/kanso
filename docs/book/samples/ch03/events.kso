@@ -1,12 +1,12 @@
 type joined
-  who:string
+  who
 
 type left
-  who:string
+  who
 
 type renamed
-  after:string
-  before:string
+  after
+  before
 
 pub play =
   print (render (joined "clay"))

@@ -1,0 +1,11 @@
+type point
+  x
+  y
+
+fn shout s:string
+  "{s}!"
+
+pub play =
+  a = point 3 4
+  b = point "three" 4
+  print "{shout b.x} {a.y}"

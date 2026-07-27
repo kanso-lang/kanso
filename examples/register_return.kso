@@ -1,6 +1,6 @@
 type user
-  age:int
-  name:string
+  age
+  name
 
 fn age_of (user age _)
   age

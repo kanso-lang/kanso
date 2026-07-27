@@ -2,6 +2,6 @@ fn use_it t
   t
 
 type thing
-  size:int
+  size
 
 pub play = print "x"
