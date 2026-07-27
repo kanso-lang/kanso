@@ -6029,3 +6029,49 @@ inferred from the declared set, with ambiguity an error rather than a silent
 pick. That keeps identity, drops the ceremony, and the edit hazard it must be
 designed against is the one the `&` gavel already named — a type added later
 must never silently reinterpret a literal written earlier.
+
+## 2026-07-26 — `&f` lands on all three engines, and the ledger's own record was wrong about lib
+
+Clay put partial application at the top of the list. It shipped on the
+interpreter in July and the two backends refused it out loud, which the
+differential law permits but which kept it out of the playground, since the
+playground runs on wasm.
+
+BOTH BACKENDS NOW LOWER IT, and the lowering is a desugaring rather than new
+machinery: `&add 2` is `(x -> add 2 x)`, so it rides the closure path both
+backends already had. The interpreter's `Value::Partial` stays as it is,
+because it can do something a lambda cannot.
+
+WHAT A LAMBDA CANNOT DO, and where the backends still decline. A lambda must
+commit to a parameter count when it is written. With `roll n`, `roll n sides`
+and `roll n sides bonus` all declared, `&roll 4` might be waiting for one
+argument or two, and only the arriving arguments decide — the interpreter
+defers exactly that. So an ambiguous partial is refused with a diagnostic that
+names the arities it could be waiting for, rather than guessed at. Pinned by a
+spec, alongside one that runs the same program through native and the
+interpreter and compares the bytes.
+
+DOCUMENTED in ch05, beside the dot, because they are the same subject: the dot
+threads a value into a function that is ready for it, and `&` supplies what you
+have when the function is not. The section says why the sigil is not optional —
+a bare application is always a call, so it can never mean "wait for more", and
+with overloading no reader could tell which was meant from the text alone.
+
+IN THE PLAYGROUND as "& holds an argument and waits", running on all three
+engines with output compared.
+
+A CORRECTION TO AN EARLIER ENTRY TODAY. It said `lib/` keeps its annotations
+"because the escape analysis reads them", and Clay pushed back. Reading
+`returnable`, the analysis wants one specific thing: the *first* field of a
+packed type declared exactly `int`.
+
+    let first_field_is_int = ... tys.len() == 1 && tys[0] == "int";
+    if !first_field_is_int { return false; }
+
+Counted: thirteen field annotations in `lib/`, of which seven feed that check.
+So the entry's mechanism was right and its conclusion was too broad — six of
+the thirteen are as droppable as the ones in `examples/`, and the seven that
+remain are load-bearing for a packing decision rather than for typing. Teaching
+`returnable` to read the inferred set instead of the written one would free
+those too, which is the same "teach the analyses to consume inference" thread
+the earlier entry named.

@@ -1943,12 +1943,61 @@ impl<'a> Backend<'a> {
         Ok(())
     }
 
+    /// A partial application, as the lambda it is equivalent to: `&add 2`
+    /// becomes `(x -> add 2 x)`. The remaining arity has to be unambiguous —
+    /// with both `add a b` and `add a b c` declared, `&add 2` could be waiting
+    /// for one argument or two, and the interpreter defers that choice until
+    /// the arguments arrive. Nothing here can defer, so an ambiguous partial
+    /// is refused out loud rather than guessed at, which is the escape the
+    /// differential law allows an engine that covers less.
+    fn partial_lambda(&self, name: &str, supplied: &[Expr], span: Span) -> Result<Expr, String> {
+        let arities: Vec<usize> = {
+            let mut seen: Vec<usize> = self
+                .program
+                .fns
+                .iter()
+                .filter(|d| d.name == name && d.params.len() > supplied.len())
+                .map(|d| d.params.len())
+                .collect();
+            seen.sort_unstable();
+            seen.dedup();
+            seen
+        };
+        let [arity] = arities.as_slice() else {
+            return match arities.is_empty() {
+                true => Err(format!(
+                    "native backend: `&{name}` supplies {} argument(s), and no `{name}` takes more",
+                    supplied.len()
+                )),
+                false => Err(format!(
+                    "native backend: `&{name}` with {} argument(s) could be waiting for {} — \
+                     the arity is ambiguous here",
+                    supplied.len(),
+                    arities
+                        .iter()
+                        .map(|a| (a - supplied.len()).to_string())
+                        .collect::<Vec<_>>()
+                        .join(" or ")
+                )),
+            };
+        };
+        let waiting = arity - supplied.len();
+        let params: Vec<(String, Span)> =
+            (0..waiting).map(|i| (format!("k#partial{i}"), span)).collect();
+        let mut args = supplied.to_vec();
+        args.extend(params.iter().map(|(n, s)| Expr::Ident(n.clone(), *s)));
+        let head = Expr::Ident(name.to_string(), span);
+        let body = Expr::App { head: Box::new(head), args, piped: false, span };
+        Ok(Expr::Lambda { params, body: Box::new(body), span })
+    }
+
     fn emit_expr(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
         match expr {
             // the interpreter is the oracle for `&`; the backends reject it out
             // loud rather than lowering something that would diverge
-            Expr::Partial(name, _) => {
-                Err(format!("native backend: `&{name}` (partial application) is not lowered yet"))
+            Expr::Partial(name, span) => {
+                let lambda = self.partial_lambda(name, &[], *span)?;
+                self.emit_expr(f, &lambda)
             }
             Expr::Upcast { expr: inner, ty, .. } => {
                 let v = self.emit_expr(f, inner)?;
@@ -2147,6 +2196,12 @@ impl<'a> Backend<'a> {
                 }
             }
             Expr::App { head, args, piped, span } => {
+                // `&f a` supplies a and waits; the arity it waits for is the
+                // one the gavel names — supplied plus holes picks the group
+                if let Expr::Partial(name, _) = head.as_ref() {
+                    let lambda = self.partial_lambda(name, args, *span)?;
+                    return self.emit_expr(f, &lambda);
+                }
                 self.emit_call_full(f, head, args, *piped, *span)
             }
             Expr::Field { base, name, .. } => {
