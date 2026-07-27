@@ -14,6 +14,7 @@ pub mod lexer;
 pub mod linear;
 pub mod parser;
 pub mod repl;
+pub mod trmc;
 pub mod wasm;
 pub mod wasm_backend;
 pub mod wasm_encode;
@@ -24,6 +25,7 @@ pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Prog
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_main);
+    trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
     match diags.is_empty() {
         true => Ok(program),
@@ -95,6 +97,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     merged.fns.extend(program.fns);
     let mut merged_diags = check::check_merged(&merged, true);
     check::check_unused_private(&merged, &used, &mut merged_diags);
+    trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     let merged_diags: Vec<_> = merged_diags.into_iter().filter(|d| d.kind != "unused").collect();
     match merged_diags.is_empty() {
@@ -102,6 +105,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
             canonicalize_types(&mut merged);
             canonicalize_bare_aliases(&mut merged);
             fuse_enumerable(&mut merged);
+            trmc::rewrite(&mut merged);
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
@@ -187,6 +191,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     canonicalize_types(&mut program);
     canonicalize_bare_aliases(&mut program);
     fuse_enumerable(&mut program);
+    trmc::rewrite(&mut program);
     Ok(program)
 }
 
@@ -252,6 +257,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     canonicalize_types(&mut program);
     canonicalize_bare_aliases(&mut program);
     fuse_enumerable(&mut program);
+    trmc::rewrite(&mut program);
     Ok(program)
 }
 
@@ -2030,6 +2036,7 @@ fn compile_module_inner(
     }
     let mut diags = check::check_merged(&merged, require_main);
     check::check_unused_private(&merged, &used, &mut diags);
+    trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
         let file = dir.to_string_lossy();
@@ -2042,5 +2049,6 @@ fn compile_module_inner(
     canonicalize_types(&mut merged);
     canonicalize_bare_aliases(&mut merged);
     fuse_enumerable(&mut merged);
+    trmc::rewrite(&mut merged);
     Ok(merged)
 }
