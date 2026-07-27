@@ -197,6 +197,7 @@ static KBlock* k_spare = NULL;
    deterministic peak, the number the one-shot welfare term watches */
 static long long k_live_block_bytes = 0;
 static long long k_stat_peak_block_bytes = 0;
+static long long k_stat_cohort_frees = 0;
 char* k_arena = NULL;
 size_t k_arena_left = 0;
 
@@ -215,6 +216,7 @@ static void k_stats_dump(void) {
     fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
     fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
     fprintf(stderr, "arena_peak_bytes=%lld\n", k_stat_peak_block_bytes);
+    fprintf(stderr, "cohort_frees=%lld\n", k_stat_cohort_frees);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
     fprintf(stderr,
@@ -299,7 +301,7 @@ static inline __attribute__((always_inline)) void* k_alloc(size_t n) {
    arena only grows, exactly as before. */
 static int k_is_heap(long long tag);
 
-typedef struct { KBlock* block; char* ptr; size_t left; } KMark;
+typedef struct { KBlock* block; char* ptr; size_t left; long long bytes; } KMark;
 static void k_cache_reg_sweep(KMark* mark);
 #define K_BEAT_MAX 64
 static KMark k_beat_stack[K_BEAT_MAX];
@@ -328,6 +330,7 @@ void k_beat_push(void) {
         m->block = k_blocks;
         m->ptr = k_arena;
         m->left = k_arena_left;
+        m->bytes = k_live_block_bytes;
         k_carry_clear(k_beat_depth);
     }
     k_beat_depth++;
@@ -746,6 +749,47 @@ KValue k_beat_pop(KValue r) {
         }
     }
     return r;
+}
+
+void k_carry_reset(void);
+void k_carry_stage(KValue v);
+KValue k_carry_take(long long i);
+void k_beat_iter_carry(void);
+
+/* A construction cohort ends here: the call built a value, and everything
+   else it allocated is garbage the caller will never see. When enough
+   blocks accumulated to be worth the dance, the result is evacuated
+   through the carry machinery — sized against the mark, copied into the
+   side buffer sharing everything below the mark, the segment rewound, the
+   survivor copied back — and the garbage goes with the rewind. A small
+   segment just drops the mark: the bookkeeping stays, the reclaim was not
+   worth a copy. The threshold is block-granular, deterministic, and
+   priced by the one-shot welfare term. */
+KValue k_cohort_pop(KValue r) {
+    if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) {
+        if (k_beat_depth > 0) k_beat_depth--;
+        return r;
+    }
+    KMark* m = &k_beat_stack[k_beat_depth - 1];
+    long long grown = k_live_block_bytes - m->bytes;
+    if (grown < (long long)(1 << 19)) {
+        k_beat_depth--;
+        return r;
+    }
+    if (!k_is_heap(r.tag)) {
+        k_beat_depth--;
+        k_cache_reg_sweep(m);
+        k_beat_rewind(m);
+        k_stat_cohort_frees++;
+        return r;
+    }
+    k_carry_reset();
+    k_carry_stage(r);
+    k_beat_iter_carry();
+    k_stat_beat_iters--; /* the dance is a free, not a loop iteration */
+    k_stat_cohort_frees++;
+    r = k_carry_take(0);
+    return k_beat_pop(r);
 }
 
 void k_carry_reset(void) { k_carry_n = 0; }

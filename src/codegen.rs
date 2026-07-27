@@ -226,6 +226,7 @@ declare void @k_carry_stage(%KValue)
 declare %KValue @k_carry_take(i64)
 declare void @k_beat_iter_carry()
 declare %KValue @k_beat_pop(%KValue)
+declare %KValue @k_cohort_pop(%KValue)
 declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_call2(%KValue, %KValue, %KValue)
 declare %KValue @k_call3(%KValue, %KValue, %KValue, %KValue)
@@ -3242,9 +3243,21 @@ impl<'a> Backend<'a> {
                 emitted.iter().enumerate().map(|(i, e)| self.call_arg(f, name, n, i, e)).collect();
             let callee_ret = self.ret_ty(name, n);
             let beat_entry = self.beat.ids.contains_key(&(name.to_string(), n));
-            if beat_entry {
-                // entering a beat loop: mark the frontier; args are already
-                // evaluated, so they live below the mark
+            // a construction cohort: a qualified call from user code whose
+            // arguments are all immutable shapes (scalars, strings) cannot
+            // have its caller's storage grown by the callee, so the call's
+            // garbage dies with the pop. loops keep their own tier, and a
+            // caller already inside a beat cluster lets its rewind do the
+            // reclaiming instead.
+            let heapish: Set = BYTES | LIST | MAP | REC | DESC | infer::FN | crate::infer::THUNK;
+            let cohort_entry = !beat_entry
+                && name.contains('/')
+                && !f.file.starts_with("std/")
+                && !self.beat.ids.contains_key(&(f.group.clone(), f.arity))
+                && emitted.iter().all(|e| f.set_of(e) & heapish == 0);
+            if beat_entry || cohort_entry {
+                // entering a beat loop or a cohort: mark the frontier; args
+                // are already evaluated, so they live below the mark
                 f.line("call void @k_beat_push()");
             }
             let t = f.tmp();
@@ -3257,6 +3270,10 @@ impl<'a> Backend<'a> {
             let result = if beat_entry {
                 let p = f.tmp();
                 f.line(&format!("{p} = call %KValue @k_beat_pop(%KValue {t})"));
+                p
+            } else if cohort_entry {
+                let p = f.tmp();
+                f.line(&format!("{p} = call %KValue @k_cohort_pop(%KValue {t})"));
                 p
             } else {
                 t

@@ -7,9 +7,9 @@
     "compile_rounds": 11,
     "compile_visits": 135,
     "emitted_lines": 1893,
-    "oneshot_peak_bytes": 4194304
+    "oneshot_peak_bytes": 9437184
   },
-  "floor": 57.88327771215517,
+  "floor": 59.31184914072659,
   "history": [
     {
       "floor": 46.33,
@@ -70,6 +70,10 @@
     {
       "floor": 57.88,
       "why": "the model gains a one-shot peak-footprint term at runtime weight: the looping gauntlet's rewinds hide the decode garbage cohort freeing exists to reclaim, and peak is the scoreboard row still lost; paid by trimming both alloc terms, both block terms, and compile_rounds \u2014 block counts cede most because peak bytes measure what they proxied"
+    },
+    {
+      "floor": 59.31,
+      "why": "structured cohort freeing: a qualified call from user code with immutable args marks the arena, and the pop evacuates the result through the carry machinery and rewinds the construction garbage when a half-megabyte grew; the round-trip one-shot peak falls 9.4 to 6.3 MB for a 32k-alloc evacuation copy, the trade the peak term was added to price"
     }
   ]
 }
