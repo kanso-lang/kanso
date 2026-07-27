@@ -1566,6 +1566,13 @@ impl<'a> Interp<'a> {
                     ),
                 })
             }
+            "is_desc" => {
+                let [v] = arity(args, name, span)?;
+                Ok(match v {
+                    Value::Desc(..) => Value::True,
+                    _ => Value::False,
+                })
+            }
             "render_value" => {
                 let [v] = arity(args, name, span)?;
                 Ok(Value::Str(render(&v, false)))

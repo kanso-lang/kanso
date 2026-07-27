@@ -918,7 +918,88 @@ fn fuse_expr(
     }
     if let Some(rewritten) = try_fuse(e, shorts, fold_name, helpers, counter) {
         *e = rewritten;
+    } else if let Some(rewritten) = try_fuse_piped(e, shorts, fold_name, helpers, counter) {
+        *e = rewritten;
     }
+}
+
+/// The pipe spelling of a chain fuses too, one runtime branch late. A piped
+/// chain's subject may be a description — the pipe is a bind there, and no
+/// rewrite may touch it — so the chain becomes: bind the subject once, and if
+/// it is not a description, run the nested spelling of the same chain, which
+/// try_fuse has already flattened into one fold. A description takes the
+/// original pipes; everything else takes the loop. The cost of the honesty
+/// is one tag test per chain and a second copy of the chain's code.
+fn try_fuse_piped(
+    e: &ast::Expr,
+    shorts: &std::collections::HashMap<String, String>,
+    fold_name: &str,
+    helpers: &std::collections::HashMap<String, String>,
+    counter: &mut usize,
+) -> Option<ast::Expr> {
+    use ast::{Expr, Pattern, Stmt};
+    // collect the piped stages outside-in: consumer first, subject last
+    let mut stages: Vec<(&str, &[Expr], crate::diag::Span)> = Vec::new();
+    let mut cur = e;
+    #[allow(clippy::while_let_loop)]
+    loop {
+        let Expr::App { head, args, span, piped: true } = cur else { break };
+        let Expr::Ident(name, _) = head.as_ref() else { break };
+        if !shorts.contains_key(name.as_str()) || args.is_empty() {
+            break;
+        }
+        stages.push((name.as_str(), args.as_slice(), *span));
+        cur = &args[0];
+    }
+    if stages.len() < 2 {
+        return None;
+    }
+    let root = cur.clone();
+    let span = stages[0].2;
+    *counter += 1;
+    let tmp = format!("froot{counter}");
+    let tmp_ident = || Expr::Ident(tmp.clone(), span);
+    // the nested spelling with the bound subject as its innermost source
+    let mut nested = tmp_ident();
+    for (name, args, sspan) in stages.iter().rev() {
+        let mut all = vec![nested];
+        all.extend(args[1..].iter().cloned());
+        nested = Expr::App {
+            head: Box::new(Expr::Ident((*name).to_string(), *sspan)),
+            args: all,
+            span: *sspan,
+            piped: false,
+        };
+    }
+    let fused = try_fuse(&nested, shorts, fold_name, helpers, counter)?;
+    // the original pipes, re-rooted at the binding
+    let mut original = tmp_ident();
+    for (name, args, sspan) in stages.iter().rev() {
+        let mut all = vec![original];
+        all.extend(args[1..].iter().cloned());
+        original = Expr::App {
+            head: Box::new(Expr::Ident((*name).to_string(), *sspan)),
+            args: all,
+            span: *sspan,
+            piped: true,
+        };
+    }
+    let test = Expr::App {
+        head: Box::new(Expr::Ident("is_desc".to_string(), span)),
+        args: vec![tmp_ident()],
+        span,
+        piped: false,
+    };
+    let picked = Expr::App {
+        head: Box::new(Expr::Ident("if".to_string(), span)),
+        args: vec![test, original, fused],
+        span,
+        piped: false,
+    };
+    Some(Expr::Block(
+        vec![Stmt::Bind { pattern: Pattern::Var(tmp, span), expr: root }, Stmt::Expr(picked)],
+        span,
+    ))
 }
 
 fn try_fuse(

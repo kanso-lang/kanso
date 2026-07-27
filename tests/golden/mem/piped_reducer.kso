@@ -1,0 +1,16 @@
+# the pipe spelling of a chain fuses like the nested spelling: the
+# subject binds once, a tag test picks the fused loop when it is not a
+# description, and the alloc count pins that the loop is the one that
+# runs — the cursor path would put this in the thousands.
+import "std/list"
+
+fn build_up 0 acc
+  acc
+
+fn build_up n acc
+  build_up (n - 1) (push acc n)
+
+pub play =
+  xs = build_up 1000 []
+  total = xs . list/map (n -> n * 3) . list/select (n -> n > 150) . list/sum
+  print "kept {total}"
