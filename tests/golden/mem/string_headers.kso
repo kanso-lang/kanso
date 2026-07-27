@@ -1,0 +1,7 @@
+fn shout _ 0 acc
+  acc
+
+fn shout s n acc
+  shout s (n - 1) (push acc "{s}!")
+
+pub play = print "{length (shout "hey" 50 [])}"

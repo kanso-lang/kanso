@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 53.168134894044485,
+  "floor": 54.744707186664456,
   "history": [
     {
       "floor": 100.0,
@@ -21,6 +21,10 @@
     {
       "floor": 53.17,
       "why": "encode allocations fall 62% (68.6M -> 26.3M): a fold's accumulator now proves unique, so appends extend the builder instead of allocating a header each time. The +5 emitted lines are #322's wrapper inlining, which is what made the mutate path reachable at all."
+    },
+    {
+      "floor": 54.74,
+      "why": "a string's header and bytes are one allocation, not two: decode allocations 12,924,473 -> 11,353,217 and encode 26,327,708 -> 22,130,027. The +5 emitted lines are still #322's wrapper inlining, which bought the encode cut above."
     }
   ]
 }

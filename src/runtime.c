@@ -875,6 +875,18 @@ KValue k_none(void) { KValue v; v.tag = K_NONE; v.payload = 0; return v; }
 static KValue k_ascii_cache[128];
 static char k_ascii_ready[128];
 
+/* A string's header and its bytes have one lifetime and are made together,
+   so they are one allocation: the payload sits immediately after the header
+   and `data` points at it. Callers that adopt storage they did not make —
+   the zero-copy finish, a deep copy that shares — assign `data` themselves
+   and are unaffected. */
+static KStr* k_str_alloc(long long len) {
+    KStr* s = k_alloc(sizeof(KStr) + (size_t)len + 1);
+    s->len = (long)len;
+    s->data = (char*)(s + 1);
+    return s;
+}
+
 KValue k_str_n(const char* data, long long len) {
     if (len == 1) {
         unsigned char b = (unsigned char)data[0];
@@ -892,9 +904,7 @@ KValue k_str_n(const char* data, long long len) {
             return k_ascii_cache[b];
         }
     }
-    KStr* s = k_alloc(sizeof(KStr));
-    s->len = (long)len;
-    s->data = k_alloc(len + 1);
+    KStr* s = k_str_alloc(len);
     memcpy(s->data, data, len);
     s->data[len] = 0;
     KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
@@ -984,9 +994,7 @@ KValue k_concat_arr(long long n, const KValue* parts) {
         if (!k_not_failure(p)) return p;
         total += k_as_str(p)->len;
     }
-    KStr* s = k_alloc(sizeof(KStr));
-    s->len = total;
-    s->data = k_alloc(total + 1);
+    KStr* s = k_str_alloc(total);
     long long at = 0;
     for (long long i = 0; i < n; i++) {
         KStr* ps = k_as_str(parts[i]);
@@ -1003,9 +1011,7 @@ KValue k_concat(KValue a, KValue b) {
     if (!k_not_failure(b)) return b;
     KStr* sa = k_as_str(a);
     KStr* sb = k_as_str(b);
-    KStr* s = k_alloc(sizeof(KStr));
-    s->len = sa->len + sb->len;
-    s->data = k_alloc(s->len + 1);
+    KStr* s = k_str_alloc(sa->len + sb->len);
     memmove(s->data, sa->data, sa->len);
     memmove(s->data + sa->len, sb->data, sb->len);
     s->data[s->len] = 0;
@@ -2996,9 +3002,7 @@ KValue k_b_utf8(KValue lv, const char* origin) {
     KList* l = k_as_list(lv);
     /* build straight into the string's own buffer, then validate in place — the
        old path filled a scratch buffer and let k_str_n copy it a second time. */
-    KStr* s = k_alloc(sizeof(KStr));
-    s->len = (long)l->len;
-    s->data = k_alloc(l->len + 1);
+    KStr* s = k_str_alloc(l->len);
     for (long long i = 0; i < l->len; i++) {
         KValue item = l->items[i];
         if (!k_not_failure(item)) return item;

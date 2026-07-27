@@ -6632,3 +6632,32 @@ per field or per element beyond the node itself.
 
 Not investigated further. Recorded as the next target after the shelf, with the
 numbers to beat written down.
+
+## 2026-07-26 — a string is one allocation, not two
+
+`k_str_n` allocated a KStr header and then its payload, two calls with one
+lifetime, always adjacent. They are now one: `k_str_alloc` takes the length,
+allocates `sizeof(KStr) + len + 1`, and points `data` at the byte after the
+header. Four sites make a string from bytes they just copied and all four go
+through it. Three others adopt storage they did not make — the zero-copy finish
+hands a builder's buffer out in place, a deep copy shares a payload that
+survives — and they assign `data` themselves, so they are untouched by this and
+have to stay that way.
+
+    decode allocations      12,924,473 -> 11,353,217   (-12.2%)
+    encode allocations      26,327,708 -> 22,130,027   (-15.9%)
+    kq, 1.9 mb document      4,617,083 ->  2,931,838   (-36.5%)
+    welfare                      53.17 ->      54.74
+
+Allocated *bytes* do not move, which is the tell that this buys calls and
+alignment slack rather than storage.
+
+WHAT IT DOES NOT BUY. kq's peak goes 139.9 mb to 139.4 — four tenths of a
+percent against a 36.5% cut in allocations. That is the grow-only arena stated
+a second way: nothing is freed for the length of the run, so how often the bump
+pointer moved is close to irrelevant to how far it got. The shelf is still the
+only thing that moves that number, and this is a useful negative control for it.
+
+The mem corpus moved everywhere, which is the point of having it: 89 -> 48 on
+append_in_place, 127 -> 74 on build_cycle, 7 -> 4 on the small lazy programs.
+`string_headers.kso` is the new pin, at 117 allocations before and 65 after.
