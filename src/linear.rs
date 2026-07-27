@@ -18,10 +18,24 @@ use std::collections::HashSet;
 pub fn in_place_pushes(program: &Program) -> HashSet<(String, usize, usize)> {
     let analysis = Analysis::new(program);
     let mut out = HashSet::new();
-    for decl in &program.fns {
+    for decl in real_fns(program) {
         collect_pushes(&analysis, decl, &decl.body, &mut out);
     }
     out
+}
+
+/// The declarations an analysis may reason from.
+///
+/// Importing a qualified name enrolls a bare-named clone of the same
+/// declaration so both spellings dispatch, and the clone carries the
+/// original's span. Two names for one function is not two functions: the
+/// clone is called by nobody, so every call-site test over it is vacuously
+/// true, and a parameter the real declaration refuses is granted to its
+/// twin. In-place sites are keyed by source position, which the twins share,
+/// so that grant reaches the code the real name emits — an accumulator held
+/// by two owners, written through one of them.
+fn real_fns(program: &Program) -> impl Iterator<Item = &FnDecl> {
+    program.fns.iter().filter(|d| !d.synthetic)
 }
 
 struct Analysis<'a> {
@@ -43,7 +57,7 @@ impl<'a> Analysis<'a> {
         // ever aliases it — the sound direction for an in-place mutation.
         let mut a =
             Analysis { program, linear_params: HashSet::new(), returns_unique: HashSet::new() };
-        for decl in &program.fns {
+        for decl in real_fns(program) {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
             for i in 0..decl.params.len() {
                 a.linear_params.insert((decl.name.clone(), decl.params.len(), i));
@@ -121,39 +135,111 @@ impl<'a> Analysis<'a> {
     /// True unless some call to `name`/`arity` in `e` passes a non-unique list
     /// at position `i`.
     fn callsites_unique(&self, ctx: &FnDecl, e: &Expr, name: &str, arity: usize, i: usize) -> bool {
+        self.callsites_unique_in(ctx, e, name, arity, i, None)
+    }
+
+    /// `scoped` names a value that is unique within `e` because of how `e` was
+    /// reached — the parameter of a folding lambda, which the fold hands a
+    /// uniquely-owned accumulator on every call. It is set only where that has
+    /// been checked, so a lambda that captures or reorders its accumulator
+    /// never gets it, and calls inside such a lambda stay non-unique.
+    fn callsites_unique_in(
+        &self,
+        ctx: &FnDecl,
+        e: &Expr,
+        name: &str,
+        arity: usize,
+        i: usize,
+        scoped: Option<&str>,
+    ) -> bool {
         if let Expr::App { head, args, .. } = e {
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == name)
                 && args.len() == arity
-                && !self.unique_list(&args[i], ctx)
+                && !self.unique_in(&args[i], ctx, scoped)
             {
                 return false;
             }
+            // a fold's own lambda is where an accumulator legitimately arrives
+            // as a parameter; check the lambda in that light, and everything
+            // else in this expression without it
+            if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
+                && args.len() == 3
+            {
+                if let (Expr::Lambda { params, body, .. }, true) =
+                    (&args[2], self.folder_is_unique(&args[2], ctx, scoped))
+                {
+                    let inner = params.first().map(|(n, _)| n.as_str());
+                    return self.callsites_unique_in(ctx, &args[0], name, arity, i, scoped)
+                        && self.callsites_unique_in(ctx, &args[1], name, arity, i, scoped)
+                        && self.callsites_unique_in(ctx, body, name, arity, i, inner);
+                }
+            }
         }
-        child_exprs(e).into_iter().all(|c| self.callsites_unique(ctx, c, name, arity, i))
+        child_exprs(e).into_iter().all(|c| self.callsites_unique_in(ctx, c, name, arity, i, scoped))
     }
 
     /// Does `e` evaluate to a freshly-owned list (refcount would be one)?
     fn unique_list(&self, e: &Expr, ctx: &FnDecl) -> bool {
+        self.unique_in(e, ctx, None)
+    }
+
+    /// Does this folding function hand back a uniquely-owned value?
+    ///
+    /// Only the shape an accumulator loop written with `fold` actually takes:
+    /// a lambda whose body is one call receiving the lambda's own first
+    /// parameter first and mentioning it nowhere else. A lambda that captures
+    /// an accumulator from outside, or passes it second, could alias — and
+    /// mutating in place under an alias is corruption, not a wrong answer.
+    fn folder_is_unique(&self, f: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
+        let Expr::Lambda { params, body, .. } = f else { return false };
+        let Some((acc, _)) = params.first() else { return false };
+        let Expr::App { head, args, .. } = body.as_ref() else { return false };
+        let Expr::Ident(callee, _) = head.as_ref() else { return false };
+        if !matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc) {
+            return false;
+        }
+        if args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() > 0 {
+            return false;
+        }
+        let _ = (ctx, scoped);
+        self.returns_unique.contains(&(callee.clone(), args.len()))
+    }
+
+    fn unique_in(&self, e: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
         match e {
             Expr::List(..) => true,
+            // A fold threads its seed through the folding function and returns
+            // what the last call gave back, so the result is unique when the
+            // seed is and the folder returns unique from a unique first
+            // argument. This is an accumulator loop written with `fold`
+            // instead of recursion, and without it the encode path collapses
+            // at `escape_able`, where the byte builder passes through one.
+            Expr::App { head, args, .. }
+                if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
+                    && args.len() == 3 =>
+            {
+                self.unique_in(&args[1], ctx, scoped)
+                    && self.folder_is_unique(&args[2], ctx, scoped)
+            }
             // a conditional yields a unique value when every arm does; the
             // encode loop returns `if done acc (step acc)` and neither arm
             // aliases, but an unknown head would have read it as opaque
             Expr::App { head, args, .. }
                 if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
             {
-                self.unique_list(&args[1], ctx) && self.unique_list(&args[2], ctx)
+                self.unique_in(&args[1], ctx, scoped) && self.unique_in(&args[2], ctx, scoped)
             }
             Expr::Guard { early, rest, .. } => {
-                let tail = matches!(rest.last(), Some(Stmt::Expr(e)) if self.unique_list(e, ctx));
-                self.unique_list(early, ctx) && tail
+                let tail =
+                    matches!(rest.last(), Some(Stmt::Expr(e)) if self.unique_in(e, ctx, scoped));
+                self.unique_in(early, ctx, scoped) && tail
             }
             Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(n, _)
                     if matches!(n.as_str(), "push" | "append" | "builtin_append")
                         && args.len() == 2 =>
                 {
-                    self.unique_list(&args[0], ctx)
+                    self.unique_in(&args[0], ctx, scoped)
                 }
                 // `concat` always allocates a fresh list (k_b_concat), so its
                 // result is uniquely owned regardless of its arguments.
@@ -175,7 +261,7 @@ impl<'a> Analysis<'a> {
                 Expr::Ident(n, _) => self.returns_unique.contains(&(n.clone(), args.len())),
                 _ => false,
             },
-            Expr::Ident(name, _) => self.is_unique_source(name, ctx),
+            Expr::Ident(name, _) => self.is_unique_source(name, ctx, scoped),
             _ => false,
         }
     }
@@ -183,7 +269,13 @@ impl<'a> Analysis<'a> {
     /// A variable holding a uniquely-owned list: a linear parameter, or a local
     /// bound to a unique list — in either case used at most once in the body, so
     /// no alias outlives the move.
-    fn is_unique_source(&self, var: &str, ctx: &FnDecl) -> bool {
+    fn is_unique_source(&self, var: &str, ctx: &FnDecl, scoped: Option<&str>) -> bool {
+        // a folding lambda's parameter: the fold hands it a uniquely-owned
+        // accumulator on every call, and the lambda was checked before this
+        // name was put in scope
+        if scoped == Some(var) {
+            return true;
+        }
         if count_uses(var, &ctx.body) > 1 {
             return false;
         }
@@ -196,7 +288,7 @@ impl<'a> Analysis<'a> {
         for stmt in &ctx.body {
             if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
                 if n == var {
-                    return self.unique_list(expr, ctx);
+                    return self.unique_in(expr, ctx, scoped);
                 }
             }
         }
@@ -223,18 +315,42 @@ fn collect_pushes(
 }
 
 fn walk_for_push(a: &Analysis, decl: &FnDecl, e: &Expr, out: &mut HashSet<(String, usize, usize)>) {
+    walk_for_push_in(a, decl, e, out, None)
+}
+
+fn walk_for_push_in(
+    a: &Analysis,
+    decl: &FnDecl,
+    e: &Expr,
+    out: &mut HashSet<(String, usize, usize)>,
+    scoped: Option<&str>,
+) {
     if let Expr::App { head, args, span, .. } = e {
         // push extends a list, append extends a byte builder, and each writes
         // into its own frontier when nobody else holds the value
         if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
             && args.len() == 2
-            && a.unique_list(&args[0], decl)
+            && a.unique_in(&args[0], decl, scoped)
         {
             out.insert((decl.file.clone(), span.line, span.col));
         }
+        // inside a validated folder the accumulator arrives as the lambda's
+        // own parameter, and every push or append there is on a unique value
+        if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
+            && args.len() == 3
+            && a.folder_is_unique(&args[2], decl, scoped)
+        {
+            if let Expr::Lambda { params, body, .. } = &args[2] {
+                let inner = params.first().map(|(n, _)| n.as_str());
+                walk_for_push_in(a, decl, &args[0], out, scoped);
+                walk_for_push_in(a, decl, &args[1], out, scoped);
+                walk_for_push_in(a, decl, body, out, inner);
+                return;
+            }
+        }
     }
     for child in child_exprs(e) {
-        walk_for_push(a, decl, child, out);
+        walk_for_push_in(a, decl, child, out, scoped);
     }
 }
 

@@ -6445,3 +6445,57 @@ is on a type of its own rather than on a field. The entries stay as they were
 written, with this note after them, because the log records what was thought at
 the time and the thinking was not wrong — it was aimed at a construct that has
 since gone.
+
+## 2026-07-26 — the encoder stops allocating a header per append, and a clone stops voting
+
+Encode allocations fall from 68,640,508 to 26,327,708, bytes from 2.29 GB to
+934 MB, arena blocks from 2,205 to 905. The checksum is unchanged and the
+decode board is untouched. Welfare 46.33 -> 53.17.
+
+The last link was `escape_able`, where the byte builder passes through
+`list/fold bs acc (a b -> esc_byte a b)`. A fold is an accumulator loop with
+the recursion written by somebody else, so the analysis now reads one: the
+result is unique when the seed is and the folding function returns unique from
+a unique first argument, and inside a folder that passed that test the lambda's
+own parameter counts as unique. The scoping is deliberate — the name is put in
+scope only under a lambda whose accumulator arrives first and appears nowhere
+else, so a lambda that captures or reorders its accumulator never gets it.
+
+WHAT THE SPEC FOUND. Writing the adversarial case — a lambda that is not a
+folder, calling the same function — turned up an existing divergence instead.
+An imported builder held by two owners was written through one of them:
+
+    base = text/append (text/bytes "") "A"
+    x = text/append base "B"
+    y = text/append base "C"
+
+    interpreter  AB AC
+    native       ABC ABC
+
+Importing a qualified name enrolls a bare-named clone so both spellings
+dispatch, and the clone carries the original's span. Nobody calls the clone by
+its bare name, so every call-site test over it is vacuously true and it keeps
+the linear parameter its twin was refused. In-place sites are keyed by source
+position, which the twins share, so the clone's verdict reached the code the
+real name emits. `push` was never exposed to this: it is decided at the site,
+not by a parameter, and the same program written with lists was correct
+throughout.
+
+The fix makes synthetic clones invisible to the analysis, which is what their
+declaration already claims about provenance.
+
+WHICH GUARD IS LOAD-BEARING. Four call sites enumerate declarations, and
+reverting any one of them alone left the specs passing — redundancy reads as
+sufficiency if you stop there. Applying one at a time to the broken baseline
+instead: skipping clones when marking sites fixes it alone, skipping them when
+seeding candidates fixes it alone, and the other two fix nothing. Only the
+first two shipped. The call-site scan in particular was reverted on principle —
+excluding a caller removes evidence rather than permission, which is the
+direction that hides the next bug rather than the one that catches it.
+
+WHAT THE OBJECTIVE MISSED. `emitted_lines` rose 1,893 -> 1,898 in #322 and no
+gate fired, because at a weight of 0.10 the move is worth 0.006 points and the
+ratchet ignores anything under a hundredth. That was a real regression bought
+on credit: #322's wrapper inlining is what made the mutate path reachable, and
+the payoff arrived today rather than then. welfare.py now names every term that
+went backwards and prices it, whatever the sum did. The sum stays the gate.
