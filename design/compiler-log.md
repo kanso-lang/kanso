@@ -6248,3 +6248,77 @@ is speculative, what does the suite actually pin — and hers does not.
 The page's own heading calls the influences "the committee", which is where the
 confusion comes from. Left alone: it reads correctly in place, and renaming it
 to serve a distinction only the log makes would be worse writing.
+
+## 2026-07-26 — the wrapper was hiding the appends, and three analysis gaps behind it
+
+Clay: "the current memory numbers on kq became an absolutely embarrassing
+explosion. that's probably the performance priority." It is, and the largest
+single cause is not the bytes but the headers around them — 42,312,800 fresh
+twenty-four-byte headers on the encode board, 62% of every allocation it makes.
+Lists already avoid the equivalent through `push_mut`; appends did not, and
+this is why.
+
+FIRST, THE WRAPPER. `text/append` is one line — `builtin_append acc x` — but it
+compiles to a real function, so at every call site the uniqueness analysis saw
+a user call rather than an append. Forty-two million appends hid behind three
+call sites, and the analysis could not decide inside the wrapper because there
+the accumulator is a parameter whose ownership belongs to a caller one frame
+away. `src/inline.rs` undoes the rename before anything looks: a call to a
+wrapper whose whole body is one builtin call, passing its own parameters in
+their own order, becomes that call at the site that made it. The encode board's
+append sites went from three to thirty-six.
+
+THEN THREE GAPS IN THE ANALYSIS ITSELF, each found by asking it what it had
+concluded rather than by reading it.
+
+  - The seed. `text/bytes ""` was not recognised as producing a fresh value, so
+    uniqueness failed at the root of every chain threaded from it.
+  - Use counting. `count_uses` summed occurrences, and an accumulator loop
+    mentions its accumulator in both arms of a conditional — the base case
+    returns it, the step passes it on — so a value used once on every path
+    counted as two and read as aliased. It now takes the larger arm rather than
+    the sum, which is what a move is, and is still conservative.
+  - Conditional results. `if done acc (step acc)` returns a unique value when
+    both arms do, but an unknown head made it opaque, so no loop of that shape
+    could ever be judged to return uniquely.
+
+MEASURED on a loop of forty appends: 127 allocations before, 89 after —
+precisely the thirty-eight headers, gone. Pinned in the mem vein, and the
+golden was watched failing against the old code first.
+
+WHAT DID NOT MOVE, said plainly: the encode board is unchanged. The minimal
+accumulator now proves linear, and encodebench's does not — something in that
+program still disproves it, and finding it is the next step rather than a
+mystery to shrug at. The work here is sound and lands three real improvements
+to an analysis that will be needed either way; the headline number is still
+sitting there.
+
+Compile cost moved by five emitted lines across the samples — one `declare` for
+the new runtime symbol in each module's preamble. Regenerated deliberately.
+
+## 2026-07-26 — inlining moved an error's birthplace, and the book caught it
+
+The wrapper-inlining pass changed one book panel and the reason is worth
+keeping. `text/to_int` wraps a builtin that can give birth to an err, and an
+err records where it was born. Inlined, the wrapper stops existing, so the
+error that said
+
+    born in text/to_int at std/text/text.kso:35
+
+started saying
+
+    born in main at parse_fail.kso:3
+
+which is true of the new program and worse for whoever reads it. Provenance is
+observable, so a pass that changes it is not the pure rename it claimed to be.
+
+The fix is exact rather than a retreat: the builtins that can birth an err are
+already a known set — codegen hands each of them the calling site's origin —
+and those four wrappers are now left alone. Everything else still inlines, and
+the encode board keeps thirty-two exposed append sites with three of them
+extending in place.
+
+Worth noting which check caught it. Not a unit test and not the goldens: the
+book, where a sample's printed output is compared to what the chapter says it
+prints. The error message is user-facing text and the book is the only place
+that reads it as a user would.

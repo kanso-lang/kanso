@@ -3421,7 +3421,7 @@ static KValue k_bytes_owned(long long len, const unsigned char* data, long long 
     KValue v; v.tag = K_BYTES; v.payload = k_ptr(b); return v;
 }
 
-KValue k_b_append(KValue acc, KValue x) {
+static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     if (!k_not_failure(acc)) return acc;
     if (!k_not_failure(x)) return x;
     if (acc.tag != K_BYTES) k_die("append takes bytes and a string, bytes, or byte");
@@ -3451,6 +3451,14 @@ KValue k_b_append(KValue acc, KValue x) {
             k_stat_append_fast++;
             memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
             buf->used = a->len + n;
+            /* The bytes went into the accumulator's own spare capacity, so a
+               fresh header would differ only in its length. Where uniqueness
+               is proven, write that length in place: the header was the
+               largest single source of garbage the encoder made. */
+            if (mutate) {
+                a->len += n;
+                return acc;
+            }
             return k_bytes_owned(a->len + n, a->data, a->cap);
         }
     }
@@ -3465,6 +3473,11 @@ KValue k_b_append(KValue acc, KValue x) {
     memcpy(data + a->len, src, (size_t)n);
     return k_bytes_owned(a->len + n, data, cap);
 }
+
+KValue k_b_append(KValue acc, KValue x) { return k_b_append_into(acc, x, 0); }
+
+/* The same append at a site the linearity analysis proved unique. */
+KValue k_b_append_mut(KValue acc, KValue x) { return k_b_append_into(acc, x, 1); }
 
 /* find2 with a floor: also stops at the first byte below `lim`. Escape
    scanning wants this shape — quote, backslash, and control bytes all
