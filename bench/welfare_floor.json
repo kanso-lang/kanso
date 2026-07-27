@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 54.744707186664456,
+  "floor": 55.510462427315446,
   "history": [
     {
       "floor": 100.0,
@@ -25,6 +25,10 @@
     {
       "floor": 54.74,
       "why": "a string's header and bytes are one allocation, not two: decode allocations 12,924,473 -> 11,353,217 and encode 26,327,708 -> 22,130,027. The +5 emitted lines are still #322's wrapper inlining, which bought the encode cut above."
+    },
+    {
+      "floor": 55.51,
+      "why": "a record's fields live after its header, not in a second allocation: encode allocations 22,130,027 -> 18,785,627. Field count is fixed at construction and set writes through the existing slots, so there is nothing to grow."
     }
   ]
 }
