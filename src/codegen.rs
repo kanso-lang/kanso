@@ -374,7 +374,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     // Beat loops rewind the arena between iterations. Groups returning the
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.
-    let mut beat = crate::beat::beat_loops(program, &inference);
+    let mut beat = crate::beat::beat_loops(program, &inference, &in_place_pushes);
     beat.ids.retain(|(n, a), _| escape.returns_ty(n, *a).is_none());
     beat.demoted.retain(|(_, callee)| beat.ids.contains_key(callee));
     let mut backend = Backend {

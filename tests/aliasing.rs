@@ -110,3 +110,18 @@ fn a_map_held_twice_is_not_written_through() {
     assert_eq!(native, interpreted);
     assert_eq!(native, "3 3");
 }
+
+/// The chain license is identity, never type: a loop whose crossing bytes
+/// value is born fresh each iteration has its header above the mark, so a
+/// rewind would hand the next iteration a dangling accumulator. The license
+/// must refuse it, and both engines must agree on the output.
+#[test]
+fn a_fresh_builder_each_iteration_is_not_licensed() {
+    let (interpreted, native) = both_engines(
+        "fresh_builder",
+        "import \"std/text\"\n\nfn churn acc 0\n  text/utf8 acc\n\nfn churn acc n\n  pad = \"{n}-{n}-{n}-{n}-{n}-{n}-{n}-{n}\"\n  churn (text/append (text/bytes (text/utf8 acc)) pad) (n - 1)\n\npub play =\n  seed = text/bytes \"go\"\n  print \"{length (churn seed 40)}\"\n",
+    );
+
+    assert_eq!(native, interpreted);
+    assert_eq!(native, "850");
+}

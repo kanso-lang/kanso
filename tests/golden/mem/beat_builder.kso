@@ -1,0 +1,9 @@
+import "std/text"
+
+fn stamp acc 0
+  acc
+
+fn stamp acc n
+  stamp (text/append acc "line {n};") (n - 1)
+
+pub play = print "{length (text/utf8 (stamp (text/bytes "") 200))}"

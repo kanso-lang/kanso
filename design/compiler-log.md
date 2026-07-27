@@ -6916,3 +6916,45 @@ build instead of waiting for a hand measurement.
 
 kq itself, rebuilt on put_mut: full peak 117.8 mb, decode peak 30.9 against
 jq's 29.2. The remaining 87 mb over jq is the shelf, which is the open front.
+
+## 2026-07-27 — the fold-state shelf ships: the encode loops rewind
+
+The largest unclaimed number on the compiler page is claimed. Three pieces,
+each necessary, none sufficient alone.
+
+**The license is identity, never type.** A bytes accumulator may cross a
+rewind when it is the very object that arrived at the loop's entry, threaded
+through mut-selected appends — pointer identity, proven by a greatest
+fixpoint over groups whose every arm returns a chain of its first parameter,
+through conditionals, guards, local bindings, folds whose folder chains its
+own accumulator, and calls to other chaining groups. The header is then below
+the mark and growth (since the malloc change) is outside the arena. Raw bytes
+hold no pointers, so nothing in the accumulator can dangle. A fresh builder
+of the same type has none of these properties: fresh_builder.kso pins the
+refusal at beat_iters=0, and under a deliberately type-only license it reads
+40 with output still correct by memory-layout luck — which is why the counter
+is the pin and the output is not.
+
+**Sorted views join builder buffers outside the arena.** The first licensed
+run took 362 ms against a 5 ms baseline: every rewind swept the cache
+registry and freed every map's sorted view, so each iteration rebuilt them —
+the cost the declined cache-sweep entry measured, reproduced exactly. Views
+are malloc'd now, nothing arena-backed can dangle, nothing registers, and the
+sweep walks an empty table. put_mut frees the view it invalidates. A
+transient map's view leaks with the map; recorded as the trade.
+
+**The numbers.** encodebench arena blocks 905 -> 5 with 5,032,001 rewinds —
+the encoder runs in constant arena space. kq, interleaved, best-of sitting:
+
+    full peak, 1.9 mb   116.1 mb -> 77.3   (was 211.9 this morning; jq 30.7)
+    wall, full 1.9 mb    35.4 ms -> 34.2   (3.02x jq, best yet)
+    cycles vs jq           3.11x -> 3.15x
+    ipc                     4.72 -> 4.90
+    path-query peaks    at or below jq on both documents
+    welfare                57.11 -> 60.25
+
+**Found on the way, left open:** loops inside imported subdirectory modules
+never beat — the decl is qualified, the recursive call is spelled bare, and
+has_self_tail sees two names where there is one function. The same duality
+#323 fixed in the linearity analysis, one analysis over. kq's top-level files
+dodge it; VSE-shaped programs will not. Tracked as the next win.

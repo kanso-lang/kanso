@@ -45,7 +45,8 @@ fn main() -> ExitCode {
     };
     if std::env::var("KANSO_BEAT_REPORT").is_ok() {
         let inference = kanso::infer::infer(&program);
-        for line in kanso::beat::report(&program, &inference) {
+        let mut_sites = kanso::linear::in_place_pushes(&program);
+        for line in kanso::beat::report(&program, &inference, &mut_sites) {
             eprintln!("beat: {line}");
         }
     }

@@ -1,0 +1,11 @@
+import "std/text"
+
+fn churn acc 0
+  text/utf8 acc
+
+fn churn acc n
+  churn (text/append (text/bytes (text/utf8 acc)) "-{n}") (n - 1)
+
+pub play =
+  seed = text/bytes "go"
+  print "{length (churn seed 40)}"
