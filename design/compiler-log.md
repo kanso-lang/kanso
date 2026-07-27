@@ -6295,3 +6295,30 @@ sitting there.
 
 Compile cost moved by five emitted lines across the samples — one `declare` for
 the new runtime symbol in each module's preamble. Regenerated deliberately.
+
+## 2026-07-26 — inlining moved an error's birthplace, and the book caught it
+
+The wrapper-inlining pass changed one book panel and the reason is worth
+keeping. `text/to_int` wraps a builtin that can give birth to an err, and an
+err records where it was born. Inlined, the wrapper stops existing, so the
+error that said
+
+    born in text/to_int at std/text/text.kso:35
+
+started saying
+
+    born in main at parse_fail.kso:3
+
+which is true of the new program and worse for whoever reads it. Provenance is
+observable, so a pass that changes it is not the pure rename it claimed to be.
+
+The fix is exact rather than a retreat: the builtins that can birth an err are
+already a known set — codegen hands each of them the calling site's origin —
+and those four wrappers are now left alone. Everything else still inlines, and
+the encode board keeps thirty-two exposed append sites with three of them
+extending in place.
+
+Worth noting which check caught it. Not a unit test and not the goldens: the
+book, where a sample's printed output is compared to what the chapter says it
+prints. The error message is user-facing text and the book is the only place
+that reads it as a user would.

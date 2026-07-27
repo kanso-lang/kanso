@@ -13,6 +13,11 @@
 //! becomes the call it stands for, at the site that made it.
 
 use crate::ast::*;
+
+/// Builtins that can produce an err, which therefore carry the origin of the
+/// site that called them. Kept in step with codegen's origin-passing list.
+const BIRTHS_ERR: [&str; 4] =
+    ["builtin_to_int", "builtin_to_float", "builtin_utf8", "builtin_from_code"];
 use std::collections::HashMap;
 
 /// Wrapper name and arity, mapped to the builtin it stands for. A wrapper
@@ -27,6 +32,14 @@ fn aliases(program: &Program) -> HashMap<(String, usize), String> {
         };
         let Expr::Ident(callee, _) = head.as_ref() else { continue };
         if !callee.starts_with("builtin_") || args.len() != decl.params.len() {
+            continue;
+        }
+        // A builtin that can give birth to an err takes the calling site's
+        // origin, and inlining moves that site — an error that said it was
+        // born in `text/to_int` would start saying it was born in whichever
+        // function called it, which is worse for the reader and is a real
+        // change in what the program reports. Those wrappers stay.
+        if BIRTHS_ERR.iter().any(|b| callee == b) {
             continue;
         }
         let mut threads = true;
