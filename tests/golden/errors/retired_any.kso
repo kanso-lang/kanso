@@ -1,5 +1,0 @@
-type person
-  name:string
-  partner:any
-
-pub play = print "{(person "ada" none).name}"

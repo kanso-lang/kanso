@@ -1,6 +1,6 @@
 type node
-  id:int
-  peers:list
+  id
+  peers
 
 pub play =
   a = node 1 []

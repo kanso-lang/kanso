@@ -1,20 +1,20 @@
 pub type capped
-  left:int
+  left
   source
 
 pub type counting
-  at:int
+  at
 
 pub type cursor
-  at:int
+  at
   source
 
 pub type cycled
-  at:int
+  at
   source
 
 pub type done
-  drained:bool
+  drained
 
 pub type grown
   seed
@@ -25,18 +25,18 @@ pub type mapped
   source
 
 type missing
-  unfound:bool
+  unfound
 
 pub type repeated
   value
 
 pub type sifted
-  keep:bool
+  keep
   source
   test
 
 pub type skipped
-  burn:int
+  burn
   source
 
 pub type sorted

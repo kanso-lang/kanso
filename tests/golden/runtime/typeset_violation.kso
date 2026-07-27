@@ -1,6 +1,0 @@
-type null
-
-type post
-  title:null string
-
-pub play = print "{post 42}"

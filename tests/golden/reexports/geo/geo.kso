@@ -1,7 +1,7 @@
 import "std/list"
 
 pub type disk
-  r:float64
+  r
 
 pub fn areas rs
   to_list (select rs (r -> 0 < r))

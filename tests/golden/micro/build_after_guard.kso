@@ -1,5 +1,5 @@
 type cell
-  tag:string
+  tag
   link
 
 fn tie n

@@ -1,5 +1,5 @@
 type user
-  age:int
+  age
 
 pub play =
   u = user 1

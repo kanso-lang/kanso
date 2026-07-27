@@ -2,17 +2,17 @@ import "std/list"
 import "std/text"
 
 type defect
-  reason:string
+  reason
 
 pub type json_null
 
 pub type parse_failure
-  position:int
-  reason:string
+  position
+  reason
 
 type parsed
-  pos:int
-  value:json
+  pos
+  value
 
 pub fn decode s
   cs = text/bytes s

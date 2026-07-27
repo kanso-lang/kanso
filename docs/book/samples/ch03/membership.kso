@@ -1,9 +1,24 @@
-type missing
+type archived
+
+type draft
+
+type published
+
+type state archived draft published
 
 type post
-  title:missing string
+  state
+  title
+
+fn label archived
+  "archived"
+
+fn label draft
+  "a draft"
+
+fn label published
+  "live"
 
 pub play =
-  p = post 42
-  { title } = p
-  print "{title}"
+  p = post draft "long season"
+  print "{p.title} is {label p.state}"

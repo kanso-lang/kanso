@@ -261,60 +261,45 @@ coming soon</code></pre>
   </div>
 </div>
 
-<h2>typesets: a field of several types</h2>
+<h2>typesets: naming a set of types</h2>
 
-<p>markers earn their keep when a field can hold more than one shape. a field type may list several permitted types, space-separated and alphabetized like every other enumeration in the language. this is a <em>typeset</em>. here a post's title is either a real <code>string</code> or the marker <code>missing</code>:</p>
-
-<div class="code-panel">
-  <div class="code-panel-title">optional.kso</div>
-  <pre><code><span class="k">type</span> missing
-
-<span class="k">type</span> post
-  <span class="f">body</span>
-  title:missing string
-
-<span class="k">fn</span> <span class="f">headline</span> (<span class="f">post</span> _ title)
-  <span class="f">show</span> title
-
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  a <span class="o">=</span> <span class="f">post</span> <span class="s">"..."</span> <span class="s">"long season"</span>
-  b <span class="o">=</span> <span class="f">post</span> <span class="s">"..."</span> missing
-  <span class="f">print</span> (<span class="f">headline</span> a) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">headline</span> b)
-
-<span class="k">fn</span> <span class="f">show</span> missing
-  <span class="s">"(untitled)"</span>
-
-<span class="k">fn</span> <span class="f">show</span> s:string
-  <span class="f">s</span></code></pre>
-  <div class="code-output">
-    <div class="code-panel-title">output</div>
-    <pre><code>long season
-(untitled)</code></pre>
-  </div>
-</div>
-
-<p><code>headline</code> pulls <code>title</code> out of the post and hands it straight to <code>show</code>, with no test for which kind of title it holds—the two <code>show</code> arms sort that out by dispatch, so absence becomes a polymorphic call, never a conditional. a nullable field isn't a special case you branch on; it's one more type in the set, handled by one more arm. the absence member is always a marker of your own—never <code>none</code>, which belongs to the failure story in chapter 04.</p>
-
-<p>a typeset is also a promise the constructor keeps. hand a field a value that matches none of its members and the program has a defect—reported when the bad value reaches the endpoint, the same way overflow and lookup misses surface as values rather than crashes:</p>
+<p>a field holds whatever the program puts in it, and the compiler works that out. sometimes you want to say something the program does not otherwise say — that a post is archived, a draft, or published, and never a fourth thing. give the set a name:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">membership.kso</div>
-  <pre><code><span class="k">type</span> missing
+  <pre><code><span class="k">type</span> archived
+
+<span class="k">type</span> draft
+
+<span class="k">type</span> published
+
+<span class="k">type</span> state archived draft published
 
 <span class="k">type</span> post
-  title:missing string
+  <span class="f">state</span>
+  <span class="f">title</span>
+
+<span class="k">fn</span> <span class="f">label</span> archived
+  <span class="s">"archived"</span>
+
+<span class="k">fn</span> <span class="f">label</span> draft
+  <span class="s">"a draft"</span>
+
+<span class="k">fn</span> <span class="f">label</span> published
+  <span class="s">"live"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  p <span class="o">=</span> <span class="f">post</span> <span class="n">42</span>
-  { title } <span class="o">=</span> <span class="f">p</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>"</span></code></pre>
+  p <span class="o">=</span> <span class="f">post</span> draft <span class="s">"long season"</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{p.title}</span> is <span class="i">{label p.state}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run membership.kso</div>
-    <pre><code><span class="k">error[runtime]</span>: field `title` of `post` takes missing string</code></pre>
+    <pre><code></code></pre>
   </div>
 </div>
 
-<p>typeset fields are the piece that ships today. two larger uses of the same idea are on the way, and worth naming honestly so you recognize them when they land: a top-level <code>typeset</code> declaration that gives a set of types a name you can reuse, and typeset <em>guards</em> on parameters, so a single overload can answer for a whole set at once and sit on that third rung of the ladder. until then, a field is where a typeset lives, and dispatch over its members is how you read it.</p>
+<p><code>type state archived draft published</code> is a typeset: one line, members alphabetical, no fields of its own. it is a name for "one of these", and once it exists you can dispatch on it, annotate a parameter with it, and read it in an error message. the field itself stays bare — <code>state</code> — because what that field holds is still something the compiler derives from the program.</p>
+
+<p>this is the one place a written type earns its keep. everywhere else the compiler already knows and writing it down only adds a second copy to disagree with the first; here you are saying something it could not have worked out, because a set nobody has yet exceeded looks exactly like a set nobody can exceed.</p>
 
 <h2>the ladder is law</h2>
 

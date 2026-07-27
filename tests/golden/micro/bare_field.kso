@@ -1,5 +1,5 @@
 type person
-  name:string
+  name
   partner
 
 pub play =

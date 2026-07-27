@@ -57,7 +57,8 @@ pub fn analyze(program: &Program) -> EscapeInfo {
 }
 
 fn analyze_inner(program: &Program) -> EscapeInfo {
-    let returnable = register_returnable(program);
+    let inference = crate::infer::infer(program);
+    let returnable = register_returnable(program, &inference);
     let mut field_count = HashMap::new();
     let mut returns = HashMap::new();
     let mut carries = HashMap::new();
@@ -89,13 +90,20 @@ fn analyze_inner(program: &Program) -> EscapeInfo {
 ///    call to a function whose group returns T) sits in a safe position: the
 ///    tail of a T-returning function, an `if` branch in tail position, or an
 ///    argument whose callee destructures that parameter as `(T ...)`.
-pub fn register_returnable(program: &Program) -> HashSet<String> {
+pub fn register_returnable(
+    program: &Program,
+    inference: &crate::infer::Inference,
+) -> HashSet<String> {
     let ctors: HashSet<&str> =
         program.types.iter().filter(|t| !t.fields.is_empty()).map(|t| t.name.as_str()).collect();
 
     let analysis = Analysis { program, returns_ty: HashSet::new() };
 
-    ctors.iter().filter(|ty| analysis.clone().returnable(ty)).map(|ty| ty.to_string()).collect()
+    ctors
+        .iter()
+        .filter(|ty| analysis.clone().returnable(ty, inference))
+        .map(|ty| ty.to_string())
+        .collect()
 }
 
 #[derive(Clone)]
@@ -106,18 +114,20 @@ struct Analysis<'a> {
 }
 
 impl<'a> Analysis<'a> {
-    fn returnable(mut self, ty: &str) -> bool {
+    fn returnable(mut self, ty: &str, inference: &crate::infer::Inference) -> bool {
         // The packed convention shifts field 0's payload into the tag word,
         // which is only sound for an int: a pointer payload would lose its
-        // tag and overflow the shift. The declared typeset makes this a
-        // static check.
+        // tag and overflow the shift. Fields carry no written types, so the
+        // question is put to inference — every construction site's first
+        // argument joined, which must be exactly an int and nothing else.
         let first_field_is_int = self
             .program
             .types
             .iter()
-            .find(|t| t.name == ty)
-            .and_then(|t| t.fields.first())
-            .is_some_and(|(_, tys, _)| tys.len() == 1 && tys[0] == "int");
+            .position(|t| t.name == ty)
+            .and_then(|idx| inference.type_fields.get(idx))
+            .and_then(|fields| fields.first())
+            .is_some_and(|set| *set == crate::infer::INT);
         if !first_field_is_int {
             return false;
         }
@@ -422,7 +432,7 @@ mod tests {
     #[test]
     fn json_parsed_returnable_error_types_not() {
         let program = crate::compile_module(Path::new("lib/json"), false).unwrap();
-        let r = register_returnable(&program);
+        let r = register_returnable(&program, &crate::infer::infer(&program));
         assert!(r.contains("parsed"), "_parsed should be register-returnable, got {r:?}");
         assert!(!r.contains("defect"), "defect escapes via err-wrapping, got {r:?}");
         assert!(!r.contains("parse_failure"), "parse_failure escapes via err-wrapping, got {r:?}");
@@ -430,17 +440,20 @@ mod tests {
 
     #[test]
     fn record_in_a_list_escapes() {
-        let src = "type pt\n  x:int\n  y:int\n\nmain = print \"{length [(mk 1 2) (mk 3 4)]}\"\n\nfn mk a b\n  pt a b\n";
+        let src = "type pt\n  x\n  y\n\nmain = print \"{length [(mk 1 2) (mk 3 4)]}\"\n\nfn mk a b\n  pt a b\n";
         let program = crate::compile("test.kso", src, true).unwrap();
-        assert!(!register_returnable(&program).contains("pt"), "pt escapes into a list");
+        assert!(
+            !register_returnable(&program, &crate::infer::infer(&program)).contains("pt"),
+            "pt escapes into a list"
+        );
     }
 
     #[test]
     fn construct_then_destructure_is_returnable() {
-        let src = "type pair\n  a:int\n  b:int\n\nfn add (pair x y)\n  x + y\n\nmain = print \"{add (mk 5)}\"\n\nfn mk n\n  pair n n\n";
+        let src = "type pair\n  a\n  b\n\nfn add (pair x y)\n  x + y\n\nmain = print \"{add (mk 5)}\"\n\nfn mk n\n  pair n n\n";
         let program = crate::compile("test.kso", src, true).unwrap();
         assert!(
-            register_returnable(&program).contains("pair"),
+            register_returnable(&program, &crate::infer::infer(&program)).contains("pair"),
             "pair is construct-then-destructure"
         );
     }
