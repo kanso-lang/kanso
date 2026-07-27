@@ -1,0 +1,18 @@
+import "std/text"
+
+fn grow acc 0
+  acc
+
+fn grow acc n
+  grow (text/append acc "line {n};") (n - 1)
+
+fn once _
+  length (text/utf8 (grow (text/bytes "") 200))
+
+fn outer 0 t
+  t
+
+fn outer n t
+  outer (n - 1) (t + (once 0))
+
+pub play = print "total {outer 40 0}"
