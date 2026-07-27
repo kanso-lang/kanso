@@ -8014,3 +8014,27 @@ error[runtime] entry documents the report beside the
 accumulator-passing fix. TRMC itself (raising the ceiling by compiling
 accumulating recursion to loops) stays in the ledger as the ergonomics
 item it is.
+
+## 2026-07-27 — accumulating integer recursion runs as a loop (TRMC, the exact slice)
+
+The ledger's TRMC item, taken at the width where reassociation is
+provably exact. A group like `count n = 1 + count (n - 1)` owes an
+addition after every return, so a million calls kept a million frames;
+over arbitrary-precision integers the sum is the same in any
+association, so the group rewrites to a tail-calling helper threading
+an accumulator, and the wrapper keeps the group's surface, name, and
+dispatch. The license is narrow by construction: every arm a single
+expression, one operator (+ or *) across the recursive arms, integer
+literals for the non-recursive operand and every base body, and a
+direct self-call — floats (association changes the answer), guards,
+and double recursion like fib all keep their frames.
+
+The rewrite is one AST pass in the shared front end, so all three
+engines inherit it: the million-frame count now prints on native,
+interp, and the browser alike (micro pin trmc_count.kso, browser
+differential 83 passed / 0 failed). The stack-report pin moved to a
+variable-operand shape (`n + weigh (n - 1)`), which stays honestly
+unlicensed, and appendix A teaches the line between the two: a literal
+operand compiles to the loop, a varying one keeps its frames until you
+carry the total down yourself. Veins byte-identical, compile golden
+untouched (no bench sample carries a licensed shape), welfare flat.

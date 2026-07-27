@@ -1,7 +1,7 @@
-fn count 0
+fn weigh 0
   0
 
-fn count n
-  1 + count (n - 1)
+fn weigh n
+  n + weigh (n - 1)
 
-pub play = print "sum {count 1000000}"
+pub play = print "sum {weigh 1000000}"

@@ -1,0 +1,9 @@
+# accumulating integer recursion runs as a loop: a million frames of
+# `1 + count …` owe no stack, on every engine
+fn count 0
+  0
+
+fn count n
+  1 + count (n - 1)
+
+pub play = print "sum {count 1000000}"
