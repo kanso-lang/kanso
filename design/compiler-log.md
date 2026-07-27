@@ -7588,3 +7588,19 @@ where today's `length takes a list, string, or map` at least names surface
 vocabulary). The terrain: user-defined sequences wait on a coherence
 ruling, and when it lands, the annotated-arm split in this entry is the
 five-minute half of the work.
+
+## 2026-07-27 — the two chart risers belong to the literal-interning entry
+
+Clay read the compiler page's trend and asked why frozen constants and ir
+lines both rose. Both moves are one commit — "a literal builds once"
+(#342) — whose entry recorded the wins (encode allocations down 2.5
+million, kq allocations down 59%, welfare banked) but not the two costs
+now visible on the chart: perm_allocs 5 -> 8, because each interned
+literal owns a permanent slot filled once at startup, and emitted_lines
+1488 -> 1544, the interning cache machinery inside the pinned compile
+samples. Both are the feature's stated mechanism, priced against the wins
+the entry already carries; the welfare gate weighed the trade and banked
+it. Nothing in the twenty-seven merges since (#349 through #375) moved
+either series — the history diff shows both flat from that commit to
+head. The lesson repeats itself: an entry that records a trade must name
+both sides, because the chart shows both.
