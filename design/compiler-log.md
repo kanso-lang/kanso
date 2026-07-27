@@ -7066,3 +7066,27 @@ bytes. The helpers existed only to fit the width canon, and gavel BB's return
 guards express the same loops as direct self-tails within the cap. That is a
 kq-side fix (kq#29); the compiler-side thread — extend the chain license to
 tail cycles — stays open, and VSE-shaped mutual recursion is who it is for.
+
+## 2026-07-27 — gentle builder growth: built, measured, declined
+
+Doubling a large builder leaves as much slack as content, so growth past a
+megabyte was gentled to five-fourths expecting a three-megabyte peak cut. It
+measured 7.7 mb WORSE: 47.5 -> 55.2 on the big document. Each mut-grow briefly
+holds old and new buffers together, and quarter-spaced sizes defeat the
+allocator's reuse of the freed extents — a freed 4.6 mb cannot hold the next
+5.8 — so the dead large blocks stack up where doubling's halves had recycled.
+Reverted within the hour; byte-identity held throughout. (This entry re-lands:
+its first push raced the shelf PR's merge and lost.)
+
+## 2026-07-27 — utf8_mut: built, measured zero, declined
+
+The theory: a utf8 finish on a moved builder copies out and leaks the
+malloc-backed buffer, nineteen thousand times per kq decode. Built the mut
+variant end to end — runtime free on the copy path, linearity marking,
+codegen selection — and it selected zero sites on kq and zero on encodebench,
+because the premise was wrong twice over. The finishes in question take the
+zero-copy path, which hands the buffer to the string as its payload: the
+storage is live, not leaked, and there is nothing to free. The utf8_zerocopy
+counter had been read across two different builds, and the stale reading is
+what made a leak seem to exist. Reverted whole; the counter comparison that
+would have caught it in one step is the one this log now records.
