@@ -111,7 +111,7 @@ def main():
             before, after = mains.get(key, 0), ours.get(key, 0)
             if before == after:
                 continue
-            bare = key.removeprefix("encode_")
+            bare = key.removeprefix("encode_").removeprefix("oneshot_")
             worse = (
                 after > before
                 if bare in LOWER_IS_BETTER

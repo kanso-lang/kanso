@@ -7753,3 +7753,36 @@ nothing about the verdict (the vendored decoder still wins at 3.1) but
 proves the mechanism where it was first seen failing. The welfare header
 now names its ratchet era, so a score is read inside its model version —
 the confusion Clay hit reading 62-then-59 across a recalibration.
+
+## 2026-07-27 — std/json strings move to the bytes builder (the kq diet, part 1)
+
+The kq-swap decline left a queue item: std/json is 3x heavier than kq's
+vendored decoder, so diet std toward kq's shape. Head-to-head profiling
+of the same 188KB decode found the first divergence in four lines of
+lib/json/text.kso: std accumulated string bytes in lists (push,
+text/concat) where kq feeds a bytes builder (text/append). List
+accumulation churns the shared buffer pool and denies utf8 zerocopy —
+std showed append_fast=0, utf8_zerocopy=0 against kq's 21,457 / 1,773.
+
+Adopting the builder pattern (append instead of push, a text/bytes ""
+seed instead of concat onto []) closes that gap exactly: the std profile
+now reads append_fast=21,457, utf8_zerocopy=1,773 — kq parity — with
+alloc_bytes down 23% (4.45M to 3.41M) and decode arena peak down a full
+block (4M to 3M). In the one-shot vein: allocs 239,415 to 234,323,
+alloc_bytes -1.04M, sh_buf halved (2.23M to 1.10M), sh_str -72K.
+
+Priced worsenings, both the builder's own signature: bytes_malloc 13 to
+1,786 (each builder growth mallocs off-arena by design, per the #336
+carry model) and buf_reuse 3,445 to 2,233 (the transient list buffers
+that used to be reused no longer exist to reuse — their whole pool
+shrank by 1.13M, which is the point). Welfare unchanged at 59.31: the
+one-shot peak is encode-side dominated and stays at six blocks, so the
+scalar's terms saw nothing. The win is churn, not peak.
+
+Also: trend_gate.py stripped only the encode_ prefix before direction
+lookup, so every oneshot counter classified neutral and a pure oneshot
+regression could pass silently. It now strips oneshot_ too — this
+entry's two worsened counters are the fix's first customers.
+
+Part 2 stays queued: std's container assembly churns sh_buf 2.2x over
+kq's even after the string fix — obj_items/array_items shapes next.
