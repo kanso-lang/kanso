@@ -6958,3 +6958,13 @@ never beat — the decl is qualified, the recursive call is spelled bare, and
 has_self_tail sees two names where there is one function. The same duality
 #323 fixed in the linearity analysis, one analysis over. kq's top-level files
 dodge it; VSE-shaped programs will not. Tracked as the next win.
+
+## 2026-07-27 — the page catches up to the shelf
+
+Section 08's fold-state entry rewrites from queued-and-measured to shipped,
+present tense, with the chronology left here where it belongs. The kq figures
+across the page move to the post-shelf sitting (77.2 mb, 4.98 ipc against
+jq's 4.74, 33.6 ms), and the retired-instructions bullet keeps its original
+gap and gains its closing — the same instrument told both halves. kq's own
+README moved in kq#28 with regenerated cost goldens, since its CI builds
+against kanso main and the old counters no longer describe it.
