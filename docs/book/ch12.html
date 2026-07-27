@@ -150,7 +150,7 @@ kept 1497675</code></pre>
   </div>
 </div>
 
-<p>twelve allocations, and the building of the thousand-element source accounts for them. the map, the select, and the sum together added <em>zero</em>—the compiler fused the nested chain into one flat loop whose body multiplies, tests, and adds, with no recipe records and no per-element machinery at all. laziness is the semantics; fusion is the compiler noticing that a chain consumed on the spot never needs the recipe to exist. writing the obvious thing gets you the allocation-free loop.</p>
+<p>twelve allocations, and the building of the thousand-element source accounts for them. the map, the select, and the sum together added <em>zero</em>—the compiler fused the chain into one flat loop whose body multiplies, tests, and adds, with no recipe records and no per-element machinery at all. the pipe spelling of the same chain fuses identically. laziness is the semantics; fusion is the compiler noticing that a chain consumed on the spot never needs the recipe to exist. writing the obvious thing gets you the allocation-free loop.</p>
 
 <h2>what to remember</h2>
 
@@ -160,7 +160,7 @@ kept 1497675</code></pre>
 <li>generators (<code>naturals</code>, <code>repeat</code>, <code>cycle</code>, <code>iterate</code>) are infinite; consumers bound them. <code>find</code>, <code>all?</code>, and <code>any?</code> stop at the answer.</li>
 <li>the map builders (<code>tally</code>, <code>group_by</code>, <code>index_by</code>, <code>to_h</code>) resolve key collisions the way <code>put</code> does: last write wins.</li>
 <li><code>list/to_list</code> realizes a recipe. reach for it when a chain's result needs to be a plain list—usually right before printing.</li>
-<li>a nested chain ending in a consumer fuses into one flat loop. the counters can prove it to you.</li>
+<li>a chain ending in a consumer fuses into one flat loop, spelled with pipes or nested. the counters can prove it to you.</li>
 </ul>
 
 <h2>exercises</h2>
