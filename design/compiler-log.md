@@ -8121,3 +8121,18 @@ gap…") described a gap that no longer exists: the streaming print
 landed at 30.0 MB against jq's 30.8, and kq holds less memory than jq
 on every scoreboard row. The page now says so, and the 211.9 → 139.9 →
 47.5 fall reads its final number.
+
+## 2026-07-27 — hako grows a source model (design, Clay-directed)
+
+The dependency-source abstraction, fleshed out from Clay's direction:
+identity and transport stay unbraided. A hako's name is its GitHub
+path forever; a source is a strategy for turning name plus
+version-request into content the lockfile's sha can verify.
+github_repo is the v1 source and default — tags are releases, majors
+are path forks, branches are interim pins the lock marks and update
+refuses to walk. The eventual true server is a source with no
+authority: a verified mirror plus metadata index, registry-then-git
+fetch preference, degrading to git byte-identically because the sha
+decides what content is. Names never move, so the server migrates
+nobody. The err-arm rule's foreign bit survives unchanged: foreign
+iff entered through any source, local iff relative.
