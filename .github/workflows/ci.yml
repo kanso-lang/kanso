@@ -141,7 +141,7 @@ jobs:
             echo "::error::iterations). If intentional, update the golden in this PR."
             exit 1
           }
-      - name: a worsened counter names its why (report-only)
+      - name: nothing worsens unless something improves
         run: |
           git fetch origin main --depth 1
           python3 scripts/trend_gate.py origin/main

@@ -13,9 +13,11 @@ classify each move by the direction table below, and look for each
 worsened counter's name in the branch's compiler-log delta. The reflection
 is the sentence; this only refuses silence.
 
-Report-only for now — it prints verdicts and always exits 0, so the
-friction is measured on real pull requests before anybody flips it to
-gating. Flip: exit 1 where UNPRICED is printed.
+What is enforced, per Clay's rule: nothing may get worse unless at least
+one other thing got better — a pure regression fails outright. A genuine
+trade (worsened here, improved there) passes this gate and is arbitrated
+by the welfare scalar, which weighs the sides. The name-each-worsening
+listing below stays advisory: the sentence is reflection, not enforcement.
 """
 import subprocess
 import sys
@@ -96,6 +98,8 @@ def main():
     base = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
     added_log = log_delta(base)
     worsened = []
+    improved = []
+    worse_all = []
     for golden in GOLDENS:
         prefix = {
             "bench/cost_golden_encode.txt": "encode_",
@@ -117,6 +121,7 @@ def main():
             )
             arrow = "worsened" if worse else "improved"
             print(f"{arrow}: {key} {before:,} -> {after:,}  ({golden})")
+            (worse_all if worse else improved).append(key)
             if worse and bare not in added_log and key not in added_log:
                 worsened.append(key)
     if worsened:
@@ -126,8 +131,14 @@ def main():
         for key in worsened:
             print(f"  {key}")
         print("movement is fine; silence is not. say why in design/compiler-log.md.")
-    else:
+    elif worse_all or improved:
         print("every changed counter is priced (or improved).")
+    if worse_all and not improved:
+        print()
+        print("FAIL  a pure regression: something got worse and nothing got")
+        print("better. that trade has no other side, and it is the one move")
+        print("the gate refuses outright.")
+        return 1
     return 0
 
 
