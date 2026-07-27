@@ -7430,3 +7430,18 @@ its 0.76/0.86 sitting (2026-07-26, interleaved, conditions named) is the
 latest published measurement. The deeper fix — prose numbers that sync
 from the golden the way panels now sync from samples — would retire this
 entire failure class, and goes on the tooling list.
+
+## 2026-07-27 — prose numbers now sync from the golden they quote
+
+Third find of the same failure class this week ended the class. Any html
+element carrying data-golden="family.counter" must show that counter's
+current value from the cost goldens; scripts/golden_prose.py diffs them in
+ci (a step on the welfare job) and rewrites them with --write, preserving
+the thousands-separator style. The landing panel's and compiler page's
+allocation, arena-block, and beat-iteration figures are tagged; watched
+red with a perturbed number, and --write repaired it. Word-form numbers
+("four arena blocks") can't be tagged, so the one remaining instance was
+rephrased to lean on the tagged numeral beside it. The convention is
+opt-in per number — a figure that should track a golden gets the
+attribute the day it is written, and the sweep that used to re-find this
+rot becomes a grep for untagged counter-looking figures.
