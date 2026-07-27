@@ -6611,3 +6611,24 @@ exit is not optional — it leaked every buffer, and that alone killed the 1.9 m
 run.
 
 Recorded as declined-as-built rather than open: the carry route is closed.
+
+## 2026-07-26 — the other half of kq's peak, sized
+
+The shelf is worth 59% of kq's footprint. The remaining 52.5 mb is the decoded
+document, which is genuinely live, so the question there is not when to free it
+but what it costs to hold.
+
+The 1.9 mb document is 264,541 json nodes. Decoding it allocates 1,003,447
+times for 50,729,968 bytes across 49 arena blocks, and peaks at 52,543,848.
+
+    198.6 bytes per node
+    3.8 allocations per node
+
+jq holds the same document, its own machinery, and its output in 30.7 mb — about
+116 bytes per node — so kanso's representation costs roughly 1.7x jq's per node.
+The allocation count is the more suspicious of the two: a scalar node should
+cost one allocation and a container two, and 3.8 says something is allocating
+per field or per element beyond the node itself.
+
+Not investigated further. Recorded as the next target after the shelf, with the
+numbers to beat written down.
