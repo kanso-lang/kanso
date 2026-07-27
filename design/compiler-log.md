@@ -7655,3 +7655,17 @@ proxied. A term new to the model enters at ratio one, so its introduction
 moves no score; the floor recalibrates to 57.88 with the reason in the
 history, and only improvement from here pays. Cohort freeing now has a
 gate that can price it.
+
+## 2026-07-27 — the trend gate enforces Clay's rule: no pure regressions
+
+Clay stated the enforceable core precisely: the only thing the machine can
+enforce is that nothing gets worse without at least one other thing
+getting better — beyond that, the utility score arbitrates. The gate now
+does exactly that. A changed-golden branch where some counter worsened
+and no counter improved fails outright: that trade has no other side. A
+genuine trade passes this gate and stands before welfare, which weighs
+the sides. The name-each-worsening listing stays advisory — the sentence
+is reflection, not enforcement — replacing the earlier report-only plan,
+which graded the sentence rather than the substance. Probed both ways:
+a lone perm_allocs rise fails; the same rise beside an allocs drop
+passes to welfare's judgment.
