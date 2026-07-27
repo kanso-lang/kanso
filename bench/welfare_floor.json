@@ -8,12 +8,8 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 60.81653023134127,
+  "floor": 62.2199820879985,
   "history": [
-    {
-      "floor": 100.0,
-      "why": "baseline established at the utf-8 short-ascii fast path"
-    },
     {
       "floor": 46.33,
       "why": "rescaled: the number is an index with a ceiling of 100, not a percentage"
@@ -49,6 +45,22 @@
     {
       "floor": 60.82,
       "why": "string literals build once into permanent slots: encode allocations 18,774,865 -> 16,274,462. The +56 emitted lines are one slot global per interned literal, priced against a 2.5M-allocation cut."
+    },
+    {
+      "floor": 61.23,
+      "why": "dead buffers from proven-unique growth go to a size-classed shelf and the next collection reuses them: decode allocations 10,518,914 -> 8,941,967 with 452,550 reuses on the decode board. Rewinds flush the shelf so no entry outlives its region."
+    },
+    {
+      "floor": 61.66,
+      "why": "put growth donates through its mut path and grow caps land on shelf classes: decode allocations 8,941,967 -> 8,341,217 with 516,750 reuses, and kq's decode peak drops below jq's."
+    },
+    {
+      "floor": 100.0,
+      "why": "baseline established at the utf-8 short-ascii fast path"
+    },
+    {
+      "floor": 62.22,
+      "why": "the full stack composed: shelf reuse plus literal interning together read 8,341,214 decode and 16,259,944 encode allocations."
     }
   ]
 }

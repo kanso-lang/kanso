@@ -7023,6 +7023,27 @@ root-file local sharing an importable's name is never rewritten
 (a_locally_bound_name_is_never_rewritten, red with the exclusion stripped).
 Benches, kq, book, site: unchanged to the byte.
 
+## 2026-07-27 — the doubling trail goes to a shelf
+
+A collection grown by repeated push passes through every intermediate
+capacity, and an arena that reclaims nothing pays for the sum — the decode
+diagnosis measured the trail at three times the live data. The trail now pays
+for itself: a mut-site grow donates its outgrown buffer to a size-classed
+shelf, k_buf takes from the shelf before the arena, and rewinds flush it so
+no entry outlives the region it sits in. Uniqueness is what makes the
+donation sound, the same proof that licensed the mutation.
+
+    decode allocations   10,518,914 -> 8,341,217   (516,750 reuses)
+    kq decode peak          30.0 mb -> 27.3        (jq holds 29.2)
+    kq full peak            50.3 mb -> 48.1
+    kq large-doc peak        5.5 mb -> 5.1         (jq holds 5.0)
+    welfare                   60.82 -> 61.66, banked
+
+put's mut path grows in place and donates like push's, and grow capacities
+land exactly on shelf classes — the first cut rounded up past them and paid
+peak for it, which the measurement caught the same hour. The decode-peak row
+now reads in kq's favor by two megabytes. The buf_reuse counter pins the
+mechanism in every vein.
 ## 2026-07-27 — pop-rewind for chained loops: built, measured, declined
 
 The theory: k_beat_pop keeps a heap result's region alive, so every nested

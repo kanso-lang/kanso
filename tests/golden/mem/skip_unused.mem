@@ -19,6 +19,7 @@ utf8_zerocopy=0
 carry_dedup=0
 bytes_malloc=0
 bytes_freed=0
+buf_reuse=0
 sh_str=0
 sh_rec=0
 sh_buf=0
