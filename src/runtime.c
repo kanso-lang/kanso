@@ -3402,6 +3402,11 @@ KValue k_b_chars(KValue sv) {
     return k_list_own(items, count);
 }
 
+KValue k_b_is_desc(KValue v) {
+    if (!k_not_failure(v)) return v;
+    return k_bool(v.tag == K_DESC);
+}
+
 KValue k_b_at(KValue container, KValue index) {
     if (!k_not_failure(container)) return container;
     if (!k_not_failure(index)) return index;

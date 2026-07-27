@@ -7474,3 +7474,33 @@ program ran and printed by import order). The full battery holds: 17
 suites, book corpus, kq, vse — no legitimate program in any of them had
 been leaning on the silent tie. ch11's original sentence comes back true,
 and if the gavel lands elsewhere, an error is the cheapest thing to relax.
+
+## 2026-07-27 — the pipe spelling fuses: one tag test, then the loop
+
+The OPEN thread said spelling was in the cost model — a nested chain fused
+to twelve allocations while the pipe spelling of the same chain paid 5,975
+— and the clean fix looked like moving fusion after inference. Built and
+measured, the cheap fix turned out to be enough: a piped chain of std/list
+stages rewrites to `froot = subject; if (is_desc froot) (the original
+pipes) (the nested spelling)`, and the nested arm is exactly what try_fuse
+already flattens. A description takes the bind cascade untouched; anything
+else takes the fold. is_desc is a new internal builtin (never bare-legal at
+check time; injected only by the post-check fusion pass), one tag test in
+C, one match arm in the interpreter, and the wasm engine reaches it through
+rt_builtin's delegation for free.
+
+Measured: the 100k piped map/select/sum drops 900,033 -> 500,021
+allocations — the build-only baseline, per-element cost zero — with
+byte-identical output. Pinned by tests/golden/mem/piped_reducer.kso
+(allocs=12 at n=1000; watched red at 5,975 with the rewrite unwired). The
+playground's pipes example now exercises the transform on every engine in
+CI. Nothing else moved: 17 suites in release and debug, book corpus, kq's
+own ratchets byte-identical, welfare flat at 62.23 — the bench programs
+carry no piped chains, so the ratchets rightly saw nothing. The cost is a
+second copy of each chain's code behind the branch, which the compile
+golden will price the day a pinned program carries one.
+
+Found while measuring, already on the record elsewhere: the interpreter
+overflows on a 100k-deep fold with or without this change — the known
+depth limit, waiting on the tail-call gavel. The differential holds at
+corpus scale.

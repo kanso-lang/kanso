@@ -205,6 +205,7 @@ declare %KValue @k_closure(ptr, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
+declare %KValue @k_b_is_desc(%KValue)
 declare %KValue @k_index(%KValue, %KValue, ptr)
 declare %KValue @k_b_bytes(%KValue)
 declare %KValue @k_b_chars(%KValue)
@@ -265,8 +266,9 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 27] = [
+const BUILTIN_CALLS: [(&str, usize); 28] = [
     ("at", 2),
+    ("is_desc", 1),
     ("append", 2),
     ("find2", 4),
     ("find2_below", 5),
