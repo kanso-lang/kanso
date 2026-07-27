@@ -109,11 +109,12 @@ impl Beats {
     }
 }
 
-pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
+pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &MutSites) -> Beats {
+    let chains = chain_groups(program, mut_sites);
     let mut ids = HashMap::new();
     let mut carried = HashMap::new();
     let mut next = 0;
-    for (name, arity, v) in classify_all(program, inference) {
+    for (name, arity, v) in classify_all(program, inference, mut_sites, &chains) {
         if v == Verdict::Beat {
             ids.insert((name, arity), next);
             next += 1;
@@ -129,7 +130,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
         }
     }
     let mut demoted = HashSet::new();
-    for (callee, callers, positions) in demotable_entries(program, inference) {
+    for (callee, callers, positions) in demotable_entries(program, inference, mut_sites, &chains) {
         ids.insert(callee.clone(), next);
         next += 1;
         for caller in callers {
@@ -139,7 +140,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
             carried.insert(callee, positions);
         }
     }
-    for (name, arity, v) in classify_all(program, inference) {
+    for (name, arity, v) in classify_all(program, inference, mut_sites, &chains) {
         if let Verdict::CarryBeat { positions } = v {
             let g = (name, arity);
             if !ids.contains_key(&g) {
@@ -177,6 +178,8 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference) -> Beats {
 fn demotable_entries(
     program: &Program,
     inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
 ) -> Vec<(Group, Vec<Group>, Vec<usize>)> {
     let allocating = alloc_groups(program);
     let mut cyclic: HashSet<Group> = HashSet::new();
@@ -198,13 +201,13 @@ fn demotable_entries(
         cyclic.extend(cluster);
     }
     let mut out = Vec::new();
-    for (name, arity, v) in classify_all(program, inference) {
+    for (name, arity, v) in classify_all(program, inference, mut_sites, chains) {
         if v != Verdict::OutsideTailCall {
             continue;
         }
         let group = (name.clone(), arity);
         // beat-worthy apart from the entry? crossing args become carried
-        let crossing = crossing_positions(program, inference, &name, arity);
+        let crossing = crossing_positions(program, inference, mut_sites, chains, &name, arity);
         if crossing.len() > K_CARRY_MAX
             || crossing.iter().any(|&p| {
                 let set = group_param_set(program, inference, &name, arity, p);
@@ -272,11 +275,129 @@ fn accumulator_grows(program: &Program, name: &str, arity: usize, position: usiz
     false
 }
 
+/// Sites where a push/append/put was proven unique, keyed by source
+/// position — the linearity analysis's output, threaded in so the chain
+/// test below can insist on pointer identity rather than merely on type.
+pub type MutSites = std::collections::HashSet<(String, usize, usize)>;
+
+/// Groups whose every arm returns the very object that arrived as its first
+/// parameter — pointer identity through mut appends, folds, conditionals and
+/// calls to other chaining groups. A greatest fixpoint: assume every group
+/// with a named first parameter chains it, then remove any an arm disproves.
+///
+/// Identity is what makes a bytes accumulator safe to thread across a
+/// rewind. The header arrived at the loop's entry, so it lives below the
+/// mark; a mut append returns its argument, so the pointer never changes;
+/// and growth allocates outside the arena, so the payload is never above the
+/// mark either. A fresh value at the same type has none of those properties,
+/// which is why the test is identity and not the type set.
+fn chain_groups(program: &Program, mut_sites: &MutSites) -> HashSet<Group> {
+    let mut chains: HashSet<Group> = program
+        .fns
+        .iter()
+        .filter(|d| !d.params.is_empty())
+        .map(|d| (d.name.clone(), d.params.len()))
+        .collect();
+    loop {
+        let mut changed = false;
+        let drop: Vec<Group> = chains
+            .iter()
+            .filter(|(name, arity)| {
+                !program.fns.iter().filter(|d| d.name == *name && d.params.len() == *arity).all(
+                    |d| match d.params.first() {
+                        Some(Pattern::Var(own, _)) => {
+                            let locals = local_binds(d);
+                            tail_exprs(d.body.last())
+                                .iter()
+                                .all(|t| is_chain(t, own, d, &locals, mut_sites, &chains))
+                        }
+                        _ => false,
+                    },
+                )
+            })
+            .cloned()
+            .collect();
+        for k in drop {
+            if std::env::var("KANSO_CHAIN_REPORT").is_ok() {
+                eprintln!("chain: dropped {}/{}", k.0, k.1);
+            }
+            chains.remove(&k);
+            changed = true;
+        }
+        if !changed {
+            return chains;
+        }
+    }
+}
+
+/// The single-assignment locals of an arm, so a chain can pass through a
+/// named intermediate — a binding is pure naming, which preserves identity.
+fn local_binds(decl: &crate::ast::FnDecl) -> HashMap<&str, &Expr> {
+    decl.body
+        .iter()
+        .filter_map(|st| match st {
+            Stmt::Bind { pattern: Pattern::Var(n, _), expr } => Some((n.as_str(), expr)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn is_chain(
+    e: &Expr,
+    own: &str,
+    decl: &crate::ast::FnDecl,
+    locals: &HashMap<&str, &Expr>,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
+) -> bool {
+    match e {
+        Expr::Ident(p, _) => {
+            p == own
+                || locals
+                    .get(p.as_str())
+                    .is_some_and(|e2| is_chain(e2, own, decl, locals, mut_sites, chains))
+        }
+        Expr::App { head, args, span, .. } => match head.as_ref() {
+            Expr::Ident(n, _)
+                if matches!(n.as_str(), "append" | "builtin_append")
+                    && args.len() == 2
+                    && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
+            {
+                is_chain(&args[0], own, decl, locals, mut_sites, chains)
+            }
+            Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
+                is_chain(&args[1], own, decl, locals, mut_sites, chains)
+                    && is_chain(&args[2], own, decl, locals, mut_sites, chains)
+            }
+            Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold") && args.len() == 3 => {
+                let folder_chains = match &args[2] {
+                    Expr::Lambda { params, body, .. } => params
+                        .first()
+                        .is_some_and(|(p, _)| is_chain(body, p, decl, locals, mut_sites, chains)),
+                    _ => false,
+                };
+                folder_chains && is_chain(&args[1], own, decl, locals, mut_sites, chains)
+            }
+            Expr::Ident(f, _) if chains.contains(&(f.clone(), args.len())) => {
+                args.first().is_some_and(|a| is_chain(a, own, decl, locals, mut_sites, chains))
+            }
+            _ => false,
+        },
+        Expr::Guard { early, rest, .. } => {
+            is_chain(early, own, decl, locals, mut_sites, chains)
+                && matches!(rest.last(), Some(Stmt::Expr(t)) if is_chain(t, own, decl, locals, mut_sites, chains))
+        }
+        _ => false,
+    }
+}
+
 /// The self-tail argument positions the boundary rule rejects — the ones a
 /// carry beat must evacuate. Sorted and deduplicated.
 fn crossing_positions(
     program: &Program,
     inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
     name: &str,
     arity: usize,
 ) -> Vec<usize> {
@@ -292,7 +413,9 @@ fn crossing_positions(
                 continue;
             }
             for (i, arg) in args.iter().enumerate() {
-                if !arg_ok(program, inference, decl, di, name, arity, i, arg) && !out.contains(&i) {
+                if !arg_ok(program, inference, mut_sites, chains, decl, di, name, arity, i, arg)
+                    && !out.contains(&i)
+                {
                     out.push(i);
                 }
             }
@@ -552,20 +675,28 @@ fn sccs_of(adj: &[Vec<usize>]) -> Vec<Vec<usize>> {
 /// Every self-recursive group's verdict, one line each, sorted — printed by
 /// the toolchain under KANSO_BEAT_REPORT so a real workload can be measured
 /// before the next rung is built.
-pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
-    let demoted: HashSet<Group> =
-        demotable_entries(program, inference).into_iter().map(|(callee, _, _)| callee).collect();
+pub fn report(
+    program: &Program,
+    inference: &infer::Inference,
+    mut_sites: &MutSites,
+) -> Vec<String> {
+    let chains = chain_groups(program, mut_sites);
+    let demoted: HashSet<Group> = demotable_entries(program, inference, mut_sites, &chains)
+        .into_iter()
+        .map(|(callee, _, _)| callee)
+        .collect();
     let clustered: HashSet<Group> = eligible_clusters(program, inference)
         .into_iter()
         .flat_map(|(members, _)| members)
         .collect();
-    let mut rows: Vec<(String, usize, Verdict)> = classify_all(program, inference)
-        .into_iter()
-        .filter(|(name, arity, _)| {
-            let g = (name.clone(), *arity);
-            !clustered.contains(&g) && !demoted.contains(&g)
-        })
-        .collect();
+    let mut rows: Vec<(String, usize, Verdict)> =
+        classify_all(program, inference, mut_sites, &chains)
+            .into_iter()
+            .filter(|(name, arity, _)| {
+                let g = (name.clone(), *arity);
+                !clustered.contains(&g) && !demoted.contains(&g)
+            })
+            .collect();
     for (name, arity) in clustered.iter().chain(demoted.iter()) {
         rows.push((name.clone(), *arity, Verdict::Beat));
     }
@@ -598,19 +729,20 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
             // classify stops at the first blocker; say what else is waiting,
             // so a fix aimed at one reason is not a surprise when it lands
             let allocating = alloc_groups(program);
-            let also: Vec<String> = blockers(program, inference, &allocating, name, *arity)
-                .into_iter()
-                .filter(|b| b != v)
-                .map(|b| match b {
-                    Verdict::ArgCrosses { position } => {
-                        format!("argument {} also carries heap", position + 1)
-                    }
-                    Verdict::OutsideTailCall => "also an unbracketed entry".to_string(),
-                    Verdict::UsedAsValue => "also used as a function value".to_string(),
-                    _ => String::new(),
-                })
-                .filter(|line| !line.is_empty())
-                .collect();
+            let also: Vec<String> =
+                blockers(program, inference, mut_sites, &chains, &allocating, name, *arity)
+                    .into_iter()
+                    .filter(|b| b != v)
+                    .map(|b| match b {
+                        Verdict::ArgCrosses { position } => {
+                            format!("argument {} also carries heap", position + 1)
+                        }
+                        Verdict::OutsideTailCall => "also an unbracketed entry".to_string(),
+                        Verdict::UsedAsValue => "also used as a function value".to_string(),
+                        _ => String::new(),
+                    })
+                    .filter(|line| !line.is_empty())
+                    .collect();
             match also.is_empty() {
                 true => format!("{name}/{arity}: {fate}"),
                 false => format!("{name}/{arity}: {fate} ({})", also.join("; ")),
@@ -629,6 +761,8 @@ pub fn report(program: &Program, inference: &infer::Inference) -> Vec<String> {
 fn blockers(
     program: &Program,
     inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
     allocating: &HashSet<&str>,
     name: &str,
     arity: usize,
@@ -644,7 +778,7 @@ fn blockers(
     if !allocating.contains(name) {
         return found;
     }
-    let crossing = crossing_positions(program, inference, name, arity);
+    let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     if let Some(&position) = crossing.iter().find(|&&p| {
         let set = group_param_set(program, inference, name, arity, p);
         accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
@@ -654,7 +788,12 @@ fn blockers(
     found
 }
 
-fn classify_all(program: &Program, inference: &infer::Inference) -> Vec<(String, usize, Verdict)> {
+fn classify_all(
+    program: &Program,
+    inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
+) -> Vec<(String, usize, Verdict)> {
     let allocating = alloc_groups(program);
     let mut groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
@@ -665,7 +804,8 @@ fn classify_all(program: &Program, inference: &infer::Inference) -> Vec<(String,
     groups
         .into_iter()
         .filter_map(|(name, arity)| {
-            classify(program, inference, &allocating, &name, arity).map(|v| (name, arity, v))
+            classify(program, inference, mut_sites, chains, &allocating, &name, arity)
+                .map(|v| (name, arity, v))
         })
         .collect()
 }
@@ -703,6 +843,8 @@ fn tail_calls_to<'a>(
 fn classify(
     program: &Program,
     inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
     allocating: &HashSet<&str>,
     name: &str,
     arity: usize,
@@ -719,7 +861,7 @@ fn classify(
     if !allocating.contains(name) {
         return Some(Verdict::PureLoop);
     }
-    let crossing = crossing_positions(program, inference, name, arity);
+    let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     if !crossing.is_empty() {
         // a slot inference can't type may hide a growing accumulator
         // behind a helper call, and a byte builder rebuilt each iteration
@@ -922,6 +1064,8 @@ fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
 fn arg_ok(
     program: &Program,
     inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
     decl: &crate::ast::FnDecl,
     decl_index: usize,
     name: &str,
@@ -936,6 +1080,21 @@ fn arg_ok(
             if set & !FAIL & !THREADED == 0 {
                 return true;
             }
+        }
+    }
+    // a bytes accumulator crossing by pointer identity: the value is the one
+    // that arrived at this arm's entry, threaded through mut appends, so its
+    // header is below the mark and its growth is outside the arena. Raw
+    // bytes hold no pointers, so nothing in it can dangle across a rewind —
+    // which is why this license reads BYTES and no other heap set.
+    if let Some(Pattern::Var(own, _)) = decl.params.first() {
+        let set0 = inference.params[decl_index][0];
+        let locals = local_binds(decl);
+        if set0 != 0
+            && set0 & !FAIL & !BYTES == 0
+            && is_chain(arg, own, decl, &locals, mut_sites, chains)
+        {
+            return true;
         }
     }
     // an empty set means inference saw no resolved call site — unknown,
@@ -1027,7 +1186,10 @@ mod tests {
         // the tests assert membership; the cluster ids are irrelevant here
         let program = crate::compile("test.kso", src, true).unwrap();
         let inference = infer::infer(&program);
-        beat_loops(&program, &inference).ids.into_keys().collect()
+        beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program))
+            .ids
+            .into_keys()
+            .collect()
     }
 
     /// The report exists to say why a loop keeps the grow-only arena, and a
@@ -1038,7 +1200,7 @@ mod tests {
     fn a_second_blocker_is_reported_not_masked() {
         let src = "fn feed acc\n  step acc\n\nfn step acc\n  step (push acc 1)\n\nmain = print \"{feed []}\"\n";
         let (program, inference) = compiled(src);
-        let lines = super::report(&program, &inference);
+        let lines = super::report(&program, &inference, &crate::linear::in_place_pushes(&program));
         let step = lines.iter().find(|l| l.starts_with("step/1")).expect("step is reported");
 
         assert!(
@@ -1061,7 +1223,8 @@ mod tests {
         // it off the carry path.
         let src = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(!beats.ids.contains_key(&("collect".to_string(), 2)));
     }
@@ -1072,7 +1235,8 @@ mod tests {
         // carry evacuates it each rewind.
         let src = "main = print \"{spin 10 [0 1]}\"\n\nfn spin 0 acc\n  length acc\n\nfn spin n acc\n  a = acc[1]\n  b = acc[2]\n  spin (n - 1) [b (a + b)]\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert_eq!(beats.carried.get(&("spin".to_string(), 2)), Some(&vec![1]));
     }
@@ -1082,7 +1246,8 @@ mod tests {
         // demoted to a plain call (one bounded frame) and spin brackets.
         let src = "fn go n\n  spin n 0\n\nmain = print \"{go 3}\"\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(beats.ids.contains_key(&("spin".to_string(), 2)));
         assert!(beats.demoted.contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
@@ -1094,7 +1259,8 @@ mod tests {
         // wholly below the entry mark, safe to carry across the rewind.
         let src = "fn go f n\n  spin f n 0\n\nmain =\n  salt = (x -> x * 2)\n  print \"{go salt 5}\"\n\nfn spin f 0 acc\n  f acc\n\nfn spin f n acc\n  step = \"seen {n}\"\n  spin f (n - 1) (acc + length step)\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(beats.ids.contains_key(&("spin".to_string(), 3)));
     }
@@ -1105,7 +1271,8 @@ mod tests {
         // mark, header never mutated, safe across the rewind.
         let src = "fn go xs n\n  spin xs n 0\n\nmain =\n  base = [10 20 30]\n  print \"{go base 5}\"\n\nfn spin xs 0 acc\n  acc + length xs\n\nfn spin xs n acc\n  garbage = \"iteration {n}\"\n  spin xs (n - 1) (acc + length garbage)\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(beats.ids.contains_key(&("spin".to_string(), 3)));
     }
@@ -1117,7 +1284,8 @@ mod tests {
         // copy resets the cache, which keeps the rewind sound.
         let src = "fn go m n\n  spin m n 0\n\nmain =\n  prices = { \"a\":1 \"b\":2 }\n  print \"{go prices 3}\"\n\nfn spin m 0 acc\n  acc + length m\n\nfn spin m n acc\n  step = \"seen {n}\"\n  spin m (n - 1) (acc + length step)\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert_eq!(beats.carried.get(&("spin".to_string(), 3)), Some(&vec![0]));
     }
@@ -1135,7 +1303,7 @@ mod tests {
         clone.file = "std/list".to_string();
         program.fns.push(clone);
         let inference = infer::infer(&program);
-        let beats = beat_loops(&program, &inference);
+        let beats = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(beats.demoted.contains(&(("go".to_string(), 1), ("spin".to_string(), 2))));
     }
@@ -1147,7 +1315,8 @@ mod tests {
         // stack without bound.
         let src = "main = print \"{ping 3}\"\n\nfn ping n\n  pong n\n\nfn pong 0\n  spin 2 0\n\nfn pong n\n  ping (n - 1)\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
         let (program, inference) = compiled(src);
-        let beats = super::beat_loops(&program, &inference);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
 
         assert!(!beats.ids.contains_key(&("spin".to_string(), 2)));
         assert!(beats.demoted.is_empty());
@@ -1161,15 +1330,21 @@ mod tests {
 
     #[test]
     fn json_decode_loops_stay_conservative() {
-        // kanso-json's scanners are mutually recursive and thread record
-        // accumulators — v1 must leave all of them alone.
+        // kanso-json's scanners are mutually recursive and thread record and
+        // list accumulators — those stay out. The two encoders thread a byte
+        // builder by pointer identity, which is exactly what the chain
+        // license admits: raw bytes hold no pointers, so nothing in the
+        // accumulator can dangle across a rewind.
         let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
-        let loops = beat_loops(&program, &inference);
-        assert!(
-            loops.ids.is_empty() && loops.demoted.is_empty(),
-            "json's folds thread lists/maps and must stay ineligible, got {:?}",
-            loops.ids
+        let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+        let mut licensed: Vec<(String, usize)> = loops.ids.into_keys().collect();
+        licensed.sort();
+        assert_eq!(
+            licensed,
+            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
+            "only the byte-builder encoders may rewind; scanners threading \
+             records or lists stay on the grow-only arena"
         );
     }
 }

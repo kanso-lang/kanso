@@ -2850,7 +2850,19 @@ static int k_msort_cmp(const void* pa, const void* pb) {
 static KValue* k_map_sorted(KMap* m, long long* out_len) {
     if (!m->sorted) {
         long long n = m->len;
-        KValue* out = k_alloc(sizeof(KValue) * 2 * (n ? n : 1));
+        /* The view lives outside the arena for the same reason a builder's
+           buffer does: a below-mark map header must never hold a pointer a
+           rewind can free. That retires the registry sweep each rewind paid
+           to null exactly such pointers — with nothing arena-backed to
+           dangle, nothing registers and the sweep walks an empty table. A
+           transient map's view leaks with the map; the trade is recorded in
+           the log beside the numbers. */
+        KValue* out = malloc(sizeof(KValue) * 2 * (size_t)(n ? n : 1));
+        if (!out) { fputs("out of memory\n", stderr); exit(1); }
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            k_stat_allocs++;
+            k_stat_alloc_bytes += (long long)(sizeof(KValue) * 2 * (size_t)(n ? n : 1));
+        }
         if (n > 0) {
             long long* idx = k_alloc(sizeof(long long) * n);
             for (long long i = 0; i < n; i++) idx[i] = i;
@@ -2873,7 +2885,6 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
             m->sorted_len = 0;
         }
         m->sorted = out;
-        k_cache_reg_add(m);
     }
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;
@@ -2911,6 +2922,9 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         m->pairs[m->len * 2 + 1] = val;
         buf->used += 2;
         m->len++;
+        if (m->sorted) {
+            free(m->sorted);
+        }
         m->sorted = NULL;
         m->sorted_len = 0;
         return mv;

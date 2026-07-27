@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 57.111465117301286,
+  "floor": 60.2530542773976,
   "history": [
     {
       "floor": 100.0,
@@ -41,6 +41,10 @@
     {
       "floor": 57.11,
       "why": "byte-builder growth is malloc-backed and a mut-grow frees its predecessor: encode arena blocks 905 -> 684, the doubling trail pays for one buffer at a time. Prerequisite for the beat license on bytes-crossing loops."
+    },
+    {
+      "floor": 60.25,
+      "why": "the three encode loops rewind: a bytes accumulator crossing by pointer identity is licensed, sorted views join builder buffers outside the arena, and the registry sweep retires. Encode arena blocks 905 -> 5; kq peak 116.1 -> 77.3 mb."
     }
   ]
 }
