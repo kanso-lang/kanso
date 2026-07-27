@@ -171,6 +171,7 @@ declare i64 @k_truthy_bad()
 
 declare %KValue @k_caf_freeze(%KValue)
 declare %KValue @k_str_n(ptr, i64)
+declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
@@ -987,6 +988,7 @@ impl<'a> Backend<'a> {
                 bytes.len(),
                 ir_bytes(bytes)
             );
+            let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
         }
         out.push('\n');
         out.push_str(&self.body);
@@ -1006,9 +1008,11 @@ impl<'a> Backend<'a> {
     }
 
     fn str_const(&mut self, f: &mut FnEmit, text: &str) -> String {
+        // a literal is the same value every evaluation, so it builds once
+        // into a permanent slot instead of allocating per visit
         let (name, len) = self.intern(text);
         let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_str_n(ptr @{name}, i64 {len})"));
+        f.line(&format!("{t} = call %KValue @k_str_lit(ptr @{name}, i64 {len}, ptr @{name}_lit)"));
         t
     }
 

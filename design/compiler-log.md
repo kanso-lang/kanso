@@ -6969,6 +6969,25 @@ gap and gains its closing — the same instrument told both halves. kq's own
 README moved in kq#28 with regenerated cost goldens, since its CI builds
 against kanso main and the old counters no longer describe it.
 
+## 2026-07-27 — a literal builds once
+
+The shape counters' first find on their first day: 49.8 mb of the strings kq
+allocated while pretty-printing were the same few literals — ",\n" and a
+two-space indent — re-materialized on every evaluation, about 42 bytes per
+loop iteration across 1.2 million iterations. The rewinds reclaimed them, so
+the peak barely noticed; the allocator and the cycle counter paid full price.
+
+k_str_lit builds a literal once into a permanent slot and hands it back
+thereafter — the ascii single-character cache generalized, one slot global
+per interned literal.
+
+    encode allocations   18,774,865 -> 16,274,462
+    kq allocations        2,600,800 ->  1,066,528   (-59%)
+    kq wall, best-of-12     33.1 ms -> 28.1         (3.64x jq)
+    welfare                   60.25 -> 60.82, banked
+
+Peak moves half a megabyte; this one was churn, and the wall clock is where
+churn shows.
 ## 2026-07-27 — one function, one spelling: module loops reach the beat tier
 
 Enrollment gives every imported pub a bare-named twin so both spellings
@@ -7025,3 +7044,25 @@ land exactly on shelf classes — the first cut rounded up past them and paid
 peak for it, which the measurement caught the same hour. The decode-peak row
 now reads in kq's favor by two megabytes. The buf_reuse counter pins the
 mechanism in every vein.
+## 2026-07-27 — pop-rewind for chained loops: built, measured, declined
+
+The theory: k_beat_pop keeps a heap result's region alive, so every nested
+container completion strands its final iteration's garbage — thousands of
+small strands. A chain-licensed loop's result is its entry accumulator, so a
+k_beat_pop_chained could rewind at close by the same identity argument.
+
+Built it (runtime pop variant, Beats.chained, emission at licensed entries),
+verified all 8 kq entry sites emitted it, and measured zero — kq's peak did
+not move a tenth of a megabyte, with or without, before and after the pretty
+loops joined the beat tier. The strands the theory predicted are either
+reclaimed by the next outer iteration in practice or too small to see.
+Reverted whole.
+
+What DID move the number, found the same hour by instrumenting reclaimed
+bytes per rewind: kq's pretty printer looped through two-group tail cycles
+(pretty_elems -> elem_row-helpers -> pretty_elems), which the chain license
+never reaches — it reads self-tails, and the cluster tier still excludes
+bytes. The helpers existed only to fit the width canon, and gavel BB's return
+guards express the same loops as direct self-tails within the cap. That is a
+kq-side fix (kq#29); the compiler-side thread — extend the chain license to
+tail cycles — stays open, and VSE-shaped mutual recursion is who it is for.

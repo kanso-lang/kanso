@@ -11,10 +11,6 @@
   "floor": 61.656147427118626,
   "history": [
     {
-      "floor": 100.0,
-      "why": "baseline established at the utf-8 short-ascii fast path"
-    },
-    {
       "floor": 46.33,
       "why": "rescaled: the number is an index with a ceiling of 100, not a percentage"
     },
@@ -47,12 +43,20 @@
       "why": "the three encode loops rewind: a bytes accumulator crossing by pointer identity is licensed, sorted views join builder buffers outside the arena, and the registry sweep retires. Encode arena blocks 905 -> 5; kq peak 116.1 -> 77.3 mb."
     },
     {
+      "floor": 60.82,
+      "why": "string literals build once into permanent slots: encode allocations 18,774,865 -> 16,274,462. The +56 emitted lines are one slot global per interned literal, priced against a 2.5M-allocation cut."
+    },
+    {
       "floor": 61.23,
       "why": "dead buffers from proven-unique growth go to a size-classed shelf and the next collection reuses them: decode allocations 10,518,914 -> 8,941,967 with 452,550 reuses on the decode board. Rewinds flush the shelf so no entry outlives its region."
     },
     {
       "floor": 61.66,
       "why": "put growth donates through its mut path and grow caps land on shelf classes: decode allocations 8,941,967 -> 8,341,217 with 516,750 reuses, and kq's decode peak drops below jq's."
+    },
+    {
+      "floor": 100.0,
+      "why": "baseline established at the utf-8 short-ascii fast path"
     }
   ]
 }
