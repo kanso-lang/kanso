@@ -6424,3 +6424,24 @@ So the four stay on that ground alone, and the rule is narrower than first
 written: an annotation restating the evidence goes; an annotation *restricting*
 below what use would permit stays, because it is the only kind that says
 something the program does not already say.
+
+## 2026-07-26 — POSTSCRIPT to the typeset entries: the ruling overtook them
+
+The two entries above were written before Clay ruled that a record field may
+carry no type at all. They argued about which annotations earn their place on a
+field, and that question is closed — none do, and declaring one is now an
+error.
+
+What survives is the part that was never about fields. A *named* typeset is
+still a declaration: `type state archived draft published`, one line, members
+alphabetical. It says the set is closed at three, which is a restriction the
+program does not otherwise contain and inference cannot derive, since a set
+nobody has yet exceeded looks exactly like a set nobody can exceed. ch03 now
+teaches that form, with the field left bare.
+
+So the reasoning holds and its subject moved: a written type earns its keep by
+*restricting* below what use would permit, and the only place left to write one
+is on a type of its own rather than on a field. The entries stay as they were
+written, with this note after them, because the log records what was thought at
+the time and the thinking was not wrong — it was aimed at a construct that has
+since gone.
