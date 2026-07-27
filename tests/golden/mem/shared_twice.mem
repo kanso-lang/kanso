@@ -17,3 +17,5 @@ append_fast=0
 append_grow=0
 utf8_zerocopy=0
 carry_dedup=0
+bytes_malloc=0
+bytes_freed=0

@@ -54,6 +54,8 @@ static long long k_stat_append_fast = 0;
 static long long k_stat_append_grow = 0;
 static long long k_stat_utf8_zerocopy = 0;
 static long long k_stat_carry_dedup = 0;
+static long long k_stat_bytes_malloc = 0;
+static long long k_stat_bytes_freed = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -206,13 +208,13 @@ static void k_stats_dump(void) {
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
         "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
         "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
-        "utf8_zerocopy=%lld\ncarry_dedup=%lld\n",
+        "utf8_zerocopy=%lld\ncarry_dedup=%lld\nbytes_malloc=%lld\nbytes_freed=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
-        k_stat_carry_dedup);
+        k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
 }
 
 static void k_arena_push(size_t need) {
@@ -3499,12 +3501,35 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;
-    KBuf* buf = k_alloc(sizeof(KBuf) + (size_t)cap);
+    /* A builder's buffer lives outside the arena. Growth doubles, and an
+       allocator that reclaims nothing pays for every intermediate size a
+       builder passes through rather than the size it reached; malloc plus a
+       free on the owned path pays for exactly one buffer at a time. A
+       builder's cap is positive only for buffers made here, which is what
+       makes the free below safe: uniqueness is proven at mut sites, so no
+       other header shares the storage being released. */
+    KBuf* buf = malloc(sizeof(KBuf) + (size_t)cap);
+    if (!buf) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
+        k_stat_bytes_malloc++;
+    }
     buf->cap = cap;
     buf->used = a->len + n;
     unsigned char* data = (unsigned char*)(buf + 1);
     memcpy(data, a->data, (size_t)a->len);
     memcpy(data + a->len, src, (size_t)n);
+    if (mutate) {
+        if (a->cap) {
+            free(((KBuf*)a->data) - 1);
+            if (__builtin_expect(k_stats_on > 0, 0)) k_stat_bytes_freed++;
+        }
+        a->len += n;
+        a->data = data;
+        a->cap = cap;
+        return acc;
+    }
     return k_bytes_owned(a->len + n, data, cap);
 }
 

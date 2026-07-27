@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 56.47516027136179,
+  "floor": 57.111465117301286,
   "history": [
     {
       "floor": 100.0,
@@ -37,6 +37,10 @@
     {
       "floor": 56.48,
       "why": "unused runtime declares no longer ride into every program: emitted lines 1,903 -> 1,488, 27% below the original baseline. This is the fix for the twice-flagged emitted-lines regression, downward rather than re-priced."
+    },
+    {
+      "floor": 57.11,
+      "why": "byte-builder growth is malloc-backed and a mut-grow frees its predecessor: encode arena blocks 905 -> 684, the doubling trail pays for one buffer at a time. Prerequisite for the beat license on bytes-crossing loops."
     }
   ]
 }
