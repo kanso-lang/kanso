@@ -1,0 +1,4 @@
+fn greet name mood
+  "hello {name}, feeling {mood}"
+
+pub play = print (greet "mai")

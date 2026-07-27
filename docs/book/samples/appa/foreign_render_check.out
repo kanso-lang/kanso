@@ -1,0 +1,4 @@
+error[ownership]: an arm of `to_string` must match on a type this module defines — rendering of primitives and sentinels is fixed; wrap the value in your own type
+  --> foreign_render_check.kso:5:4
+   5 | fn to_string none
+          ^

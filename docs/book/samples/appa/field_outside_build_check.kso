@@ -1,0 +1,8 @@
+type cart
+  owner
+  items
+
+pub play =
+  basket = cart "mai" []
+  basket.items = ["dango"]
+  print "{basket}"

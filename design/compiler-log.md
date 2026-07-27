@@ -7312,3 +7312,21 @@ concrete target is automating the enumerable's hand-written per-shape arms,
 a maintainability win the enumerable_arms parity test guards today; it files
 with the tracked compiler-refactor pass. The ledger entry stays queued on
 the public page until Clay ratifies this reframing.
+
+## 2026-07-27 — the diagnostics catalog catches up with the compiler
+
+A census of Diagnostic::new sites and the error corpus found the compiler
+speaking fifteen diagnostic kinds while appendix a cataloged nine. The six
+missing families — arity, naming, none, build, ownership, runtime — each
+gain a section with a worked sample run through the real toolchain, and the
+closing enumeration now names all fifteen (thirteen never survive check;
+runtime and endpoint are the residue only running reveals). arity had no
+home in the error corpus either; arity_mismatch.kso adds one. The
+exhaustive kind stays out of the catalog deliberately: it is gated behind
+KANSO_EXHAUSTIVE, the none-campaign experiment Clay has not started, and a
+catalog should document the surface a reader actually meets.
+
+Found by the sweep and fixed in passing: length accepts a map everywhere —
+appendix b documents it, the maps sample proves it — but its runtime
+refusal said "a list or string". The message now names all three, on both
+engines, with the wasm build refreshed.

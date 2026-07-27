@@ -1,0 +1,4 @@
+error[build]: `basket.items = ...` writes a field, and only a `build` block may do that
+  --> field_outside_build_check.kso:7:10
+   7 |   basket.items = ["dango"]
+                ^

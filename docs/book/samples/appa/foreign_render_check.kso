@@ -1,0 +1,6 @@
+xs = [1 2]
+
+pub play = print "n: {xs[5]}"
+
+fn to_string none
+  "MISSING"

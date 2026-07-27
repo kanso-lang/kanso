@@ -1,0 +1,4 @@
+pub play = print "{fresh 3}"
+
+fn fresh n
+  n < 10
