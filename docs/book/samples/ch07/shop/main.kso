@@ -1,0 +1,3 @@
+import "teahouse"
+
+print "dango costs {teahouse/price "dango"}"

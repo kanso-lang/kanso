@@ -1,0 +1,4 @@
+error[opacity]: `base_price` is private to module `teahouse` — only pub names cross an import
+  --> peek_check.kso:3:33
+   3 | print "the wholesale number is {teahouse/base_price}"
+                                       ^
