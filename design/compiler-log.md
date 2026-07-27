@@ -7295,3 +7295,20 @@ tested lib/json alone. Both libraries' suites gate now.
 Fused-scan stop for take/drop remains the one genuinely queued mechanism,
 and it is YAGNI until a measurement names it: take chains stay on cursors,
 which are lazy and bounded already.
+
+## 2026-07-27 — ledger item 6 measured: FBIP's runtime headroom here is thin
+
+The queued pairing was FBIP (in-place as a guarantee) plus SpecConstr
+(call-pattern specialization), and a static census grounds what they would
+buy. In the emitted IR for both bench programs, the linear analysis already
+selects the mut variant at 48 of 57 mutation sites — push 11/15, append
+33/34, put 4/8 — and the cost counters say the hot loops all ride the fast
+paths (append_fast carries the encode board; the plain sites are setup code
+or genuinely shared values FBIP could not convert either). FBIP's value on
+this corpus is therefore not speed: it is turning "discovered in-place"
+into "stated and checked," which is ownership-annotation surface — language
+design, so it waits for dialog rather than an autonomous build. SpecConstr's
+concrete target is automating the enumerable's hand-written per-shape arms,
+a maintainability win the enumerable_arms parity test guards today; it files
+with the tracked compiler-refactor pass. The ledger entry stays queued on
+the public page until Clay ratifies this reframing.
