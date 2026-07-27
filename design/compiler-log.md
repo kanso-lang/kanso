@@ -5955,3 +5955,77 @@ order it implies is: teach the analyses to consume inferred field types, then
 drop the annotations from performance-critical code — not the other way around.
 `lib/` keeps its annotations until then, and the welfare ratchet would not have
 caught this on its own, because the cost goldens had not been regenerated.
+
+## 2026-07-26 — COMMITTEE: the day's language changes, three lenses
+
+Clay asked for a check-in on the recent language work. Under review: bare
+record fields with inferred types, the retirement of `any`/`some`, field
+conflict reporting, dot access, `build` blocks, the constant-cycle ban, and
+`&f` on the interpreter. The committee is not here to approve.
+
+HICKEY — is anything complected that was not before?
+
+  The clear win is `some`. Two names for "unconstrained" collapsed to one
+  absence of a name, and a type whose content was "not none" stopped
+  masquerading as a type. Strictly fewer concepts, and none of them lost.
+
+  The clear worry is inferred field types, and it is not the one debated
+  today. A declared field braided nothing: `x:int` said what `x` holds and you
+  read it where it is written. An inferred field braids the type with *the
+  whole program* — to know what `x` holds you must consider every construction
+  site and every use, which are unbounded and elsewhere. That is the textbook
+  shape of complecting a value with its context. The mitigations are real (the
+  language server shows it on hover, the conflict names both sides) but they
+  are tools compensating for a property of the design, and a tool is not the
+  same as the property being absent. The honest summary: ceremony went down,
+  locality went down with it, and locality was load-bearing for reading code
+  you did not write.
+
+  `build` blocks go the other way and deserve the credit. Mutation exists in
+  exactly one construct with a beginning and an end, rather than being diffused
+  through the language as assignability. That is un-complecting.
+
+BECK — is this the simplest thing, and is anything speculative?
+
+  The conflict check is well-scoped: it fires where a local is bound straight
+  to a constructor and a parameter carries a declared type, and it claims
+  nothing beyond that. That is the simplest thing that works, and it is honest
+  about its reach.
+
+  Two objections. First, the tree now runs two regimes at once: `examples/` and
+  the book have no field annotations, `lib/` keeps all of them because the
+  escape analysis reads them. That is the same concept expressed two ways in
+  one repository, which is the duplication that actually costs — a reader
+  cannot tell whether an annotation is meaningful or vestigial. Either finish
+  teaching the analyses to consume inferred types, or put the annotations back
+  until it is finished. Living in between is the worst of the three.
+
+  Second, the welfare function. Seven terms, per-term satiation, a recorded
+  floor with a history — that is a lot of machinery built before two real
+  trades needed arbitrating. It may well pay, but it was designed rather than
+  grown, and the weights are guesses nobody has yet had cause to defend.
+
+BERNHARDT — what does the test suite actually pin?
+
+  Good: the conflict check is asserted through diagnostics a user sees, not
+  through the classifier's internals. The escape-analysis spec caught a real
+  codegen regression the moment `lib/json` lost its annotations, which is
+  exactly a test earning its keep.
+
+  Bad, and this is the one to fix: the byte-shelf spec could not fail. It was
+  written against the beat report — an internal verdict — passed with the rule
+  removed and with its replacement removed, and was caught only because
+  somebody thought to mutate the source by hand. The rule added to CLAUDE.md
+  today says to do that mutation every time, and a rule that depends on
+  remembering is the same class of thing this log has already watched fail.
+  What is missing is the automation: a mutation pass that breaks each guard and
+  asserts something goes red.
+
+THE ONE THING THE COMMITTEE AGREES ON. Structural typing came up and was
+correctly declined — two types with identical fields must stay distinguishable
+or dispatch loses the ability to tell a `celsius` from a `fahrenheit`. But the
+narrower idea underneath it survives: a keyed literal whose *nominal* type is
+inferred from the declared set, with ambiguity an error rather than a silent
+pick. That keeps identity, drops the ceremony, and the edit hazard it must be
+designed against is the one the `&` gavel already named — a type added later
+must never silently reinterpret a literal written earlier.
