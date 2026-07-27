@@ -340,14 +340,6 @@ fn short_name(path: &str) -> &str {
 /// the canonical (origin) name: patterns and typeset members are type
 /// positions, so no local binding can shadow them. Records then match by
 /// one identity no matter which spelling constructed or destructured them.
-/// A bare-enrollment clone whose name has no other arms is one function with
-/// two spellings, and the analyses that reason about self-recursion see two.
-/// Where the whole bare group is clones of a single qualified origin, every
-/// bare reference rewrites to the qualified spelling and the clones go: one
-/// group, one emission, and a module's internal recursion reads as
-/// self-recursion again. A bare name that also has local arms is a real
-/// overload union (the import-incarnation gavel) and is left alone.
-
 fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String>) {
     match p {
         ast::Pattern::Var(n, _) => {
@@ -366,7 +358,9 @@ fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String
                 out.insert(e.bind_name.clone());
             }
         }
-        ast::Pattern::IntLit(..) | ast::Pattern::StrLit(..) | ast::Pattern::Nullary(..)
+        ast::Pattern::IntLit(..)
+        | ast::Pattern::StrLit(..)
+        | ast::Pattern::Nullary(..)
         | ast::Pattern::Wildcard(..) => {}
     }
 }
@@ -440,11 +434,20 @@ fn bound_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
             bound_in_expr(lhs, out);
             bound_in_expr(rhs, out);
         }
-        ast::Expr::Int(..) | ast::Expr::Float(..) | ast::Expr::Ident(..)
+        ast::Expr::Int(..)
+        | ast::Expr::Float(..)
+        | ast::Expr::Ident(..)
         | ast::Expr::Partial(..) => {}
     }
 }
 
+/// A bare-enrollment clone whose name has no other arms is one function with
+/// two spellings, and the analyses that reason about self-recursion see two.
+/// Where the whole bare group is clones of a single qualified origin, every
+/// bare reference rewrites to the qualified spelling and the clones go: one
+/// group, one emission, and a module's internal recursion reads as
+/// self-recursion again. A bare name that also has local arms is a real
+/// overload union (the import-incarnation gavel) and is left alone.
 pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
     use std::collections::{HashMap, HashSet};
     let mut by_name: HashMap<&str, (bool, HashSet<&str>)> = HashMap::new();
@@ -513,9 +516,9 @@ pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
 
 fn alias_stmt(stmt: &mut ast::Stmt, aliases: &std::collections::HashMap<String, String>) {
     match stmt {
-        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) | ast::Stmt::Set { value: expr, .. } => {
-            alias_expr(expr, aliases)
-        }
+        ast::Stmt::Bind { expr, .. }
+        | ast::Stmt::Expr(expr)
+        | ast::Stmt::Set { value: expr, .. } => alias_expr(expr, aliases),
     }
 }
 

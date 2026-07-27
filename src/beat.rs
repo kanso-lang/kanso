@@ -157,12 +157,8 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // rewind is a pointer reset, and a module loop that earned one keeps
     // it. Groups with a synthetic arm stay out of everything — a bare clone
     // is a second spelling the analyses cannot see through.
-    let has_synthetic: std::collections::HashSet<&str> = program
-        .fns
-        .iter()
-        .filter(|d| d.synthetic)
-        .map(|d| d.name.as_str())
-        .collect();
+    let has_synthetic: std::collections::HashSet<&str> =
+        program.fns.iter().filter(|d| d.synthetic).map(|d| d.name.as_str()).collect();
     let imported: std::collections::HashSet<&str> = program
         .fns
         .iter()
@@ -1382,13 +1378,10 @@ mod tests {
             "import \"std/list\"\n\npub fn label xs\n  first = list/first xs\n  \"head {first}\"\n",
         )
         .expect("fixture writes");
-        std::fs::write(dir.join("main.kso"), "print \"{label [7 8 9]}\"\n").expect("fixture writes");
+        std::fs::write(dir.join("main.kso"), "print \"{label [7 8 9]}\"\n")
+            .expect("fixture writes");
         let program = crate::compile_module(&dir, false).unwrap();
-        let label = program
-            .fns
-            .iter()
-            .find(|d| d.name == "label")
-            .expect("label compiles");
+        let label = program.fns.iter().find(|d| d.name == "label").expect("label compiles");
         let mut idents = std::collections::HashSet::new();
         for stmt in &label.body {
             collect_idents(stmt, &mut idents);
