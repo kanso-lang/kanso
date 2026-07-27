@@ -1,0 +1,164 @@
+---
+layout: book
+title: "chapter 12—sequences"
+description: "what an adapter chain actually is: a recipe value pulled one element at a time, consumers that stop at the answer, infinite generators bounded by whoever consumes them, and the single flat loop the compiler fuses it all into."
+extra_css: /book/book.css
+---
+<span class="eyebrow">chapter 12</span>
+<h1>sequences</h1>
+
+<p>chapter 02 handed you the list verbs and chapter 05 gave you the pipe to chain them. this chapter is about what a chain actually <em>is</em>. the short version: <code>list/map</code> does not return a list, consumers do all the work, and the work happens one element at a time. everything else on this page falls out of those three facts.</p>
+
+<h2>a recipe, not a result</h2>
+
+<p>bind an adapter's result to a name and print it, and the value tells you what it is:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">recipe.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+xs <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  recipe <span class="o">=</span> <span class="f">list/map</span> xs (n <span class="o">-&gt;</span> n <span class="o">*</span> <span class="n">10</span>)
+  <span class="f">print</span> <span class="s">"the recipe: <span class="i">{recipe}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"the result: <span class="i">{list/to_list recipe}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run recipe.kso</div>
+    <pre><code>the recipe: list/mapped &lt;fn&gt; list/cursor 1 [1 2 3]
+the result: [10 20 30]</code></pre>
+  </div>
+</div>
+
+<p>the first print shows a small record—an arm holding your function and a cursor over the source—that <em>describes</em> the mapping without performing it. no multiplication has happened yet. this should feel familiar: chapter 05's io values describe an effect the executor performs later, and an adapter describes a traversal a consumer performs later. <code>list/to_list</code> is the consumer that realizes the recipe into an ordinary list, and it is the usual last step before printing.</p>
+
+<p>the shapes the recipe is made of—the cursor, the arms—belong to <code>std/list</code>'s own machinery. you will see them in rendered output and can otherwise leave them alone.</p>
+
+<h2>pull, one element at a time</h2>
+
+<p>because an adapter is a recipe, composing adapters costs nothing, and the source can be infinite. <code>list/naturals</code> counts 1, 2, 3, … forever; nothing about writing it down runs forever, because nothing runs at all until a consumer pulls:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">bounded.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  firsts <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/take</span> list/naturals <span class="n">5</span>)
+  squares <span class="o">=</span> <span class="f">list/map</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n)
+  <span class="f">print</span> <span class="s">"<span class="i">{firsts}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/take squares 4)}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run bounded.kso</div>
+    <pre><code>[1 2 3 4 5]
+[1 4 9 16]</code></pre>
+  </div>
+</div>
+
+<p>when <code>to_list</code> pulls, each element flows through the whole chain before the next is touched: the fourth natural is squared and delivered, then the pull stops, because <code>take</code> said four. no intermediate list of squares ever exists—there is no such list to build, only a recipe that was asked four times. an unbounded consumer on an unbounded generator is a program that runs forever, which in kanso is a legal thing to write; <code>take</code> is how you say where the end is.</p>
+
+<h2>consumers stop at the answer</h2>
+
+<p>some consumers do not need the whole sequence, and they do not take it. <code>find</code>, <code>all?</code>, and <code>any?</code> pull until the answer is settled and return on the spot:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">stops.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  found <span class="o">=</span> <span class="f">list/find</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">*</span> n <span class="o">&gt;</span> <span class="n">50</span>)
+  any_big <span class="o">=</span> <span class="f">list/any?</span> list/naturals (n <span class="o">-&gt;</span> n <span class="o">&gt;</span> <span class="n">3</span>)
+  <span class="f">print</span> <span class="s">"<span class="i">{found}</span> <span class="i">{any_big}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run stops.kso</div>
+    <pre><code>8 true</code></pre>
+  </div>
+</div>
+
+<p>both lines consume <code>naturals</code>, and both programs finish. <code>find</code> squared eight numbers, saw 64 clear the bar, and stopped; <code>any?</code> stopped at 4. a predicate that is never satisfied over an infinite source still runs forever—the language cannot know your predicate's future—but a satisfiable question over an infinite sequence is answered in finite time.</p>
+
+<h2>maps out of sequences</h2>
+
+<p>a family of consumers builds maps instead of scalars. <code>tally</code> counts occurrences; <code>group_by</code> files each element under a key of your choosing:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">buckets.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+orders <span class="o">=</span> [<span class="s">"oat"</span> <span class="s">"soy"</span> <span class="s">"oat"</span> <span class="s">"whole"</span> <span class="s">"oat"</span>]
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">print</span> <span class="s">"tally <span class="i">{list/tally orders}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"letters <span class="i">{list/group_by orders (s -&gt; s[1])}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run buckets.kso</div>
+    <pre><code>tally { "oat":3 "soy":1 "whole":1 }
+letters { "o":["oat" "oat" "oat"] "s":["soy"] "w":["whole"] }</code></pre>
+  </div>
+</div>
+
+<p><code>index_by</code> and <code>to_h</code> round out the family, and all four share one collision rule: when two elements land on the same key, the last write wins—the same rule <code>put</code> follows, so a map built by a consumer behaves like the map you would have built by hand.</p>
+
+<h2>the chain compiles to one loop</h2>
+
+<p>chapter 10 introduced the counters. point them at a chain:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">fused.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">fn</span> <span class="f">build</span> <span class="n">0</span> acc
+  <span class="f">acc</span>
+
+<span class="k">fn</span> <span class="f">build</span> n acc
+  <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  xs <span class="o">=</span> <span class="f">build</span> <span class="n">1000</span> []
+  tripled <span class="o">=</span> <span class="f">list/map</span> xs (n <span class="o">-&gt;</span> n <span class="o">*</span> <span class="n">3</span>)
+  big <span class="o">=</span> <span class="f">list/select</span> tripled (n <span class="o">-&gt;</span> n <span class="o">&gt;</span> <span class="n">150</span>)
+  <span class="f">print</span> <span class="s">"kept <span class="i">{list/sum big}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso run fused.kso</div>
+    <pre><code>allocs=12
+alloc_bytes=43936
+arena_blocks=1
+perm_allocs=1
+beat_iters=0
+thunk_allocs=0
+thunk_forces=0
+thunk_evals=0
+thunk_frees=0
+thunk_escaped=0
+thunk_live_exit=0
+el_parses=0
+ryu_renders=0
+utf8_bytes=0
+find2_calls=0
+append_fast=0
+append_grow=0
+utf8_zerocopy=0
+carry_dedup=0
+bytes_malloc=0
+bytes_freed=0
+buf_reuse=0
+sh_str=64
+sh_rec=0
+sh_buf=43728
+sh_map=0
+sh_bytes=0
+kept 1497675</code></pre>
+  </div>
+</div>
+
+<p>twelve allocations, and the building of the thousand-element source accounts for them. the map, the select, and the sum together added <em>zero</em>—the compiler fused the nested chain into one flat loop whose body multiplies, tests, and adds, with no recipe records and no per-element machinery at all. laziness is the semantics; fusion is the compiler noticing that a chain consumed on the spot never needs the recipe to exist. writing the obvious thing gets you the allocation-free loop.</p>
+
+<h2>what to remember</h2>
+
+<ul>
+<li>an adapter (<code>map</code>, <code>select</code>, <code>reject</code>, <code>take</code>, <code>drop</code>, <code>zip</code>) returns a recipe, not a list. a consumer forces it.</li>
+<li>elements flow one at a time through the whole chain. no intermediate collections exist.</li>
+<li>generators (<code>naturals</code>, <code>repeat</code>, <code>cycle</code>, <code>iterate</code>) are infinite; consumers bound them. <code>find</code>, <code>all?</code>, and <code>any?</code> stop at the answer.</li>
+<li>the map builders (<code>tally</code>, <code>group_by</code>, <code>index_by</code>, <code>to_h</code>) resolve key collisions the way <code>put</code> does: last write wins.</li>
+<li><code>list/to_list</code> realizes a recipe. reach for it when a chain's result needs to be a plain list—usually right before printing.</li>
+<li>a nested chain ending in a consumer fuses into one flat loop. the counters can prove it to you.</li>
+</ul>

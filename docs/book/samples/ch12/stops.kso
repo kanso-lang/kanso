@@ -1,0 +1,6 @@
+import "std/list"
+
+pub play =
+  found = list/find list/naturals (n -> n * n > 50)
+  any_big = list/any? list/naturals (n -> n > 3)
+  print "{found} {any_big}"

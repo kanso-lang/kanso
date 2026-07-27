@@ -212,47 +212,71 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 <p>a deterministic language has deterministic costs. run any compiled binary with <code>KANSO_COUNTERS=1</code> and, instead of how long it took, the runtime tells you what it <em>did</em>. take a program small enough to check by eye: build a thousand-element list one <code>push</code> at a time, then sum it.</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">samples/ch10/counters.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">build</span> <span class="n">0</span> acc
-  acc
+  <div class="code-panel-title">counters.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
+
+<span class="k">fn</span> <span class="f">build</span> <span class="n">0</span> acc
+  <span class="f">acc</span>
 
 <span class="k">fn</span> <span class="f">build</span> n acc
   <span class="f">build</span> (n <span class="o">-</span> <span class="n">1</span>) (<span class="f">push</span> acc n)
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{sum (build 1000 [])}</span>"</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{list/sum (build 1000 [])}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">KANSO_COUNTERS=1 ./counters</div>
-    <pre><code>allocs=29
-alloc_bytes=33232
+    <div class="code-panel-title">KANSO_COUNTERS=1 kanso run counters.kso</div>
+    <pre><code>allocs=12
+alloc_bytes=43936
 arena_blocks=1
-perm_allocs=0
+perm_allocs=1
 beat_iters=0
+thunk_allocs=0
+thunk_forces=0
+thunk_evals=0
+thunk_frees=0
+thunk_escaped=0
+thunk_live_exit=0
+el_parses=0
+ryu_renders=0
+utf8_bytes=0
+find2_calls=0
+append_fast=0
+append_grow=0
+utf8_zerocopy=0
+carry_dedup=0
+bytes_malloc=0
+bytes_freed=0
+buf_reuse=0
+sh_str=64
+sh_rec=0
+sh_buf=43728
+sh_map=0
+sh_bytes=0
 sum 500500</code></pre>
   </div>
 </div>
 
-<p>a thousand pushes cost twenty-nine allocations. not "about twenty-nine." not "twenty-nine on my laptop." twenty-nine—run it again, run it on a different chip, a loaded cpu, a cold cache, and all five of those integers come back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
+<p>a thousand pushes cost twelve allocations. not "about twelve." not "twelve on my laptop." twelve—run it again, run it on a different chip, a loaded cpu, a cold cache, and every one of those integers comes back identical. these aren't measurements with error bars. they're facts about the program, as reproducible as its printed output, because the list's growth policy is fixed and it extends its one owner in place until it has to double.</p>
 
 <p>now point the same instrument at the gauntlet:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">KANSO_COUNTERS=1 ./jsonbench</div>
-  <pre><code>allocs=14799465
-alloc_bytes=640242688
-arena_blocks=5
-perm_allocs=1
+  <pre><code>allocs=8341214
+alloc_bytes=489854112
+arena_blocks=4
+perm_allocs=8
 beat_iters=151
 decoded 150 times, checksum 24000</code></pre>
 </div>
 
-<p>two of those integers tell the memory story cleanly. <code>arena_blocks=5</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches five blocks of scratch space, a hundred and fifty decodes touch the same five, because each decode hands its arena back before the next begins. <code>beat_iters=151</code> is one rewind per decode plus one for the program itself, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
+<p>two of those integers tell the memory story cleanly. <code>arena_blocks=4</code> across a hundred and fifty decodes is the flat-memory guarantee written as a constant: one decode touches four blocks of scratch space, a hundred and fifty decodes touch the same four, because each decode hands its arena back before the next begins. <code>beat_iters=151</code> is one rewind per decode plus one for the program itself, on the record. and because none of these five numbers ever move, ci writes them down and diffs against the file:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">bench/cost_golden.txt</div>
-  <pre><code>allocs=14799465
-alloc_bytes=640242688
-arena_blocks=5
-perm_allocs=1
+  <pre><code>allocs=8341214
+alloc_bytes=489854112
+arena_blocks=4
+perm_allocs=8
 beat_iters=151</code></pre>
 </div>
 

@@ -112,7 +112,7 @@ PANEL = re.compile(
 # the recorded .out for that sample, or the page is quoting a compiler that
 # no longer exists
 OUT_PANEL = re.compile(
-    r'(<div class="code-panel-title">kanso (?:run|check|test|build)[^<]*?'
+    r'(<div class="code-panel-title">(KANSO_COUNTERS=1 )?kanso (?:run|check|test|build)[^<]*?'
     r'([a-z_0-9/]+)\.kso[^<]*</div>\s*<pre><code>)(.*?)(</code></pre>)',
     re.S,
 )
@@ -170,7 +170,11 @@ def main():
 
         def fix_out(m):
             nonlocal drift
-            base = m.group(2).split("/")[-1]
+            base = m.group(3).split("/")[-1]
+            # a KANSO_COUNTERS=1 title records the counter dump, which book
+            # samples keep under the _counters suffix
+            if m.group(2):
+                base += "_counters"
             hits = []
             for root, _, files in os.walk(sample_dir):
                 for f in files:
@@ -179,12 +183,12 @@ def main():
             if len(hits) != 1:
                 return m.group(0)
             recorded = open(hits[0]).read()
-            if strip_tags(m.group(3)).rstrip("\n") == recorded.rstrip("\n"):
+            if strip_tags(m.group(4)).rstrip("\n") == recorded.rstrip("\n"):
                 return m.group(0)
             drift += 1
             print(f"{'rewrote' if write else 'drifted'}: {ch} :: {base}.out")
             if write:
-                return m.group(1) + render_output(recorded) + m.group(4)
+                return m.group(1) + render_output(recorded) + m.group(5)
             return m.group(0)
 
         updated = OUT_PANEL.sub(fix_out, updated)

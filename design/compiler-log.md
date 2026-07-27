@@ -7330,3 +7330,34 @@ Found by the sweep and fixed in passing: length accepts a map everywhere —
 appendix b documents it, the maps sample proves it — but its runtime
 refusal said "a list or string". The message now names all three, on both
 engines, with the wasm build refreshed.
+
+## 2026-07-27 — chapter 12: sequences; the counters panels tell the truth again
+
+The book taught every list verb and never taught what a chain is. Chapter 12
+now does — recipes not results, the pull, consumers that stop, the map
+builders, and the fused loop proven by a counters panel — appended after
+modules the way ch11 itself was appended, so nothing renumbers. Clay may
+re-slot or cut it; the loop's charter says improve the docs, and this was
+the largest gap left.
+
+Writing it surfaced two rot sites and one compiler gap. The rot: ch10's
+counters panel had never been machine-synced (its path-prefixed title dodged
+the panel matcher, and the counters-dump output had no sync rule at all), so
+the page still showed `main =`, bare `sum`, and allocs=29 from an old
+compiler — reality is `pub play`, `list/sum`, and allocs=12. book_panels now
+recognizes a `KANSO_COUNTERS=1 kanso run x.kso` title and syncs it against
+`x_counters.out`; both ch10 panels retitled into the machinery, and the
+gauntlet panel's hand-kept numbers trued to the current golden (8,341,214
+allocs, four arena blocks — the page had fourteen million and five).
+
+The gap, measured: the pipe spelling of a chain does not fuse. try_fuse
+matches `piped: false`, and rewriting `x . list/map f` blindly would break
+the case where x is a description (the pipe is a bind there, not an
+application). Nested spelling: 12 allocs for a thousand-element
+map/select/sum. Pipe spelling: 5,975. The house style is the pipe, so the
+gap is real and wants a set-aware fusion pass (fusion currently runs before
+inference). Appendix b's fusion sentence was corrected to say what is true
+today; the chapter's counters sample uses the nested spelling and claims
+nothing about pipes. OPEN for design: either fusion learns the sets, or the
+pipe-vs-nested cost difference stays and the book eventually has to explain
+it — the first option is the one that keeps spelling out of the cost model.
