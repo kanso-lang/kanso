@@ -6361,3 +6361,48 @@ something already went wrong. Recorded because I had been treating a wakeup as
 a natural end-of-shift, which inverts what it is for. Only Clay arms, disarms or
 retimes it — I dropped it earlier today without being asked, which was the
 clearest instance of the whole problem.
+## 2026-07-26 — RULED: trust the editor. And what a typeset still says that inference cannot
+
+Clay, on the committee's locality objection: "we're sticking by kanso. don't
+put into the written text what the compiler can already infer and display.
+trust your editor."
+
+Settled, and recorded so it stops being relitigated. A fact the compiler
+derives does not get written down again; the editor is where a reader learns
+it. Hickey's complaint that a field's type is no longer local is answered by
+saying locality of the *text* was never the goal — locality of the *answer*
+is, and hover gives it without a second copy that can rot.
+
+WHAT THAT DOES NOT COVER, measured rather than argued. Four annotations
+survived the sweep, all of them typesets, and they are a different thing:
+
+    type task
+      status:active archived pending
+      title:null string
+
+Constructing a task with a marker that is not a member:
+
+    with the typeset     error[runtime]: field `status` of `task` takes
+                         active archived pending
+    without it           constructs fine, and fails later and elsewhere as
+                         "no overload of `label` matches these arguments"
+
+A single-type annotation restates what construction sites already establish, so
+dropping it loses nothing. A typeset does not restate — it *narrows*, to a set
+the program's use does not establish, and it does so in the direction inference
+cannot reach. Inference derives what a field IS given; a typeset declares what
+it MAY be. Those come apart whenever the permitted set is wider than today's
+evidence, which is exactly what an enumeration is for: `title:null string`
+permits a null even in a program where nothing has passed one yet, and
+inference over that program would derive `string` and reject the first null
+that arrives.
+
+The error moves too, and that is half the value. With the typeset the mistake
+is caught at the field being filled; without it the program builds a value
+nobody can use and the failure surfaces at some later call that had nothing to
+do with the error.
+
+So the four stay, and the rule the sweep should have followed is: an annotation
+that restates the evidence goes, an annotation that constrains beyond the
+evidence stays. Under Clay's ruling those are not the same kind of thing at
+all — the first is a duplicate, the second is a claim.
