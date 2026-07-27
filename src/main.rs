@@ -116,7 +116,7 @@ fn run_interpreted(program: &ast::Program) -> ExitCode {
     // the main thread's default, mirroring the oracle harness.
     std::thread::scope(|scope| {
         std::thread::Builder::new()
-            .stack_size(256 << 20)
+            .stack_size(1 << 30)
             .spawn_scoped(scope, || run_interpreted_on_stack(program))
             .expect("spawns")
             .join()

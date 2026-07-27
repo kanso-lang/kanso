@@ -8000,8 +8000,17 @@ returns the same words through its RuntimeError channel at fifty
 thousand frames, well under where its 256 MB thread would fall.
 Engines differ in how deep they can actually go — frame sizes differ,
 that window is inherent — but the report and the exit code are one.
-Pinned in tests/golden/runtime/deep_recursion.kso, asserted identical
-on both engines by the corpus harness; the appendix's error[runtime]
-entry documents the report beside the accumulator-passing fix. TRMC
-itself (raising the ceiling by compiling accumulating recursion to
-loops) stays in the ledger as the ergonomics item it is.
+The third engine had the same hole one layer down: compiled wasm
+exhausts the browser's stack as a trap that records nothing, and the
+trap fetch rendered an empty message. An unrecorded trap IS the stack
+case — the same translation native's parent makes from SIGSEGV — so
+the fetch now says the same words. The guard sits at ten thousand
+frames over a 1 GB interpreter thread (debug builds carry frames fat
+enough to fell the old 256 MB at half the old limit). Pinned in
+tests/golden/runtime/deep_recursion.kso — native and interp asserted
+identical by the corpus harness, all three engines byte-identical in
+the browser differential (82 passed, 0 failed) — and the appendix's
+error[runtime] entry documents the report beside the
+accumulator-passing fix. TRMC itself (raising the ceiling by compiling
+accumulating recursion to loops) stays in the ledger as the ergonomics
+item it is.

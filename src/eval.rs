@@ -1209,8 +1209,11 @@ impl<'a> Interp<'a> {
         // the process would die in Rust's own overflow handler instead of
         // reporting. The message matches the one native's parent prints
         // when the compiled child takes the same fall.
+        // 10k holds under debug's fat frames and release alike on the
+        // 256 MB interpreter thread; recursion past it is non-portable
+        // anyway (native's own ceiling is finite and smaller in wasm).
         self.depth.set(self.depth.get() + 1);
-        if self.depth.get() > 50_000 {
+        if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
             return Err(RuntimeError {
                 message: "the program ran out of stack: recursion went deeper than the stack holds"
