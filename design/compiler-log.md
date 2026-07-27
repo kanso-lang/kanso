@@ -6661,3 +6661,24 @@ only thing that moves that number, and this is a useful negative control for it.
 The mem corpus moved everywhere, which is the point of having it: 89 -> 48 on
 append_in_place, 127 -> 74 on build_cycle, 7 -> 4 on the small lazy programs.
 `string_headers.kso` is the new pin, at 117 allocations before and 65 after.
+
+## 2026-07-26 — a record's fields live after its header
+
+The same shape as the string above, one value type over. `k_rec` allocated a
+KRec and then its field array; a record's field count is fixed at construction
+and `set` writes through the existing slots, so there is nothing to grow and the
+fields can sit immediately after the header. The deep copier builds its own
+storage and assigns `fields` itself, which stays correct.
+
+    encode allocations   22,130,027 -> 18,785,627   (-15.1%)
+    kq, 1.9 mb document   2,931,838 ->  2,848,228   (-2.9%)
+    welfare                   54.74 ->      55.51
+
+Decode does not move — the decode bench builds no records. `record_fields.kso`
+pins it at 114 allocations before and 64 after.
+
+Taken with the string merge, encode allocations are down from 26,327,708 to
+18,785,627 in one sitting, and kq's from 4,617,083 to 2,848,228 — 38% fewer
+allocations for the same bytes. kq's peak moved 139.9 mb to 139.3, which is the
+third measurement this evening saying the same thing: the arena's high-water
+mark is set by what is never freed, not by how often it was asked.

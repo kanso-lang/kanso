@@ -962,10 +962,14 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
         }
         return k_marker_cache[type_id];
     }
-    KRec* r = k_alloc(sizeof(KRec));
+    /* A record's field count is fixed at construction and `set` writes
+       through the existing slots, so the fields live immediately after the
+       header rather than in a second allocation. The deep copier builds its
+       own storage and assigns `fields` itself, which stays correct. */
+    KRec* r = k_alloc(sizeof(KRec) + sizeof(KValue) * (size_t)n);
     r->type_id = type_id;
     r->nfields = n;
-    r->fields = k_alloc(sizeof(KValue) * n);
+    r->fields = (KValue*)(r + 1);
     memcpy(r->fields, args, sizeof(KValue) * n);
     KValue v; v.tag = K_REC; v.payload = k_ptr(r); return v;
 }

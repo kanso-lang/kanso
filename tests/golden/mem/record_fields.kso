@@ -1,0 +1,11 @@
+type point
+  x
+  y
+
+fn walk 0 acc
+  acc
+
+fn walk n acc
+  walk (n - 1) (push acc (point n (n * 2)))
+
+pub play = print "{length (walk 50 [])}"
