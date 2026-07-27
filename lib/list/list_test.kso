@@ -50,3 +50,11 @@ test_to_h_last_wins =
 test_transform_keys_collide =
   folded = transform_keys (put (put {:} "Ash" 1) "ash" 2) (_ -> "ash")
   folded["ash"]! == 2 && (length folded) == 1
+
+test_find_bounds_naturals = (find naturals (n -> n * n > 50)) == 8
+
+test_all_bounds_naturals = (all? naturals (n -> n < 4)) == false
+
+test_any_bounds_naturals = (any? naturals (n -> n > 3)) == true
+
+test_find_miss = (find [2 4 6] (n -> n > 9)) == none
