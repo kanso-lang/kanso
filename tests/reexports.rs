@@ -28,3 +28,15 @@ fn dependency_pubs_stay_off_the_surface_without_a_reexport() {
     );
     assert!(!output.status.success());
 }
+
+#[test]
+fn a_bare_call_two_imports_answer_alike_is_refused() {
+    let output = run("torn/use");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("a bare `strength` reaches `brew/strength` and `steep/strength` alike"),
+        "expected the torn bare call to be refused, got: {stderr}"
+    );
+    assert!(!output.status.success());
+}
