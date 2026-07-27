@@ -1,0 +1,14 @@
+import "std/text"
+
+fn churn_row acc n
+  churn_all (text/append (text/bytes (text/utf8 acc)) "-{n}") (n - 1)
+
+fn churn_all acc 0
+  text/utf8 acc
+
+fn churn_all acc n
+  churn_row acc n
+
+pub play =
+  seed = text/bytes "go"
+  print "{length (churn_all seed 40)}"

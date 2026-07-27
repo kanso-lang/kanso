@@ -1,0 +1,14 @@
+import "std/text"
+
+fn stamp_row acc n
+  stamp_all (text/append acc "row {n};") (n - 1)
+
+fn stamp_all acc 0
+  acc
+
+fn stamp_all acc n
+  stamp_row acc n
+
+pub play =
+  seed = text/bytes ""
+  print "{length (text/utf8 (stamp_all seed 200))}"
