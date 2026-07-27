@@ -7003,3 +7003,26 @@ Pins: a module loop threading a builder is licensed and in ids
 root-file local sharing an importable's name is never rewritten
 (a_locally_bound_name_is_never_rewritten, red with the exclusion stripped).
 Benches, kq, book, site: unchanged to the byte.
+
+## 2026-07-27 — pop-rewind for chained loops: built, measured, declined
+
+The theory: k_beat_pop keeps a heap result's region alive, so every nested
+container completion strands its final iteration's garbage — thousands of
+small strands. A chain-licensed loop's result is its entry accumulator, so a
+k_beat_pop_chained could rewind at close by the same identity argument.
+
+Built it (runtime pop variant, Beats.chained, emission at licensed entries),
+verified all 8 kq entry sites emitted it, and measured zero — kq's peak did
+not move a tenth of a megabyte, with or without, before and after the pretty
+loops joined the beat tier. The strands the theory predicted are either
+reclaimed by the next outer iteration in practice or too small to see.
+Reverted whole.
+
+What DID move the number, found the same hour by instrumenting reclaimed
+bytes per rewind: kq's pretty printer looped through two-group tail cycles
+(pretty_elems -> elem_row-helpers -> pretty_elems), which the chain license
+never reaches — it reads self-tails, and the cluster tier still excludes
+bytes. The helpers existed only to fit the width canon, and gavel BB's return
+guards express the same loops as direct self-tails within the cap. That is a
+kq-side fix (kq#29); the compiler-side thread — extend the chain license to
+tail cycles — stays open, and VSE-shaped mutual recursion is who it is for.
