@@ -1,0 +1,11 @@
+# a record renders as its constructor form and none as <none>, on every engine
+type point
+  x
+  y
+
+fn missing _
+  none
+
+pub play =
+  p = point 3 4
+  print "record {p}, absent {missing 0}"
