@@ -1,0 +1,4 @@
+error[type]: a record field carries no type — write `artist` and let the compiler infer what it holds
+  --> field_type_check.kso:2:3
+   2 |   artist:string
+         ^

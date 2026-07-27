@@ -1,0 +1,7 @@
+type track
+  artist:string
+  title
+
+pub play =
+  song = track "fishmans" "long season"
+  print "{song.title}"

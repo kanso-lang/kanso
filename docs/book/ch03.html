@@ -13,7 +13,9 @@ extra_css: /book/book.css
 
 <p>every type in kanso is a single-constructor record: a name and some fields. the fields are alphabetical—enforced, like everything else other languages leave to code review. a field is just a name; its type is whatever the program puts in it and asks of it, which the compiler works out for itself. construction is positional, using the type name as the constructor and passing fields in that same alphabetical order:</p>
 
-<p>you can write a type down if you want it as a promise rather than a description—<code>name:string</code> is legal and is checked—but the compiler already knows, and a written type is one more thing that can disagree with the code around it. when it does, the error names both sides, because neither line is wrong on its own and you are the one who knows which you meant.</p>
+<p>writing the type on a field is an error, not a style preference. <code>artist:string</code> gets you <em>a record field carries no type—write <code>artist</code> and let the compiler infer what it holds</em>, because the annotation only repeats what the program already says and then sits there waiting to disagree with it. the language server shows you what a field actually holds when you hover it, which is the same information without a second copy to maintain.</p>
+
+<p>a written type earns its place where it <em>restricts</em> below what use would permit, and that place is a type of its own. <code>type state archived draft published</code> says the set is closed at three, which no amount of reading the program can tell you—a set nobody has exceeded yet looks exactly like a set nobody can exceed. that one you write down.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">reading.kso</div>

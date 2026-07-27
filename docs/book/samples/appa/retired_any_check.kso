@@ -1,0 +1,4 @@
+fn label x:any
+  "a value: {x}"
+
+pub play = print "{label 3}"

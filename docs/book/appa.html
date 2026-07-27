@@ -475,6 +475,73 @@ size <span class="o">=</span> <span class="n">9</span>
   </div>
 </div>
 
+<h2>error[type]—a written type disagreeing with the program</h2>
+
+<p>the <code>type</code> family fires where a type is written down and the program says otherwise, and its largest member is the one that fires where a type is written down at all. a record field's type is whatever the program puts in it, so writing it is a second copy of a fact the compiler already has, and the second copy is the one that can go stale:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">field_type_check.kso</div>
+  <pre><code><span class="k">type</span> track
+  <span class="f">artist</span><span class="o">:</span><span class="t">string</span>
+  <span class="f">title</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="s">"long season"</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{song.title}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check field_type_check.kso</div>
+    <pre><code><span class="k">error[type]</span>: a record field carries no type — write `artist` and let the compiler infer what it holds
+<span class="c">  --&gt; field_type_check.kso:2:3</span>
+   2 |   artist:string
+         <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>a <em>parameter</em> keeps its ascription, because there it does work no inference can do for you: <code>n:int</code> chooses an arm. the rule is about the field, where nothing is being chosen.</p>
+
+<p>the family's other half is where two lines each look right on their own. a field filled with one kind of thing and read by a function that takes another is a disagreement between two places, so the diagnostic names both and takes no side—you are the one who knows which line you meant:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">field_conflict_check.kso</div>
+  <pre><code><span class="k">type</span> box
+  <span class="f">held</span>
+
+<span class="k">fn</span> <span class="f">double</span> n<span class="o">:</span><span class="t">int</span>
+  n <span class="o">*</span> <span class="n">2</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  b <span class="o">=</span> <span class="f">box</span> <span class="s">"words"</span>
+  <span class="f">print</span> <span class="s">"<span class="i">{double b.held}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check field_conflict_check.kso</div>
+    <pre><code><span class="k">error[type]</span>: `box`'s `held` is a string here, and `double` takes an int — these two cannot both hold
+<span class="c">  --&gt; field_conflict_check.kso:8:11</span>
+   8 |   b = box "words"
+                 <span class="k">^</span>
+<span class="k">error[type]</span>: ...and this is where it is read as an int
+<span class="c">  --&gt; field_conflict_check.kso:9:19</span>
+   9 |   print "<span class="i">{double b.held}</span>"
+                         <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>the last member is a name that used to exist. <code>any</code> was the way to say "whatever you like", and it never meant that—it matched every value except <code>none</code>, which is a real constraint wearing a word that denies being one. a bare parameter says the honest version:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">retired_any_check.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">label</span> x<span class="o">:</span><span class="t">any</span>
+  <span class="s">"a value: <span class="i">{x}</span>"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{label 3}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso check retired_any_check.kso</div>
+    <pre><code><span class="k">error[type]</span>: there is no `any` type; leave the annotation off for a field or parameter that accepts anything
+<span class="c">  --&gt; retired_any_check.kso:1:10</span>
+   1 | fn label x:any
+                <span class="k">^</span></code></pre>
+  </div>
+</div>
+
 <h2>error[signature]—markers carry no fields</h2>
 
 <p>a type with no fields is a marker: its bare name <em>is</em> its only value, the way <code>none</code> is a value and not a constructor waiting for arguments. applying a marker to an argument treats a value as if it were a function, and the <code>signature</code> family catches the confusion:</p>
