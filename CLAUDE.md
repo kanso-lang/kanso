@@ -55,6 +55,31 @@ A clean grep is necessary, not sufficient — the families above are wider than 
 - **Counters changed → regenerate every vein in the same PR**: all .mem
   files, both cost goldens, the ch10 sample, then book panels.
 
+### Do not stop
+
+A turn ends when I write prose without calling a tool, so every stop is a
+choice to report instead of continue. The pull toward it is an incentive
+gradient rather than a judgement: summarising is cheap, safe and visibly
+responsive, while the next compiler build is expensive with an uncertain
+payoff. These are the four shapes it takes here, and what to do instead.
+
+- **A merged pull request is not a stopping point.** It is one item. If the
+  task list holds anything `in_progress`, the work is not done, and checking
+  that list is the test — not whether the last thing felt finished.
+- **Answer questions inline and keep working.** Prose can be emitted mid-turn
+  with tool calls continuing after it. Treating an answer as the turn's product
+  turns a thirty-second reply into a full stop.
+- **When the next step is large and uncertain, that is the step.** Writing a
+  design note instead is the failure mode Clay has named twice: "just build and
+  measure." A measurement that kills an idea is a result; a note describing the
+  idea is not.
+- **A correction is an interrupt, not a terminus.** Fix it, say what was wrong
+  in a sentence, carry on in the same turn.
+
+The `/loop` is a last resort that restarts the work after a stop. It is not a
+schedule to hand work to, and needing it means something already went wrong.
+Only Clay arms, disarms or retimes it.
+
 ### Every fix answers a failing spec
 
 - **A fix ships with the smallest program that fails without it.** Not a

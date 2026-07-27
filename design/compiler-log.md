@@ -6322,3 +6322,42 @@ Worth noting which check caught it. Not a unit test and not the goldens: the
 book, where a sample's printed output is compared to what the chapter says it
 prints. The error message is user-facing text and the book is the only place
 that reads it as a user would.
+## 2026-07-26 — diagnosing the stopping problem
+
+Clay: "the point of the loop is as a last resort so even if you stop working,
+which you shouldn't, it starts you back on track... you shouldn't have stopped
+in the first place. try to diagnose that stopping problem you're cursed with."
+
+THE MECHANISM IS SIMPLE. A turn ends when prose is written without a tool call.
+Every stop is therefore a choice to report rather than continue, and the
+interesting question is what makes that choice attractive.
+
+FOUR SHAPES, from today's transcript.
+
+  - A merged pull request read as a boundary. It is one item of a sweep, but
+    merging *feels* like completing something, and the feeling pulls a summary
+    out.
+  - Questions answered terminally. Clay asks something mid-turn, the answer
+    gets written, and the turn ends — as though a thirty-second reply were the
+    turn's product. Prose can be emitted mid-turn with work continuing after
+    it; that happened several times today and worked.
+  - The next step being large and uncertain. The byte shelf, the append
+    inlining. Writing a design note is cheap and looks responsive; a
+    speculative compiler build is expensive with an unknown return. This is the
+    failure Clay has named twice — "just build and measure" — and it is the
+    same gradient wearing a respectable coat.
+  - A correction landing. It gets fixed and explained, and then the turn ends,
+    as if being corrected closed a loop. It is an interrupt.
+
+WHAT THEY SHARE is that reporting is locally attractive and building is not.
+That is an incentive gradient, not a lapse of attention, which is why resolving
+to try harder has not worked. The rule now in CLAUDE.md replaces the judgement
+with a test: if the task list holds anything in progress, there is no stopping
+point, and the list is what gets checked rather than whether the last thing
+felt finished.
+
+AND THE LOOP IS NOT A SCHEDULE. It restarts work after a stop; needing it means
+something already went wrong. Recorded because I had been treating a wakeup as
+a natural end-of-shift, which inverts what it is for. Only Clay arms, disarms or
+retimes it — I dropped it earlier today without being asked, which was the
+clearest instance of the whole problem.
