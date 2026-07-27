@@ -6361,3 +6361,87 @@ something already went wrong. Recorded because I had been treating a wakeup as
 a natural end-of-shift, which inverts what it is for. Only Clay arms, disarms or
 retimes it — I dropped it earlier today without being asked, which was the
 clearest instance of the whole problem.
+## 2026-07-26 — RULED: trust the editor. And what a typeset still says that inference cannot
+
+Clay, on the committee's locality objection: "we're sticking by kanso. don't
+put into the written text what the compiler can already infer and display.
+trust your editor."
+
+Settled, and recorded so it stops being relitigated. A fact the compiler
+derives does not get written down again; the editor is where a reader learns
+it. Hickey's complaint that a field's type is no longer local is answered by
+saying locality of the *text* was never the goal — locality of the *answer*
+is, and hover gives it without a second copy that can rot.
+
+WHAT THAT DOES NOT COVER, measured rather than argued. Four annotations
+survived the sweep, all of them typesets, and they are a different thing:
+
+    type task
+      status:active archived pending
+      title:null string
+
+Constructing a task with a marker that is not a member:
+
+    with the typeset     error[runtime]: field `status` of `task` takes
+                         active archived pending
+    without it           constructs fine, and fails later and elsewhere as
+                         "no overload of `label` matches these arguments"
+
+A single-type annotation restates what construction sites already establish, so
+dropping it loses nothing. A typeset does not restate — it *narrows*, to a set
+the program's use does not establish, and it does so in the direction inference
+cannot reach. Inference derives what a field IS given; a typeset declares what
+it MAY be. Those come apart whenever the permitted set is wider than today's
+evidence, which is exactly what an enumeration is for: `title:null string`
+permits a null even in a program where nothing has passed one yet, and
+inference over that program would derive `string` and reject the first null
+that arrives.
+
+RETRACTED, an argument this entry made an hour ago: that the typeset also
+moves the error to a better place. Clay: "the compiler can put the error output
+wherever it wants to. it could even cite the construction and all the available
+matching overload opportunities." Correct — where a diagnostic points is a
+choice the compiler makes, not a consequence of what was written down, and the
+current message surfacing at a later call is a fact about today's
+implementation rather than about the design.
+
+WHAT SURVIVES IS NARROWER THAN THE ENTRY CLAIMED, and worth stating exactly.
+Permitting a case nothing exercises yet turns out to buy little: an unexercised
+permission has no observable effect until it is exercised, and when the first
+null does arrive inference widens to admit it and the program runs. So
+`title:null string` is close to a duplicate after all.
+
+The residue is the other direction. A typeset can be *narrower* than what the
+program's use would allow — `status:active archived` in a program where every
+`label` overload also handles `deleted`. Inference would admit `deleted`,
+because nothing in the code objects to it; the typeset rejects it, because the
+author says the domain has three states and not four. That restriction is not
+derivable from code that does not contain it, and it is the one thing on this
+page that survives Clay's ruling about not writing down what the compiler
+knows: the compiler does not know it, and cannot.
+
+So the four stay on that ground alone, and the rule is narrower than first
+written: an annotation restating the evidence goes; an annotation *restricting*
+below what use would permit stays, because it is the only kind that says
+something the program does not already say.
+
+## 2026-07-26 — POSTSCRIPT to the typeset entries: the ruling overtook them
+
+The two entries above were written before Clay ruled that a record field may
+carry no type at all. They argued about which annotations earn their place on a
+field, and that question is closed — none do, and declaring one is now an
+error.
+
+What survives is the part that was never about fields. A *named* typeset is
+still a declaration: `type state archived draft published`, one line, members
+alphabetical. It says the set is closed at three, which is a restriction the
+program does not otherwise contain and inference cannot derive, since a set
+nobody has yet exceeded looks exactly like a set nobody can exceed. ch03 now
+teaches that form, with the field left bare.
+
+So the reasoning holds and its subject moved: a written type earns its keep by
+*restricting* below what use would permit, and the only place left to write one
+is on a type of its own rather than on a field. The entries stay as they were
+written, with this note after them, because the log records what was thought at
+the time and the thinking was not wrong — it was aimed at a construct that has
+since gone.
