@@ -7066,3 +7066,15 @@ bytes. The helpers existed only to fit the width canon, and gavel BB's return
 guards express the same loops as direct self-tails within the cap. That is a
 kq-side fix (kq#29); the compiler-side thread — extend the chain license to
 tail cycles — stays open, and VSE-shaped mutual recursion is who it is for.
+
+## 2026-07-27 — gentle builder growth: built, measured, declined
+
+Doubling a large builder leaves as much slack as content, so growth past a
+megabyte was gentled to five-fourths expecting a three-megabyte peak cut. It
+measured 7.7 mb WORSE: 47.5 -> 55.2 on the big document. Each mut-grow briefly
+holds old and new buffers together, and quarter-spaced sizes defeat the
+allocator's reuse of the freed extents — a freed 4.6 mb cannot hold the next
+5.8 — so the dead large blocks stack up where doubling's halves had recycled.
+The folklore that growth factors near phi trade well against allocators did
+not survive contact with this allocator at these sizes. Reverted within the
+hour; byte-identity held throughout.
