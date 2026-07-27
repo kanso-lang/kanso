@@ -7533,3 +7533,33 @@ that sentence to the docs. What it settles is the differential law's side:
 the oracle now runs everything the native engine runs at these depths,
 instead of defining semantics it cannot itself execute. Non-tail recursion
 keeps its stack bound on both engines, as it must.
+
+## 2026-07-27 — BUILT, MEASURED, DECLINED (for now): map-log compaction at put_mut
+
+The quadratic repeated-key build looked fixable without a gavel: compaction
+only materializes what dedup-on-read already defines (last put wins, the
+comparator tie-breaking by index), so the semantics cannot move. An
+exclusive-log bit on KMap licensed in-place compaction — fresh at birth,
+kept by put_mut, lost the moment a persistent put shares the log — and
+put_mut adopted the cached sorted view as the new log when duplicates
+dominated. Correct, built, and measured: zero effect. The 10k tally still
+allocates 2.0 GB.
+
+The measurement that matters is why. put_mut is never selected for a
+read-write map: the linear analysis kills uniqueness on any second mention,
+and a map you read between writes — `put m k (bump m[k])`, tally's whole
+shape, in fused, hand-rolled, and binding-separated spellings alike — always
+mentions twice. jsonbench's four put_mut sites are write-only builds, which
+never cache a sorted view, so the compaction path is unreachable from both
+directions. The mechanism was fine; no program can stand where it fires.
+
+Two designs would unblock it, and choosing is Clay's. The principled one:
+teach linear.rs that an Index read (`m[k]`) before the consuming put does
+not break uniqueness — FBIP's read-then-consume discipline — which
+requires an interlock with demand analysis, because a thunked read forced
+after the mutation would see the wrong map. The quick one: let a plain put
+inherit the predecessor's cached view by single insertion, bounded by a
+view-size cap so group_by-shaped many-distinct builds don't trade quadratic
+time for quadratic memory — a policy cliff that deserves a ruling rather
+than an interim constant. Until one lands, the 2.0 GB tally stands, and
+this entry is the map of the terrain.
