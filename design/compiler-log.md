@@ -6499,3 +6499,69 @@ ratchet ignores anything under a hundredth. That was a real regression bought
 on credit: #322's wrapper inlining is what made the mutate path reachable, and
 the payoff arrived today rather than then. welfare.py now names every term that
 went backwards and prices it, whatever the sum did. The sum stays the gate.
+
+## 2026-07-26 — the shelf's prize, measured
+
+kq pretty-printing the 1.9 mb document allocates 135,762,784 bytes and peaks at
+139,903,456. The two agreeing says nothing is reclaimed for the length of the
+run. It does not say what a rewind would save, and the first number written
+here — 97%, from allocation over output — answered the wrong question: the
+decoded document is live for the whole run, and no analysis is going to change
+that.
+
+The split that does answer it costs one more measurement. A path query on the
+same file decodes the same tree and prints 2.6 kb, and peaks at 52,543,848. The
+difference from the full pretty-print, 87.3 mb, is what encoding adds; the
+output being built is 4.6 mb of it. So 82.8 mb — 59% of peak — is encode
+garbage, and a decode side that no shelf can shrink is the other 38%.
+
+Peak scales with the document rather than with the output, and the multiplier
+rises with nesting — 28x the input on a flat 845 kb list, 71x on the nested
+1.9 mb one — which is what a grow-only arena does when every nested call's
+temporaries outlive it.
+
+The 62% allocation cut above moves the peak from 211.9 mb to 139.9 and does not
+touch this: fewer allocations still means nothing freed. What closes it is the
+fold-state shelf, and one of its four open questions is now half answered.
+Hoisting a builder out of the arena for a loop's duration is sound only if the
+loop owns it outright, and proving that is what the linearity analysis already
+does to license an in-place append. The same proof read over a longer span is
+what would license the longer lifetime; what is still open is the exit — who
+frees the buffer when the loop ends, what happens on the failure path, and what
+happens to a builder that escapes.
+
+Not built. The measurement is recorded so the next attempt starts from the
+number rather than from the hunch.
+
+## 2026-07-26 — what the beat report says about the encode path
+
+`KANSO_BEAT_REPORT=1` over kq, which is the compiler explaining its own
+refusals rather than a guess about them:
+
+    encode_items/3   grow-only: argument 1 may carry heap across the iteration
+    encode_pairs/3   grow-only: argument 1 may carry heap across the iteration
+    indent_onto/2    grow-only: argument 1 may carry heap across the iteration
+    list/fold_go/3   grow-only: another group tail-calls it (unbracketed entry)
+    skip_ws/2        pure loop: no iteration allocates, nothing to rewind
+    list/bisect/5    beat: rewinds every iteration
+
+Argument 1 is the byte builder in all three encode loops, and the reason is
+narrower than "bytes are ineligible". A *bare parameter* carrying bytes is
+already eligible — bytes are an immutable payload and one that arrived at entry
+lives below the mark. What these loops pass is `(elem_onto acc xs[i])`, and an
+expression's result is assumed to be newly allocated.
+
+Since the header work it usually is not. An in-place append returns the very
+pointer it was handed, so on the fast path the value crossing the boundary is
+the entry-threaded one. The grow path is what stops that being a rule: it
+allocates a fresh buffer through `k_alloc`, above the mark, and returns a fresh
+header. kq takes it 18 times in a run against 2,217,224 fast appends. Rare, and
+rare is not never — a rewind after one grow frees the buffer the next iteration
+appends into.
+
+So the shelf's runtime half is specific: for a builder the loop owns, both the
+header and the buffer have to live outside the arena, and then the grow path
+keeps them there. The open question is not the copy any more, it is the exit —
+who frees a malloc'd buffer when the loop ends, what happens on the failure
+path, and what happens to a builder that escapes. `list/fold_go/3` carries a
+second reason (an unbracketed entry) and would need that fixed too.
