@@ -2,14 +2,19 @@
 //!
 //! `1 + count (n - 1)` keeps a frame per call: the addition still owes work
 //! after the recursion returns. Over arbitrary-precision integers the sum
-//! is the same in any association, so the group rewrites to a tail-calling
-//! helper threading an accumulator — the loop the programmer would have
-//! written by hand — and the wrapper keeps the group's surface. The license
-//! is deliberately narrow: every arm is a single expression, the operator
-//! is one of `+`/`*` across all recursive arms, the non-recursive operand
-//! and every base body are integer literals, and the recursive call is a
-//! direct call to the group's own name and arity. Anything else — floats,
-//! guards, double recursion like fib — keeps its frames.
+//! is the same in any association, so the group gains a tail-calling helper
+//! threading an accumulator, entered through an int-ascribed wrapper arm.
+//! The original arms all stay: specificity sends integer arguments to the
+//! wrapper (a concrete type outranks a bare variable) while literal-pattern
+//! arms still answer their literals directly, and any non-integer argument
+//! falls through to the original arms and behaves exactly as it always
+//! did — including the frame-per-call descent. The license is deliberately
+//! narrow: every arm is a single expression, the operator is one of `+`/`*`
+//! across all recursive arms, the non-recursive operand and every base body
+//! are integer literals, the recursive call is a direct call to the group's
+//! own name and arity, and some parameter position dispatches on an integer
+//! literal (the counter the descent consumes). Anything else — floats,
+//! guards, double recursion like fib — is left alone entirely.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
 use num_bigint::BigInt;
@@ -123,7 +128,6 @@ pub fn rewrite(program: &mut Program) {
         groups.entry((decl.name.clone(), decl.params.len())).or_default().push(i);
     }
     let mut new_fns: Vec<FnDecl> = Vec::new();
-    let mut replaced: HashMap<usize, FnDecl> = HashMap::new();
     for ((name, arity), idxs) in &groups {
         if name.contains('/') || *arity == 0 {
             continue;
@@ -140,6 +144,16 @@ pub fn rewrite(program: &mut Program) {
         });
         let Some(op) = ops.next() else { continue };
         if ops.any(|o| o != op) || !arms.iter().any(|a| matches!(a, Arm::Base(_))) {
+            continue;
+        }
+        // the counter positions: where some arm dispatches on an integer
+        // literal. The wrapper ascribes those, so only integer arguments
+        // ever take the loop; without one, nothing bounds the descent and
+        // the group is left alone.
+        let counter: Vec<bool> = (0..*arity)
+            .map(|i| decls.iter().any(|d| matches!(d.params.get(i), Some(Pattern::IntLit(..)))))
+            .collect();
+        if !counter.iter().any(|c| *c) {
             continue;
         }
         let helper = format!("trmc/{name}");
@@ -197,12 +211,18 @@ pub fn rewrite(program: &mut Program) {
             "*" => BigInt::from(1),
             _ => BigInt::from(0),
         };
-        let wrapper_params: Vec<Pattern> =
-            (0..*arity).map(|i| Pattern::Var(format!("trmcp{i}"), span)).collect();
+        let wrapper_params: Vec<Pattern> = (0..*arity)
+            .map(|i| match counter[i] {
+                true => {
+                    Pattern::Annotated { name: format!("trmcp{i}"), ty: "int".to_string(), span }
+                }
+                false => Pattern::Var(format!("trmcp{i}"), span),
+            })
+            .collect();
         let mut wrapper_args: Vec<Expr> =
             (0..*arity).map(|i| Expr::Ident(format!("trmcp{i}"), span)).collect();
         wrapper_args.push(Expr::Int(identity, span));
-        let wrapper = FnDecl {
+        new_fns.push(FnDecl {
             name: name.clone(),
             is_pub: decls.iter().any(|d| d.is_pub),
             span,
@@ -215,25 +235,7 @@ pub fn rewrite(program: &mut Program) {
             })],
             file: decls[0].file.clone(),
             synthetic: true,
-        };
-        let mut idxs = idxs.clone();
-        let first = idxs.remove(0);
-        replaced.insert(first, wrapper);
-        for i in idxs {
-            replaced.insert(i, FnDecl { name: String::new(), ..program.fns[i].clone() });
-        }
+        });
     }
-    if replaced.is_empty() {
-        return;
-    }
-    let mut rebuilt: Vec<FnDecl> = Vec::new();
-    for (i, decl) in program.fns.drain(..).enumerate() {
-        match replaced.remove(&i) {
-            Some(r) if r.name.is_empty() => {}
-            Some(r) => rebuilt.push(r),
-            None => rebuilt.push(decl),
-        }
-    }
-    rebuilt.extend(new_fns);
-    program.fns = rebuilt;
+    program.fns.extend(new_fns);
 }

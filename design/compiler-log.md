@@ -8038,3 +8038,24 @@ unlicensed, and appendix A teaches the line between the two: a literal
 operand compiles to the loop, a varying one keeps its frames until you
 carry the total down yourself. Veins byte-identical, compile golden
 untouched (no bench sample carries a licensed shape), welfare flat.
+
+## 2026-07-27 — TRMC keeps the crash it was hiding (additive wrappers)
+
+Probing the shipped transform found an edge #394 got wrong: a float
+argument to a licensed group used to descend with frames and die with
+the stack report; the transformed tail loop ran forever. A crash had
+become a hang — engine-consistent, but the wrong trade.
+
+The fix simplifies the whole design. The original arms are no longer
+replaced: the pass ADDS an accumulator helper and a wrapper arm whose
+counter positions (the ones some arm dispatches on with an integer
+literal) are ascribed :int. Specificity does the routing — a literal
+arm still answers its literal, the ascribed wrapper outranks the bare
+arm for integers and takes the loop, and every non-integer argument
+falls through to the original arms and behaves exactly as it always
+did, stack report included. A group with no integer-literal position
+is left alone, since nothing would bound its descent. Verified: the
+million-frame count loops, count 2.5 reports the stack on both
+engines, count "oops" errs identically, zero and negative bases answer
+through the original literal arms. 19 suites, browser differential
+83/0, decode vein byte-identical.
