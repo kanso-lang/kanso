@@ -26,7 +26,7 @@ extra_css: /book/book.css
 
 <h2>the first program</h2>
 
-<p>here is hello world in its entirety—the file cargo just ran for you:</p>
+<p>here is hello world in its entirety—the file you just ran:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">hello.kso</div>
@@ -37,11 +37,11 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>one line, and it's a slightly subversive line. <code>main</code> is not a function—it's a <em>constant</em>, bound with plain <code>=</code>, and its value is a description of printing. nothing executes while <code>main</code> is evaluated; the runtime receives that description and performs it. this distinction carries an entire chapter later, when effects turn out to be ordinary data you can inspect and test. for now, notice only that the simplest possible program is a value with a name.</p>
+<p>one line, and it's a slightly subversive line. <code>print "hello, world"</code> is not a call that fires as the parser walks past—it's an expression whose value is a <em>description</em> of printing. the runtime receives that description and performs it. this distinction carries an entire chapter later, when effects turn out to be ordinary data you can inspect and test. for now, notice only that the simplest possible program is a value.</p>
 
-<p>notice also what isn't there. no parentheses around the argument—application is a space, <code>print "hello, world"</code>. no semicolon. no import for <code>print</code>. no <code>()</code> after <code>main</code>. and no room for stylistic debate: this program has exactly one legal rendering, and you just read it. the file you write is the file everyone writes.</p>
+<p>notice also what isn't there. no parentheses around the argument—application is a space, <code>print "hello, world"</code>. no semicolon. no import for <code>print</code>. no <code>main</code> to wrap it in. and no room for stylistic debate: this program has exactly one legal rendering, and you just read it. the file you write is the file everyone writes.</p>
 
-<p>the entrypoint today is exactly this: a file with a <code>main</code> constant, which the toolchain evaluates and runs. treat that as a convenience, not a monument—the settled direction is that an entry file will simply be a list of statements, and <code>main</code> will dissolve into the file itself. when that lands you'll change nothing you've learned here; you'll just stop writing the word <code>main</code>.</p>
+<p>an entry file is a list of statements—no <code>main</code>, no ceremony marking where the program starts, because a file that runs starts at its first line. library files are the ones that declare things, and part ii covers how the two meet.</p>
 
 <h2>five verbs</h2>
 
@@ -159,7 +159,7 @@ plan:
   print <span class="s">"hello, world"</span>    <span class="c"># from line 1</span></code></pre>
 </div>
 
-<p>that <code>main</code> is a value, not an action, stops being a slogan the moment you can print the value and read it. the plan is exactly what the runtime would perform, laid out for inspection. chapter 05 builds whole programs you test this way—by asserting on the plan instead of mocking the world.</p>
+<p>that a program is a value, not an action, stops being a slogan the moment you can print the value and read it. the plan is exactly what the runtime would perform, laid out for inspection. chapter 05 builds whole programs you test this way—by asserting on the plan instead of mocking the world.</p>
 
 <h2>two engines, one meaning</h2>
 
@@ -187,7 +187,7 @@ plan:
 
 <p>the three <strong>appendices</strong> are reference, not narrative: <a href="appa.html">the diagnostics catalog</a> is every error the compiler can hand you and how to read it, <a href="appb.html">the builtin reference</a> is every function you get for free, and <a href="appc.html">canonical form</a> is the exact set of formatting rules the compiler enforces—the ones that made your unused binding an error.</p>
 
-<p>you can now build the toolchain, run a program, check it, test it, compile it to a native binary, and talk to it in the repl—the whole cycle, five verbs. you've also met the compiler's temperament: it treats clutter as an error, not a preference, and it tells you exactly where. one loose thread remains from the very first program: <code>main</code> was a constant, not a function, and its value was a <em>description</em>. the next chapter pulls that thread. it starts where both engines start—with values and the names you bind them to, and with the errors kanso raises to keep those names honest.</p>
+<p>you can now build the toolchain, run a program, check it, test it, compile it to a native binary, and talk to it in the repl—the whole cycle, five verbs. you've also met the compiler's temperament: it treats clutter as an error, not a preference, and it tells you exactly where. one loose thread remains from the very first program: its single line was a value, not an action, and that value was a <em>description</em>. the next chapter pulls that thread. it starts where both engines start—with values and the names you bind them to, and with the errors kanso raises to keep those names honest.</p>
 
 <h2>exercises</h2>
 
