@@ -7854,3 +7854,33 @@ leak was storage, not time — and kanso's peak cell falls 5.6 to 4.1 MB,
 now the smallest on the board by a wider margin. compiler.html board,
 index.html landing panel, and the about-blurb figure all updated in
 the same commit.
+
+## 2026-07-27 — the burned final is freed by the rewind that kills its string
+
+bytes_peak's first catch after its own PR: encodebench held 85 MB of
+RSS on a 4-block arena. The shape is the zerocopy handoff — a licensed
+accumulator grows malloc-backed, utf8's finish gives the chunk to the
+result string and burns the frontier, the string dies at the outer
+loop's rewind, and the chunk had no owner left to free it. One ~270 KB
+buffer per iteration since the shelf shipped (#337).
+
+The fix registers a malloc-backed chunk with the innermost beat frame
+at the moment of handoff; the frame's rewind frees its list wholesale.
+Nothing can dangle: the carry copy-out never shares malloc'd data — it
+fails k_survives and is copied — so by the time any rewind runs, no
+surviving value points into the frame's chunks. Pops that keep their
+region alive migrate the frame's list to the enclosing frame (the
+strings now die with it); with no enclosing frame the chunks live to
+exit, as they always did. A frame holds at most 256 registrations;
+overflow leaks as before and is counted.
+
+Red on the record: builder_reclaim.kso (licensed inner builder, outer
+loop of forty) reads bytes_freed=200, bytes_peak=104,734 with
+registration disabled — the forty burned finals, scaling with the
+loop — and 240 / 3,880 with it on. encodebench: bytes_freed 4,400 ->
+4,800 (every chunk), bytes_peak 108,877,534 -> 407,788, RSS 85 -> 6.2
+MB. Decode and one-shot veins byte-identical.
+
+The model gains the encode workload's true peak at 0.06 — the third of
+three, so every published workload's peak is priced the same way —
+with baseline at the pre-fix 113 MB. Floor 60.81 -> 62.70.

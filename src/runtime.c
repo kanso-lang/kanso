@@ -314,8 +314,51 @@ static int k_beat_depth = 0;
 
 static void k_buf_flush(void);
 
+/* Malloc-backed builder chunks handed to strings by the zerocopy finish.
+   The string dies at its frame's rewind; the chunk would outlive it as a
+   leak — one burned buffer per iteration was 85 MB of encodebench RSS.
+   Registration happens at the handoff, and the rewind frees the frame's
+   chunks wholesale: the carry copy-out never shares malloc'd data (it
+   fails k_survives and is copied), so nothing can point here afterward. */
+static KBuf* k_chunkreg[K_BEAT_MAX][256];
+static int k_chunkreg_n[K_BEAT_MAX];
+static long long k_chunkreg_spill[K_BEAT_MAX];
+
+static void k_chunkreg_flush(int d) {
+    for (int i = 0; i < k_chunkreg_n[d]; i++) {
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            k_stat_bytes_freed++;
+            k_stat_bytes_live -= (long long)sizeof(KBuf) + k_chunkreg[d][i]->cap;
+        }
+        free(k_chunkreg[d][i]);
+    }
+    k_chunkreg_n[d] = 0;
+    k_chunkreg_spill[d] = 0;
+}
+
+/* A pop that keeps its region alive keeps the region's strings alive, so
+   the frame's chunks now die with the enclosing frame instead: hand them
+   up. With no enclosing frame they live until exit, as they always did. */
+static void k_chunkreg_migrate(int d) {
+    if (d < 0 || d >= K_BEAT_MAX) return;
+    if (d > 0) {
+        int up = d - 1;
+        for (int i = 0; i < k_chunkreg_n[d]; i++) {
+            if (k_chunkreg_n[up] < 256) {
+                k_chunkreg[up][k_chunkreg_n[up]++] = k_chunkreg[d][i];
+            } else {
+                k_chunkreg_spill[up]++;
+            }
+        }
+    }
+    k_chunkreg_n[d] = 0;
+    k_chunkreg_spill[d] = 0;
+}
+
 static void k_beat_rewind(KMark* m) {
     k_buf_flush();
+    long long d = m - k_beat_stack;
+    if (d >= 0 && d < K_BEAT_MAX) k_chunkreg_flush((int)d);
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
@@ -744,11 +787,14 @@ KValue k_beat_pop(KValue r) {
             if (!k_is_heap(r.tag)) {
                 k_cache_reg_sweep(&k_beat_stack[k_beat_depth]);
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
-            } else if (c->used_flag) {
-                KCopy cp = { NULL, NULL, 1 };
-                k_ptrmap_begin(&k_copy_map);
-                k_copy_map_live = 0;
-                r = k_deep_copy(r, &cp);
+            } else {
+                if (c->used_flag) {
+                    KCopy cp = { NULL, NULL, 1 };
+                    k_ptrmap_begin(&k_copy_map);
+                    k_copy_map_live = 0;
+                    r = k_deep_copy(r, &cp);
+                }
+                k_chunkreg_migrate(k_beat_depth);
             }
             c->used_flag = 0;
         }
@@ -779,6 +825,7 @@ KValue k_cohort_pop(KValue r) {
     long long grown = k_live_block_bytes - m->bytes;
     if (grown < (long long)(1 << 19)) {
         k_beat_depth--;
+        k_chunkreg_migrate(k_beat_depth);
         return r;
     }
     if (!k_is_heap(r.tag)) {
@@ -3436,6 +3483,16 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
         if (buf->used == b->len) {
             ((unsigned char*)b->data)[b->len] = 0;
             buf->used = bcap;
+            /* a malloc-backed chunk now belongs to a string that dies at
+               the innermost rewind; register it so that rewind frees it */
+            if (b->cap > 0 && k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+                int d = k_beat_depth - 1;
+                if (k_chunkreg_n[d] < 256) {
+                    k_chunkreg[d][k_chunkreg_n[d]++] = ((KBuf*)b->data) - 1;
+                } else {
+                    k_chunkreg_spill[d]++;
+                }
+            }
             KStr* s = k_alloc(sizeof(KStr));
             s->len = (long)b->len;
             s->data = (char*)b->data;
