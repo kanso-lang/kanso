@@ -40,6 +40,7 @@ LOWER_IS_BETTER = {
     "thunk_escaped",
     "thunk_live_exit",
     "arena_peak_bytes",
+    "bytes_peak",
     "lines",
     "calls",
     "branches",

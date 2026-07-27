@@ -7,9 +7,10 @@
     "compile_rounds": 11,
     "compile_visits": 135,
     "emitted_lines": 1893,
-    "oneshot_peak_bytes": 9437184
+    "oneshot_peak_bytes": 6977052,
+    "decode_peak_bytes": 24421728
   },
-  "floor": 60.3515327503794,
+  "floor": 60.813427186469426,
   "history": [
     {
       "floor": 46.33,
@@ -78,6 +79,10 @@
     {
       "floor": 60.35,
       "why": "std/json strings on the bytes builder: decode allocs -9%, alloc bytes -32%, arena peak down a block"
+    },
+    {
+      "floor": 60.81,
+      "why": "transient builders grow in the arena: decode true peak 24.4M->3.1M (the leak the RSS showed at 25MB), oneshot pays one arena block, +3 IR lines per sample for the signed-cap fast path; model sums arena+builder peak and gains the decode peak term at 0.10"
     }
   ]
 }

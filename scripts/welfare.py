@@ -52,20 +52,26 @@ FLOOR = ROOT / "bench/welfare_floor.json"
 #             eighth doubling still shows up in somebody's bill. Larger
 #             satiation means the term keeps paying for longer.
 TERMS = {
-    "decode_allocs": (0.20, 2.0),
-    "decode_arena_blocks": (0.08, 1.5),
-    "encode_allocs": (0.17, 2.0),
-    "encode_arena_blocks": (0.07, 1.5),
+    "decode_allocs": (0.18, 2.0),
+    "decode_arena_blocks": (0.072, 1.5),
+    # the gauntlet's true peak: arena high water plus malloc-backed builder
+    # storage at its high water. A looping process's leak accumulates in
+    # exactly the storage the arena number cannot see — this term is what
+    # made the 21 MB transient-builder leak a priced regression instead of
+    # an invisible one. Runtime-class weight, late satiation.
+    "decode_peak_bytes": (0.10, 2.0),
+    "encode_allocs": (0.153, 2.0),
+    "encode_arena_blocks": (0.063, 1.5),
     # the one-shot peak: decode a document, hold it, print — kq's shape.
     # the looping gauntlet's rewinds hide exactly the garbage this term
     # sees, and peak footprint is the scoreboard row the project still
     # loses, so it enters at runtime-class weight with late satiation.
     # the arena-block terms cede the most, because peak bytes now measure
     # what block counts only proxied.
-    "oneshot_peak_bytes": (0.15, 2.0),
-    "compile_rounds": (0.13, 0.5),
-    "compile_visits": (0.10, 0.5),
-    "emitted_lines": (0.10, 0.5),
+    "oneshot_peak_bytes": (0.135, 2.0),
+    "compile_rounds": (0.117, 0.5),
+    "compile_visits": (0.09, 0.5),
+    "emitted_lines": (0.09, 0.5),
 }
 
 
@@ -93,9 +99,13 @@ def terms():
     return {
         "decode_allocs": decode["allocs"],
         "decode_arena_blocks": decode["arena_blocks"],
+        "decode_peak_bytes": decode["arena_peak_bytes"] + decode["bytes_peak"],
         "encode_allocs": encode["allocs"],
         "encode_arena_blocks": encode["arena_blocks"],
-        "oneshot_peak_bytes": oneshot["arena_peak_bytes"],
+        # the true one-shot peak: arena blocks plus malloc-backed builder
+        # storage at its high water. The arena number alone missed exactly
+        # the leak bytes_peak was built to expose.
+        "oneshot_peak_bytes": oneshot["arena_peak_bytes"] + oneshot["bytes_peak"],
         "compile_rounds": comp["rounds"],
         "compile_visits": comp["visits"],
         "emitted_lines": comp["lines"],

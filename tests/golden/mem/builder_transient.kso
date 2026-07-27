@@ -1,0 +1,18 @@
+import "std/text"
+
+fn assemble cs p acc
+  if (p > (length cs)) (text/utf8 acc) (step cs p acc)
+
+fn step cs p acc
+  assemble cs (p + 1) (text/append acc cs[p]!)
+
+fn once _
+  assemble (text/bytes "a builder that dies at the rewind") 1 (text/bytes "")
+
+fn run 0 acc
+  acc
+
+fn run n acc
+  run (n - 1) (acc + (length (once 0)))
+
+pub play = print "total {run 40 0}"
