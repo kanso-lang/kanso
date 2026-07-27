@@ -7884,3 +7884,22 @@ MB. Decode and one-shot veins byte-identical.
 The model gains the encode workload's true peak at 0.06 — the third of
 three, so every published workload's peak is priced the same way —
 with baseline at the pre-fix 113 MB. Floor 60.81 -> 62.70.
+
+## 2026-07-27 — the birthday theorem gets its adversarial corpus
+
+The ledger's soundness item: "cycles cannot cross birthdays" carried
+the whole cohort-counting design on one can't-happen claim, untested.
+Five attack programs now pin the boundary from the outside. Writing an
+older value inside a block is rejected whether the value arrives as an
+argument, is laundered through a local alias or an identity call,
+belongs to an enclosing block still under construction, or is a prior
+loop iteration's frozen cohort — each with its own diagnostic golden.
+The deep-path write (young wrapper, old interior) is a parse error:
+field writes are single-hop, so a write can only land on the named
+root, and the root must be a construction of the innermost block. The
+legal direction — an outer block referencing an inner block's
+already-frozen cohort — runs byte-identical on all three engines
+(micro corpus). Loop granularity falls out of the prior-iteration
+rejection: every incarnation of a syntactic block is its own cohort.
+No implementation change was needed; the checker held against every
+attack. The claim now has teeth instead of confidence.

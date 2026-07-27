@@ -1,0 +1,4 @@
+error[syntax]: expected a parameter pattern
+  --> build_write_deep_path.kso:9:12
+   9 |     wrapper.link.link = young
+                  ^

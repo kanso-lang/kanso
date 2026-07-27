@@ -1,0 +1,4 @@
+error[build]: `a.link = ...` writes only block-born values: `a` is not a construction made in this `build` block, so it stays immutable
+  --> build_write_enclosing_block.kso:10:9
+  10 |       a.link = b
+               ^

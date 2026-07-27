@@ -1,0 +1,15 @@
+type cell
+  tag
+  link
+
+fn go _
+  outer = build
+    a = cell "outer" none
+    inner = build
+      b = cell "inner" none
+      b
+    a.link = inner
+    a
+  outer.link.tag
+
+pub play = print "{go 0}"

@@ -1,0 +1,19 @@
+type cell
+  tag
+  link
+
+fn attack old
+  build
+    wrapper = cell "w" old
+    young = cell "young" none
+    wrapper.link.link = young
+    young
+
+fn go _
+  old = build
+    c = cell "old" none
+    c
+  a = attack old
+  a.tag
+
+pub play = print "{go 0}"

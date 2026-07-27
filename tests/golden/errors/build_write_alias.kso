@@ -1,0 +1,22 @@
+type cell
+  tag
+  link
+
+fn same x
+  x
+
+fn attack old
+  build
+    young = cell "young" none
+    alias = same old
+    alias.link = young
+    young
+
+fn go _
+  old = build
+    c = cell "old" none
+    c
+  a = attack old
+  a.tag
+
+pub play = print "{go 0}"
