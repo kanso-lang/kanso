@@ -146,18 +146,19 @@ fn partial_lambda(
         .collect();
     arities.sort_unstable();
     arities.dedup();
-    let [arity] = arities.as_slice() else {
-        return match arities.is_empty() {
-            true => Err(format!(
-                "browser backend: `&{name}` supplies {} argument(s), and no `{name}` takes more",
-                supplied.len()
-            )),
-            false => Err(format!(
-                "browser backend: `&{name}` with {} argument(s) has an ambiguous arity",
-                supplied.len()
-            )),
-        };
-    };
+    if arities.is_empty() {
+        return Err(format!(
+            "browser backend: `&{name}` holds {} argument(s), and no `{name}` takes more",
+            supplied.len()
+        ));
+    }
+    let Some(&arity) = arities.first() else { unreachable!("checked non-empty") };
+    if arities.len() > 1 {
+        return Err(format!(
+            "browser backend: `&{name}` escapes as a value while {} arms could still finish it",
+            arities.len()
+        ));
+    }
     let params: Vec<(String, crate::diag::Span)> =
         (0..arity - supplied.len()).map(|i| (format!("k#partial{i}"), span)).collect();
     let mut args = supplied.to_vec();
@@ -689,9 +690,23 @@ impl<'a> WasmBackend<'a> {
                     ctx.body.call(RT_ERR_STAMP);
                 }
             }
-            Expr::App { head, args, piped, span } if matches!(head.as_ref(), Expr::Partial(..)) => {
+            // `(&roll 4) 5` is one application seen whole, so it lowers to the
+            // call it means and dispatch happens on the total count
+            Expr::App { head, args, piped, span } if matches!(head.as_ref(), Expr::App { head: inner, .. } if matches!(inner.as_ref(), Expr::Partial(..))) =>
+            {
+                let Expr::App { head: inner, args: held, .. } = head.as_ref() else {
+                    unreachable!()
+                };
+                let Expr::Partial(name, nspan) = inner.as_ref() else { unreachable!() };
+                let mut all = held.clone();
+                all.extend(args.iter().cloned());
+                let callee = Expr::Ident(name.clone(), *nspan);
+                let call =
+                    Expr::App { head: Box::new(callee), args: all, piped: *piped, span: *span };
+                return self.emit_expr(ctx, &call, false);
+            }
+            Expr::App { head, args, span, .. } if matches!(head.as_ref(), Expr::Partial(..)) => {
                 let Expr::Partial(name, _) = head.as_ref() else { unreachable!() };
-                let _ = (piped, span);
                 let lambda = partial_lambda(self.program, name, args, *span)?;
                 return self.emit_expr(ctx, &lambda, false);
             }
