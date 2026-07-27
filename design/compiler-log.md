@@ -6861,3 +6861,30 @@ output 4.6 of it, so encode garbage is 82.3 mb — 69% of peak now that the
 decode side stopped inflating. The shelf is a larger share of a smaller
 number, and it is now nearly the whole story: a working shelf would put the
 full pretty-print near 37 mb, jq territory.
+
+## 2026-07-26 — put joins push and append: unique maps extend in place
+
+The last mut-less insertion verb. `put` allocated a fresh 32-byte KMap header
+on every call, even on the frontier path that claims the next pair slot in
+O(1) — the diagnosis measured 83,610 of them decoding the 1.9 mb document.
+`k_b_put_mut` carries the new length in the existing header where the
+linearity analysis proves the map moved, and a map literal now counts as a
+unique source, which it always was — `{:}` is born fresh exactly as `[]` is.
+
+The sorted view resets on the mut path: it is per-header state and the header
+now describes different contents. put never builds one, a later read rebuilds
+it, and the differential suite is what checks this reasoning rather than the
+prose.
+
+    decode allocations   11,353,217 -> 10,518,917
+    kq decode            702,043 -> 646,423   (the 55,620 fast-path puts)
+    welfare                   55.51 -> 55.95
+
+WHAT THE FIRST SPEC MISSED. The aliasing spec's first draft held a map with
+exact capacity, and it passed even under a deliberately unsound analysis —
+both aliased puts fell to the copy path because there was no slack to claim,
+so the mutation the spec existed to catch could not physically happen on its
+input. The dangerous shape needs a map that has grown once (growth doubles, so
+slack exists), and only the strengthened input goes red when the uniqueness
+check is stripped. Watched failing both ways: the mem pin at 152 allocations
+against 107 on the old runtime, the alias spec under the stripped analysis.

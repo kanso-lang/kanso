@@ -207,7 +207,7 @@ impl<'a> Analysis<'a> {
 
     fn unique_in(&self, e: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
         match e {
-            Expr::List(..) => true,
+            Expr::List(..) | Expr::MapLit(..) => true,
             // A fold threads its seed through the folding function and returns
             // what the last call gave back, so the result is unique when the
             // seed is and the folder returns unique from a unique first
@@ -239,6 +239,9 @@ impl<'a> Analysis<'a> {
                     if matches!(n.as_str(), "push" | "append" | "builtin_append")
                         && args.len() == 2 =>
                 {
+                    self.unique_in(&args[0], ctx, scoped)
+                }
+                Expr::Ident(n, _) if n == "put" && args.len() == 3 => {
                     self.unique_in(&args[0], ctx, scoped)
                 }
                 // `concat` always allocates a fresh list (k_b_concat), so its
@@ -330,6 +333,13 @@ fn walk_for_push_in(
         // into its own frontier when nobody else holds the value
         if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "push" | "append" | "builtin_append"))
             && args.len() == 2
+            && a.unique_in(&args[0], decl, scoped)
+        {
+            out.insert((decl.file.clone(), span.line, span.col));
+        }
+        // put extends a map the same way, one arity over
+        if matches!(head.as_ref(), Expr::Ident(n, _) if n == "put")
+            && args.len() == 3
             && a.unique_in(&args[0], decl, scoped)
         {
             out.insert((decl.file.clone(), span.line, span.col));

@@ -1,0 +1,7 @@
+fn fill 0 acc
+  acc
+
+fn fill n acc
+  fill (n - 1) (put acc "k{n}" n)
+
+pub play = print "{length (fill 50 {:})}"
