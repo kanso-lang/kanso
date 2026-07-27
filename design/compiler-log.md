@@ -6837,3 +6837,27 @@ Worth stating plainly: this benchmark document escapes 19% of its strings, which
 is high for real json. A clean corpus would show less of this and more of the
 buffer growth measured earlier — the fix is still right, the multiplier on it is
 document-shaped.
+
+## 2026-07-26 — the escape fix lands in kq; the shelf split moves
+
+kq's escaped strings now decode through a byte builder instead of a list of
+ints (kq#26). The diagnosis said most of the 228,283 decode buffers were
+per-character pushes after a first backslash, and the fix confirms it:
+
+    decode peak         52.5 mb -> 32.5   (jq holds 29.2)
+    full peak          139.3 mb -> 119.4  (jq holds 30.7)
+    decode allocations  874,393 -> 702,043
+    instructions        680.4m  -> 641.6m  (3.65x less than jq, was 3.44x)
+    pretty-print wall   35.4 ms -> 35.0
+
+On the 188 kb path query kq's footprint is now smaller than jq's, 4.2 mb
+against 4.8. The failed slice-and-concat attempt from the diagnosis is
+superseded: the builder appends the clean prefix in one copy and each escape
+byte in place, so no intermediate value exists and no range-append primitive
+was needed after all.
+
+The shelf split re-measured: encoding adds 86.9 mb to a 32.5 mb decode peak,
+output 4.6 of it, so encode garbage is 82.3 mb — 69% of peak now that the
+decode side stopped inflating. The shelf is a larger share of a smaller
+number, and it is now nearly the whole story: a working shelf would put the
+full pretty-print near 37 mb, jq territory.
