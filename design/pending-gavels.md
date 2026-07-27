@@ -49,8 +49,18 @@ stays module-local (it couples to full field count and order — the
 author's layout freedom). Construction stays factory-only. This
 supersedes "types are opaque outside their module, always" and retires
 projection boilerplate like std/json's failure_position. Open detail:
-per-field pub, or all fields readable with the pub type (proposed:
-all-with-type until a real invariant-hiding case appears).
+per-field pub, or all fields readable with the pub type — argued on
+the merits, not demand. For per-field: the doctrine's own sentence is
+"pub is name-level surface," a field is a name, so field-level pub is
+the same rule applied uniformly, not a new feature; and with
+construction factory-only, authors will have computed internal fields
+(caches, normalized forms) that all-with-type forces them to either
+expose or split into a pub shell around a private core — ceremony the
+per-field spelling deletes. For all-with-type: records are data, a
+hidden field is a sign the value is carrying non-data, and one fewer
+visibility site keeps patterns and dot-reads uniform. Recommendation:
+per-field pub, because it is the existing rule made uniform rather
+than an addition.
 
 ## 2. Read-write map uniqueness
 
