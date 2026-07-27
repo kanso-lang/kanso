@@ -1,0 +1,8 @@
+pub fn go _
+  print "{missing 0}"
+
+fn missing _
+  none
+
+fn to_string none
+  "NOTHING"
