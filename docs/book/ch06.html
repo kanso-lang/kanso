@@ -96,12 +96,9 @@ serving</code></pre>
   </div>
   <div class="code-output">
     <div class="code-panel-title">kanso run join.kso --plan</div>
-    <pre><code>plan:
-  join {
-  print "steeping the sencha"    <span class="c"># from line 2</span>
-  print "warming the cups"    <span class="c"># from line 3</span>
-  } <span class="c"># unordered; both run</span>
-  print "serving"    <span class="c"># from line 4</span></code></pre>
+    <pre><code>steeping the sencha
+warming the cups
+serving</code></pre>
   </div>
 </div>
 
@@ -142,22 +139,13 @@ brew: poured</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">kanso run concurrency.kso --plan</div>
-  <pre><code>plan:
-  join {
-  print "brew: steeping"    <span class="c"># from line 4</span>
-  sleep 60
-  print "brew: poured"    <span class="c"># from line 4</span>
-  random 6
-  . &lt;continuation&gt;
-  random 6
-  . &lt;continuation&gt;
-  random 6
-  . &lt;continuation&gt;
-  random 6
-  . &lt;continuation&gt;
-  random 6
-  . &lt;continuation&gt;
-  } # unordered; both run</code></pre>
+  <pre><code>brew: steeping
+roll 1: a 3
+roll 2: a 1
+roll 3: a 4
+roll 4: a 1
+roll 5: a 1
+brew: poured</code></pre>
 </div>
 
 <p>both threads live inside one <code>join</code>: the brew chain, and the five throws chained by <code>&gt;&gt;</code> into a single sequence. nothing hangs below the block, because this program has no wall—order exists only inside each thread. <code>walled.kso</code> is the same program with the wall put back:</p>
@@ -308,10 +296,10 @@ ramen: bowled</code></pre>
 <span class="f">print</span> <span class="s">"the sum above went nowhere"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check bare_check.kso</div>
-    <pre><code><span class="k">error[unused]</span>: unused expression: every non-final line binds a name (sequence effects with `&gt;&gt;`)
-  --&gt; bare_check.kso:2:5
-   2 |   1 + 1
-           ^</code></pre>
+    <pre><code><span class="k">error[unused]</span>: this value is never used: a non-final line binds a name, or is an effect joining the group
+<span class="c">  --&gt; bare_check.kso:1:3</span>
+   1 | 1 + 1
+         <span class="k">^</span></code></pre>
   </div>
 </div>
 

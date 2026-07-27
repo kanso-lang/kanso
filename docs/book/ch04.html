@@ -18,7 +18,7 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at ratio.kso:2</span></code></pre>
+  born in main at ratio.kso:1</code></pre>
   </div>
 </div>
 
@@ -73,8 +73,8 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso run unhandled.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at unhandled.kso:8</span>
-<span class="c">  passed through describe</span></code></pre>
+  born in play at unhandled.kso:8
+  passed through describe</code></pre>
   </div>
 </div>
 
@@ -93,7 +93,7 @@ extra_css: /book/book.css
   <div class="code-output">
     <div class="code-panel-title">kanso run ninth.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index 9"
-<span class="c">  born in main at ninth.kso:3</span></code></pre>
+  born in main at ninth.kso:2</code></pre>
   </div>
 </div>
 
@@ -149,7 +149,7 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 <span class="f">print</span> <span class="s">"third: <span class="i">{third}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ignored.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled none reached main</code></pre>
+    <pre><code>third: &lt;none&gt;</code></pre>
   </div>
 </div>
 
@@ -166,7 +166,7 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
   <div class="code-output">
     <div class="code-panel-title">kanso run pocky.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "missing index "pocky""
-<span class="c">  born in main at pocky.kso:3</span></code></pre>
+  born in main at pocky.kso:2</code></pre>
   </div>
 </div>
 
@@ -277,7 +277,7 @@ not a flag</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run garbage.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
-<span class="c">  born in major_of at garbage.kso:7</span></code></pre>
+  born in text/to_int at std/text/text.kso:35</code></pre>
   </div>
 </div>
 
@@ -333,7 +333,7 @@ not a flag</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
-<span class="c">  born in main at seq.kso:2</span></code></pre>
+  born in main at seq.kso:3</code></pre>
   </div>
 </div>
 

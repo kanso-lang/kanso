@@ -108,6 +108,30 @@ PANEL = re.compile(
     re.S,
 )
 
+# an output panel's title is the command that produced it; its body must be
+# the recorded .out for that sample, or the page is quoting a compiler that
+# no longer exists
+OUT_PANEL = re.compile(
+    r'(<div class="code-panel-title">kanso (?:run|check|test|build)[^<]*?'
+    r'([a-z_0-9/]+)\.kso[^<]*</div>\s*<pre><code>)(.*?)(</code></pre>)',
+    re.S,
+)
+
+def render_output(text):
+    lines = []
+    for line in text.rstrip("\n").split("\n"):
+        if re.match(r"^(error|warning)\[[a-z]+\]", line):
+            tag, rest = line.split(":", 1)
+            lines.append(f'<span class="k">{esc(tag)}</span>:{esc(rest)}')
+        elif line.lstrip().startswith("-->"):
+            lines.append(f'<span class="c">{esc(line)}</span>')
+        elif set(line.strip()) == {"^"} and line.strip():
+            at = line.index("^")
+            lines.append(line[:at] + f'<span class="k">{esc(line[at:])}</span>')
+        else:
+            lines.append(esc(line))
+    return "\n".join(lines)
+
 def strip_tags(html_body):
     text = re.sub(r"<[^>]+>", "", html_body)
     return html.unescape(text)
@@ -143,6 +167,27 @@ def main():
                 return m.group(1) + render(source) + m.group(4)
             return m.group(0)
         updated = PANEL.sub(fix, content)
+
+        def fix_out(m):
+            nonlocal drift
+            base = m.group(2).split("/")[-1]
+            hits = []
+            for root, _, files in os.walk(sample_dir):
+                for f in files:
+                    if f == base + ".out":
+                        hits.append(os.path.join(root, f))
+            if len(hits) != 1:
+                return m.group(0)
+            recorded = open(hits[0]).read()
+            if strip_tags(m.group(3)).rstrip("\n") == recorded.rstrip("\n"):
+                return m.group(0)
+            drift += 1
+            print(f"{'rewrote' if write else 'drifted'}: {ch} :: {base}.out")
+            if write:
+                return m.group(1) + render_output(recorded) + m.group(4)
+            return m.group(0)
+
+        updated = OUT_PANEL.sub(fix_out, updated)
         if write and updated != content:
             open(path, "w").write(updated)
     print(f"{drift} panel(s) {'rewritten' if write else 'drifted'}")
