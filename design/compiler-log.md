@@ -7416,3 +7416,17 @@ Also verified in the same sweep, all green: field-annotation refusal (ch03),
 the endpoint rule (ch04), arity-short calls (ch05), the bare-line effect
 check (ch06), and canonical form as grammar (appc, backed by the 26
 formatting fixtures).
+
+## 2026-07-27 — the landing page and the compiler page quoted a retired golden
+
+The number-bearing-surfaces checklist exists because sweeps run on recall,
+and here is this week's proof: index.html's landing panel and two passages
+of compiler.html still said the gauntlet performs 14,799,465 allocations
+across five arena blocks. The golden the build actually diffs says
+8,341,214 across four, and has for some time — ch10 carried the same stale
+set until its panels were wired into the machine sync earlier today. All
+three prose sites now match the golden; the timing table stands, because
+its 0.76/0.86 sitting (2026-07-26, interleaved, conditions named) is the
+latest published measurement. The deeper fix — prose numbers that sync
+from the golden the way panels now sync from samples — would retire this
+entire failure class, and goes on the tooling list.
