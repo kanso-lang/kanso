@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 55.510462427315446,
+  "floor": 55.951496357747686,
   "history": [
     {
       "floor": 100.0,
@@ -29,6 +29,10 @@
     {
       "floor": 55.51,
       "why": "a record's fields live after its header, not in a second allocation: encode allocations 22,130,027 -> 18,785,627. Field count is fixed at construction and set writes through the existing slots, so there is nothing to grow."
+    },
+    {
+      "floor": 55.95,
+      "why": "put extends a unique map in place: decode allocations 11,353,217 -> 10,518,917 and a map literal counts as a unique source. The +10 emitted lines are the put_mut declare (5 samples) plus the wrapper-inlining lines already priced."
     }
   ]
 }

@@ -2890,6 +2890,32 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
+KValue k_b_put(KValue mv, KValue key, KValue val);
+
+/* The same put at a site the linearity analysis proved unique: the map is
+   moved into this call, so its header can carry the new length instead of a
+   fresh one being allocated. The sorted view is per-header state and the
+   header now describes different contents, so it resets; put never builds
+   one, and a later read rebuilds it. */
+KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
+    if (!k_not_failure(mv)) return mv;
+    if (!k_not_failure(key)) return key;
+    if (!k_not_failure(val)) return val;
+    if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
+    KMap* m = k_as_map(mv);
+    KBuf* buf = k_buf_of(m->pairs);
+    if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
+        m->pairs[m->len * 2] = key;
+        m->pairs[m->len * 2 + 1] = val;
+        buf->used += 2;
+        m->len++;
+        m->sorted = NULL;
+        m->sorted_len = 0;
+        return mv;
+    }
+    return k_b_put(mv, key, val);
+}
+
 KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (!k_not_failure(mv)) return mv;
     if (!k_not_failure(key)) return key;

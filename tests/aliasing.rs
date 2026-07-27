@@ -97,3 +97,16 @@ fn a_singly_owned_builder_is_still_written_through() {
          stopped paying for itself"
     );
 }
+
+/// The map half of the same rule: `put` extends in place only where the map
+/// is moved, so one held by two owners keeps its second owner's view intact.
+#[test]
+fn a_map_held_twice_is_not_written_through() {
+    let (interpreted, native) = both_engines(
+        "map_alias",
+        "pub play =\n  base = put (put {:} \"a\" 1) \"b\" 2\n  x = put base \"c\" 3\n  y = put base \"d\" 4\n  print \"{length x} {length y}\"\n",
+    );
+
+    assert_eq!(native, interpreted);
+    assert_eq!(native, "3 3");
+}
