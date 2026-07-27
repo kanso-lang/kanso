@@ -6888,3 +6888,31 @@ input. The dangerous shape needs a map that has grown once (growth doubles, so
 slack exists), and only the strengthened input goes red when the uniqueness
 check is stripped. Watched failing both ways: the mem pin at 152 allocations
 against 107 on the old runtime, the alias spec under the stripped analysis.
+
+## 2026-07-26 — the ratchets go aggressive, and the declare fix pays the debt
+
+Clay, twice: emitted lines went up and nothing stopped it. He is right that a
+test should have — the ratchet's design allowed any move under a hundredth of a
+point, and two such moves stacked. The fix is not a re-pricing.
+
+**The lines came down instead.** Every program carried all 93 runtime declares
+whether it called them or not. The emitter now keeps a declare only when its
+symbol appears in the body or in one of the preamble's own inline definitions:
+1,903 -> 1,488 emitted lines, 27% below the original 1,893 baseline, and the
+compile golden drops about 83 lines per sample. Welfare 55.95 -> 56.48.
+
+**The welfare gate is two-sided now.** It failed only on falls; a rise nobody
+banked was a rise the next change could spend, and the banking was manual
+discipline. An unheld gain above the floor is now itself a CI failure, so the
+floor rises the moment an improvement merges and every regression thereafter is
+measured against the best the project has ever been. That is what "the number
+only goes up" means when a machine enforces it.
+
+**kq gets its own ratchet** (kq#27). Its counters were checked by hand, which
+is how the decode anomaly sat unnoticed until Clay called the footprint an
+embarrassment. Two deterministic cost goldens now gate kq's CI beside the jq
+byte-identity check, so the next kanso change that moves kq's memory fails a
+build instead of waiting for a hand measurement.
+
+kq itself, rebuilt on put_mut: full peak 117.8 mb, decode peak 30.9 against
+jq's 29.2. The remaining 87 mb over jq is the shelf, which is the open front.

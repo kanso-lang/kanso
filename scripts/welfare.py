@@ -190,7 +190,10 @@ def main():
         print("make that argument, then welfare.py --set \"the reason\".")
         return 1
     if value > floor + 0.01:
-        print(f"\nwelfare is {value - floor:.2f} above the floor; run --set to hold the gain.")
+        print(f"\nFAIL  welfare is {value - floor:.2f} above the floor and the gain is not held.")
+        print("A rise nobody ratchets is a rise the next change is free to spend. Bank it")
+        print("in this same PR: welfare.py --set \"what improved and why\".")
+        return 1
     return 0
 
 
