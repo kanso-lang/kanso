@@ -7669,3 +7669,36 @@ is reflection, not enforcement — replacing the earlier report-only plan,
 which graded the sentence rather than the substance. Probed both ways:
 a lone perm_allocs rise fails; the same rise beside an allocs drop
 passes to welfare's judgment.
+
+## 2026-07-27 — structured cohort freeing: a call's garbage dies at the pop
+
+The gaveled build, priced by the term built for it. A qualified call from
+user code whose arguments are all immutable shapes — scalars and strings,
+the mask that makes it impossible for the callee to have grown the
+caller's storage — now marks the arena on entry, and the pop ends the
+construction cohort: when at least half a megabyte of blocks grew, the
+result is evacuated through the carry machinery (sized against the mark,
+copied to the side buffer sharing everything below, the segment rewound,
+the survivor re-interned) and the garbage goes with the rewind. A small
+segment just drops the mark. Loops keep their own tier, and a caller
+already inside a beat cluster is skipped — its rewind does the reclaiming,
+which is why the decode gauntlet's counters moved by exactly two new
+lines and nothing else.
+
+The mechanism is composed entirely of shipped parts: k_cohort_pop is
+carry_reset, stage, iter_carry, take, and beat_pop in a row, behind a
+block-granular deterministic threshold snapshotted on the mark. Measured
+on the reshaped one-shot bench — decode the board, hold it, encode it
+back, kq's full-print shape — peak falls 9,437,184 to 6,291,456 bytes,
+minus a third, for a 239,415-versus-207,435 alloc bill: the evacuation
+copy, the exact trade the oneshot_peak_bytes term entered the model to
+price. Welfare 57.88 -> 59.31, banked; the term's baseline re-anchored to
+the reshaped bench's pre-cohort measurement in the same change, reason in
+the history. allocs worsened in the one-shot vein and peak improved — the
+compensation rule's first real customer, and it passes.
+
+The slice is deliberately narrow: immutable-args only, so the
+caller-held-container growth hazard cannot arise. Widening the license to
+heap arguments needs the arg-position evacuation the loop tier's carried
+slots already do, and that is the natural second slice once the
+read-write-uniqueness ruling lands.

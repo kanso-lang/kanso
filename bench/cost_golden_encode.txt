@@ -2,6 +2,7 @@ allocs=16259944
 alloc_bytes=853335616
 arena_blocks=4
 arena_peak_bytes=4194304
+cohort_frees=0
 perm_allocs=12
 beat_iters=5032401
 thunk_allocs=0

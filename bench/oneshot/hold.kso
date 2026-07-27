@@ -3,4 +3,5 @@ import "std/json"
 
 fn report text
   doc = json/decode text
-  print "held {length doc}"
+  out = json/encode doc
+  print "held {length doc} wrote {length out}"
