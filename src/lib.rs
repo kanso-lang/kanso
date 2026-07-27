@@ -941,6 +941,7 @@ fn try_fuse_piped(
     // collect the piped stages outside-in: consumer first, subject last
     let mut stages: Vec<(&str, &[Expr], crate::diag::Span)> = Vec::new();
     let mut cur = e;
+    #[allow(clippy::while_let_loop)]
     loop {
         let Expr::App { head, args, span, piped: true } = cur else { break };
         let Expr::Ident(name, _) = head.as_ref() else { break };
