@@ -8059,3 +8059,23 @@ million-frame count loops, count 2.5 reports the stack on both
 engines, count "oops" errs identically, zero and negative bases answer
 through the original literal arms. 19 suites, browser differential
 83/0, decode vein byte-identical.
+
+## 2026-07-27 — the ledger closes its sweep; the pending gavels get a catalog
+
+The queue's last four survivors are settled with evidence rather than
+left dangling. The mini-rewind and the two-level scratch arena are
+declined for now: no current workload shows unreclaimed LIFO scratch
+beyond what beats and the cohort already rewind, and that missing
+signal — arena growth with no beat or cohort fire — is the recorded
+reopening condition. The three-way escape split ran its gating
+measurement: vse holds two arena blocks with its loops beating, so the
+split has nothing to buy on the workload named as its test. The
+explain-copies item is part-superseded by the counter stack this
+stretch built (bytes_peak, cohort_kept, carry_dedup, the trend gate,
+the welfare peak terms); the unserved half — naming the source site of
+each evacuation copy — is scoped and waits on a CLI-surface ruling.
+
+Everything that waits on Clay now lives in design/pending-gavels.md:
+eleven decisions with context, interim state, and what each unblocks,
+plus the four open-but-unblocking notes. The sweep that started at the
+top of this log's 2026-07-27 entries ends here.

@@ -67,22 +67,36 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    selection between `k_b_push`/`k_b_push_mut` is missing. Add an
    observable-allocation-count test, measure the spine case first. *(Memory-
    behavior-sensitive — mutation in place; supervise the x86 gate.)*
-2. **Free-the-top mini-rewind** — captures the whole LIFO scratch win cheaply
-   (any-size subsequent reuse, no pairing, no fragmentation); a finer-grained
-   rewind that composes with beats.
+2. **Free-the-top mini-rewind — DECLINED FOR NOW (2026-07-27, evidence).**
+   No current workload exhibits unreclaimed LIFO scratch beyond what beats
+   and the cohort already rewind: the decode gauntlet runs at 3 blocks,
+   encode at 4, oneshot's boundary fires, vse at 2 blocks. Revisit when a
+   workload shows arena growth with no beat or cohort fire — that signal,
+   not the idea, is the reopening condition.
 3. **Generalize the non-heap-scalar rewind rule** (runtime.c:134) to every
    scalar-returning call site / arm — the one legitimate sub-beat case, using
    the SCALAR set `beat.rs` already computes. Abandon any placement that rewinds
    a frame producing surviving heap (use-after-free).
-4. **Three-way escape split** — dies-this-beat → scratch; MUST-survive (proven on
-   every path) → born-in-shelf, no copy; MAY-survive → build-on-bench + copy.
-   Gating on *may* instead of *must* is a cross-beat leak (the MLKit
-   region-pinning failure). Measure survivor volume on VSE first.
-5. **`--explain-copies` diagnostic + AARA CI footprint ratchet** — make the
-   design's one fragility (a distant edit silently flips reuse→copy) observable;
-   symbolic peak-RSS bound as a CI contract. Observability, not speedup.
-6. **TRMC (stack-safety + ergonomics, not a memory win) + single-consumer bit +
-   surgical DPS** where a copy genuinely occurs.
+4. **Three-way escape split — DECLINED FOR NOW (2026-07-27, measured).**
+   The gating measurement ran: vse holds arena_blocks=2 with its loops
+   beating — constant space already, so the split has nothing to buy on
+   the workload that was named as its test. Reopen if a beat-heavy
+   workload shows significant carry-copy volume (carry_dedup and the
+   copy-size pass now make that visible).
+5. **`--explain-copies` diagnostic + AARA CI footprint ratchet — PARTLY
+   SUPERSEDED (2026-07-27).** The reuse→copy flip is now observable and
+   CI-gated by the counter stack built this stretch: bytes_peak,
+   cohort_kept, carry_dedup, buf_reuse pinned per vein, the trend gate's
+   direction table, and the welfare peak terms. What remains unserved is
+   the *where* — a diagnostic naming the source site of each evacuation
+   copy — which needs span plumbing through the carry machinery and a
+   CLI surface worth a ruling before building.
+6. **TRMC — SHIPPED at the exact slice (#394, #395).** Accumulating
+   integer recursion with literal operands runs as a loop on all three
+   engines, through additive int-ascribed wrappers so every non-integer
+   argument keeps its original behavior. Widening to inferred-int
+   operands is scoped (needs Inference threaded from check, not
+   recomputed). Single-consumer bit + surgical DPS remain unexplored.
 7. **Cohort-counting soundness ratchet TEST — DONE (adversarial corpus,
    2026-07-27).** Five attacks live in tests/golden/errors, all rejected
    with pinned diagnostics: writing an argument's older value
@@ -99,7 +113,9 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    tests/golden/micro/build_nested_cohort.kso. Loop granularity is
    settled by the prior-iteration rejection: each incarnation of a
    syntactic block is its own cohort.
-8. Two-level scratch arena — lowest priority, gated on measured scrap volume.
+8. Two-level scratch arena — DECLINED FOR NOW (2026-07-27): same evidence
+   as item 2; the gating scrap-volume signal does not exist in any
+   current workload.
 
 ## 4. Breaking new ground (survived attack, SPECULATIVE — each gets an experiment)
 
