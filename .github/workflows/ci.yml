@@ -99,6 +99,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 scripts/welfare.py
+      - name: prose numbers match the golden they quote
+        run: python3 scripts/golden_prose.py
 
   grammar:
     name: editor grammar (types, strings and comments still painted)
