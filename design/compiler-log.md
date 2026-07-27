@@ -7769,15 +7769,22 @@ seed instead of concat onto []) closes that gap exactly: the std profile
 now reads append_fast=21,457, utf8_zerocopy=1,773 — kq parity — with
 alloc_bytes down 23% (4.45M to 3.41M) and decode arena peak down a full
 block (4M to 3M). In the one-shot vein: allocs 239,415 to 234,323,
-alloc_bytes -1.04M, sh_buf halved (2.23M to 1.10M), sh_str -72K.
+alloc_bytes -1.04M, sh_buf halved (2.23M to 1.10M), sh_str -72K. In the
+decode gauntlet (150 decodes): allocs 8.34M to 7.58M, alloc_bytes 490M
+to 334M (-32%), arena peak 4 blocks to 3, sh_buf -55%. (The gauntlet
+number surfaced on CI first: bench/jsonbench vendors lib/json at
+generation time, and the local copy was stale — regenerate with
+make_jsonbench.sh before reading that vein.)
 
-Priced worsenings, both the builder's own signature: bytes_malloc 13 to
-1,786 (each builder growth mallocs off-arena by design, per the #336
-carry model) and buf_reuse 3,445 to 2,233 (the transient list buffers
-that used to be reused no longer exist to reuse — their whole pool
-shrank by 1.13M, which is the point). Welfare unchanged at 59.31: the
-one-shot peak is encode-side dominated and stays at six blocks, so the
-scalar's terms saw nothing. The win is churn, not peak.
+Priced worsenings, all the builder's own signature: bytes_malloc (13 to
+1,786 one-shot, 0 to 265,950 gauntlet — each builder growth mallocs
+off-arena by design, per the #336 carry model), buf_reuse (3,445 to
+2,233 / 516,750 to 334,950 — the transient list buffers that used to be
+reused no longer exist to reuse; their whole pool shrank, which is the
+point), and perm_allocs 8 to 9 (the text/bytes "" seed constant freezes
+once). Welfare 59.31 to 60.35, banked in this PR: decode_allocs and
+decode_arena_blocks both moved; the one-shot peak stays encode-side
+dominated at six blocks.
 
 Also: trend_gate.py stripped only the encode_ prefix before direction
 lookup, so every oneshot counter classified neutral and a pure oneshot
