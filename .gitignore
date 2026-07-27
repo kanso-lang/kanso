@@ -4,6 +4,7 @@ fib.c
 fib.ll
 /jsonbench
 /encodebench
+/oneshot
 jsonbench.ll
 bench/jsonbench/
 /kq
