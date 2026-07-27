@@ -119,8 +119,10 @@ A clean grep is necessary, not sufficient — the families above are wider than 
 - **One scalar covers runtime and compile cost together**, because the
   per-counter goldens cannot see a trade. `scripts/welfare.py` weighs decode
   allocations and arena blocks, encode allocations and arena blocks, fixpoint
-  rounds, expression visits and emitted lines into a single score against a
-  recorded baseline; a hundred is the reference and higher is better. Every
+  rounds, expression visits and emitted lines into a single score. **It is an
+  index, not a percentage** — the ceiling is a hundred, where every term costs
+  nothing, and the origin is arbitrary. Only its direction and the size of its
+  moves mean anything. It currently reads about 46. Every
   term is deterministic, so the number moves only when somebody changes the
   compiler. CI fails when it drops.
 - **The sum is the objective; the terms are diagnostics.** A term getting worse

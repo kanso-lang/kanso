@@ -122,16 +122,22 @@ def satisfaction(ratio, satiation):
 
 
 def score(now, base):
-    """The one number. A weighted sum of per-term satisfaction, scaled so the
-    recorded baseline reads 100."""
-    total = at_baseline = 0.0
+    """The one number: a weighted sum of per-term satisfaction, on a scale
+    whose ceiling is a hundred and whose origin is arbitrary.
+
+    Not a percentage of anything. Anchoring the baseline at 100 made it read
+    as "complete", which invited the question of what a hundred percent of the
+    work would be — there is no such quantity. What the number is for is its
+    direction and the size of its moves. A hundred is the unreachable limit
+    where every term costs nothing.
+    """
+    total = 0.0
     for key, (weight, satiation) in TERMS.items():
         # a term that reached zero is better than any baseline, and dividing
         # by it would say infinity rather than "as good as this gets"
         current = now[key] if now[key] else 0.5
         total += weight * satisfaction(base[key] / current, satiation)
-        at_baseline += weight * satisfaction(1.0, satiation)
-    return 100.0 * total / at_baseline
+    return 100.0 * total
 
 
 def main():
@@ -157,7 +163,7 @@ def main():
     held = json.loads(FLOOR.read_text())
     value = score(now, held["baseline"])
     floor = held["floor"]
-    print(f"welfare {value:.2f}   floor {floor:.2f}")
+    print(f"welfare {value:.2f}   floor {floor:.2f}   (ceiling 100)")
     for key in sorted(TERMS):
         base, cur = held["baseline"][key], now[key]
         if base != cur:

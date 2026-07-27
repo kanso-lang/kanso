@@ -8,11 +8,15 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 100.0,
+  "floor": 46.33,
   "history": [
     {
       "floor": 100.0,
       "why": "baseline established at the utf-8 short-ascii fast path"
+    },
+    {
+      "floor": 46.33,
+      "why": "rescaled: the number is an index with a ceiling of 100, not a percentage"
     }
   ]
 }
