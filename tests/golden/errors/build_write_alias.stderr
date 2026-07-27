@@ -1,0 +1,4 @@
+error[build]: `alias.link = ...` writes only block-born values: `alias` is not a construction made in this `build` block, so it stays immutable
+  --> build_write_alias.kso:12:11
+  12 |     alias.link = young
+                 ^

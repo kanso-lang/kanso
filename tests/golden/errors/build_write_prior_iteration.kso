@@ -1,0 +1,22 @@
+type cell
+  tag
+  link
+
+fn weave prev 0
+  prev
+
+fn weave prev n
+  next = build
+    c = cell "gen" prev
+    prev.link = c
+    c
+  weave next (n - 1)
+
+fn go _
+  seed = build
+    s = cell "seed" none
+    s
+  w = weave seed 3
+  w.tag
+
+pub play = print "{go 0}"

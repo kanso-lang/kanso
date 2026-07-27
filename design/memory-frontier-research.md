@@ -83,13 +83,22 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
    symbolic peak-RSS bound as a CI contract. Observability, not speedup.
 6. **TRMC (stack-safety + ergonomics, not a memory win) + single-consumer bit +
    surgical DPS** where a copy genuinely occurs.
-7. **Cohort-counting soundness ratchet TEST — before regions ship.** "Cycles
-   cannot cross birthdays" is the most novel + least-tested piece; its soundness
-   rests on one "X can never happen" claim of exactly the shape that's burned us
-   before. Write an adversarial property test (a build-block capturing + mutating
-   an already-frozen outer value) in the `ratchet_*` style. Get an adversarial
-   proof, not a confident assertion. Also nail the birthday granularity for two
-   build-blocks sharing a beat.
+7. **Cohort-counting soundness ratchet TEST — DONE (adversarial corpus,
+   2026-07-27).** Five attacks live in tests/golden/errors, all rejected
+   with pinned diagnostics: writing an argument's older value
+   (build_write_older_cohort), the same value laundered through a local
+   alias and a call (build_write_alias), an enclosing block's
+   construction from a nested block (build_write_enclosing_block), a
+   prior loop iteration's frozen cohort (build_write_prior_iteration),
+   and a deep-path write through a young wrapper into an old cell
+   (build_write_deep_path — a parse error: single-hop writes make the
+   channel unrepresentable, so a field write can only land on the named
+   root, which must be a construction of the innermost block). The legal
+   pastward case — outer block referencing an inner block's frozen
+   cohort — is pinned three-engine byte-identical in
+   tests/golden/micro/build_nested_cohort.kso. Loop granularity is
+   settled by the prior-iteration rejection: each incarnation of a
+   syntactic block is its own cohort.
 8. Two-level scratch arena — lowest priority, gated on measured scrap volume.
 
 ## 4. Breaking new ground (survived attack, SPECULATIVE — each gets an experiment)

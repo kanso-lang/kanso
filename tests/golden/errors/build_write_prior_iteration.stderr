@@ -1,0 +1,4 @@
+error[build]: `prev.link = ...` writes only block-born values: `prev` is not a construction made in this `build` block, so it stays immutable
+  --> build_write_prior_iteration.kso:11:10
+  11 |     prev.link = c
+                ^
