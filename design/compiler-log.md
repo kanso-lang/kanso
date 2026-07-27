@@ -6968,3 +6968,23 @@ jq's 4.74, 33.6 ms), and the retired-instructions bullet keeps its original
 gap and gains its closing — the same instrument told both halves. kq's own
 README moved in kq#28 with regenerated cost goldens, since its CI builds
 against kanso main and the old counters no longer describe it.
+
+## 2026-07-27 — a literal builds once
+
+The shape counters' first find on their first day: 49.8 mb of the strings kq
+allocated while pretty-printing were the same few literals — ",\n" and a
+two-space indent — re-materialized on every evaluation, about 42 bytes per
+loop iteration across 1.2 million iterations. The rewinds reclaimed them, so
+the peak barely noticed; the allocator and the cycle counter paid full price.
+
+k_str_lit builds a literal once into a permanent slot and hands it back
+thereafter — the ascii single-character cache generalized, one slot global
+per interned literal.
+
+    encode allocations   18,774,865 -> 16,274,462
+    kq allocations        2,600,800 ->  1,066,528   (-59%)
+    kq wall, best-of-12     33.1 ms -> 28.1         (3.64x jq)
+    welfare                   60.25 -> 60.82, banked
+
+Peak moves half a megabyte; this one was churn, and the wall clock is where
+churn shows.

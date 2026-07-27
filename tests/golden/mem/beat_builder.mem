@@ -1,7 +1,7 @@
-allocs=602
-alloc_bytes=24160
+allocs=401
+alloc_bytes=17728
 arena_blocks=1
-perm_allocs=10
+perm_allocs=12
 beat_iters=200
 thunk_allocs=0
 thunk_forces=0
