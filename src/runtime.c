@@ -55,6 +55,14 @@ static long long k_stat_append_grow = 0;
 static long long k_stat_utf8_zerocopy = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
+/* Where arena bytes go, by value shape. The totals above say how much was
+   allocated; these say what it was, which is the first question every memory
+   diagnosis asks. Headers and payloads count into the shape that owns them. */
+static long long k_stat_sh_str = 0;
+static long long k_stat_sh_rec = 0;
+static long long k_stat_sh_buf = 0;
+static long long k_stat_sh_map = 0;
+static long long k_stat_sh_bytes = 0;
 static long long k_stat_bytes_freed = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
@@ -215,6 +223,9 @@ static void k_stats_dump(void) {
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
+    fprintf(stderr,
+        "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
+        k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
 }
 
 static void k_arena_push(size_t need) {
@@ -883,6 +894,8 @@ static char k_ascii_ready[128];
    the zero-copy finish, a deep copy that shares — assign `data` themselves
    and are unaffected. */
 static KStr* k_str_alloc(long long len) {
+    if (__builtin_expect(k_stats_on > 0, 0))
+        k_stat_sh_str += (long long)((sizeof(KStr) + (size_t)len + 1 + 15) & ~(size_t)15);
     KStr* s = k_alloc(sizeof(KStr) + (size_t)len + 1);
     s->len = (long)len;
     s->data = (char*)(s + 1);
@@ -985,6 +998,8 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
        through the existing slots, so the fields live immediately after the
        header rather than in a second allocation. The deep copier builds its
        own storage and assigns `fields` itself, which stays correct. */
+    if (__builtin_expect(k_stats_on > 0, 0))
+        k_stat_sh_rec += (long long)((sizeof(KRec) + sizeof(KValue) * (size_t)n + 15) & ~(size_t)15);
     KRec* r = k_alloc(sizeof(KRec) + sizeof(KValue) * (size_t)n);
     r->type_id = type_id;
     r->nfields = n;
@@ -2730,6 +2745,8 @@ long long k_truthy(KValue v) {
 /* ---- slice 2: lists, maps, closures, builtins ---- */
 
 static KValue* k_buf(long long cap) {
+    if (__builtin_expect(k_stats_on > 0, 0))
+        k_stat_sh_buf += (long long)((sizeof(KBuf) + sizeof(KValue) * (size_t)cap + 15) & ~(size_t)15);
     KBuf* b = k_alloc(sizeof(KBuf) + sizeof(KValue) * cap);
     b->cap = cap;
     b->used = 0;
@@ -2956,6 +2973,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     KMap* m = k_as_map(mv);
     KBuf* buf = k_buf_of(m->pairs);
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_map += (long long)sizeof(KMap);
     KMap* out = k_alloc(sizeof(KMap));
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     out->sorted = NULL;
@@ -3007,6 +3025,7 @@ static long k_cp_len(unsigned char b) {
 }
 
 static KValue k_bytes_view(const unsigned char* data, long long len) {
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_bytes += (long long)sizeof(KBytes);
     KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
     b->data = data;
@@ -3481,6 +3500,7 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
    claims its frontier exactly as list push does, so a fold of appends is
    amortized linear while every intermediate value stays a real value. */
 static KValue k_bytes_owned(long long len, const unsigned char* data, long long cap) {
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_bytes += (long long)sizeof(KBytes);
     KBytes* b = k_alloc(sizeof(KBytes));
     b->len = len;
     b->data = data;

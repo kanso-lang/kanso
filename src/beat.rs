@@ -150,19 +150,30 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             }
         }
     }
-    // Imported library functions stay beat-ineligible: a shared driver like
-    // list/fold_at threads its caller's invariant source through the loop,
-    // and carrying it would copy per iteration. Beats belong to the
-    // user-code loops that own their data. Provenance is the file stamp —
-    // bare-enrolled clones of imported decls are still imported code.
+    // A carried beat evacuates its slots every iteration, and a shared
+    // library driver threads its caller's invariant source through the loop
+    // — carrying that copies an unbounded value per iteration, so imported
+    // groups stay out of the carry tier. A plain beat carries nothing: its
+    // rewind is a pointer reset, and a module loop that earned one keeps
+    // it. Groups with a synthetic arm stay out of everything — a bare clone
+    // is a second spelling the analyses cannot see through.
+    let has_synthetic: std::collections::HashSet<&str> =
+        program.fns.iter().filter(|d| d.synthetic).map(|d| d.name.as_str()).collect();
     let imported: std::collections::HashSet<&str> = program
         .fns
         .iter()
-        .filter(|d| d.synthetic || d.file.starts_with("std/") || d.name.contains('/'))
+        .filter(|d| d.file.starts_with("std/") || d.file.starts_with("lib/"))
         .map(|d| d.name.as_str())
         .collect();
-    ids.retain(|(name, _), _| !imported.contains(name.as_str()));
-    carried.retain(|(name, _), _| !imported.contains(name.as_str()));
+    ids.retain(|(name, _), _| !has_synthetic.contains(name.as_str()));
+    let carried_needed: std::collections::HashSet<(String, usize)> =
+        carried.keys().cloned().collect();
+    carried.retain(|(name, _), _| {
+        !has_synthetic.contains(name.as_str()) && !imported.contains(name.as_str())
+    });
+    // an id whose carry was just stripped must not stay armed as a carry
+    // beat with nothing staged: drop imported ids that needed their carry
+    ids.retain(|g, _| !imported.contains(g.0.as_str()) || !carried_needed.contains(g));
 
     // A demoted pair lives or dies with its target loop, never with the
     // caller's name: a user loop entered through a group that shares its
@@ -853,13 +864,13 @@ fn classify(
         return None;
     }
     if outside_tails(program, name, arity) {
-        return Some(Verdict::OutsideTailCall);
+        return Some(crate::beat::Verdict::OutsideTailCall);
     }
     if used_as_value(program, name) {
-        return Some(Verdict::UsedAsValue);
+        return Some(crate::beat::Verdict::UsedAsValue);
     }
     if !allocating.contains(name) {
-        return Some(Verdict::PureLoop);
+        return Some(crate::beat::Verdict::PureLoop);
     }
     let crossing = crossing_positions(program, inference, mut_sites, chains, name, arity);
     if !crossing.is_empty() {
@@ -871,14 +882,14 @@ fn classify(
             let set = group_param_set(program, inference, name, arity, p);
             accumulator_grows(program, name, arity, p) || set == 0 || set & BYTES != 0
         }) {
-            return Some(Verdict::ArgCrosses { position });
+            return Some(crate::beat::Verdict::ArgCrosses { position });
         }
         if crossing.len() <= K_CARRY_MAX {
-            return Some(Verdict::CarryBeat { positions: crossing });
+            return Some(crate::beat::Verdict::CarryBeat { positions: crossing });
         }
-        return Some(Verdict::ArgCrosses { position: crossing[0] });
+        return Some(crate::beat::Verdict::ArgCrosses { position: crossing[0] });
     }
-    Some(Verdict::Beat)
+    Some(crate::beat::Verdict::Beat)
 }
 
 /// Names of groups whose evaluation may allocate, transitively: seeded by
@@ -1326,6 +1337,85 @@ mod tests {
     fn non_tail_outside_call_is_fine() {
         let src = "main = print \"{1 + spin 3 0}\"\n\nfn spin 0 acc\n  acc\n\nfn spin n acc\n  spin (n - 1) (acc + length \"beat {n}\")\n";
         assert!(loops_of(src).contains(&("spin".to_string(), 2)));
+    }
+
+    fn module_fixture(name: &str, lib: &str, entry: &str) -> crate::ast::Program {
+        let dir = std::env::temp_dir().join(format!("kanso-beat-{name}"));
+        std::fs::create_dir_all(dir.join("work")).expect("fixture dir");
+        std::fs::write(dir.join("work/work.kso"), lib).expect("fixture writes");
+        std::fs::write(dir.join("main.kso"), entry).expect("fixture writes");
+        crate::compile_module(&dir, false).unwrap()
+    }
+
+    #[test]
+    fn a_module_loop_is_one_group_with_one_spelling() {
+        // enrollment gives an imported function a bare twin, and before the
+        // alias canonicalization the twin made every module-internal
+        // recursion read as a call between two groups — no loop inside an
+        // imported module could ever beat. One spelling, one group, and the
+        // chain license reaches it.
+        let lib = "import \"std/text\"\n\npub fn stamp acc 0\n  acc\n\npub fn stamp acc n\n  stamp (text/append acc \"x{n}\") (n - 1)\n\npub fn start _\n  text/bytes \"\"\n\npub fn finish acc\n  length (text/utf8 acc)\n";
+        let entry = "import \"work\"\n\nprint \"{work/finish (work/stamp (work/start 0) 9)}\"\n";
+        let program = module_fixture("canon", lib, entry);
+        let inference = infer::infer(&program);
+        let muts = crate::linear::in_place_pushes(&program);
+        let loops = beat_loops(&program, &inference, &muts);
+
+        assert!(loops.ids.contains_key(&("work/stamp".to_string(), 2)), "got {:?}", loops.ids);
+    }
+
+    #[test]
+    fn a_locally_bound_name_is_never_rewritten() {
+        // `first` here is a local binding, and std/list also exports a
+        // `first`. Rewriting the local to the function value fed a closure
+        // to append at runtime — kq's pretty-printer found it. A name that
+        // is ever locally bound keeps its clones and its old dispatch.
+        let dir = std::env::temp_dir().join("kanso-beat-shadow");
+        std::fs::create_dir_all(&dir).expect("fixture dir");
+        let _ = std::fs::remove_dir_all(dir.join("work"));
+        std::fs::write(
+            dir.join("helpers.kso"),
+            "import \"std/list\"\n\npub fn label xs\n  first = list/first xs\n  \"head {first}\"\n",
+        )
+        .expect("fixture writes");
+        std::fs::write(dir.join("main.kso"), "print \"{label [7 8 9]}\"\n")
+            .expect("fixture writes");
+        let program = crate::compile_module(&dir, false).unwrap();
+        let label = program.fns.iter().find(|d| d.name == "label").expect("label compiles");
+        let mut idents = std::collections::HashSet::new();
+        for stmt in &label.body {
+            collect_idents(stmt, &mut idents);
+        }
+
+        assert!(idents.contains("first"), "the local was rewritten: {idents:?}");
+    }
+
+    fn collect_idents(stmt: &crate::ast::Stmt, out: &mut std::collections::HashSet<String>) {
+        let e = match stmt {
+            crate::ast::Stmt::Bind { expr, .. }
+            | crate::ast::Stmt::Expr(expr)
+            | crate::ast::Stmt::Set { value: expr, .. } => expr,
+        };
+        idents_in(e, out);
+    }
+
+    fn idents_in(e: &crate::ast::Expr, out: &mut std::collections::HashSet<String>) {
+        if let crate::ast::Expr::Ident(n, _) = e {
+            out.insert(n.clone());
+        }
+        if let crate::ast::Expr::Str(parts, _) = e {
+            for p in parts {
+                if let crate::ast::TemplatePart::Interp(inner) = p {
+                    idents_in(inner, out);
+                }
+            }
+        }
+        if let crate::ast::Expr::App { head, args, .. } = e {
+            idents_in(head, out);
+            for a in args {
+                idents_in(a, out);
+            }
+        }
     }
 
     #[test]
