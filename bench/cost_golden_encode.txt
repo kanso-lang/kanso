@@ -1,5 +1,5 @@
-allocs=18774865
-alloc_bytes=933874832
+allocs=18760347
+alloc_bytes=933348544
 arena_blocks=5
 perm_allocs=5
 beat_iters=5032001
@@ -19,3 +19,4 @@ utf8_zerocopy=400
 carry_dedup=0
 bytes_malloc=5200
 bytes_freed=4800
+buf_reuse=3445

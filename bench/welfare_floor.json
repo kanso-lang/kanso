@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 60.2530542773976,
+  "floor": 61.656147427118626,
   "history": [
     {
       "floor": 100.0,
@@ -45,6 +45,14 @@
     {
       "floor": 60.25,
       "why": "the three encode loops rewind: a bytes accumulator crossing by pointer identity is licensed, sorted views join builder buffers outside the arena, and the registry sweep retires. Encode arena blocks 905 -> 5; kq peak 116.1 -> 77.3 mb."
+    },
+    {
+      "floor": 61.23,
+      "why": "dead buffers from proven-unique growth go to a size-classed shelf and the next collection reuses them: decode allocations 10,518,914 -> 8,941,967 with 452,550 reuses on the decode board. Rewinds flush the shelf so no entry outlives its region."
+    },
+    {
+      "floor": 61.66,
+      "why": "put growth donates through its mut path and grow caps land on shelf classes: decode allocations 8,941,967 -> 8,341,217 with 516,750 reuses, and kq's decode peak drops below jq's."
     }
   ]
 }

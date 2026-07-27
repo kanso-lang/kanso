@@ -19,3 +19,4 @@ utf8_zerocopy=1
 carry_dedup=0
 bytes_malloc=2
 bytes_freed=1
+buf_reuse=0

@@ -56,6 +56,7 @@ static long long k_stat_utf8_zerocopy = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 static long long k_stat_bytes_freed = 0;
+static long long k_stat_buf_reuse = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -215,6 +216,7 @@ static void k_stats_dump(void) {
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
+    fprintf(stderr, "buf_reuse=%lld\n", k_stat_buf_reuse);
 }
 
 static void k_arena_push(size_t need) {
@@ -283,7 +285,10 @@ static void k_cache_reg_sweep(KMark* mark);
 static KMark k_beat_stack[K_BEAT_MAX];
 static int k_beat_depth = 0;
 
+static void k_buf_flush(void);
+
 static void k_beat_rewind(KMark* m) {
+    k_buf_flush();
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
@@ -2712,7 +2717,46 @@ long long k_truthy(KValue v) {
 
 /* ---- slice 2: lists, maps, closures, builtins ---- */
 
+/* Dead buffers from proven-unique growth, held by exact power-of-two
+   capacity for the next collection that starts at that size. A donated
+   buffer is arena storage that would otherwise idle until the run ends, so
+   handing it to the next grower collapses the doubling trail from the sum
+   of every intermediate size to the live sizes plus one shelf of spares.
+   Rewinds flush the shelf: a rewound donation is reclaimed storage, and a
+   free list must never outlive the arena region its entries sit in. */
+#define K_BUF_CLASSES 12
+static KBuf* k_buf_free[K_BUF_CLASSES];
+static KBuf* k_buf_of(KValue* items);
+
+static int k_buf_class(long long cap) {
+    int c = 0;
+    long long size = 4;
+    while (size < cap && c < K_BUF_CLASSES - 1) {
+        size <<= 1;
+        c++;
+    }
+    return size == cap ? c : -1;
+}
+
+static void k_buf_donate(KValue* items) {
+    KBuf* b = k_buf_of(items);
+    int c = k_buf_class(b->cap);
+    if (c < 0) return;
+    b->used = (long long)(intptr_t)k_buf_free[c];
+    k_buf_free[c] = b;
+}
+
+static void k_buf_flush(void) { memset(k_buf_free, 0, sizeof(k_buf_free)); }
+
 static KValue* k_buf(long long cap) {
+    int c = k_buf_class(cap);
+    if (c >= 0 && k_buf_free[c]) {
+        KBuf* b = k_buf_free[c];
+        k_buf_free[c] = (KBuf*)(intptr_t)b->used;
+        b->used = 0;
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_buf_reuse++;
+        return (KValue*)(b + 1);
+    }
     KBuf* b = k_alloc(sizeof(KBuf) + sizeof(KValue) * cap);
     b->cap = cap;
     b->used = 0;
@@ -2929,7 +2973,27 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         m->sorted_len = 0;
         return mv;
     }
-    return k_b_put(mv, key, val);
+    /* growth at a proven-unique site: the map keeps its header, the pairs
+       move to a bigger buffer, and the outgrown one goes to the shelf */
+    {
+        long long need = 2 * (m->len + 1);
+        long long cap = 4;
+        while (cap < need) cap <<= 1;
+        KValue* np = k_buf(cap);
+        memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
+        np[m->len * 2] = key;
+        np[m->len * 2 + 1] = val;
+        k_buf_of(np)->used = m->len * 2 + 2;
+        k_buf_donate(m->pairs);
+        m->pairs = np;
+        m->len++;
+        if (m->sorted) {
+            free(m->sorted);
+        }
+        m->sorted = NULL;
+        m->sorted_len = 0;
+        return mv;
+    }
 }
 
 KValue k_b_put(KValue mv, KValue key, KValue val) {
@@ -2954,7 +3018,8 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
         return ov;
     }
     long long need = 2 * (m->len + 1);
-    long long cap = need < 4 ? 4 : need * 2;
+    long long cap = 4;
+    while (cap < need) cap <<= 1;
     KValue* np = k_buf(cap);
     memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
     np[m->len * 2] = key;
@@ -3355,7 +3420,7 @@ KValue k_index(KValue container, KValue key, const char* origin) {
     return found;
 }
 
-KValue k_b_push(KValue lv, KValue item) {
+static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) k_die("push takes a list and a value");
     KList* l = k_as_list(lv);
@@ -3364,21 +3429,37 @@ KValue k_b_push(KValue lv, KValue item) {
         /* this list is the frontier of its buffer: claim the next slot */
         l->items[l->len] = item;
         buf->used++;
+        if (mutate) {
+            l->len++;
+            return lv;
+        }
         KList* out = k_alloc(sizeof(KList));
         out->len = l->len + 1;
         out->items = l->items;
         KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
     }
-    long long cap = l->len < 2 ? 4 : l->len * 2;
+    long long cap = 4;
+    while (cap < (l->len + 1)) cap <<= 1;
+    cap <<= 1;
     KValue* items = k_buf(cap);
     memcpy(items, l->items, sizeof(KValue) * l->len);
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
+    if (mutate) {
+        /* uniqueness is proven at mut sites, so the outgrown buffer has no
+           other holder and goes to the shelf for the next collection */
+        k_buf_donate(l->items);
+        l->items = items;
+        l->len++;
+        return lv;
+    }
     KList* out = k_alloc(sizeof(KList));
     out->len = l->len + 1;
     out->items = items;
     KValue v; v.tag = K_LIST; v.payload = k_ptr(out); return v;
 }
+
+KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
 
 /* In-place push, emitted only where the linearity analysis proved the list is
    uniquely owned. On the frontier it mutates the header — no per-element
@@ -3395,7 +3476,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         l->len++;
         return lv;
     }
-    return k_b_push(lv, item);
+    return k_b_push_into(lv, item, 1);
 }
 
 KValue k_b_length(KValue v) {
