@@ -7903,3 +7903,30 @@ already-frozen cohort — runs byte-identical on all three engines
 rejection: every incarnation of a syntactic block is its own cohort.
 No implementation change was needed; the checker held against every
 attack. The claim now has teeth instead of confidence.
+
+## 2026-07-27 — bytes join the cohort license, behind a survivor-ratio guard
+
+Ledger item: generalize the scalar-result rewind. The safe half turned
+out to be about arguments, not results. Bytes carry no pointers and no
+thunks, so nothing a rewind frees can be reached through a bytes
+argument — the container exclusions exist because a forced thunk's
+value would die under a cell the caller still holds, and bytes cannot
+hold one. So the license now admits bytes arguments alongside scalars
+and strings. The unsafe half — containers proven thunk-free — waits on
+demand-analysis integration and is recorded here as the enabler.
+
+Probing the widening exposed a hazard the old license had dodged by
+luck: the 512KB threshold counts what grew, not what died. A qualified
+utf8 over a large sliced buffer trips it with a result that IS the
+growth, and the dance would copy megabytes to reclaim nothing. The
+survivor-ratio guard sizes the copy first (the k_copy_size pass the
+carry already owns) and keeps the region when the copy exceeds half
+the reclaim. cohort_kept counts the refusals.
+
+Pins, each watched red in isolation: cohort_kept.kso reads kept=1,
+frees=1; with the guard disabled it reads frees=2 (the wasted copy
+happens); with the license narrowed back it reads kept=0 (the wrap
+never lands). The benches are untouched — oneshot still fires its
+garbage-heavy decode (survivor well under half), gauntlet and encode
+unchanged, welfare flat at 62.70. This is a correctness-of-the-trade
+change: the license reaches further and can no longer overpay.

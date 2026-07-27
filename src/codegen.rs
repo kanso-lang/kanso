@@ -3269,12 +3269,19 @@ impl<'a> Backend<'a> {
             let caller = (f.group.clone(), f.arity);
             let caller_loops = self.beat.ids.contains_key(&caller)
                 && !self.beat.demoted.iter().any(|(_, callee)| *callee == caller);
+            // bytes join scalars and strings in the license: raw bytes hold
+            // no pointers and no thunks, so nothing a rewind frees can be
+            // reached through them, and a mut-grown unique arg is
+            // unreachable after its last use. containers stay excluded —
+            // they can carry thunks whose forced values would die under a
+            // cell the caller still holds.
+            let arg_heapish = heapish & !BYTES;
             let cohort_entry = !beat_entry
                 && name.contains('/')
                 && !f.group.contains('/')
                 && !f.synthetic
                 && !caller_loops
-                && emitted.iter().all(|e| f.set_of(e) & heapish == 0);
+                && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
             if beat_entry || cohort_entry {
                 // entering a beat loop or a cohort: mark the frontier; args
                 // are already evaluated, so they live below the mark

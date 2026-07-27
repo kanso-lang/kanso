@@ -203,6 +203,7 @@ static KBlock* k_spare = NULL;
 static long long k_live_block_bytes = 0;
 static long long k_stat_peak_block_bytes = 0;
 static long long k_stat_cohort_frees = 0;
+static long long k_stat_cohort_kept = 0;
 char* k_arena = NULL;
 size_t k_arena_left = 0;
 
@@ -221,7 +222,7 @@ static void k_stats_dump(void) {
     fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
     fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
     fprintf(stderr, "arena_peak_bytes=%lld\n", k_stat_peak_block_bytes);
-    fprintf(stderr, "cohort_frees=%lld\n", k_stat_cohort_frees);
+    fprintf(stderr, "cohort_frees=%lld\ncohort_kept=%lld\n", k_stat_cohort_frees, k_stat_cohort_kept);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
     fprintf(stderr,
@@ -833,6 +834,20 @@ KValue k_cohort_pop(KValue r) {
         k_cache_reg_sweep(m);
         k_beat_rewind(m);
         k_stat_cohort_frees++;
+        return r;
+    }
+    /* the survivor-ratio guard: the threshold above counts what grew, not
+       what died. When the result is most of the growth — utf8 of a large
+       buffer, a decode that is nearly all live tree — the dance would copy
+       the value to reclaim almost nothing. Size the copy first and keep
+       the region when it exceeds half the reclaim. */
+    k_ptrmap_begin(&k_copy_seen);
+    k_copy_seen_live = 0;
+    size_t survivor = k_copy_size(r, m);
+    if ((long long)(2 * survivor) > grown) {
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_cohort_kept++;
+        k_beat_depth--;
+        k_chunkreg_migrate(k_beat_depth);
         return r;
     }
     k_carry_reset();
