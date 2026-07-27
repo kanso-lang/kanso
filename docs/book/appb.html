@@ -364,10 +364,10 @@ zero non-positive</code></pre>
 
 <h2>effects</h2>
 
-<p>the seven builtins in this group return <em>descriptions</em>, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.</code> pipes the value a description will yield into a function.</p>
+<p>the seven functions in this group return <code>io</code> values—descriptions of work, not results. evaluating them performs no i/o; they build a value the runtime executes afterward, which is why the same program can be run, planned with <code>--plan</code>, or fed to a scripted executor in a test (chapter 05). <code>&gt;&gt;</code> sequences two descriptions that pass no data; <code>.</code> pipes the value a description will yield into a function.</p>
 
 <h3 id="b-args"><code>io/args</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>io/args → string[]</code></p>
+<p class="builtin-sig"><code>io/args → io (yields string[])</code></p>
 <p>yields the command-line arguments—everything after <code>--</code> on the invocation—as a list of strings. the list exists only at execution time, so an index past its end is answered the way every absent index is: with <code>none</code>, a value the caller dispatches on. reach for <code>xs[i]!</code> when the position must be there and its absence should end the run.</p>
 
 <div class="code-panel">
@@ -389,7 +389,7 @@ zero non-positive</code></pre>
 </div>
 
 <h3 id="b-print"><code>print</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>print string → description</code></p>
+<p class="builtin-sig"><code>print string → io</code></p>
 <p>a description of writing one line to standard output. it takes a <em>string</em>, and only a string—to print a number or a list, interpolate it into one with <code>"{value}"</code>. handing <code>print</code> a bare non-string is a runtime error with exactly that advice. sequence prints with <code>&gt;&gt;</code>; render the sequence without running it with <code>--plan</code>.</p>
 
 <div class="code-panel">
@@ -410,11 +410,11 @@ third</code></pre>
 </div>
 
 <h3 id="b-random"><code>math/random</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>math/random int → int</code></p>
+<p class="builtin-sig"><code>math/random int → io (yields int)</code></p>
 <p>a description that yields an integer in the half-open range <code>[0, bound)</code>. the scheduler's generator is deterministic, so a program's rolls are reproducible run to run—random enough for a simulation, repeatable enough for a test. pipe the yielded value into a function with <code>.</code>.</p>
 
 <h3 id="b-sleep"><code>time/sleep</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>time/sleep int → description</code></p>
+<p class="builtin-sig"><code>time/sleep int → io</code></p>
 <p>a description of pausing for a number of milliseconds. under the deterministic scheduler it advances virtual time rather than wall-clock time, so a program that "sleeps" is still instant to test. sequence it with <code>&gt;&gt;</code>.</p>
 
 <div class="code-panel">
@@ -439,11 +439,11 @@ third</code></pre>
 <p>the plan names <code>sleep</code> and <code>random</code> up front, then stops at <code>. &lt;continuation&gt;</code>—honest notation for "what <code>show</code> does depends on a value the roll hasn't produced yet." that is the visible seam between <code>&gt;&gt;</code>, which lists every step, and <code>.</code>, which threads a not-yet-known value forward.</p>
 
 <h3 id="b-read_file"><code>io/read_file</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>io/read_file string → string</code></p>
+<p class="builtin-sig"><code>io/read_file string → io (yields string)</code></p>
 <p>a description that yields the contents of a file as a string. a missing or unreadable path fails at execution time—at the executor, when the read is actually attempted—rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
 
 <h3 id="b-write_file"><code>io/write_file</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>io/write_file string string → description</code></p>
+<p class="builtin-sig"><code>io/write_file string string → io</code></p>
 <p>a description of writing a string to a path, replacing any existing contents. it yields nothing useful, so it is normally sequenced with <code>&gt;&gt;</code> before the next step. here one program writes a file and then reads it straight back:</p>
 
 <div class="code-panel">
@@ -458,7 +458,7 @@ third</code></pre>
 </div>
 
 <h3 id="b-stdin"><code>io/stdin</code> <span class="desc-tag">description</span></h3>
-<p class="builtin-sig"><code>io/stdin → string</code></p>
+<p class="builtin-sig"><code>io/stdin → io (yields string)</code></p>
 <p>a description that yields all of standard input as a single string. pipe it into a function to process what was fed on the pipe:</p>
 
 <div class="code-panel">

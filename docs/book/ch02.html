@@ -129,7 +129,7 @@ sum 6 len 3 first 3</code></pre>
   </div>
 </div>
 
-<p><code>xs[i]</code> is the strict form: it expects the index to be there, and a miss becomes an <code>err</code> that rides to the endpoint. when absence is a normal outcome you plan for, reach for <code>at</code> instead—it returns the value or <code>none</code> rather than failing. asking for the ninth element of a three-element list yields <code>none</code>, which here rides to the endpoint because nothing downstream handled it:</p>
+<p>the plain subscript <em>asks</em>: a miss answers <code>none</code> rather than failing. and a <code>none</code> is loud—interpolate it and it prints as <code>&lt;none&gt;</code>, so a miss you forgot to plan for shows up in the output instead of passing as a plausible value. when the index must be there, add the sigil—<code>xs[i]!</code>—and a miss becomes an <code>err</code> that rides to the endpoint (chapter 04 draws this line carefully). asking for the ninth element of a three-element list:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">at_miss.kso</div>
@@ -141,7 +141,7 @@ sum 6 len 3 first 3</code></pre>
   </div>
 </div>
 
-<p>two operations, two spellings, no overlap: <code>xs[i]</code> says "this is present," <code>at xs i</code> says "this might not be." the choice is a sentence about your data, and the compiler holds you to it.</p>
+<p>one operation, two spellings, no overlap: <code>xs[i]!</code> says "this is present," plain <code>xs[i]</code> says "this might not be." the choice is a sentence about your data, and the compiler holds you to it.</p>
 
 <h2>maps</h2>
 
@@ -159,7 +159,7 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   </div>
 </div>
 
-<p>the entries came back <code>clay</code>, <code>mai</code>, <code>sam</code>—alphabetical, though <code>mai</code> was inserted last. a map in kanso has no incidental order to accidentally depend on. and like a list, its lookup is strict: a key that is not there is an <code>err</code>, not a silent <code>none</code> pretending the miss never happened:</p>
+<p>the entries came back <code>clay</code>, <code>mai</code>, <code>sam</code>—alphabetical, though <code>mai</code> was inserted last. a map in kanso has no incidental order to accidentally depend on. and like a list, its lookup carries both spellings. the strict <code>ages["nobody"]!</code> promises the key exists, and a broken promise is an <code>err</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">map_miss.kso</div>
