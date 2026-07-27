@@ -7702,3 +7702,25 @@ caller-held-container growth hazard cannot arise. Widening the license to
 heap arguments needs the arg-position evacuation the loop tier's carried
 slots already do, and that is the natural second slice once the
 read-write-uniqueness ruling lands.
+
+## 2026-07-27 — BUILT, MEASURED, DECLINED: kq behind the std/json boundary
+
+The cohort follow-up assumed the vendored decoder was the debt and the
+import boundary was the prize. The measurement inverted both. Swapping
+kq's decode for std/json's — the branch lives at kq's import-std-decode,
+deliberately unmerged — moves the full-print peak from 3,145,728 to
+11,534,336 bytes and allocations from 96,561 to 289,668 on the same
+fixture: kq's ninety-nine-plus-two-hundred-line vendored decoder is three
+times lighter than the library's. The cohort wrap emits around
+json/decode exactly as licensed and cohort_frees still reads zero — the
+block-granular threshold never trips inside the pipe executor's bind
+context, a mechanism question the branch preserves.
+
+Two live conclusions, both queued rather than judged here. First, the
+adoption should run the other way: std/json carries position machinery
+and must-wrappers per node that kq's decoder simply does not pay, and the
+gauntlet's own footprint would thank a diet designed against kq's shape.
+Second, the cohort threshold's interaction with warm blocks and the bind
+executor needs the mechanism traced before the license earns wider trust
+— the one-shot bench proves the pop works; kq's shape proves the trigger
+has a blind spot.
