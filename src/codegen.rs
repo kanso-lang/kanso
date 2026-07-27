@@ -949,7 +949,33 @@ impl<'a> Backend<'a> {
             "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
              @d_main_0()\n  ret %KValue %r\n}\n",
         );
-        let mut out = String::from(DECLARES);
+        // A declaration the program never calls is a line the compile golden
+        // counts and the reader scrolls past. Keep a declare only when its
+        // symbol appears somewhere outside the declare itself — in the body,
+        // or inside one of the preamble's own inline definitions.
+        let declares: String = {
+            let referenced = |sym: &str| {
+                let probe = format!("@{sym}(");
+                self.body.contains(&probe)
+                    || DECLARES
+                        .lines()
+                        .filter(|l| !l.starts_with("declare"))
+                        .any(|l| l.contains(&probe))
+            };
+            DECLARES
+                .lines()
+                .filter(|line| {
+                    let Some(rest) = line.strip_prefix("declare ") else { return true };
+                    let Some(at) = rest.find('@') else { return true };
+                    let sym = &rest[at + 1..];
+                    let Some(paren) = sym.find('(') else { return true };
+                    referenced(&sym[..paren])
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let mut out = declares;
+        out.push('\n');
         for cell in &self.caf_cells {
             let _ = writeln!(out, "@{cell} = internal global %KValue zeroinitializer");
             let _ = writeln!(out, "@{cell}_ready = internal global i8 0");
