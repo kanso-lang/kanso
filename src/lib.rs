@@ -100,6 +100,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     match merged_diags.is_empty() {
         true => {
             canonicalize_types(&mut merged);
+            canonicalize_bare_aliases(&mut merged);
             fuse_enumerable(&mut merged);
             Ok(merged)
         }
@@ -184,6 +185,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         synthetic: false,
     });
     canonicalize_types(&mut program);
+    canonicalize_bare_aliases(&mut program);
     fuse_enumerable(&mut program);
     Ok(program)
 }
@@ -248,6 +250,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
         return Err(diag::render(&merged_diags, file, source));
     }
     canonicalize_types(&mut program);
+    canonicalize_bare_aliases(&mut program);
     fuse_enumerable(&mut program);
     Ok(program)
 }
@@ -337,6 +340,248 @@ fn short_name(path: &str) -> &str {
 /// the canonical (origin) name: patterns and typeset members are type
 /// positions, so no local binding can shadow them. Records then match by
 /// one identity no matter which spelling constructed or destructured them.
+/// A bare-enrollment clone whose name has no other arms is one function with
+/// two spellings, and the analyses that reason about self-recursion see two.
+/// Where the whole bare group is clones of a single qualified origin, every
+/// bare reference rewrites to the qualified spelling and the clones go: one
+/// group, one emission, and a module's internal recursion reads as
+/// self-recursion again. A bare name that also has local arms is a real
+/// overload union (the import-incarnation gavel) and is left alone.
+
+fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String>) {
+    match p {
+        ast::Pattern::Var(n, _) => {
+            out.insert(n.clone());
+        }
+        ast::Pattern::Annotated { name, .. } => {
+            out.insert(name.clone());
+        }
+        ast::Pattern::Ctor { fields, .. } => {
+            for f in fields {
+                bound_in_pattern(f, out);
+            }
+        }
+        ast::Pattern::Keyed { entries, .. } => {
+            for e in entries {
+                out.insert(e.bind_name.clone());
+            }
+        }
+        ast::Pattern::IntLit(..) | ast::Pattern::StrLit(..) | ast::Pattern::Nullary(..)
+        | ast::Pattern::Wildcard(..) => {}
+    }
+}
+
+fn bound_in_stmt(stmt: &ast::Stmt, out: &mut std::collections::HashSet<String>) {
+    match stmt {
+        ast::Stmt::Bind { pattern, expr } => {
+            bound_in_pattern(pattern, out);
+            bound_in_expr(expr, out);
+        }
+        ast::Stmt::Expr(e) | ast::Stmt::Set { value: e, .. } => bound_in_expr(e, out),
+    }
+}
+
+fn bound_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
+    match e {
+        ast::Expr::Lambda { params, body, .. } => {
+            for (n, _) in params {
+                out.insert(n.clone());
+            }
+            bound_in_expr(body, out);
+        }
+        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+            for st in stmts {
+                bound_in_stmt(st, out);
+            }
+        }
+        ast::Expr::Guard { cond, early, rest, .. } => {
+            bound_in_expr(cond, out);
+            bound_in_expr(early, out);
+            for st in rest {
+                bound_in_stmt(st, out);
+            }
+        }
+        ast::Expr::App { head, args, .. } => {
+            bound_in_expr(head, out);
+            for a in args {
+                bound_in_expr(a, out);
+            }
+        }
+        ast::Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                bound_in_expr(k, out);
+                bound_in_expr(v, out);
+            }
+        }
+        ast::Expr::Str(parts, _) => {
+            for part in parts {
+                if let ast::TemplatePart::Interp(inner) = part {
+                    bound_in_expr(inner, out);
+                }
+            }
+        }
+        ast::Expr::List(items, _) => {
+            for i in items {
+                bound_in_expr(i, out);
+            }
+        }
+        ast::Expr::Field { base, .. } | ast::Expr::Upcast { expr: base, .. } => {
+            bound_in_expr(base, out)
+        }
+        ast::Expr::Index { base, index, .. } => {
+            bound_in_expr(base, out);
+            bound_in_expr(index, out);
+        }
+        ast::Expr::Seq(a, b, _) | ast::Expr::Join { lhs: a, rhs: b, .. } => {
+            bound_in_expr(a, out);
+            bound_in_expr(b, out);
+        }
+        ast::Expr::BinOp { lhs, rhs, .. } => {
+            bound_in_expr(lhs, out);
+            bound_in_expr(rhs, out);
+        }
+        ast::Expr::Int(..) | ast::Expr::Float(..) | ast::Expr::Ident(..)
+        | ast::Expr::Partial(..) => {}
+    }
+}
+
+pub fn canonicalize_bare_aliases(program: &mut ast::Program) {
+    use std::collections::{HashMap, HashSet};
+    let mut by_name: HashMap<&str, (bool, HashSet<&str>)> = HashMap::new();
+    for d in &program.fns {
+        if d.name.contains('/') {
+            continue;
+        }
+        let entry = by_name.entry(d.name.as_str()).or_insert((true, HashSet::new()));
+        entry.0 &= d.synthetic;
+        if d.synthetic {
+            for twin in &program.fns {
+                if !twin.synthetic
+                    && twin.file == d.file
+                    && twin.span.line == d.span.line
+                    && twin.span.col == d.span.col
+                    && twin.params.len() == d.params.len()
+                    && twin.name.ends_with(&format!("/{}", d.name))
+                {
+                    entry.1.insert(twin.name.as_str());
+                }
+            }
+        }
+    }
+    let mut skip: HashSet<String> = std::env::var("KANSO_ALIAS_SKIP")
+        .map(|v| v.split(',').map(str::to_string).collect())
+        .unwrap_or_default();
+    // a name that is ever locally bound — a parameter, a `x = ...` binding, a
+    // lambda parameter, a destructured field — must not be rewritten, because
+    // an occurrence may mean the local rather than the function. Excluding
+    // the name entirely keeps its clones and the old dispatch, which is
+    // correct and merely unoptimised.
+    for d in &program.fns {
+        for p in &d.params {
+            bound_in_pattern(p, &mut skip);
+        }
+        for stmt in &d.body {
+            bound_in_stmt(stmt, &mut skip);
+        }
+    }
+    let aliases: HashMap<String, String> = by_name
+        .into_iter()
+        .filter(|(name, (all_synthetic, targets))| {
+            *all_synthetic && targets.len() == 1 && !skip.contains(*name)
+        })
+        .map(|(bare, (_, targets))| {
+            (bare.to_string(), (*targets.iter().next().expect("one target")).to_string())
+        })
+        .collect();
+    if aliases.is_empty() {
+        return;
+    }
+    if std::env::var("KANSO_ALIAS_REPORT").is_ok() {
+        let mut v: Vec<_> = aliases.iter().collect();
+        v.sort();
+        for (b, q) in v {
+            eprintln!("alias: {b} -> {q}");
+        }
+    }
+    program.fns.retain(|d| !(d.synthetic && aliases.contains_key(&d.name)));
+    for d in &mut program.fns {
+        for stmt in &mut d.body {
+            alias_stmt(stmt, &aliases);
+        }
+    }
+}
+
+fn alias_stmt(stmt: &mut ast::Stmt, aliases: &std::collections::HashMap<String, String>) {
+    match stmt {
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) | ast::Stmt::Set { value: expr, .. } => {
+            alias_expr(expr, aliases)
+        }
+    }
+}
+
+fn alias_expr(e: &mut ast::Expr, aliases: &std::collections::HashMap<String, String>) {
+    match e {
+        ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+            if let Some(q) = aliases.get(name) {
+                *name = q.clone();
+            }
+        }
+        ast::Expr::Int(..) | ast::Expr::Float(..) => {}
+        ast::Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                alias_expr(k, aliases);
+                alias_expr(v, aliases);
+            }
+        }
+        ast::Expr::Str(parts, _) => {
+            for part in parts {
+                if let ast::TemplatePart::Interp(inner) = part {
+                    alias_expr(inner, aliases);
+                }
+            }
+        }
+        ast::Expr::List(items, _) => {
+            for item in items {
+                alias_expr(item, aliases);
+            }
+        }
+        ast::Expr::App { head, args, .. } => {
+            alias_expr(head, aliases);
+            for a in args {
+                alias_expr(a, aliases);
+            }
+        }
+        ast::Expr::Field { base, .. } => alias_expr(base, aliases),
+        ast::Expr::Index { base, index, .. } => {
+            alias_expr(base, aliases);
+            alias_expr(index, aliases);
+        }
+        ast::Expr::Seq(a, b, _) | ast::Expr::Join { lhs: a, rhs: b, .. } => {
+            alias_expr(a, aliases);
+            alias_expr(b, aliases);
+        }
+        ast::Expr::Lambda { body, .. } | ast::Expr::Upcast { expr: body, .. } => {
+            alias_expr(body, aliases)
+        }
+        ast::Expr::BinOp { lhs, rhs, .. } => {
+            alias_expr(lhs, aliases);
+            alias_expr(rhs, aliases);
+        }
+        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+            for st in stmts {
+                alias_stmt(st, aliases);
+            }
+        }
+        ast::Expr::Guard { cond, early, rest, .. } => {
+            alias_expr(cond, aliases);
+            alias_expr(early, aliases);
+            for st in rest {
+                alias_stmt(st, aliases);
+            }
+        }
+    }
+}
+
 pub fn canonicalize_types(program: &mut ast::Program) {
     let aliases: std::collections::HashMap<String, String> = program
         .types
@@ -1653,6 +1898,7 @@ fn compile_module_inner(
         return Err(rendered.join(""));
     }
     canonicalize_types(&mut merged);
+    canonicalize_bare_aliases(&mut merged);
     fuse_enumerable(&mut merged);
     Ok(merged)
 }

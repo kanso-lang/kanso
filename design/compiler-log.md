@@ -6968,3 +6968,38 @@ jq's 4.74, 33.6 ms), and the retired-instructions bullet keeps its original
 gap and gains its closing — the same instrument told both halves. kq's own
 README moved in kq#28 with regenerated cost goldens, since its CI builds
 against kanso main and the old counters no longer describe it.
+
+## 2026-07-27 — one function, one spelling: module loops reach the beat tier
+
+Enrollment gives every imported pub a bare-named twin so both spellings
+dispatch, and the twin cost the analyses their footing: a module's internal
+recursion read as a call between two groups, so has_self_tail failed and no
+loop inside an imported module could ever beat — std/list's own fold_go
+reported "another group tail-calls it" about its own recursion. The same
+two-names-one-function duality #323 fixed in the linearity analysis, one
+analysis over.
+
+Where a bare name's whole group is clones of a single qualified origin, the
+program now canonicalizes after inlining: every bare reference rewrites to
+the qualified spelling and the clones go. A bare name with local arms is a
+real overload union (the import-incarnation gavel) and is left alone. A name
+that is ever locally bound is also left alone, because an occurrence may mean
+the local — kq's pretty-printer found that one at runtime, where a local
+named `first` was rewritten to list/first and a closure arrived where a byte
+accumulator belonged. The exclusion is program-wide and over-broad by design:
+a skipped alias keeps its clones and the old dispatch, which is correct and
+merely unoptimised. Root-file locals are the exposed case; dep locals were
+already safe because qualification renames them.
+
+The beat tier's provenance filter narrowed to its own rationale. It dropped
+every group whose name contains a slash — with canonical names that is all
+module code, the very thing being enabled. The carry-cost concern it encoded
+applies to carried groups, whose evacuation copies per iteration; a plain
+beat's rewind is a pointer reset. Imported groups now stay out of the carry
+tier only, and groups with a surviving synthetic arm stay out of everything.
+
+Pins: a module loop threading a builder is licensed and in ids
+(a_module_loop_is_one_group_with_one_spelling, red before the fix), and a
+root-file local sharing an importable's name is never rewritten
+(a_locally_bound_name_is_never_rewritten, red with the exclusion stripped).
+Benches, kq, book, site: unchanged to the byte.
