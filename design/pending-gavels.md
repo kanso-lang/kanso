@@ -36,17 +36,13 @@ dep's stay qualified and never join (recorded in
 also ship its rendering. Surface question: whether rendering is part of
 a module's exportable surface or a root privilege.
 
-## 4. Streaming stdout
+## 4. Streaming stdout — GAVELED AND SHIPPED (2026-07-27)
 
-kq's last losing scoreboard row (full-print peak 47.5 MB vs jq's 30.7)
-is live data: ~13 MB of decoded document plus ~18 MB of output string
-built in full before one print. jq streams its output. kanso's io
-surface has no write-without-newline / chunked-write description, so
-streaming a pretty-print is unexpressible. Adding one is an io-surface
-design (the description vocabulary, ordering guarantees), not a
-performance patch. This is the only remaining lever on that row —
-boundary/cohort schemes were built, measured, and declined twice
-(`kq:import-std-decode`, `kq:decode-submodule`, both preserved).
+Clay ruled "implement." io/write landed as the eighth description
+(kanso#397) with the bind loop's floor guard; kq streams its printer
+(kq#36) and now holds less memory than jq on every scoreboard row
+(full print 30.0 MB vs 30.8). Kept here for the record; nothing
+remains to decide.
 
 ## 5. Open dispatch groups
 
