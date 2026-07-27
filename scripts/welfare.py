@@ -164,10 +164,23 @@ def main():
     value = score(now, held["baseline"])
     floor = held["floor"]
     print(f"welfare {value:.2f}   floor {floor:.2f}   (ceiling 100)")
+    worse = []
     for key in sorted(TERMS):
         base, cur = held["baseline"][key], now[key]
         if base != cur:
             print(f"  {key:22} {base:>12,} -> {cur:>12,}   {100 * (base / (cur or 0.5) - 1):+6.1f}%")
+        if cur > base:
+            worse.append((key, base, cur))
+    # the sum is the gate, but a term that went backwards under the cover of
+    # another term's gain is a trade, and a trade has to be said out loud
+    if worse:
+        print("\nTERMS THAT GOT WORSE — say why each one was worth it:")
+        for key, base, cur in worse:
+            weight, satiation = TERMS[key]
+            cost = 100 * weight * (
+                satisfaction(base / base, satiation) - satisfaction(base / cur, satiation)
+            )
+            print(f"  {key:22} {base:>12,} -> {cur:>12,}   costs {cost:.3f} points")
     # a hundredth of a point is below anything a real change moves, and
     # leaves room for a term that rounds
     if value < floor - 0.01:
