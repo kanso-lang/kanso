@@ -120,7 +120,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             next += 1;
         }
     }
-    for (cluster, cluster_carried) in eligible_clusters(program, inference) {
+    for (cluster, cluster_carried) in eligible_clusters(program, inference, mut_sites, &chains) {
         for member in cluster {
             ids.insert(member, next);
         }
@@ -468,7 +468,12 @@ fn tail_cycles(edges: &[(Group, Group)]) -> Vec<Vec<Group>> {
 /// would free it under a live register — so threading is a fixpoint: a slot
 /// keeps its threaded standing only while every edge feeding it passes a
 /// bare parameter from a slot that kept its own.
-fn eligible_clusters(program: &Program, inference: &infer::Inference) -> Vec<ClusterCarry> {
+fn eligible_clusters(
+    program: &Program,
+    inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
+) -> Vec<ClusterCarry> {
     let groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -509,7 +514,9 @@ fn eligible_clusters(program: &Program, inference: &infer::Inference) -> Vec<Clu
         if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
             continue;
         }
-        if let Some(carried) = cluster_edges_ok(program, inference, &groups, &members, &edges) {
+        if let Some(carried) =
+            cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges)
+        {
             out.push((scc.iter().map(|&g| groups[g].clone()).collect(), carried));
         }
     }
@@ -521,6 +528,8 @@ fn eligible_clusters(program: &Program, inference: &infer::Inference) -> Vec<Clu
 fn cluster_edges_ok(
     program: &Program,
     inference: &infer::Inference,
+    mut_sites: &MutSites,
+    chains: &HashSet<Group>,
     groups: &[(String, usize)],
     members: &HashSet<usize>,
     edges: &[(usize, usize, usize, &Vec<Expr>)],
@@ -571,6 +580,45 @@ fn cluster_edges_ok(
             break;
         }
     }
+    // A bytes slot may also cross by pointer identity: every inner edge
+    // feeds it a mut-append chain rooted at one of the caller's own
+    // chain-threaded slots, so the value is the accumulator that entered
+    // the cluster — header below the entry mark, growth outside the arena,
+    // no pointers inside. The same license as a self-tail, read around a
+    // cycle: greatest fixpoint, assume every bytes slot qualifies, knock
+    // out any an edge disproves.
+    let mut chain_threaded: HashSet<(usize, usize)> = HashSet::new();
+    for &g in members {
+        for i in 0..groups[g].1 {
+            let s = slot_set(g, i);
+            if s != 0 && s & !FAIL & !BYTES == 0 {
+                chain_threaded.insert((g, i));
+            }
+        }
+    }
+    loop {
+        let mut changed = false;
+        for &&(from, to, di, args) in &inner {
+            let decl = &program.fns[di];
+            let locals = local_binds(decl);
+            for (i, arg) in args.iter().enumerate() {
+                if !chain_threaded.contains(&(to, i)) {
+                    continue;
+                }
+                let fed_by_chain = decl.params.iter().enumerate().any(|(j, pat)| {
+                    let Pattern::Var(own, _) = pat else { return false };
+                    chain_threaded.contains(&(from, j))
+                        && is_chain(arg, own, decl, &locals, mut_sites, chains)
+                });
+                if !fed_by_chain && chain_threaded.remove(&(to, i)) {
+                    changed = true;
+                }
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
     // every remaining edge argument becomes a carried slot on its callee;
     // growth in a carried slot disqualifies the cluster
     let mut carried: HashMap<Group, Vec<usize>> = HashMap::new();
@@ -578,7 +626,10 @@ fn cluster_edges_ok(
         let decl = &program.fns[*di];
         for (i, arg) in args.iter().enumerate() {
             let s = slot_set(*to, i);
-            if (s != 0 && s & !FAIL & !SCALAR == 0) || threaded.contains(&(*to, i)) {
+            if (s != 0 && s & !FAIL & !SCALAR == 0)
+                || threaded.contains(&(*to, i))
+                || chain_threaded.contains(&(*to, i))
+            {
                 continue;
             }
             // a byte builder rebuilt each iteration would deep-copy its
@@ -696,7 +747,7 @@ pub fn report(
         .into_iter()
         .map(|(callee, _, _)| callee)
         .collect();
-    let clustered: HashSet<Group> = eligible_clusters(program, inference)
+    let clustered: HashSet<Group> = eligible_clusters(program, inference, mut_sites, &chains)
         .into_iter()
         .flat_map(|(members, _)| members)
         .collect();
