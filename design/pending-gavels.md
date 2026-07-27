@@ -5,15 +5,62 @@ question is, where it came from, what the interim state is, and what it
 unblocks. Nothing here is urgent in the sense of broken; everything here
 is a fork the project has deliberately not taken without a ruling.
 
-## 1. The err-arm rule
+## 1. The err-arm rule — PROPOSED RULING (dialog converged 2026-07-27; awaiting Clay's final read)
 
-May a dispatch arm match on `err`? The three-way split under discussion:
-arms may match err freely / arms may never match err (err is only ever
-propagated) / err arms allowed only in designated handler positions.
-`design/err-migration.md` holds the migration plan for whichever way it
-goes. Interim: the current engines propagate err through calls and no
-user arm matches it. Unblocks: the failure-model chapter's final form
-and several std error-path signatures.
+The two-universes rule, mechanized without provenance tracking:
+
+- **Trapping is naming.** An arm may convert an err to a value only by
+  naming the err's reason type, and only when that type is owned by a
+  *different published package* (hako unit). Since patterns can only
+  name pub types, a package's catchable surface is exactly its pub
+  reason types — catchability is pub-ness.
+- **Unstoppable = private.** An err whose reason type is not exported
+  cannot be named downstream, so it bubbles with no way to stop it.
+  Both original motives (no err control flow within a party; forcible
+  bubbling) come from type visibility alone.
+- **Bare `err reason` arms may only return err-or-subtype** —
+  annotation and wrapping on the way through, never absorption.
+- **Local subdirectory modules are one universe** (no license).
+  Workspace siblings — separately published packages in one repo — are
+  licensed (treat them as potentially two teams) with a `kanso check`
+  advisory naming the smell. Vendored code is owned code: its errs
+  stop being trappable.
+- **Construction stays module-private**, which also prevents forging a
+  foreign failure to launder control flow.
+- The cheat (splitting your own code to trap your own errs) is
+  self-defeating: making a failure trappable requires publishing the
+  reason type, which makes it catchable by every client forever —
+  there is no "handleable by me only" state, which is exactly the
+  state the rule exists to ban.
+
+Sub-questions needing one word each: (a) std counts as foreign to user
+code? (proposed: yes) (b) bare-err re-err carries the original as a
+wrapped cause on the trace? (proposed: yes) (c) re-exporting a foreign
+err type transfers ownership? (proposed: no — it stays theirs).
+`design/err-migration.md` holds the migration plan.
+
+## 1b. Foreign structure access — PROPOSED AMENDMENT to modules-plan
+(Clay, 2026-07-27 dialog)
+
+Named structure reads cross packages: dot access (`e.position`) and
+keyed patterns (`(parse_failure position: p)`) on pub types, one level,
+the Demeter-legal read of a value in hand. Positional destructuring
+stays module-local (it couples to full field count and order — the
+author's layout freedom). Construction stays factory-only. This
+supersedes "types are opaque outside their module, always" and retires
+projection boilerplate like std/json's failure_position. Open detail:
+per-field pub, or all fields readable with the pub type — argued on
+the merits, not demand. For per-field: the doctrine's own sentence is
+"pub is name-level surface," a field is a name, so field-level pub is
+the same rule applied uniformly, not a new feature; and with
+construction factory-only, authors will have computed internal fields
+(caches, normalized forms) that all-with-type forces them to either
+expose or split into a pub shell around a private core — ceremony the
+per-field spelling deletes. For all-with-type: records are data, a
+hidden field is a sign the value is carrying non-data, and one fewer
+visibility site keeps patterns and dot-reads uniform. Recommendation:
+per-field pub, because it is the existing rule made uniform rather
+than an addition.
 
 ## 2. Read-write map uniqueness
 
