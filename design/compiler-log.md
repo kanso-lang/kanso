@@ -6397,12 +6397,30 @@ permits a null even in a program where nothing has passed one yet, and
 inference over that program would derive `string` and reject the first null
 that arrives.
 
-The error moves too, and that is half the value. With the typeset the mistake
-is caught at the field being filled; without it the program builds a value
-nobody can use and the failure surfaces at some later call that had nothing to
-do with the error.
+RETRACTED, an argument this entry made an hour ago: that the typeset also
+moves the error to a better place. Clay: "the compiler can put the error output
+wherever it wants to. it could even cite the construction and all the available
+matching overload opportunities." Correct — where a diagnostic points is a
+choice the compiler makes, not a consequence of what was written down, and the
+current message surfacing at a later call is a fact about today's
+implementation rather than about the design.
 
-So the four stay, and the rule the sweep should have followed is: an annotation
-that restates the evidence goes, an annotation that constrains beyond the
-evidence stays. Under Clay's ruling those are not the same kind of thing at
-all — the first is a duplicate, the second is a claim.
+WHAT SURVIVES IS NARROWER THAN THE ENTRY CLAIMED, and worth stating exactly.
+Permitting a case nothing exercises yet turns out to buy little: an unexercised
+permission has no observable effect until it is exercised, and when the first
+null does arrive inference widens to admit it and the program runs. So
+`title:null string` is close to a duplicate after all.
+
+The residue is the other direction. A typeset can be *narrower* than what the
+program's use would allow — `status:active archived` in a program where every
+`label` overload also handles `deleted`. Inference would admit `deleted`,
+because nothing in the code objects to it; the typeset rejects it, because the
+author says the domain has three states and not four. That restriction is not
+derivable from code that does not contain it, and it is the one thing on this
+page that survives Clay's ruling about not writing down what the compiler
+knows: the compiler does not know it, and cannot.
+
+So the four stay on that ground alone, and the rule is narrower than first
+written: an annotation restating the evidence goes; an annotation *restricting*
+below what use would permit stays, because it is the only kind that says
+something the program does not already say.
