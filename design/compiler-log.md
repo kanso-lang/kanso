@@ -6802,3 +6802,38 @@ between insertions, so a collection's buffer is never the newest allocation).
 
 Still standing from the earlier entry: `put` has no `put_mut`, so all 83,610
 insertions allocate a fresh 32-byte header even on the O(1) path.
+
+## 2026-07-26 — the decode anomaly named: strings after their first escape
+
+The 3.1x push count has a cause, and the arithmetic closes on it. Of the
+document's 104,750 strings, 19,440 — 19% — contain an escape, and 227,780
+characters sit after a first escape. Add the 97,320 list items and the
+prediction is 325,100 insertions against 301,612 measured, within 7% with the
+estimate running high.
+
+kq scans a string with `text/find2` for the next quote or backslash, and a
+clean string is sliced whole — that path is right. What happens at the first
+backslash is the problem: `string_at cs 92` converts the clean prefix to a byte
+list and hands it to `str_chars`, whose catch-all arm pushes **one character**
+and recurses. Everything after the first escape in a string is decoded a
+character at a time into a growing integer list, and those lists are most of the
+228,283 buffer allocations and the 30.7 mb behind them.
+
+TRIED AND FAILED: make the catch-all scan the run instead. One arm — find the
+next quote-or-backslash, `text/concat acc (text/slice cs p (n - 1))`, recurse at
+n. Output stayed byte-identical to jq and allocation went the wrong way:
+50,729,968 -> 61,025,168 bytes, peak 52.5 mb -> 62.8. `text/slice` allocates the
+run and `text/concat` allocates the result, so a run costs two allocations of
+its own length, and in a document escaping every few characters the runs are too
+short to pay for that. Reverted.
+
+What the measurement actually asks for is an append that takes a source range:
+copy `cs[p..n]` onto the accumulator with no intermediate value, the decode
+mirror of what `text/append` already does on the encode side. Then a run costs
+one memcpy and no allocation, and the per-character path disappears without the
+slice-and-concat tax that replaced it.
+
+Worth stating plainly: this benchmark document escapes 19% of its strings, which
+is high for real json. A clean corpus would show less of this and more of the
+buffer growth measured earlier — the fix is still right, the multiplier on it is
+document-shaped.
