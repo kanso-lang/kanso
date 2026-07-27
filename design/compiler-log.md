@@ -7842,3 +7842,15 @@ decode gauntlet's true peak joins at weight 0.10 — the flagship
 workload's peak was unpriced, which is why a 21 MB leak could ride in
 on a welfare rise. Floor recalibrated 60.35 -> 60.81 in the same PR,
 reasons in the ratchet history.
+
+## 2026-07-27 — decode board re-sat after the leak fix
+
+The transient-builder fix moved a published number, so the whole
+four-way sitting re-ran (2026-07-27, load under five, interleaved
+150/450 cpu-floor slopes, 12 rounds): kanso 0.783 ms/decode at 4.13 MB
+peak, serde 0.872 at 7.05, naive rust 1.024 at 7.14, go 1.948 cpu /
+1.80 wall at 10.65. Slopes are within noise of the 07-26 sitting — the
+leak was storage, not time — and kanso's peak cell falls 5.6 to 4.1 MB,
+now the smallest on the board by a wider margin. compiler.html board,
+index.html landing panel, and the about-blurb figure all updated in
+the same commit.
