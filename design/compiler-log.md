@@ -6322,3 +6322,50 @@ Worth noting which check caught it. Not a unit test and not the goldens: the
 book, where a sample's printed output is compared to what the chapter says it
 prints. The error message is user-facing text and the book is the only place
 that reads it as a user would.
+
+## 2026-07-26 — the encode accumulator, traced to its last link
+
+Following the wrapper inlining, the encode board still would not prove its
+accumulator unique while a minimal one did. Asking the fixpoint which key it
+dropped first, rather than reading the code, walks straight to the answer.
+
+THE CASCADE. `escape_str` and the escape family drop before anything else, and
+`encode_onto` follows because its string arm calls `escape_onto`. The root is
+one line:
+
+    fn escape_able acc bs
+      list/fold bs acc (a b -> esc_byte a b)
+
+The accumulator passes through a fold, and a fold was opaque. Teaching
+`unique_list` that a fold yields a unique value when its seed is unique and its
+folding function returns unique from a unique first argument is sound and was
+written — and it changed nothing, because there is one more link.
+
+THE LAST LINK. `esc_byte`'s accumulator is disproved fifth of three hundred and
+sixty-nine drops, and the reason is where it is called from. Inside the lambda
+`(a b -> esc_byte a b)`, the argument is `a` — the *lambda's* parameter.
+`is_unique_source` knows two things: the enclosing function's parameters, and
+its local bindings. A lambda's parameter is neither, so it is not a unique
+source, so the call site is not unique, so the parameter is not linear, and the
+whole chain above it falls.
+
+WHAT THE FIX WOULD HAVE TO BE, and why it is not in this commit. Treating every
+lambda parameter as unique is unsound: `esc_byte` could be called from some
+other lambda that aliases its accumulator, and mutating in place would corrupt
+it. The sound version requires that *every* lambda calling the function is a
+validated folder, which means `callsites_unique` has to know it is inside a
+lambda and which lambda it is — a change to how the traversal carries context,
+not a new rule beside the others.
+
+This module's own header says it plainly: "unsoundness here is memory
+corruption — mutating a list another reference still sees — so the analysis is
+conservative." That is a change to make deliberately with adversarial cases in
+front of it, not on momentum at the end of a long session. The fold rule is
+reverted with it, because it buys nothing alone and shipping inert analysis is
+the mistake this log already recorded once today.
+
+WHAT STANDS from the session's work on this: the wrapper inlining, the byte
+builder as a uniqueness seed, path-aware use counting, and conditional results
+threading uniqueness — all merged, all sound, and together they take a minimal
+accumulator loop from 127 allocations to 89. The encode board is unchanged and
+the reason is now a single named sentence rather than a mystery.
