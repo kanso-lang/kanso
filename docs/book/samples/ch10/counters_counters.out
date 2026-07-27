@@ -1,7 +1,7 @@
-allocs=26
-alloc_bytes=33232
+allocs=25
+alloc_bytes=33200
 arena_blocks=1
-perm_allocs=0
+perm_allocs=1
 beat_iters=0
 thunk_allocs=0
 thunk_forces=0
@@ -21,7 +21,7 @@ bytes_malloc=0
 bytes_freed=0
 sh_str=64
 sh_rec=0
-sh_buf=32880
+sh_buf=32848
 sh_map=0
 sh_bytes=0
 sum 500500

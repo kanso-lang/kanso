@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 60.2530542773976,
+  "floor": 60.81653023134127,
   "history": [
     {
       "floor": 100.0,
@@ -45,6 +45,10 @@
     {
       "floor": 60.25,
       "why": "the three encode loops rewind: a bytes accumulator crossing by pointer identity is licensed, sorted views join builder buffers outside the arena, and the registry sweep retires. Encode arena blocks 905 -> 5; kq peak 116.1 -> 77.3 mb."
+    },
+    {
+      "floor": 60.82,
+      "why": "string literals build once into permanent slots: encode allocations 18,774,865 -> 16,274,462. The +56 emitted lines are one slot global per interned literal, priced against a 2.5M-allocation cut."
     }
   ]
 }

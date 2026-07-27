@@ -902,6 +902,23 @@ static KStr* k_str_alloc(long long len) {
     return s;
 }
 
+/* A string literal evaluates to the same value every time, so it is built
+   once, in permanent storage, and the slot hands it back thereafter. The
+   emitter passes one slot per interned literal; the ascii cache below is
+   this same idea for the single-character strings every program shares. */
+KValue k_str_lit(const char* data, long long len, KValue* slot) {
+    if (slot->tag != K_STR) {
+        KStr* s = k_alloc_perm(sizeof(KStr) + (size_t)len + 1);
+        s->len = (long)len;
+        s->data = (char*)(s + 1);
+        memcpy(s->data, data, (size_t)len);
+        s->data[len] = 0;
+        slot->tag = K_STR;
+        slot->payload = k_ptr(s);
+    }
+    return *slot;
+}
+
 KValue k_str_n(const char* data, long long len) {
     if (len == 1) {
         unsigned char b = (unsigned char)data[0];
