@@ -81,34 +81,34 @@ fn str_char _ none p _
   fail p "unterminated string"
 
 fn str_char cs c p acc
-  str_chars cs (p + 1) (push acc c)
+  str_chars cs (p + 1) (text/append acc c)
 
 fn str_chars cs p acc
   str_char cs (cs[p]) p acc
 
 fn str_escape cs 34 p acc
-  str_chars cs (p + 2) (push acc 34)
+  str_chars cs (p + 2) (text/append acc 34)
 
 fn str_escape cs 47 p acc
-  str_chars cs (p + 2) (push acc 47)
+  str_chars cs (p + 2) (text/append acc 47)
 
 fn str_escape cs 92 p acc
-  str_chars cs (p + 2) (push acc 92)
+  str_chars cs (p + 2) (text/append acc 92)
 
 fn str_escape cs 98 p acc
-  str_chars cs (p + 2) (push acc 8)
+  str_chars cs (p + 2) (text/append acc 8)
 
 fn str_escape cs 102 p acc
-  str_chars cs (p + 2) (push acc 12)
+  str_chars cs (p + 2) (text/append acc 12)
 
 fn str_escape cs 110 p acc
-  str_chars cs (p + 2) (push acc 10)
+  str_chars cs (p + 2) (text/append acc 10)
 
 fn str_escape cs 114 p acc
-  str_chars cs (p + 2) (push acc 13)
+  str_chars cs (p + 2) (text/append acc 13)
 
 fn str_escape cs 116 p acc
-  str_chars cs (p + 2) (push acc 9)
+  str_chars cs (p + 2) (text/append acc 9)
 
 fn str_escape cs 117 p acc
   str_unicode cs p acc
@@ -125,13 +125,13 @@ fn str_unicode cs p acc
   h3 = hex_digit (cs[p + 4])
   h4 = hex_digit (cs[p + 5])
   code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
-  str_chars cs (p + 6) (text/concat acc (text/bytes (text/from_code code)))
+  str_chars cs (p + 6) (text/append acc (text/from_code code))
 
 fn string_at cs 34 start p
   parsed (p + 1) (string_ok p (text/utf8 (text/slice cs start (p - 1))))
 
 fn string_at cs 92 start p
-  str_chars cs p (text/concat [] (text/slice cs start (p - 1)))
+  str_chars cs p (text/append (text/bytes "") (text/slice cs start (p - 1)))
 
 fn string_at _ none _ p
   fail p "unterminated string"

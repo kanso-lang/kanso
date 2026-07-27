@@ -7753,3 +7753,43 @@ nothing about the verdict (the vendored decoder still wins at 3.1) but
 proves the mechanism where it was first seen failing. The welfare header
 now names its ratchet era, so a score is read inside its model version —
 the confusion Clay hit reading 62-then-59 across a recalibration.
+
+## 2026-07-27 — std/json strings move to the bytes builder (the kq diet, part 1)
+
+The kq-swap decline left a queue item: std/json is 3x heavier than kq's
+vendored decoder, so diet std toward kq's shape. Head-to-head profiling
+of the same 188KB decode found the first divergence in four lines of
+lib/json/text.kso: std accumulated string bytes in lists (push,
+text/concat) where kq feeds a bytes builder (text/append). List
+accumulation churns the shared buffer pool and denies utf8 zerocopy —
+std showed append_fast=0, utf8_zerocopy=0 against kq's 21,457 / 1,773.
+
+Adopting the builder pattern (append instead of push, a text/bytes ""
+seed instead of concat onto []) closes that gap exactly: the std profile
+now reads append_fast=21,457, utf8_zerocopy=1,773 — kq parity — with
+alloc_bytes down 23% (4.45M to 3.41M) and decode arena peak down a full
+block (4M to 3M). In the one-shot vein: allocs 239,415 to 234,323,
+alloc_bytes -1.04M, sh_buf halved (2.23M to 1.10M), sh_str -72K. In the
+decode gauntlet (150 decodes): allocs 8.34M to 7.58M, alloc_bytes 490M
+to 334M (-32%), arena peak 4 blocks to 3, sh_buf -55%. (The gauntlet
+number surfaced on CI first: bench/jsonbench vendors lib/json at
+generation time, and the local copy was stale — regenerate with
+make_jsonbench.sh before reading that vein.)
+
+Priced worsenings, all the builder's own signature: bytes_malloc (13 to
+1,786 one-shot, 0 to 265,950 gauntlet — each builder growth mallocs
+off-arena by design, per the #336 carry model), buf_reuse (3,445 to
+2,233 / 516,750 to 334,950 — the transient list buffers that used to be
+reused no longer exist to reuse; their whole pool shrank, which is the
+point), and perm_allocs 8 to 9 (the text/bytes "" seed constant freezes
+once). Welfare 59.31 to 60.35, banked in this PR: decode_allocs and
+decode_arena_blocks both moved; the one-shot peak stays encode-side
+dominated at six blocks.
+
+Also: trend_gate.py stripped only the encode_ prefix before direction
+lookup, so every oneshot counter classified neutral and a pure oneshot
+regression could pass silently. It now strips oneshot_ too — this
+entry's two worsened counters are the fix's first customers.
+
+Part 2 stays queued: std's container assembly churns sh_buf 2.2x over
+kq's even after the string fix — obj_items/array_items shapes next.
