@@ -84,7 +84,7 @@ extra_css: /book/book.css
 
 <h2>none is for asking</h2>
 
-<p>so meet the handleable one. the standard library is opinionated about where you meet it. indexing with <code>xs[i]</code> is <em>strict</em>: it means "i know this element exists," and a miss is a broken promise—an err:</p>
+<p>so meet the handleable one. the standard library is opinionated about where you meet it. indexing with the sigil, <code>xs[i]!</code>, is <em>strict</em>: it means "i know this element exists," and a miss is a broken promise—an err:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">ninth.kso</div>
@@ -99,7 +99,7 @@ extra_css: /book/book.css
 
 <p>(indexing is 1-based, everywhere, no exceptions. the first flavor is <code>flavors[1]</code>. we are at peace with this.)</p>
 
-<p>when absence is <em>expected</em>—you're asking, not promising—use <code>at</code>, which returns <code>none</code> on a miss. and <code>none</code>, unlike <code>err</code>, is a shape dispatch fully understands. it sits on the marker rung of the specificity ladder, so handling absence is one more arm, written like any other:</p>
+<p>when absence is <em>expected</em>—you're asking, not promising—drop the sigil: plain <code>xs[i]</code> returns <code>none</code> on a miss. and <code>none</code>, unlike <code>err</code>, is a shape dispatch fully understands. it sits on the marker rung of the specificity ladder, so handling absence is one more arm, written like any other:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">fourth.kso</div>
@@ -121,7 +121,7 @@ no fourth flavor</code></pre>
   </div>
 </div>
 
-<p>the same pair of tools covers maps—literal syntax <code>{ "dango":350 }</code>, strict lookup with brackets, polite lookup with <code>at</code>:</p>
+<p>the same pair of tools covers maps—literal syntax <code>{ "dango":350 }</code>, strict lookup with <code>m[k]!</code>, polite lookup with plain <code>m[k]</code>:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">menu.kso</div>
@@ -153,11 +153,11 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
   </div>
 </div>
 
-<p>you asked a question with <code>at</code> and then wrote code that only works if the answer was yes—the interpolation has no way to render an absence you never resolved. so the difference between the two values is not that one is policed and the other isn't. both refuse to be ignored. the difference is that <code>none</code> <em>can</em> be claimed by an arm and <code>err</code> cannot. asking for something you might not get obligates you to write the arm for not getting it.</p>
+<p>you asked a question with the plain subscript and then wrote code that only works if the answer was yes—the interpolation has no way to render an absence you never resolved. so the difference between the two values is not that one is policed and the other isn't. both refuse to be ignored. the difference is that <code>none</code> <em>can</em> be claimed by an arm and <code>err</code> cannot. asking for something you might not get obligates you to write the arm for not getting it.</p>
 
 <h2>access is a decision</h2>
 
-<p>step back and look at what the last section actually handed you. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by which function you reach for. brackets document an invariant: this key exists, and if it doesn't, that's a bug, fail here. <code>at</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
+<p>step back and look at what the last section actually handed you. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by one character. the sigil <code>xs[i]!</code> documents an invariant: this key exists, and if it doesn't, that's a bug, fail here. the plain <code>xs[i]</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pocky.kso</div>
