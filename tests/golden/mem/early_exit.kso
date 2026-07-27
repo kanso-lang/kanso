@@ -1,7 +1,8 @@
 # find, all? and any? drive next and stop at the answer. the predicate
 # here allocates on every call, so the alloc count pins how far the scan
 # went: a fold-the-whole-list implementation adds one alloc per element
-# and moves this golden by thousands.
+# and moves this golden by thousands. the list stays at 2000 elements so
+# the debug-build interpreter's stack survives the build recursion.
 import "std/list"
 
 fn build_up 0 acc
@@ -11,7 +12,7 @@ fn build_up n acc
   build_up (n - 1) (push acc n)
 
 pub play =
-  xs = build_up 20000 []
+  xs = build_up 2000 []
   hit = list/find xs (n -> length "{n}" > 0)
-  short = list/all? xs (n -> length "{n}" < 5)
+  short = list/all? xs (n -> length "{n}" < 4)
   print "{hit} {short}"

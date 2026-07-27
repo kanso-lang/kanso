@@ -1,5 +1,5 @@
-allocs=25
-alloc_bytes=699856
+allocs=23
+alloc_bytes=44464
 arena_blocks=1
 perm_allocs=1
 beat_iters=0
@@ -22,6 +22,6 @@ bytes_freed=0
 buf_reuse=0
 sh_str=160
 sh_rec=384
-sh_buf=699120
+sh_buf=43728
 sh_map=0
 sh_bytes=0
