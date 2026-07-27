@@ -7628,3 +7628,30 @@ friction is measured on real pull requests before it gates. The flip is
 one line, and it is Clay's to flip. Probed all three ways before shipping:
 a simulated perm_allocs rise with no sentence lists as UNPRICED, the same
 rise with a naming sentence prices, and a clean branch is clean.
+
+## 2026-07-27 — the utility function learns to see peak: the one-shot term
+
+Clay's gavel on cohort freeing was conditional — build it if it is a net
+welfare win, and first make damn sure the utility function is good. The
+audit said it was not: every runtime term measures the looping gauntlet,
+whose rewinds reclaim decode garbage each iteration, so the exact win
+cohort freeing exists to buy — peak footprint in the decode-and-hold
+shape, kq's shape — was invisible to the objective. The gate would have
+read the whole build as a no-op.
+
+So the model gains a term before the build starts. A new deterministic
+counter, arena_peak_bytes, tracks the live block chain's high-water — it
+appears in every counter dump, so every vein regenerated in this change,
+and the encode_arena_peak_bytes and arena_peak_bytes lines the trend gate
+flags on this very branch are the counter's introduction, not a
+regression. A new pinned program, bench/oneshot, decodes the 188 kb board
+once, holds it, and prints: allocs 55,622, arena_peak_bytes 4,194,304 —
+four megabytes of peak for a document that deep-sizes near 1.24, the
+measured two-thirds garbage ratio written as a golden. The welfare term
+oneshot_peak_bytes enters at 0.15 weight with late satiation, paid by
+trimming both alloc terms, both block terms, and compile_rounds — the
+block terms cede most because peak bytes measure what block counts only
+proxied. A term new to the model enters at ratio one, so its introduction
+moves no score; the floor recalibrates to 57.88 with the reason in the
+history, and only improvement from here pays. Cohort freeing now has a
+gate that can price it.

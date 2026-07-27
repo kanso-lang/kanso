@@ -193,6 +193,10 @@ static KValue* k_map_sorted(KMap* m, long long* out_len);
 typedef struct KBlock { struct KBlock* next; size_t cap; } KBlock;
 static KBlock* k_blocks = NULL;
 static KBlock* k_spare = NULL;
+/* bytes held by the live chain, and the most it ever held: the process's
+   deterministic peak, the number the one-shot welfare term watches */
+static long long k_live_block_bytes = 0;
+static long long k_stat_peak_block_bytes = 0;
 char* k_arena = NULL;
 size_t k_arena_left = 0;
 
@@ -210,6 +214,7 @@ static void k_stats_dump(void) {
     fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
     fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
     fprintf(stderr, "arena_blocks=%lld\n", k_stat_blocks);
+    fprintf(stderr, "arena_peak_bytes=%lld\n", k_stat_peak_block_bytes);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
     fprintf(stderr,
@@ -244,6 +249,10 @@ static void k_arena_push(size_t need) {
     }
     b->next = k_blocks;
     k_blocks = b;
+    k_live_block_bytes += (long long)b->cap;
+    if (k_live_block_bytes > k_stat_peak_block_bytes) {
+        k_stat_peak_block_bytes = k_live_block_bytes;
+    }
     k_arena = (char*)(b + 1);
     k_arena_left = b->cap;
 }
@@ -303,6 +312,7 @@ static void k_beat_rewind(KMark* m) {
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
+        k_live_block_bytes -= (long long)b->cap;
         b->next = k_spare;
         k_spare = b;
     }

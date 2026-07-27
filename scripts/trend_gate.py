@@ -37,6 +37,7 @@ LOWER_IS_BETTER = {
     "thunk_allocs",
     "thunk_escaped",
     "thunk_live_exit",
+    "arena_peak_bytes",
     "lines",
     "calls",
     "branches",
@@ -53,7 +54,12 @@ HIGHER_IS_BETTER = {
     "thunk_frees",
 }
 
-GOLDENS = ("bench/cost_golden.txt", "bench/cost_golden_encode.txt", "bench/compile_golden.txt")
+GOLDENS = (
+    "bench/cost_golden.txt",
+    "bench/cost_golden_encode.txt",
+    "bench/cost_golden_oneshot.txt",
+    "bench/compile_golden.txt",
+)
 
 
 def counters(text, prefix):
@@ -91,7 +97,10 @@ def main():
     added_log = log_delta(base)
     worsened = []
     for golden in GOLDENS:
-        prefix = {"bench/cost_golden_encode.txt": "encode_"}.get(golden, "")
+        prefix = {
+            "bench/cost_golden_encode.txt": "encode_",
+            "bench/cost_golden_oneshot.txt": "oneshot_",
+        }.get(golden, "")
         ours = counters((ROOT / golden).read_text(), prefix)
         mains = counters(from_git(base, golden), prefix)
         for key in sorted(set(ours) | set(mains)):

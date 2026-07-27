@@ -52,11 +52,18 @@ FLOOR = ROOT / "bench/welfare_floor.json"
 #             eighth doubling still shows up in somebody's bill. Larger
 #             satiation means the term keeps paying for longer.
 TERMS = {
-    "decode_allocs": (0.25, 2.0),
-    "decode_arena_blocks": (0.10, 1.5),
-    "encode_allocs": (0.20, 2.0),
-    "encode_arena_blocks": (0.10, 1.5),
-    "compile_rounds": (0.15, 0.5),
+    "decode_allocs": (0.20, 2.0),
+    "decode_arena_blocks": (0.08, 1.5),
+    "encode_allocs": (0.17, 2.0),
+    "encode_arena_blocks": (0.07, 1.5),
+    # the one-shot peak: decode a document, hold it, print — kq's shape.
+    # the looping gauntlet's rewinds hide exactly the garbage this term
+    # sees, and peak footprint is the scoreboard row the project still
+    # loses, so it enters at runtime-class weight with late satiation.
+    # the arena-block terms cede the most, because peak bytes now measure
+    # what block counts only proxied.
+    "oneshot_peak_bytes": (0.15, 2.0),
+    "compile_rounds": (0.13, 0.5),
     "compile_visits": (0.10, 0.5),
     "emitted_lines": (0.10, 0.5),
 }
@@ -81,12 +88,14 @@ def compile_totals(path):
 def terms():
     decode = counters(ROOT / "bench/cost_golden.txt")
     encode = counters(ROOT / "bench/cost_golden_encode.txt")
+    oneshot = counters(ROOT / "bench/cost_golden_oneshot.txt")
     comp = compile_totals(ROOT / "bench/compile_golden.txt")
     return {
         "decode_allocs": decode["allocs"],
         "decode_arena_blocks": decode["arena_blocks"],
         "encode_allocs": encode["allocs"],
         "encode_arena_blocks": encode["arena_blocks"],
+        "oneshot_peak_bytes": oneshot["arena_peak_bytes"],
         "compile_rounds": comp["rounds"],
         "compile_visits": comp["visits"],
         "emitted_lines": comp["lines"],
@@ -148,6 +157,10 @@ def main():
             print("floor established at 100.0")
             return 0
         held = json.loads(FLOOR.read_text())
+        # a term new to the model enters at ratio one: its own introduction
+        # is never a score move, and only improvement from here pays
+        for key in now:
+            held["baseline"].setdefault(key, now[key])
         value = score(now, held["baseline"])
         reasons = [a for a in sys.argv[1:] if a != "--set"]
         if not reasons:
