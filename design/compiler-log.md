@@ -6121,3 +6121,55 @@ Also worth recording because it was the other half of Clay's correction:
 lambdas do not overload. Only functions do. A lambda committing to a parameter
 count is therefore a fact about lambdas, and says nothing about whether `&f`
 is ambiguous — which is precisely where the reasoning went wrong.
+
+## 2026-07-26 — GAVEL, IMPLEMENTED: a record field carries no type
+
+Clay: "indeed it should now be a compiler error to try to specify types on
+record fields. we can always revert that if real world use proves it to be too
+painful."
+
+    error[type]: a record field carries no type — write `x` and let the
+                 compiler infer what it holds
+
+Fifty-seven annotations came out of the tree — the standard library, the
+examples, the book's samples, the golden corpora and the spec fixtures — and
+nothing is left anywhere.
+
+THE HARD PART WAS NOT THE BAN. `escape.rs` decided register-returnability by
+reading a written type:
+
+    let first_field_is_int = ... tys.len() == 1 && tys[0] == "int";
+
+With nothing written, that can never be true, and a two-word value returned in
+registers would have gone back to memory traffic — a codegen regression hiding
+inside a syntax change. So the analysis now asks inference instead:
+`type_fields[idx][0] == INT`, the join over every construction site's first
+argument. The spec that caught this when `lib/json` was stripped by accident
+this afternoon now passes with `lib/json` stripped on purpose.
+
+EVERY COUNTER IDENTICAL, which is the claim that matters. Decode: 12,924,473
+allocations, 595,495,056 bytes, 4 arena blocks, 151 rewinds, 318,450
+eisel-lemire parses. Encode: 68,640,508 allocations, 2,205 blocks, 849,200 ryū
+renders, 42,312,800 in-place appends. Welfare 100.00. Inference replaced the
+declarations with nothing lost.
+
+TWO CHECKS BECAME DEAD and were removed rather than left to rot:
+`check_ctor_literals` and `check_set_literals` both read `declared`, which is
+now always empty, so neither could ever fire. What replaces them is the
+conflict check built this morning, which works from inference and still
+reports:
+
+    `point`'s `x` is an int here, and `shout` takes a string —
+    these two cannot both hold
+
+TWO GOLDENS DELETED because the behaviour they pinned is gone: the
+constructor field-type error and the typeset-membership rejection. A golden
+asserting a fiction is worse than no golden.
+
+AND A CHAPTER SECTION RETARGETED RATHER THAN DELETED. ch03 taught "typesets: a
+field of several types" with `status:active archived pending` written on the
+field. The *named* form survives — `type state archived draft published`, one
+line, members alphabetical — so the section now teaches that, with the field
+left bare. The prose says why that is the one written type that earns its
+keep: a set nobody has yet exceeded looks exactly like a set nobody can
+exceed, and only a declaration can tell those apart.

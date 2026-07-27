@@ -68,8 +68,8 @@ fn rank n
     (
         "records",
         "type point
-  x:int
-  y:int
+  x
+  y
 
 main = print \"{shift (point 1 2)}\"
 
@@ -80,8 +80,8 @@ fn shift (point x y)
     (
         "build_block",
         "type node
-  id:int
-  peer:some
+  id
+  peer
 
 main =
   ring = build

@@ -1,6 +1,6 @@
 type user
-  admin:bool
-  name:string
+  admin
+  name
 
 pub play =
   { admin name } = user false "clay"

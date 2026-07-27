@@ -339,123 +339,6 @@ fn demand_conflicts(
     }
 }
 
-fn check_set_literals(program: &Program, diags: &mut Vec<Diagnostic>) {
-    const CONCRETE: [&str; 6] = ["int", "float64", "string", "bool", "list", "map"];
-
-    fn walk(program: &Program, stmts: &[Stmt], diags: &mut Vec<Diagnostic>) {
-        // a local binding straight to a constructor is the one case where the
-        // target's type is knowable without knowing anything else
-        let mut built: HashMap<&str, &str> = HashMap::new();
-        for stmt in stmts {
-            if let Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::App { head, .. } } =
-                stmt
-            {
-                if let Expr::Ident(ty, _) = head.as_ref() {
-                    if program.types.iter().any(|t| t.name == *ty) {
-                        built.insert(name.as_str(), ty.as_str());
-                    }
-                }
-            }
-            if let Stmt::Set { target, field, value, .. } = stmt {
-                if let Some(ty_name) = built.get(target.as_str()) {
-                    if let Some(ty) = program.types.iter().find(|t| t.name == **ty_name) {
-                        if let Some((_, declared, _)) =
-                            ty.fields.iter().find(|(f, _, _)| f == field)
-                        {
-                            if let [want] = declared.as_slice() {
-                                if CONCRETE.contains(&want.as_str()) {
-                                    if let Some(got) = literal_type(value) {
-                                        if got != want {
-                                            diags.push(Diagnostic::new(
-                                                "type",
-                                                format!(
-                                                    "`{ty_name}`'s `{field}` holds {want}, not {got}"
-                                                ),
-                                                value.span(),
-                                            ));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            // a build block carries its own statements, and they are where
-            // assignment actually happens
-            let expr = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            let mut stack = vec![expr];
-            while let Some(cur) = stack.pop() {
-                if let Expr::Build(inner, _) | Expr::Block(inner, _) = cur {
-                    walk(program, inner, diags);
-                }
-                stack.extend(crate::expr_children(cur));
-            }
-        }
-    }
-
-    for decl in &program.fns {
-        walk(program, &decl.body, diags);
-    }
-}
-
-/// A field annotation is a promise about what the field holds, and a literal
-/// argument is the one case where the compiler can keep it without knowing
-/// anything else about the program.
-fn check_ctor_literals(program: &Program, diags: &mut Vec<Diagnostic>) {
-    let primitive = |e: &Expr| -> Option<&'static str> {
-        match e {
-            Expr::Int(..) => Some("int"),
-            Expr::Float(..) => Some("float64"),
-            Expr::Str(parts, _) => match parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))) {
-                true => Some("string"),
-                false => None,
-            },
-            Expr::List(..) => Some("list"),
-            Expr::MapLit(..) => Some("map"),
-            Expr::Ident(name, _) if name == "true" || name == "false" => Some("bool"),
-            _ => None,
-        }
-    };
-    let concrete = ["int", "float64", "string", "bool", "list", "map"];
-    let walk = |expr: &Expr, diags: &mut Vec<Diagnostic>| {
-        let Expr::App { head, args, .. } = expr else { return };
-        let Expr::Ident(name, _) = head.as_ref() else { return };
-        let Some(ty) = program.types.iter().find(|t| t.name == *name) else { return };
-        if ty.fields.len() != args.len() {
-            return;
-        }
-        for ((field, declared, _), arg) in ty.fields.iter().zip(args) {
-            let [want] = declared.as_slice() else { continue };
-            if !concrete.contains(&want.as_str()) {
-                continue;
-            }
-            let Some(got) = primitive(arg) else { continue };
-            if got != want {
-                diags.push(Diagnostic::new(
-                    "type",
-                    format!("`{name}`'s `{field}` holds {want}, not {got}"),
-                    arg.span(),
-                ));
-            }
-        }
-    };
-    for decl in &program.fns {
-        for stmt in &decl.body {
-            let e = match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
-            };
-            let mut stack = vec![e];
-            while let Some(cur) = stack.pop() {
-                walk(cur, diags);
-                stack.extend(crate::expr_children(cur));
-            }
-        }
-    }
-}
-
 /// The engines carry `none` as a tag rather than a declared type, so nothing
 /// can derive from it yet. Rejecting here keeps all three engines identical
 /// instead of one erroring and another silently dropping the subtype.
@@ -764,7 +647,7 @@ pub fn check_file_shadow(
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
     check_retired_any(program, &mut diags);
-    check_set_literals(program, &mut diags);
+    check_field_annotations(program, &mut diags);
     check_field_conflicts(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
@@ -878,12 +761,10 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
-    check_set_literals(program, &mut diags);
     check_predicates(program, &mut diags);
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
-    check_ctor_literals(program, &mut diags);
     check_none_in_collections(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
@@ -1045,6 +926,28 @@ fn constant_refs<'a>(expr: &'a Expr, known: &HashSet<&str>, out: &mut Vec<&'a st
 /// `any` was the old name for the type that accepts every value except
 /// `none`, which is what it never said. An unannotated field or parameter is
 /// the unconstrained one.
+/// A field's type is what construction sites put in it and uses ask of it,
+/// and the compiler works that out for itself — so writing it down again adds
+/// a second copy that can disagree with the first. The editor shows the
+/// inferred answer on hover, which is where a reader should learn it.
+fn check_field_annotations(program: &Program, diags: &mut Vec<Diagnostic>) {
+    for ty in &program.types {
+        for (field, declared, span) in &ty.fields {
+            if declared.is_empty() {
+                continue;
+            }
+            diags.push(Diagnostic::new(
+                "type",
+                format!(
+                    "a record field carries no type — write `{field}` and let the compiler \
+                     infer what it holds"
+                ),
+                *span,
+            ));
+        }
+    }
+}
+
 fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
     let retired = |ty: &str, span, diags: &mut Vec<Diagnostic>| {
         if ty == "any" {

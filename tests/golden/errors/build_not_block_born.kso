@@ -1,6 +1,6 @@
 type node
-  id:int
-  peers:list
+  id
+  peers
 
 fn mutate n
   build

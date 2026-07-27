@@ -1,4 +1,0 @@
-error[type]: there is no `any` type; leave the annotation off for a field or parameter that accepts anything
-  --> retired_any.kso:3:3
-   3 |   partner:any
-         ^

@@ -1,5 +1,0 @@
-type node
-  id:int
-  peer:int
-
-pub play = print "{node "hello" 5}"

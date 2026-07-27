@@ -1,5 +1,5 @@
 type count
-  n:float64 int
+  n
 
 type money int
 
@@ -7,7 +7,7 @@ type slot
   v
 
 type wallet
-  amount:money none
+  amount
 
 pub play =
   print "{slot none} {slot 7} {slot "text"}"
