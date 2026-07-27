@@ -6499,3 +6499,29 @@ ratchet ignores anything under a hundredth. That was a real regression bought
 on credit: #322's wrapper inlining is what made the mutate path reachable, and
 the payoff arrived today rather than then. welfare.py now names every term that
 went backwards and prices it, whatever the sum did. The sum stays the gate.
+
+## 2026-07-26 — the shelf's prize, measured
+
+kq pretty-printing the 1.9 mb document allocates 135,762,784 bytes and peaks at
+139,903,456. The two figures agreeing is the finding: nothing is reclaimed for
+the length of the run, because the loop that would reclaim it declines on its
+accumulator. The output is 4,582,213 bytes, so at most 3.3% of the peak is live
+at the end. jq holds 6.7 times its output on the same document; kq holds thirty.
+
+Peak scales with the document rather than with the output, and the multiplier
+rises with nesting — 28x the input on a flat 845 kb list, 71x on the nested
+1.9 mb one — which is what a grow-only arena does when every nested call's
+temporaries outlive it.
+
+The 62% allocation cut above moves the peak from 211.9 mb to 139.9 and does not
+touch this: fewer allocations still means nothing freed. What closes it is the
+fold-state shelf, and one of its four open questions is now half answered.
+Hoisting a builder out of the arena for a loop's duration is sound only if the
+loop owns it outright, and proving that is what the linearity analysis already
+does to license an in-place append. The same proof read over a longer span is
+what would license the longer lifetime; what is still open is the exit — who
+frees the buffer when the loop ends, what happens on the failure path, and what
+happens to a builder that escapes.
+
+Not built. The measurement is recorded so the next attempt starts from the
+number rather than from the hunch.
