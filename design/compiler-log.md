@@ -6735,3 +6735,31 @@ extension where the analysis proves uniqueness — thirteen sites in kq — and
 maps never do, so every put allocates a fresh 32-byte KMap header even on the
 O(1) frontier path. That is the 2.7 mb above, and it is the same shape as the
 append header the linearity work removed.
+
+## 2026-07-26 — the decode anomaly, localised
+
+Counting buffer *allocations* rather than bytes finds the thing the growth
+model could not explain. Decoding the 1.9 mb document:
+
+    c_buf     30,672,512 bytes
+    n_buf        228,283 allocations
+    average          134 bytes each
+
+The document holds 55,121 collections, so that is **4.1 buffers per
+collection**, on collections averaging three entries. One or two is what
+growth from an initial capacity of four should cost. Four means the buffer is
+being reallocated on almost every insertion, so the O(1) frontier path in
+`put` and `push` is mostly being missed and the copying path is the norm.
+
+A predicted total from the growth policy alone comes to 10.2 mb against the
+30.7 measured, and this is the missing factor of three.
+
+The sorted-view hypothesis is ruled out: 17 calls during decode, 2,440 bytes.
+On the full pretty-print it is 27,610 calls and 3.3 mb — one view per map,
+built on read, real but not the anomaly.
+
+The frontier path in `put` is guarded by `buf->used == m->len * 2`, which asks
+whether this map is still the newest writer into its shared buffer. Something
+in the parser is breaking that condition on most insertions. That is the next
+thing to find, and it is a decoder-shaped question rather than an allocator
+one — the allocator is behaving exactly as written.
