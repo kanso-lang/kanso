@@ -8,7 +8,7 @@
     "compile_visits": 135,
     "emitted_lines": 1893
   },
-  "floor": 61.656147427118626,
+  "floor": 62.2199820879985,
   "history": [
     {
       "floor": 46.33,
@@ -57,6 +57,10 @@
     {
       "floor": 100.0,
       "why": "baseline established at the utf-8 short-ascii fast path"
+    },
+    {
+      "floor": 62.22,
+      "why": "the full stack composed: shelf reuse plus literal interning together read 8,341,214 decode and 16,259,944 encode allocations."
     }
   ]
 }
