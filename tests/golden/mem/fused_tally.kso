@@ -1,0 +1,16 @@
+# tally and group_by fuse like sum does: the chain's adapter steps land
+# inside one fold reducer, so no cursor records tick per element. the
+# alloc count pins the fused shape (map puts remain; cursors do not).
+import "std/list"
+
+fn build_up 0 acc
+  acc
+
+fn build_up n acc
+  build_up (n - 1) (push acc n)
+
+pub play =
+  xs = build_up 500 []
+  buckets = list/group_by (list/select xs (n -> n > 490)) (n -> n / 2 * 2)
+  counts = list/tally (list/map xs (n -> n - n / 100 * 100))
+  print "{counts[7]} {buckets[492]}"

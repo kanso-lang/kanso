@@ -7244,3 +7244,28 @@ bench programs carry no redexes, so the ratchets rightly saw nothing.
 STILL QUEUED from the enumerable spec: take/drop bounds in the fused scan,
 first/find early-exit fusion, tally/group_by reducers — the remaining
 400k excess in the four-chain measurement is exactly those unfused shapes.
+
+## 2026-07-27 — tally and group_by join the fused consumers; the map log is quadratic
+
+Two of the queued reducers were a small extension once the inline-beta step
+landed: try_fuse now emits tally as `put m x (bump m[x])` and group_by as
+`file_under acc (key x) x`, resolving the private std/list helpers by
+qualified name the same way it resolves fold — privacy is a check-time
+property and fusion runs after the check. Pinned by
+tests/golden/mem/fused_tally.kso (allocs=1590 fused; 5118 without the
+arms, watched red). Still queued: take/drop bounds and first/find
+early-exit, which need a fold that can stop — a different mechanism, not
+more arms.
+
+OPEN, found by the measurement: building a map under repeated keys is
+quadratic at runtime. k_b_put and k_b_put_mut both append to the pair log
+unconditionally — an existing key still grows len by one — and every read
+resolves duplicates by sorting the whole log. A 10k-element tally over 17
+distinct keys allocates 2.0 GB and runs seconds; 30k runs half a minute;
+the scaling is n². This is not the fusion's doing — KANSO_NO_FUSE times
+within noise — it is the cost model of dedup-on-read meeting an
+accumulator that writes the same keys forever. Any tally, index_by, or
+put-loop over few distinct keys pays it. The fix wants design attention
+(compact the log when duplicates cross a threshold? resolve on put_mut at
+proven-unique sites?) because the frontier-append trick is load-bearing
+for the build-block shapes that never repeat a key.

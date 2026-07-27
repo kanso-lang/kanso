@@ -3058,8 +3058,7 @@ impl<'a> Backend<'a> {
                 }
                 let body_from = f.cur_label.clone();
                 let out_set = f.set_of(&out);
-                let fail_bits: Set =
-                    bails.iter().fold(0, |acc, (v, _)| acc | (f.set_of(v) & FAIL));
+                let fail_bits: Set = bails.iter().fold(0, |acc, (v, _)| acc | (f.set_of(v) & FAIL));
                 f.line(&format!("br label %{merge}"));
                 f.start_block(&merge);
                 let t = f.tmp();
