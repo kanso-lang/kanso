@@ -8079,3 +8079,37 @@ Everything that waits on Clay now lives in design/pending-gavels.md:
 eleven decisions with context, interim state, and what each unblocks,
 plus the four open-but-unblocking notes. The sweep that started at the
 top of this log's 2026-07-27 entries ends here.
+
+## 2026-07-27 — GAVEL: streaming stdout. io/write ships, and the bind loop learns to floor
+
+Clay gaveled streaming stdout ("seems very good! implement"). Two
+pieces, and the second is the one that mattered.
+
+io/write is the eighth description: a string to stdout, no newline,
+wired through all three engines, the plan renderer, the executors, and
+appendix B. The streaming idiom is write-then-bind — the continuation
+builds the next chunk only when the executor reaches it — and the bind
+executor's bracketed loop makes the chain flat: a 20,000-chunk, 32 MB
+stream runs at 1.4 MB RSS, one arena block, pinned in
+tests/golden/mem/stream_write.kso.
+
+But the first kq measurement went the wrong way, 47.5 to 88.6 MB: the
+bind loop's evacuation hauled the continuation — which captures the
+13 MB decoded document — through the carry pair on every one of 1,600
+chunks. An intermediate design (promote-by-copying) still paid the
+doubling once, 59.7. The landed fix sizes the staged continuation with
+the cohort guard's budgeted pass and, past 256 KB, skips the
+evacuation entirely: the bracket pops and re-marks, flooring the
+region under the big survivor. Later steps find it below the mark and
+share it; the ping-pong resumes for per-step junk; the step's garbage
+joins the floor — the same trade the cohort's keep makes, and right
+for a process that exits. All three cost veins are byte-identical (the
+bench chains stage under the threshold), welfare flat, browser
+differential 83/0.
+
+kq streams its top-level list through exactly this idiom, and the
+scoreboard's last two losing rows flip: full print 47.5 -> 30.0 MB
+against jq's 30.7 on the 1.9 MB document, 5.1 -> 4.5 against 4.9 on
+the 188 KB one, hash-identical to jq -S, spec suite green. kq now
+leads every row. The kq-side landing (goldens, README, TRY, site
+scoreboards) rides the sibling PR.

@@ -40,7 +40,7 @@ extra_css: /book/book.css
 <span class="eyebrow">appendix b</span>
 <h1>builtin reference</h1>
 
-<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. six names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>length</code>, and <code>entries</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. seven are <em>descriptions</em>: <code>print</code>, <code>io/read_file</code>, <code>io/write_file</code>, <code>io/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
+<p>kanso keeps its standard library small enough to hold in your head, and it draws one line through it. six names are <em>ambient</em>—<code>if</code>, <code>print</code>, <code>push</code>, <code>put</code>, <code>length</code>, and <code>entries</code> resolve in any file with no import, because nearly every program touches them. everything else arrives through a std module: <code>import "std/math"</code> gives you <code>math/sqrt</code>, <code>import "std/list"</code> gives you <code>list/map</code>, and the qualified spelling in your source is the same spelling you will find in the entry headers below. the functions come in two shapes. most are ordinary pure functions—<code>list/sort</code> takes a list and returns a sorted one, <code>math/sqrt</code> takes a number and returns its root, with no trace left behind. eight are <em>descriptions</em>: <code>print</code>, <code>io/read_file</code>, <code>io/write</code>, <code>io/write_file</code>, <code>io/args</code>, <code>io/stdin</code>, <code>time/sleep</code>, and <code>math/random</code> don't perform i/o when evaluated—they return a value describing i/o that the runtime performs later (chapter 05). this appendix marks those <span class="desc-tag">description</span> and treats the rest as plain functions.</p>
 
 <p>every function here follows the same failure convention. an <code>err</code> or <code>none</code> handed in passes straight through, unlooked-at, so failures ride the railway from chapter 04 without special cases. a genuine type mismatch—<code>list/sum</code> on a list containing a string, <code>math/sqrt</code> on a record—is a program bug, not a value, and raises a runtime error at the point of the call. each entry below states both: what the function does, and what it does when the input is wrong. every example was run through the interpreter; every output block is copied from the machine, and the sources live under <code>samples/appb/</code>.</p>
 
@@ -71,6 +71,7 @@ extra_css: /book/book.css
 <a href="#b-to_float"><code>text/to_float</code></a>
 <a href="#b-to_int"><code>text/to_int</code></a>
 <a href="#b-utf8"><code>text/utf8</code></a>
+<a href="#b-write"><code>io/write</code></a>
 <a href="#b-write_file"><code>io/write_file</code></a>
 </div>
 
@@ -441,6 +442,24 @@ third</code></pre>
 <h3 id="b-read_file"><code>io/read_file</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>io/read_file string → io (yields string)</code></p>
 <p>a description that yields the contents of a file as a string. a missing or unreadable path fails at execution time—at the executor, when the read is actually attempted—rather than when the description is built. pipe the contents into a function with <code>.</code>.</p>
+
+<h3 id="b-write"><code>io/write</code> <span class="desc-tag">description</span></h3>
+<p class="builtin-sig"><code>io/write string → io</code></p>
+<p>a description of writing a string to standard output exactly as given—no newline. <code>print</code> is the whole-line form; <code>write</code> is for assembling a line from pieces, and for streaming: a chain that writes a chunk and <em>binds</em> the rest (<code>io/write chunk . (_ -&gt; more)</code>) builds each chunk only when the executor reaches it, so output of any size flows in constant memory.</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">write_stream.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">io/write</span> <span class="s">"no newline "</span>
+  <span class="o">&gt;&gt;</span> <span class="f">io/write</span> <span class="s">"between these"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"; print ends the line"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play write_stream.kso</div>
+    <pre><code>no newline between these; print ends the line</code></pre>
+  </div>
+</div>
 
 <h3 id="b-write_file"><code>io/write_file</code> <span class="desc-tag">description</span></h3>
 <p class="builtin-sig"><code>io/write_file string string → io</code></p>

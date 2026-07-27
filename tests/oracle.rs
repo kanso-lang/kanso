@@ -39,6 +39,10 @@ impl Executor for CollectExecutor {
         self.stdout.push('\n');
     }
 
+    fn write(&mut self, text: &str) {
+        self.stdout.push_str(text);
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         self.rng.below(n)
     }

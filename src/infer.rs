@@ -518,7 +518,7 @@ fn desc_yield(e: &Expr) -> Set {
             Expr::Ident(n, _) if matches!(base(n), "read_file" | "stdin") => STR,
             Expr::Ident(n, _) if base(n) == "args" => LIST,
             Expr::Ident(n, _) if base(n) == "random" => INT,
-            Expr::Ident(n, _) if matches!(base(n), "print" | "write_file" | "sleep") => 0,
+            Expr::Ident(n, _) if matches!(base(n), "print" | "write" | "write_file" | "sleep") => 0,
             _ => TOP & !FAIL,
         },
         // `a >> b` yields what its right side yields
@@ -573,7 +573,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "sum" => INT | fails,
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
-        "read_file" | "write_file" | "sleep" | "random" => DESC | fails,
+        "read_file" | "write" | "write_file" | "sleep" | "random" => DESC | fails,
         _ => TOP,
     }
 }

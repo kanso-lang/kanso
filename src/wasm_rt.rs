@@ -778,6 +778,10 @@ impl Executor for RtExecutor {
         });
     }
 
+    fn write(&mut self, text: &str) {
+        PRINTS.with(|p| p.borrow_mut().push_str(text));
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         crate::wasm::next_random(n)
     }

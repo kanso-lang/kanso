@@ -175,7 +175,8 @@ typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 typedef struct { long long type_id; KValue inner; } KSub;
 typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
-/* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind */
+/* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
+   7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline) */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -2570,6 +2571,12 @@ KValue k_b_read_file(KValue path) {
     return k_mkdesc(4, path, k_none());
 }
 
+KValue k_b_write(KValue content) {
+    if (!k_not_failure(content)) return content;
+    if (content.tag != K_STR) k_die("write takes a string");
+    return k_mkdesc(11, content, k_none());
+}
+
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
@@ -2752,6 +2759,11 @@ static KValue k_exec(KDesc* d) {
         case 10: {
             return k_none();
         }
+        case 11: {
+            KStr* s = k_as_str(d->x);
+            fwrite(s->data, 1, s->len, stdout);
+            return k_none();
+        }
         default: {
             /* a bind chain is the program's outer pulse, so it runs as one
                bracketed loop: each step executes, hands its yield to the
@@ -2774,10 +2786,33 @@ static KValue k_exec(KDesc* d) {
                 if (next.tag != K_DESC) {
                     return k_beat_pop(next);
                 }
-                k_carry_reset();
-                k_carry_stage(next);
-                k_beat_iter_carry();
-                cur = k_carry_take(0);
+                /* a large survivor — a continuation holding a decoded
+                   document, say — would ride the carry pair on every step
+                   of the chain, and even one evacuation doubles it while
+                   the step's region is still live. Size it first (the
+                   budgeted pass from the cohort guard): past the
+                   threshold, skip the evacuation and floor the region
+                   under it — the survivors sit below a fresh mark, every
+                   later step shares them, and the ping-pong resumes for
+                   the small per-step junk. The step's garbage joins the
+                   floor, the same trade the cohort's keep makes. */
+                k_ptrmap_begin(&k_copy_seen);
+                k_copy_seen_live = 0;
+                k_copy_size_budget = (size_t)(1 << 18);
+                k_copy_size_spent = 0;
+                size_t nsz = k_copy_size(next, &k_beat_stack[k_beat_depth - 1]);
+                k_copy_size_budget = 0;
+                if (nsz > (size_t)(1 << 18)) {
+                    k_beat_depth--;
+                    k_chunkreg_migrate(k_beat_depth);
+                    k_beat_push();
+                    cur = next;
+                } else {
+                    k_carry_reset();
+                    k_carry_stage(next);
+                    k_beat_iter_carry();
+                    cur = k_carry_take(0);
+                }
             }
         }
     }

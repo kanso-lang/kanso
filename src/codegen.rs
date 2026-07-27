@@ -217,6 +217,7 @@ declare %KValue @k_b_utf8(%KValue, ptr)
 declare %KValue @k_desc_args()
 declare %KValue @k_desc_stdin()
 declare %KValue @k_b_read_file(%KValue)
+declare %KValue @k_b_write(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_desc_join(%KValue, %KValue)
@@ -270,7 +271,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 28] = [
+const BUILTIN_CALLS: [(&str, usize); 29] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -278,6 +279,7 @@ const BUILTIN_CALLS: [(&str, usize); 28] = [
     ("find2_below", 5),
     ("bytes", 1),
     ("read_file", 1),
+    ("write", 1),
     ("write_file", 2),
     ("concat", 2),
     ("utf8", 1),
