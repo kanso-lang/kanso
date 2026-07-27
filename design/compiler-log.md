@@ -8113,3 +8113,11 @@ against jq's 30.7 on the 1.9 MB document, 5.1 -> 4.5 against 4.9 on
 the 188 KB one, hash-identical to jq -S, spec suite green. kq now
 leads every row. The kq-side landing (goldens, README, TRY, site
 scoreboards) rides the sibling PR.
+
+## 2026-07-27 — the compiler page records the closed row
+
+The kq paragraph's closing claim ("what remains of the pretty-print
+gap…") described a gap that no longer exists: the streaming print
+landed at 30.0 MB against jq's 30.8, and kq holds less memory than jq
+on every scoreboard row. The page now says so, and the 211.9 → 139.9 →
+47.5 fall reads its final number.
