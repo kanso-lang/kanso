@@ -21,6 +21,6 @@ bytes_malloc=0
 bytes_freed=0
 sh_str=1632
 sh_rec=0
-sh_buf=2096
+sh_buf=2064
 sh_map=0
 sh_bytes=0

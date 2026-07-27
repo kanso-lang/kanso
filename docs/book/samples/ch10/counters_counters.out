@@ -21,7 +21,7 @@ bytes_malloc=0
 bytes_freed=0
 sh_str=64
 sh_rec=0
-sh_buf=32880
+sh_buf=32848
 sh_map=0
 sh_bytes=0
 sum 500500
