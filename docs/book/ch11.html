@@ -48,7 +48,7 @@ a ride: 3.963325623765981</code></pre>
 
 <h2>shared names are the normal case</h2>
 
-<p>two modules will export the same word, and a local function may use it too. all of them land in one overload space, and dispatch picks by specificity—the same mechanism that chooses between a <code>fact 0</code> arm and a <code>fact n</code> arm chooses between a local <code>select</code> on invoices and the list module's <code>select</code>. a local arm sorts before an imported one when the shapes tie, so your own definitions win the close calls. when two imports collide head-on, a qualifier says exactly which module you mean.</p>
+<p>two modules will export the same word, and a local function may use it too. all of them land in one overload space, and dispatch picks by specificity—the same mechanism that chooses between a <code>fact 0</code> arm and a <code>fact n</code> arm chooses between a local <code>select</code> on invoices and the list module's <code>select</code>. a local arm sorts before an imported one when the shapes tie, so your own definitions win the close calls. when two imports collide head-on—the same name, the same shape, and no local arm to break the tie—a bare call is refused, and the fix is one qualifier.</p>
 
 <h2>privacy holds at the boundary</h2>
 
@@ -137,14 +137,14 @@ area came through: 3.14159</code></pre>
 <ul>
 <li>a module is a directory; its files share one namespace.</li>
 <li><code>import "path"</code> declares the dependency and enrolls every pub name, bare and qualified. the compiler prunes what you don't use.</li>
-<li>overloading is the resolution mechanism. specificity picks; a local arm outranks an import on a tie; a qualifier narrows to one module.</li>
+<li>overloading is the resolution mechanism. specificity picks; a local arm outranks an import on a tie; a head-on collision between imports is an error with a one-word fix.</li>
 <li><code>import g { theirs:yours } "path"</code> aliases the qualifier and renames a token. a rename replaces the bare spelling.</li>
 <li>a surface is a module's own pubs plus its explicit re-exports—<code>pub name</code>, <code>pub qualifier</code>, <code>pub theirs:yours</code>. nothing leaks through on its own.</li>
 </ul>
 
 <h2>exercises</h2>
 <ol>
-<li>make two small modules that both export a function named <code>area</code> with the same shape, import both from a third, and call <code>area</code> bare. work out which module answered, then qualify both calls and confirm each spelling reaches its own module.</li>
+<li>make two small modules that both export a function named <code>area</code> with the same shape, import both from a third, and call <code>area</code> bare. read the refusal, then qualify both calls and confirm each spelling reaches its own module.</li>
 <li>in the resort module from this chapter, re-export <code>area</code> under a new name with <code>pub area:footprint</code>. confirm the visitor can call <code>footprint</code> and that bare <code>area</code> no longer arrives.</li>
 <li>call a private helper of an imported module by its qualified name. read the <code>error[opacity]</code> diagnostic, then make the helper <code>pub</code> and watch the same call succeed.</li>
 <li>geo's <code>ride_km</code> takes two arguments. declare a local <code>ride_km</code> with a different arity (in a library file beside your entry), import geo, and confirm both dispatch by argument count with no qualifier. then match the arity and work out which one answers a bare call—your own declaration outranks the import—and confirm <code>geo/ride_km</code> still reaches the other.</li>

@@ -766,6 +766,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
     check_none_in_collections(program, &mut diags);
+    check_bare_ambiguity(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }
@@ -1053,6 +1054,117 @@ fn check_overload_ranks(program: &Program, diags: &mut Vec<Diagnostic>) {
                 format!("overlapping overloads of `{}` are illegal", pair[1].name),
                 pair[1].span,
             ));
+        }
+    }
+}
+
+/// INTERIM committee ruling, awaiting Clay's tie gavel: a bare call that two
+/// imports answer with the very same shape is refused at the call site,
+/// because the silent alternative resolves the tie by import order — and
+/// imports are formatted alphabetical, so the winner would be whichever
+/// module's directory sorts first. Rejecting is the conservative reading: a
+/// refused program can be given meaning later; a silently-resolved one is a
+/// commitment. Qualified calls stay legal, and a local arm of the same shape
+/// still shadows the imports, per the ruled precedence.
+fn check_bare_ambiguity(program: &Program, diags: &mut Vec<Diagnostic>) {
+    use std::collections::HashMap;
+    let origin_of = |d: &FnDecl| -> Option<String> {
+        program
+            .fns
+            .iter()
+            .find(|t| {
+                !t.synthetic
+                    && t.file == d.file
+                    && t.span.line == d.span.line
+                    && t.span.col == d.span.col
+                    && t.params.len() == d.params.len()
+                    && t.name.ends_with(&format!("/{}", d.name))
+            })
+            .map(|t| t.name.clone())
+    };
+    let mut torn: HashMap<(&str, usize), Vec<String>> = HashMap::new();
+    for (i, a) in program.fns.iter().enumerate() {
+        if !a.synthetic || a.name.contains('/') {
+            continue;
+        }
+        for b in program.fns.iter().skip(i + 1) {
+            if !b.synthetic
+                || b.name != a.name
+                || b.params.len() != a.params.len()
+                || !same_shape(&a.params, &b.params)
+            {
+                continue;
+            }
+            let (Some(oa), Some(ob)) = (origin_of(a), origin_of(b)) else { continue };
+            if oa == ob {
+                continue;
+            }
+            let shadowed = program.fns.iter().any(|l| {
+                !l.synthetic
+                    && l.name == a.name
+                    && l.params.len() == a.params.len()
+                    && same_shape(&l.params, &a.params)
+            });
+            if shadowed {
+                continue;
+            }
+            let entry = torn.entry((a.name.as_str(), a.params.len())).or_default();
+            for o in [oa, ob] {
+                if !entry.contains(&o) {
+                    entry.push(o);
+                }
+            }
+        }
+    }
+    if torn.is_empty() {
+        return;
+    }
+    fn walk(e: &Expr, torn: &HashMap<(&str, usize), Vec<String>>, diags: &mut Vec<Diagnostic>) {
+        if let Expr::App { head, args, .. } = e {
+            if let Expr::Ident(name, span) = head.as_ref() {
+                if let Some(origins) = torn.get(&(name.as_str(), args.len())) {
+                    let spellings = origins.join("` and `");
+                    diags.push(Diagnostic::new(
+                        "dispatch",
+                        format!(
+                            "a bare `{name}` reaches `{spellings}` alike — say which \
+                             with a qualifier"
+                        ),
+                        *span,
+                    ));
+                }
+            }
+        }
+        for child in crate::expr_children(e) {
+            walk(child, torn, diags);
+        }
+    }
+    for d in &program.fns {
+        if d.synthetic || d.name.contains('/') {
+            continue;
+        }
+        let bound: std::collections::HashSet<&str> = d
+            .params
+            .iter()
+            .filter_map(|p| match p {
+                Pattern::Var(n, _) | Pattern::Annotated { name: n, .. } => Some(n.as_str()),
+                _ => None,
+            })
+            .collect();
+        let live: HashMap<(&str, usize), Vec<String>> = torn
+            .iter()
+            .filter(|((n, _), _)| !bound.contains(*n))
+            .map(|(k, v)| (*k, v.clone()))
+            .collect();
+        if live.is_empty() {
+            continue;
+        }
+        for stmt in &d.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    walk(expr, &live, diags)
+                }
+            }
         }
     }
 }

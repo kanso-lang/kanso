@@ -7445,3 +7445,32 @@ rephrased to lean on the tagged numeral beside it. The convention is
 opt-in per number — a figure that should track a golden gets the
 attribute the day it is written, and the sweep that used to re-find this
 rot becomes a grep for untagged counter-looking figures.
+
+## 2026-07-27 — INTERIM: a bare call two imports answer alike is refused
+
+The committee's interim ruling on the silent cross-module tie, built and
+pinned, awaiting Clay's reassessment. The case: two imports export the same
+name with the very same shape, a bare call reaches the group, and dispatch
+had nothing to pick by — so it picked import order, which the formatter
+forces alphabetical, which meant directory names were deciding semantics.
+The book had promised an ambiguity error; the machine had none.
+
+The ruling and its reasoning: refuse the bare call. Rejecting is the
+conservative direction — a refused program can be given meaning by a later
+gavel, while a silently-resolved one is a commitment nobody made. Hickey's
+lens: the tie braided name resolution with directory naming, pure incident.
+Beck's: make it an error until a real use case names the semantics it
+wants. Bernhardt's: silent order-dependence is the bug class. Nothing else
+moves: qualified calls stay legal, a local arm of the same shape still
+shadows the imports (the ruled precedence, untouched), and distinct-shape
+overloads across modules keep dispatching by specificity.
+
+check_bare_ambiguity in check.rs finds torn bare groups — two or more
+synthetic enrollment clones, distinct origins, identical rank and shape,
+no local arm of that shape — and reports at each bare call site with both
+qualified spellings in the message. Pinned by
+tests/golden/reexports/torn (watched red with the check unwired: the
+program ran and printed by import order). The full battery holds: 17
+suites, book corpus, kq, vse — no legitimate program in any of them had
+been leaning on the silent tie. ch11's original sentence comes back true,
+and if the gavel lands elsewhere, an error is the cheapest thing to relax.
