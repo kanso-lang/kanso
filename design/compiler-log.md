@@ -6682,3 +6682,84 @@ Taken with the string merge, encode allocations are down from 26,327,708 to
 allocations for the same bytes. kq's peak moved 139.9 mb to 139.3, which is the
 third measurement this evening saying the same thing: the arena's high-water
 mark is set by what is never freed, not by how often it was asked.
+
+## 2026-07-26 — where kq's decode memory actually goes
+
+Clay: "the current memory numbers on kq became an absolutely embarrassing
+explosion... something is majorly wrong there." He is right, and the shelf is
+not the whole of it. Decoding the 1.9 mb document — before a byte of output is
+built — allocates 50,729,968 bytes and peaks at 52.5 mb.
+
+What the decoded document actually needs, counted from the document itself:
+
+    104,750 strings, 7.0 bytes average          3.35 mb
+    27,610 maps, 83,610 entries                 3.56 mb
+    27,511 lists, 97,320 items                  2.00 mb
+    ------------------------------------------------
+    live                                        8.91 mb
+
+So the representation costs 5.7x what the data occupies. Named counters on the
+allocation sites say where:
+
+    c_buf   (map pairs + list items)      30,672,512
+    c_str   (headers and payloads)         6,261,216
+    c_map   (headers, one per put)         2,675,520
+
+The pairs and items themselves are 4.3 mb of that 30.7. Seven times over, and
+the multiple is not a representation problem — it is geometric growth against
+an allocator that reclaims nothing. A collection grown by repeated push passes
+through every intermediate capacity, and each abandoned buffer stays in the
+arena for the life of the run. A freeing allocator pays for the final buffer;
+this one pays for the sum.
+
+TRIED AND FAILED: extend at the frontier. When a grown buffer is still the
+arena's newest allocation, the bytes after it are unclaimed, so it can grow
+where it sits — no copy, no abandoned buffer. Implemented for both the map put
+and list push grow paths, output byte-identical to jq, and `c_buf` did not move
+one byte: 30,672,512 before and after. The reason is structural rather than
+incidental — between two pushes onto the same collection the parser allocates
+the next element, so the buffer is never the newest allocation. The trick can
+only ever help a loop that allocates nothing but the collection, which is not
+what parsing is. Reverted.
+
+That leaves two routes, and they are the same question Clay asked about
+refcounting. Either the abandoned buffer gets freed, which needs an owner, or
+growth stops copying: a chunked buffer that adds a segment instead of doubling
+never abandons anything, and its total is the live size plus one partial chunk.
+The second needs no ownership story at all and would take c_buf from 30.7 mb to
+about 4.5. It costs an indirection on element access, which is a real price on
+the hottest path in the decoder and has to be measured rather than assumed.
+
+Also noted while measuring: `put` has no `put_mut`. Lists get in-place
+extension where the analysis proves uniqueness — thirteen sites in kq — and
+maps never do, so every put allocates a fresh 32-byte KMap header even on the
+O(1) frontier path. That is the 2.7 mb above, and it is the same shape as the
+append header the linearity work removed.
+
+## 2026-07-26 — the decode anomaly, localised
+
+Counting buffer *allocations* rather than bytes finds the thing the growth
+model could not explain. Decoding the 1.9 mb document:
+
+    c_buf     30,672,512 bytes
+    n_buf        228,283 allocations
+    average          134 bytes each
+
+The document holds 55,121 collections, so that is **4.1 buffers per
+collection**, on collections averaging three entries. One or two is what
+growth from an initial capacity of four should cost. Four means the buffer is
+being reallocated on almost every insertion, so the O(1) frontier path in
+`put` and `push` is mostly being missed and the copying path is the norm.
+
+A predicted total from the growth policy alone comes to 10.2 mb against the
+30.7 measured, and this is the missing factor of three.
+
+The sorted-view hypothesis is ruled out: 17 calls during decode, 2,440 bytes.
+On the full pretty-print it is 27,610 calls and 3.3 mb — one view per map,
+built on read, real but not the anomaly.
+
+The frontier path in `put` is guarded by `buf->used == m->len * 2`, which asks
+whether this map is still the newest writer into its shared buffer. Something
+in the parser is breaking that condition on most insertions. That is the next
+thing to find, and it is a decoder-shaped question rather than an allocator
+one — the allocator is behaving exactly as written.
