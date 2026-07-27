@@ -164,6 +164,15 @@ pub extern "C" fn kanso_exec_main(h: u32) -> i32 {
 #[no_mangle]
 pub extern "C" fn kanso_take_rt_error() {
     let message = crate::wasm_rt::take_error();
+    if message.is_empty() {
+        // a trap nothing recorded: the stack is the one resource compiled
+        // code exhausts without a chance to say so — the same translation
+        // native's parent makes from the child's SIGSEGV
+        set_out(
+            "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds\n",
+        );
+        return;
+    }
     set_out(&format!("error[runtime]: {message}\n"));
 }
 

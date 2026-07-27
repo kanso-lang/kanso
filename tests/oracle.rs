@@ -75,7 +75,7 @@ fn evaluate(program: &kanso::ast::Program, program_args: Vec<String>) -> Evaluat
     // deep stack explicitly instead of leaning on the test thread's margin.
     std::thread::scope(|scope| {
         std::thread::Builder::new()
-            .stack_size(256 << 20)
+            .stack_size(1 << 30)
             .spawn_scoped(scope, || evaluate_on_stack(program, program_args))
             .expect("spawns")
             .join()

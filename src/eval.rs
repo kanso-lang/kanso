@@ -387,6 +387,7 @@ pub struct Interp<'a> {
     entry_decl: TypeDecl,
     demand: crate::demand::DemandInfo,
     pub thunk_stats: ThunkStats,
+    depth: Cell<usize>,
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
@@ -440,7 +441,14 @@ impl<'a> Interp<'a> {
             ],
         };
         let demand = crate::demand::analyze(program);
-        Interp { fns, types, entry_decl, demand, thunk_stats: ThunkStats::default() }
+        Interp {
+            fns,
+            types,
+            entry_decl,
+            demand,
+            thunk_stats: ThunkStats::default(),
+            depth: Cell::new(0),
+        }
     }
 
     /// Evaluate a declaration's body with its lazy bind sites in view.
@@ -1191,6 +1199,34 @@ impl<'a> Interp<'a> {
     /// way the native engine's musttail already made it run in constant
     /// machine stack. The oracle should not be the engine that fails first.
     fn dispatch_loop(
+        &self,
+        name: String,
+        overloads: Vec<&FnDecl>,
+        args: Vec<Value>,
+        span: Span,
+    ) -> EvalResult {
+        // Non-tail recursion nests a Rust frame per call; past this depth
+        // the process would die in Rust's own overflow handler instead of
+        // reporting. The message matches the one native's parent prints
+        // when the compiled child takes the same fall.
+        // 10k holds under debug's fat frames and release alike on the
+        // 256 MB interpreter thread; recursion past it is non-portable
+        // anyway (native's own ceiling is finite and smaller in wasm).
+        self.depth.set(self.depth.get() + 1);
+        if self.depth.get() > 10_000 {
+            self.depth.set(self.depth.get() - 1);
+            return Err(RuntimeError {
+                message: "the program ran out of stack: recursion went deeper than the stack holds"
+                    .to_string(),
+                span,
+            });
+        }
+        let result = self.dispatch_loop_inner(name, overloads, args, span);
+        self.depth.set(self.depth.get() - 1);
+        result
+    }
+
+    fn dispatch_loop_inner(
         &self,
         name: String,
         overloads: Vec<&FnDecl>,

@@ -1,0 +1,7 @@
+fn count 0
+  0
+
+fn count n
+  1 + count (n - 1)
+
+pub play = print "sum {count 1000000}"

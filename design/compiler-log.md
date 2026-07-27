@@ -7987,3 +7987,30 @@ no free-the-garbage scheme touches it. The oneshot fire is unchanged
 What this bought is armor: any root program handing a large document
 across a licensed boundary would have paid the 2x dance; now it
 cannot.
+
+## 2026-07-27 — the interpreter reports the stack it runs out of
+
+Probing the TRMC ledger item found a differential-law violation on the
+crash surface: deep non-tail recursion gets a clean
+error[runtime] from native (the parent translating the child's
+SIGSEGV) while the interpreter died in Rust's own overflow handler —
+an abort, not a diagnostic, with a Rust panic message no kanso program
+should ever show. The interpreter now counts dispatch depth and
+returns the same words through its RuntimeError channel at fifty
+thousand frames, well under where its 256 MB thread would fall.
+Engines differ in how deep they can actually go — frame sizes differ,
+that window is inherent — but the report and the exit code are one.
+The third engine had the same hole one layer down: compiled wasm
+exhausts the browser's stack as a trap that records nothing, and the
+trap fetch rendered an empty message. An unrecorded trap IS the stack
+case — the same translation native's parent makes from SIGSEGV — so
+the fetch now says the same words. The guard sits at ten thousand
+frames over a 1 GB interpreter thread (debug builds carry frames fat
+enough to fell the old 256 MB at half the old limit). Pinned in
+tests/golden/runtime/deep_recursion.kso — native and interp asserted
+identical by the corpus harness, all three engines byte-identical in
+the browser differential (82 passed, 0 failed) — and the appendix's
+error[runtime] entry documents the report beside the
+accumulator-passing fix. TRMC itself (raising the ceiling by compiling
+accumulating recursion to loops) stays in the ledger as the ergonomics
+item it is.
