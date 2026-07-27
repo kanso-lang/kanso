@@ -41,6 +41,14 @@ ENCODE = (
 )
 
 
+# One shot: decode, hold, print — the peak the rewinds cannot hide.
+ONESHOT = (
+    "allocs",
+    "arena_blocks",
+    "arena_peak_bytes",
+)
+
+
 def counters(path, watched):
     pairs = (line.split("=", 1) for line in path.read_text().splitlines() if "=" in line)
     return {k: int(v) for k, v in pairs if k in watched}
@@ -80,6 +88,8 @@ def main():
     # prefixed rather than merged
     encode = counters(ROOT / "bench/cost_golden_encode.txt", ENCODE)
     record.update({f"encode_{k}": v for k, v in encode.items()})
+    oneshot = counters(ROOT / "bench/cost_golden_oneshot.txt", ONESHOT)
+    record.update({f"oneshot_{k}": v for k, v in oneshot.items()})
     record.update(compile_work(ROOT / "bench/compile_golden.txt"))
     json.dump(record, sys.stdout)
     print()

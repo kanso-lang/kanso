@@ -6,9 +6,10 @@
     "encode_arena_blocks": 2205,
     "compile_rounds": 11,
     "compile_visits": 135,
-    "emitted_lines": 1893
+    "emitted_lines": 1893,
+    "oneshot_peak_bytes": 4194304
   },
-  "floor": 62.22674335102084,
+  "floor": 57.88327771215517,
   "history": [
     {
       "floor": 46.33,
@@ -65,6 +66,10 @@
     {
       "floor": 62.23,
       "why": "lambda-head beta step in inference narrows sets; encode arena flattens 5 to 4 blocks (one more loop licensed to beat)"
+    },
+    {
+      "floor": 57.88,
+      "why": "the model gains a one-shot peak-footprint term at runtime weight: the looping gauntlet's rewinds hide the decode garbage cohort freeing exists to reclaim, and peak is the scoreboard row still lost; paid by trimming both alloc terms, both block terms, and compile_rounds \u2014 block counts cede most because peak bytes measure what they proxied"
     }
   ]
 }

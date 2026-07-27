@@ -131,6 +131,7 @@ jobs:
           bash bench/make_jsonbench.sh
           ./target/release/kanso build bench/jsonbench --release
           ./target/release/kanso build bench/encodebench --release >/dev/null
+          ./target/release/kanso build bench/oneshot --release >/dev/null
       - name: decode counters
         run: |
           KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null
@@ -144,6 +145,15 @@ jobs:
         run: |
           git fetch origin main --depth 1
           python3 scripts/trend_gate.py origin/main
+      - name: one-shot counters
+        run: |
+          KANSO_COUNTERS=1 ./oneshot 2>counters_oneshot.txt >/dev/null
+          diff bench/cost_golden_oneshot.txt counters_oneshot.txt || {
+            echo "::error::one-shot counters diverged — the peak-footprint"
+            echo "::error::term's input moved. If intentional, update the"
+            echo "::error::golden in this PR."
+            exit 1
+          }
       - name: encode counters
         run: |
           KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null

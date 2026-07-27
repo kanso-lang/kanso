@@ -1,6 +1,7 @@
 allocs=3
 alloc_bytes=112
 arena_blocks=1
+arena_peak_bytes=1048576
 perm_allocs=1
 beat_iters=0
 thunk_allocs=0
