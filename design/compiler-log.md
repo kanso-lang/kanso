@@ -6763,3 +6763,42 @@ whether this map is still the newest writer into its shared buffer. Something
 in the parser is breaking that condition on most insertions. That is the next
 thing to find, and it is a decoder-shaped question rather than an allocator
 one — the allocator is behaving exactly as written.
+
+## 2026-07-26 — the push accounting, and where the anomaly is not
+
+Instrumenting both insertion paths separately turns the buffer anomaly into
+something specific. Decoding the 1.9 mb document:
+
+    mut_fast   218,831   push_mut extended in place
+    mut_fall    82,781   push_mut found the buffer full and fell through
+    push_fast        0   and the fallback's own frontier check never fires
+    push_copy   82,781   so every fallthrough copies
+    put_fast    55,620   put claimed the next pair slot in place
+    put_copy    27,990
+    n_buf      228,283
+
+Three things this settles.
+
+The uniqueness analysis is working. 218,831 of 301,612 pushes — 73% — extend a
+list in place, which is the whole point of `push_mut` and it is doing its job.
+`push_fast` reading zero is not a second bug: `k_b_push` is only ever reached
+after `push_mut` has already found the buffer full, so its own frontier test
+must fail. Two counters describing one condition.
+
+Per-collection behaviour is correct at small sizes. `[[1 2 3 4 5]]` costs
+exactly six pushes for six items, with two grows where doubling from four
+predicts two. Nothing is pushing twice.
+
+And yet the big document takes **301,612 pushes against 97,320 list items**,
+three times more insertions than there are things to insert. Whatever that is,
+it is scale-dependent rather than a per-collection defect, and it is the next
+thing to find: 82,781 of those pushes hit a full buffer and allocate, which at
+134 bytes average is most of the 30.7 mb.
+
+Ruled out on the way: sorted views (17 calls during decode), the growth policy
+alone (predicts 10.2 mb against 30.7 measured), and frontier extension (built,
+byte-identical output, `c_buf` unchanged to the byte — the parser allocates
+between insertions, so a collection's buffer is never the newest allocation).
+
+Still standing from the earlier entry: `put` has no `put_mut`, so all 83,610
+insertions allocate a fresh 32-byte header even on the O(1) path.
