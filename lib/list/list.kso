@@ -154,6 +154,10 @@ pub fn group_by coll key
 fn file_under acc k x
   put acc k (push (bucket acc[k]) x)
 
+# last key wins on collision, as put itself does
+pub fn index_by coll key
+  fold coll {:} (acc x -> put acc (key x) x)
+
 fn iter (capped left source)
   capped left source
 
@@ -299,6 +303,16 @@ fn place run x
   under = to_list (select run (y -> y < x))
   join_parts under x (reject run (y -> y < x))
 
+# the statistical spread; a bounded integer generator is naturals . take n
+pub fn range coll
+  spread (min coll) (max coll)
+
+fn spread none _
+  none
+
+fn spread lo hi
+  hi - lo
+
 pub fn reject coll pred
   sifted false (iter coll) pred
 
@@ -352,6 +366,16 @@ fn unwrap_found (missing _)
 
 fn unwrap_found found
   found
+
+# both build through put, so a colliding key keeps its last value
+pub fn to_h pairs
+  fold pairs {:} (acc kv -> put acc kv[1]! kv[2]!)
+
+pub fn transform_keys m f
+  fold (entries m) {:} (acc e -> put_renamed acc e f)
+
+fn put_renamed acc (entry k v) f
+  put acc (f k) v
 
 pub fn transform_values m f
   fold (entries m) {:} (acc e -> put_shaped acc e f)

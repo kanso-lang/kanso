@@ -7166,3 +7166,44 @@ Every consumer dispatches per shape, so a new shape must bring its fold arm:
 zip's first draft forgot and the catch-all treated a paired as a plain list.
 The differential harness caught it in one run, both engines agreeing on the
 same wrong error, which is the system working.
+
+## 2026-07-27 — two inference holes at the lambda call head, found by one book sample each
+
+The four verbs waiting on interim committee rulings (range, to_h, index_by,
+transform_keys) went in cleanly. What made the branch expensive was the pair
+of latent inference bugs the differential law surfaced on its book samples,
+each one a different way for the fixpoint to be wrong about a lambda in call
+position.
+
+First: `eval_call` never walked a lambda head at all — it returned TOP for
+the call and moved on, so every call inside an applied lambda's body was
+invisible to the param fixpoint. A callee reached only from such a body kept
+whatever narrow set its other callers gave it; squeeze's `measure`-shaped
+chain proved a list-taking function int-only, the ABI unboxed it, and a list
+pointer crossed as a smuggled i64. Silent wrong answers, native only.
+Pinned by tests/golden/micro/redex_callee_widens.kso (baseline prints
+"11 1" for "7 1" — watched red) and fixed by stepping the beta: bind the
+argument sets to the params and walk the body, which is also what the fusion
+pass's emitted redexes needed.
+
+Second, exposed by the first: the pipe's set semantics dropped DESC. A pipe
+whose left side may be a description substitutes the yield into the
+continuation's param — correct — but the pipe expression's own value at
+runtime is then a description (k_maybe_bind's chain), and the result set
+said otherwise. Under TOP-returning betas nobody noticed, because TOP
+carries DESC; once the beta step returned precise body sets, a program
+whose io chain runs through function results — vse — inferred `trials`
+desc-free, and the set-gated pipe emission in codegen direct-called `means`
+on a raw description. sums[1] then indexed a desc: "at takes a list...".
+Pinned by tests/golden/micro/pipe_desc_chain.kso (dies red without the
+DESC bit) and fixed by riding DESC along in piped_bits.
+
+The lesson worth the price: a set that is merely narrow is a performance
+bug, but a set that is wrong is a correctness bug, and the difference is
+whether every consumer of the sets treats them as over-approximations.
+The pipe gate does — it only trusts "can't be a desc" — so the fix belongs
+in inference, making the promise true, not in the gate.
+
+Measured: encode arena flattens 5 -> 4 blocks (beat_iters +400 — one more
+loop licensed), decode unchanged, kq spec suite and both its ratchets green
+byte-identical, welfare 62.22 -> 62.23, banked.

@@ -1,8 +1,8 @@
 # Enumerable — kanso's collection vocabulary
 
-Status: **design, ratified in dialog 2026-07-18. NOT implemented.** Current VSE
-code uses hand-rolled eager helpers (`examples/enumerable.kso` seed) until this
-lands. Implementing it is a major compiler project (see §Compilation).
+Status: **ratified 2026-07-18; vocabulary fully implemented in `lib/list` as
+of 2026-07-27, with fusion.** Two open items were resolved by INTERIM committee
+ruling (recorded in §6 and §9) and await Clay's reassessment.
 
 ## 1. Model — lazy pull-based, `next`-rooted, compiled to zero-cost loops
 
@@ -138,9 +138,12 @@ question: **what happens when two keys land on the same slot?**
 - `transform_keys` and `index_by` *can* — e.g.
   `transform_keys {"Name": a, "name": b} downcase` → both keys become `"name"`.
 
-Answer it **once**, apply everywhere. Leaning: plain `put` semantics
-(last-write-wins, caller owns key-uniqueness the same as when building any map),
-documented not hidden — **but not yet gaveled** (last-wins vs raise is open).
+Answer it **once**, apply everywhere. INTERIM RULING (committee, 2026-07-27,
+awaiting Clay): plain `put` semantics — last-write-wins, matching what the map
+itself already does (measured: a duplicate `put` replaces and length holds).
+Hickey: a raise is a second, stricter map semantic living in three verbs.
+Beck: matching the runtime adds zero new behavior. Bernhardt: a raise makes
+core vocabulary partial; injectivity is the caller's boundary assertion.
 
 ## 7. Map-builders and mutation — the two doors
 
@@ -176,11 +179,10 @@ fusion (no side effects to reorder); closed-world + monomorphization erase the
 
 ## 9. Open items (not gaveled)
 
-1. **`range` collision** — `range coll` (stat spread, `max - min`) vs a `1..n`
-   int generator both want the name. Disambiguate: reserve `range` for the stat,
-   spell the generator `naturals . take n` or a distinct `upto`.
-2. **`transform_keys` / `index_by` collision** — last-wins-like-`put` vs raise
-   (§6).
+1. **`range` collision** — RESOLVED (interim, 2026-07-27, awaiting Clay):
+   `range coll` is the stat spread; the generator stays `naturals . take n`
+   with no dedicated verb until real demand (Beck's razor).
+2. **`transform_keys` / `index_by` collision** — RESOLVED (interim, §6).
 3. **`first n` vs `take n . to_list`** — is there a `first coll n` consumer
    convenience, or only `take` (adapter) + `to_list`? One-right-way says pick
    one.
