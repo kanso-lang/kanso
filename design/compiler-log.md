@@ -6173,3 +6173,35 @@ line, members alphabetical — so the section now teaches that, with the field
 left bare. The prose says why that is the one written type that earns its
 keep: a set nobody has yet exceeded looks exactly like a set nobody can
 exceed, and only a declaration can tell those apart.
+
+## 2026-07-26 — welfare is an index, and the two failed optimisations are on the page
+
+Clay, on the score reading 100.00: "it should just be a number, like 34.9 or
+whatever." Right — anchoring the baseline at a hundred made it read as a
+percentage, which invites asking what a hundred percent of the work would be.
+There is no such quantity. The scale now runs to a ceiling of a hundred, where
+every term costs nothing, from an origin that means nothing; the project sits
+at 46.33. Only the direction and the size of the moves are information.
+Verified both ways on the new scale: halving decode allocations reads 50.50,
+doubling encode allocations fails at 43.67.
+
+AND, on the two optimisations that did not land: "it's fine if you couldn't
+land things. you just document in the compiler page what you tried and what the
+outcome was." Both are now entries there rather than only in this log, because
+the page is where a declined idea has to live to stay declined.
+
+Entry 8 is the append header. Forty-two million allocations, sixty-two percent
+of everything encoding allocates, and the machinery to remove them already
+exists for lists. The build was made and selected zero sites: the encode
+program has three append call-sites, because all forty-two million appends run
+inside the standard library's one-line wrapper where the accumulator is a
+parameter and uniqueness belongs to a caller the analysis cannot see. Right
+mechanism, wrong altitude — the decision has to be made at the call site and
+the call site is one function away.
+
+Entry 9 is the rewind's cache sweep, and it records two failures rather than
+one. Scoping the walk to entries newer than the mark was circular reasoning and
+the goldens caught it. Deduplicating the registry with a flag on the map worked
+and cost a word per map, which took the decode board from four arena blocks to
+five with no win to pay for it — reverted on the ratchet's own terms, since a
+regression without evidence of benefit is just a regression.
