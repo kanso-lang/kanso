@@ -1,4 +1,4 @@
-allocs=12924473
+allocs=11353217
 alloc_bytes=595495056
 arena_blocks=4
 perm_allocs=5
