@@ -7361,3 +7361,26 @@ today; the chapter's counters sample uses the nested spelling and claims
 nothing about pipes. OPEN for design: either fusion learns the sets, or the
 pipe-vs-nested cost difference stays and the book eventually has to explain
 it — the first option is the one that keeps spelling out of the cost model.
+
+## 2026-07-27 — ch11's ambiguity promise measured false; ties resolve by import order
+
+Writing exercises for the two exercise-less chapters turned into a premise
+check, and one premise failed. ch11 said "when a call is genuinely ambiguous
+the compiler says so." MEASURED: two imports exporting the same
+identical-shape arm resolve silently, first import winning — and since the
+formatter forces imports alphabetical, the winner of a genuine tie is
+decided by what the directories are named. check_arm_ties covers subtype
+ties only (it returns early without subtype parents); nothing examines
+cross-module generic ties. This is the tie-rejection dispatch rule already
+pending gavel, now with a concrete motivating case: alphabetical-directory-
+name-wins is not a semantics anyone would defend, and the book was
+promising the error the gavel would create.
+
+The chapter now says only what is verified — specificity picks, a local arm
+outranks an import on a tie, a qualifier narrows — and its new exercises
+walk the verified behaviors (arity dispatch across the boundary, local-
+beats-import, opacity at the boundary, qualified reach-through). ch12 gains
+exercises in the same premise-checked style, and ch09's claim that "the
+builtins give it map, at" joins the qualified world. Every exercise premise
+on both pages was run before it shipped; one drafted exercise died in
+verification, which is the point of verifying.
