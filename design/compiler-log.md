@@ -7269,3 +7269,29 @@ put-loop over few distinct keys pays it. The fix wants design attention
 (compact the log when duplicates cross a threshold? resolve on put_mut at
 proven-unique sites?) because the frontier-append trick is load-bearing
 for the build-block shapes that never repeat a key.
+
+## 2026-07-27 — find, all? and any? stop at the answer
+
+The queue said "first/find early-exit fusion," and the measurement said the
+fusion half was the wrong frame: find was a full fold even on the lazy
+cursor path — an allocating probe showed the predicate running on all 100k
+elements for a hit at position one — and all?/any? folded the same way. The
+fix is not a fold that can stop; it is not folding. The three verbs now
+drive `next` directly and return at the answer, the way `first` always has:
+find via found_in, the predicates via holds_all?/holds_any? (the naming rule
+insisted on the suffix, correctly). seek and pick_found retire with the old
+shape.
+
+What this buys beyond the constant factor: the three consumers now bound
+infinite generators, which appendix b already claimed — `find naturals
+(n -> n * n > 50)` answers 8 where it used to run forever. list_test grows
+four cases pinning that, and the mem vein gains early_exit.kso: allocs=25
+with the exit, 40004 without (watched red), the probe being a predicate
+that allocates per call.
+
+Also closed: lib/list's own test file was never run in CI — the specs job
+tested lib/json alone. Both libraries' suites gate now.
+
+Fused-scan stop for take/drop remains the one genuinely queued mechanism,
+and it is YAGNI until a measurement names it: take chains stay on cursors,
+which are lazy and bounded already.

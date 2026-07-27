@@ -51,10 +51,22 @@ pub type step
   rest
 
 pub fn all? coll pred
-  fold coll true (ok x -> if (pred x) ok false)
+  holds_all? (next (iter coll)) pred
+
+fn holds_all? (done _) _
+  true
+
+fn holds_all? (step e rest) pred
+  if (pred e) (holds_all? (next rest) pred) false
 
 pub fn any? coll pred
-  fold coll false (hit x -> if (pred x) true hit)
+  holds_any? (next (iter coll)) pred
+
+fn holds_any? (done _) _
+  false
+
+fn holds_any? (step e rest) pred
+  if (pred e) true (holds_any? (next rest) pred)
 
 pub fn argmax coll key
   unwrap_found (fold coll (missing true) (m x -> outrank_by m x key))
@@ -89,7 +101,13 @@ pub fn find (sorted items) pred
   bisect items pred 1 (length items) none
 
 pub fn find coll pred
-  unwrap_found (seek coll pred)
+  found_in (next (iter coll)) pred
+
+fn found_in (done _) _
+  none
+
+fn found_in (step e rest) pred
+  if (pred e) e (found_in (next rest) pred)
 
 pub fn first coll
   first_of (next (iter coll))
@@ -287,18 +305,6 @@ fn outrank_by (missing _) x _
 fn outrank_by m x key
   if (key m < key x) x m
 
-fn pick_found (missing _) true x
-  x
-
-fn pick_found (missing m) false _
-  missing m
-
-fn pick_found (err e) _ _
-  err e
-
-fn pick_found found _ _
-  found
-
 fn place run x
   under = to_list (select run (y -> y < x))
   join_parts under x (reject run (y -> y < x))
@@ -318,9 +324,6 @@ pub fn reject coll pred
 
 pub fn repeat value
   repeated value
-
-fn seek coll pred
-  fold coll (missing true) (found x -> pick_found found (pred x) x)
 
 pub fn select coll pred
   sifted true (iter coll) pred

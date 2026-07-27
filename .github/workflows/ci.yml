@@ -38,7 +38,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test
       - name: the shipped library's own tests
-        run: cargo run -- test lib/json
+        run: |
+          cargo run -- test lib/json
+          cargo run -- test lib/list
 
   playground:
     name: playground examples (every engine)
