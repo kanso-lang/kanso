@@ -52,6 +52,9 @@ fast:
   %data = load ptr, ptr %datap
   %capp = getelementptr i8, ptr %b, i64 16
   %cap = load i64, ptr %capp
+  %capneg = sub i64 0, %cap
+  %isneg = icmp slt i64 %cap, 0
+  %capa = select i1 %isneg, i64 %capneg, i64 %cap
   %owned = icmp ne i64 %cap, 0
   br i1 %owned, label %fr, label %slow
 fr:
@@ -59,7 +62,7 @@ fr:
   %used = load i64, ptr %usedp
   %atfront = icmp eq i64 %used, %len
   %len1 = add i64 %len, 1
-  %fits = icmp sle i64 %len1, %cap
+  %fits = icmp sle i64 %len1, %capa
   %ok = and i1 %atfront, %fits
   br i1 %ok, label %claim, label %slow
 claim:

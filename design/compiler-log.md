@@ -7793,3 +7793,52 @@ entry's two worsened counters are the fix's first customers.
 
 Part 2 stays queued: std's container assembly churns sh_buf 2.2x over
 kq's even after the string fix — obj_items/array_items shapes next.
+
+## 2026-07-27 — transient builders grow in the arena (a 21 MB leak, caught by its own counter)
+
+The string diet moved std/json onto the bytes builder, and the builder
+carried a debt nobody had measured: growth chunks are malloc'd, the
+mut-grow frees its predecessor, and the final chunk of every builder
+belongs to whatever value took the buffer — usually a string that dies
+at the next rewind, which frees arena and leaves malloc alone. One
+decode leaks ~140 KB of chunks; the 150-decode gauntlet leaked 21 MB,
+visible as RSS at 25 MB against a 3-block arena. kq never saw it
+because a CLI decodes once and exits.
+
+First the counter, then the fix. bytes_peak tracks malloc-backed
+builder storage at its high water — deterministic, platform-invariant.
+The red state is on the record: gauntlet bytes_peak=21,276,000, and
+the new mem pin (builder_transient.kso: forty rewinds, one transient
+builder each) reads 3,200 with the fix disabled — one leaked chunk per
+iteration, scaling with the loop, which is the definition of the bug.
+
+The fix routes growth by where the builder's header dies. A header the
+innermost rewind reclaims gets an arena buffer (negative cap marks the
+regime; the byte-append fast path and utf8 zerocopy read |cap|): the
+rewind frees it wholesale, and the carry copy-out already duplicates
+any bytes that outlive the frame. A header below the mark — the
+licensed accumulator threading a beat — keeps malloc growth, because
+arena storage above the mark would vanish under it. The encode vein
+proves the split: its licensed accumulators still malloc (bytes_malloc
+4,800, mut-frees 4,400) while the gauntlet and one-shot read
+bytes_malloc=0, bytes_peak=0. Gauntlet RSS: 25 MB before, 3.65 MB
+after — below even the pre-diet 4.7 MB.
+
+Priced worsenings. oneshot_arena_peak_bytes 6,291,456 -> 7,340,032 and
+oneshot_arena_blocks 6 -> 7 (with oneshot_alloc_bytes +84): growth that
+used to leak off-arena now lives in the arena, and block granularity
+rounds 686 KB of it up to a full block — the true peak (arena + builder
+high water) moves 6.98 -> 7.34 MB, which the welfare term now prices at
+0.15 points against the decode term's gain. emitted_lines 1,544 ->
+1,559: three IR lines per sample for the signed-cap fast path.
+encode_bytes_peak enters at 108,877,534 — not caused but revealed: each
+encodebench iteration's burned final buffer (~270 KB) has leaked since
+the shelf shipped, RSS 85 MB before and after this change. That is an
+open thread, now pinned where it can be watched.
+
+The welfare model changed to see all of this: peak terms sum arena and
+builder high water (the arena proxy missed exactly the leak), and the
+decode gauntlet's true peak joins at weight 0.10 — the flagship
+workload's peak was unpriced, which is why a 21 MB leak could ride in
+on a welfare rise. Floor recalibrated 60.35 -> 60.81 in the same PR,
+reasons in the ratchet history.

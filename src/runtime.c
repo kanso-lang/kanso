@@ -65,6 +65,11 @@ static long long k_stat_sh_map = 0;
 static long long k_stat_sh_bytes = 0;
 static long long k_stat_bytes_freed = 0;
 static long long k_stat_buf_reuse = 0;
+/* Malloc-backed builder storage currently live, and its high-water mark.
+   Arena storage rewinds away; these bytes only leave through free(), so a
+   peak that scales with iteration count is a leak by definition. */
+static long long k_stat_bytes_live = 0;
+static long long k_stat_bytes_peak = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -231,7 +236,7 @@ static void k_stats_dump(void) {
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
-    fprintf(stderr, "buf_reuse=%lld\n", k_stat_buf_reuse);
+    fprintf(stderr, "buf_reuse=%lld\nbytes_peak=%lld\n", k_stat_buf_reuse, k_stat_bytes_peak);
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
@@ -3425,11 +3430,12 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
     KBytes* b = k_as_bytes(bv);
     KValue bad = k_utf8_bad((const char*)b->data, b->len, origin);
     if (bad.tag == K_ERR) return bad;
-    if (b->cap && b->len < b->cap) {
+    long long bcap = b->cap < 0 ? -b->cap : b->cap;
+    if (bcap && b->len < bcap) {
         KBuf* buf = ((KBuf*)b->data) - 1;
         if (buf->used == b->len) {
             ((unsigned char*)b->data)[b->len] = 0;
-            buf->used = b->cap;
+            buf->used = bcap;
             KStr* s = k_alloc(sizeof(KStr));
             s->len = (long)b->len;
             s->data = (char*)b->data;
@@ -3672,9 +3678,10 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         k_die("append takes bytes and a string, bytes, or byte");
         return k_none();
     }
-    if (a->cap) {
+    long long acap = a->cap < 0 ? -a->cap : a->cap;
+    if (acap) {
         KBuf* buf = ((KBuf*)a->data) - 1;
-        if (buf->used == a->len && a->len + n <= a->cap) {
+        if (buf->used == a->len && a->len + n <= acap) {
             k_stat_append_fast++;
             memcpy((unsigned char*)a->data + a->len, src, (size_t)n);
             buf->used = a->len + n;
@@ -3692,6 +3699,42 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     k_stat_append_grow++;
     long long cap = 2 * (a->len + n);
     if (cap < 64) cap = 64;
+    /* Where the grown buffer lives depends on where its header dies. A
+       header the innermost rewind reclaims gets an arena buffer (negative
+       cap marks the regime): the rewind frees it wholesale, and the carry
+       copy-out already duplicates any bytes that must outlive it. A header
+       below the mark — the licensed accumulator threading a beat — gets
+       malloc, because arena storage above the mark would vanish under it.
+       A fresh header always lands at the frontier, so the non-mut result
+       dies with the frame whenever a beat is active. */
+    int dies = 0;
+    if (k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+        KMark* inner = &k_beat_stack[k_beat_depth - 1];
+        dies = mutate ? (k_survives(a, NULL) && !k_survives(a, inner)) : 1;
+    }
+    if (dies) {
+        KBuf* buf = k_alloc(sizeof(KBuf) + (size_t)cap);
+        buf->cap = cap;
+        buf->used = a->len + n;
+        unsigned char* data = (unsigned char*)(buf + 1);
+        memcpy(data, a->data, (size_t)a->len);
+        memcpy(data + a->len, src, (size_t)n);
+        if (mutate) {
+            if (a->cap > 0) {
+                KBuf* old = ((KBuf*)a->data) - 1;
+                if (__builtin_expect(k_stats_on > 0, 0)) {
+                    k_stat_bytes_freed++;
+                    k_stat_bytes_live -= (long long)sizeof(KBuf) + old->cap;
+                }
+                free(old);
+            }
+            a->len += n;
+            a->data = data;
+            a->cap = -cap;
+            return acc;
+        }
+        return k_bytes_owned(a->len + n, data, -cap);
+    }
     /* A builder's buffer lives outside the arena. Growth doubles, and an
        allocator that reclaims nothing pays for every intermediate size a
        builder passes through rather than the size it reached; malloc plus a
@@ -3705,6 +3748,8 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
         k_stat_bytes_malloc++;
+        k_stat_bytes_live += (long long)(sizeof(KBuf) + (size_t)cap);
+        if (k_stat_bytes_live > k_stat_bytes_peak) k_stat_bytes_peak = k_stat_bytes_live;
     }
     buf->cap = cap;
     buf->used = a->len + n;
@@ -3712,9 +3757,13 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
     memcpy(data, a->data, (size_t)a->len);
     memcpy(data + a->len, src, (size_t)n);
     if (mutate) {
-        if (a->cap) {
-            free(((KBuf*)a->data) - 1);
-            if (__builtin_expect(k_stats_on > 0, 0)) k_stat_bytes_freed++;
+        if (a->cap > 0) {
+            KBuf* old = ((KBuf*)a->data) - 1;
+            if (__builtin_expect(k_stats_on > 0, 0)) {
+                k_stat_bytes_freed++;
+                k_stat_bytes_live -= (long long)sizeof(KBuf) + old->cap;
+            }
+            free(old);
         }
         a->len += n;
         a->data = data;

@@ -28,6 +28,7 @@ DECODE = (
     "el_parses",
     "utf8_bytes",
     "find2_calls",
+    "bytes_peak",
 )
 
 # Encode: the write path, where the builder and the float renderer live.
@@ -38,6 +39,7 @@ ENCODE = (
     "append_fast",
     "append_grow",
     "utf8_zerocopy",
+    "bytes_peak",
 )
 
 
@@ -46,6 +48,7 @@ ONESHOT = (
     "allocs",
     "arena_blocks",
     "arena_peak_bytes",
+    "bytes_peak",
 )
 
 
