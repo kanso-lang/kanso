@@ -931,6 +931,18 @@ impl<'a> WasmBackend<'a> {
         if piped {
             return self.emit_piped(ctx, head, args, span);
         }
+        // an inlined single-use binding can leave a lambda in call
+        // position; it is an ordinary closure, built then applied
+        if matches!(head, Expr::Lambda { .. }) {
+            for arg in args {
+                self.emit_expr(ctx, arg, false)?;
+                ctx.body.call(RT_ARG);
+            }
+            self.emit_expr(ctx, head, false)?;
+            ctx.body.i32_const(args.len() as i64);
+            ctx.body.call(RT_CALL);
+            return Ok(());
+        }
         let Expr::Ident(name, _) = head else {
             return Err("unsupported call head".to_string());
         };
