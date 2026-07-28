@@ -9285,3 +9285,45 @@ Reading one as though it did is a memory-safety bug, not a wrong number.
 So the invariant has to be made true at both producers before the
 discriminator can be trusted. That is the next step and it is recorded
 rather than rushed.
+
+## 2026-07-28 — the string accumulator is not the concat, it is the shelf
+
+Built the in-place concat the entry above called for, end to end: a
+capacity on `KStr`, a `k_concat_arr_mut` that appends into the
+accumulator's spare room, a linearity mark on interpolation sites whose
+first piece is the accumulator, and the emitter choosing the twin. It
+works — the site is marked, the call fires a hundred thousand times,
+and the output is unchanged. It buys nothing: 168.4 ms against 162.4.
+
+The capacity never survives to the next iteration. Counters, on the
+same loop at a hundred thousand:
+
+    string accumulator   beat_iters 100,000   allocs 100,003   append_fast 0
+    bytes accumulator    beat_iters 0         allocs 18        append_fast 99,988
+
+The byte builder does not rewind at all. Its storage is malloc'd
+outside the arena — twelve grows for a hundred thousand appends — so a
+rewind cannot reach it, and the fold-state shelf carries it across the
+line untouched. The string accumulator is rewound every iteration and
+carried out by a copy, and the copy sets the capacity to zero because a
+copy has no spare room. The concat then has nothing to append into and
+allocates afresh, which is the quadratic, unmoved.
+
+The licence that decides this is explicit about why (src/beat.rs, the
+bytes-accumulator clause): it reads BYTES and no other heap set,
+because raw bytes hold no pointers and nothing in them can dangle
+across a rewind. A string's header and its bytes both sit in the arena,
+so it cannot join that shelf as it is. Making it eligible means moving
+an accumulator's storage out of the arena, the way bytes already
+do — a change to how strings are stored, not to how they are joined.
+
+A correction to the entry above. It said a capacity field on `KStr`
+would be the map-header mistake at larger scale, reasoning from 42 MB
+of string headers on a decode. Measured rather than reasoned: the field
+costs **283,216 bytes on that decode, 0.085%**, because sixteen-byte
+allocation rounding absorbs it for all but 1.4% of the 1,305,303
+strings. The estimate was wrong by a factor of fifty, and the field is
+affordable. It is not what stands in the way.
+
+The mechanism is written and measured and it is not being kept, because
+the half of it that pays is the other half.
