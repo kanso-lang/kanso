@@ -176,6 +176,7 @@ declare %KValue @k_caf_freeze(%KValue)
 declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
+declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_field(%KValue, i64)
@@ -3198,6 +3199,16 @@ impl<'a> Backend<'a> {
             let origin = self.origin_arg(f, span);
             let t = f.tmp();
             f.line(&format!("{t} = call %KValue @k_err(%KValue {}, {origin})", emitted[0]));
+            f.record(&t, ERR);
+            return Ok(t);
+        }
+        if name == "wrap_err" {
+            let origin = self.origin_arg(f, span);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = call %KValue @k_b_wrap_err(%KValue {}, %KValue {}, {origin})",
+                emitted[0], emitted[1]
+            ));
             f.record(&t, ERR);
             return Ok(t);
         }

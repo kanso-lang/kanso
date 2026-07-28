@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::{HashMap, HashSet};
 
-pub const BUILTINS: [&str; 30] = [
+pub const BUILTINS: [&str; 31] = [
     "append",
     "args",
     "bytes",
@@ -31,6 +31,7 @@ pub const BUILTINS: [&str; 30] = [
     "to_float",
     "to_int",
     "utf8",
+    "wrap_err",
     "write",
     "write_file",
 ];
@@ -848,6 +849,7 @@ fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<St
     let mut globals: HashSet<String> = AMBIENT.iter().map(|b| b.to_string()).collect();
     globals.insert("entry".to_string());
     globals.insert("err".to_string());
+    globals.insert("wrap_err".to_string());
     for nullary in NULLARY {
         globals.insert(nullary.to_string());
     }

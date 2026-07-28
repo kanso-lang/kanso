@@ -1088,7 +1088,9 @@ impl<'a> WasmBackend<'a> {
     /// Builtins that can give birth to an err get the site's origin stamped
     /// onto the fresh (still unstamped) err they return.
     fn stamp_fallible(&mut self, ctx: &mut Ctx, name: &str, span: crate::diag::Span) {
-        if matches!(name, "to_int" | "to_float" | "utf8" | "from_code") {
+        // wrap_err mints an err too — through the generic builtin bridge,
+        // where no frame exists, so the site's origin is stamped here
+        if matches!(name, "to_int" | "to_float" | "utf8" | "from_code" | "wrap_err") {
             let origin = self.origin_lit(&ctx.prefix, span);
             ctx.body.i32_const(origin as i64);
             ctx.body.call(RT_ERR_STAMP);
