@@ -1,0 +1,13 @@
+fn bump none
+  1
+
+fn bump n
+  n + 1
+
+fn go 0 m
+  m
+
+fn go n m
+  go (n - 1) (put m "k{n}" (bump m["k{n}"]))
+
+pub play = print "distinct {length (go 300 {:})}"

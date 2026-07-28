@@ -111,7 +111,7 @@ impl<'a> Analysis<'a> {
         for decl in self.group(name, arity) {
             match decl.params.get(i) {
                 Some(Pattern::Var(pname, _)) => {
-                    if count_uses(pname, &decl.body) > 1 {
+                    if effective_uses(pname, &decl.body) > 1 {
                         return false;
                     }
                 }
@@ -206,6 +206,22 @@ impl<'a> Analysis<'a> {
     }
 
     fn unique_in(&self, e: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
+        self.unique_in_with(e, ctx, scoped, &[])
+    }
+
+    /// The same question, told which sibling expressions do not count as
+    /// aliases. A builtin's arguments are all evaluated before the builtin
+    /// runs, so a read of the map inside one of them is finished by the time
+    /// the write happens — `put m k (bump m[k])` mentions `m` twice and holds
+    /// it once. Only the consuming call's own arguments may be exempted, and
+    /// only for a builtin whose arguments are forced.
+    fn unique_in_with(
+        &self,
+        e: &Expr,
+        ctx: &FnDecl,
+        scoped: Option<&str>,
+        exempt: &[&Expr],
+    ) -> bool {
         match e {
             Expr::List(..) | Expr::MapLit(..) => true,
             // A fold threads its seed through the folding function and returns
@@ -218,7 +234,7 @@ impl<'a> Analysis<'a> {
                 if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
                     && args.len() == 3 =>
             {
-                self.unique_in(&args[1], ctx, scoped)
+                self.unique_in_with(&args[1], ctx, scoped, exempt)
                     && self.folder_is_unique(&args[2], ctx, scoped)
             }
             // a conditional yields a unique value when every arm does; the
@@ -227,12 +243,13 @@ impl<'a> Analysis<'a> {
             Expr::App { head, args, .. }
                 if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
             {
-                self.unique_in(&args[1], ctx, scoped) && self.unique_in(&args[2], ctx, scoped)
+                self.unique_in_with(&args[1], ctx, scoped, exempt)
+                    && self.unique_in_with(&args[2], ctx, scoped, exempt)
             }
             Expr::Guard { early, rest, .. } => {
-                let tail =
-                    matches!(rest.last(), Some(Stmt::Expr(e)) if self.unique_in(e, ctx, scoped));
-                self.unique_in(early, ctx, scoped) && tail
+                let tail = matches!(rest.last(), Some(Stmt::Expr(e))
+                    if self.unique_in_with(e, ctx, scoped, exempt));
+                self.unique_in_with(early, ctx, scoped, exempt) && tail
             }
             Expr::App { head, args, .. } => match head.as_ref() {
                 Expr::Ident(n, _)
@@ -264,7 +281,7 @@ impl<'a> Analysis<'a> {
                 Expr::Ident(n, _) => self.returns_unique.contains(&(n.clone(), args.len())),
                 _ => false,
             },
-            Expr::Ident(name, _) => self.is_unique_source(name, ctx, scoped),
+            Expr::Ident(name, _) => self.is_unique_source(name, ctx, scoped, exempt),
             _ => false,
         }
     }
@@ -272,14 +289,21 @@ impl<'a> Analysis<'a> {
     /// A variable holding a uniquely-owned list: a linear parameter, or a local
     /// bound to a unique list — in either case used at most once in the body, so
     /// no alias outlives the move.
-    fn is_unique_source(&self, var: &str, ctx: &FnDecl, scoped: Option<&str>) -> bool {
+    fn is_unique_source(
+        &self,
+        var: &str,
+        ctx: &FnDecl,
+        scoped: Option<&str>,
+        exempt: &[&Expr],
+    ) -> bool {
         // a folding lambda's parameter: the fold hands it a uniquely-owned
         // accumulator on every call, and the lambda was checked before this
         // name was put in scope
         if scoped == Some(var) {
             return true;
         }
-        if count_uses(var, &ctx.body) > 1 {
+        let discounted: usize = exempt.iter().map(|e| count_in_expr(var, e)).sum();
+        if effective_uses(var, &ctx.body).saturating_sub(discounted) > 1 {
             return false;
         }
         if let Some(idx) =
@@ -291,7 +315,7 @@ impl<'a> Analysis<'a> {
         for stmt in &ctx.body {
             if let Stmt::Bind { pattern: Pattern::Var(n, _), expr } = stmt {
                 if n == var {
-                    return self.unique_in(expr, ctx, scoped);
+                    return self.unique_in_with(expr, ctx, scoped, exempt);
                 }
             }
         }
@@ -340,7 +364,7 @@ fn walk_for_push_in(
         // put extends a map the same way, one arity over
         if matches!(head.as_ref(), Expr::Ident(n, _) if n == "put")
             && args.len() == 3
-            && a.unique_in(&args[0], decl, scoped)
+            && a.unique_in_with(&args[0], decl, scoped, &[&args[1], &args[2]])
         {
             out.insert((decl.file.clone(), span.line, span.col));
         }
@@ -365,6 +389,52 @@ fn walk_for_push_in(
 }
 
 /// Count value occurrences of `var` in `body` (pattern bindings don't count).
+/// Uses of `var` that could still hold the value when a write happens.
+///
+/// A builtin evaluates every argument before it runs, so a read of the map
+/// inside a sibling argument of the very call that consumes it is finished
+/// before the write: `put m k (bump m[k])` mentions `m` twice and holds it
+/// once. Those mentions are discounted here, and only those — a use anywhere
+/// else still counts, so a map read after the put, or passed elsewhere, keeps
+/// the value shared and the write copying.
+fn effective_uses(var: &str, body: &[Stmt]) -> usize {
+    let total = count_uses(var, body);
+    let mut discounted = 0;
+    for stmt in body {
+        let e = match stmt {
+            Stmt::Bind { expr, .. } => expr,
+            Stmt::Expr(e) => e,
+            Stmt::Set { value, .. } => value,
+        };
+        discounted += consumed_sibling_uses(var, e);
+    }
+    total.saturating_sub(discounted)
+}
+
+/// Uses of `var` inside the sibling arguments of a call that consumes `var`
+/// as its first argument.
+fn consumed_sibling_uses(var: &str, e: &Expr) -> usize {
+    let mut n = 0;
+    if let Expr::App { head, args, .. } = e {
+        let consuming = matches!(head.as_ref(), Expr::Ident(h, _)
+            if matches!(h.as_str(), "put" | "push" | "append" | "builtin_append"));
+        if consuming && matches!(args.first(), Some(Expr::Ident(first, _)) if first == var) {
+            for sibling in &args[1..] {
+                n += count_in_expr(var, sibling);
+            }
+        }
+        for arg in args {
+            n += consumed_sibling_uses(var, arg);
+        }
+        n += consumed_sibling_uses(var, head);
+    } else {
+        for child in crate::expr_children(e) {
+            n += consumed_sibling_uses(var, child);
+        }
+    }
+    n
+}
+
 fn count_uses(var: &str, body: &[Stmt]) -> usize {
     let mut n = 0;
     for stmt in body {
