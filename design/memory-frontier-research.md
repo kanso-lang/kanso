@@ -5,7 +5,16 @@ literature → dream grounded-but-wild ideas → refute each with a skeptic →
 synthesize. 16 ideas generated; 0 survived unqualified, 9 partial, 7 refuted.
 Every claim is falsifiable against the tree or a named paper.
 
-## 0. The receipt that reframes everything (VERIFIED against the tree)
+## 0. The receipt that reframes everything (STALE — see note)
+
+**This section describes a tree from before the uniqueness campaign.**
+`linear.rs` is consumed by codegen (which selects `push_mut` at proven
+sites), `k_b_push_mut` is called, and the gauntlet reports 334,950 buffer
+reuses per run. The honest baseline is no longer "beats + copying
+construction". Left in place because the reasoning that follows it is
+still worth reading; the premise is not.
+
+## 0. The receipt as originally written (VERIFIED against the tree, then)
 
 Our own honesty tiers are optimistic by one notch. In-place reuse for
 uniquely-owned list builders is treated as **built**. It is not wired:
@@ -123,11 +132,18 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   brings a tree's 2x-until-beat-boundary footprint to 1x, scoped to where
   uniqueness is syntactic. Gated on item 3.1. (Halves the peak that bounds the
   per-cycle resident set for control loops — beats' own headline metric.)
-- **Tag-hoist under monomorphism speculation** — the highest-value new ground
-  because it hits the *actual* 13% (representation). Speculate a collection is
-  monomorphic in element tag, hoist the tag out of the hot loop, bail to the
-  scalar path on failure. The transpose (full SoA) fights deforestation; tag-
-  hoist is the separable half.
+- **Tag-hoist under monomorphism speculation — ALREADY HARVESTED
+  (measured 2026-07-28).** The unboxing proof got there first. A tight
+  numeric loop compiles with its arguments unboxed (`i64`, not `%KValue`),
+  every tag a compile-time constant, and the recursion a `musttail` self
+  call: there is no tag left in the loop to hoist. What separates it from
+  Rust is three `llvm.*.with.overflow` intrinsics per iteration, which is
+  semantics rather than representation — and against Rust compiled with
+  `-C overflow-checks=on` the same loop runs at **1.03x**. The 1.37x
+  against wrapping Rust is the price of kanso's int, not a gap in its
+  compilation. What remains, if the price is ever judged too high: a range
+  analysis that discharges the check where bounds are provable, which
+  needs specialization to see a caller's constant.
 - **Auto-SoA via whole-program field-touch** — "sell layout to the compiler"
   made literal (values have no address-identity contract; the compiler sees
   every access site — Rust can't, `&T` bakes in identity + separate compilation

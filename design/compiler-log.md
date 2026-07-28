@@ -8707,3 +8707,30 @@ assertions at either level, nothing deeper, a JustBeforeEach
 equivalent, and possibly a one-level `let`. The constraint is the
 design: two levels can be read from one screen, and a failing example
 three contexts down cannot.
+
+## 2026-07-28 — tag-hoist was already harvested, and numeric is at parity
+
+Clay asked whether the ledger was finished. Section 3's eight survivors
+were; section 4 — five speculative ideas, each marked as wanting an
+experiment — had never been touched. Starting with the one the section
+calls highest-value, because it aims at representation.
+
+There is nothing left to hoist. A tight numeric loop compiles with its
+arguments unboxed — `i64`, not `%KValue` — every tag a compile-time
+constant, and the recursion a musttail self call. The unboxing proof
+(#262) got there first and took the tag with it. What separates the
+loop from Rust is three overflow intrinsics per iteration, one per
+arithmetic operation, which is semantics: kanso's int is arbitrary
+precision and a native build traps rather than wrapping silently.
+
+Measured like for like, 2M iterations of `acc + n * n`: kanso 2.52 ms,
+Rust with `-C overflow-checks=on` 2.43 ms — **1.03x**. Against Rust's
+default wrapping arithmetic it is 1.37x, and that difference is the
+price of the int, not a gap in compilation. So the remaining lever on
+numeric code is not representation at all but discharging overflow
+checks where bounds are provable, which needs specialization to see a
+caller's constant. Recorded rather than built.
+
+Also corrected while reading: section 0's receipt, which says linear.rs
+is dead analysis and push_mut is called by nothing, describes a tree
+from before the uniqueness campaign. Marked stale in place.
