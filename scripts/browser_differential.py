@@ -257,9 +257,7 @@ def show(text):
 # program the browser declines and the phrase it declines with; the harness
 # fails if that phrase changes, and tells you to delete the entry once the
 # program starts passing. Silence is what this file exists to prevent.
-KNOWN_GAPS = {
-    "examples/json_failure_door.kso": "`std/json` is not in the shipped library",
-}
+KNOWN_GAPS = {}
 
 
 def main():
