@@ -8578,3 +8578,26 @@ its dependency attached.
 What is implemented is now pinned: foreign_err_trap names a foreign
 reason type and dispatches on it, three engines, beside a plain
 document taking the other arm.
+
+## 2026-07-28 — CORRECTION: inspection was never in question
+
+Clay, on the entry above: "it can inspect them all day. it just can't
+rescue them. any function that it passes its own err to must also
+return err."
+
+The claim recorded here — that a package cannot inspect its own errs
+— was wrong, and wrong in a way worth naming: it confused the
+constraint on a function's *return* with a constraint on what the
+function may *look at*. An arm may match its own err, read every
+field of the reason, and build anything it likes out of them, so long
+as an err is what comes back. Verified: an arm reading two fields and
+raising a new reason built from both runs, and the license advisory
+is silent on it — so the code drew the right line while the prose
+described a different one.
+
+What survives is narrower. A package cannot get a non-err value out
+of its own err, and an assertion is a value: a test constant that
+touches an err propagates it and the harness reports FAILED
+(returned err …), which closes equality and interpolation together.
+The test-file exemption is still wanted, for that reason rather than
+the one first written down.
