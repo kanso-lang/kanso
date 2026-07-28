@@ -8370,3 +8370,28 @@ module that declares `money` may claim it, and still may not claim
 `int` — the licence follows the declaration, not the chain.
 
 Sixty-one error programs now, covering thirteen diagnostic kinds.
+
+## 2026-07-28 — every io program was falling back in the browser
+
+Auditing which programs the browser differential compiles rather than
+interprets found a hole hiding behind a passing suite: the compiled
+wasm backend rejected `builtin_args`, so every program importing
+std/io fell back to the interpreter — the import alone was enough,
+whether or not the program ever mentions args. The streaming pin from
+the io/write work was among them, which means the feature had never
+run through the compiled browser path at all while reporting green.
+
+The backend supported `args` and `stdin` but not the `builtin_`
+spelling std's own wrappers use, which every other site in the
+compiler normalizes away before matching. It normalizes here now. The
+differential moves from 90 passed with 4 fallbacks to 91 passed with
+3, and the first io program to reach the compiled path passes
+byte-identical. The three that remain fall back for an unrelated
+reason (an unsupported call head) and are honestly reported as
+before.
+
+The general lesson is about the shape of the report: a fallback is
+not a failure and never turns the suite red, so a feature can look
+covered on three engines while one of them quietly runs the
+interpreter underneath. Reading the skip lines is part of reading the
+result.

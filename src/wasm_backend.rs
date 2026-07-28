@@ -798,13 +798,16 @@ impl<'a> WasmBackend<'a> {
             }
             return Ok(());
         }
-        match name {
+        // std wrappers name the natives through the builtin_ prefix, the
+        // same normalization every other site does
+        let bare = name.strip_prefix("builtin_").unwrap_or(name);
+        match bare {
             "true" | "false" | "none" => {
-                let lit = self.nullary_lit(name);
+                let lit = self.nullary_lit(bare);
                 ctx.body.i32_const(lit as i64);
             }
             "args" | "stdin" => {
-                let lit = self.str_lit(name);
+                let lit = self.str_lit(bare);
                 ctx.body.i32_const(lit as i64);
                 ctx.body.i32_const(0);
                 ctx.body.call(RT_BUILTIN);
