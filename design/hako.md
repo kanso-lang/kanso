@@ -97,6 +97,18 @@ preference becomes registry-then-github; a registry outage degrades to
 git, byte-identically, because the lock's sha decides what content
 *is*. Names never move, so standing one up migrates nobody.
 
+**An import never names a strategy — asking how it would is a
+layering violation.** The binding is resolved *from* the name, in
+Go's order of authority, which rule 2 forces anyway: (1) the name's
+shape — `owner/repo` means `github_repo`, by convention; (2) later,
+for full-domain names (`corp.dev/team/hako`), metadata the name's
+owner publishes at the domain (Go's `go-import` meta-tag move,
+decentralized, no registry required); (3) fetch *preference* —
+registry-then-git — is user and CI configuration, never source,
+with the lock's sha making every fetcher equally trustworthy.
+Go's `replace` analog is `kanso install --from <ref>`: an interim
+pin written into the lock, never into an import.
+
 **Other git hosts** are the same shape with a different remote —
 a `git_repo` source behind the same conventions — and can wait until
 someone actually publishes a hako off GitHub.
