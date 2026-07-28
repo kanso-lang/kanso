@@ -128,10 +128,18 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
 
 ## 4. Breaking new ground (survived attack, SPECULATIVE — each gets an experiment)
 
-- **Static reuse-in-place inside the build-block** — shape-preserving rebuild
-  brings a tree's 2x-until-beat-boundary footprint to 1x, scoped to where
-  uniqueness is syntactic. Gated on item 3.1. (Halves the peak that bounds the
-  per-cycle resident set for control loops — beats' own headline metric.)
+- **Static reuse-in-place inside the build-block — DECLINED (measured
+  2026-07-28): the build block is not where the cost is.** Three fixtures,
+  seven runs each, maximum resident: a 20,000-node tree built once costs
+  4.4 MB; the same tree carried across a beat costs 17.6 MB; the same tree
+  carried across a beat *with the build block removed* costs 17.6 MB. The
+  block contributes nothing measurable, so a rebuild scoped to it has
+  nothing to reclaim. The 4x belongs to the carry, which copies any large
+  survivor whatever built it — already characterised, with its own floor:
+  evacuation holds the survivor twice while the garbage is still live
+  (see the 2026-07-28 entry on the evacuation law). In-place push was the
+  other suspect and was cleared: identical counters inside and outside a
+  block.
 - **Tag-hoist under monomorphism speculation — ALREADY HARVESTED
   (measured 2026-07-28).** The unboxing proof got there first. A tight
   numeric loop compiles with its arguments unboxed (`i64`, not `%KValue`),
