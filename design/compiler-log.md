@@ -8442,3 +8442,23 @@ zero failures — the whole corpus, on all three engines, for the first
 time. Cost: 52 KB of wasm, 4.8%. The decode vein is byte-identical
 and lib/json's own 18 tests pass, so nothing about the shipped
 decoder moved; only where its source can be found did.
+
+## 2026-07-28 — the playground offers the library it benchmarks
+
+std/json running in the browser is only half a capability if nothing
+in the playground reaches for it. Twelve examples shipped there and
+none touched the library the front page benchmarks, so a visitor had
+no path to it. There is one now, and it teaches the pair worth
+teaching: a document that decodes and one that does not, dispatched
+apart by an `(err reason)` arm beside a plain one.
+
+The example carries no braces, and that is deliberate. The
+differential harness reads docs/play.js as raw text while the browser
+receives the JavaScript-unescaped string, so an example containing a
+backslash would be tested in one form and run in another — the kind
+of gap that reports green while covering nothing. Decoding an array
+sidesteps it: no `{` to escape, so raw text and runtime text are the
+same bytes. A brace-carrying example would want the harness taught to
+unescape first.
+
+Differential: 96 passed, no gaps, no fallbacks, no failures.

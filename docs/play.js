@@ -86,6 +86,18 @@ fn fact n
 
 pub play = print "20! = {fact 20}"
 `,
+  json: `import "std/json"
+
+fn report (err reason)
+  "did not parse: {reason}"
+
+fn report doc
+  "decoded {length doc} values, first is {doc[1]}"
+
+pub play =
+  print (report (json/decode "[1, 2, 3]"))
+  >> print (report (json/decode "[1, 2"))
+`,
   railway: `fn describe n
   "half is {n}"
 
