@@ -169,7 +169,7 @@ something else: 1.5</code></pre>
   </div>
 </div>
 
-<p>four arms, one name, and a <em>specificity ladder</em> deciding who answers. a literal like <code>0</code> is the most specific thing you can ask for, so it wins over the ascribed type <code>n:int</code>, which in turn wins over the bare generic <code>x</code>. the ladder, top to bottom: literal, then single concrete type, then—we'll get there—typeset, then the unannotated generic that catches everything left. note the ascription is tight: <code>n:int</code>, no spaces. <code>n: int</code> is a formatting error, because the loose spelling is reserved for something the compiler will use later.</p>
+<p>four arms, one name, and a <em>specificity ladder</em> deciding who answers. a literal like <code>0</code> is the most specific thing you can ask for, so it wins over the ascribed type <code>n:int</code>, which in turn wins over the bare generic <code>x</code>. the ladder, top to bottom: literal, then single concrete type, then—we'll get there—typeset, then the unannotated generic that catches everything left. note the ascription is tight: <code>n:int</code>, no spaces. <code>n: int</code> is a formatting error, because the loose spelling is reserved for something the compiler will use later. when an arm needs the type and not the value, ascribe the wildcard: <code>_:int</code> dispatches on membership and binds nothing.</p>
 
 <p>dispatch on a literal is what turns the classic recursive definition into something you can read aloud. the base case is an overload, not an <code>if</code> guarding the real body:</p>
 

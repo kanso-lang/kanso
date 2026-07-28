@@ -1,0 +1,16 @@
+# `_:type` dispatches on membership and binds nothing — the arm that
+# needs the type and not the value
+type animal
+  name
+
+type dog animal
+
+fn speak _:dog
+  "woof"
+
+fn speak _:animal
+  "some animal"
+
+pub play =
+  print (speak (dog (animal "rex")))
+  >> print (speak (animal "generic"))
