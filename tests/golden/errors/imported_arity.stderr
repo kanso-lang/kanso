@@ -1,0 +1,4 @@
+error[arity]: no 2-argument arm of `list/range` (arms take 1)
+  --> imported_arity.kso:3:34
+   3 | pub play = print "{list/to_list (list/range 1 5)}"
+                                        ^
