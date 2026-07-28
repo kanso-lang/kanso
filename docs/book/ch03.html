@@ -1,7 +1,7 @@
 ---
 layout: book
 title: "chapter 03—types and dispatch"
-description: "records, markers, typeset fields, destructuring both ways, and overload dispatch—the only switch kanso gives you, and the design center of every kanso program."
+description: "records, markers, typesets, wrapper types, destructuring both ways, and overload dispatch—the only switch kanso gives you, and the design center of every kanso program."
 extra_css: /book/book.css
 ---
 <span class="eyebrow">chapter 03</span>
@@ -169,7 +169,7 @@ something else: 1.5</code></pre>
   </div>
 </div>
 
-<p>four arms, one name, and a <em>specificity ladder</em> deciding who answers. a literal like <code>0</code> is the most specific thing you can ask for, so it wins over the ascribed type <code>n:int</code>, which in turn wins over the bare generic <code>x</code>. the ladder, top to bottom: literal, then single concrete type, then—we'll get there—typeset, then the unannotated generic that catches everything left. note the ascription is tight: <code>n:int</code>, no spaces. <code>n: int</code> is a formatting error, because the loose spelling is reserved for something the compiler will use later. when an arm needs the type and not the value, ascribe the wildcard: <code>_:int</code> dispatches on membership and binds nothing.</p>
+<p>four arms, one name, and a <em>specificity ladder</em> deciding who answers. a literal like <code>0</code> is the most specific thing you can ask for, so it wins over the ascribed type <code>n:int</code>, which in turn wins over the bare generic <code>x</code>. the ladder, top to bottom: literal, then single concrete type—a wrapper before the type it wraps—then—we'll get there—typeset, then the unannotated generic that catches everything left. note the ascription is tight: <code>n:int</code>, no spaces. <code>n: int</code> is a formatting error, because the loose spelling is reserved for something the compiler will use later. when an arm needs the type and not the value, ascribe the wildcard: <code>_:int</code> dispatches on membership and binds nothing.</p>
 
 <p>dispatch on a literal is what turns the classic recursive definition into something you can read aloud. the base case is an overload, not an <code>if</code> guarding the real body:</p>
 
@@ -302,6 +302,41 @@ coming soon</code></pre>
 <p><code>type state archived draft published</code> is a typeset: one line, members alphabetical, no fields of its own. it is a name for "one of these", and once it exists you can dispatch on it, annotate a parameter with it, and read it in an error message. the field itself stays bare — <code>state</code> — because what that field holds is still something the compiler derives from the program.</p>
 
 <p>this is the one place a written type earns its keep. everywhere else the compiler already knows and writing it down only adds a second copy to disagree with the first; here you are saying something it could not have worked out, because a set nobody has yet exceeded looks exactly like a set nobody can exceed.</p>
+
+<h2>wrappers: one type standing in for another</h2>
+
+<p>a typeset names a set of types you already have. the other direction names a new type that <em>is</em> one you already have: cents are integers, a post body is a string. one line declares it, child first and parent after, and the compiler can then tell them apart where you care and treat them alike where you don't:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wrappers.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">cents</span> <span class="t">int</span>
+
+<span class="k">type</span> <span class="t">post_body</span> <span class="t">string</span>
+
+<span class="k">fn</span> <span class="f">to_string</span> <span class="o">_</span>:<span class="t">cents</span>
+  <span class="s">"a price"</span>
+
+<span class="k">fn</span> <span class="f">quote</span> c:<span class="t">cents</span>
+  <span class="s">"<span class="i">{c}</span> for the set"</span>
+
+<span class="k">fn</span> <span class="f">quote</span> n:<span class="t">int</span>
+  <span class="s">"<span class="i">{n}</span> plain"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">print</span> (<span class="f">quote</span> (<span class="t">cents</span> <span class="n">350</span>))
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">quote</span> <span class="n">350</span>)
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"a body reads through: <span class="i">{post_body "hello"}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play wrappers.kso</div>
+    <pre><code>a price for the set
+350 plain
+a body reads through: hello</code></pre>
+  </div>
+</div>
+
+<p><code>cents 350</code> builds one, and the wrapper sits one rung above its parent on the ladder: <code>quote (cents 350)</code> takes the <code>c:cents</code> arm while a bare <code>350</code> falls through to <code>n:int</code>. arms still appear most-specific first, so the wrapper's arm is written above the parent's. a chain may run deeper than one link, and the nearer declaration always answers.</p>
+
+<p>a wrapper flows wherever its parent flows, and that includes printing: <code>post_body "hello"</code> renders as <code>hello</code>, because a string is what it is. adding a <code>to_string</code> arm for the type changes that, which is what makes the price above read <code>a price</code>. appendix a explains the rule that permits it — an arm may claim a type its own module declares, which is exactly what a wrapper is.</p>
 
 <h2>the ladder is law</h2>
 
@@ -464,6 +499,7 @@ mugi left</code></pre>
   <li>write a <code>label</code> group over three markers <code>weekday</code>, <code>weekend</code>, and <code>holiday</code>, then add a fourth marker without touching any existing arm. confirm it compiles and runs, and note how many lines you had to change.</li>
   <li>take the <code>sign</code> function from this chapter and try to rewrite it as three overloads instead of nested <code>if</code>. where does dispatch help, and where does it fight you? write a sentence on why <code>sign</code> is a content question, not a shape one.</li>
   <li>deliberately trigger three of the chapter's compile errors on purpose: fields out of alphabetical order, overload arms in the wrong specificity order, and two arms dispatch cannot tell apart. read each diagnostic and write the one-line rule it is teaching.</li>
+  <li>declare <code>type meters int</code> and <code>type feet int</code>, then write one <code>describe</code> group with an arm for each and a third for plain <code>int</code>. call it three ways and confirm each lands where you expect. then delete the <code>meters</code> arm and predict which arm answers <code>meters 5</code> before you run it.</li>
 </ol>
 
 <nav class="chapter-nav">
