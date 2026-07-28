@@ -9129,3 +9129,51 @@ Veins byte-identical, nineteen suites, browser differential 98 and
 zero, kq's own suite green. What remains quadratic is the
 distinct-key case, where every read rebuilds a view the previous
 insert invalidated — a different mechanism, and still open.
+
+## 2026-07-28 — the distinct-key case stops rebuilding its view (1,316 ms to 36 ms)
+
+The case the last entry left open: a loop writing keys it has never
+written before. Each write appended to the pairs log and threw the
+sorted view away, so the read on the next iteration rebuilt it from
+scratch. Ten thousand keys meant ten thousand rebuilds averaging five
+thousand pairs each.
+
+A new key is now inserted into the view where it belongs, by memmove,
+with the buffer doubling when it fills. The view survives the write,
+so the read that follows finds it.
+
+    10,000 distinct keys   1,316 ms  410.0 MB  ->  36 ms  4.6 MB
+    100 keys, 10,000 puts      8.0 ms   3.5 MB  ->  8.1 ms  3.5 MB
+    write-only 10,000          6.1 ms   3.5 MB  ->  5.9 ms  3.5 MB
+
+Best of seven each, both binaries back to back. The other two shapes
+are level, which is what the memmove had to be checked for.
+
+What it costs: `KMap` carries a capacity field, so every map header is
+eight bytes wider. That is `sh_map` up a quarter on fused_tally, and
+`alloc_bytes` up two percent on decode, five hundredths of a percent
+on encode, one percent on oneshot — a fixed toll on every map in every
+program, paid for a bound on one shape. Welfare is unmoved at 62.70.
+
+The toll shows up in wall time where the program allocates the most
+maps: decode runs 0.789 ms against 0.802 ms, both binaries built and
+raced back to back, best of seven. One and a half percent. The
+published board reads 0.78 from an idle box, which this is not, so it
+is left alone for the re-sitting that already owes it a visit.
+
+The corpus had no home for the pathology. `readwrite_map.kso` cycles
+eight keys, so it never rebuilds a view worth measuring; the win lives
+in `growing_map.kso`, where allocation churn falls from 12,986,880
+bytes to 233,168.
+
+The trend gate could not see either side of this trade. It read the
+four bench goldens and not the mem corpus, so a change was free to
+worsen every allocation pin in the tree in silence, and the win here
+was invisible to it. It reads the mem vein now, each fixture prefixed
+by its own name, with fixtures a branch adds skipped because they have
+nothing to be compared against. Two bugs fell out of writing that: the
+direction table was consulted with the prefix still attached, so mem
+movement always read as an improvement, and the `sh_` family was in
+neither direction set, so bytes held read as an improvement whichever
+way they went. Both are fixed, and the first thing the fixed gate did
+was report this entry's own regression.

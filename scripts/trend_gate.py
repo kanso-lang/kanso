@@ -41,6 +41,12 @@ LOWER_IS_BETTER = {
     "thunk_live_exit",
     "arena_peak_bytes",
     "bytes_peak",
+    # the sh_ family is bytes held, by category
+    "sh_str",
+    "sh_rec",
+    "sh_buf",
+    "sh_map",
+    "sh_bytes",
     "lines",
     "calls",
     "branches",
@@ -57,12 +63,26 @@ HIGHER_IS_BETTER = {
     "thunk_frees",
 }
 
-GOLDENS = (
-    "bench/cost_golden.txt",
-    "bench/cost_golden_encode.txt",
-    "bench/cost_golden_oneshot.txt",
-    "bench/compile_golden.txt",
-)
+BENCH_GOLDENS = {
+    "bench/cost_golden.txt": "",
+    "bench/cost_golden_encode.txt": "encode_",
+    "bench/cost_golden_oneshot.txt": "oneshot_",
+    "bench/compile_golden.txt": "",
+}
+
+
+def goldens():
+    """Every pinned counter, bench veins and the mem corpus alike.
+
+    The mem corpus is a counter vein like the others, and allocation shape
+    is exactly the kind of thing that moves quietly: a change can worsen
+    every .mem file in the tree without a sentence anywhere. Each fixture
+    is prefixed by its own name so a move says which program it came from.
+    """
+    out = dict(BENCH_GOLDENS)
+    for path in sorted((ROOT / "tests/golden/mem").glob("*.mem")):
+        out[f"tests/golden/mem/{path.name}"] = f"{path.stem}_"
+    return out
 
 
 def counters(text, prefix):
@@ -101,18 +121,20 @@ def main():
     worsened = []
     improved = []
     worse_all = []
-    for golden in GOLDENS:
-        prefix = {
-            "bench/cost_golden_encode.txt": "encode_",
-            "bench/cost_golden_oneshot.txt": "oneshot_",
-        }.get(golden, "")
+    for golden, prefix in goldens().items():
+        base_text = from_git(base, golden)
+        # a fixture this branch adds has nothing to be compared against, and
+        # counting its counters as movement would read every new pin as a
+        # regression
+        if not base_text:
+            continue
         ours = counters((ROOT / golden).read_text(), prefix)
-        mains = counters(from_git(base, golden), prefix)
+        mains = counters(base_text, prefix)
         for key in sorted(set(ours) | set(mains)):
             before, after = mains.get(key, 0), ours.get(key, 0)
             if before == after:
                 continue
-            bare = key.removeprefix("encode_").removeprefix("oneshot_")
+            bare = key.removeprefix(prefix)
             worse = (
                 after > before
                 if bare in LOWER_IS_BETTER

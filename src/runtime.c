@@ -167,6 +167,7 @@ typedef struct {
     KValue* pairs;        /* k_buf-backed, frontier-shared like list items */
     KValue* sorted;       /* cached sorted+deduped [k v k v...], or NULL */
     long long sorted_len; /* deduped entry count */
+    long long sorted_cap; /* entries the view's buffer can hold */
 } KMap;
 typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; } KClosure;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
@@ -484,6 +485,7 @@ static void k_cache_reg_sweep(KMark* mark) {
         if (m->sorted && !k_survives(m->sorted, mark)) {
             m->sorted = NULL;
             m->sorted_len = 0;
+            m->sorted_cap = 0;
             resets++;
             continue;
         }
@@ -729,6 +731,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             nm->pairs = pairs;
             nm->sorted = NULL;
             nm->sorted_len = 0;
+            nm->sorted_cap = 0;
             out.payload = k_ptr(nm);
             break;
         }
@@ -3186,6 +3189,7 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
             m->sorted_len = 0;
         }
         m->sorted = out;
+        m->sorted_cap = n ? n : 1;
     }
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;
@@ -3201,6 +3205,7 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     m->len = n;
     m->sorted = NULL;
     m->sorted_len = 0;
+    m->sorted_cap = 0;
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
@@ -3258,6 +3263,41 @@ static int k_map_replace(KMap* m, KValue key, KValue val) {
     return 1;
 }
 
+/// A key not yet present is inserted into the view rather than discarding it.
+///
+/// Discarding meant the next read rebuilt the whole thing: a loop inserting
+/// ten thousand keys sorted ten thousand times and malloc'd a fresh view on
+/// each, which is where its time and its peak both went. Insertion keeps the
+/// order the view already has, so the sort never runs again and the buffer is
+/// grown by doubling instead of reallocated per read.
+static void k_map_view_insert(KMap* m, KValue key, KValue val) {
+    if (!m->sorted) {
+        return;
+    }
+    if (m->sorted_len + 1 > m->sorted_cap) {
+        long long cap = m->sorted_cap ? m->sorted_cap * 2 : 8;
+        KValue* grown = malloc(sizeof(KValue) * 2 * (size_t)cap);
+        if (!grown) { fputs("out of memory\n", stderr); exit(1); }
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            k_stat_allocs++;
+            k_stat_alloc_bytes += (long long)(sizeof(KValue) * 2 * (size_t)cap);
+        }
+        memcpy(grown, m->sorted, sizeof(KValue) * 2 * (size_t)m->sorted_len);
+        free(m->sorted);
+        m->sorted = grown;
+        m->sorted_cap = cap;
+    }
+    long long at = 0;
+    while (at < m->sorted_len && k_key_cmp(m->sorted[at * 2], key) < 0) {
+        at++;
+    }
+    memmove(&m->sorted[(at + 1) * 2], &m->sorted[at * 2],
+            sizeof(KValue) * 2 * (size_t)(m->sorted_len - at));
+    m->sorted[at * 2] = key;
+    m->sorted[at * 2 + 1] = val;
+    m->sorted_len++;
+}
+
 KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (!k_not_failure(mv)) return mv;
     if (!k_not_failure(key)) return key;
@@ -3273,11 +3313,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         m->pairs[m->len * 2 + 1] = val;
         buf->used += 2;
         m->len++;
-        if (m->sorted) {
-            free(m->sorted);
-        }
-        m->sorted = NULL;
-        m->sorted_len = 0;
+        k_map_view_insert(m, key, val);
         return mv;
     }
     /* growth at a proven-unique site: the map keeps its header, the pairs
@@ -3294,11 +3330,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         k_buf_donate(m->pairs);
         m->pairs = np;
         m->len++;
-        if (m->sorted) {
-            free(m->sorted);
-        }
-        m->sorted = NULL;
-        m->sorted_len = 0;
+        k_map_view_insert(m, key, val);
         return mv;
     }
 }
@@ -3315,6 +3347,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     out->sorted = NULL;
     out->sorted_len = 0;
+    out->sorted_cap = 0;
     if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
         /* frontier-owned: claim the next pair slot in place (O(1)), leaving
            the key unsorted and any duplicate to be resolved on read */
