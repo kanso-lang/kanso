@@ -1,0 +1,6 @@
+type money int
+
+fn to_string _:int
+  "not yours"
+
+pub play = print "{money 350}"

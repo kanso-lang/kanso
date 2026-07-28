@@ -1,0 +1,4 @@
+error[dispatch]: overlapping overloads of `handle` are illegal
+  --> overlapping_err_arms.kso:7:4
+   7 | fn handle (err _:woe)
+          ^

@@ -8351,3 +8351,22 @@ that arm is allowed. The specificity-ladder sentence earlier in the
 chapter gains the rung, and an exercise closes on the case worth
 feeling: delete the wrapper's arm and predict where the value lands.
 The sample is verified by the harness like every other panel.
+
+## 2026-07-28 — the campaign's diagnostics get their goldens
+
+An audit of this session's own work against the every-behaviour-ships-
+with-a-golden rule found three diagnostics shipped without corpus
+entries. All three now have them, each watched fire before it was
+pinned.
+
+`wildcard_ascription_loose` pins the tightness rule reaching the new
+wildcard spelling: `_ :dog` is refused the way `n : int` is.
+`overlapping_err_arms` pins the other half of the recursive overlap
+check from the ladder work — arms differing in their reason pattern
+coexist, and two arms naming the same reason are still illegal, which
+is the claim that PR made and did not pin. `sub_render_ownership`
+pins the coherence argument the wrapper-rendering fix rested on: a
+module that declares `money` may claim it, and still may not claim
+`int` — the licence follows the declaration, not the chain.
+
+Sixty-one error programs now, covering thirteen diagnostic kinds.

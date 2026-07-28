@@ -1,0 +1,4 @@
+error[formatting]: canonical form requires no space here
+  --> wildcard_ascription_loose.kso:3:12
+   3 | fn speak _ :dog
+                  ^

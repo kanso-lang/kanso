@@ -1,0 +1,10 @@
+type woe
+  at
+
+fn handle (err _:woe)
+  "one"
+
+fn handle (err _:woe)
+  "two"
+
+pub play = print (handle (err (woe 1)))
