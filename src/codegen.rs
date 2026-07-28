@@ -903,6 +903,21 @@ impl<'a> Backend<'a> {
                             true => 1000,
                             false => 2000 + depth_of(ty),
                         },
+                        // an err arm ranks as its reason pattern does: a
+                        // named leaf with the concretes, a typeset with the
+                        // typesets, a bare binder just above the generics
+                        Pattern::Ctor { ty, fields } if ty == "err" && fields.len() == 1 => {
+                            match &fields[0] {
+                                Pattern::Annotated { ty: rty, .. } => {
+                                    match self.typesets.contains_key(rty) {
+                                        true => 1000,
+                                        false => 2000 + depth_of(rty),
+                                    }
+                                }
+                                Pattern::Var(..) | Pattern::Wildcard(..) => 1,
+                                _ => 2000,
+                            }
+                        }
                         Pattern::Ctor { .. } | Pattern::Keyed { .. } => 2000,
                         Pattern::Var(..) | Pattern::Wildcard(..) => 0,
                     })

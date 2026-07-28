@@ -8161,3 +8161,23 @@ does not match, `_:type` does not parse, a wrapper renders as its
 parent. Interim calls, recorded: the space-form declaration is
 canonical (the colon form never existed), implicit auto-cause over a
 wrap_err factory, named-access-only foreign destructuring.
+
+## 2026-07-28 — err arms learn the ladder (leaf, root, bare, in any order)
+
+The overlap check compared only the outer ctor, so a leaf arm and a
+typeset-root arm on the same group were refused as overlapping;
+same_shape now recurses into ctor fields, so arms differing in their
+reason pattern coexist and identical shapes are still refused. The
+interp's score conflated inner rank with inner depth — a bare
+`(err reason)` binder tied a named leaf; it now ranks at 89, below
+every named reason and just above the plain generics. The native and
+wasm-backend arm sorts keyed every ctor at a flat 2000, which left
+leaf-vs-root err arms in declaration order — a real divergence-in-
+waiting against the interp's scores; both now key an err arm by its
+reason pattern, mirroring the interp exactly.
+
+Pins, red-watched: err_trap_named (was exit 2 "overlapping
+overloads") now picks leaf, root, and value arms correctly;
+err_trap_order declares the root arm first and the leaf still wins —
+specificity, not declaration order, exactly Ruby's rescue made
+order-independent. Browser differential 87 passed / 0 failed.

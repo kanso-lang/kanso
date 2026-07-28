@@ -245,6 +245,20 @@ impl<'a> WasmBackend<'a> {
                                 false => 2000 + depth_of(ty),
                             }
                         }
+                        // an err arm ranks as its reason pattern does —
+                        // mirrors the native sort and the interp's scores
+                        Pattern::Ctor { ty, fields } if ty == "err" && fields.len() == 1 => {
+                            match &fields[0] {
+                                Pattern::Annotated { ty: rty, .. } => {
+                                    match typeset_names.contains(rty.as_str()) {
+                                        true => 1000,
+                                        false => 2000 + depth_of(rty),
+                                    }
+                                }
+                                Pattern::Var(..) | Pattern::Wildcard(..) => 1,
+                                _ => 2000,
+                            }
+                        }
                         Pattern::Ctor { .. } | Pattern::Keyed { .. } => 2000,
                         Pattern::Var(..) | Pattern::Wildcard(..) => 0,
                     })

@@ -1,0 +1,33 @@
+# an arm naming the reason type traps the err and reads its fields; the
+# most specific arm wins, the typeset root catches the rest, and a bare
+# reason arm re-raises
+type quota_torn
+  limit
+
+type slow_lane
+  wait
+
+type lane_err quota_torn slow_lane
+
+fn fetch 1
+  err (quota_torn 99)
+
+fn fetch 2
+  err (slow_lane 7)
+
+fn fetch n
+  "plain {n}"
+
+fn handle (err q:quota_torn)
+  "quota: limit {q.limit}"
+
+fn handle (err e:lane_err)
+  "lane trouble: {e}"
+
+fn handle v
+  "ok: {v}"
+
+pub play =
+  print (handle (fetch 1))
+  >> print (handle (fetch 2))
+  >> print (handle (fetch 3))
