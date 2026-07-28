@@ -9,6 +9,43 @@ is a fork the project has deliberately not taken without a ruling.
 
 The two-universes rule, mechanized without provenance tracking:
 
+**PROVENANCE, and why the shipped proxy is not it (Clay, 2026-07-28).**
+Clay: the criterion is where the err *stack originated*, not which
+package the receiving function sits in — "package A can't rescue an
+err from package B by passing it into a function defined in B", and
+he adds that he cannot see the simplest way to hand that to a
+compiler. He is right, and the advisory built here uses a proxy for
+it: the reason type's qualifier. Two measurements, both against the
+current tree:
+
+1. **The proxy has a reachable hole.** A package can raise an err
+   whose reason is a foreign type and then rescue it, because the
+   qualifiers differ and the advisory sees a foreign reason:
+   `err (json/parse_failure 1 "mine")` raised in user code, then
+   matched by `(err _:json/parse_failure)` and turned into a string.
+   Runs today, advisory silent. Provenance says illegal; the proxy
+   says fine.
+2. **Foreign construction is not enforced at all.** The doctrine says
+   "construction is module-private; importers build through pub
+   factories" (modules-plan). It is not: user code builds
+   `json/parse_failure 99 "I made this"` and prints it. That is an
+   independent gap, and it is also what makes (1) reachable.
+
+If construction were enforced, the proxy would be exact rather than
+approximate — only json can build a json reason, so a json-reasoned
+err can only have been raised by json. That is the cheapest route to
+a compiler-checkable provenance: **enforce the construction rule the
+doctrine already states, and the reason type becomes a sound witness
+for the raiser.** The alternatives are a whole-program dataflow that
+tracks which functions could have raised the err reaching a site, or
+a runtime check against the origin the err already carries — exact,
+but a runtime failure mode for a rule the language wants static.
+
+Recommendation: enforce construction first, then the proxy needs no
+argument. Clay's call, since it is a language rule with its own
+migration (every `json/parse_failure` built outside json becomes a
+call to a json factory).
+
 - **The rule, in one line (Clay's phrasing, 2026-07-28): a function
   that receives an err raised in its own package must return an err.**
   Everything else follows. Inspection inside that function is
