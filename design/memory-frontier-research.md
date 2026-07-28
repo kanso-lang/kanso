@@ -174,10 +174,29 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   read column-wise, which is a transpose opportunity rather than a
   field-touch one, and the entry's own note that the transpose fights
   deforestation applies to it.
-- **Build-blocks as the sanctioned host for in-place graph algorithms** —
-  union-find, a compile-time e-graph, NbE, unification — mutable aliased
-  pointer-identity mutation with no lifetimes/rank-2, via the syntactic
-  "nothing escapes" check. Construct 3 doing its advertised job on a new payload.
+- **Build-blocks as the sanctioned host for in-place graph algorithms —
+  NOT EXPRESSIBLE TODAY (measured 2026-07-28); the blocker is the
+  block-born rule, not the theorem.** Every algorithm named here reaches
+  its nodes by traversal or by index, and block-born-ness survives
+  neither. Measured, each rejected with `error[build]`: a node taken from
+  a list built in the same block (`cells[1]!`), a node reached by
+  following a field (`a.up`), a plain alias (`c = a`), and a node chosen
+  by a conditional (`c = if … a b`). Only a name bound **directly** to a
+  construction expression may be written.
+  So union-find cannot compress a path, an e-graph cannot rewire a class,
+  and unification cannot bind a variable it found — the mutation each one
+  needs is on a node it reached, and reaching loses the licence. What
+  build blocks support today is the case the book teaches: wiring a cycle
+  among a fixed set of directly-named constructions.
+  The rule is conservative rather than necessary. The theorem needs the
+  cohort to be closed — everything born in the block, nothing escaping —
+  and a node reached by indexing a block-born list *is* in the cohort. So
+  the enabling work is to make block-born a dataflow property (flowing
+  through aliases, conditionals, indexes of block-born collections and
+  fields of block-born nodes) instead of a syntactic one on the binding.
+  That is scoped compiler work, not a research question, and it is what
+  4.4 is waiting on. Clay's call, since it widens what the checker
+  admits.
   (Interaction nets stay REFUTED: ~10x slower on numeric code — Asperti's own
   retrospective; no polynomial bookkeeping bound; flat-freeze kills the sharing.)
 - **e-graph fusion over pure IR — DECLINED for want of a customer
