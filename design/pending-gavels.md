@@ -82,6 +82,15 @@ against the current tree:
 - std's other own-err arms are all legal: `number_ok`, `string_ok`,
   and `must` match err and *return* err. The discipline was already
   being followed where it matters.
+- **Now measured, not predicted (2026-07-28).** The rule is built as
+  `advisory[license]`, sound-by-under-approximation: it flags only an
+  arm whose reason type carries the arm's own qualifier, where same
+  module means same universe with no plumbing needed. The fleet's
+  entire violation set is two functions — std/json's
+  `failure_position` and `failure_reason`, plus kq's vendored copies
+  of them. Everything else is silent, including kq's
+  `render_result (err reason)`, which re-raises. `*_test.kso` files
+  are exempt per the recommendation below.
 - **A package can no longer test its own failure paths.** json_test's
   position assertions and its `defect?` predicate both convert.
   RECOMMENDED (interim, being built behind): a **file-scope exemption

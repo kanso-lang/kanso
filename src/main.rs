@@ -54,6 +54,10 @@ fn main() -> ExitCode {
         for advisory in kanso::advisory::door_advisories(&program) {
             eprintln!("{advisory}");
         }
+        let inference = kanso::infer::infer(&program);
+        for advisory in kanso::advisory::license_advisories(&program, &inference.returns) {
+            eprintln!("{advisory}");
+        }
         println!("{file}: ok");
         return ExitCode::SUCCESS;
     }

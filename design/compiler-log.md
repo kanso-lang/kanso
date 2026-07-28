@@ -8530,3 +8530,30 @@ the numbers should be; it knows which claims are the same claim.
 Watched red on each surface it says it covers: a wrong figure in the
 panel, in the prose, and in the peak all fail it by name, and today's
 four rows agree. In CI beside the golden-prose check.
+
+## 2026-07-28 — the license, advised rather than enforced
+
+The two-universe rule has been blocked on two rulings, but only its
+edges are: the mechanism is gaveled entire — std is foreign, local
+modules share a universe, published packages do not. What waits on
+Clay is a test-file exemption and a chapter's prose. So the rule ships
+as an advisory, which is progress the gavels do not block and which
+turns a prediction into a list.
+
+It is sound by under-approximation, the same way the door advisory
+is. A qualifier alone cannot separate a foreign package from a local
+subdirectory, so it says nothing there; it speaks only where the
+answer needs no plumbing — an arm and a reason type carrying the same
+qualifier are one module, so one universe. Test files are exempt,
+the interim call already reported.
+
+The fleet's entire violation set turns out to be two functions:
+std/json's failure_position and failure_reason, and kq's vendored
+copies of the same two. Everything else is quiet, including the arm
+that looked most likely to trip — kq's `render_result (err reason)`,
+which matches an err and re-raises it, exactly the discipline. The
+migration Clay's ruling unblocks is therefore two deletions and three
+call sites, not a campaign.
+
+Pinned both ways in the advisory corpus: an arm that converts its own
+err is advised, an arm that re-raises is silent.

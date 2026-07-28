@@ -1,0 +1,11 @@
+type woe
+  at
+
+pub fn boom _
+  err (woe 5)
+
+pub fn position (err w:woe)
+  w.at
+
+pub fn position _
+  0
