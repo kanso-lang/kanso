@@ -8890,3 +8890,35 @@ workload holds records it traverses twice, 4.5 because no workload
 splits a chain. The pattern is worth naming — these were designed
 against imagined programs, and the programs that exist are shaped
 differently.
+
+## 2026-07-28 — check refuses a literal no arm could take
+
+Clay: "i don't know what the point is of having kanso check not fail
+for all the same reasons build or run would fail." Three gaps were
+measured; this closes the first, and the arity gap closed with it
+earlier today.
+
+The general form of the question wants the inference sets, and a join
+is a superset — a wrong call can hide behind a right one at another
+site, so the general check must fire only where the joined set misses
+every arm, which is sound and blunt. A literal needs none of that. Its
+type is on the page. So the check asks the narrow question exactly and
+says nothing about anything else: an argument written as a literal is
+compared against the arms that could take it, and refused only when
+every arm is a definite no. An unknown type name, an interpolated
+string, any computed expression — all pass unremarked.
+
+Writing the quiet-case fixture is what found the second thing.
+`widen 3` against `fn widen x:float64` fails at runtime: **dispatch
+does not widen**, whatever arithmetic does with the same two types
+(`1 + 2.5` is 3.5, and always was). My first model had float64 taking
+an int and would have stayed silent on a program that cannot run. The
+fixture built to prove the check quiet proved the model wrong instead,
+which is the entire reason to write one.
+
+Zero findings across std, kq, vse, examples and every bench — the
+check is silent on all working code. Pinned both ways: the refusal in
+the error corpus, and a micro program where a typeset, a wrapper and a
+generic arm each admit their literal. Appendix A documents both the
+refusal and the widening asymmetry, since the second is the surprising
+half.
