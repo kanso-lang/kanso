@@ -1386,6 +1386,10 @@ impl Resolver<'_> {
     fn flush_unused(&mut self, from: usize) {
         let mut shadowed: HashSet<String> = HashSet::new();
         for local in self.locals[from..].iter().rev() {
+            // `_:type` ascribes without binding: there is no name to use
+            if local.name == "_" {
+                continue;
+            }
             if !local.used && !shadowed.contains(&local.name) {
                 self.diags.push(Diagnostic::new(
                     "unused",

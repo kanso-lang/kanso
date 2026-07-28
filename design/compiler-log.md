@@ -8156,9 +8156,12 @@ score must separate inner rank from inner depth (today a bare
 license — nothing yet stops a module converting its own err, and
 std's failure_position projections do exactly that (they migrate to
 direct field reads under the structure-access amendment); (3)
-implicit auto-cause chains; (4) surface gaps — `e:err` ascription
-does not match, `_:type` does not parse, a wrapper renders as its
-parent. Interim calls, recorded: the space-form declaration is
+implicit auto-cause chains; (4) surface gaps — `_:type` does not
+parse, a wrapper renders as its parent. (The claim that `e:err`
+ascription does not match was wrong: the hop trace shows the arm
+matching — an err arm's body propagates the err it bound, which
+prints identically to a fall-through. Corrected here rather than
+edited above, per the append-only rule.) Interim calls, recorded: the space-form declaration is
 canonical (the colon form never existed), implicit auto-cause over a
 wrap_err factory, named-access-only foreign destructuring.
 
@@ -8181,3 +8184,14 @@ overloads") now picks leaf, root, and value arms correctly;
 err_trap_order declares the root arm first and the leaf still wins —
 specificity, not declaration order, exactly Ruby's rescue made
 order-independent. Browser differential 87 passed / 0 failed.
+
+## 2026-07-28 — `_:type`, the arm that needs the type and not the value
+
+Dispatching on a type without using the value had no spelling. A bare
+binder trips the unused-binding check, and the language retired
+leading underscores itself — "privacy is `pub`'s absence, and `_`
+alone is the wildcard" — which points at exactly the spelling that
+did not parse. `_:type` now parses as an ascription that binds
+nothing, under the same tightness rule as `n:int` (`_ :dog` is a
+formatting error), and the unused check skips the name it cannot
+bind. One micro pin, three engines, and ch03 gains the sentence.

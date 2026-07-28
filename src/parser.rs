@@ -1384,6 +1384,24 @@ impl<'a> P<'a> {
             }
             Some(Tok::Underscore) => {
                 self.pos += 1;
+                // `_:type` dispatches on membership and binds nothing — the
+                // spelling for an arm that needs the type and not the value
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    let colon_span = self.span_here();
+                    let tight_before = colon_span.col == span.col + 1;
+                    self.pos += 1;
+                    let ty_span = self.span_here();
+                    let tight_after = ty_span.col == colon_span.col + 1;
+                    if !tight_before || !tight_after {
+                        return Err(Diagnostic::new(
+                            "formatting",
+                            "type ascription is tight: `_:type`".to_string(),
+                            colon_span,
+                        ));
+                    }
+                    let ty = self.parse_type_expr()?;
+                    return Ok(Pattern::Annotated { name: "_".to_string(), ty, span });
+                }
                 Ok(Pattern::Wildcard(span))
             }
             Some(Tok::Ident(name)) => {
