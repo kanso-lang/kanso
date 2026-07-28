@@ -1932,7 +1932,13 @@ impl<'a> Interp<'a> {
     /// Err is an err value the whole template must return.
     pub fn render_interpolated(&self, value: Value) -> Result<Result<String, Value>, RuntimeError> {
         let rendered = match (&value, self.fns.get("render/to_string")) {
-            (Value::Record { .. } | Value::NoneV | Value::Desc(_), Some(overloads)) => {
+            // a subtype is user-owned, so an arm can exist for it — the
+            // coherence licence that keeps primitives on the direct path
+            // does not reach a wrapper
+            (
+                Value::Record { .. } | Value::NoneV | Value::Desc(_) | Value::Sub { .. },
+                Some(overloads),
+            ) => {
                 let overloads = overloads.clone();
                 let result = self.dispatch(
                     "render/to_string",

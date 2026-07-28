@@ -8227,3 +8227,24 @@ Left open, and small: an arm cannot both destructure a reason and
 name the whole err (`(err d:disk_torn)` binds d, not e), so wrapping
 with data from the reason wants an as-pattern. The `e:err` shape
 covers the common case and nothing in the tree needs the other yet.
+
+## 2026-07-28 — a subtype may claim its own rendering (a live divergence, closed)
+
+Probing wrapper rendering found the engines disagreeing in the field:
+a user `to_string` arm for a subtype was honored by native and
+ignored by the interpreter, which rendered the parent — `$3.50` on
+one engine, `350` on the other, for the same program. The oracle was
+the wrong one. Native gates on the inferred set, which carries the
+wrapper's own bit; the interpreter gated on the runtime value shape
+and its list named records, none, and descriptions but not wrappers,
+so a subtype skipped the ambient group entirely.
+
+The render campaign's coherence licence is what decides it: a
+primitive keeps the direct renderer because the ownership rule proves
+no arm can exist for it, and that proof does not reach a wrapper —
+a subtype is a type the user declared and may therefore claim. The
+interpreter's gate now includes it. Default behaviour is untouched:
+with no arm, a wrapper still renders exactly as its parent does, the
+transparency the subtype gavel intends. Pinned three-engine
+(sub_render_arm: custom arm, bare wrapper, bare primitive in one
+program); browser differential 90 passed / 0 failed.
