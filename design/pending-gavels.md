@@ -9,11 +9,20 @@ is a fork the project has deliberately not taken without a ruling.
 
 The two-universes rule, mechanized without provenance tracking:
 
-- **Trapping is naming.** An arm may convert an err to a value only by
-  naming the err's reason type, and only when that type is owned by a
-  *different published package* (hako unit). Since patterns can only
-  name pub types, a package's catchable surface is exactly its pub
-  reason types — catchability is pub-ness.
+- **The rule, in one line (Clay's phrasing, 2026-07-28): a function
+  that receives an err raised in its own package must return an err.**
+  Everything else follows. Inspection inside that function is
+  unrestricted — read the reason's fields, compute with them, build
+  what you like — because the constraint is on what comes back out,
+  not on what may be looked at. The transitive case falls out too:
+  hand your own err to a helper that returns an int and the helper is
+  the violation, since it is the one that received it. What
+  *converting* costs is therefore a foreign reason: an arm may turn
+  an err into a value only by naming a reason type owned by a
+  different published package.
+- **Trapping is naming.** Since patterns can only name pub types, a
+  package's catchable surface is exactly its pub reason types —
+  catchability is pub-ness.
 - **Unstoppable = private.** An err whose reason type is not exported
   cannot be named downstream, so it bubbles with no way to stop it.
   Both original motives (no err control flow within a party; forcible
