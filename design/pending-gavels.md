@@ -118,6 +118,17 @@ the sketch's postfix `"":foo`); positional destructuring of foreign
 types (recommended: named access only crosses).
 `design/err-migration.md` holds the migration plan.
 
+**PREREQUISITE, found by building (2026-07-28): the license cannot
+land until 1b does.** Measured against the current implementation: a
+foreign client may trap by membership — `(err e:json/parse_failure)`
+compiles and dispatches, since a foreign type NAME crosses an import
+— but may not read the failure's fields, because the opacity rule
+still bans foreign destructuring. So the only way to extract a
+position or a reason is the owner's projection function, which is
+precisely what the license forbids the owner to write. Together the
+two rules make failure data unreachable. 1b is not a nicety attached
+to this ruling; it is the thing that makes the ruling shippable.
+
 ## 1b. Foreign structure access — PROPOSED AMENDMENT to modules-plan
 (Clay, 2026-07-27 dialog)
 

@@ -8557,3 +8557,24 @@ call sites, not a campaign.
 
 Pinned both ways in the advisory corpus: an arm that converts its own
 err is advised, an arm that re-raises is silent.
+
+## 2026-07-28 — the license needs the structure amendment to be shippable
+
+Trying to migrate the one call site that needs no ruling — an example
+that is a foreign client, so trapping std/json's failure is
+unambiguously legal — found the deadlock. A foreign client may name a
+foreign reason type: `(err e:json/parse_failure)` compiles and
+dispatches, membership crossing an import exactly as the doctrine
+says. It may not read that failure's fields, because the opacity rule
+still bans foreign destructuring. The only route to a position or a
+reason is the owner's projection function, and the license forbids
+the owner from writing one.
+
+So the two rules together make failure data unreachable, and the
+structure-access amendment is a prerequisite rather than a companion.
+Recorded at the head of the gavel entry so the ruling is read with
+its dependency attached.
+
+What is implemented is now pinned: foreign_err_trap names a foreign
+reason type and dispatches on it, three engines, beside a plain
+document taking the other arm.

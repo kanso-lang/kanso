@@ -1,0 +1,13 @@
+# a foreign reason type may be named — membership crosses an import even
+# though structure does not
+import "std/json"
+
+fn door (err _:json/parse_failure)
+  "the document was torn"
+
+fn door doc
+  "read {length doc} values"
+
+pub play =
+  print (door (json/decode "[1, 2"))
+  >> print (door (json/decode "[1, 2]"))
