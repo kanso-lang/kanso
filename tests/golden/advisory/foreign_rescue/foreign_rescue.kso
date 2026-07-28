@@ -1,0 +1,10 @@
+import "std/json"
+
+pub fn go _
+  door (json/decode "[1, 2")
+
+fn door (err _:json/parse_failure)
+  "json raised it, so this program may rescue it"
+
+fn door doc
+  "read {length doc} values"

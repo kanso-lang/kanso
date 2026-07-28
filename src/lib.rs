@@ -13,6 +13,7 @@ pub mod inline;
 pub mod lexer;
 pub mod linear;
 pub mod parser;
+pub mod provenance;
 pub mod repl;
 pub mod trmc;
 pub mod wasm;

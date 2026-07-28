@@ -26,28 +26,46 @@ fn an_accepting_op_on_the_surface_silences_the_advisory() {
     assert_eq!(advisories, Vec::<String>::new());
 }
 
-#[test]
-fn an_arm_converting_its_own_err_is_advised() {
-    let dir = std::path::Path::new("tests/golden/advisory/own_err");
-    let program = kanso::compile_module(dir, false).expect("own_err compiles");
+fn licenses(dir: &str) -> Vec<String> {
+    let dir = std::path::Path::new(dir);
+    let program = kanso::compile_module(dir, false).expect("module compiles");
     let inference = kanso::infer::infer(&program);
+    let prov = kanso::provenance::analyze(&program);
+    kanso::provenance::violations(&program, &prov, &inference.returns)
+}
 
-    let advisories = kanso::advisory::license_advisories(&program, &inference.returns);
-
+#[test]
+fn rescuing_an_err_this_package_raised_is_advised() {
     assert_eq!(
-        advisories,
-        vec!["advisory[license]: `position` turns its own `woe` into a value — \
-             an err is handled by the package that did not raise it; re-raise, \
-             or let callers name the reason themselves"
+        licenses("tests/golden/advisory/own_err"),
+        vec!["advisory[license]: `position` rescues an err raised in this program \
+             — a failure is handled by a package that did not raise it; return an \
+             err, or let a caller elsewhere name the reason"
             .to_string()]
     );
 }
 
 #[test]
-fn an_arm_that_re_raises_its_own_err_is_silent() {
-    let dir = std::path::Path::new("tests/golden/advisory/reraises");
-    let program = kanso::compile_module(dir, false).expect("reraises compiles");
-    let inference = kanso::infer::infer(&program);
+fn re_raising_ones_own_err_is_silent() {
+    assert!(licenses("tests/golden/advisory/reraises").is_empty());
+}
 
-    assert!(kanso::advisory::license_advisories(&program, &inference.returns).is_empty());
+/// The case a reason-type proxy cannot see: the err was raised here, and
+/// only its reason was borrowed from elsewhere. Provenance is the raiser.
+#[test]
+fn laundering_an_own_err_through_a_foreign_reason_is_advised() {
+    assert_eq!(
+        licenses("tests/golden/advisory/laundered"),
+        vec!["advisory[license]: `unwrap` rescues an err raised in this program \
+             — a failure is handled by a package that did not raise it; return an \
+             err, or let a caller elsewhere name the reason"
+            .to_string()]
+    );
+}
+
+/// The other direction, which must stay legal: the failure really is
+/// somebody else's, so this program is the party that may answer it.
+#[test]
+fn rescuing_a_genuinely_foreign_err_is_silent() {
+    assert!(licenses("tests/golden/advisory/foreign_rescue").is_empty());
 }

@@ -31,7 +31,30 @@ current tree:
    `json/parse_failure 99 "I made this"` and prints it. That is an
    independent gap, and it is also what makes (1) reachable.
 
-If construction were enforced, the proxy would be exact rather than
+**BUILT (2026-07-28, Clay: "build it correctly"). Provenance is
+computed, not proxied.** `src/provenance.rs` gives each dispatch group
+the set of packages whose errs it may hand back and takes a fixpoint
+over the call graph, the way inference already does for value sets —
+Clay's observation that one hop suffices is what makes it cheap: an
+err can only reach a function through a pattern that matches err, so
+every step of a failure's travel is a call whose callee names it. The
+rule reads off it directly: a group that may receive an err raised in
+its own package must return an err. A pub group is seeded with its
+own package, because its callers are not all in view and anyone may
+hand a package its own failure back. Cost, measured A/B on one
+binary: 0.6 ms on `kanso check` (KANSO_NO_PROV switches it off, as
+KANSO_NO_FUSE does for fusion).
+
+The laundering case is caught: raise `err (json/parse_failure …)` in
+your own code, rescue it with a foreign-reason arm, and provenance
+names the raiser — the borrowed name buys nothing. Rescuing a
+genuinely foreign err stays silent. Both pinned.
+
+Construction enforcement is therefore no longer needed for soundness,
+though the doctrine still says it and it is still unenforced — a
+separate gap, recorded above.
+
+If construction were enforced, the proxy would have been exact rather than
 approximate — only json can build a json reason, so a json-reasoned
 err can only have been raised by json. That is the cheapest route to
 a compiler-checkable provenance: **enforce the construction rule the

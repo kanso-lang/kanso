@@ -55,8 +55,11 @@ fn main() -> ExitCode {
             eprintln!("{advisory}");
         }
         let inference = kanso::infer::infer(&program);
-        for advisory in kanso::advisory::license_advisories(&program, &inference.returns) {
-            eprintln!("{advisory}");
+        if std::env::var_os("KANSO_NO_PROV").is_none() {
+            let prov = kanso::provenance::analyze(&program);
+            for advisory in kanso::provenance::violations(&program, &prov, &inference.returns) {
+                eprintln!("{advisory}");
+            }
         }
         println!("{file}: ok");
         return ExitCode::SUCCESS;
