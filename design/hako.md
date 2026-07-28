@@ -34,8 +34,17 @@ The import resolver (the keystone) sees three path shapes, one rule each:
 | shape | resolves to |
 |---|---|
 | `std/...` | the toolchain's shipped stdlib |
-| `owner/repo[/vN]/module` | the hako cache (fetching if absent) |
-| anything else | relative to the importing file's directory |
+| leading `./` or `../` | relative to the importing file's directory |
+| bare single segment | a sibling subdirectory module |
+| first segment contains a dot | a domain-shaped hako name — the domain is (or publishes the binding to) its server |
+| `owner/repo[/vN]/module` | a GitHub-named hako, the cache (fetching if absent) |
+
+Nested local imports are dot-prefixed, always (Clay, 2026-07-27):
+`./lib/json` for your own subtree, never bare `lib/json` — so every
+bare multi-segment path is a hako name, every import's universe is
+readable in its spelling, and no shape is ambiguous between them.
+Locals and GitHub owners cannot contain a dot in first position, so
+domain-shaped names can never collide with either.
 
 Cycles are compile errors at every layer. The compiler never talks to the
 network; `hako install` populates the cache, `kanso build` reads it, and a
@@ -112,6 +121,16 @@ pin written into the lock, never into an import.
 **Other git hosts** are the same shape with a different remote —
 a `git_repo` source behind the same conventions — and can wait until
 someone actually publishes a hako off GitHub.
+
+**Three homes, and the import is never one of them.** Identity lives
+in the name (its shape picks the convention — GitHub-named or
+domain-named). Per-project overrides live in the lock: `kanso install
+--from ../checkout` or `--from owner/repo@branch=name` writes an
+interim pin that `kanso list` flags, `kanso update` refuses to walk,
+and release CI can reject — trying a local branch of a dependency is
+a lock entry, never an import edit. Transport preference lives in
+user and CI configuration (registry-then-git, the GOPROXY layer),
+with the lock's sha making every fetcher produce the same bytes.
 
 The foreign-universe bit the err-arm rule needs stays crisp under all
 of this: a module is foreign iff it entered the build through *any
