@@ -1,0 +1,20 @@
+# an arm naming the reason type traps the err and reads its fields; a
+# plain value takes the value arm untouched
+type quota_torn
+  limit
+
+fn fetch 1
+  err (quota_torn 99)
+
+fn fetch n
+  "plain {n}"
+
+fn handle (err q:quota_torn)
+  "quota: limit {q.limit}"
+
+fn handle v
+  "ok: {v}"
+
+pub play =
+  print (handle (fetch 1))
+  >> print (handle (fetch 3))

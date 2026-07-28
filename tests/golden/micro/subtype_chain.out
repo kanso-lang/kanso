@@ -1,0 +1,3 @@
+woof: animal "rex"
+generic: animal "generic"
+an animal: animal "rex"
