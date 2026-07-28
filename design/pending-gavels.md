@@ -317,6 +317,43 @@ user identifiers may use it freely).
 Small, but it is a semantics hole in the map surface and should be one
 sentence in the spec once ruled.
 
+## Where a linear string accumulator's bytes live
+
+Building a string by repeated interpolation is quadratic — 100,000
+appends take 161.6 ms where the same build through bytes takes none of
+it. The in-place concat was built and measured and does not fix it
+(design/compiler-log.md, 2026-07-28): the accumulator is rewound every
+iteration and carried out by a copy, and a copy has no spare room.
+
+    string   beat_iters 100,000   allocs 100,003   append_fast 0
+    bytes    beat_iters 0         allocs 18        append_fast 99,988
+
+The byte builder escapes because its storage is malloc'd outside the
+arena, which is exactly what the fold-state shelf's licence requires:
+it reads BYTES and no other heap set, because raw bytes hold no
+pointers to dangle across a rewind. A string's header and its bytes
+both sit in the arena.
+
+So the fix is to move a *linear accumulator's* storage out of the
+arena, as bytes already do, and widen the licence to cover it. That
+changes where strings live, which is a memory-model call rather than an
+optimisation, and it wants a ruling before it is built:
+
+- do accumulator strings become malloc-backed like bytes, with the
+  arena form kept for every other string (two storage shapes for one
+  type, discriminated by a capacity that is zero for the arena form);
+- or does the language answer "build with bytes, convert once", and the
+  quadratic stays a documented cost with `text/append` as the escape;
+- or something else.
+
+Settled and not at issue: a capacity field on `KStr` costs 283,216
+bytes on a decode of the board, 0.085%, because the sixteen-byte
+allocation rounding absorbs it for all but 1.4% of 1,305,303 strings.
+The field is affordable. Extending the frontier instead is dead —
+frontier ownership measured 0% over 100,000 iterations, because the
+loop counter is arbitrary-precision and its decrement allocates in
+between.
+
 ## Also open, not blocking any current work
 
 - **TRMC v2**: license operands by inferred set (any provably-int
