@@ -9177,3 +9177,30 @@ movement always read as an improvement, and the `sh_` family was in
 neither direction set, so bytes held read as an improvement whichever
 way they went. Both are fixed, and the first thing the fixed gate did
 was report this entry's own regression.
+
+## 2026-07-28 — carrying the view across a shared put buys nothing (declined)
+
+The map work above only reaches loops the linearity analysis proves
+unique. A loop that reads the old map after writing the new one takes
+the copying put instead, and that shape is still quadratic: four
+thousand keys held shared cost 368 ms and 351 MB, against 36 ms and
+4.6 MB for ten thousand keys held linearly. Twenty-five times the time
+per key and a hundred and ninety times the memory.
+
+The copying put already pays an O(n) copy of the pairs, so it looked
+free to carry the sorted view across it — the next read would find a
+view instead of sorting a fresh one, and a map nobody has read holds
+no view and would pay nothing. Built, guarded on `m->sorted`, and
+raced against its own predecessor: 370 ms against 368 ms on the shared
+case, level on the other three shapes. The sort it saves costs about
+what the second copy adds.
+
+Reverted. `append_fast` reads zero on that fixture, which is the
+finding underneath the null result: every shared put copies the whole
+pairs array, and the view was never the expensive part. What would fix
+it is a map representation with a logarithmic put, and the page
+already declines persistent trees on constant-factor grounds — a
+declination this measurement narrows rather than overturns, since it
+now names the one shape where the flat array loses outright. That is a
+memory-model question and it is recorded as one, not queued as an
+optimization.
