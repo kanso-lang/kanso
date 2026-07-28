@@ -24,11 +24,34 @@ fn examples() -> Vec<(String, String)> {
             .collect();
         let body = &rest[at + 3..];
         let end = body.find('`').expect("every example literal closes");
-        found.push((name, body[..end].to_string()));
+        found.push((name, unescape_template(&body[..end])));
         rest = &body[end..];
     }
     assert!(found.len() >= 9, "expected the playground's examples, found {}", found.len());
     found
+}
+
+/// What the browser receives, not what the file holds: a template
+/// literal's backslash escapes are resolved by JavaScript before the source
+/// reaches the compiler, so testing the raw text would test a program no
+/// visitor runs.
+fn unescape_template(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => match chars.next() {
+                Some(next @ ('\\' | '`' | '$')) => out.push(next),
+                Some(other) => {
+                    out.push('\\');
+                    out.push(other);
+                }
+                None => out.push('\\'),
+            },
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 fn written(name: &str, source: &str) -> PathBuf {

@@ -8462,3 +8462,25 @@ same bytes. A brace-carrying example would want the harness taught to
 unescape first.
 
 Differential: 96 passed, no gaps, no fallbacks, no failures.
+
+## 2026-07-28 — the harnesses read what the browser reads
+
+Last entry sidestepped an escaping trap by choosing an example
+without braces; this one removes the trap. Both playground harnesses
+— the browser differential and the cargo suite — lifted example
+sources out of play.js as raw file text, while the browser receives
+what JavaScript makes of that text after resolving a template
+literal's escapes. Any example carrying a backslash would therefore
+be tested in one form and shipped in another, and json objects carry
+backslashes by necessity: `{` opens an interpolation in a kanso
+string, so a JSON brace must be escaped.
+
+Watched red first, which is the point of the order: an object-shaped
+example made both harnesses fail with `unexpected character` on text
+no visitor would ever run. Both now resolve the escapes JavaScript
+resolves, and the playground's json example is object-shaped —
+`doc["title"]` beside a torn document — because that is what a
+reader recognizes as json.
+
+Two harnesses had the same defect, which is what happens when two
+readers parse the same file by hand. Neither knew about the other.
