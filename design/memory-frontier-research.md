@@ -180,11 +180,29 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   "nothing escapes" check. Construct 3 doing its advertised job on a new payload.
   (Interaction nets stay REFUTED: ~10x slower on numeric code — Asperti's own
   retrospective; no polynomial bookkeeping bound; flat-freeze kills the sharing.)
-- **e-graph fusion over pure IR** — promote the already-planned fusion; purity
-  makes every value-equality rewrite unconditionally valid, closed-world makes it
-  program-wide (past GHC's function-boundary limit). Do NOT extend to co-schedule
-  layout/lifetime/reuse (those memory edges are context-sensitive + mutually
-  recursive = Wansbrough–SPJ smuggled back in; peak-RSS is non-additive).
+- **e-graph fusion over pure IR — DECLINED for want of a customer
+  (measured 2026-07-28); if the shape ever appears, inlining is the
+  cheaper answer.** The cliff is real and steep. The same chain —
+  select, then map, then sum, over 300,000 elements — costs **16
+  allocations** written inside one function and **1,200,022** with a
+  single link moved behind a function boundary, 11.2 MB against 92.8 MB
+  of allocation. Fusion stops dead at the call, exactly the
+  function-boundary limit the entry names.
+  No workload crosses it. Thirty-seven functions across vse, kq, std and
+  the benches have a single-expression body using an adapter, and every
+  one is a self-contained chain: `sum (list/map voters f)`,
+  `argmax (to_list (list/map (range ncand) f))`. The idiom the book
+  teaches — write the chain where it is consumed, or pipe it — is
+  exactly the idiom fusion already handles.
+  And if a program does grow the shape, an e-graph is the expensive way
+  to answer it. Inlining a small single-use function before fusion
+  reaches the same result, has two precedents in the tree already
+  (`inline_builtin_wrappers` undoes a rename; `inline_single_use_chains`
+  folds a single-use adapter binding), and needs no equality saturation.
+  Reopen with the cheap intervention first. The entry's warning stands
+  either way: do NOT extend it to co-schedule layout/lifetime/reuse —
+  those memory edges are context-sensitive and mutually recursive
+  (Wansbrough-SPJ smuggled back in), and peak-RSS is non-additive.
 
 ## 5. The theoretical ceiling
 

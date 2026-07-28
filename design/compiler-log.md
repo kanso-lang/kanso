@@ -8858,3 +8858,35 @@ next to.
 Worth noting which harness caught the documentation slip: the panel
 checker taught about `kanso play` titles this morning refused an
 abbreviated output panel that nothing would have compared a day ago.
+
+## 2026-07-28 — 4.5: the cliff is real, the customer is not
+
+Fusion's function-boundary limit measured, on one chain written two
+ways over 300,000 elements. Inside a single function: sixteen
+allocations, 11.2 MB. With one link — the select — moved behind a
+function boundary: 1,200,022 allocations, 92.8 MB. Fusion stops at the
+call and the intermediate list is built in full.
+
+That is a large prize and it has nobody to give it to. Thirty-seven
+single-expression functions across vse, kq, std and the benches use an
+adapter, and every one holds a complete chain: `sum (list/map voters
+f)`, `argmax (to_list (list/map (range ncand) f))`, `min (list/map
+(range ncand) f)`. The idiom the book teaches — write the chain where
+it is consumed, or pipe it — is the idiom fusion already handles, so
+the boundary is not crossed in practice.
+
+Recorded with a second finding attached, because it changes what to
+build if the shape ever appears: an e-graph is the expensive answer.
+Inlining a small single-use function before fusion reaches the same
+place, and the tree already does this twice — inline_builtin_wrappers
+undoes a rename so uniqueness can see through it, inline_single_use_
+chains folds a single-use adapter binding. A third case of the same
+kind is a much smaller thing to build than equality saturation, and
+should be tried first.
+
+Three of section 4's five are now closed by measurement rather than
+argument: 4.1 because the build block costs nothing, 4.3 because no
+workload holds records it traverses twice, 4.5 because no workload
+splits a chain. The pattern is worth naming — these were designed
+against imagined programs, and the programs that exist are shaped
+differently.
