@@ -1,0 +1,6 @@
+type dog
+
+fn speak _ :dog
+  "woof"
+
+pub play = print (speak dog)
