@@ -112,7 +112,7 @@ PANEL = re.compile(
 # the recorded .out for that sample, or the page is quoting a compiler that
 # no longer exists
 OUT_PANEL = re.compile(
-    r'(<div class="code-panel-title">(KANSO_COUNTERS=1 )?kanso (?:run|check|test|build)[^<]*?'
+    r'(<div class="code-panel-title">(KANSO_COUNTERS=1 )?kanso (?:run|check|test|build|play)[^<]*?'
     r'([a-z_0-9/]+)\.kso[^<]*</div>\s*<pre><code>)(.*?)(</code></pre>)',
     re.S,
 )
