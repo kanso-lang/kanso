@@ -8417,3 +8417,28 @@ browser cannot resolve that import at all).
 Worth keeping beside the earlier entry: two fallbacks in two
 iterations, both hiding behind a green suite, both found by reading
 the skip lines rather than the pass count.
+
+## 2026-07-28 — the playground can run std/json
+
+The differential's last standing gap was the language's own flagship
+library: `import "std/json"` failed in the browser, so a visitor to
+the playground could not run the thing the front page benchmarks.
+The embedded-source mechanism that serves the browser and installed
+binaries handled one file per module with no imports of its own, and
+json is five files that import std/list and std/text.
+
+The fix is a unification rather than a special case. The module
+loader now takes its file set as a parameter: the disk path reads a
+directory as before, and the embedded path hands over include_str!
+contents under the same names. Everything after that — the
+alphabetical check per file, the cross-file namespace merge, import
+resolution (which finds the embedded std/list and std/text through
+the same branch), re-exports, shadowing, the ambient render arms — is
+the code that already ran for directories. Embedded modules stop
+being a second, weaker loader.
+
+Browser differential: 95 passed, zero known gaps, zero fallbacks,
+zero failures — the whole corpus, on all three engines, for the first
+time. Cost: 52 KB of wasm, 4.8%. The decode vein is byte-identical
+and lib/json's own 18 tests pass, so nothing about the shipped
+decoder moved; only where its source can be found did.

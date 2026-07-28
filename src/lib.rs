@@ -1384,17 +1384,32 @@ fn load_dependencies(
         // Embedded std modules load where no filesystem exists (the browser)
         // and where no lib/ ships beside the binary (installs). include_str!
         // of the same files keeps the embedded copies incapable of drifting.
-        let embedded = match path.as_str() {
-            "std/render" => Some(("render", include_str!("../lib/render/render.kso"))),
-            "std/list" => Some(("list", include_str!("../lib/list/list.kso"))),
-            "std/time" => Some(("time", include_str!("../lib/time/time.kso"))),
-
-            "std/io" => Some(("io", include_str!("../lib/io/io.kso"))),
-            "std/text" => Some(("text", include_str!("../lib/text/text.kso"))),
-            "std/math" => Some(("math", include_str!("../lib/math/math.kso"))),
+        // the shipped library, embedded so the browser (no filesystem) and
+        // an installed binary (no lib/ beside it) resolve the same sources
+        // the checkout does. A module is its whole file set, so a
+        // multi-file module lists every file.
+        let embedded: Option<(&str, &[(&str, &str)])> = match path.as_str() {
+            "std/render" => {
+                Some(("render", &[("render.kso", include_str!("../lib/render/render.kso"))]))
+            }
+            "std/list" => Some(("list", &[("list.kso", include_str!("../lib/list/list.kso"))])),
+            "std/time" => Some(("time", &[("time.kso", include_str!("../lib/time/time.kso"))])),
+            "std/io" => Some(("io", &[("io.kso", include_str!("../lib/io/io.kso"))])),
+            "std/text" => Some(("text", &[("text.kso", include_str!("../lib/text/text.kso"))])),
+            "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
+            "std/json" => Some((
+                "json",
+                &[
+                    ("json.kso", include_str!("../lib/json/json.kso")),
+                    ("number.kso", include_str!("../lib/json/number.kso")),
+                    ("scan.kso", include_str!("../lib/json/scan.kso")),
+                    ("text.kso", include_str!("../lib/json/text.kso")),
+                    ("value.kso", include_str!("../lib/json/value.kso")),
+                ],
+            )),
             _ => None,
         };
-        if let Some((short, source)) = embedded {
+        if let Some((short, files)) = embedded {
             // a module importing itself compiles a second copy, so every type
             // gets a twin and a constructor pattern stops matching values the
             // other half built — a confusing failure a long way from here
@@ -1405,7 +1420,12 @@ fn load_dependencies(
                      one's\n"
                 ));
             }
-            let mut dep = compile(&format!("{path}/{short}.kso"), source, false)?;
+            let qualified: Vec<(String, String)> =
+                files.iter().map(|(n, s)| (format!("{path}/{n}"), s.to_string())).collect();
+            let borrowed: Vec<(&str, &str)> =
+                qualified.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
+            let mut dep =
+                compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
             qualify(&mut dep, qual, &mut exports);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
@@ -1431,7 +1451,7 @@ fn load_dependencies(
                  this one's\n"
             ));
         }
-        let mut dep = compile_module_inner(&dep_dir, false, visited)?;
+        let mut dep = compile_module_inner(&dep_dir, false, visited, None)?;
         qualify(&mut dep, qual, &mut exports);
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
@@ -1759,7 +1779,7 @@ fn compile_module_root(
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
 ) -> Result<ast::Program, String> {
     AMBIENT_ROOT.with(|c| c.set(true));
-    let result = compile_module_inner(dir, require_main, visited);
+    let result = compile_module_inner(dir, require_main, visited, None);
     AMBIENT_ROOT.with(|c| c.set(false));
     result
 }
@@ -1874,26 +1894,39 @@ fn compile_module_inner(
     dir: &std::path::Path,
     require_main: bool,
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
     let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
     if !visited.insert(canon) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
-    let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
-        .map_err(|io| format!("error: cannot read {}: {io}\n", dir.display()))?
-        .filter_map(|entry| entry.ok())
-        .map(|entry| entry.path())
-        .filter(|p| p.extension().is_some_and(|e| e == "kso"))
-        .collect();
-    paths.sort();
-    if paths.is_empty() {
+    let mut sources: Vec<(String, String)> = match embedded {
+        Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
+        None => {
+            let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+                .map_err(|io| format!("error: cannot read {}: {io}\n", dir.display()))?
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "kso"))
+                .collect();
+            paths.sort();
+            let mut out = Vec::new();
+            for path in &paths {
+                let file = path.to_string_lossy().to_string();
+                let source = std::fs::read_to_string(path)
+                    .map_err(|io| format!("error: cannot read {file}: {io}\n"))?;
+                out.push((file, source));
+            }
+            out
+        }
+    };
+    sources.sort_by(|a, b| a.0.cmp(&b.0));
+    if sources.is_empty() {
         return Err(format!("error: no .kso files in {}\n", dir.display()));
     }
     let mut parsed = Vec::new();
-    for path in &paths {
-        let file = path.to_string_lossy().to_string();
-        let source = std::fs::read_to_string(path)
-            .map_err(|io| format!("error: cannot read {file}: {io}\n"))?;
+    for (file, source) in sources.drain(..) {
+        let path = std::path::PathBuf::from(&file);
         let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, &file, &source))?;
         let is_entry = path.file_name().is_some_and(|n| n == "main.kso");
         let mut program = match is_entry {
