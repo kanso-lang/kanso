@@ -8797,3 +8797,35 @@ clocks and forgets about memory: a single reading is not a
 measurement. Peak resident varied two to one across runs of what I
 believed was the same binary, which is exactly how a wrong number gets
 into a merged log entry.
+
+## 2026-07-28 — 4.3 has a prize and no customer
+
+Auto-SoA asks the compiler to choose a layout, which it may do here and
+not in Rust, where `&T` bakes in address identity and separate
+compilation hides the access sites. The idea survives its own
+measurement and dies on a different question.
+
+The prize, measured on 200,000 three-field records traversed twenty
+times reading one field: 50.3 ms and 23.8 MB held as an
+array-of-records, 27.7 ms and 19.9 MB held as three parallel arrays
+carrying the same data. That is 1.82x on time and 1.20x on peak, and
+it is worth having. (The first attempt at this comparison was unfair —
+it stored one field on the SoA side against three on the AoS side, so
+it measured a smaller dataset rather than a different layout. Caught
+and redone before drawing a conclusion, unlike the reading that went
+into a merged entry earlier today.)
+
+The customer is what is missing. The entry's own gate is multi-pass or
+random access over a materialized collection, and exactly one workload
+qualifies: vse traverses its electorate six times. vse holds no
+records. A voter is a list of scores read as `v[c]`, so there is no
+field for a field-touch analysis to see. Everything that does hold
+records — the decoder, the encoder, kq — is single-pass, which is the
+case fusion already owns.
+
+So the transform is declined for want of a customer rather than for
+want of value, and the ledger says so, with the number attached for
+whoever reopens it. One adjacent thing is worth separating: vse's
+electorate is a matrix stored by row and read by column, which is a
+transpose, not a field-touch — and the ledger's own warning that the
+transpose fights deforestation is about exactly that.
