@@ -106,6 +106,23 @@ preference becomes registry-then-github; a registry outage degrades to
 git, byte-identically, because the lock's sha decides what content
 *is*. Names never move, so standing one up migrates nobody.
 
+**Name authority: mechanism is declared by whoever owns the name,
+never by the importer.** Resolving a name answers "how is this
+fetched?" in exactly one place per shape:
+
+- `owner/repo` (no dot in the first segment): hard convention,
+  `github_repo`, no lookup ever — GitHub is the namespace authority
+  for that shape and the shape is the declaration.
+- Domain-shaped (`corp.dev/team/thing`): the tool asks the domain
+  once — `GET https://corp.dev/team/thing?hako=1` — and the domain
+  answers a one-line statement: `mechanism: git | github_repo |
+  hako_server` plus its endpoint. A GitLab instance answers git; a
+  vanity front for GitHub answers github_repo; a true hako server
+  answers hako_server. The answer is cached in `hako.lock` beside the
+  sha, so builds never re-ask and stay byte-reproducible offline.
+- Lock overrides (`--from`) carry their mechanism in their own
+  spelling: a path is a path, `@branch=x` is git.
+
 **An import never names a strategy — asking how it would is a
 layering violation.** The binding is resolved *from* the name, in
 Go's order of authority, which rule 2 forces anyway: (1) the name's
