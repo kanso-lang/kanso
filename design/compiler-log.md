@@ -9086,3 +9086,46 @@ rebuilds the sorted view the preceding `put` invalidated, so the loop
 pays a linear view per iteration. That is the next target and a
 different mechanism — incremental view maintenance, or an index that a
 write can update rather than discard.
+
+## 2026-07-28 — a repeated put stops growing the map (5,685 ms to 11 ms)
+
+Chasing what remained of the read-write quadratic turned up something
+worse than the thing being chased. A tally over a hundred keys was
+*slower* than one over ten thousand — six seconds against one and a
+half — which no theory of view rebuilding explains. The reason is that
+`put` appended. A hundred distinct keys written ten thousand times
+held ten thousand pairs, deduped only when something read the map, so
+storage grew with the number of writes rather than the number of keys.
+For a counting loop, which is the shape this operation exists for,
+that is unbounded growth.
+
+A key already present is now written where it sits. The sorted view
+answers whether it is present, by binary search, so a loop writing
+keys it has never written pays a logarithm and nothing else; when the
+key is there, both the view and the pairs log are patched, which keeps
+the view alive for the read that follows rather than making it rebuild
+what it just discarded.
+
+Measured A/B, both binaries back to back, best of three:
+
+    100 keys, 10,000 puts   5,685 ms  409.4 MB  ->  11 ms  3.5 MB
+    10,000 distinct keys    1,377 ms  410.1 MB  ->  1,355 ms  410.2 MB
+    write-only 10,000       6 ms      3.5 MB    ->  6 ms   3.5 MB
+
+Five hundred times faster and a hundred times smaller on the shape a
+tally actually has, with the other two untouched.
+
+The A/B is why this shipped. Single-shot readings taken minutes apart
+had said the distinct-key case regressed by a third, and on that
+evidence the change would have been reverted; run back to back against
+its own predecessor it is level. Machine load moved those numbers by
+more than the change did, which is the second time today that has
+nearly cost a true result.
+
+Semantics checked where they could break: `put m "size_before"
+(length m)` still reads the map as it was, and a key written twice
+still reads its last value with the map still holding one of it.
+Veins byte-identical, nineteen suites, browser differential 98 and
+zero, kq's own suite green. What remains quadratic is the
+distinct-key case, where every read rebuilds a view the previous
+insert invalidated — a different mechanism, and still open.

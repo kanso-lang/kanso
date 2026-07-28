@@ -8,6 +8,6 @@ fn go 0 m
   m
 
 fn go n m
-  go (n - 1) (put m "k{n}" (bump m["k{n}"]))
+  go (n - 1) (put m "k{n % 8}" (bump m["k{n % 8}"]))
 
 pub play = print "distinct {length (go 300 {:})}"

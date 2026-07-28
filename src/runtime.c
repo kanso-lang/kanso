@@ -3211,12 +3211,62 @@ KValue k_b_put(KValue mv, KValue key, KValue val);
    fresh one being allocated. The sorted view is per-header state and the
    header now describes different contents, so it resets; put never builds
    one, and a later read rebuilds it. */
+/// A key already present is written where it sits.
+///
+/// Storage otherwise grew with the number of writes rather than the number
+/// of keys: a counting loop over a hundred keys held ten thousand pairs
+/// after ten thousand puts, deduped only when something read the map. That
+/// is unbounded growth for a bounded key set. Replacing in place also keeps
+/// the sorted view alive — its value slot is patched too, so the read that
+/// follows does not rebuild it.
+static int k_map_replace(KMap* m, KValue key, KValue val) {
+    /* Only when a view is already built. Without one there is no cheap way
+       to know whether the key is present, and appending is correct anyway
+       (the view keeps the last write) — so a write-only loop pays nothing
+       and never scans for a key that is not there. */
+    if (!m->sorted) {
+        return 0;
+    }
+    /* the view is sorted, so absence costs a binary search rather than a
+       walk: a loop writing keys it has never written pays nothing here */
+    long long lo = 0, hi = m->sorted_len - 1, at = -1;
+    while (lo <= hi) {
+        long long mid = lo + (hi - lo) / 2;
+        int c = k_key_cmp(m->sorted[mid * 2], key);
+        if (c == 0) {
+            at = mid;
+            break;
+        }
+        if (c < 0) {
+            lo = mid + 1;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    if (at < 0) {
+        return 0;
+    }
+    m->sorted[at * 2 + 1] = val;
+    /* the pairs log holds the same key, last write winning, so the newest
+       occurrence is the one a rebuild would keep */
+    for (long long i = m->len - 1; i >= 0; i--) {
+        if (k_key_cmp(m->pairs[i * 2], key) == 0) {
+            m->pairs[i * 2 + 1] = val;
+            return 1;
+        }
+    }
+    return 1;
+}
+
 KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (!k_not_failure(mv)) return mv;
     if (!k_not_failure(key)) return key;
     if (!k_not_failure(val)) return val;
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
     KMap* m = k_as_map(mv);
+    if (k_map_replace(m, key, val)) {
+        return mv;
+    }
     KBuf* buf = k_buf_of(m->pairs);
     if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
         m->pairs[m->len * 2] = key;
