@@ -1,0 +1,17 @@
+type cents int
+
+type post_body string
+
+fn to_string _:cents
+  "a price"
+
+fn quote c:cents
+  "{c} for the set"
+
+fn quote n:int
+  "{n} plain"
+
+pub play =
+  print (quote (cents 350))
+  >> print (quote 350)
+  >> print "a body reads through: {post_body "hello"}"

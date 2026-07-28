@@ -8330,3 +8330,24 @@ decode path stands at 2.79 allocations per document node with the
 shelf already recycling 2,233 buffers per decode; the remaining
 weight is the document itself, which is the same wall the evacuation
 law hit from the other side.
+
+## 2026-07-28 — the book teaches wrapper types (a shipped feature with no page)
+
+An audit for the standing docs directive found subtypes undocumented
+everywhere: zero mentions across ch03, appendix b, and appendix c,
+while ch03 teaches typesets seven times. The gap had already started
+costing — appendix a's ownership diagnostic tells the reader to "wrap
+the value in a type of your own and render that," advice for a
+construct the book never introduces.
+
+ch03 gains a section beside typesets, since the two are the same
+question from opposite sides: a typeset names a set of types you
+have, a wrapper names a new type that is one you have. It teaches
+declaration (child first, parent after), construction, the ladder
+position (a wrapper's arm above its parent's, chains resolving to the
+nearer declaration), and rendering — transparent by default, claimed
+by a to_string arm, with appendix a's ownership rule as the reason
+that arm is allowed. The specificity-ladder sentence earlier in the
+chapter gains the rung, and an exercise closes on the case worth
+feeling: delete the wrapper's arm and predict where the value lands.
+The sample is verified by the harness like every other panel.
