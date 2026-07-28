@@ -1,0 +1,10 @@
+import "std/json"
+
+pub fn go _
+  unwrap (mine 0)
+
+fn mine _
+  err (json/parse_failure 1 "raised here, not by json")
+
+fn unwrap (err _:json/parse_failure)
+  "rescued my own failure through a borrowed name"

@@ -8651,3 +8651,35 @@ against the origin every err already carries.
 
 Recorded rather than built: enforcing construction is a language rule
 with a migration behind it, and it is Clay's call.
+
+## 2026-07-28 — provenance, computed
+
+Clay: build it correctly. The proxy is gone and provenance is
+computed. Each dispatch group gets the set of packages whose errs it
+may hand back, taken to a fixpoint over the call graph — the shape
+inference already uses for value sets, and cheap for the reason Clay
+gave: one hop is enough, because an err reaches a function only
+through a pattern that matches err, so every step of a failure's
+travel is a call whose callee names it.
+
+The rule then reads off the analysis with nothing left to guess: a
+group that may receive an err raised in its own package must return
+an err. Two design points the fixtures forced. A pub group is seeded
+with its own package — its callers are not all in view, and anyone
+may hand a package its own failure back, which is exactly how
+std/json's projections are reached. And the walk had to descend into
+every expression form, not only statement position: the first
+same-package rescue went undetected because the call sat inside a
+string interpolation.
+
+Caught now, and pinned: the laundering case Clay's correction
+predicted — raise an err whose reason is borrowed from another
+package, then rescue it locally — is named by its raiser, so the
+borrowed name buys nothing. Rescuing a genuinely foreign err stays
+silent, as does re-raising one's own.
+
+Cost, measured A/B on one binary rather than against yesterday's
+number: 0.6 ms on `kanso check`. The absolute figures today read two
+milliseconds high on a loaded box — main measured 8.9 ms against the
+branch's 8.0 — which is why the A/B was run at all. KANSO_NO_PROV
+turns the pass off, as KANSO_NO_FUSE does for fusion.
