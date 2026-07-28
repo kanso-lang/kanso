@@ -8395,3 +8395,25 @@ not a failure and never turns the suite red, so a feature can look
 covered on three engines while one of them quietly runs the
 interpreter underneath. Reading the skip lines is part of reading the
 result.
+
+## 2026-07-28 — the browser corpus compiles, all of it
+
+Following the io fallback into its neighbours: the three programs
+left interpreting shared one cause, and it was not the one their
+message suggested. "Unsupported call head" named a lambda sitting in
+call position — an inlined single-use binding leaves one there — and
+every program that passed a lambda to a list adapter hit it. Lambdas
+were never the problem; the backend builds closures already, and a
+lambda in call position is one built and applied, which is three
+lines it was missing.
+
+The browser differential now reads 94 passed with zero fallbacks: the
+compiled path covers the whole corpus for the first time, list and
+pipe programs included — which is what the playground actually runs
+when somebody types a map into it. The single remaining gap is
+honest and unrelated (std/json is not in the shipped library, so the
+browser cannot resolve that import at all).
+
+Worth keeping beside the earlier entry: two fallbacks in two
+iterations, both hiding behind a green suite, both found by reading
+the skip lines rather than the pass count.
