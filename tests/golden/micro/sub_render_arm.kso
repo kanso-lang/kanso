@@ -1,0 +1,13 @@
+# a subtype is user-owned, so a to_string arm may claim it; without one
+# the wrapper renders as its parent does
+type money int
+
+type plain_tag int
+
+fn to_string _:money
+  "$3.50"
+
+pub play =
+  print "custom: {money 350}"
+  >> print "default: {plain_tag 7}"
+  >> print "primitive: {350}"
