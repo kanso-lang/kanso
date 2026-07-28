@@ -8484,3 +8484,27 @@ reader recognizes as json.
 
 Two harnesses had the same defect, which is what happens when two
 readers parse the same file by hand. Neither knew about the other.
+
+## 2026-07-28 — the play panels were never checked
+
+The book's panel checker compares an output panel against the sample's
+recorded .out, and it recognized an output panel by its title: a
+command reading `kanso run`, `check`, `test`, or `build`. Every panel
+this session added titles its command `kanso play`, which the pattern
+did not match, so four panels — the wrap_err chain, the wrapper
+types, the streaming write, the stack report — displayed output that
+nothing compared to anything.
+
+Watched red the only way that means something here: falsify a
+panel's text and run the checks. Both passed, cheerfully. The word
+`play` in the pattern is the whole fix, and with it the same
+falsification is caught by name. All four panels were in fact
+correct, which is luck rather than process — they were written by
+copying real output, and nothing would have said otherwise.
+
+The audits of the last several days keep landing on one shape: a
+check that looks at less than its name suggests. Two harnesses
+reading raw text where the browser reads escaped, a fallback path
+that never reddens a suite, and now a title pattern that quietly
+skips a verb. None of them failed; all of them covered less than the
+reader would assume.
