@@ -9022,3 +9022,31 @@ scoped compiler work rather than a research question, and it is what
 With this, all five of section 4 are answered: three declined by
 measurement, one already harvested, and one blocked on a rule that can
 be widened. None of them was refuted by argument.
+
+## 2026-07-28 — what this session cost the front end, and what the box cannot tell us
+
+The published compile figures are 6.6 ms for kq's check and 6.1 for the
+decoder's, dated three days ago. Today's readings for the same work sat
+between 5.9 and 8.9 ms depending on the hour, so the absolute claim can
+neither be confirmed nor refuted here; this box has not been idle all
+session, and load between two and six moves the number by more than the
+thing being measured.
+
+What can be measured is the difference, and it was, by building the
+commit from before this session's front-end work and racing the two
+binaries back to back:
+
+    before this session      7.46 ms
+    now                      7.95 ms      +0.49
+    now, provenance off      7.74 ms      provenance 0.21
+    so the three check passes             0.28
+
+Half a millisecond, for err provenance, imported-group arity, and two
+literal-argument checks. That is the real cost and it is small, but it
+is seven percent of a published six-and-a-half, so the next sitting
+will show it and the note should say why.
+
+Recorded rather than published: moving a dated absolute by a delta
+measured on a different day would mix two sittings into one number,
+which is the thing the surface-sweep rule exists to prevent. The
+re-sit stays owed, and it wants a box that is actually idle.
