@@ -9050,3 +9050,39 @@ Recorded rather than published: moving a dated absolute by a delta
 measured on a different day would mix two sittings into one number,
 which is the thing the surface-sweep rule exists to prevent. The
 re-sit stays owed, and it wants a box that is actually idle.
+
+## 2026-07-28 — a read-write map stops copying itself (2.09 GB to 410 MB)
+
+The largest measured problem in the system, and it was still there: a
+ten-thousand-key tally — `put m k (bump m[k])`, the shape every
+counting loop has — peaked at 2.09 GB and took two seconds. Quadratic,
+about two thousand times the footprint the data needs.
+
+The cause is one line. `linear.rs` refuses uniqueness to any name used
+more than once, and `m` appears twice in that expression: once as the
+map being written, once as the map being read. So `put` never selected
+its in-place form and every iteration copied the whole map.
+
+The second mention is not an alias, though, and the reason is
+evaluation order rather than analysis. A builtin's arguments are all
+evaluated before the builtin runs, so a read of the map inside a
+sibling argument of the very call that consumes it has finished before
+the write happens. `put m k (bump m[k])` mentions the map twice and
+holds it once. Uses are now discounted exactly there — inside sibling
+arguments of a consuming call whose first argument is the name — and
+nowhere else, so a read after the put, or the map passed anywhere
+else, still keeps it shared and the write copying.
+
+Peak falls from 2.09 GB to 410 MB. Checked where it would hurt most:
+`put m "size_before" (length m)` reads three on both engines and
+totals four, so the read sees the map as it was, which is what the
+argument above claims and what a wrong answer would have exposed. All
+three cost veins are byte-identical, nineteen suites pass, browser
+differential 98 and zero.
+
+It is still quadratic, and the remaining quadratic is the *read*:
+2,500 keys 40 MB, 5,000 keys 105, 10,000 keys 410. Each `m[key]`
+rebuilds the sorted view the preceding `put` invalidated, so the loop
+pays a linear view per iteration. That is the next target and a
+different mechanism — incremental view maintenance, or an index that a
+write can update rather than discard.
