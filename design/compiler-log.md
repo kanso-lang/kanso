@@ -9327,3 +9327,58 @@ affordable. It is not what stands in the way.
 
 The mechanism is written and measured and it is not being kept, because
 the half of it that pays is the other half.
+
+## 2026-07-28 — a string accumulator grows in place (163 ms to 8)
+
+Clay, on the entry above proposing a gavel for this: how would I
+possibly make a string-storage gavel — it's a performance thing, you
+can just measure that. That was right and the framing was wrong.
+Nothing here is visible to anyone writing kanso: same semantics, same
+output, same spelling. It is an implementation detail and it wanted
+building, not ruling.
+
+    25,000     12.3 ms  ->  8.0 ms
+    50,000     35.5 ms  ->  8.2 ms
+    100,000   163.3 ms  ->  7.7 ms
+
+Flat where it was square. The corpus pins the shape rather than the
+clock: `string_build.kso` goes from 2,003 allocations and 2,050,112
+bytes to **10 and 4,562**.
+
+Three parts. `KStr` carries a capacity with the contract KBytes already
+had — zero for every string built the ordinary way, positive only for a
+buffer the accumulating concat malloc'd, which is what keeps a
+write-through away from an interned constant. `k_concat_arr_mut`
+appends into that spare room and doubles it when it fills. And the
+carry hands the buffer to the copy instead of duplicating it: the
+buffer is outside the arena, so it outlives the rewind that takes its
+header, and the copy that used to cost the accumulator's whole length
+now costs a pointer.
+
+Two things went wrong and both were caught by things already in the
+tree, which is the argument for having them.
+
+The first: widening the header to twenty-four bytes turned
+`a_bound_branch_chosen_pipe_still_fires_the_cohort` red. Not a golden
+drifting — the cohort guard reads the survivor-to-garbage ratio, and a
+string is the most numerous heap object a decode makes, so eight bytes
+on its header moved a real decision. The fields are reordered and
+narrowed instead (`char* data; int len; int cap`), which holds the
+header at sixteen bytes and costs a length ceiling of two gigabytes,
+checked where strings are allocated. Every vein and every mem pin is
+byte-identical, which is the evidence the header did not move.
+
+The second: handing the buffer over on *every* copy corrupted the
+oneshot bench into `invalid utf-8`. The freeze path copies under a zero
+mark, where the original does not die — so it kept a pointer to a
+buffer the copy would later grow and free. The handover is now
+restricted to a real mark over a header that does not survive it, which
+is the only case where the original is genuinely doomed. Worth saying
+plainly: the first version of this was a use-after-free, and what found
+it was a benchmark, not a test.
+
+Welfare is unmoved at 62.70, and unmoved is the interesting part: none
+of its seven terms can see string building at all. The number is right
+that nothing it measures changed and wrong that nothing happened, which
+is a claim about the weights and belongs in that argument rather than
+in this one.

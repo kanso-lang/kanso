@@ -19,7 +19,14 @@ typedef struct { long long tag; long long payload; } KValue;
 
 enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB };
 
-typedef struct { long len; char* data; } KStr;
+/* `cap` is spare room the string may grow into, and its contract is the one
+   KBytes carries: zero for every string built the ordinary way, positive only
+   for a buffer malloc'd by the accumulating concat. The fields are ordered
+   and narrowed to keep the header at sixteen bytes — a string is the most
+   numerous heap object a decode makes (1,305,303 of them on the board), and
+   widening the header shifts the survivor-to-garbage ratio the cohort guard
+   reads, which is a behaviour change and not merely a size one. */
+typedef struct { char* data; int len; int cap; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
@@ -586,7 +593,11 @@ static size_t k_copy_size(KValue v, KMark* m) {
         case K_STR: {
             KStr* s = (KStr*)p;
             n += k_copy_size_ptr(s, sizeof(KStr), m);
-            if (!k_survives(s->data, m)) n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
+            /* an accumulator's buffer is handed to the copy rather than
+               duplicated, so it costs the survivor nothing to take */
+            if (s->cap <= 0 && !k_survives(s->data, m)) {
+                n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
+            }
             break;
         }
         case K_BYTES: {
@@ -677,6 +688,20 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KStr* ns = k_copy_alloc(cp, sizeof(KStr));
             k_copy_map_put(p, ns);
             ns->len = s->len;
+            ns->cap = 0;
+            /* An accumulator's buffer is malloc'd, so it outlives the rewind
+               that takes its header. Hand it over rather than duplicating it,
+               and disown it here so exactly one header ever frees it —
+               uniqueness at the mut site is what makes the handover safe, and
+               it is what keeps a carried accumulator growable instead of
+               starting again from nothing on every iteration. */
+            if (s->cap > 0 && cp->mark && !k_survives(s, cp->mark)) {
+                ns->data = s->data;
+                ns->cap = s->cap;
+                s->cap = 0;
+                out.payload = k_ptr(ns);
+                break;
+            }
             if (k_survives(s->data, cp->mark)) {
                 ns->data = s->data;
             } else {
@@ -1072,11 +1097,13 @@ static char k_ascii_ready[128];
    the zero-copy finish, a deep copy that shares — assign `data` themselves
    and are unaffected. */
 static KStr* k_str_alloc(long long len) {
+    if (len > 2147483647LL) k_die("string too long");
     if (__builtin_expect(k_stats_on > 0, 0))
         k_stat_sh_str += (long long)((sizeof(KStr) + (size_t)len + 1 + 15) & ~(size_t)15);
     KStr* s = k_alloc(sizeof(KStr) + (size_t)len + 1);
-    s->len = (long)len;
+    s->len = (int)len;
     s->data = (char*)(s + 1);
+    s->cap = 0;
     return s;
 }
 
@@ -1087,8 +1114,9 @@ static KStr* k_str_alloc(long long len) {
 KValue k_str_lit(const char* data, long long len, KValue* slot) {
     if (slot->tag != K_STR) {
         KStr* s = k_alloc_perm(sizeof(KStr) + (size_t)len + 1);
-        s->len = (long)len;
+        s->len = (int)len;
         s->data = (char*)(s + 1);
+        s->cap = 0;
         memcpy(s->data, data, (size_t)len);
         s->data[len] = 0;
         slot->tag = K_STR;
@@ -1104,6 +1132,7 @@ KValue k_str_n(const char* data, long long len) {
             if (!k_ascii_ready[b]) {
                 KStr* s = k_alloc_perm(sizeof(KStr));
                 s->len = 1;
+                s->cap = 0;
                 s->data = malloc(2);
                 s->data[0] = (char)b;
                 s->data[1] = 0;
@@ -1219,6 +1248,71 @@ long long k_check_bool(KValue v) { return v.tag == K_TRUE || v.tag == K_FALSE; }
    quadratic-copying hot on the encode path. An array, not varargs —
    16-byte structs through va_arg differ between the arm64 and x86_64
    ABIs when the caller is emitted IR. */
+KValue k_concat_arr(long long n, const KValue* parts);
+
+/* Joining an accumulator the linearity analysis proved dead afterwards.
+   Repeated interpolation copied the whole accumulator every iteration, so
+   building a string cost the square of its length: 100,000 appends took
+   155.9 ms. The storage here is malloc'd and doubles when it fills, exactly
+   as the byte builder's does, so it outlives the rewind that takes its
+   header and the carry hands it on instead of copying it. */
+KValue k_concat_arr_mut(long long n, const KValue* parts) {
+    if (n == 0) return k_concat_arr(n, parts);
+    for (long long i = 0; i < n; i++) {
+        if (!k_not_failure(parts[i])) return parts[i];
+    }
+    KStr* acc = k_as_str(parts[0]);
+    long long extra = 0;
+    for (long long i = 1; i < n; i++) extra += k_as_str(parts[i])->len;
+    long long want = (long long)acc->len + extra;
+    if (want > 2147483647LL) k_die("string too long");
+    if (acc->cap > 0 && want <= acc->cap) {
+        long long at = acc->len;
+        for (long long i = 1; i < n; i++) {
+            KStr* ps = k_as_str(parts[i]);
+            memcpy(acc->data + at, ps->data, (size_t)ps->len);
+            at += ps->len;
+        }
+        acc->data[want] = 0;
+        acc->len = (int)want;
+        return parts[0];
+    }
+    long long cap = want * 2 + 16;
+    if (cap > 2147483647LL) cap = 2147483647LL;
+    char* fresh = malloc((size_t)cap + 1);
+    if (!fresh) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += cap + 1;
+    }
+    memcpy(fresh, acc->data, (size_t)acc->len);
+    long long at = acc->len;
+    for (long long i = 1; i < n; i++) {
+        KStr* ps = k_as_str(parts[i]);
+        memcpy(fresh + at, ps->data, (size_t)ps->len);
+        at += ps->len;
+    }
+    fresh[want] = 0;
+    /* Growing a buffer this path already owns keeps the header, so the chain
+       stays the one that arrived; a seed it does not own — an interned
+       literal, anything built elsewhere — is left untouched and gets a fresh
+       header instead. */
+    if (acc->cap > 0) {
+        free(acc->data);
+        acc->data = fresh;
+        acc->cap = (int)cap;
+        acc->len = (int)want;
+        return parts[0];
+    }
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_str += (long long)sizeof(KStr);
+    KStr* out = k_alloc(sizeof(KStr));
+    out->len = (int)want;
+    out->data = fresh;
+    out->cap = (int)cap;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(out);
+    return v;
+}
+
 KValue k_concat_arr(long long n, const KValue* parts) {
     long long total = 0;
     for (long long i = 0; i < n; i++) {

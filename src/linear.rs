@@ -10,7 +10,7 @@
 //! through a chain in which every step is *moved* (used exactly once) and never
 //! aliased. Anything the analysis can't follow leaves the push allocating.
 
-use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
+use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt, TemplatePart};
 use std::collections::HashSet;
 
 /// Push call sites, keyed `(file, line, col)`, whose list argument is uniquely
@@ -223,7 +223,12 @@ impl<'a> Analysis<'a> {
         exempt: &[&Expr],
     ) -> bool {
         match e {
-            Expr::List(..) | Expr::MapLit(..) => true,
+            // A literal is freshly written or permanently interned and an
+            // interpolation allocates its result, so in every case nothing
+            // else holds the value. An interned one carries no spare capacity,
+            // which is what stops a write-through reaching a shared constant —
+            // the same guard the list literals above rely on.
+            Expr::List(..) | Expr::MapLit(..) | Expr::Str(..) => true,
             // A fold threads its seed through the folding function and returns
             // what the last call gave back, so the result is unique when the
             // seed is and the folder returns unique from a unique first
@@ -380,6 +385,24 @@ fn walk_for_push_in(
                 walk_for_push_in(a, decl, &args[1], out, scoped);
                 walk_for_push_in(a, decl, body, out, inner);
                 return;
+            }
+        }
+    }
+    // an interpolation whose first piece is the accumulator extends it the
+    // same way a push extends a list: the pieces after it are appended into
+    // its own spare room when nobody else holds it
+    if let Expr::Str(parts, span) = e {
+        if let Some(TemplatePart::Interp(first)) = parts.first() {
+            let rest: Vec<&Expr> = parts
+                .iter()
+                .skip(1)
+                .filter_map(|p| match p {
+                    TemplatePart::Interp(inner) => Some(inner),
+                    TemplatePart::Lit(_) => None,
+                })
+                .collect();
+            if parts.len() > 1 && a.unique_in_with(first, decl, scoped, &rest) {
+                out.insert((decl.file.clone(), span.line, span.col));
             }
         }
     }
