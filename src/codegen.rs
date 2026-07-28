@@ -248,6 +248,7 @@ declare %KValue @k_b_push_mut(%KValue, %KValue)
 declare %KValue @k_b_append_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
+declare %KValue @k_concat_arr_mut(i64, ptr)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
@@ -2113,7 +2114,9 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{t} = call %KValue @k_float(double 0x{:016X})", x.to_bits()));
                 Ok(t)
             }
-            Expr::Str(parts, _) => {
+            Expr::Str(parts, span) => {
+                let in_place =
+                    self.in_place_pushes.contains(&(f.file.clone(), span.line, span.col));
                 let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
                 for part in parts {
@@ -2169,8 +2172,14 @@ impl<'a> Backend<'a> {
                             f.line(&format!("store %KValue {p}, ptr {slot}"));
                         }
                         let t = f.tmp();
+                        // where the first piece is an accumulator nobody else
+                        // holds, the rest land in its own spare room
+                        let sym = match in_place {
+                            true => "k_concat_arr_mut",
+                            false => "k_concat_arr",
+                        };
                         f.line(&format!(
-                            "{t} = call %KValue @k_concat_arr(i64 {}, ptr {arr})",
+                            "{t} = call %KValue @{sym}(i64 {}, ptr {arr})",
                             pieces.len()
                         ));
                         t
