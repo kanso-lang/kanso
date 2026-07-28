@@ -67,12 +67,26 @@ the arm's package against the type's *origin* package — where the err
 stack leafs out. Everyone but the origin may trap it, including the
 re-exporter.
 
-**NEW, found in the build (2026-07-28) — a package cannot inspect its
-own errs, at all.** The license forbids own-universe trapping, and
-there is no non-trapping alternative: err equality is infectious
-(`a == b` on errs propagates the err), interpolation propagates, so
-matching is the only way to see a reason. Consequences measured
-against the current tree:
+**CORRECTED (Clay, 2026-07-28).** An earlier entry here said a package
+cannot inspect its own errs. It can, all day. The rule constrains the
+*return*, not the look: an arm may match its own err, read every field
+of the reason, and build whatever it likes from them — it must hand
+back an err. "Any function it passes its own err to must also return
+err." The advisory built for this already draws exactly that line
+(an arm reading both fields and re-raising is silent; only conversion
+to a value is flagged), so the code was right and the description was
+not.
+
+What survives the correction is narrower and still real: **a package
+cannot get a non-err value out of its own err**, and an assertion
+needs a value. Measured — a test constant that touches an err
+propagates it, and the harness reports `FAILED (returned err …)`, so
+equality, interpolation and every other route are closed alike. That
+is why the test-file exemption below is still wanted: not because
+inspection is blocked, but because an assertion is a value and a
+package may not produce one about its own failure.
+
+Consequences measured against the current tree:
 
 - std/json's `failure_position` and `failure_reason` become illegal
   (std trapping std's own `parse_failure`). They are also unnecessary
@@ -91,8 +105,9 @@ against the current tree:
   of them. Everything else is silent, including kq's
   `render_result (err reason)`, which re-raises. `*_test.kso` files
   are exempt per the recommendation below.
-- **A package can no longer test its own failure paths.** json_test's
-  position assertions and its `defect?` predicate both convert.
+- **A package can no longer assert about its own failure paths.**
+  json_test's position assertions and its `defect?` predicate both
+  convert an err to a value, which is the one thing the rule forbids.
   RECOMMENDED (interim, being built behind): a **file-scope exemption
   for `*_test.kso`** — a test is the author inspecting internals, not
   shipped behavior, and the alternative is that no package can ever
