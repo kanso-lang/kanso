@@ -881,15 +881,42 @@ fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
     let types: HashMap<&str, &TypeDecl> =
         program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+    let builtins = crate::inline::aliases(program);
     for decl in &program.fns {
         if decl.synthetic {
             continue;
         }
         let bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
         for stmt in &decl.body {
-            literal_walk_stmt(stmt, &groups, &types, &bound, diags);
+            literal_walk_stmt(stmt, &groups, &types, &bound, &builtins, diags);
         }
     }
+}
+
+/// What each builtin will accept in each position, verified by running the
+/// wrong thing at each one and reading the diagnostic it gives. Absent
+/// entries are unconstrained: this says nothing it has not checked.
+fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
+    use LitKind::*;
+    let table: &[(&str, &[&[LitKind]])] = &[
+        ("length", &[&[Str, List, Map]]),
+        ("entries", &[&[Map]]),
+        ("bytes", &[&[Str]]),
+        ("char_code", &[&[Str]]),
+        ("chars", &[&[Str]]),
+        ("sqrt", &[&[Int, Float]]),
+        ("round", &[&[Int, Float]]),
+        ("print", &[&[Str]]),
+        ("write", &[&[Str]]),
+        ("read_file", &[&[Str]]),
+        ("write_file", &[&[Str], &[Str]]),
+        ("push", &[&[List]]),
+        ("put", &[&[Map]]),
+        ("sleep", &[&[Int]]),
+        ("random", &[&[Int]]),
+        ("from_code", &[&[Int]]),
+    ];
+    table.iter().find(|(n, _)| *n == name).and_then(|(_, positions)| positions.get(index)).copied()
 }
 
 /// What a literal is, coarsely enough to compare against a pattern.
@@ -967,11 +994,12 @@ fn literal_walk_stmt(
     groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
+    builtins: &HashMap<(String, usize), String>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            literal_walk_expr(expr, groups, types, bound, diags)
+            literal_walk_expr(expr, groups, types, bound, builtins, diags)
         }
     }
 }
@@ -981,11 +1009,38 @@ fn literal_walk_expr(
     groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
     types: &HashMap<&str, &TypeDecl>,
     bound: &HashSet<&str>,
+    builtins: &HashMap<(String, usize), String>,
     diags: &mut Vec<Diagnostic>,
 ) {
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(name, _) = &**head {
             if !bound.contains(name.as_str()) {
+                // a std wrapper is a rename over a builtin, so the builtin's
+                // demand is the one that will actually be met
+                let bare =
+                    builtins.get(&(name.clone(), args.len())).cloned().unwrap_or_else(|| {
+                        name.rsplit_once('/')
+                            .map(|(_, n)| n.to_string())
+                            .unwrap_or_else(|| name.clone())
+                    });
+                let bare = bare.strip_prefix("builtin_").unwrap_or(&bare).to_string();
+                for (i, arg) in args.iter().enumerate() {
+                    let Some(kind) = literal_kind(arg) else { continue };
+                    let Some(allowed) = builtin_demand(&bare, i) else { continue };
+                    if !allowed.contains(&kind) {
+                        let want: Vec<String> =
+                            allowed.iter().map(|k| describe_literal(*k).to_string()).collect();
+                        diags.push(Diagnostic::new(
+                            "type",
+                            format!(
+                                "`{bare}` takes {} here, not {}",
+                                or_join(want),
+                                describe_literal(kind)
+                            ),
+                            arg.span(),
+                        ));
+                    }
+                }
                 if let Some(arms) = groups.get(&(name.as_str(), args.len())) {
                     for (i, arg) in args.iter().enumerate() {
                         let Some(kind) = literal_kind(arg) else { continue };
@@ -1014,7 +1069,7 @@ fn literal_walk_expr(
         }
     }
     for child in crate::expr_children(e) {
-        literal_walk_expr(child, groups, types, bound, diags);
+        literal_walk_expr(child, groups, types, bound, builtins, diags);
     }
 }
 
@@ -1036,6 +1091,17 @@ fn describe_pattern(p: &Pattern) -> String {
         Pattern::Ctor { ty, .. } => ty.clone(),
         Pattern::Annotated { ty, .. } => ty.clone(),
         Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. } => "any".to_string(),
+    }
+}
+
+/// "a list, a map, or a string" — a demand reads as a choice, not a list.
+fn or_join(mut names: Vec<String>) -> String {
+    names.sort();
+    names.dedup();
+    match names.len() {
+        0 | 1 => names.join(""),
+        2 => names.join(" or "),
+        n => format!("{}, or {}", names[..n - 1].join(", "), names[n - 1]),
     }
 }
 

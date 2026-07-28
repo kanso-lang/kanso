@@ -24,7 +24,7 @@ use std::collections::HashMap;
 /// qualifies only when its body is exactly one call to a builtin, passing its
 /// own parameters in their own order and nothing else — anything more and
 /// inlining would be a decision rather than a rename.
-fn aliases(program: &Program) -> HashMap<(String, usize), String> {
+pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
     let mut found = HashMap::new();
     for decl in &program.fns {
         let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
