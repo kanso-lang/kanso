@@ -771,6 +771,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
+    check_literal_arguments(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }
@@ -862,6 +863,186 @@ fn arity_walk_expr(
     for child in crate::expr_children(e) {
         arity_walk_expr(child, arities, bound, diags);
     }
+}
+
+/// A literal argument no arm could ever take.
+///
+/// The general question — can this expression's type reach any arm — wants
+/// the inference sets and their joins, and a join is a superset, so a wrong
+/// call can hide behind a right one at another site. A literal needs none of
+/// that: its type is on the page. So this asks the narrow question exactly,
+/// and says nothing where an argument is anything else. What it catches is
+/// the call that could never have worked, reported where the author wrote it
+/// instead of when the value arrives.
+fn check_literal_arguments(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let mut groups: HashMap<(&str, usize), Vec<&FnDecl>> = HashMap::new();
+    for decl in &program.fns {
+        groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(decl);
+    }
+    let types: HashMap<&str, &TypeDecl> =
+        program.types.iter().map(|t| (t.name.as_str(), t)).collect();
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        let bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        for stmt in &decl.body {
+            literal_walk_stmt(stmt, &groups, &types, &bound, diags);
+        }
+    }
+}
+
+/// What a literal is, coarsely enough to compare against a pattern.
+#[derive(Clone, Copy, PartialEq)]
+enum LitKind {
+    Int,
+    Float,
+    Str,
+    List,
+    Map,
+}
+
+fn literal_kind(e: &Expr) -> Option<LitKind> {
+    match e {
+        Expr::Int(..) => Some(LitKind::Int),
+        Expr::Float(..) => Some(LitKind::Float),
+        Expr::Str(parts, _) => match parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))) {
+            // an interpolation can render anything; only a plain string is a
+            // literal for this purpose
+            true => Some(LitKind::Str),
+            false => None,
+        },
+        Expr::List(..) => Some(LitKind::List),
+        Expr::MapLit(..) => Some(LitKind::Map),
+        _ => None,
+    }
+}
+
+/// Could this pattern accept a literal of this kind? Unsure counts as yes:
+/// the check only fires where every arm is a definite no.
+fn pattern_admits(p: &Pattern, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> bool {
+    match p {
+        Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. } => true,
+        Pattern::IntLit(..) => kind == LitKind::Int,
+        Pattern::StrLit(..) => kind == LitKind::Str,
+        Pattern::Nullary(..) => false,
+        Pattern::Ctor { .. } => false,
+        Pattern::Annotated { ty, .. } => type_admits(ty, kind, types),
+    }
+}
+
+fn type_admits(ty: &str, kind: LitKind, types: &HashMap<&str, &TypeDecl>) -> bool {
+    if ty.ends_with("[]") {
+        return kind == LitKind::List;
+    }
+    if ty.contains('[') {
+        return kind == LitKind::Map;
+    }
+    match ty {
+        "int" => kind == LitKind::Int,
+        // dispatch does not widen: an int literal reaches no float64 arm,
+        // whatever arithmetic does with the two together
+        "float64" => kind == LitKind::Float,
+        "string" => kind == LitKind::Str,
+        "bool" | "none" | "err" => false,
+        "some" | "any" => true,
+        other => match types.get(other) {
+            // a typeset admits what any member admits; a subtype admits what
+            // its parent does; a record admits no literal at all
+            Some(t) if !t.members.is_empty() => {
+                t.members.iter().any(|m| type_admits(m, kind, types))
+            }
+            Some(t) => match &t.parent {
+                Some(parent) => type_admits(parent, kind, types),
+                None => false,
+            },
+            // an unknown name is not something to be confident about
+            None => true,
+        },
+    }
+}
+
+fn literal_walk_stmt(
+    stmt: &Stmt,
+    groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
+    types: &HashMap<&str, &TypeDecl>,
+    bound: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match stmt {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+            literal_walk_expr(expr, groups, types, bound, diags)
+        }
+    }
+}
+
+fn literal_walk_expr(
+    e: &Expr,
+    groups: &HashMap<(&str, usize), Vec<&FnDecl>>,
+    types: &HashMap<&str, &TypeDecl>,
+    bound: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if let Expr::App { head, args, .. } = e {
+        if let Expr::Ident(name, _) = &**head {
+            if !bound.contains(name.as_str()) {
+                if let Some(arms) = groups.get(&(name.as_str(), args.len())) {
+                    for (i, arg) in args.iter().enumerate() {
+                        let Some(kind) = literal_kind(arg) else { continue };
+                        let admitted = arms.iter().any(|a| {
+                            a.params.get(i).is_some_and(|p| pattern_admits(p, kind, types))
+                        });
+                        if !admitted {
+                            let wanted: Vec<String> = arms
+                                .iter()
+                                .filter_map(|a| a.params.get(i))
+                                .map(describe_pattern)
+                                .collect();
+                            diags.push(Diagnostic::new(
+                                "type",
+                                format!(
+                                    "no arm of `{name}` takes {} here (arms take {})",
+                                    describe_literal(kind),
+                                    dedup_join(wanted)
+                                ),
+                                arg.span(),
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for child in crate::expr_children(e) {
+        literal_walk_expr(child, groups, types, bound, diags);
+    }
+}
+
+fn describe_literal(kind: LitKind) -> &'static str {
+    match kind {
+        LitKind::Int => "an int",
+        LitKind::Float => "a float",
+        LitKind::Str => "a string",
+        LitKind::List => "a list",
+        LitKind::Map => "a map",
+    }
+}
+
+fn describe_pattern(p: &Pattern) -> String {
+    match p {
+        Pattern::IntLit(n, _) => n.to_string(),
+        Pattern::StrLit(s, _) => format!("\"{s}\""),
+        Pattern::Nullary(n, _) => n.clone(),
+        Pattern::Ctor { ty, .. } => ty.clone(),
+        Pattern::Annotated { ty, .. } => ty.clone(),
+        Pattern::Var(..) | Pattern::Wildcard(..) | Pattern::Keyed { .. } => "any".to_string(),
+    }
+}
+
+fn dedup_join(mut names: Vec<String>) -> String {
+    names.sort();
+    names.dedup();
+    names.join(", ")
 }
 
 /// Values born before the block stay immutable, which is what keeps every

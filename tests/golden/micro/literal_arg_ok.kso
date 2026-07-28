@@ -1,0 +1,21 @@
+# the check that refuses a literal no arm takes stays quiet where an arm
+# does take it: a typeset admits what its members admit, a wrapper admits
+# what its parent does, and a generic arm admits anything
+type cents int
+
+type num float64 int
+
+fn either n:num
+  "num {n}"
+
+fn generic x
+  "any {x}"
+
+fn wrapped c:cents
+  "cents {c}"
+
+pub play =
+  print (either 4)
+  >> print (either 4.5)
+  >> print (generic "text")
+  >> print (wrapped (cents 5))

@@ -749,6 +749,25 @@ size <span class="o">=</span> <span class="n">9</span>
   </div>
 </div>
 
+<p>and an argument written as a literal is checked against the arms that could take it. this is the narrow, certain half of the type question—a literal's type is on the page, so no inference is needed to know that no arm could ever answer:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">literal_arg_type.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">twice</span> n:<span class="t">int</span>
+  n <span class="o">*</span> <span class="n">2</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{twice "a string"}</span>"</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play literal_arg_type.kso</div>
+    <pre><code><span class="k">error[type]</span>: no arm of `twice` takes a string here (arms take int)
+<span class="c">  --&gt; literal_arg_type.kso:4:26</span>
+   4 | pub play = print "{twice "a string"}"
+                                <span class="k">^</span></code></pre>
+  </div>
+</div>
+
+<p>note that dispatch does not widen. arithmetic joins an <code>int</code> and a <code>float64</code> happily—<code>1 + 2.5</code> is <code>3.5</code>—but an arm asking for <code>float64</code> is asking for that type, so <code>widen 3</code> is refused here rather than at runtime. a typeset admits whatever its members admit, and a wrapper admits whatever its parent does.</p>
+
 <h2>error[endpoint]—the failures compilation can't catch</h2>
 
 <p>the six families above are all settled before the program runs. some failures cannot be: whether a divisor is zero, or a lookup finds nothing, is a fact about values that only exist at runtime. kanso represents those outcomes as ordinary values—<code>err</code> for a genuine failure, <code>none</code> for a legitimate absence—and lets them flow. chapter four is the full story; the catalog entry is what happens when such a value is never handled and reaches the edge of the program. a division by zero produces an <code>err</code>, and an unhandled <code>err</code> that reaches <code>main</code> ends the program with a report of where it was born:</p>
