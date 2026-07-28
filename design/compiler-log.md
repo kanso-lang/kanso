@@ -8248,3 +8248,28 @@ with no arm, a wrapper still renders exactly as its parent does, the
 transparency the subtype gavel intends. Pinned three-engine
 (sub_render_arm: custom arm, bare wrapper, bare primitive in one
 program); browser differential 90 passed / 0 failed.
+
+## 2026-07-28 — as-patterns declined: dispatch already spells it
+
+The gap left by wrap_err — an arm cannot both destructure a reason
+and name the whole err — looked like it wanted an as-pattern. It does
+not. The case composes out of what the language already has: bind the
+whole err in one group, destructure the reason in another.
+
+    fn relabel e:err
+      wrap_err (config_bad "app.conf" (path_of e)) e
+
+    fn path_of (err d:disk_torn)
+      d.path
+
+    fn path_of _
+      "unknown"
+
+Measured end to end: the wrapped err carries the reason's data, the
+cause chain survives, each link keeps its birthplace. This is the
+language's own idiom — one name, many arms — rather than a second
+pattern syntax that would need parser, checker, and three engines.
+Not a YAGNI deferral: the spelling exists and reads better than the
+as-pattern would. One honest caveat: the extractor converts an err to
+a value, so under the license it is legal exactly when the reason
+type is foreign — which is the case wrapping is for.
