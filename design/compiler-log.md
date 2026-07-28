@@ -8771,3 +8771,29 @@ firing inside a build block, since the mutation analysis has more to
 prove there. It fires identically — the same 60,013 allocations and
 2,939,344 bytes inside and out. Whatever the nine times is made of, it
 is not lost uniqueness.
+
+## 2026-07-28 — CORRECTION: the nine times was measurement error, and 4.1 is declined
+
+The entry above reports a carried build-block tree costing about nine
+times a single build, 4.4 MB against 40 MB. The 40 was wrong. It came
+from single-shot readings taken while the fixture was being edited
+between runs, so two different programs were compared as though they
+were one. Repeating each fixture seven times gives numbers that do not
+move at all, and a different conclusion.
+
+    single build, no carry        4.4 MB
+    carried, no build block      17.6 MB
+    carried, with build block    17.6 MB
+
+The build block costs nothing. Removing it entirely leaves the peak
+unchanged to the decimal, so 4.1 — a shape-preserving rebuild scoped
+to where uniqueness is syntactic — has nothing to reclaim, and is
+declined. The four times belongs to the carry, which copies any large
+survivor whatever built it, and which already has its floor on record:
+evacuation holds the survivor twice while the garbage is still live.
+
+The lesson is the one the project already writes down about wall
+clocks and forgets about memory: a single reading is not a
+measurement. Peak resident varied two to one across runs of what I
+believed was the same binary, which is exactly how a wrong number gets
+into a merged log entry.
