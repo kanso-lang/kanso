@@ -1177,7 +1177,9 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         (Pattern::StrLit(x, _), Pattern::StrLit(y, _)) => x == y,
         (Pattern::Nullary(x, _), Pattern::Nullary(y, _)) => x == y,
         (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => x == y,
-        (Pattern::Ctor { ty: x, .. }, Pattern::Ctor { ty: y, .. }) => x == y,
+        (Pattern::Ctor { ty: x, fields: fa }, Pattern::Ctor { ty: y, fields: fb }) => {
+            x == y && fa.len() == fb.len() && same_shape(fa, fb)
+        }
         (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => {
             true
         }

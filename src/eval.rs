@@ -2020,7 +2020,17 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
         (Pattern::Keyed { .. }, _) => None,
         (Pattern::Ctor { ty, fields }, Value::ErrV(info)) if ty == "err" => {
             match fields.len() == 1 {
-                true => match_one(&fields[0], &info.reason, binds),
+                true => {
+                    let inner = match_one(&fields[0], &info.reason, binds)?;
+                    // a bare reason binder demands err-ness but names
+                    // nothing: it ranks below every named reason — leaf
+                    // and typeset alike — and just above the plain
+                    // generics
+                    Some(match &fields[0] {
+                        Pattern::Var(..) | Pattern::Wildcard(_) => 89,
+                        _ => inner,
+                    })
+                }
                 false => None,
             }
         }
