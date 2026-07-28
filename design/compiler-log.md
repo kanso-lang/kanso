@@ -8734,3 +8734,40 @@ caller's constant. Recorded rather than built.
 Also corrected while reading: section 0's receipt, which says linear.rs
 is dead analysis and push_mut is called by nothing, describes a tree
 from before the uniqueness campaign. Marked stale in place.
+
+## 2026-07-28 — two peak metrics, and which one the numbers used
+
+Measuring ledger 4.1 turned up an instrument problem worth recording
+before any conclusion drawn with it. `/usr/bin/time -l` reports both
+"peak memory footprint" and "maximum resident set size", and on
+arena-heavy workloads they disagree by a factor of forty: a
+build-block loop reads 1.6 MB of footprint against 65 MB of maximum
+resident. Footprint excludes pages the arena has rewound and handed
+back; resident counts them. For a question about peak footprint the
+resident figure is the honest one, and every measurement in this
+entry uses it.
+
+The published comparisons are unaffected, checked rather than assumed:
+kq reads 30.5 MB maximum resident against 30.0 MB footprint, jq 31.4
+against 30.7 — two percent apart, and kq wins on both. The divergence
+needs an arena that grows and rewinds hard, which a decode-and-print
+does not do and this fixture does.
+
+## 2026-07-28 — 4.1, measured before building
+
+Three results, none of them the optimization yet.
+
+A build block's tree carried across a beat costs about nine times what
+the same tree costs built once: 4.4 MB for a single 20,000-node build,
+40 MB for the same build carried through a beat loop. That gap is the
+beat and carry machinery, which is what 4.1 proposes to halve.
+
+The gap does not grow with iteration count — 10, 30 and 120 iterations
+all peak near 40 MB — so the arena reclaims correctly and this is a
+fixed working set rather than a leak.
+
+And one hypothesis died on contact: in-place push was suspected of not
+firing inside a build block, since the mutation analysis has more to
+prove there. It fires identically — the same 60,013 allocations and
+2,939,344 bytes inside and out. Whatever the nine times is made of, it
+is not lost uniqueness.
