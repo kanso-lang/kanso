@@ -1,0 +1,5 @@
+pub fn sq_sum 0 acc
+  acc
+
+pub fn sq_sum n acc
+  sq_sum (n - 1) (acc + (n * n))
