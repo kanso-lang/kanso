@@ -21,8 +21,9 @@ lesson, consistent with run/check/test/build/repl/play.
    Breaking majors fork the path — `kanso-lang/vse/v2` — so two majors
    coexist as distinct types (Go's mechanics; the visibility gavel's
    versioned type identity rests on this).
-5. **Publishing is `git tag && git push`.** No server to run, ever. A proxy
-   or mirror, if one is ever wanted, is a cache — not a redesign.
+5. **Publishing is `git tag && git push`.** No server to run to publish,
+   ever. A registry, when one exists, is a source: a verified mirror and
+   metadata index — a cache, not a redesign (see Sources).
 6. **The cache is content-addressed and boring.** `~/.hako/` keyed by
    path@sha; fetches are shallow; offline builds work from cache.
 
@@ -63,6 +64,46 @@ made it unnecessary; search is GitHub's search box.
 Private registries (git auth already works), vendoring (the cache is
 enough), post-install scripts (never — a hako is inert source), yanking
 (tags are immutable history; publish a fix).
+
+## Sources (drafted 2026-07-27, Clay-directed)
+
+A hako's *name* is permanent identity — `kanso-lang/vse`, the GitHub
+path, versioned by tags, majors as path forks. A *source* is a strategy
+for turning name + version-request into verified content, and the two
+never mix: sources are interchangeable fetchers, and the lockfile's
+`path@sha` is what makes any of them trustworthy. Rule 5's framing
+("a server is a cache, not a redesign") becomes the definition.
+
+**`github_repo` — the v1 source, and the default for every name.**
+It knows the naming conventions:
+
+- *Releases* are tags `vX.Y.Z`; discovery is `git ls-remote --tags`
+  (or the API where it is cheaper); fetch is a shallow clone or
+  tarball at the tag, verified against the locked sha.
+- *Majors* are path forks (`/v2`) — the source resolves the path
+  suffix to the matching tag series.
+- *Branches* are interim pins, never releases: `kanso install` can
+  lock `branch@sha` when told to, `kanso list` marks the pin as
+  interim, and `kanso update` refuses to walk an interim pin forward —
+  it walks tags. (The dev-sha-pin discipline made structural: you can
+  build against a collaborator's unreleased branch, and the lock
+  shames the pin until a tag replaces it.)
+
+**The true server, later, is a source with two jobs and no authority.**
+A registry is (1) a verified mirror — same names, same shas, faster
+and shallower than git — and (2) a metadata index: tag listings,
+checksums, eventually signatures, without cloning anything. Fetch
+preference becomes registry-then-github; a registry outage degrades to
+git, byte-identically, because the lock's sha decides what content
+*is*. Names never move, so standing one up migrates nobody.
+
+**Other git hosts** are the same shape with a different remote —
+a `git_repo` source behind the same conventions — and can wait until
+someone actually publishes a hako off GitHub.
+
+The foreign-universe bit the err-arm rule needs stays crisp under all
+of this: a module is foreign iff it entered the build through *any
+source* (`std/` included); relative resolution is the one local path.
 
 ## Open questions for the observation clause
 
