@@ -101,6 +101,8 @@ jobs:
       - run: python3 scripts/welfare.py
       - name: prose numbers match the golden they quote
         run: python3 scripts/golden_prose.py
+      - name: one sitting, published once
+        run: python3 scripts/cross_surface_numbers.py
 
   grammar:
     name: editor grammar (types, strings and comments still painted)
