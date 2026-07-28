@@ -8305,3 +8305,28 @@ front end runs kq's check in 5.9 ms and the json decoder's in 5.2 ms,
 faster than the 6.6/6.1 the compiler page publishes, so the session's
 compiler additions (the trmc pass, the recursive overlap check, the
 wider render gate) cost nothing measurable.
+
+## 2026-07-28 — the list growth policy is measured-optimal (built, measured, declined)
+
+The decode profile says the workload is small collections: 2,752
+arrays holding 9,732 elements and 2,761 objects holding 8,361 pairs,
+so three and a half elements per array and three pairs per object,
+against a buffer policy that starts at four slots and doubles. That
+looked like over-allocation worth testing — a first buffer of eight
+where four would hold most collections whole.
+
+Two experiments, both negative. Skipping the doubling when the list
+is empty changed nothing at all: an empty literal carries a one-slot
+buffer that absorbs the first push, so the growth path is never
+entered at length zero. Skipping it at length one — the real first
+growth — traded three hundred allocations for 2.9 MB more bytes and
+2.9 MB more buffer storage, with shelf reuse climbing from 334,950 to
+469,200: the smaller first buffer simply moves the same collections
+through an extra growth step, and every step is an allocation plus a
+copy plus a shelf entry. The doubling earns its headroom.
+
+Declined, and the policy is now measured rather than assumed. The
+decode path stands at 2.79 allocations per document node with the
+shelf already recycling 2,233 buffers per decode; the remaining
+weight is the document itself, which is the same wall the evacuation
+law hit from the other side.
