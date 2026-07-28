@@ -8949,3 +8949,44 @@ of the three are closed; the third, a field that no record declares,
 needs per-expression record types that the set-based inference does not
 carry — the sets say REC, not which one. Recorded rather than
 attempted.
+
+## 2026-07-28 — the overflow-check ceiling, and why partial elimination is not worth building
+
+The numeric parity finding left one lever: kanso matches Rust exactly
+when both check overflow, so the only way further is to stop checking
+where it is provably safe. The ceiling was measured before any analysis
+was designed, by stripping the checks out of the emitted IR by hand and
+rebuilding against the same runtime object — same answer, so the strip
+is faithful.
+
+Stripping all three checks takes the loop from 3.51 ms to 2.32 ms, a
+third of the running time, and lands it under Rust's own wrapping
+arithmetic. That is a real prize. What kills it is how the prize is
+distributed.
+
+    all checks on                 3.51 ms
+    counter (n - 1) unchecked     3.43 ms     2%
+    multiply (n * n) unchecked    3.21 ms     9%
+    accumulate (acc + …) unchecked 3.01 ms    14%
+    all three unchecked           2.32 ms    34%
+
+The parts sum to twenty-five and the whole is thirty-four, so the
+checks are not three independent costs. Each one is a branch, and the
+branches are what stop llvm doing anything else with the loop; remove
+two and the third still holds the door. Partial elimination is worth
+close to nothing.
+
+That decides the design question. The tractable analysis — a range on
+a loop counter, where the bound is a literal at the call — buys the
+two percent line. The thirty-four requires discharging the
+accumulator's check too, and an accumulator's bound is inductive: it
+needs to know what the fold reaches over the whole loop, which is the
+AARA-shaped question section 5 of the ledger already names as one of
+the three places undecidability actually bites.
+
+So: not built, and not because it is hard in the abstract. Building
+the part that is easy would buy two percent, and the part that pays
+is the part the ledger already says has no general answer. If it is
+ever wanted, the honest route is a language surface — an opt-in
+wrapping arithmetic the author asks for — rather than an analysis
+that promises to find it.
