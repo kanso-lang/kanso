@@ -24,9 +24,9 @@ type Group = (String, usize);
 type Pkgs = u32;
 
 pub struct Provenance {
-    /// per group: packages whose errs a call to it may return
-    returns: HashMap<Group, Pkgs>,
-    /// per group, per parameter: packages whose errs may arrive there
+    /// per group, per parameter: packages whose errs may arrive there. The
+    /// per-group return sets the fixpoint computes on the way are what feed
+    /// these, and are not wanted afterwards.
     params: HashMap<Group, Vec<Pkgs>>,
     table: Vec<String>,
 }
@@ -273,7 +273,7 @@ pub fn analyze(program: &Program) -> Provenance {
             walk.absorb(group, result);
         }
     }
-    Provenance { returns: walk.returns, params: walk.params, table }
+    Provenance { params: walk.params, table }
 }
 
 /// The rule: a group that may receive an err raised in its own package must
