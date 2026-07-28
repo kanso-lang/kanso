@@ -9382,3 +9382,45 @@ of its seven terms can see string building at all. The number is right
 that nothing it measures changed and wrong that nothing happened, which
 is a claim about the weights and belongs in that argument rather than
 in this one.
+
+## 2026-07-28 — sorting four thousand numbers wanted 4.4 GB
+
+Clay asked for the welfare benchmark to be a broad basket rather than
+one more good, the way an inflation index samples a basket. Composing
+one found this in the first run, which is the argument for the basket
+in one sentence.
+
+`list/sort` was an insertion sort, and each insertion rebuilt the run:
+
+    fn place run x
+      under = to_list (select run (y -> y < x))
+      join_parts under x (reject run (y -> y < x))
+
+Two full walks of the accumulated run and two fresh lists, per element.
+Over n elements that is quadratic in both time and the memory it holds
+at once, because the intermediates pile up before anything rewinds:
+
+    n        allocations              arena peak
+    500      1,011,342  ->   33,402   67 MB   ->  2.1 MB
+    1,000    4,023,330  ->   71,816   276 MB  ->  5.2 MB
+    2,000   16,047,330  ->  153,642   1.07 GB ->  9.4 MB
+    4,000   64,113,290  ->  327,296   4.43 GB -> 19.9 MB
+
+Sixteen thousand allocations per element at four thousand, and four
+gigabytes to sort a list that holds thirty-two kilobytes of integers.
+Eight thousand elements did not finish at all before and now does.
+
+It merges halves instead. The shape is dispatch rather than nested
+conditionals — `advance true` and `advance false` take the next element
+from the side that has it — which is how the rest of this library reads.
+`place` and its quadratic are gone.
+
+Every vein is byte-identical, nineteen suites, browser differential 98
+and zero. `sort_shape.kso` pins the allocation count so an insertion
+sort cannot come back quietly.
+
+Welfare does not move, and that is the second half of the point. Its
+seven terms read three benchmark programs and a compile, none of which
+sorts anything, so a two-hundred-fold improvement is invisible to the
+number that is supposed to say whether the project came out ahead. The
+basket is the fix and it is being built.

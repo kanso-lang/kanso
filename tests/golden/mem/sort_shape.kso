@@ -1,0 +1,12 @@
+# merging halves touches each element once per level; placing each element
+# into a sorted run walked the run twice and built two lists every time. the
+# alloc count pins which of those the sort is doing.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play = print "sorted {list/sum (list/sort (build 500 []))}"
