@@ -8195,3 +8195,35 @@ did not parse. `_:type` now parses as an ascription that binds
 nothing, under the same tightness rule as `n:int` (`_ :dog` is a
 formatting error), and the unused check skips the name it cannot
 bind. One micro pin, three engines, and ch03 gains the sentence.
+
+## 2026-07-28 — wrap_err ships, and the interim call reverses on contact
+
+The gaveled promise was that a re-raise never discards the original.
+The interim call was Ruby's implicit chaining — an err minted inside
+an err-matched arm silently carries the matched err. Implementation
+contact reversed it, on two grounds. Cost: implicit needs the whole
+matched err available where only its destructured reason is bound
+(as-patterns kanso does not have), then that value threaded through
+dispatch in three engines and past the thunk layer. The factory is
+one builtin routed through the existing bridge. Semantics: implicit
+chaining attaches a cause to every err minted in a handler, including
+the ones an author means as fresh and unrelated — the surprise Ruby
+is known for — and Clay's own first instinct in the dialog was
+"maybe what's wanted is a factory method like wrap_err".
+
+So: `wrap_err reason original` mints an err with the original as its
+cause. It is the one hole in err's infectiousness — the second
+argument IS an err and must arrive as a value — implemented as an
+exemption ahead of the propagation gate in call_builtin, which the
+wasm bridge shares for free; the compiled-wasm path stamps the site's
+origin the way the other err-bearing builtins do, since no frame
+exists there. ErrInfo and KErrBox gained a cause link; the endpoint
+report renders `caused by:` and recurses, each link keeping its own
+birthplace. Byte-identical across all three engines (browser
+differential 89/0), runtime-corpus pinned, appendix B documents it
+with a verified sample.
+
+Left open, and small: an arm cannot both destructure a reason and
+name the whole err (`(err d:disk_torn)` binds d, not e), so wrapping
+with data from the reason wants an as-pattern. The `e:err` shape
+covers the common case and nothing in the tree needs the other yet.

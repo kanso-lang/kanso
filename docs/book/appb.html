@@ -59,6 +59,7 @@ extra_css: /book/book.css
 <a href="#b-length"><code>length</code></a>
 <a href="#b-vocabulary"><code>list/…</code></a>
 <a href="#b-print"><code>print</code></a>
+<a href="#b-wrap_err"><code>wrap_err</code></a>
 <a href="#b-push"><code>push</code></a>
 <a href="#b-put"><code>put</code></a>
 <a href="#b-random"><code>math/random</code></a>
@@ -386,6 +387,34 @@ zero non-positive</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run argv.kso</div>
     <pre><code>&lt;none&gt;</code></pre>
+  </div>
+</div>
+
+<h3 id="b-wrap_err"><code>wrap_err</code></h3>
+<p class="builtin-sig"><code>wrap_err reason err → err</code></p>
+<p>a new <code>err</code> carrying your reason, with the one it wraps kept as its <em>cause</em>. this is the only place an <code>err</code> is an ordinary argument instead of something that propagates: everywhere else, handing an <code>err</code> to anything yields that <code>err</code> unchanged, which is why <code>err e</code> cannot wrap and this function exists. the endpoint report prints the chain, each link keeping its own birthplace, so re-raising under a name of your own never loses where the trouble started:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">wrap_err.kso</div>
+  <pre><code><span class="k">type</span> <span class="t">config_bad</span>
+  file
+
+<span class="k">type</span> <span class="t">disk_torn</span>
+  path
+
+<span class="k">fn</span> <span class="f">low_read</span> <span class="o">_</span>
+  <span class="k">err</span> (<span class="t">disk_torn</span> <span class="s">"/etc/x"</span>)
+
+<span class="k">fn</span> <span class="f">relabel</span> e:<span class="t">err</span>
+  <span class="f">wrap_err</span> (<span class="t">config_bad</span> <span class="s">"app.conf"</span>) e
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">relabel</span> (<span class="f">low_read</span> <span class="n">0</span>)</code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso play wrap_err.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: config_bad "app.conf"
+  born in relabel at wrap_err.kso:11
+  caused by: disk_torn "/etc/x"
+  born in low_read at wrap_err.kso:8</code></pre>
   </div>
 </div>
 

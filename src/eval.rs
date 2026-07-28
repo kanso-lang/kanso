@@ -71,6 +71,9 @@ pub struct ErrInfo {
     pub reason: Value,
     pub origin: Option<Rc<str>>,
     pub hops: Vec<Rc<str>>,
+    /// The err this one was wrapped around, kept so a re-raise never
+    /// discards what it was told (`wrap_err`).
+    pub cause: Option<Rc<ErrInfo>>,
 }
 
 /// The evaluation frame an expression runs in, as an err-origin prefix
@@ -86,7 +89,7 @@ pub fn origin_at(frame: &Frame, span: Span) -> Option<Rc<str>> {
 }
 
 pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
-    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new() }))
+    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new(), cause: None }))
 }
 
 /// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
@@ -111,6 +114,7 @@ pub fn hop(failure: Value, name: &str) -> Value {
                 reason: info.reason.clone(),
                 origin: info.origin.clone(),
                 hops,
+                cause: info.cause.clone(),
             }))
         }
         other => other,
@@ -131,6 +135,12 @@ pub fn trace_lines(info: &ErrInfo) -> String {
         out.push_str("  passed through ");
         out.push_str(&path.join(" \u{2190} "));
         out.push('\n');
+    }
+    if let Some(cause) = &info.cause {
+        out.push_str("  caused by: ");
+        out.push_str(&render(&cause.reason, true));
+        out.push('\n');
+        out.push_str(&trace_lines(cause));
     }
     out
 }
@@ -1327,6 +1337,26 @@ impl<'a> Interp<'a> {
         let args: Vec<Value> = args.into_iter().map(sub_base).collect();
         if name == "if" {
             return self.builtin_if(args, span);
+        }
+        // the one hole in err's infectiousness: wrap_err's second argument
+        // IS the err being wrapped, so it arrives as a value
+        if name == "wrap_err" {
+            let [reason, original] = arity(args, name, span)?;
+            if is_failure(&reason) {
+                return Ok(reason);
+            }
+            let Value::ErrV(cause) = original else {
+                return Err(RuntimeError {
+                    message: "wrap_err takes a reason and the err it wraps".to_string(),
+                    span,
+                });
+            };
+            return Ok(Value::ErrV(Rc::new(ErrInfo {
+                reason,
+                origin: origin_at(frame, span),
+                hops: Vec::new(),
+                cause: Some(cause),
+            })));
         }
         if let Some(bad) = args.iter().find(|a| is_failure(a)) {
             return Ok(bad.clone());

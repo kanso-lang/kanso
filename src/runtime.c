@@ -183,7 +183,8 @@ struct KDesc { long long dtag; KValue x; KValue y; };
    executor-born errs) plus one hop per dispatcher failure pass-through,
    newest first. The happy path never allocates or touches any of this. */
 typedef struct KHop { const char* fn; struct KHop* prev; } KHop;
-typedef struct { KValue reason; const char* origin; KHop* hops; } KErrBox;
+typedef struct KErrBox KErrBox;
+struct KErrBox { KValue reason; const char* origin; KHop* hops; KErrBox* cause; };
 
 static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
@@ -1133,6 +1134,21 @@ KValue k_err(KValue reason, const char* origin) {
     box->reason = reason;
     box->origin = origin;
     box->hops = NULL;
+    box->cause = NULL;
+    KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
+}
+
+/* The one hole in err's infectiousness: the wrapped err arrives as a
+   value instead of propagating, and rides along as the new err's cause
+   so a re-raise never discards what it was told. */
+KValue k_b_wrap_err(KValue reason, KValue original, const char* origin) {
+    if (!k_not_failure(reason)) return reason;
+    if (original.tag != K_ERR) k_die("wrap_err takes a reason and the err it wraps");
+    KErrBox* box = k_alloc(sizeof(KErrBox));
+    box->reason = reason;
+    box->origin = origin;
+    box->hops = NULL;
+    box->cause = k_err_box(original);
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -1147,6 +1163,7 @@ KValue k_err_hop(KValue v, const char* fn) {
     box->reason = old->reason;
     box->origin = old->origin;
     box->hops = hop;
+    box->cause = old->cause;
     KValue out; out.tag = K_ERR; out.payload = k_ptr(box); return out;
 }
 
@@ -4989,11 +5006,7 @@ KValue k_b_to_float(KValue v, const char* origin) {
 
 extern KValue k_user_main(void);
 
-static void k_report_err(KValue e, const char* reached) {
-    KValue r = k_render(k_err_inner(e), 1);
-    fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: %s\n",
-            k_c_err(), k_c_off(), reached, k_as_str(r)->data);
-    KErrBox* box = k_err_box(e);
+static void k_report_trace(KErrBox* box) {
     if (box->origin) {
         fprintf(stderr, "%s  born in %s%s\n", k_c_dim(), box->origin, k_c_off());
     }
@@ -5004,6 +5017,18 @@ static void k_report_err(KValue e, const char* reached) {
         }
         fprintf(stderr, "%s\n", k_c_off());
     }
+    if (box->cause) {
+        KValue cr = k_render(box->cause->reason, 1);
+        fprintf(stderr, "%s  caused by: %s%s\n", k_c_dim(), k_as_str(cr)->data, k_c_off());
+        k_report_trace(box->cause);
+    }
+}
+
+static void k_report_err(KValue e, const char* reached) {
+    KValue r = k_render(k_err_inner(e), 1);
+    fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: %s\n",
+            k_c_err(), k_c_off(), reached, k_as_str(r)->data);
+    k_report_trace(k_err_box(e));
 }
 
 void k_caf_init(void);
