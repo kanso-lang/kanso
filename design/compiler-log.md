@@ -8248,3 +8248,60 @@ with no arm, a wrapper still renders exactly as its parent does, the
 transparency the subtype gavel intends. Pinned three-engine
 (sub_render_arm: custom arm, bare wrapper, bare primitive in one
 program); browser differential 90 passed / 0 failed.
+
+## 2026-07-28 — as-patterns declined: dispatch already spells it
+
+The gap left by wrap_err — an arm cannot both destructure a reason
+and name the whole err — looked like it wanted an as-pattern. It does
+not. The case composes out of what the language already has: bind the
+whole err in one group, destructure the reason in another.
+
+    fn relabel e:err
+      wrap_err (config_bad "app.conf" (path_of e)) e
+
+    fn path_of (err d:disk_torn)
+      d.path
+
+    fn path_of _
+      "unknown"
+
+Measured end to end: the wrapped err carries the reason's data, the
+cause chain survives, each link keeps its birthplace. This is the
+language's own idiom — one name, many arms — rather than a second
+pattern syntax that would need parser, checker, and three engines.
+Not a YAGNI deferral: the spelling exists and reads better than the
+as-pattern would. One honest caveat: the extractor converts an err to
+a value, so under the license it is legal exactly when the reason
+type is foreign — which is the case wrapping is for.
+
+## 2026-07-28 — evacuation cannot free a large survivor (the law, measured twice)
+
+Streaming changed what kq's peak is made of, so the declined
+decode-submodule experiment was re-run against it rather than trusted.
+Rebased onto streaming main it reads 32.7 MB against main's 30.0 —
+still worse, and now the counters say why: cohort_kept=1, the
+survivor-ratio guard refusing the dance.
+
+Whether the guard was right is a measurement, not an opinion, so the
+cap was lifted and the evacuation forced: 58.7 MB, nearly double.
+The reason is structural and worth stating as a law. Evacuation frees
+a region by copying what survives out of it, so it transiently holds
+the survivor twice while the garbage is still live — the peak during
+the dance is (region + survivor), and the peak is what a scoreboard
+measures. Freeing 17 MB of decode garbage by copying a 13 MB document
+raises the high-water mark instead of lowering it. **A
+copy-out-and-rewind scheme can only win where the survivor is small
+against the garbage.** kq's decode is the opposite shape by
+construction: the document is the point.
+
+So the boundary/cohort family is closed for kq, for the third and
+last time, with the general reason on record rather than another
+per-experiment verdict. What remains of kq's footprint is the decoded
+document itself; the levers that could still move it are a lighter
+document representation or decoding lazily against a retained input,
+neither of which is a memory-reclamation scheme. Also re-measured
+this sitting, per the every-change-carries-a-perf-check rule: the
+front end runs kq's check in 5.9 ms and the json decoder's in 5.2 ms,
+faster than the 6.6/6.1 the compiler page publishes, so the session's
+compiler additions (the trmc pass, the recursive overlap check, the
+wider render gate) cost nothing measurable.
