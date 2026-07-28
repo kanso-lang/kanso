@@ -770,6 +770,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_sub_parents(program, &mut diags);
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
+    check_call_arities(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }
@@ -777,6 +778,90 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
         check_main(program, &mut diags);
     }
     diags
+}
+
+/// A call's argument count against the arms that could answer it. The
+/// per-file pass sees only that file's declarations, so a wrong-arity call
+/// to an *imported* group reached codegen unchecked and surfaced as an
+/// undefined symbol from the assembler — compiler internals, where a
+/// diagnostic belongs. This runs on the merged program, where the
+/// dependency's arms are in scope.
+fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let mut arities: HashMap<&str, Vec<usize>> = HashMap::new();
+    for decl in &program.fns {
+        let slot = arities.entry(decl.name.as_str()).or_default();
+        if !slot.contains(&decl.params.len()) {
+            slot.push(decl.params.len());
+        }
+    }
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        let bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        for stmt in &decl.body {
+            arity_walk_stmt(stmt, &arities, &bound, diags);
+        }
+    }
+}
+
+fn param_names(p: &Pattern) -> Vec<&str> {
+    match p {
+        Pattern::Var(n, _) => vec![n.as_str()],
+        Pattern::Annotated { name, .. } => vec![name.as_str()],
+        Pattern::Ctor { fields, .. } => fields.iter().flat_map(param_names).collect(),
+        Pattern::Keyed { entries, .. } => entries.iter().map(|e| e.bind_name.as_str()).collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn arity_walk_stmt(
+    stmt: &Stmt,
+    arities: &HashMap<&str, Vec<usize>>,
+    bound: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    match stmt {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+            arity_walk_expr(expr, arities, bound, diags)
+        }
+    }
+}
+
+fn arity_walk_expr(
+    e: &Expr,
+    arities: &HashMap<&str, Vec<usize>>,
+    bound: &HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if let Expr::App { head, args, .. } = e {
+        if let Expr::Ident(name, span) = &**head {
+            // only qualified names: a bare name may be a local holding a
+            // function value, and the per-file pass already covers the rest
+            let known = arities.get(name.as_str());
+            if name.contains('/') && !bound.contains(name.as_str()) {
+                if let Some(known) = known {
+                    if !known.contains(&args.len()) && !known.contains(&0) {
+                        let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
+                        takes.sort();
+                        diags.push(Diagnostic::new(
+                            "arity",
+                            format!(
+                                "no {}-argument arm of `{}` (arms take {})",
+                                args.len(),
+                                name,
+                                takes.join(", ")
+                            ),
+                            *span,
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    for child in crate::expr_children(e) {
+        arity_walk_expr(child, arities, bound, diags);
+    }
 }
 
 /// Values born before the block stay immutable, which is what keeps every

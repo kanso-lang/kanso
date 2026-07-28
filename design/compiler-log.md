@@ -8829,3 +8829,32 @@ whoever reopens it. One adjacent thing is worth separating: vse's
 electorate is a matrix stored by row and read by column, which is a
 transpose, not a field-touch — and the ledger's own warning that the
 transpose fights deforestation is about exactly that.
+
+## 2026-07-28 — a wrong-arity call to an imported group reached the assembler
+
+Sizing e-graph fusion wanted a chain split across functions, and the
+fixture would not build: `list/range 1 5` — range takes one argument —
+produced `use of undefined value '@d_list/range_2'` from the LLVM
+assembler. Compiler internals, shown to a user, where a diagnostic
+belongs.
+
+The cause is a scope gap rather than a missing rule. The arity check
+runs per file, over that file's own declarations, so it catches
+`twice 1 2` and cannot see `list/range` at all; and the merged pass,
+the only one that has the dependency's arms in scope, never checked
+arity. Between them a wrong-arity call to any imported group passed
+check, passed the interpreter with a clean runtime error, and reached
+codegen on the native path to be caught by the assembler in its own
+vocabulary.
+
+check_call_arities now runs on the merged program, over qualified
+names only — a bare name may be a local holding a function value, and
+the per-file pass already covers the rest. The engines agree again:
+the same error[arity], at check time and at run time, naming the count
+it got and the counts the group takes. Pinned in the error corpus and
+documented in appendix A beside the local-arity entry it belongs
+next to.
+
+Worth noting which harness caught the documentation slip: the panel
+checker taught about `kanso play` titles this morning refused an
+abbreviated output panel that nothing would have compared a day ago.
