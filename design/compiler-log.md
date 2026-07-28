@@ -9204,3 +9204,39 @@ declination this measurement narrows rather than overturns, since it
 now names the one shape where the flat array loses outright. That is a
 memory-model question and it is recorded as one, not queued as an
 optimization.
+
+## 2026-07-28 — the capacity field leaves the map header
+
+Clay read the chart and said the obvious thing: allocated bytes went
+up, and nothing on that page got better to pay for it. Both halves
+were true. The read-write fix carried a capacity field in `KMap` —
+eight bytes on a header every map gets — and the decode board does not
+write maps, so it paid and gained nothing.
+
+The size of it: decode allocates 828,000 map headers across a hundred
+and fifty runs and builds zero views. Every one of those headers
+carried a field describing a buffer that was never made. Six and a
+half megabytes for a read that does not happen.
+
+The capacity now lives with the buffer it describes, one slot in front
+of the view, so a map nobody reads pays nothing. Decode returns to
+334,437,312 bytes, where it sat before the map work started, and
+`sh_map` on fused_tally goes back to 16,320 from 20,400 — the header
+is thirty-two bytes again. `readwrite_map` reads 400 more in
+`alloc_bytes`, which is the slot itself on a fixture that builds
+views, and is the whole of what this costs.
+
+An intermediate version derived the capacity from the length by
+rounding every view up to a power of two, storing nothing anywhere.
+Measured and dropped: fused_tally rose twenty-seven percent, because
+the slack a power-of-two view carries is worth more than the field it
+saves on maps that do get read.
+
+A correction to the entry two above. It reported decode wall time at
+0.789 ms against 0.802 and called the one and a half percent the eight
+bytes showing up. Re-measured interleaved across three builds — before
+the map work, after it, and after this — they sit at 0.801, 0.793 and
+0.798, in no order at all. The difference was machine load. The
+allocation counters are deterministic and were right; the wall-clock
+figure beside them was noise handed a causal-sounding sentence. That
+is the same error as the single reading it was written to correct.
