@@ -15,7 +15,8 @@ fn wrapped c:cents
   "cents {c}"
 
 pub play =
-  print (either 4)
+  print "len {length [1 2 3]}"
+  >> print (either 4)
   >> print (either 4.5)
   >> print (generic "text")
   >> print (wrapped (cents 5))

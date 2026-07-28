@@ -8922,3 +8922,30 @@ the error corpus, and a micro program where a typeset, a wrapper and a
 generic arm each admit their literal. Appendix A documents both the
 refusal and the widening asymmetry, since the second is the surprising
 half.
+
+## 2026-07-28 — check refuses a literal no builtin would take
+
+The second of Clay's three gaps. Each builtin's demand was established
+by handing it the wrong thing and reading what it said — `length` takes
+a list, string or map; `entries` a map; `bytes`, `char_code` and
+`chars` a string; `sqrt` and `round` a number; `sleep`, `random` and
+`from_code` an int — rather than by reading the implementation and
+believing it. Absent entries constrain nothing.
+
+A std module's function that is a rename over a builtin gets resolved
+first, reusing the alias map the wrapper inliner already computes, so
+`text/bytes 5` is refused and reported against `bytes`, the name whose
+contract will actually be met.
+
+Regenerating the book found the consequence: appendix A's example of
+error[runtime] *was* `length 5`, and that program no longer reaches
+runtime. The entry now shows a value computed one way and used another
+— `length (measured 0)` — which is the case a checker cannot see, and
+the prose says so. The kind did not lose its meaning; it lost the half
+that moved to check time.
+
+Zero findings across std, kq, vse, examples and every bench. Two gaps
+of the three are closed; the third, a field that no record declares,
+needs per-expression record types that the set-based inference does not
+carry — the sets say REC, not which one. Recorded rather than
+attempted.
