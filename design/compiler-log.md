@@ -8990,3 +8990,35 @@ is the part the ledger already says has no general answer. If it is
 ever wanted, the honest route is a language surface — an opt-in
 wrapping arithmetic the author asks for — rather than an analysis
 that promises to find it.
+
+## 2026-07-28 — 4.4 is blocked by the block-born rule, not by the theorem
+
+The last of section 4. Union-find is the sharpest test of it, because
+path compression is precisely aliased mutation of a node reached by
+traversal, so it either works or names exactly what does not.
+
+It does not, and the boundary is razor-sharp. A `set` may write only a
+name bound **directly** to a construction in the block. Four shapes,
+all rejected with error[build]: a node taken from a list built in the
+same block, a node reached by following a field, a plain alias
+`c = a`, and a node chosen by `if`. Every algorithm the entry names —
+union-find, a compile-time e-graph, NbE, unification — reaches its
+nodes one of those four ways, so none of them can be written.
+
+What build blocks do support is the case the book teaches, and it is a
+real case: wiring a cycle among a fixed set of directly-named
+constructions.
+
+The rule is conservative rather than necessary, which is the useful
+part of the finding. The theorem wants the cohort closed — everything
+born in the block, nothing escaping — and a node reached by indexing a
+block-born list is inside that cohort by construction. Making
+block-born a dataflow property, flowing through aliases, conditionals,
+indexes of block-born collections and fields of block-born nodes,
+would admit these algorithms without touching the theorem. That is
+scoped compiler work rather than a research question, and it is what
+4.4 waits on.
+
+With this, all five of section 4 are answered: three declined by
+measurement, one already harvested, and one blocked on a rule that can
+be widened. None of them was refuted by argument.
