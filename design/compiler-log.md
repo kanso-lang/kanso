@@ -8622,3 +8622,32 @@ against the advisory, which lands on the arm that matched the err and
 returns the int, and stays silent on the function that only ever sees
 the reason record. Recorded as the canonical statement at the head of
 the gavel entry, since this is the sentence the book will teach.
+
+## 2026-07-28 — provenance, and the hole in the proxy
+
+Clay, on the restated rule: the criterion is where the err stack
+originated, not which package the receiving function is in — and he
+says plainly he cannot see the simplest way to give a compiler that.
+The advisory shipped here answers a nearby question instead: it
+compares the arm's qualifier with the reason type's. Two measurements
+say how far apart those are.
+
+The proxy has a reachable hole. User code raises
+`err (json/parse_failure 1 "mine")`, matches it with
+`(err _:json/parse_failure)`, and returns a string. It runs, and the
+advisory is silent, because the qualifiers differ and a foreign
+reason reads as licensed. By provenance the err was raised in the
+user's own package and must not be rescued there.
+
+The hole is reachable because a second doctrine line is unenforced:
+modules-plan says construction is module-private and importers build
+through pub factories, and in fact user code builds
+`json/parse_failure 99 "I made this"` and prints it. Enforcing that
+line would close both — only json can build a json reason, so a
+json-reasoned err can only have been raised by json, and the reason
+type stops being a proxy and becomes a witness. The alternatives are
+a whole-program dataflow over err provenance or a runtime check
+against the origin every err already carries.
+
+Recorded rather than built: enforcing construction is a language rule
+with a migration behind it, and it is Clay's call.
