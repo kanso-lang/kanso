@@ -8136,3 +8136,28 @@ fetch preference, degrading to git byte-identically because the sha
 decides what content is. Names never move, so the server migrates
 nobody. The err-arm rule's foreign bit survives unchanged: foreign
 iff entered through any source, local iff relative.
+
+## 2026-07-28 — the err-arm campaign opens: what exists, what's missing
+
+Clay gaveled the start. Probing before building found the foundation
+already alive and engine-identical: wrapper subtypes parse in the
+space form (`type dog animal` — one parent is a subtype, several are
+a typeset), construction wraps the parent, subsumption admits a child
+to the parent's arm, the child's arm outranks it, and — the big one —
+reason-type-ascribed err arms (`(err w:parse_woe)`) already trap and
+read fields on both engines. Two micro pins land here
+(subtype_chain, err_trap_leaf), three-engine verified.
+
+Missing, in build order: (1) the err-pattern overlap check compares
+only the outer ctor, so a leaf arm and a typeset-root arm are refused
+as "overlapping" — same_shape must recurse into fields, and the
+score must separate inner rank from inner depth (today a bare
+`(err reason)` arm would tie a typed one); (2) the two-condition
+license — nothing yet stops a module converting its own err, and
+std's failure_position projections do exactly that (they migrate to
+direct field reads under the structure-access amendment); (3)
+implicit auto-cause chains; (4) surface gaps — `e:err` ascription
+does not match, `_:type` does not parse, a wrapper renders as its
+parent. Interim calls, recorded: the space-form declaration is
+canonical (the colon form never existed), implicit auto-cause over a
+wrap_err factory, named-access-only foreign destructuring.

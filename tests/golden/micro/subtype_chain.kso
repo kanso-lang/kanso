@@ -1,0 +1,22 @@
+# a wrapper subtype: construction wraps the parent, subsumption admits the
+# child to the parent's arm, and the child's arm outranks it
+type animal
+  name
+
+type dog animal
+
+fn label x:animal
+  "an animal: {x}"
+
+fn speak d:dog
+  "woof: {d}"
+
+fn speak x:animal
+  "generic: {x}"
+
+pub play =
+  d = dog (animal "rex")
+  a = animal "generic"
+  print (speak d)
+  >> print (speak a)
+  >> print (label d)
