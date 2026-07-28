@@ -152,12 +152,28 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
   compilation. What remains, if the price is ever judged too high: a range
   analysis that discharges the check where bounds are provable, which
   needs specialization to see a caller's constant.
-- **Auto-SoA via whole-program field-touch** — "sell layout to the compiler"
-  made literal (values have no address-identity contract; the compiler sees
-  every access site — Rust can't, `&T` bakes in identity + separate compilation
-  hides sites). Only profitable where deforestation is already defeated
-  (multi-pass/random-access over a materialized collection). Gate as a cost-model
-  term co-selected against fusion; validate on a *numeric* workload, not JSON.
+- **Auto-SoA via whole-program field-touch — DECLINED for want of a
+  customer (measured 2026-07-28), with the prize recorded so it can be
+  reopened.** The prize is real: 200,000 three-field records traversed
+  twenty times touching one field run 50.3 ms and 23.8 MB as an
+  array-of-records, against 27.7 ms and 19.9 MB as three parallel arrays
+  holding the same data — **1.82x on time, 1.20x on peak**. (The first
+  version of this measurement was unfair, storing one field in the SoA
+  case against three in the AoS case; the numbers above are the corrected
+  run.)
+  What is missing is a workload with that shape. The gate the entry sets
+  — multi-pass or random access over a materialized collection — is met
+  only by vse, which traverses its electorate six times, and vse holds no
+  records at all: a voter is a list of scores read as `v[c]`, so a
+  field-touch analysis has nothing to see. Every workload that does hold
+  records — the json decoder, the encoder, kq — is single-pass, and
+  fusion already owns that case. Reopen when a record-shaped, multi-pass
+  workload exists; the transform's value is not in doubt, only its
+  customer.
+  Adjacent and distinct: vse's electorate is a matrix stored row-wise and
+  read column-wise, which is a transpose opportunity rather than a
+  field-touch one, and the entry's own note that the transpose fights
+  deforestation applies to it.
 - **Build-blocks as the sanctioned host for in-place graph algorithms** —
   union-find, a compile-time e-graph, NbE, unification — mutable aliased
   pointer-identity mutation with no lifetimes/rank-2, via the syntactic
