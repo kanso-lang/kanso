@@ -67,6 +67,39 @@ the arm's package against the type's *origin* package — where the err
 stack leafs out. Everyone but the origin may trap it, including the
 re-exporter.
 
+**NEW, found in the build (2026-07-28) — a package cannot inspect its
+own errs, at all.** The license forbids own-universe trapping, and
+there is no non-trapping alternative: err equality is infectious
+(`a == b` on errs propagates the err), interpolation propagates, so
+matching is the only way to see a reason. Consequences measured
+against the current tree:
+
+- std/json's `failure_position` and `failure_reason` become illegal
+  (std trapping std's own `parse_failure`). They are also unnecessary
+  under the structure-access amendment — foreign clients trap and read
+  fields directly — so they migrate away, taking
+  examples/json_failure_door.kso and the ch08 suite with them.
+- std's other own-err arms are all legal: `number_ok`, `string_ok`,
+  and `must` match err and *return* err. The discipline was already
+  being followed where it matters.
+- **A package can no longer test its own failure paths.** json_test's
+  position assertions and its `defect?` predicate both convert.
+  RECOMMENDED (interim, being built behind): a **file-scope exemption
+  for `*_test.kso`** — a test is the author inspecting internals, not
+  shipped behavior, and the alternative is that no package can ever
+  test the errs it raises. Crisp, file-level, trivially checkable.
+- **The pedagogy consequence needs Clay's eye.** ch08's teaching
+  program (`positions.kso`) has a decoder and a `show` arm that
+  dispatches on its own `parse_failure` — legal today, illegal under
+  the rule, and *unfixable within one program*, since local modules
+  share a universe. The chapter teaches "an err a caller might
+  reasonably handle is a value to dispatch on" (ch04's line), which
+  the rule narrows to "across a package boundary." Either the chapter
+  restructures around std/json as the foreign library, or the book
+  teaches that within one program handleable outcomes are `none` and
+  values, and err-dispatch belongs at library boundaries. This is a
+  real narrowing of the failure story the book currently tells.
+
 Still open, smaller: the dot-prefix canon for local imports (nested
 local paths spelled `./a/b`, bare multi-segment = hako name — makes
 every import's universe readable in its spelling); the subtype
