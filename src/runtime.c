@@ -167,7 +167,6 @@ typedef struct {
     KValue* pairs;        /* k_buf-backed, frontier-shared like list items */
     KValue* sorted;       /* cached sorted+deduped [k v k v...], or NULL */
     long long sorted_len; /* deduped entry count */
-    long long sorted_cap; /* entries the view's buffer can hold */
 } KMap;
 typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; } KClosure;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
@@ -485,7 +484,6 @@ static void k_cache_reg_sweep(KMark* mark) {
         if (m->sorted && !k_survives(m->sorted, mark)) {
             m->sorted = NULL;
             m->sorted_len = 0;
-            m->sorted_cap = 0;
             resets++;
             continue;
         }
@@ -731,7 +729,6 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             nm->pairs = pairs;
             nm->sorted = NULL;
             nm->sorted_len = 0;
-            nm->sorted_cap = 0;
             out.payload = k_ptr(nm);
             break;
         }
@@ -3151,6 +3148,31 @@ static int k_msort_cmp(const void* pa, const void* pb) {
 
 /* The canonical sorted+deduped view, computed once and cached on the map.
    Duplicate keys collapse keeping the last put (json's last-key-wins). */
+/* How much the view holds is a property of the view, so it is stored with
+   the buffer rather than in the map header. A header is allocated for every
+   map a program builds and most are never read at all — a decode of the
+   188 kb board allocates 828,000 of them and builds no view — so a field
+   there is paid for by every map to serve the few that are read. One slot
+   in front of the buffer is paid only by those few. */
+static KValue* k_view_alloc(long long cap) {
+    char* raw = malloc(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
+    if (!raw) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
+    }
+    *(long long*)raw = cap;
+    return (KValue*)(raw + sizeof(KValue));
+}
+
+static long long k_view_cap(KValue* view) {
+    return *(long long*)((char*)view - sizeof(KValue));
+}
+
+static void k_view_free(KValue* view) {
+    free((char*)view - sizeof(KValue));
+}
+
 static KValue* k_map_sorted(KMap* m, long long* out_len) {
     if (!m->sorted) {
         long long n = m->len;
@@ -3161,12 +3183,7 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
            dangle, nothing registers and the sweep walks an empty table. A
            transient map's view leaks with the map; the trade is recorded in
            the log beside the numbers. */
-        KValue* out = malloc(sizeof(KValue) * 2 * (size_t)(n ? n : 1));
-        if (!out) { fputs("out of memory\n", stderr); exit(1); }
-        if (__builtin_expect(k_stats_on > 0, 0)) {
-            k_stat_allocs++;
-            k_stat_alloc_bytes += (long long)(sizeof(KValue) * 2 * (size_t)(n ? n : 1));
-        }
+        KValue* out = k_view_alloc(n ? n : 1);
         if (n > 0) {
             long long* idx = k_alloc(sizeof(long long) * n);
             for (long long i = 0; i < n; i++) idx[i] = i;
@@ -3189,7 +3206,6 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
             m->sorted_len = 0;
         }
         m->sorted = out;
-        m->sorted_cap = n ? n : 1;
     }
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;
@@ -3205,7 +3221,6 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     m->len = n;
     m->sorted = NULL;
     m->sorted_len = 0;
-    m->sorted_cap = 0;
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
@@ -3274,18 +3289,11 @@ static void k_map_view_insert(KMap* m, KValue key, KValue val) {
     if (!m->sorted) {
         return;
     }
-    if (m->sorted_len + 1 > m->sorted_cap) {
-        long long cap = m->sorted_cap ? m->sorted_cap * 2 : 8;
-        KValue* grown = malloc(sizeof(KValue) * 2 * (size_t)cap);
-        if (!grown) { fputs("out of memory\n", stderr); exit(1); }
-        if (__builtin_expect(k_stats_on > 0, 0)) {
-            k_stat_allocs++;
-            k_stat_alloc_bytes += (long long)(sizeof(KValue) * 2 * (size_t)cap);
-        }
+    if (m->sorted_len + 1 > k_view_cap(m->sorted)) {
+        KValue* grown = k_view_alloc(m->sorted_len * 2 + 1);
         memcpy(grown, m->sorted, sizeof(KValue) * 2 * (size_t)m->sorted_len);
-        free(m->sorted);
+        k_view_free(m->sorted);
         m->sorted = grown;
-        m->sorted_cap = cap;
     }
     long long at = 0;
     while (at < m->sorted_len && k_key_cmp(m->sorted[at * 2], key) < 0) {
@@ -3347,7 +3355,6 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     out->sorted = NULL;
     out->sorted_len = 0;
-    out->sorted_cap = 0;
     if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
         /* frontier-owned: claim the next pair slot in place (O(1)), leaving
            the key unsorted and any duplicate to be resolved on read */

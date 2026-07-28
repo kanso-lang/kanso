@@ -27,5 +27,5 @@ bytes_peak=0
 sh_str=224
 sh_rec=0
 sh_buf=42944
-sh_map=20400
+sh_map=16320
 sh_bytes=0
