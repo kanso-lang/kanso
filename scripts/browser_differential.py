@@ -163,9 +163,28 @@ def playground_examples():
     for match in re.finditer(r"\n  ([a-z_0-9]+): `", body):
         source = body[match.end() :]
         path = written / f"{match.group(1)}.kso"
-        path.write_text(source[: source.index("`")])
+        path.write_text(unescape_template(source[: source.index("`")]))
         paths.append(path)
     return paths
+
+
+def unescape_template(raw):
+    """What the browser receives, not what the file holds. A template
+    literal's backslash escapes are resolved by JavaScript before the
+    source ever reaches the compiler, so a sample carrying one would
+    otherwise be tested as text no visitor runs."""
+    out = []
+    i = 0
+    while i < len(raw):
+        if raw[i] == "\\" and i + 1 < len(raw):
+            nxt = raw[i + 1]
+            if nxt in "\\`$":
+                out.append(nxt)
+                i += 2
+                continue
+        out.append(raw[i])
+        i += 1
+    return "".join(out)
 
 
 def local_import(source):

@@ -92,11 +92,13 @@ fn report (err reason)
   "did not parse: {reason}"
 
 fn report doc
-  "decoded {length doc} values, first is {doc[1]}"
+  "title {doc["title"]}, {length doc} fields in all"
 
 pub play =
-  print (report (json/decode "[1, 2, 3]"))
-  >> print (report (json/decode "[1, 2"))
+  good = "\\{\\"title\\": \\"kanso\\", \\"stars\\": 3}"
+  torn = "\\{\\"title\\": \\"kanso\\", \\"stars\\": }"
+  print (report (json/decode good))
+  >> print (report (json/decode torn))
 `,
   railway: `fn describe n
   "half is {n}"
