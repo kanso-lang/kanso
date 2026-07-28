@@ -9240,3 +9240,48 @@ the map work, after it, and after this — they sit at 0.801, 0.793 and
 allocation counters are deterministic and were right; the wall-clock
 figure beside them was noise handed a causal-sounding sentence. That
 is the same error as the single reading it was written to correct.
+
+## 2026-07-28 — string building is quadratic, and the cheap fix is not available
+
+A scaling sweep over the core operations, looking for the shape the map
+work turned up twice. Building a string by repeated interpolation:
+
+    25,000    11.6 ms
+    50,000    37.3 ms
+    100,000  162.4 ms
+
+Ratios of 4.5 and 4.8 per doubling where linear reads 2.0. `list_push`,
+`map_entries` and `rec_update` are all linear at the same sizes.
+
+`"{s}x"` lowers to `k_concat_arr`, which sums the pieces, allocates a
+string of the total, and copies both in. Every iteration copies the
+whole accumulator. There is no linear way to build a string: `text/append`
+takes bytes, so the escape is to build bytes and convert at the end.
+
+That is the ordinary cost of immutable strings, and the ordinary fix is
+to write the append in place when the accumulator is provably unique —
+what a refcount buys Python's `s += x` at runtime, and what this
+language can prove statically, the way `put_mut` is already chosen for
+maps.
+
+The cheap version was measured and is dead. A string's bytes sit inline
+behind its header in the arena, so a string that happens to be the last
+thing allocated could be extended by moving the frontier, needing no
+capacity anywhere. Instrumented at the concat site over a hundred
+thousand iterations: **frontier ownership 0%**, never once. The loop
+counter is an arbitrary-precision integer and its decrement allocates
+between the accumulator's birth and its use, so the accumulator is
+never last.
+
+What remains is a capacity, and the map header is a warning about where
+to put one. `KStr` is sixteen bytes and decode holds 42 MB of them, so a
+field there is the same mistake at a larger scale. The capacity belongs
+with the buffer, as the map view's now does, which needs a sound answer
+to "is this buffer one of mine?" — and `data` not sitting inline behind
+the header does not answer it, because the copy machinery already
+produces strings whose data is out of line and carries no capacity.
+Reading one as though it did is a memory-safety bug, not a wrong number.
+
+So the invariant has to be made true at both producers before the
+discriminator can be trusted. That is the next step and it is recorded
+rather than rushed.
