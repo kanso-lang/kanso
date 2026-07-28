@@ -177,10 +177,16 @@ Consequences measured against the current tree:
 - **A package can no longer assert about its own failure paths.**
   json_test's position assertions and its `defect?` predicate both
   convert an err to a value, which is the one thing the rule forbids.
-  RECOMMENDED (interim, being built behind): a **file-scope exemption
-  for `*_test.kso`** — a test is the author inspecting internals, not
-  shipped behavior, and the alternative is that no package can ever
-  test the errs it raises. Crisp, file-level, trivially checkable.
+  Two ways out (Clay, 2026-07-28, on why tests need this at all — an
+  assertion is a value, and a package may not produce one from its own
+  err): a **file-scope exemption for `*_test.kso`**, which is one line
+  and crude, a hole in a language rule at file granularity; or
+  **assertions get a toolchain surface** — the harness is not the
+  package, so a builtin that reads a failure is a foreign party
+  rescuing, legal under the rule as written, needing no exemption and
+  not leaking into shipped code. The exemption is what ships behind
+  the advisory today; the surface is the cleaner design and wants a
+  small amount of shaping. See design/testing.md.
 - **The pedagogy consequence needs Clay's eye.** ch08's teaching
   program (`positions.kso`) has a decoder and a `show` arm that
   dispatches on its own `parse_failure` — legal today, illegal under

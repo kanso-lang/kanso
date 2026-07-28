@@ -8683,3 +8683,27 @@ number: 0.6 ms on `kanso check`. The absolute figures today read two
 milliseconds high on a loaded box — main measured 8.9 ms against the
 branch's 8.0 — which is why the A/B was run at all. KANSO_NO_PROV
 turns the pass off, as KANSO_NO_FUSE does for fusion.
+
+## 2026-07-28 — why tests need the exemption, and a way to not need it
+
+Clay, working out why a test would want to rescue its own package's
+err: to prove that handing an err to the function under test causes a
+side effect, or comes back wrapped. That is the case, and the reason
+under it is simpler than the case — an assertion is a value, and the
+rule forbids a package producing a value from its own err. Measured:
+a test constant that touches an err reports FAILED (returned err …),
+so equality, interpolation and every other route close together.
+
+Which opens a second design. The harness is not the package; it is
+the toolchain. If assertions about failure came from a toolchain
+surface rather than a function the package writes, provenance permits
+them by the same clause that lets any foreign party rescue, with no
+file-scope exemption and no leak into shipped code. Recorded beside
+the exemption in the gavel entry as the cleaner of the two.
+
+Also recorded, for the far queue: design/testing.md holds Clay's
+shape for a spec framework — one describe, one level of contexts,
+assertions at either level, nothing deeper, a JustBeforeEach
+equivalent, and possibly a one-level `let`. The constraint is the
+design: two levels can be read from one screen, and a failing example
+three contexts down cannot.
