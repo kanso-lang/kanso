@@ -50,10 +50,30 @@ reproduces Ruby's StandardError/Exception split — handleable things
 under a published root, defects rooted outside it — with pub doing
 the work Ruby's inheritance convention does.
 
-Still needing one word each: (b) bare-err re-err carries the original
-as a wrapped cause on the trace? (proposed: yes) (c) re-exporting a
-foreign err type transfers ownership? (proposed: no — it stays
-theirs).
+SETTLED (Clay, 2026-07-27, second round): (b) wrapping carries the
+original — mechanized as the only two legal spellings. err stays
+opaque magic (reason + origin + hop trace, runtime-maintained, never
+record fields); infectiousness makes `err some_err` inert, so the
+annotate-nothing case is the identity re-raise (`fn handle e:err`,
+return `e` — trace intact; canon prefers this over reconstruction,
+which would mint a new birth site), and wrapping is the builtin
+factory `wrap_err new_reason original` — the one deliberate hole in
+infectiousness, attaching the original as cause in the magic layer,
+rendered nested at the endpoint. Discard-while-wrapping has no
+spelling. (c) re-export follows the door, trapping follows the leaf:
+a re-exported type is the re-exporter's as a *name* (the ultimate
+caller neither knows nor cares), but the conversion license compares
+the arm's package against the type's *origin* package — where the err
+stack leafs out. Everyone but the origin may trap it, including the
+re-exporter.
+
+Still open, smaller: the dot-prefix canon for local imports (nested
+local paths spelled `./a/b`, bare multi-segment = hako name — makes
+every import's universe readable in its spelling); the subtype
+declaration spelling (`type foo string` vs `type post_body:string`);
+the into-subtype spelling (ctor-form `foo ""`, previously ruled, vs
+the sketch's postfix `"":foo`); positional destructuring of foreign
+types (recommended: named access only crosses).
 `design/err-migration.md` holds the migration plan.
 
 ## 1b. Foreign structure access — PROPOSED AMENDMENT to modules-plan
