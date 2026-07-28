@@ -8508,3 +8508,25 @@ reading raw text where the browser reads escaped, a fallback path
 that never reddens a suite, and now a title pattern that quietly
 skips a verb. None of them failed; all of them covered less than the
 reader would assume.
+
+## 2026-07-28 — one sitting, published once
+
+The log already records what happens when a perf sweep runs on
+memory: three surfaces stale for a day, and a later sweep finding
+five disagreeing figure sets across four pages. The rule written
+afterwards — walk every number-bearing surface, it is a checklist not
+a memory — is the right rule and has no enforcement behind it.
+
+Some of that is unenforceable by construction: a wall-clock figure
+has no golden to check against, which is why the table is dated and
+called a sitting. But a figure published twice is checkable against
+itself, and the decode sitting is published three times over — the
+compiler page's board, the landing page's code panel, and the landing
+page's own prose sentence quoting kanso against serde. Nothing
+compared them.
+
+cross_surface_numbers.py compares them. It knows nothing about what
+the numbers should be; it knows which claims are the same claim.
+Watched red on each surface it says it covers: a wrong figure in the
+panel, in the prose, and in the peak all fail it by name, and today's
+four rows agree. In CI beside the golden-prose check.
