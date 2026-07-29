@@ -148,6 +148,13 @@ jobs:
         run: |
           git fetch origin main --depth 1
           python3 scripts/trend_gate.py origin/main
+      # the log is the chronology and the page is what a reader is shown; the
+      # second used to follow the first by memory, and memory let ten shipped
+      # optimisations land in a day without the page moving once
+      - name: the page keeps up with the log
+        run: |
+          git fetch origin main --depth 1 || true
+          python3 scripts/page_drift.py
       - name: one-shot counters
         run: |
           KANSO_COUNTERS=1 ./oneshot 2>counters_oneshot.txt >/dev/null
