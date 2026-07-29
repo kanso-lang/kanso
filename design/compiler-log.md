@@ -10253,3 +10253,42 @@ widening has to be conditioned on the chain rather than on the type.
 Reverted whole. What this attempt bought is that the runtime half is
 written and measured and the blocker is now a single clause rather than
 a design question.
+
+## 2026-07-28 — why kq's goldens did not move all day
+
+Sixteen merges, the basket down from 91,864 allocations to 24,102, and
+kq's two cost goldens byte-identical throughout. That is either kq
+being already tight or the day's work missing the shapes a real program
+uses, and it is worth knowing which.
+
+Profiled: a full pretty-print of the 188 kb board costs 98,304
+allocations, and the sizes say where they are.
+
+    32 bytes  63,820      65% of everything
+    16 bytes  10,322
+    64 bytes   8,892
+    48 bytes   4,276
+   144 bytes   3,388
+
+`sh_bytes` divides into about twenty-five thousand byte-builder
+headers, and `sh_rec` into about eight thousand records, which is the
+decoded document itself. The remaining thirty-odd thousand are
+two-field buffers.
+
+The byte path is already as good as it goes: appends run in place two
+hundred and forty-four thousand times and not once through the copying
+path. Nothing today could have improved that because there was nothing
+to improve.
+
+So the answer is the second half of the question. kq streams — it
+renders a top-level element, writes it, and frees it — and that is a
+byte-builder workload. The day's work was on folds, adapters, records
+and string accumulation, which is what the basket exercises and what kq
+mostly does not. Two instruments measuring different programs, which is
+the point of having both, and a reminder that the basket's numbers are
+not kq's numbers.
+
+Where kq's remaining cost sits, for whoever wants it: twenty-five
+thousand byte-buffer headers, one per streamed chunk. Whether that is
+reducible is a question about kq's design rather than the compiler's,
+and it is not being answered here.
