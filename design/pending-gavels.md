@@ -361,6 +361,50 @@ field's main data point and it argues against the ruling:
 So Haskell started where this gavel points and spent twenty-five years
 walking back to dot notation with the selectors switched off.
 
+Where they ended up, and where they are going, because the destination
+matters more than the retreat:
+
+- The surface is `person.name`, desugared to `getField` of a `HasField`
+  class; record update desugars to `setField`. The mechanism is a
+  typeclass, not a name.
+- `setField` **has not shipped in a released compiler**. Overloaded
+  record update still needs `RebindableSyntax` and hand-written
+  `getField`/`setField` in scope. Four years after the dot syntax,
+  update is still provisional — a caution about how long the tail on
+  this kind of change is.
+- Proposal 583 splits `HasField` into independent `GetField` and
+  `SetField` with no superclass relationship, `Field` as a constraint
+  synonym, laws, unlifted types. The stated motivation is **read-only
+  virtual fields** — a field that is computed rather than stored — and
+  they avoid making `GetField` a superclass of `SetField` precisely so
+  write-only fields stay expressible.
+
+Two things follow that bear on the ruling.
+
+**Their mistake was the namespace, not the functions.** A Haskell
+selector is a monomorphic name — `name :: Person -> String` — so a
+second `name` is a duplicate definition. Every escape they built was
+about getting field names out of the value namespace, and `HasField` is
+them bolting on dispatch-by-argument-type because the language lacked
+it. kanso has that natively: `length` already carries arms for lists,
+strings and maps, so a record arm is the ordinary case. The namespace
+question is only frightening if one pictures a flat monomorphic
+namespace rather than a dispatch group.
+
+**Virtual fields come free here.** The thing proposal 583 needs a class
+redesign to reach — a field that is computed rather than stored — is
+just another arm once accessors are functions. `fn area (rect w h)` is
+indistinguishable from a stored field at the call site. That is an
+argument for the ruling, and it is where their own vision points.
+
+**The risk, stated precisely.** GHC removed type-directed
+disambiguation because inference could not always know the argument
+type at the use site. kanso should answer the same question: what
+happens where the argument's type is not statically known? Every
+function here already faces it, so it is presumably answered — but
+fields would make it far more common, and that is the one place their
+failure mode would reappear.
+
 The distinction that may or may not rescue it: Haskell's selectors are
 monomorphic functions and disambiguation was a bolt-on to inference,
 which could not always know the argument type at the use site. kanso
