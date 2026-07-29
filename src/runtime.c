@@ -1375,6 +1375,21 @@ KValue k_keyed_check(KValue v, long long entries) {
 }
 
 /* `.` field access: failures ride through; a non-record dies loudly. */
+// A getter group that matched nothing. The reader wrote `x.name`, so the
+// failure is a field error in their words, not a dispatch error in ours.
+void k_no_field(KValue v, const char* name) {
+    if (v.tag != K_REC) {
+        KValue shown = k_render(v, 1);
+        fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
+                k_c_err(), k_c_off(), k_as_str(shown)->data);
+        exit(1);
+    }
+    KRec* r = k_as_rec(v);
+    fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
+            k_type_name(r->type_id), name);
+    exit(1);
+}
+
 KValue k_b_field(KValue v, const char* name) {
     if (!k_not_failure(v)) return v;
     if (v.tag != K_REC) {

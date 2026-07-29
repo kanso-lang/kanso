@@ -186,6 +186,7 @@ declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
+declare void @k_no_field(%KValue, ptr)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
 declare %KValue @k_err_inner(%KValue)
@@ -1516,9 +1517,19 @@ impl<'a> Backend<'a> {
             self.emit_ret_failure(&mut f, name, arity, &hopped);
             f.start_block(&next);
         }
-        let msg = format!("no overload of `{name}` matches these arguments");
-        let (m, _len) = self.intern(&format!("{msg}\0"));
-        f.line(&format!("call void @k_die(ptr @{m})"));
+        // a getter that matched nothing is a field error to the reader, and
+        // only the runtime can name the value it was handed
+        match crate::ast::getter_field(name) {
+            Some(field) if arity == 1 => {
+                let (lit, _len) = self.intern(&format!("{field}\0"));
+                f.line(&format!("call void @k_no_field(%KValue %x0, ptr @{lit})"));
+            }
+            _ => {
+                let msg = format!("no overload of `{name}` matches these arguments");
+                let (m, _len) = self.intern(&format!("{msg}\0"));
+                f.line(&format!("call void @k_die(ptr @{m})"));
+            }
+        }
         f.line("unreachable");
         let _ = writeln!(self.body, "{header}\n{}}}\n", f.out);
         Ok(())

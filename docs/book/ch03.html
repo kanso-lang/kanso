@@ -39,6 +39,12 @@ extra_css: /book/book.css
 
 <p>when one field is all you want, a dot reads it: <code>song.title</code>. the two forms answer different questions. a binding pattern says you are about to use the whole record and want its parts named; a dot says you want one value and are done. reach for the pattern when you would otherwise write three dots in a row.</p>
 
+<p>leave the record out and you have the reader on its own: <code>_.title</code> is a function that takes a track and gives you its title. it goes wherever a function goes.</p>
+
+<pre><code><span class="f">list/map</span> songs <span class="o">_</span><span class="o">.</span>title</code></pre>
+
+<p>this works for any record with a <code>title</code>, because a field reader is an ordinary arm and every type that has the field contributes one. nothing has to be imported to read a field — the reader is not a name in your file, so it can never collide with one.</p>
+
 <p>reading is where the dot stops. there is no <code>song.title = "…"</code> outside the one construct in the next section, because a record is a value and a value does not change under you. if you want a track with a different title, you build a track with a different title.</p>
 
 <h2>taking a record apart</h2>

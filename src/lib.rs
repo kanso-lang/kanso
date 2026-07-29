@@ -24,8 +24,11 @@ pub mod wasm_rt;
 pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    synthesize_getters(&mut program);
     stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_main);
+    desugar_field_reads(&mut program);
+    prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     inline::inline_builtin_wrappers(&mut program);
     match diags.is_empty() {
@@ -38,6 +41,7 @@ pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Prog
 pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    synthesize_getters(&mut program);
     stamp_file(&mut program, file);
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let ownership_diags = merge_ambient_arms(&mut program);
@@ -98,6 +102,8 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     merged.fns.extend(program.fns);
     let mut merged_diags = check::check_merged(&merged, true);
     check::check_unused_private(&merged, &used, &mut merged_diags);
+    desugar_field_reads(&mut merged);
+    prune_unused_getters(&mut merged);
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     let merged_diags: Vec<_> = merged_diags.into_iter().filter(|d| d.kind != "unused").collect();
@@ -107,6 +113,8 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
             canonicalize_bare_aliases(&mut merged);
             hoist_repeated_strings(&mut merged);
             fuse_enumerable(&mut merged);
+            desugar_field_reads(&mut merged);
+            prune_unused_getters(&mut merged);
             trmc::rewrite(&mut merged);
             Ok(merged)
         }
@@ -119,6 +127,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    synthesize_getters(&mut program);
     stamp_file(&mut program, file);
     let ownership_diags = merge_ambient_arms(&mut program);
     if !ownership_diags.is_empty() {
@@ -194,6 +203,8 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
+    desugar_field_reads(&mut program);
+    prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     Ok(program)
 }
@@ -204,6 +215,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    synthesize_getters(&mut program);
     stamp_file(&mut program, file);
     let ownership_diags = merge_ambient_arms(&mut program);
     if !ownership_diags.is_empty() {
@@ -261,6 +273,8 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
+    desugar_field_reads(&mut program);
+    prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
     Ok(program)
 }
@@ -296,6 +310,46 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
     for decl in &mut program.fns {
         decl.file = file.to_string();
     }
+}
+
+/// A field is read by applying its name, so every field declares an arm:
+/// `pub fn name (user _ name) = name`. The accessor is then a value, which
+/// is what field syntax could never hand to anything else.
+///
+/// An enrollment clone re-declares a type it does not own, so it is skipped
+/// — the getter belongs to the module that declared the fields, and a
+/// second identical arm would collide with the first.
+fn synthesize_getters(program: &mut ast::Program) {
+    let mut arms = Vec::new();
+    for ty in &program.types {
+        if ty.synthetic || ty.origin.is_some() {
+            continue;
+        }
+        for (index, (field, _, span)) in ty.fields.iter().enumerate() {
+            let bound = ty
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(at, _)| match at == index {
+                    true => ast::Pattern::Var(ast::GETTER_BINDER.to_string(), *span),
+                    false => ast::Pattern::Wildcard(*span),
+                })
+                .collect();
+            arms.push(ast::FnDecl {
+                name: ast::getter_name(field),
+                is_pub: true,
+                span: *span,
+                params: vec![ast::Pattern::Ctor { ty: ty.name.clone(), fields: bound }],
+                body: vec![ast::Stmt::Expr(ast::Expr::Ident(
+                    ast::GETTER_BINDER.to_string(),
+                    *span,
+                ))],
+                file: String::new(),
+                synthetic: false,
+            });
+        }
+    }
+    program.fns.extend(arms);
 }
 
 /// Resolve one import path to a directory, per the gaveled table: `std/` is
@@ -1165,14 +1219,125 @@ fn qualify(
         }
     }
     for f in &mut dep.fns {
+        // a getter is structural, not owned: one group per field name across
+        // every module, reachable without an import
+        if f.is_getter() {
+            continue;
+        }
         exports.entry(format!("{qual}/{}", f.name)).or_insert(f.is_pub);
         f.name = format!("{qual}/{}", f.name);
-        for stmt in &mut f.body {
-            rewrite_stmt(stmt, qual, &owned);
-        }
+        let mut bound = Vec::new();
         for p in &mut f.params {
             rewrite_pattern(p, qual, &owned);
+            pattern_binds(p, &mut bound);
         }
+        for stmt in &mut f.body {
+            rewrite_stmt(stmt, qual, &owned, &mut bound);
+        }
+    }
+}
+
+/// `x.name` is the getter applied. The rewrite runs late, after the checks
+/// that read field syntax to say something about the field — a type conflict
+/// names the read site, and an application would have nothing to point at.
+pub fn desugar_field_reads(program: &mut ast::Program) {
+    for decl in &mut program.fns {
+        for stmt in &mut decl.body {
+            desugar_stmt(stmt);
+        }
+    }
+}
+
+fn desugar_stmt(stmt: &mut ast::Stmt) {
+    match stmt {
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => desugar_expr(expr),
+        ast::Stmt::Set { value, .. } => desugar_expr(value),
+    }
+}
+
+fn desugar_expr(e: &mut ast::Expr) {
+    if let ast::Expr::Field { base, name, span } = e {
+        desugar_expr(base);
+        let head = ast::Expr::Ident(ast::getter_name(name), *span);
+        let base = std::mem::replace(base.as_mut(), ast::Expr::Int(0.into(), *span));
+        *e = ast::Expr::App { head: Box::new(head), args: vec![base], span: *span, piped: false };
+        return;
+    }
+    walk_children_mut(e, &mut desugar_expr);
+}
+
+/// Every field declares a getter so that name resolves wherever it is read,
+/// but a program that never reads a field should not pay for its accessor.
+/// Dropping the unreferenced ones is unobservable — nothing can call a
+/// function whose name the program does not mention — and it keeps the
+/// emitted output the size it was before accessors became functions.
+pub fn prune_unused_getters(program: &mut ast::Program) {
+    let mut mentioned = std::collections::HashSet::new();
+    for decl in &program.fns {
+        if decl.is_getter() {
+            continue;
+        }
+        for stmt in &decl.body {
+            mentions_in_stmt(stmt, &mut mentioned);
+        }
+    }
+    program.fns.retain(|d| !d.is_getter() || mentioned.contains(&d.name));
+}
+
+fn mentions_in_stmt(stmt: &ast::Stmt, out: &mut std::collections::HashSet<String>) {
+    match stmt {
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => mentions_in_expr(expr, out),
+        ast::Stmt::Set { value, .. } => mentions_in_expr(value, out),
+    }
+}
+
+fn mentions_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
+    match e {
+        ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+            out.insert(name.clone());
+            // a qualified read reaches the same getter under its bare name
+            if let Some((_, short)) = name.rsplit_once('/') {
+                out.insert(short.to_string());
+            }
+        }
+        ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
+            for s in stmts {
+                mentions_in_stmt(s, out);
+            }
+        }
+        ast::Expr::Guard { cond, early, rest, .. } => {
+            mentions_in_expr(cond, out);
+            mentions_in_expr(early, out);
+            for s in rest {
+                mentions_in_stmt(s, out);
+            }
+        }
+        _ => {
+            for child in expr_children(e) {
+                mentions_in_expr(child, out);
+            }
+        }
+    }
+}
+
+/// Names a pattern brings into scope. Qualification has to know them: a
+/// local named like one of the module's own declarations is the local, and
+/// rewriting it into a module reference silently swaps a value for a
+/// function. Field getters make this reachable — `left` is a declared name
+/// the moment some type has that field — where before the shadow ban made
+/// the case impossible to write.
+fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
+    match p {
+        ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => out.push(name.clone()),
+        ast::Pattern::Ctor { fields, .. } => {
+            for f in fields {
+                pattern_binds(f, out);
+            }
+        }
+        ast::Pattern::Keyed { entries, .. } => {
+            out.extend(entries.iter().map(|e| e.bind_name.clone()))
+        }
+        _ => {}
     }
 }
 
@@ -1193,73 +1358,96 @@ fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &std::collections::H
     }
 }
 
-fn rewrite_stmt(stmt: &mut ast::Stmt, qual: &str, owned: &std::collections::HashSet<String>) {
+fn rewrite_stmt(
+    stmt: &mut ast::Stmt,
+    qual: &str,
+    owned: &std::collections::HashSet<String>,
+    bound: &mut Vec<String>,
+) {
     match stmt {
         ast::Stmt::Bind { expr, pattern } => {
             rewrite_pattern(pattern, qual, owned);
-            rewrite_expr(expr, qual, owned);
+            rewrite_expr(expr, qual, owned, bound);
+            pattern_binds(pattern, bound);
         }
-        ast::Stmt::Expr(e) => rewrite_expr(e, qual, owned),
-        ast::Stmt::Set { value, .. } => rewrite_expr(value, qual, owned),
+        ast::Stmt::Expr(e) => rewrite_expr(e, qual, owned, bound),
+        ast::Stmt::Set { value, .. } => rewrite_expr(value, qual, owned, bound),
     }
 }
 
-fn rewrite_expr(e: &mut ast::Expr, qual: &str, owned: &std::collections::HashSet<String>) {
+fn rewrite_scope(
+    stmts: &mut [ast::Stmt],
+    qual: &str,
+    owned: &std::collections::HashSet<String>,
+    bound: &[String],
+) {
+    let mut inner = bound.to_vec();
+    for stmt in stmts {
+        rewrite_stmt(stmt, qual, owned, &mut inner);
+    }
+}
+
+fn rewrite_expr(
+    e: &mut ast::Expr,
+    qual: &str,
+    owned: &std::collections::HashSet<String>,
+    bound: &[String],
+) {
     match e {
         ast::Expr::Partial(..) => {}
         ast::Expr::Guard { cond, early, rest, .. } => {
-            rewrite_expr(cond, qual, owned);
-            rewrite_expr(early, qual, owned);
-            for stmt in rest {
-                rewrite_stmt(stmt, qual, owned);
-            }
+            rewrite_expr(cond, qual, owned, bound);
+            rewrite_expr(early, qual, owned, bound);
+            rewrite_scope(rest, qual, owned, bound);
         }
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
-            for stmt in stmts {
-                rewrite_stmt(stmt, qual, owned);
-            }
+            rewrite_scope(stmts, qual, owned, bound)
         }
         ast::Expr::Ident(name, _) => {
-            if owned.contains(name.as_str()) {
+            if owned.contains(name.as_str()) && !bound.iter().any(|b| b == name) {
                 *name = format!("{qual}/{name}");
             }
         }
-        ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned),
-        ast::Expr::Upcast { expr, .. } => rewrite_expr(expr, qual, owned),
+        ast::Expr::Field { base, .. } => rewrite_expr(base, qual, owned, bound),
+        ast::Expr::Upcast { expr, .. } => rewrite_expr(expr, qual, owned, bound),
         ast::Expr::App { head, args, .. } => {
-            rewrite_expr(head, qual, owned);
+            rewrite_expr(head, qual, owned, bound);
             for a in args {
-                rewrite_expr(a, qual, owned);
+                rewrite_expr(a, qual, owned, bound);
             }
         }
         ast::Expr::Index { base, index, .. } => {
-            rewrite_expr(base, qual, owned);
-            rewrite_expr(index, qual, owned);
+            rewrite_expr(base, qual, owned, bound);
+            rewrite_expr(index, qual, owned, bound);
         }
         ast::Expr::BinOp { lhs, rhs, .. } | ast::Expr::Join { lhs, rhs, .. } => {
-            rewrite_expr(lhs, qual, owned);
-            rewrite_expr(rhs, qual, owned);
+            rewrite_expr(lhs, qual, owned, bound);
+            rewrite_expr(rhs, qual, owned, bound);
         }
         ast::Expr::Seq(a, b, _) => {
-            rewrite_expr(a, qual, owned);
-            rewrite_expr(b, qual, owned);
+            rewrite_expr(a, qual, owned, bound);
+            rewrite_expr(b, qual, owned, bound);
         }
-        ast::Expr::Lambda { body, .. } => rewrite_expr(body, qual, owned),
+        ast::Expr::Lambda { params, body, .. } => {
+            let mut inner = bound.to_vec();
+            inner.extend(params.iter().map(|(n, _)| n.clone()));
+            rewrite_expr(body, qual, owned, &inner);
+        }
         ast::Expr::List(items, _) => {
             for i in items {
-                rewrite_expr(i, qual, owned);
+                rewrite_expr(i, qual, owned, bound);
             }
         }
         ast::Expr::MapLit(pairs, _) => {
             for (k, v) in pairs {
-                rewrite_expr(k, qual, owned);
-                rewrite_expr(v, qual, owned);
+                rewrite_expr(k, qual, owned, bound);
+                rewrite_expr(v, qual, owned, bound);
             }
         }
         ast::Expr::Str(parts, _) => {
             for p in parts {
                 if let ast::TemplatePart::Interp(inner) = p {
-                    rewrite_expr(inner, qual, owned);
+                    rewrite_expr(inner, qual, owned, bound);
                 }
             }
         }
@@ -1280,6 +1468,9 @@ fn enroll_bare(
 ) {
     let mut bare_fns = Vec::new();
     for f in &dep_program.fns {
+        if f.is_getter() {
+            continue;
+        }
         if exports.get(&f.name).copied().unwrap_or(false) && !renamed.contains(&f.name) {
             if let Some((_, short)) = f.name.rsplit_once('/') {
                 let mut clone = f.clone();
@@ -1937,6 +2128,7 @@ fn compile_module_inner(
             true => parser::parse_entry(&lexed).map_err(|d| diag::render(&d, &file, &source))?,
             false => parser::parse(&lexed).map_err(|d| diag::render(&d, &file, &source))?,
         };
+        synthesize_getters(&mut program);
         stamp_file(&mut program, &file);
         parsed.push((file, source, program));
     }
@@ -2073,6 +2265,8 @@ fn compile_module_inner(
     }
     let mut diags = check::check_merged(&merged, require_main);
     check::check_unused_private(&merged, &used, &mut diags);
+    desugar_field_reads(&mut merged);
+    prune_unused_getters(&mut merged);
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
@@ -2087,6 +2281,8 @@ fn compile_module_inner(
     canonicalize_bare_aliases(&mut merged);
     hoist_repeated_strings(&mut merged);
     fuse_enumerable(&mut merged);
+    desugar_field_reads(&mut merged);
+    prune_unused_getters(&mut merged);
     trmc::rewrite(&mut merged);
     Ok(merged)
 }

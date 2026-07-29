@@ -10383,3 +10383,182 @@ the book samples, kq's suite including its allocator goldens, lib/list
 and lib/json compiled alone, nineteen suites, the browser differential,
 every memory-corpus stdout byte-identical and all three cost veins
 unchanged. Welfare 65.17 to 65.53.
+
+## 2026-07-29 — naming as the call's identity, and what it costs
+
+Clay, working out how a pipe reaches a multi-argument function: "if the
+function only takes one argument, do you just let it work as normal
+because it's obvious? okay, and then if it has multiple, then what?
+`random_name() . make_user age:31 name:_`. shrug." The shrug turned out
+to be the smallest part of it. Working the answer through pulled the
+whole of construction, dispatch and ordering along behind.
+
+The settled design is in design/pending-gavels.md. Three things belong
+here because they are measurements or corrections rather than design.
+
+**FIELD ACCESS IS ALREADY A NAME LOOKUP, so the accessor ruling buys
+speed rather than costing it.** The worry going in was that turning
+`u.name` into a function call would tax every read on the decode board,
+where a field read was assumed to be a static offset. It is not one.
+Native emits `call @k_b_field(%KValue %base, ptr @".name\0")`, and
+k_b_field walks the record comparing field names with strcmp until one
+matches (runtime.c:1378). The interpreter does the same by position
+lookup per read. A synthesised getter arm that binds its field
+positionally is strictly less work than that, so the ruling that looked
+like a performance risk is a performance opportunity. Measurement, not
+argument, and it inverted the plan.
+
+**The lexer already does most of the work.** A dot with air around it
+lexes as Tok::Pipe today; only a dot pressed tight between word
+characters becomes Tok::Dot (lexer.rs:396). So `foo . bar` is already an
+application, and the ruled spelling is what the language does when the
+tight-gap branch is deleted. Floats are safe: the number lexer consumes
+`1.5` before the dot branch is reached, and tight_right requires a
+lowercase letter or underscore in any case.
+
+**A correction, on evidence I cited for a rule that is on its way out.**
+Arguing that fields and call sites should be canonicalised while
+parameter declarations should not, I offered the enforced typeset
+ordering as precedent — `type num int float64` is refused. Clay: that
+constraint was recently agreed removed, "let the programmer choose the
+most rational order". Checking rather than recalling: check.rs today
+enforces typeset members and keyed reads, and record fields and function
+groups were relaxed with the comment "Declaration order is the author's"
+(check.rs:1241). So the five rules the 2026-07-25 entry counted are two.
+The evidence I reached for was a rule the project had already decided
+against, which is what citing a compiler for a language decision earns.
+
+His follow-on is the substantive part and it reverses my recommendation:
+enforce alphabetical order everywhere once naming lands, because order
+stops meaning anything. I had argued parameters should stay unsorted on
+the grounds that `bisect xs p lo hi best` sorted to `best hi lo p xs`
+loses the `lo hi` pairing. That is a readability claim against a
+soundness gain and it does not survive the trade. What does survive is
+sequencing: sorting fields while construction is positional re-creates
+the silent rewiring recorded on 2026-07-25, because field order *is* the
+constructor's argument order. Sort after naming, not before.
+
+**The trade on renaming, which Clay priced and I had mispriced.** I
+recorded "parameter names become API" as a cost. He: "currently adding or
+removing or re-ordering ordered arguments is a breaking change, so that
+seems smaller." Counted properly: positional makes adding breaking and
+makes reordering two same-typed parameters silently wrong; naming makes
+adding breaking, reordering free, renaming breaking. Same number of
+breaking operations, and the one silent failure is eliminated. It is a
+better trade, not an acceptable one.
+
+Nothing is built. The next commit is the accessor change, which is now
+expected to move the decode board rather than hold it.
+
+## 2026-07-29 — named arguments, declined by the author who proposed them
+
+Same day as the entry above. Clay, after working the design out to its
+consequences: "i'm starting to reverse my thinking honestly. if the goal
+is minimalism, order is as concise as it gets. names are actually more
+verbose. and you'd have to sometimes re-map them with a colon."
+
+The settled outcome is in design/pending-gavels.md under DECLINED. Two
+things belong here because they are corrections to what this log recorded
+a few hours earlier.
+
+**The complecting argument was symmetric and the entry above leaned on
+it as though it were not.** Clay: "you've got to complect *something* to
+match the args, and name isn't inherently better than position." That is
+right. Matching arguments to parameters requires a correspondence;
+position is one and name is another. The asymmetry that actually exists
+is blast radius, not braiding — position derives correspondence from a
+global property of the parameter list, so any add, remove or reorder
+changes every call site at once, where a rename breaks only the calls
+that name it. That is a real difference and it was not enough.
+
+**The decisive argument came from a ruling this project had already
+made, and it was sitting in the previous entry unnoticed.** Clay, hours
+earlier, correcting a different argument: "we care about information the
+editor can show us via the language server, not in the code." Named
+arguments are a readability feature. Omitting inferred types from source
+and spelling parameter labels into it are opposite answers to one
+question. Having taken the first, the language is committed to the
+second. The reversal is the language being consistent with itself rather
+than a change of taste, which is a better reason than any offered while
+the direction was still live.
+
+**A correction to my own framing, from Clay.** I recorded "every field
+name is now a program-wide global" as a cost of the accessor ruling. He:
+"that's like saying cat.run and dog.run both require a global thing
+called run. we're doing the exact same thing, polymorphic overloading,
+just with a different syntax: run cat vs run dog." Correct — method
+selectors are a global namespace in every OO language and nobody
+experiences it as a cost, because dispatch resolves it. The narrower
+residue is that OO keeps field names out of the value namespace by
+*requiring* receiver syntax, and making accessors first-class values is
+what merges them here. Shadowing is the resolution and it is the price of
+the thing the ruling was for.
+
+What survives, and what the tree keeps: accessors are functions; keyed
+destructuring is untouched, because taking one field out of a record
+without walking past the others with `_` is a different problem that
+never depended on labelled calls; `_` stays the pipe slot; ordering rules
+stay where they are, since the instruction to alphabetize everything was
+conditional on order losing its meaning and order keeps it.
+
+## 2026-07-29 — accessors built twice: the pipe spelling, then the section
+
+The accessor ruling was implemented, measured, and then respelled the
+same day. Both versions worked; the second costs nothing the first cost.
+The settled design is in design/pending-gavels.md. What belongs here is
+the measurement and the two bugs it found.
+
+**Field access was never a static offset, which inverted the plan.**
+Native emitted `k_b_field(v, "name\0")`, and that walks the record
+comparing field names with strcmp (runtime.c). The interpreter did a
+position lookup per read. So routing reads through a getter arm that
+binds its field positionally is *less* work, not more. Twenty million
+reads, interleaved, five runs, no variance:
+
+    before  0.08s        after  0.03s
+
+**Version one: `.` is the pipe, getters are ordinary functions.** The
+spaced dot already lexed as `Tok::Pipe`, so this was mostly deleting the
+tight-gap branch. It works — `list/map people name` returns the names —
+and it costs three things. Every field name becomes a value-namespace
+declaration, so a field can no longer share a name with a type (`type
+post` with a `state` field beside a `state` typeset stops compiling) and
+destructuring shadows the accessor (ch03's own sample cannot show the
+pattern and the dot in one scope). The pipe also binds looser than
+arithmetic and application, so `point (p.x + 1) p.y` needs
+`point ((p . x) + 1) (p . y)`. Welfare fell 0.12: the `records` sample
+grew 60 emitted lines, and no term rewards a runtime improvement the
+allocation counters cannot see.
+
+**Version two: the dot stays tight, `_.name` is the accessor.** Same
+getters, same arms, same speed, declared under `Get_name` — a name the
+lexer cannot produce — and never module-qualified, so a field read needs
+nothing imported. All three costs go away and welfare returns to the
+floor with every cost vein byte-identical. Clay, on the section: "you
+don't have to import the getter functions to get this, so it makes
+things a lot easier, less name conflicts."
+
+**A real bug on main, found because getters made it reachable.**
+Loading a dependency qualifies every identifier the module declares,
+with no awareness of local bindings. It was sound only because shadowing
+a declared name is banned — except that bare-enrolled imports are
+deliberately shadowable, so this reproduces on main with no getters
+involved at all:
+
+    inner:  pub fn foo x
+    middle: import "../inner"; pub fn bar foo → length foo
+    app:    print (middle/bar [1 2 3])
+    error[runtime]: length takes a list, string, or map
+
+`foo` inside `bar` was rewritten to `middle/foo` and `length` was handed
+a function. Fixed by threading scope through the rewrite; pinned by
+tests/shadowing.rs, watched red on the unfixed compiler. The diagnostic
+that found it now says what it received rather than only what it wanted.
+
+**Reading a field no type declares is a compile error now.** It could
+not succeed at any runtime, so `check_field_exists` reports it and
+`field_missing.kso` moves from the runtime corpus to the error corpus.
+Reading a field a *particular* record lacks stays a runtime error, since
+only the value knows its type — and both engines still print the two
+messages `k_b_field` used to, byte for byte, through a new `k_no_field`
+so a dispatch failure never shows a reader the internal name.

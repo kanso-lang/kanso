@@ -149,6 +149,28 @@ pub enum Stmt {
     },
 }
 
+/// The binder inside a synthesised field getter. Source identifiers are
+/// lowercase, so this collides with nothing a program can write.
+pub const GETTER_BINDER: &str = "Read";
+
+/// A field getter's name. Reading a field is applying this function, but the
+/// name it is applied under is not one a program can spell, so a field never
+/// takes a name away from a type, a local or anything else. `x.name` and the
+/// section `_.name` are the two ways to reach it.
+///
+/// Every type declaring the same field lands in one group, and it is never
+/// module-qualified: reading a field is structural, so it needs nothing
+/// brought into scope.
+pub fn getter_name(field: &str) -> String {
+    format!("Get_{field}")
+}
+
+/// The field a getter reads, for diagnostics: a dispatch failure on `Get_name`
+/// is a reader's field error, and must never show them the internal name.
+pub fn getter_field(name: &str) -> Option<&str> {
+    name.strip_prefix("Get_")
+}
+
 #[derive(Clone, Debug)]
 pub struct FnDecl {
     pub name: String,
@@ -161,6 +183,15 @@ pub struct FnDecl {
     /// True for bare-enrollment clones of imported decls (the import
     /// incarnation): real for dispatch, invisible to provenance analyses.
     pub synthetic: bool,
+}
+
+impl FnDecl {
+    /// A field getter, recognised by the binder no source can spell. It
+    /// carries its field's span, so checks that read declaration order have
+    /// to leave it out — it was never placed by an author.
+    pub fn is_getter(&self) -> bool {
+        matches!(self.body.as_slice(), [Stmt::Expr(Expr::Ident(name, _))] if name == GETTER_BINDER)
+    }
 }
 
 #[derive(Clone, Debug)]
