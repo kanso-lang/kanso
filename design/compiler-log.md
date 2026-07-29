@@ -9818,3 +9818,37 @@ ch09's cloud sample both print what they should, the book samples
 verify, kq's suite is green including its allocator goldens, every
 memory-corpus stdout is byte-identical, and the three cost veins are
 unchanged. Welfare 59.05 to 59.16, held.
+
+## 2026-07-28 — GAVEL: accessors are functions
+
+Clay, on whether `foo.bar.baz` makes sense when `bar` may be a typeset:
+"so we should make that change." Field access becomes ordinary function
+application. `name` is a function, `list/map people name` works, and an
+accessor is a value like any other.
+
+Two arguments were put for it and both were wrong. They are recorded
+because the reasoning behind a ruling outlives the ruling.
+
+The first was that a field read off a typeset cannot be a static
+offset. It can. It would be a second form of invocation, resolved by
+name and invisible to normal dispatch, which is what `rt_field_by_name`
+already does. The case against it is that it is a second mechanism —
+not that it is impossible, and the difference matters because a cost
+argument can be weighed and an impossibility claim just ends the
+conversation wrongly.
+
+The second was that a reader cannot tell which mechanism is in play
+without information that is not on the page. This language leaves
+inferred types out of source deliberately and expects the editor to
+show them through the language server. What the page alone carries is
+not the measure here, and that correction reaches further than this
+question.
+
+What carried it was the one argument that survived: an accessor which
+is a function is a value, and can be passed, composed and mapped. Field
+syntax hands you nothing you can give to anything else.
+
+Two things follow from the ruling rather than being settled by it — the
+namespace field names now occupy, and whether the tight spelling
+survives as sugar. Both are in design/pending-gavels.md. Nothing is
+built yet.
