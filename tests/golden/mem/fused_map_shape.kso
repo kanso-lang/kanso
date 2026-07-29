@@ -1,0 +1,18 @@
+# fusion composes a chain by applying the reducer where it stands, so the
+# folder it leaves is `(a v -> (a v -> push a v) a (f v))` — an applied lambda
+# wearing a wrapper. reading through the wrapper is what lets the push write in
+# place: 4,015 allocations before, 15 after, for the same four thousand
+# elements. a select is not covered by this and still costs per element,
+# because its fused reducer is a conditional.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  doubled = list/to_list (list/map xs (v -> v * 2))
+  print "mapped {length doubled} first {doubled[1]} last {doubled[4000]}"

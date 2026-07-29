@@ -9736,3 +9736,43 @@ histogram over `k_alloc` names the allocation in one run; a pair of
 counters in `k_b_push` and `k_b_push_mut` says which path a workload
 takes; and grouping the emitted IR's calls by enclosing `define` says
 which function is making them. None of them needed a debugger.
+
+## 2026-07-28 — reading through the wrapper fusion leaves (4,015 to 15, for map)
+
+The reason found. `folder_is_unique` asks what a folder's body applies
+and gives up unless the head is a name. Fusion composes a chain by
+applying the reducer where it stands, so the folder it leaves behind is
+
+    (a v -> (a v -> push a v) a (f v))
+
+an applied lambda wearing a wrapper, and the head is a lambda rather
+than a name. Printed out of the analysis, that reads
+`lambda -> App head="Lambda { params: [(\"a\", "` — which is the whole
+answer, and it took a line of debug output rather than another theory.
+
+An immediately-applied lambda handed the accumulator as its first
+argument is the same folder underneath. The check now asks its question
+of what is applied, and the walk peels the same wrapper to find the
+push and the name that holds the accumulator inside it.
+
+    to_list over a mapped view   4,015 allocations  ->  15
+    the same, pinned             4,017              ->  17
+
+Where it stops, and this is most of the story. A `select` is still
+4,015 and a `take` is 12,019. Their fused reducers are conditional —
+`if (p v) (push a v) a` — so the accumulator is not the first argument
+of the body and the check declines for a different reason than the one
+just fixed. The basket therefore moves by eleven allocations, not by
+four thousand: what it materialises goes through `select`.
+
+So this is a small win reported as a small win. It is worth having
+because the isolated number is real and because the wrapper had to be
+read through before the conditional case can be, but nobody should read
+eleven allocations as a mapped-view chain getting cheaper across the
+board.
+
+Every canary green before this was believed: `effect_push_shape.kso`
+and ch09's cloud sample both still print what they should, the book
+samples verify, kq's suite is green including its allocator goldens,
+every memory-corpus stdout is byte-identical and the three cost veins
+are unchanged. Welfare does not move.
