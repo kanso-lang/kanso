@@ -714,7 +714,11 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
         // test functions are assertions the test verb consumes — their own
         // convention, not questions
         let short = decl.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&decl.name);
+        // a getter takes its field's name, so this rule would reach past the
+        // function and rename the field — a language question (should a
+        // boolean field be `drained?`) that is not this check's to answer
         if decl.synthetic
+            || decl.is_getter()
             || decl.name == "main"
             || decl.name == "play"
             || short.starts_with("test_")
@@ -760,6 +764,45 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// `x.name` where no record type anywhere declares `name` cannot succeed at
+/// any runtime, so it is a compile error rather than a failure the program
+/// has to reach. Reading a field a *particular* record lacks stays a runtime
+/// error, since only the value knows its type.
+fn check_field_exists(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let declared: HashSet<&str> =
+        program.types.iter().flat_map(|t| t.fields.iter().map(|(f, _, _)| f.as_str())).collect();
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            field_reads(stmt, &declared, diags);
+        }
+    }
+}
+
+fn field_reads(stmt: &Stmt, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    let expr = match stmt {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+        Stmt::Set { value, .. } => value,
+    };
+    field_reads_expr(expr, declared, diags);
+}
+
+fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+    if let Expr::Field { base, name, span } = e {
+        if !declared.contains(name.as_str()) {
+            diags.push(Diagnostic::new(
+                "name",
+                format!("no record type has a field `{name}`"),
+                *span,
+            ));
+        }
+        field_reads_expr(base, declared, diags);
+        return;
+    }
+    for child in crate::expr_children(e) {
+        field_reads_expr(child, declared, diags);
+    }
+}
+
 pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
@@ -771,6 +814,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
+    check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
@@ -1210,7 +1254,9 @@ fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<St
 }
 
 fn check_type_order(program: &Program, diags: &mut Vec<Diagnostic>) {
-    if let Some(first_fn_line) = program.fns.iter().map(|f| f.span.line).min() {
+    if let Some(first_fn_line) =
+        program.fns.iter().filter(|f| !f.is_getter()).map(|f| f.span.line).min()
+    {
         for ty in program.types.iter().filter(|t| t.span.line > first_fn_line) {
             diags.push(Diagnostic::new(
                 "formatting",

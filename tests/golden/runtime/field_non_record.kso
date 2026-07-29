@@ -1,3 +1,6 @@
+type box
+  age
+
 pub play =
   x = 5
   print "{x.age}"

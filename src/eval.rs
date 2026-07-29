@@ -1312,10 +1312,22 @@ impl<'a> Interp<'a> {
                     }
                 }
                 None => {
+                    // a getter that matched nothing is a field error, in the
+                    // reader's words: they wrote `x.name`, not `Get_name x`
+                    let subject = args.first().cloned();
                     return match args.into_iter().find(is_failure) {
                         Some(bad) => Ok(hop(bad, &name)),
                         None => Err(RuntimeError {
-                            message: format!("no overload of `{name}` matches these arguments"),
+                            message: match (crate::ast::getter_field(&name), subject) {
+                                (Some(field), Some(Value::Record { ty, .. })) => {
+                                    format!("`{ty}` has no field `{field}`")
+                                }
+                                (Some(_), Some(value)) => format!(
+                                    "`.` reads a field of a record, not {}",
+                                    render(&value, true)
+                                ),
+                                _ => format!("no overload of `{name}` matches these arguments"),
+                            },
                             span,
                         }),
                     };
@@ -1825,8 +1837,11 @@ impl<'a> Interp<'a> {
                     Value::List(items) => Ok(Value::Int(BigInt::from(items.len()))),
                     Value::Str(s) => Ok(Value::Int(BigInt::from(s.chars().count()))),
                     Value::Map(entries) => Ok(Value::Int(BigInt::from(entries.len()))),
-                    _ => Err(RuntimeError {
-                        message: "length takes a list, string, or map".to_string(),
+                    other => Err(RuntimeError {
+                        message: format!(
+                            "length takes a list, string, or map, not {}",
+                            render(&other, true)
+                        ),
                         span,
                     }),
                 }

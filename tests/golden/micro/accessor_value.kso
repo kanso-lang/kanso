@@ -1,0 +1,16 @@
+import "std/list"
+
+type city
+  name
+
+type user
+  age
+  name
+
+pub play =
+  people = [(user 31 "ada") (user 47 "clay")]
+  places = [(city "oakland") (city "tokyo")]
+  clay = user 47 "clay"
+  print "{clay.name} is {clay.age}"
+  >> print (list/to_list (list/map people _.name))
+  >> print (list/to_list (list/map places _.name))

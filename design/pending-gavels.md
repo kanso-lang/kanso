@@ -416,18 +416,46 @@ warning, so it is recorded as an argument rather than a conclusion.
 
 Both follow-on questions are now ruled.
 
-**Spelling: `foo . bar . baz`.** The tight form does not survive as a
-separate thing. Clay: "we have overloads/polymorphism, so i think we can
-one-up them" — where Haskell needed a class and a new syntax to reach
-overloaded field access, this reaches it with the pipe that is already
-in the language and the dispatch that is already under every call.
-`x . f` applies a plain function today: `[1 2 3] . length` is 3.
+**Spelling: `x.name` reads, `_.name` is the accessor.** The dot stays
+tight, as it was, and the section supplies the thing field syntax could
+not: a value you can hand to something else.
 
-**Namespace: getters are ordinary arms.** A field getter joins the
-dispatch group of that name. `length` already carries arms for lists,
-strings and maps, so a record arm is the ordinary case, and a genuine
-clash — two arms matching the same type — is the ambiguity error that
-exists already.
+    clay.name                      the read
+    list/map people _.name         the accessor, dispatching on each element
+
+The pipe spelling `foo . bar . baz` was built first, on the reasoning
+that the pipe and the dispatch already in the language reach overloaded
+field access with no new mechanism. It works, and it costs more than it
+saves. Making the accessor reachable by name puts every field name in
+the value namespace, and three things follow: a field may no longer
+share a name with a type, so `type post` with a `state` field and a
+`state` typeset stops compiling; destructuring shadows the accessor, so
+ch03's own example cannot show `track artist minutes title = song` and
+`song.title` in one scope; and the pipe binds looser than arithmetic and
+application, so `point (p.x + 1) p.y` becomes
+`point ((p . x) + 1) (p . y)`.
+
+Haskell reached the same place from the other side and its answer is the
+one taken here. `OverloadedRecordDot` classifies the dot through the
+whitespace-sensitive operator mechanism — tight is field selection,
+loose stays composition — and the users' guide gives the section
+directly: "You may also write `(.b)` to mean a function that 'projects
+the `b` field from its argument'". `NoFieldSelectors` then stops
+generating the top-level selectors, so field names leave the value
+namespace entirely while construction, update and pattern matching keep
+working. Clay: One Right Way — and `_` is already the pipe-position
+hole, so the section is spelled with the hole this language has rather
+than the parenthesis convention that one does.
+
+**Namespace: getters are arms under a name no program can spell.** A
+getter is a real dispatch arm, so every type declaring `name` joins one
+group and `_.name` is polymorphic across all of them — the one-up over
+Haskell survives, since `HasField` exists only because their selectors
+are monomorphic. What does not survive is the getter occupying a
+writable name. It is declared as `Get_name`, which the lexer cannot
+produce, and it is never module-qualified: reading a field is
+structural, so it needs nothing brought into scope and can collide with
+nothing.
 
 **And the Haskell risk does not transfer, measured rather than
 argued.** GHC removed type-directed disambiguation because inference
@@ -450,6 +478,71 @@ What remains is implementation, and one small thing worth noticing on
 the way: `a.peers = [b]` inside a build block is a *write*, a statement
 form, and this ruling is about reads. The two look alike and are not
 the same construct.
+
+## DECLINED 2026-07-29: named arguments and the label set
+
+Explored in a day's dialog and declined by the author who proposed it.
+Recorded because the reasoning is worth more than the outcome, and
+because it will occur to somebody again.
+
+**What was on the table.** One colon in four places — `fn speak
+animal:(dog n)`, `speak animal:pet`, `user age:47 name:"clay"`, `{ age:a
+name:n } = clay` — with the call's label set acting as a dispatch
+selector, so a shorter set is a less specific call and the piped value
+fills the slot marked `_`. Order would then carry nothing, which is what
+made alphabetizing fields and parameters look mandatory rather than
+merely tidy.
+
+**What killed it, in the author's words: minimalism.** "Order is as
+concise as it gets. names are actually more verbose. and you'd have to
+sometimes re-map them with a colon." Two arguments behind that, both
+his.
+
+The first retires an objection rather than making one. Complecting is
+symmetric here: matching arguments to parameters needs *some*
+correspondence, position is one and name is another, and neither is
+free. "You've got to complect something to match the args, and name
+isn't inherently better than position." The Hickey framing recorded
+during the dialog leaned on an asymmetry that is not there.
+
+The second is decisive and comes from a ruling this project already
+made. Named arguments are a readability feature, and kanso has already
+chosen to buy readability from the editor rather than the page — which
+is exactly why inferred types are omitted from source and the language
+server shows them. Spelling labels into the text while omitting types is
+inconsistent. The consistent position keeps position.
+
+A third argument, which surfaced from the author's remark about
+re-mapping with a colon: naming gives a call site two forms, bare when
+the local's name happens to match and `x:item` when it does not.
+Position has one spelling, always. By the one-way-to-do-it measure
+naming is the more complected option, not the less.
+
+**What was genuinely on the other side**, so a future revisit argues
+against the real thing. The asymmetry that survives is blast radius
+rather than complecting: position derives correspondence from a global
+property of the parameter list, so adding, removing or reordering
+changes every call site at once, where a rename breaks only the calls
+that mention it and breaks them loudly. And the silent-reorder hazard is
+narrower than it first appeared — type dispatch already catches a swap
+of differently-typed arguments, so only adjacent same-typed parameters
+are exposed. That window did not pay for a permanent verbosity tax on
+every call in a language whose name means plain.
+
+**What survives the reversal, unchanged:**
+
+- Accessors are functions, ruled above. Reads are application; that has
+  nothing to do with labels.
+- Keyed destructuring stays exactly as it is: `{ author:writer title } =
+  hello`. The author's reason is that it solves a different problem —
+  taking one field out of a record without walking past the others with
+  `_` placeholders — and it never depended on labelled calls.
+- `_` in pipe position, which multi-argument pipes need under position
+  just as much.
+- Ordering rules stay where they are: typeset members and keyed reads
+  alphabetical, record fields and function groups the author's. The
+  instruction to alphabetize everything was conditional on order losing
+  its meaning, and order keeps it.
 
 ## Also open, not blocking any current work
 

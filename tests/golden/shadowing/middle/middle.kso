@@ -1,0 +1,4 @@
+import "../inner"
+
+pub fn bar foo
+  length foo

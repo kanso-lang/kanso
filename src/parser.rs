@@ -1623,6 +1623,13 @@ impl<'a> P<'a> {
     }
 
     fn starts_atom(&self) -> bool {
+        // `_.name` is an atom; a bare `_` is not, so the pipe hole and the
+        // wildcard pattern keep the meanings they already have
+        if matches!(self.peek(), Some(Tok::Underscore))
+            && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::Dot))
+        {
+            return true;
+        }
         matches!(
             self.peek(),
             Some(
@@ -1689,6 +1696,18 @@ impl<'a> P<'a> {
 
     fn parse_atom_base(&mut self) -> Result<Expr, Diagnostic> {
         let span = self.span_here();
+        // `_.name` is the read with its record left out — the accessor as a
+        // value, so `list/map people _.name` works. The name it denotes is
+        // not one a program can write, which is what keeps a field from
+        // taking a name away from anything else.
+        if matches!(self.peek(), Some(Tok::Underscore))
+            && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::Dot))
+        {
+            if let Some((Tok::Ident(field), _)) = self.toks.get(self.pos + 2).cloned() {
+                self.pos += 3;
+                return Ok(Expr::Ident(crate::ast::getter_name(&field), span));
+            }
+        }
         match self.toks.get(self.pos).map(|(t, _)| t.clone()) {
             Some(Tok::Int(n)) => {
                 self.pos += 1;
