@@ -107,7 +107,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
             canonicalize_bare_aliases(&mut merged);
             hoist_repeated_strings(&mut merged);
             hoist_repeated_strings(&mut merged);
-    fuse_enumerable(&mut merged);
+            fuse_enumerable(&mut merged);
             trmc::rewrite(&mut merged);
             Ok(merged)
         }
@@ -2235,8 +2235,7 @@ fn hoist_in_body(body: &mut Vec<ast::Stmt>, counter: &mut usize) {
             }
             ast::Stmt::Set { value, .. } => collect_hoistable(value, &mut found),
         }
-        let mut seen: std::collections::HashMap<String, usize> =
-            std::collections::HashMap::new();
+        let mut seen: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
         for (shape, _) in &found {
             *seen.entry(shape.clone()).or_default() += 1;
         }
