@@ -202,6 +202,17 @@ impl<'a> Analysis<'a> {
             return false;
         }
         let _ = (ctx, scoped);
+        // The accumulator builtins are exactly the ones whose result is unique
+        // when their first argument is, which the folder's contract already
+        // gives. They are not declarations, so `returns_unique` never held
+        // them, and the check said no to the shape it most obviously fits:
+        // `to_list` is `fold coll [] (acc x -> push acc x)`.
+        if matches!(callee.as_str(), "push" | "append" | "builtin_append") && args.len() == 2 {
+            return true;
+        }
+        if callee == "put" && args.len() == 3 {
+            return true;
+        }
         self.returns_unique.contains(&(callee.clone(), args.len()))
     }
 
@@ -373,6 +384,9 @@ fn walk_for_push_in(
         if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
             && args.len() == 3
             && a.folder_is_unique(&args[2], decl, scoped)
+            // the seed is what the first call writes into, so a shared one
+            // rules out the whole chain
+            && a.unique_in(&args[1], decl, scoped)
         {
             if let Expr::Lambda { params, body, .. } = &args[2] {
                 let inner = params.first().map(|(n, _)| n.as_str());

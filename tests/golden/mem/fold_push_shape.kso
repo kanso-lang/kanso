@@ -1,0 +1,17 @@
+# a fold whose reducer pushes writes into the accumulator it was handed. the
+# mark for that is keyed by source position, and a lifted lambda used to carry
+# no file, so every in-place site inside one was missed and the fold minted a
+# fresh list header per element. the alloc count pins which side of that the
+# compiler is on: 4,015 before, 15 after, for the same four thousand elements.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  copied = list/fold xs [] (a v -> push a v)
+  print "folded {length copied} first {copied[1]} last {copied[4000]}"

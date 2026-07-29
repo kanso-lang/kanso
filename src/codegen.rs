@@ -3405,6 +3405,11 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let mut f = FnEmit::new();
         f.origin_prefix = outer.origin_prefix.clone();
+        // A lifted lambda is still code from the file it was written in, and
+        // in-place sites are keyed by source position: without this the key is
+        // ("", line, col) and every mark inside a lambda is missed, so a fold
+        // that pushes allocated a fresh list header per element.
+        f.file = outer.file.clone();
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
             let t = f.tmp();

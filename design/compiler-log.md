@@ -9611,3 +9611,50 @@ is right on its own terms and changed the measurement by nothing at
 all, which means the mark was never what stood in the way. It is not
 being shipped: widening the linearity analysis without a number to show
 for it is what put a use-after-free in kq this morning.
+
+## 2026-07-28 — a lifted lambda forgot where it came from (4,015 to 15)
+
+The open question from the entry above has an answer, and it was two
+faults meeting rather than one. A size histogram named the allocation
+first: four thousand and three of them, sixteen bytes each, which is a
+list header per element.
+
+The push was innocent, as recorded — but the instrumented count that
+cleared it was watching the wrong loop. That program builds a list by
+recursion and then folds over it, four thousand pushes each; the four
+thousand `push_mut` calls taking their fast path were the builder's.
+The fold's pushes went to plain `k_b_push`, which claims the slot in
+the shared buffer and then allocates a fresh header to describe it.
+
+Why they went there is the second fault. `folder_is_unique` asks
+whether the folder's callee returns something unique and looks the
+answer up in `returns_unique`, which is seeded from declarations, so
+the builtin `push` was never in it. Teaching it the accumulator
+builtins is correct and, on its own, changes nothing — which is what
+was measured this morning and misread as "the mark is not the
+obstacle".
+
+It was half the obstacle. In-place sites are keyed by source position,
+and a lambda is lifted into a function whose emitter context is built
+fresh — with an empty file. So every mark inside a lambda was looked up
+as `("", line, col)` and missed, and the fold could not have written in
+place however the analysis was taught. The lifted function now carries
+the file it came from.
+
+    to_list over 4,000 elements   4,015 allocations  ->  15
+    the same fold, pinned         4,017              ->  17
+    basket                       79,952              ->  74,380
+    sort_shape                   29,470              ->  24,401
+    skip_shape                       51              ->  41
+
+Every stdout in the corpus is byte-identical, the three cost veins are
+unchanged, and kq's spec suite is green including its own allocator
+goldens — which is the check that matters here, because this widens
+in-place marking into lambda bodies, and widening in-place marking is
+what put a use-after-free in kq this morning.
+
+`to_list` over a *mapped* view still costs an allocation per element.
+Folding a mapped view to a sum costs twelve, so the adapter fuses; what
+does not is the pair of them together. That is the next thread.
+
+Welfare 58.90 to 59.05, held.
