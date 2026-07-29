@@ -1,0 +1,6 @@
+type user
+  name
+
+pub play =
+  reader = _.name
+  print "{reader}"

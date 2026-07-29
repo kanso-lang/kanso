@@ -1,0 +1,7 @@
+type user
+  name
+
+fn boom _
+  err "gone"
+
+pub play = print "{(boom 0).name}"
