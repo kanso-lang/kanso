@@ -9698,3 +9698,41 @@ veins are unchanged, the book samples verify, and kq's suite is green
 including its own allocator goldens.
 
 Welfare 58.90 to 59.05, held.
+
+## 2026-07-28 — the fused reducer's push is the one still copying
+
+Where the last entry's win stops. Materialising a list is fifteen
+allocations when the source is a list and four thousand and fifteen
+when it is a mapped view, and the difference is not the adapter: a fold
+that sums over a mapped view costs twelve.
+
+Counted at the runtime, the mapped path calls the copying `k_b_push`
+four thousand times and `push_mut` not once for that accumulator. The
+same user lambda, the same mark. Read out of the emitted IR, the
+copying call is inside a lifted lambda that nobody wrote:
+
+    %t14 = call %KValue @k_mul(%KValue %a1, %KValue { i64 0, i64 2 })
+    %t21 = call %KValue @k_b_push(%KValue %a0, %KValue %t16)
+
+That is `(a v -> push a (v * 2))` — `fuse_enumerable` has folded the
+map's shape into the fold's reducer, and the push in the synthesised
+lambda carries no mark. The user's own reducer, lifted beside it,
+calls `k_b_push_mut` correctly.
+
+Fusion runs before the marks are computed, so the lambda is in the
+program when the analysis walks it. Two things it is not: the fold's
+spelling (matching any qualification of `fold` rather than the two
+literal names changes nothing), and the folder shape (`push a (v * 2)`
+satisfies `folder_is_unique` — first argument the accumulator, the rest
+free of it).
+
+So the mark is refused for a reason not yet found, and the tidy
+explanations are used up. Recorded here rather than guessed at again,
+because the last two guesses in this area each cost a corrupted
+program.
+
+The instruments that did the work, for whoever picks it up: a size
+histogram over `k_alloc` names the allocation in one run; a pair of
+counters in `k_b_push` and `k_b_push_mut` says which path a workload
+takes; and grouping the emitted IR's calls by enclosing `define` says
+which function is making them. None of them needed a debugger.
