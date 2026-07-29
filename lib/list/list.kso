@@ -123,8 +123,27 @@ fn first_of (done _)
 fn first_of (step e _)
   e
 
+# A window over an array is walked by index, the way a bare list is. Pulling
+# it through `next` builds a step and a fresh window every element, and both
+# are read once and dropped — the same two records the window already saved by
+# not being a cap around a cursor.
+# A cap around a cursor is a window over an array, and a window is walked by
+# index the way a bare list is. Pulling it through `next` builds a step and a
+# fresh window every element, both read once and dropped.
+pub fn fold (capped left (cursor at source)) init f
+  bounded_flat source init f at (at + left - 1)
+
 pub fn fold (bounded at stop source) init f
-  fold_go (next (bounded at stop source)) init f
+  bounded_flat source init f at stop
+
+fn bounded_flat source acc f i stop
+  if (stop < i) acc (bounded_more source acc f i stop)
+
+fn bounded_more source acc f i stop
+  if (length source < i) acc (bounded_step source acc f i stop)
+
+fn bounded_step source acc f i stop
+  bounded_flat source (f acc (source[i]!)) f (i + 1) stop
 
 pub fn fold (capped left source) init f
   fold_go (next (capped left source)) init f
