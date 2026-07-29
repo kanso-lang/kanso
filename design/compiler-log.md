@@ -9424,3 +9424,36 @@ seven terms read three benchmark programs and a compile, none of which
 sorts anything, so a two-hundred-fold improvement is invisible to the
 number that is supposed to say whether the project came out ahead. The
 basket is the fix and it is being built.
+
+## 2026-07-28 — the in-place string concat is reverted; kq found what we did not
+
+Clay asked for kq's metrics to be re-run against the latest compiler.
+They could not be: kq printed two hundred and sixty-seven NUL bytes
+where its unicode fixture should be, at exactly the right length.
+
+The entry above is reverted. What shipped was wrong and nothing in this
+repository said so — nineteen suites, a browser differential over
+ninety-eight programs, three cost veins and every memory pin were green
+on a compiler that corrupted the first real program it met. The
+regression tests here exercise the language; kq exercises the language
+the way somebody uses it.
+
+Two things are known and one is not.
+
+The buffer handover is implicated: disabling it alone restores kq's
+output. Skipping the free on the grow path changes the corruption from
+NUL bytes to spaces rather than removing it, so this is not simply a
+read of freed storage — a live accumulator is being written through
+while somebody else still holds it.
+
+The likely reason is the widening in `linear.rs`. Adding `Expr::Str` to
+the unique-source rule was written as a fact about strings, but that
+rule decides in-place *for every builtin that has a mut twin* — a push,
+a put, an append. Any parameter a string literal reaches now reads as
+linear. That is a much larger claim than the one being made, and it was
+not measured against anything that would notice.
+
+What comes back has to come back narrower: a licence that speaks only
+for the interpolation site it was written for, and the kq fixture in
+this repository's corpus before the optimisation returns rather than
+after.

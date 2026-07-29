@@ -1,9 +1,0 @@
-# an accumulator nobody else holds grows in place: the alloc count pins the
-# linear shape, where a copy per append would make it grow with the square.
-fn go 0 s
-  length s
-
-fn go n s
-  go (n - 1) "{s}x"
-
-pub play = print "built {go 2000 ""}"
