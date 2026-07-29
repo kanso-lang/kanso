@@ -106,7 +106,6 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
             canonicalize_types(&mut merged);
             canonicalize_bare_aliases(&mut merged);
             hoist_repeated_strings(&mut merged);
-            hoist_repeated_strings(&mut merged);
             fuse_enumerable(&mut merged);
             trmc::rewrite(&mut merged);
             Ok(merged)
