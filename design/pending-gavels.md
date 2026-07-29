@@ -317,6 +317,44 @@ user identifiers may use it freely).
 Small, but it is a semantics hole in the map surface and should be one
 sentence in the spec once ruled.
 
+## RULED 2026-07-28: accessors are functions
+
+Clay: "so we should make that change." Field access becomes ordinary
+function application. `name` is a function, so `list/map people name`
+works, and an accessor is a value that can be passed, composed and
+mapped like any other.
+
+Two arguments were put and both were wrong, recorded because the
+reasoning behind a ruling is worth more than the ruling:
+
+- That `foo.bar` on a typeset "cannot be a static field offset". It can.
+  It would be a second form of invocation, resolved by name and
+  invisible to normal dispatch — which is what `rt_field_by_name`
+  already does. The case against it is that it is a second mechanism,
+  not that it is impossible.
+- That a reader "cannot tell which mechanism without information that
+  is not on the page". This language omits inferred types from source on
+  purpose and expects the editor to show them through the language
+  server. An argument from what the page alone carries does not apply
+  here, and will not apply to the next question either.
+
+What carried it: an accessor that is a function is a value. Field
+syntax hands you nothing you can give to anything else.
+
+Still to rule, because it follows from this rather than being settled
+by it:
+
+- **Namespace.** Field names become ordinary function names. Multi-arm
+  dispatch over several record types is the natural fit, but every field
+  name then occupies the namespace and can collide with a function.
+  Clojure pays this with namespaced keywords; the options here are
+  module qualification, or something else.
+- **Spelling.** Whether `foo.bar.baz` survives as sugar for the
+  application, or the tight form goes and it is written `foo . bar .
+  baz`. The tight-gap lexer rule exists either way; the question is
+  whether it still buys anything once the two spellings mean the same
+  thing.
+
 ## Also open, not blocking any current work
 
 - **TRMC v2**: license operands by inferred set (any provably-int
