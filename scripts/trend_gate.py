@@ -67,6 +67,7 @@ BENCH_GOLDENS = {
     "bench/cost_golden.txt": "",
     "bench/cost_golden_encode.txt": "encode_",
     "bench/cost_golden_oneshot.txt": "oneshot_",
+    "bench/cost_golden_basket.txt": "basket_",
     "bench/compile_golden.txt": "",
 }
 
