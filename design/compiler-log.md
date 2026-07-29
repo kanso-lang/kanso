@@ -9852,3 +9852,37 @@ Two things follow from the ruling rather than being settled by it — the
 namespace field names now occupy, and whether the tight spelling
 survives as sugar. Both are in design/pending-gavels.md. Nothing is
 built yet.
+
+## 2026-07-28 — why a take does not fuse, from the code rather than a guess
+
+The entry above left `take` at 12,019 allocations and guessed its
+fusion "carries a count and a done signal". It carries nothing: there
+is no fusion case for it at all.
+
+    sum over a select      12 allocations
+    sum over a take    12,016
+    to_list over a take 12,019
+
+So `take` fuses under no consumer, where `select` fuses under any. The
+reason is four lines of `fuse_enumerable`: reducer lambdas are
+generated for `map`, `select` and `reject`, and for nothing else.
+`take` and `drop` appear in the *inliner's* adapter list, which is a
+different pass, and that is the whole of their support.
+
+The reason behind the reason is that a fold cannot stop. A `map` or a
+`select` is a per-element transform and composes into a reducer without
+remembering anything; `take` has to count what it has emitted and end
+the traversal, and a fold has no way to end. Fusing it means giving the
+fused reducer a done signal, which is a capability rather than a case.
+
+What it costs meanwhile: twelve thousand and three records of
+sixty-four bytes for three thousand elements, four per element, which
+is the price of any chain fusion does not cover. `drop` used to pay the
+same and does not any more, but by a different route — skipping over a
+cursor became index arithmetic rather than walking, so there was
+nothing left per element to fuse away.
+
+No such shortcut exists for `take`: it has to yield each element it
+takes. Either the fold learns to stop, or the unfused adapter path gets
+cheaper than four records an element. Both are real work and neither is
+begun.
