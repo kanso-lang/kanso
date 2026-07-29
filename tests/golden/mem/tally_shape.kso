@@ -1,0 +1,17 @@
+# a tally is `fold coll {:} (m x -> put m x (bump m[x]))`, which mentions the
+# map twice and holds it once: the read in the sibling argument finishes before
+# the write, because a builtin forces every argument before it runs. Without
+# that discount the fold copied its map once an element — 4,000 map headers and
+# four megabytes of buffers for four thousand elements.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  counts = list/tally (list/map xs (v -> v - v / 32 * 32))
+  print "buckets {length counts} at7 {counts[7]}"

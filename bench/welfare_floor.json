@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 60.031974578582656,
+  "floor": 64.28542350664415,
   "history": [
     {
       "floor": 46.33,
@@ -118,6 +118,10 @@
     {
       "floor": 60.03,
       "why": "the sort's halves are index ranges, not lists: splitting by take and drop walked each half element by element at every level to build a list read once and thrown away. sort 500 23,486 -> 2,512, sort 4,000 -> 20,014, sort_shape 20,468 -> 2,513, basket 66,432 -> 48,477."
+    },
+    {
+      "floor": 64.29,
+      "why": "a builtin forces its arguments, so a sibling may read the accumulator: tally is fold coll {:} (m x -> put m x (bump m[x])), which mentions the map twice and holds it once. Without the discount the fold copied its map every element. tally 12,024 -> 25 allocations and 128,000 -> 0 map-header bytes, fused_tally 1,590 -> 94, basket 48,477 -> 36,478."
     }
   ]
 }
