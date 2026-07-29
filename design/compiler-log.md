@@ -10098,3 +10098,39 @@ elimination: it does one shape, inside one statement, with a purity
 test that would embarrass a real compiler. What it is, is the twenty
 percent of the basket that shape was worth, taken without a pass that
 could reorder an effect.
+
+## 2026-07-28 — reusing a finished record, built and not kept
+
+The last item in the basket that is overhead rather than the work
+itself: four thousand record updates, one fresh record each.
+
+    fn shift n p
+      shift (n - 1) (point (p.x + 1) p.y)
+
+Every field the constructor needs is read before it runs, so by then
+`p` is finished and its storage is free. This is the Perceus move and
+the runtime half of it is twelve lines — `k_rec_reuse` writes into a
+victim of the same width and falls back to allocating otherwise, which
+also keeps it away from the shared zero-field marker. The emitter half
+is a lookup and a different call. Both were written and both work.
+
+The analysis is where it stops, and the reason is worth having exactly.
+Reuse needs `p` proved uniquely owned, and the linearity fixpoint
+disqualifies a parameter used more than once. `p.x` and `p.y` are two
+uses. The discount that exists — sibling arguments of a call that
+consumes the value — does not apply, because a constructor does not
+take `p` at all; it takes two integers that were read out of it.
+
+    shift/2 param 1 `p` linear=false
+    reuse sites: {}
+
+So the rule that is missing is: a value whose only mentions are reads
+inside one expression is finished when that expression is done, whether
+or not the expression consumes it by name. That is a third change to
+the same fixpoint in one day, and the two before it each shipped a
+corrupted program before the canaries caught them. It is not being
+written at the end of a long session.
+
+Reverted whole. What is worth keeping is the shape of the answer: the
+runtime and the emitter are easy and the analysis is the whole problem,
+which is the opposite of where the effort looked like it would go.
