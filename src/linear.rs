@@ -654,35 +654,6 @@ fn child_exprs(e: &Expr) -> Vec<&Expr> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::in_place_pushes;
-    use std::path::Path;
-
-    #[test]
-    fn json_accumulator_pushes_flagged() {
-        let program = crate::compile_module(Path::new("lib/json"), false).unwrap();
-        let p = in_place_pushes(&program);
-        assert!(
-            p.iter().any(|(f, _, _)| f.ends_with("value.kso")),
-            "array accumulator push should be in-place, got {p:?}"
-        );
-        assert!(
-            p.iter().any(|(f, _, _)| f.ends_with("text.kso")),
-            "string accumulator pushes should be in-place, got {p:?}"
-        );
-    }
-
-    #[test]
-    fn aliased_list_not_flagged() {
-        // xs is pushed twice, so neither push uniquely owns it — mutating in
-        // place would corrupt the other reference. Must stay allocating.
-        let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  push a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
-        let program = crate::compile("test.kso", src, true).unwrap();
-        assert!(in_place_pushes(&program).is_empty(), "aliased pushes must not be marked in-place");
-    }
-}
-
 /// Constructor sites that may build into a record that is finished.
 ///
 /// `shift (n - 1) (point (p.x + 1) p.y)` reads every field it needs before the
@@ -764,4 +735,33 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
         candidate = Some(name.clone());
     }
     candidate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::in_place_pushes;
+    use std::path::Path;
+
+    #[test]
+    fn json_accumulator_pushes_flagged() {
+        let program = crate::compile_module(Path::new("lib/json"), false).unwrap();
+        let p = in_place_pushes(&program);
+        assert!(
+            p.iter().any(|(f, _, _)| f.ends_with("value.kso")),
+            "array accumulator push should be in-place, got {p:?}"
+        );
+        assert!(
+            p.iter().any(|(f, _, _)| f.ends_with("text.kso")),
+            "string accumulator pushes should be in-place, got {p:?}"
+        );
+    }
+
+    #[test]
+    fn aliased_list_not_flagged() {
+        // xs is pushed twice, so neither push uniquely owns it — mutating in
+        // place would corrupt the other reference. Must stay allocating.
+        let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  push a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
+        let program = crate::compile("test.kso", src, true).unwrap();
+        assert!(in_place_pushes(&program).is_empty(), "aliased pushes must not be marked in-place");
+    }
 }
