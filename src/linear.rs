@@ -11,7 +11,7 @@
 //! aliased. Anything the analysis can't follow leaves the push allocating.
 
 use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Push call sites, keyed `(file, line, col)`, whose list argument is uniquely
 /// owned and may be extended in place.
@@ -40,6 +40,8 @@ fn real_fns(program: &Program) -> impl Iterator<Item = &FnDecl> {
 
 struct Analysis<'a> {
     program: &'a Program,
+    /// Declared type names, so a constructor call can be recognised.
+    types: HashSet<String>,
     /// (function name, arity, param index) positions that receive a uniquely
     /// owned list at every call site and are moved (used at most once) in body.
     linear_params: HashSet<(String, usize, usize)>,
@@ -55,8 +57,13 @@ impl<'a> Analysis<'a> {
         // returns a unique list, then remove any the code disproves. Removal is
         // monotone, so it converges, and a value stays "unique" only if nothing
         // ever aliases it — the sound direction for an in-place mutation.
-        let mut a =
-            Analysis { program, linear_params: HashSet::new(), returns_unique: HashSet::new() };
+        let types: HashSet<String> = program.types.iter().map(|t| t.name.clone()).collect();
+        let mut a = Analysis {
+            program,
+            types,
+            linear_params: HashSet::new(),
+            returns_unique: HashSet::new(),
+        };
         for decl in real_fns(program) {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
             for i in 0..decl.params.len() {
@@ -120,6 +127,28 @@ impl<'a> Analysis<'a> {
             }
         }
         // Every call site must pass a uniquely-owned list at position i.
+        self.program.fns.iter().all(|caller| {
+            caller.body.iter().all(|stmt| {
+                let e = match stmt {
+                    Stmt::Bind { expr, .. } => expr,
+                    Stmt::Expr(e) => e,
+                    Stmt::Set { value, .. } => value,
+                };
+                self.callsites_unique(caller, e, name, arity, i)
+            })
+        })
+    }
+
+    /// Every call site of this group hands over a uniquely-owned value at `i`.
+    ///
+    /// This is the caller half of `param_is_linear`, asked on its own. The
+    /// other half — used at most once — is deliberately not asked, because a
+    /// record read twice for its fields is used twice and is still finished
+    /// afterwards. The reuse site replaces it with a stricter local test: every
+    /// mention of the parameter anywhere in the arm is inside the one
+    /// expression that consumes it. Nothing here touches `linear_params`, so
+    /// what a push or a put is allowed to do is unchanged.
+    fn callers_hand_over(&self, name: &str, arity: usize, i: usize) -> bool {
         self.program.fns.iter().all(|caller| {
             caller.body.iter().all(|stmt| {
                 let e = match stmt {
@@ -316,6 +345,11 @@ impl<'a> Analysis<'a> {
                 {
                     true
                 }
+                // a constructor allocates its record, so nobody else holds
+                // the result — the same fact as a list or map literal, which
+                // was missing only because a type is not a declaration and
+                // `returns_unique` is built from declarations
+                Expr::Ident(n, _) if self.types.contains(n.as_str()) => true,
                 Expr::Ident(n, _) => self.returns_unique.contains(&(n.clone(), args.len())),
                 _ => false,
             },
@@ -647,4 +681,87 @@ mod tests {
         let program = crate::compile("test.kso", src, true).unwrap();
         assert!(in_place_pushes(&program).is_empty(), "aliased pushes must not be marked in-place");
     }
+}
+
+/// Constructor sites that may build into a record that is finished.
+///
+/// `shift (n - 1) (point (p.x + 1) p.y)` reads every field it needs before the
+/// constructor runs, so by then `p` is done with. When every caller hands the
+/// parameter over uniquely, and the only mentions of it in the arm are those
+/// reads, its storage is free and the new record can go there.
+///
+/// The runtime keeps the other half: it writes through only into a record of
+/// the same width, so a mismatch — or the shared zero-field marker — falls
+/// back to allocating.
+pub fn reusable_records(program: &Program) -> HashMap<(String, usize, usize), String> {
+    let analysis = Analysis::new(program);
+    let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    let mut out = HashMap::new();
+    for decl in real_fns(program) {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            walk_for_reuse(&analysis, decl, e, &types, &mut out);
+        }
+    }
+    out
+}
+
+fn walk_for_reuse(
+    a: &Analysis,
+    decl: &FnDecl,
+    e: &Expr,
+    types: &HashSet<&str>,
+    out: &mut HashMap<(String, usize, usize), String>,
+) {
+    // a lambda runs when somebody else decides, so what is finished inside one
+    // is not knowable from here
+    if matches!(e, Expr::Lambda { .. }) {
+        return;
+    }
+    if let Expr::App { head, args, span, .. } = e {
+        if let Expr::Ident(name, _) = head.as_ref() {
+            if types.contains(name.as_str()) && !args.is_empty() {
+                if let Some(victim) = sole_finished_record(a, decl, args) {
+                    out.insert((decl.file.clone(), span.line, span.col), victim);
+                }
+            }
+        }
+    }
+    for child in child_exprs(e) {
+        walk_for_reuse(a, decl, child, types, out);
+    }
+}
+
+/// The one parameter these arguments read, when it is read nowhere else in the
+/// arm and every caller hands it over.
+fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<String> {
+    let arity = decl.params.len();
+    let mut candidate: Option<String> = None;
+    for (i, pattern) in decl.params.iter().enumerate() {
+        let Pattern::Var(name, _) = pattern else { continue };
+        let here: usize = args.iter().map(|arg| count_in_expr(name, arg)).sum();
+        if here == 0 {
+            continue;
+        }
+        let everywhere: usize = decl
+            .body
+            .iter()
+            .map(|s| match s {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(name, expr),
+                Stmt::Set { value, .. } => count_in_expr(name, value),
+            })
+            .sum();
+        // read here and nowhere else, or somebody outlives the constructor
+        if here != everywhere || !a.callers_hand_over(&decl.name, arity, i) {
+            continue;
+        }
+        if candidate.is_some() {
+            return None;
+        }
+        candidate = Some(name.clone());
+    }
+    candidate
 }

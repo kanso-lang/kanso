@@ -1,0 +1,18 @@
+# a record whose fields are all read by one constructor is finished when that
+# constructor runs, so the new record goes in its storage. 4,005 allocations
+# before, 3 after, for four thousand updates. reuse_guard.kso is the other
+# half: where the old record is read afterwards, or kept beside the new one,
+# the analysis must decline and those bytes must still be the old ones.
+type point
+  x
+  y
+
+fn shift 0 p
+  p
+
+fn shift n p
+  shift (n - 1) (point (p.x + 1) p.y)
+
+pub play =
+  moved = shift 4000 (point 0 0)
+  print "x {moved.x} y {moved.y}"

@@ -1174,6 +1174,27 @@ KValue k_err_hop(KValue v, const char* fn) {
 static KValue k_marker_cache[K_MARKER_CACHE];
 static char k_marker_ready[K_MARKER_CACHE];
 
+/* Building a record from one that is finished writes into its storage rather
+   than asking for more. `point (p.x + 1) p.y` reads every field it needs
+   before the constructor runs, so by then `p` is done with, and the analysis
+   is what says nobody else holds it. The width test is this side's guard: a
+   record of a different shape, or the shared zero-field marker, falls through
+   to a fresh allocation. */
+KValue k_rec(long long type_id, long long n, KValue* args);
+
+KValue k_rec_reuse(long long type_id, long long n, KValue* args, KValue victim) {
+    for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
+    if (n > 0 && victim.tag == K_REC) {
+        KRec* r = k_as_rec(victim);
+        if (r->nfields == n) {
+            for (long long i = 0; i < n; i++) r->fields[i] = args[i];
+            r->type_id = type_id;
+            return victim;
+        }
+    }
+    return k_rec(type_id, n, args);
+}
+
 KValue k_rec(long long type_id, long long n, KValue* args) {
     for (long long i = 0; i < n; i++) if (!k_not_failure(args[i])) return args[i];
     if (n == 0 && type_id >= 0 && type_id < K_MARKER_CACHE) {

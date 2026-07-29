@@ -179,6 +179,7 @@ declare %KValue @k_err(%KValue, ptr)
 declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
+declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
 declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
@@ -381,6 +382,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     escape.carries.retain(|_, ty| packable.contains(ty));
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
     let in_place_pushes = crate::linear::in_place_pushes(program);
+    let reusable_records = crate::linear::reusable_records(program);
     // Beat loops rewind the arena between iterations. Groups returning the
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.
@@ -405,6 +407,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         escape,
         byte_disc,
         in_place_pushes,
+        reusable_records,
         beat,
         type_ids,
         strings: Vec::new(),
@@ -432,6 +435,7 @@ struct Backend<'a> {
     escape: crate::escape::EscapeInfo,
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
+    reusable_records: std::collections::HashMap<(String, usize, usize), String>,
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
@@ -3270,7 +3274,17 @@ impl<'a> Backend<'a> {
                 f.line(&format!("store %KValue {value}, ptr {slot}"));
             }
             let t = f.tmp();
-            f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 {n}, ptr {arr})"));
+            // a record this call is the last reader of can be built into
+            let victim = self
+                .reusable_records
+                .get(&(f.file.clone(), span.line, span.col))
+                .and_then(|name| f.lookup(name));
+            match victim {
+                Some(v) => f.line(&format!(
+                    "{t} = call %KValue @k_rec_reuse(i64 {id}, i64 {n}, ptr {arr}, %KValue {v})"
+                )),
+                None => f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 {n}, ptr {arr})")),
+            }
             let fails: Set = emitted.iter().fold(0, |acc, e| acc | (f.set_of(e) & FAIL));
             f.record(&t, REC | fails);
             return Ok(t);

@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 64.77816294576887,
+  "floor": 65.08852119966436,
   "history": [
     {
       "floor": 46.33,
@@ -126,6 +126,10 @@
     {
       "floor": 64.78,
       "why": "a repeated pure interpolation is evaluated once: reading a key then writing it builds the key twice as written, and the licence is narrow \u2014 an interpolation over names, numbers and arithmetic only, never inside a lambda. repeated 14,759 -> 7,388, basket 36,478 -> 29,107, growing_map 3,207 -> 1,616, readwrite_map 611 -> 311."
+    },
+    {
+      "floor": 65.09,
+      "why": "a record whose fields are all read by one constructor is finished when it runs, so the new record goes in its storage. The judgment is local \u2014 every caller hands the parameter over, and every mention in the arm is inside that one expression \u2014 so the shared fixpoint is untouched. record updates 4,005 -> 3, basket 29,107 -> 25,105."
     }
   ]
 }

@@ -10134,3 +10134,41 @@ written at the end of a long session.
 Reverted whole. What is worth keeping is the shape of the answer: the
 runtime and the emitter are easy and the analysis is the whole problem,
 which is the opposite of where the effort looked like it would go.
+
+## 2026-07-28 — a finished record is built into (4,005 allocations to 3)
+
+The entry above reverted this and said the analysis was the whole
+problem. It was, and the way through it was not to change the analysis
+but to stop asking it the wrong question.
+
+`param_is_linear` asks two things: every caller hands the value over,
+and the arm uses it at most once. A record read for two fields is used
+twice and fails the second, which is why the fixpoint said no — and
+changing the fixpoint would have been the third such change in a day,
+after two that shipped corrupted programs.
+
+So the reuse site asks the first half on its own and replaces the
+second with something stricter and local: every mention of the
+parameter anywhere in the arm is inside the one expression that builds
+the new record. Two field reads there are fine; a read afterwards, or a
+copy kept beside the new one, is not. `linear_params` is not consulted
+and not changed, so what a push or a put may do is exactly what it was.
+
+One fact was missing and is now supplied: a constructor call allocates
+its record, so nobody else holds the result. That was already known of
+a list literal and a map literal, and was absent for a type only
+because `returns_unique` is built from declarations and a type is not
+one.
+
+    record updates   4,005 allocations  ->   3
+    pinned           4,006              ->   4
+    basket          29,107              ->  25,105
+
+The guard is a fixture rather than an argument. `reuse_guard.kso` reads
+the old record after the constructor, keeps it in a list beside the
+new one, and discards the new one immediately — and prints the same
+bytes on both compilers, because in each of those the analysis declines.
+An allocation count would have called that file an improvement; what it
+asserts is the bytes.
+
+Welfare 64.78 to 65.09.
