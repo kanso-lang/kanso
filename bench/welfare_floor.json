@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 64.28542350664415,
+  "floor": 64.77816294576887,
   "history": [
     {
       "floor": 46.33,
@@ -122,6 +122,10 @@
     {
       "floor": 64.29,
       "why": "a builtin forces its arguments, so a sibling may read the accumulator: tally is fold coll {:} (m x -> put m x (bump m[x])), which mentions the map twice and holds it once. Without the discount the fold copied its map every element. tally 12,024 -> 25 allocations and 128,000 -> 0 map-header bytes, fused_tally 1,590 -> 94, basket 48,477 -> 36,478."
+    },
+    {
+      "floor": 64.78,
+      "why": "a repeated pure interpolation is evaluated once: reading a key then writing it builds the key twice as written, and the licence is narrow \u2014 an interpolation over names, numbers and arithmetic only, never inside a lambda. repeated 14,759 -> 7,388, basket 36,478 -> 29,107, growing_map 3,207 -> 1,616, readwrite_map 611 -> 311."
     }
   ]
 }
