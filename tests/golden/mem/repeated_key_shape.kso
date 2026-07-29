@@ -1,0 +1,19 @@
+# reading a key and then writing it is the ordinary shape of map code, and
+# spelled directly it builds the key twice. evaluating a repeated pure
+# interpolation once halves the strings: 14,759 allocations before, 7,388
+# after, for four thousand iterations over sixty-four keys.
+fn bump none
+  1
+
+fn bump v
+  v + 1
+
+fn go 0 m
+  m
+
+fn go n m
+  go (n - 1) (put m "k{n - n / 64 * 64}" (bump m["k{n - n / 64 * 64}"]))
+
+pub play =
+  counts = go 4000 {:}
+  print "keys {length counts} at k7 {counts["k7"]}"

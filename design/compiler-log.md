@@ -10058,3 +10058,43 @@ What each remaining item is, so nobody re-derives it:
 - `grouped`, `grown` — roughly one allocation an element, which is the
   element being stored. Near the floor.
 - `sorted` — five an element after today's three rounds on it.
+
+## 2026-07-28 — a repeated pure interpolation is evaluated once
+
+The entry above named this and refused to tidy the fixture that
+exposed it, on the grounds that the duplication was the honest shape of
+an opportunity. This is the opportunity taken.
+
+    put m "k{i}" (bump m["k{i}"])
+
+Reading a key and then writing it is the ordinary shape of map code,
+and spelled directly it allocates two identical strings an iteration.
+
+The licence is small on purpose. An interpolation is hoisted when every
+piece of it is a name, a number or arithmetic over those — no calls, no
+indexing, nothing that can fail or reach an effect — and lambda bodies
+are skipped entirely, because a folder's shape is what the linearity
+analysis matches on and a binding in front of it would hide the write
+that makes a fold write in place.
+
+    repeated fixture   14,759 allocations  ->   7,388
+    pinned             14,761              ->   7,390
+    growing_map         3,207              ->   1,616
+    readwrite_map         611              ->     311
+    basket             36,478              ->  29,107
+
+The two memory pins fell without being touched, which says the pattern
+is not peculiar to the fixture that found it: both were written the
+same way, months apart, by somebody not thinking about it.
+
+Compile cost is unchanged — rounds, visits and emitted lines are
+identical on every sample, because the pass only rewrites where a
+repeat exists and the compile fixtures have none.
+
+Welfare 64.29 to 64.78.
+
+Worth noting what this is not. It is not common-subexpression
+elimination: it does one shape, inside one statement, with a purity
+test that would embarrass a real compiler. What it is, is the twenty
+percent of the basket that shape was worth, taken without a pass that
+could reorder an effect.
