@@ -310,6 +310,20 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
     push(Slot::V(Value::NoneV))
 }
 
+/// A getter group that matched nothing. The reader wrote `x.name`, so they
+/// get a field error, in the same words the other two engines use.
+#[no_mangle]
+pub extern "C" fn rt_no_field(base: u32, name_lit: u32) -> u32 {
+    let name = match val(name_lit) {
+        Value::Str(s) => s,
+        _ => die("field name must be a string".to_string()),
+    };
+    match val(base) {
+        Value::Record { ty, .. } => die(format!("`{ty}` has no field `{name}`")),
+        other => die(format!("`.` reads a field of a record, not {}", render(&other, true))),
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rt_field_by_name(base: u32, name_lit: u32) -> u32 {
     let name = match val(name_lit) {

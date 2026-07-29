@@ -68,6 +68,7 @@ const RT_SETFIELD: u32 = 31;
 const RT_FIELD_BY_NAME: u32 = 32;
 const RT_IS_REC: u32 = 33;
 const RT_JOIN: u32 = 34;
+const RT_NO_FIELD: u32 = 35;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -106,6 +107,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_field_by_name", params: 2, returns: true },
         Import { name: "rt_is_rec", params: 1, returns: true },
         Import { name: "rt_join", params: 2, returns: true },
+        Import { name: "rt_no_field", params: 2, returns: true },
     ]
 }
 
@@ -338,9 +340,21 @@ impl<'a> WasmBackend<'a> {
             ctx.body.ret();
             ctx.body.end();
         }
-        let msg = self.str_lit(&format!("no overload of `{name}` matches these arguments"));
-        ctx.body.i32_const(msg as i64);
-        ctx.body.call(RT_DIE);
+        // a getter that matched nothing is a field error to the reader, and
+        // only the runtime can name the value it was handed
+        match crate::ast::getter_field(name) {
+            Some(field) if arity == 1 => {
+                let lit = self.str_lit(field);
+                ctx.body.local_get(0);
+                ctx.body.i32_const(lit as i64);
+                ctx.body.call(RT_NO_FIELD);
+            }
+            _ => {
+                let msg = self.str_lit(&format!("no overload of `{name}` matches these arguments"));
+                ctx.body.i32_const(msg as i64);
+                ctx.body.call(RT_DIE);
+            }
+        }
         ctx.body.unreachable();
         Ok(ctx.body)
     }
