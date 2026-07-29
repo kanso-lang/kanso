@@ -414,19 +414,42 @@ ordinary case rather than an extension. That is a real difference and
 it is also exactly the kind of reasoning that talks somebody past a
 warning, so it is recorded as an argument rather than a conclusion.
 
-Still to rule, because it follows from this rather than being settled
-by it:
+Both follow-on questions are now ruled.
 
-- **Namespace.** Field names become ordinary function names. Multi-arm
-  dispatch over several record types is the natural fit, but every field
-  name then occupies the namespace and can collide with a function.
-  Clojure pays this with namespaced keywords; the options here are
-  module qualification, or something else.
-- **Spelling.** Whether `foo.bar.baz` survives as sugar for the
-  application, or the tight form goes and it is written `foo . bar .
-  baz`. The tight-gap lexer rule exists either way; the question is
-  whether it still buys anything once the two spellings mean the same
-  thing.
+**Spelling: `foo . bar . baz`.** The tight form does not survive as a
+separate thing. Clay: "we have overloads/polymorphism, so i think we can
+one-up them" — where Haskell needed a class and a new syntax to reach
+overloaded field access, this reaches it with the pipe that is already
+in the language and the dispatch that is already under every call.
+`x . f` applies a plain function today: `[1 2 3] . length` is 3.
+
+**Namespace: getters are ordinary arms.** A field getter joins the
+dispatch group of that name. `length` already carries arms for lists,
+strings and maps, so a record arm is the ordinary case, and a genuine
+clash — two arms matching the same type — is the ambiguity error that
+exists already.
+
+**And the Haskell risk does not transfer, measured rather than
+argued.** GHC removed type-directed disambiguation because inference
+could not always pin the argument type at the use site, and their
+resolution is a compile-time class lookup with no runtime fallback:
+unpinned means ambiguity error. kanso dispatches at runtime through
+`k_check_rec` and specialises only when the inferred set is narrow
+enough to allow it. A bare unannotated parameter handed to a two-arm
+group resolves both ways correctly:
+
+    fn describe v
+      speak v
+
+    describe (dog "rex")   -> woof from rex
+    describe (cat "tom")   -> meow from tom
+
+Not statically known is the ordinary case here, not a failure.
+
+What remains is implementation, and one small thing worth noticing on
+the way: `a.peers = [b]` inside a build block is a *write*, a statement
+form, and this ruling is about reads. The two look alike and are not
+the same construct.
 
 ## Also open, not blocking any current work
 
