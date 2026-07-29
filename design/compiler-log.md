@@ -10209,3 +10209,47 @@ other source alone.
 Both were found by the edge cases rather than by the benchmark, which
 had already gone green on the first attempt and stayed green on the
 second.
+
+## 2026-07-28 — the string accumulator, third attempt, and the one piece left
+
+Clay ruled earlier that where an accumulator's bytes live is an
+implementation detail rather than a gavel, so this is not waiting on
+anybody. It is waiting on one thing, and this attempt found which.
+
+Two hypotheses died cheaply first.
+
+The shelf's licence reads `decl.params.first()`, so it looked as though
+an accumulator had to be the first parameter and the string builder's
+is second. Measured, both positions are optimal for bytes — fifteen
+allocations for twenty thousand appends either way — so position is not
+it and the clause is not the only route.
+
+Then the whole mechanism was rebuilt without the part that corrupted kq
+in July: a capacity on `KStr` held at sixteen bytes, storage malloc'd
+outside the arena the way the byte builder's is, an in-place join, and
+the site marked by the same local judgment that made record reuse safe
+— every caller hands the parameter over, every mention in the arm is
+inside this one expression, the shared fixpoint untouched.
+
+It fires, and it is worse:
+
+    basket's string build   4,004 allocations  ->   8,003
+    100,000 appends         162 ms             ->   436 ms
+
+Which is the answer, and it is the one the July entry already gave: the
+beat rewinds under this loop four thousand times, the carry copies the
+accumulator out and a copy has no spare room, so every iteration takes
+the growing path and allocates twice what it needs instead of once.
+Doubling is a loss when you never get to use the slack.
+
+So the remaining piece is exactly the shelf, and nothing else. Bytes
+cross a rewind by identity because their storage is outside the arena
+*and* the licence admits them; a string can now have the first and
+still lacks the second. The licence reads BYTES and no other heap set,
+for the stated reason that raw bytes hold no pointers — which is true
+of a malloc-backed string too, and not true of an ordinary one, so the
+widening has to be conditioned on the chain rather than on the type.
+
+Reverted whole. What this attempt bought is that the runtime half is
+written and measured and the blocker is now a single clause rather than
+a design question.
