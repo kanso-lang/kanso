@@ -1,0 +1,13 @@
+# a string the arm still needs after the join is not a builder: the join would
+# write into storage the later read can see. these print the same bytes on a
+# compiler that builds in place and one that does not, because in each of them
+# the analysis declines.
+fn grown s
+  bigger = "{s}!"
+  "orig {s} bigger {bigger}"
+
+fn kept s
+  pair = ["{s}x" s]
+  "new {pair[1]} old {pair[2]}"
+
+pub play = print "{grown "ab"} | {kept "cd"}"

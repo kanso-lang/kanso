@@ -19,7 +19,13 @@ typedef struct { long long tag; long long payload; } KValue;
 
 enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_LIST, K_MAP, K_CLOSURE, K_FNREF, K_BYTES, K_THUNK, K_SUB };
 
-typedef struct { long len; char* data; } KStr;
+/* `cap` is spare room the string may grow into. Zero for every string built
+   the ordinary way; positive only for a builder, whose storage is malloc'd
+   rather than taken from the arena so a rewind cannot reach it — the byte
+   builder's arrangement. Fields are ordered and narrowed to hold the header at
+   sixteen bytes: a string is the most numerous heap object a decode makes, and
+   widening it moves the survivor ratio the cohort guard reads. */
+typedef struct { char* data; int len; int cap; } KStr;
 typedef struct { long long cap; long long used; } KBuf;
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
@@ -677,6 +683,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KStr* ns = k_copy_alloc(cp, sizeof(KStr));
             k_copy_map_put(p, ns);
             ns->len = s->len;
+            ns->cap = 0;
             if (k_survives(s->data, cp->mark)) {
                 ns->data = s->data;
             } else {
@@ -1074,9 +1081,11 @@ static char k_ascii_ready[128];
 static KStr* k_str_alloc(long long len) {
     if (__builtin_expect(k_stats_on > 0, 0))
         k_stat_sh_str += (long long)((sizeof(KStr) + (size_t)len + 1 + 15) & ~(size_t)15);
+    if (len > 2147483647LL) k_die("string too long");
     KStr* s = k_alloc(sizeof(KStr) + (size_t)len + 1);
-    s->len = (long)len;
+    s->len = (int)len;
     s->data = (char*)(s + 1);
+    s->cap = 0;
     return s;
 }
 
@@ -1087,8 +1096,9 @@ static KStr* k_str_alloc(long long len) {
 KValue k_str_lit(const char* data, long long len, KValue* slot) {
     if (slot->tag != K_STR) {
         KStr* s = k_alloc_perm(sizeof(KStr) + (size_t)len + 1);
-        s->len = (long)len;
+        s->len = (int)len;
         s->data = (char*)(s + 1);
+        s->cap = 0;
         memcpy(s->data, data, (size_t)len);
         s->data[len] = 0;
         slot->tag = K_STR;
@@ -1104,6 +1114,7 @@ KValue k_str_n(const char* data, long long len) {
             if (!k_ascii_ready[b]) {
                 KStr* s = k_alloc_perm(sizeof(KStr));
                 s->len = 1;
+                s->cap = 0;
                 s->data = malloc(2);
                 s->data[0] = (char)b;
                 s->data[1] = 0;
@@ -1240,6 +1251,79 @@ long long k_check_bool(KValue v) { return v.tag == K_TRUE || v.tag == K_FALSE; }
    quadratic-copying hot on the encode path. An array, not varargs —
    16-byte structs through va_arg differ between the arm64 and x86_64
    ABIs when the caller is emitted IR. */
+KValue k_concat_arr(long long n, const KValue* parts);
+
+/* The seed of a string builder, made where `text/bytes ""` is made: its own
+   header, outside the loop that will grow it, with malloc'd storage the
+   arena's rewinds cannot reach. Every later join writes into this same header,
+   which is what lets the fold-state shelf carry it across a beat by identity
+   instead of copying it. */
+KValue k_b_str_builder(KValue sv) {
+    if (!k_not_failure(sv)) return sv;
+    if (sv.tag != K_STR) k_die("a string builder starts from a string");
+    KStr* src = k_as_str(sv);
+    long long cap = (long long)src->len * 2 + 32;
+    char* room = malloc((size_t)cap + 1);
+    if (!room) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += cap + 1;
+        k_stat_bytes_malloc++;
+        k_stat_sh_str += (long long)sizeof(KStr);
+    }
+    memcpy(room, src->data, (size_t)src->len);
+    room[src->len] = 0;
+    KStr* out = k_alloc(sizeof(KStr));
+    out->len = src->len;
+    out->data = room;
+    out->cap = (int)cap;
+    KValue v; v.tag = K_STR; v.payload = k_ptr(out);
+    return v;
+}
+
+/* Joining into a builder. This only ever writes into the header it was given
+   and never makes a new one, because the shelf carries that header across a
+   rewind and a fresh one would be allocated above the mark and reclaimed
+   underneath it. A string that is not a builder arriving here means the seed
+   was not converted, which is a compiler bug: it says so rather than quietly
+   allocating and leaving a dangling carry behind. */
+KValue k_concat_arr_mut(long long n, const KValue* parts) {
+    if (n == 0) return k_concat_arr(n, parts);
+    for (long long i = 0; i < n; i++) {
+        if (!k_not_failure(parts[i])) return parts[i];
+    }
+    KStr* acc = k_as_str(parts[0]);
+    if (acc->cap <= 0) k_die("a string builder was expected here");
+    long long extra = 0;
+    for (long long i = 1; i < n; i++) extra += k_as_str(parts[i])->len;
+    long long want = (long long)acc->len + extra;
+    if (want > 2147483647LL) k_die("string too long");
+    if (want > acc->cap) {
+        long long cap = want * 2 + 32;
+        if (cap > 2147483647LL) cap = 2147483647LL;
+        char* room = malloc((size_t)cap + 1);
+        if (!room) { fputs("out of memory\n", stderr); exit(1); }
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            k_stat_allocs++;
+            k_stat_alloc_bytes += cap + 1;
+            k_stat_bytes_malloc++;
+        }
+        memcpy(room, acc->data, (size_t)acc->len);
+        free(acc->data);
+        acc->data = room;
+        acc->cap = (int)cap;
+    }
+    long long at = acc->len;
+    for (long long i = 1; i < n; i++) {
+        KStr* ps = k_as_str(parts[i]);
+        memcpy(acc->data + at, ps->data, (size_t)ps->len);
+        at += ps->len;
+    }
+    acc->data[want] = 0;
+    acc->len = (int)want;
+    return parts[0];
+}
+
 KValue k_concat_arr(long long n, const KValue* parts) {
     long long total = 0;
     for (long long i = 0; i < n; i++) {

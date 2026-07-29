@@ -10336,3 +10336,50 @@ deferred; the first two were for want of a diagnosis and this one is a
 judgment about when to start a change whose failure mode is a dangling
 pointer in the beat machinery. The diagnosis is now complete and the
 judgment is mine rather than the code's, which is worth saying plainly.
+
+## 2026-07-28 — a string builder, on the fourth attempt (162 ms to 10)
+
+Three attempts failed and the fourth needed less than any of them,
+because the diagnosis from the third turned out to remove the piece
+everybody was waiting on.
+
+    100,000 appends        162 ms             ->  10.3 ms
+    basket's string build  4,004 allocations  ->   9
+    pinned                 4,005              ->  10
+    basket                24,102              ->  20,107
+
+Three parts, and none of them is the shelf.
+
+The seed is converted where it enters the group from outside — the
+compiler-inserted equivalent of writing `text/bytes ""` before a loop.
+That conversion happens at the *call site*, so the header it makes is
+allocated before the loop sets a single mark.
+
+The join only ever writes into the header it was given. It never mints
+a new one, and says so loudly rather than allocating if a string
+arrives that is not a builder, because a fresh header would sit above
+the mark and be reclaimed under the carry.
+
+The site is marked by the same local judgment record reuse uses: every
+caller hands the parameter over, and every mention of it in the arm is
+inside this one expression. `linear_params` is neither read nor
+written.
+
+And then the shelf was not needed at all. The earlier entries all
+assumed the licence had to be widened so the accumulator could cross a
+rewind by identity — but a header allocated before the marks *already*
+survives them, and storage that is malloc'd is not the arena's to
+reclaim. Nothing crosses by special dispensation; nothing is copied,
+because there is nothing above the mark to copy. Three entries of
+design for a clause that never had to change.
+
+The guard is a fixture. `builder_guard.kso` reads the string after the
+join and keeps it in a list beside the new one, and prints `orig ab
+bigger ab!` on a compiler that builds in place and on one that does
+not, because the analysis declines in both.
+
+Every canary first: `effect_push_shape`, `reuse_guard`, ch09's cloud,
+the book samples, kq's suite including its allocator goldens, lib/list
+and lib/json compiled alone, nineteen suites, the browser differential,
+every memory-corpus stdout byte-identical and all three cost veins
+unchanged. Welfare 65.17 to 65.53.

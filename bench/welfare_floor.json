@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 65.17186345610384,
+  "floor": 65.52894321190618,
   "history": [
     {
       "floor": 46.33,
@@ -134,6 +134,10 @@
     {
       "floor": 65.17,
       "why": "a cap around a cursor is walked by index: pulling a window through next built a step and a fresh window every element, both read once and dropped. take 3,000 of 4,000 went 6,023 allocations -> 20, sum over a take 6,017 -> 14, basket 25,105 -> 24,102."
+    },
+    {
+      "floor": 65.53,
+      "why": "a string built by joining onto itself writes into one buffer: the seed is converted where it enters the group from outside, so its header predates the loop's marks and survives every rewind, and the join only ever writes into that header. basket string build 4,004 allocations -> 9, 100,000 appends 162 ms -> 10.3 ms, basket 24,102 -> 20,107."
     }
   ]
 }

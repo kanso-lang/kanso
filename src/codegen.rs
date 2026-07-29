@@ -180,6 +180,8 @@ declare %KValue @k_b_wrap_err(%KValue, %KValue, ptr)
 declare %KValue @k_err_hop(%KValue, ptr)
 declare %KValue @k_rec(i64, i64, ptr)
 declare %KValue @k_rec_reuse(i64, i64, ptr, %KValue)
+declare %KValue @k_concat_arr_mut(i64, ptr)
+declare %KValue @k_b_str_builder(%KValue)
 declare %KValue @k_field(%KValue, i64)
 declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
@@ -383,6 +385,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
     let in_place_pushes = crate::linear::in_place_pushes(program);
     let reusable_records = crate::linear::reusable_records(program);
+    let (builder_joins, builder_params) = crate::linear::string_builders(program);
     // Beat loops rewind the arena between iterations. Groups returning the
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.
@@ -408,6 +411,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         byte_disc,
         in_place_pushes,
         reusable_records,
+        builder_joins,
+        builder_params,
         beat,
         type_ids,
         strings: Vec::new(),
@@ -436,6 +441,8 @@ struct Backend<'a> {
     byte_disc: std::collections::HashSet<(String, usize, usize)>,
     in_place_pushes: std::collections::HashSet<(String, usize, usize)>,
     reusable_records: std::collections::HashMap<(String, usize, usize), String>,
+    builder_joins: std::collections::HashSet<(String, usize, usize)>,
+    builder_params: std::collections::HashSet<(String, usize, usize)>,
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
@@ -655,6 +662,24 @@ impl<'a> Backend<'a> {
     }
 
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+        // A string this group builds by joining onto itself needs its seed
+        // converted where it enters from outside: a builder writes into the
+        // header it was given, and an interned literal cannot be written
+        // through. The recursive call is not converted — it is already
+        // carrying the builder made here.
+        let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
+            && !(f.group == callee && f.arity == arity);
+        let seeded;
+        let e = match entering {
+            true => {
+                let t = f.tmp();
+                f.line(&format!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
+                f.record(&t, f.set_of(e));
+                seeded = t;
+                seeded.as_str()
+            }
+            false => e,
+        };
         let forced;
         let e = match f.set_of(e) & crate::infer::THUNK != 0 && self.scrutinizes(callee, arity, i) {
             true => {
@@ -2117,7 +2142,9 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{t} = call %KValue @k_float(double 0x{:016X})", x.to_bits()));
                 Ok(t)
             }
-            Expr::Str(parts, _) => {
+            Expr::Str(parts, span) => {
+                let joins_builder =
+                    self.builder_joins.contains(&(f.file.clone(), span.line, span.col));
                 let mut acc: Option<Vec<String>> = None;
                 let mut fails: Set = 0;
                 for part in parts {
@@ -2173,8 +2200,12 @@ impl<'a> Backend<'a> {
                             f.line(&format!("store %KValue {p}, ptr {slot}"));
                         }
                         let t = f.tmp();
+                        let sym = match joins_builder {
+                            true => "k_concat_arr_mut",
+                            false => "k_concat_arr",
+                        };
                         f.line(&format!(
-                            "{t} = call %KValue @k_concat_arr(i64 {}, ptr {arr})",
+                            "{t} = call %KValue @{sym}(i64 {}, ptr {arr})",
                             pieces.len()
                         ));
                         t
