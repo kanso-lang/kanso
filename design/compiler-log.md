@@ -10172,3 +10172,40 @@ An allocation count would have called that file an improvement; what it
 asserts is the bytes.
 
 Welfare 64.78 to 65.09.
+
+## 2026-07-28 — a window is walked by index (6,023 allocations to 20)
+
+The last thing the basket had to say about `take`. A bounded window
+already carried its position and its limit in one record rather than
+two, but the fold that consumed it still pulled it through `next`, and
+every pull built a step and a fresh window that were read once and
+dropped.
+
+A bare list is not consumed that way — `fold coll init f` walks it by
+index, and a window over an array is a list with two numbers around it.
+So the fold arm for a cap around a cursor now walks the same way.
+
+    take 3,000 of 4,000   6,023 allocations  ->  20
+    sum over a take       6,017              ->  14
+    basket               25,105              ->  24,102
+
+Two attempts on the way, both worth recording because each failed
+differently.
+
+The first bound the recursive call to a name to keep a line under eighty
+characters, which took it out of tail position, and three thousand
+elements ran out of stack. Restructuring into two arms rather than a
+binding fixed it, and the lesson is that the width rule and the tail
+call are in tension: the fix is another function, not a local.
+
+The second built the window in `take` rather than in `fold`, so that a
+window arrived already made. That collapsed the allocations just as
+well and sent `take (drop xs 2) 2` into unbounded recursion — a drop
+does not iterate to a cursor, and the general arm that was supposed to
+catch that did not. Converting inside the fold arm, where the shape is
+matched rather than constructed, does the same work and leaves every
+other source alone.
+
+Both were found by the edge cases rather than by the benchmark, which
+had already gone green on the first attempt and stayed green on the
+second.
