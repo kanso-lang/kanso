@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 59.311460430366935,
+  "floor": 60.031974578582656,
   "history": [
     {
       "floor": 46.33,
@@ -110,6 +110,14 @@
     {
       "floor": 59.31,
       "why": "taking from a cursor is a window: capped over a cursor rebuilt an advanced cursor, a step, a fresh cap and another step every element, and a bounded window carries position and limit in one record. take 12,019 -> 6,020, basket 71,364 -> 66,432, sort_shape 24,401 -> 20,468 (merging halves takes)."
+    },
+    {
+      "floor": 59.99,
+      "why": "the sort slices its halves instead of walking them: msort materialised each half through take/drop, paying adapter records per element per level, where builtin_slice copies the range once. sort 20,468 -> 3,509 at 500 elements and 28,010 at 4,000, basket 66,432 -> 49,473."
+    },
+    {
+      "floor": 60.03,
+      "why": "the sort's halves are index ranges, not lists: splitting by take and drop walked each half element by element at every level to build a list read once and thrown away. sort 500 23,486 -> 2,512, sort 4,000 -> 20,014, sort_shape 20,468 -> 2,513, basket 66,432 -> 48,477."
     }
   ]
 }

@@ -372,18 +372,25 @@ pub fn sort coll
 # four-thousand element sort allocated sixty-four million times and peaked at
 # 4.4 GB. Merging touches each element once per level.
 fn msort xs
-  halves xs (length xs)
+  whole xs (length xs)
 
-fn halves xs 0
+fn whole xs 0
   xs
 
-fn halves xs 1
-  xs
+fn whole xs n
+  span xs 1 n (n - 1)
 
-fn halves xs n
-  cut = n / 2
-  left = msort (to_list (take xs cut))
-  right = msort (to_list (drop xs cut))
+# The halves are index ranges, not lists. Splitting by `take` and `drop` walked
+# each half element by element to build a list that was read once and thrown
+# away, at every level of the descent; a range costs nothing to make and the
+# only lists built are the merged ones, which the sort owes anyway.
+fn span xs lo _ 0
+  [xs[lo]!]
+
+fn span xs lo hi n
+  mid = lo + n / 2
+  left = span xs lo mid (mid - lo)
+  right = span xs (mid + 1) hi (hi - mid - 1)
   merge [] left right 1 1
 
 fn merge out left right i j
