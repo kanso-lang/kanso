@@ -741,6 +741,10 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
     candidate
 }
 
+/// A set of source positions, or of (group, arity, index) triples — the two
+/// happen to have the same shape.
+pub type Sites = HashSet<(String, usize, usize)>;
+
 /// Where a string is built by joining onto itself, and which parameter holds
 /// the builder.
 ///
@@ -752,9 +756,7 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
 ///
 /// Returns the join sites, and the (name, arity, index) of each accumulator so
 /// the emitter can convert the seed where a caller hands one in from outside.
-pub fn string_builders(
-    program: &Program,
-) -> (HashSet<(String, usize, usize)>, HashSet<(String, usize, usize)>) {
+pub fn string_builders(program: &Program) -> (Sites, Sites) {
     let analysis = Analysis::new(program);
     let mut sites = HashSet::new();
     let mut accs = HashSet::new();
