@@ -317,51 +317,43 @@ user identifiers may use it freely).
 Small, but it is a semantics hole in the map surface and should be one
 sentence in the spec once ruled.
 
-## What `foo.bar.baz` means when `bar` is a typeset
+## RULED 2026-07-28: accessors are functions
 
-Clay, 2026-07-28: `foo.bar.baz` does not obviously make sense, because
-`bar` may be a typeset — so `.baz` on the result cannot be a field
-offset. Either it is written `foo . bar . baz` and the accessors are
-getter functions, as in Haskell, or the tight spelling is sugar for
-exactly that.
+Clay: "so we should make that change." Field access becomes ordinary
+function application. `name` is a function, so `list/map people name`
+works, and an accessor is a value that can be passed, composed and
+mapped like any other.
 
-The decisive point is his: a field read off a typeset cannot resolve
-statically, so the only alternative to "accessors are functions" is a
-notation that means an offset when the type is known and a dispatch
-when it is not. That is one syntax over two mechanisms, and which one a
-reader is looking at is not on the page.
+Two arguments were put and both were wrong, recorded because the
+reasoning behind a ruling is worth more than the ruling:
 
-The committee reading, on an interim basis and open to being overruled:
+- That `foo.bar` on a typeset "cannot be a static field offset". It can.
+  It would be a second form of invocation, resolved by name and
+  invisible to normal dispatch — which is what `rt_field_by_name`
+  already does. The case against it is that it is a second mechanism,
+  not that it is impossible.
+- That a reader "cannot tell which mechanism without information that
+  is not on the page". This language omits inferred types from source on
+  purpose and expects the editor to show them through the language
+  server. An argument from what the page alone carries does not apply
+  here, and will not apply to the next question either.
 
-- **Hickey** — the middle option is the braid, and the positive case is
-  Clojure's: keywords are functions of maps precisely so accessors are
-  values you can pass, compose and map. `list/map people name` needs
-  `name` to be a function. Field syntax hands you nothing.
-- **Bernhardt** — one concept rather than two, and no second set of
-  rules for the boundary cases (absent field, typeset, `none`).
-- **Beck** — fewest elements says one mechanism; reveals-intent is
-  satisfied by spelling rather than semantics.
+What carried it: an accessor that is a function is a value. Field
+syntax hands you nothing you can give to anything else.
 
-Where that lands: getters are functions and `.` is the pipe that is
-already there, so `foo . bar . baz` needs no new rule and `foo.bar.baz`
-is a visual variant of it. The tight-gap rule stops being load-bearing
-and becomes whitespace. Where a type is statically known, collapsing a
-getter to an offset is an ordinary optimisation, and dispatch
-specificity plus whole-program inference is the machinery for it — the
-language does not need a second meaning so the emitter can be lazy.
-
-What wants ruling rather than assuming:
+Still to rule, because it follows from this rather than being settled
+by it:
 
 - **Namespace.** Field names become ordinary function names. Multi-arm
-  dispatch over several record types is kanso's strength, but every
-  field name then occupies the namespace and may collide with a real
-  function. Clojure pays this with namespaced keywords; kanso would pay
-  it with module qualification. This is the genuine cost.
-- **Absence.** A getter needs a `none` arm, which makes "absent field" a
-  dispatch case rather than a special form. Probably an improvement,
-  worth confirming it reads that way.
-
-Nothing is built on this. Recorded so the shape survives.
+  dispatch over several record types is the natural fit, but every field
+  name then occupies the namespace and can collide with a function.
+  Clojure pays this with namespaced keywords; the options here are
+  module qualification, or something else.
+- **Spelling.** Whether `foo.bar.baz` survives as sugar for the
+  application, or the tight form goes and it is written `foo . bar .
+  baz`. The tight-gap lexer rule exists either way; the question is
+  whether it still buys anything once the two spellings mean the same
+  thing.
 
 ## Also open, not blocking any current work
 
