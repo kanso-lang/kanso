@@ -9570,3 +9570,44 @@ not pay — that is the next thread and it is not this one.
 
 Welfare 58.61 to 58.90, held. The first optimisation to land after the
 basket is one the index could not have seen the day before.
+
+## 2026-07-28 — what `to_list` costs, and what it is not
+
+Chasing the thread the skip entry left open. Materialising a four
+thousand element list costs four thousand allocations, and the adapters
+are not where they go:
+
+    fold over the list, summing            12
+    fold over a mapped view, summing       12
+    sum over a mapped view                 12
+    to_list over the list               4,015
+    to_list over a mapped view          4,015
+
+`map` fuses into a fold completely. What costs is `to_list`, which is
+`fold coll [] (acc x -> push acc x)`, and it costs the same over a raw
+list as over an adapter — so the adapter is innocent.
+
+The obvious suspect was the push. It is not that either. Instrumented,
+`k_b_push_mut` is called four thousand times and takes its in-place
+path three thousand nine hundred and ninety-four of them, growing the
+buffer by doubling exactly as the hand-written loop does — and a
+hand-written recursive `push acc src[n]` over the same four thousand
+elements costs eleven allocations in total.
+
+So the same operation costs eleven written as recursion and four
+thousand written as a fold, with the pushes themselves in place in both.
+Counter by counter the difference is `allocs`, `alloc_bytes`, five
+buffer reuses and the buffer bytes; `sh_rec` does not move, so the
+extra allocations are not cursor or step records. They are k_allocs
+that no category counter attributes, once per element, and where they
+come from is the open question.
+
+One repair was tried and is not kept. `folder_is_unique` asks whether
+the folder's callee returns something unique and answers by looking in
+`returns_unique`, which is seeded from declarations — so `push`, a
+builtin, was never in it, and the check said no for the one shape it
+most obviously should say yes to. Teaching it the accumulator builtins
+is right on its own terms and changed the measurement by nothing at
+all, which means the mark was never what stood in the way. It is not
+being shipped: widening the linearity analysis without a number to show
+for it is what put a use-after-free in kq this morning.
