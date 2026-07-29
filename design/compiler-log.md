@@ -9611,3 +9611,50 @@ is right on its own terms and changed the measurement by nothing at
 all, which means the mark was never what stood in the way. It is not
 being shipped: widening the linearity analysis without a number to show
 for it is what put a use-after-free in kq this morning.
+
+## 2026-07-28 — the in-place marks inside lambdas are not sound, and a bug was hiding it
+
+The entry above was wrong to ship and is closed. It found the missing
+allocation honestly — four thousand sixteen-byte list headers, one per
+element, because a fold's push went to the copying `k_b_push` — and
+then fixed the wrong half.
+
+In-place sites are keyed by source position. A lambda is lifted into a
+function whose emitter context is built fresh, with an empty file, so
+every mark the analysis made inside a lambda body is looked up as
+`("", line, col)` and missed. Carrying the file through makes them
+resolve, and `to_list` over four thousand elements falls from 4,015
+allocations to 15.
+
+It also turns ch09's cloud sample from
+
+    three voters: [[876 612] [601 850] [662 624]]
+
+into
+
+    three voters: [[662 624] <none> <value>]
+
+Isolated with `linear.rs` reverted, the emitter change alone does it.
+That is the finding, and it is larger than the optimisation: the
+emitter change creates no marks, it only lets existing ones through. So
+the analysis has been marking pushes inside lambda bodies that are not
+safe to write in place, and nothing has gone wrong only because a
+lookup key that can never match has been discarding them.
+
+The empty file now says so in a comment, because it reads exactly like
+a bug and the next person to fix it will get a corrupted list and a
+267-fold improvement in the same commit.
+
+Two things worth keeping from the attempt. The size histogram is how
+the allocation was named, and it took one run: bucket every `k_alloc`
+by rounded size and diff two programs. And the earlier reading that
+"the push is innocent, `k_b_push_mut` fast-paths 3,994 of 4,000 calls"
+was measured on the wrong loop — that program builds a list by
+recursion and then folds over it, four thousand pushes each, and the
+fast ones were the builder's.
+
+What the corpus did here it did not do this morning: kq's suite is
+green on the broken compiler, and the book samples are not. A
+simulation that draws random numbers and prints the values it built is
+a byte assertion over a long pipeline, which is the shape that catches
+this class. The mem corpus, which counts, saw an improvement.

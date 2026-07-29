@@ -3405,6 +3405,16 @@ impl<'a> Backend<'a> {
     ) -> Result<(), String> {
         let mut f = FnEmit::new();
         f.origin_prefix = outer.origin_prefix.clone();
+        // `file` is deliberately left empty, and this is load-bearing rather
+        // than an oversight. In-place sites are keyed by source position, so a
+        // lifted lambda with its own file would resolve every mark the
+        // analysis made inside a lambda body — and those marks are not sound.
+        // Carrying the file through was measured: `to_list` over four thousand
+        // elements fell from 4,015 allocations to 15, and ch09's cloud sample
+        // went from `[[876 612] [601 850] [662 624]]` to
+        // `[[662 624] <none> <value>]`. The win is real and it is waiting on
+        // the analysis, not on this line. See design/compiler-log.md,
+        // 2026-07-28.
         f.start_block("entry");
         for (i, cap) in captures.iter().enumerate() {
             let t = f.tmp();
