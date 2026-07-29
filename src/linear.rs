@@ -194,13 +194,21 @@ impl<'a> Analysis<'a> {
         let Expr::Lambda { params, body, .. } = f else { return false };
         let Some((acc, _)) = params.first() else { return false };
         let Expr::App { head, args, .. } = body.as_ref() else { return false };
-        let Expr::Ident(callee, _) = head.as_ref() else { return false };
         if !matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc) {
             return false;
         }
         if args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() > 0 {
             return false;
         }
+        // Fusion composes a chain by applying the reducer where it stands, so
+        // the folder it leaves behind is `(a v -> (a v -> push a v) a (f v))`.
+        // An immediately-applied lambda handed the accumulator as its first
+        // argument is the same folder wearing a wrapper: ask the question of
+        // what it applies.
+        if let Expr::Lambda { .. } = head.as_ref() {
+            return self.folder_is_unique(head.as_ref(), ctx, scoped);
+        }
+        let Expr::Ident(callee, _) = head.as_ref() else { return false };
         let _ = (ctx, scoped);
         // The accumulator builtins are the ones whose result is unique when
         // their first argument is, which the folder's contract already gives.
@@ -384,10 +392,23 @@ fn walk_for_push_in(
             && a.folder_is_unique(&args[2], decl, scoped)
         {
             if let Expr::Lambda { params, body, .. } = &args[2] {
-                let inner = params.first().map(|(n, _)| n.as_str());
+                let mut inner = params.first().map(|(n, _)| n.as_str());
                 walk_for_push_in(a, decl, &args[0], out, scoped);
                 walk_for_push_in(a, decl, &args[1], out, scoped);
-                walk_for_push_in(a, decl, body, out, inner);
+                // peel the wrapper fusion leaves: the applied lambda is the
+                // folder, and its own first parameter is what holds the
+                // accumulator inside it
+                let mut target = body.as_ref();
+                while let Expr::App { head, args: inner_args, .. } = target {
+                    let Expr::Lambda { params: ps, body: b, .. } = head.as_ref() else { break };
+                    if !matches!(inner_args.first(), Some(Expr::Ident(n, _)) if Some(n.as_str()) == inner)
+                    {
+                        break;
+                    }
+                    inner = ps.first().map(|(n, _)| n.as_str());
+                    target = b.as_ref();
+                }
+                walk_for_push_in(a, decl, target, out, inner);
                 return;
             }
         }
