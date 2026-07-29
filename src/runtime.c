@@ -1166,6 +1166,9 @@ KValue k_b_wrap_err(KValue reason, KValue original, const char* origin) {
 /* A dispatcher passing a failure through appends its name; none stays bare. */
 KValue k_err_hop(KValue v, const char* fn) {
     if (v.tag != K_ERR) return v;
+    // a field read is not a call the reader made, and its internal name is
+    // not theirs to see — the getter prefix no source can spell
+    if (strncmp(fn, "Get_", 4) == 0) return v;
     KErrBox* old = k_err_box(v);
     KErrBox* box = k_alloc(sizeof(KErrBox));
     KHop* hop = k_alloc(sizeof(KHop));

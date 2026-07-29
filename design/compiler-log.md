@@ -10562,3 +10562,43 @@ Reading a field a *particular* record lacks stays a runtime error, since
 only the value knows its type — and both engines still print the two
 messages `k_b_field` used to, byte for byte, through a new `k_no_field`
 so a dispatch failure never shows a reader the internal name.
+
+## 2026-07-29 — the getter's internal name leaked twice more
+
+Clay, on the wasm divergence fixed in #483: "why would it need to have
+any publicly accessible name at all? it's an implementation detail not
+part of the language."
+
+The principle is right and the evidence was already there. `Get_name`
+exists as a name only because the compiler keys every function by
+String, so keeping it out of the user's namespace and keeping it out of
+the user's *sight* are two different problems. #483 patched three
+engines' dispatch-failure messages, and patching per-site is what a
+name-based encoding forces. Two more sites were still open, both found
+by asking rather than by a test:
+
+**The err hop trace named it.** `(boom 0).name` printed `passed through
+Get_name` on both engines. A field read is not a call the reader made,
+so the fix is in `hop` and `k_err_hop` — the two runtimes, where no
+backend can forget it — and the trace skips getters entirely rather than
+renaming them.
+
+**Rendering an accessor named it, and the engines disagreed.** The
+interpreter printed `<fn Get_name>` where native printed `<fn>`. That
+divergence predates getters: `Value::FnRef(name)` has always rendered
+with its name while `K_FNREF` never has. Nothing pinned either form, so
+they now agree on the one that carries no name. This was reachable
+before this change and nothing caught it, which is what an unpinned
+difference between engines buys.
+
+Both are pinned, both watched red — and the first attempt to watch the
+second one red proved nothing, because `cargo fmt` had reflowed the arm
+the revert was targeting and the revert silently did not apply. The test
+passed for the wrong reason. Checking that the source actually changed
+is part of watching a spec fail.
+
+The structural version of Clay's point stands and is not done: identity
+for a getter should be (getter, field) rather than a prefixed string, so
+there is no name to leak and no site to remember. That is a wide change
+— every function table, symbol name and diagnostic keys by String — and
+it is recorded rather than attempted here.

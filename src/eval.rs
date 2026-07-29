@@ -105,7 +105,14 @@ fn bytes_to_str(items: &[Value]) -> Option<String> {
 }
 
 /// A dispatcher passing a failure through appends its name; none stays bare.
+///
+/// A field getter is not one of them. The reader wrote `x.name`, not a call,
+/// and its internal name is not theirs to see — so the trace skips it here,
+/// where no backend can forget to.
 pub fn hop(failure: Value, name: &str) -> Value {
+    if crate::ast::getter_field(name).is_some() {
+        return failure;
+    }
     match failure {
         Value::ErrV(info) => {
             let mut hops = info.hops.clone();
@@ -2506,8 +2513,12 @@ fn render_seen(
                 format!("{} {}", ty, inner.join(" "))
             }
         },
-        Value::FnRef(name) => format!("<fn {name}>"),
-        Value::Closure(_) | Value::TableFn(_) | Value::Partial(..) => "<fn>".to_string(),
+        // every engine renders a function the same way and none of them names
+        // it: the name is the compiler's, and for a field getter it is one no
+        // program could have written
+        Value::FnRef(_) | Value::Closure(_) | Value::TableFn(_) | Value::Partial(..) => {
+            "<fn>".to_string()
+        }
         Value::Desc(_) => "<io>".to_string(),
     }
 }
