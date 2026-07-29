@@ -10,7 +10,7 @@
 //! through a chain in which every step is *moved* (used exactly once) and never
 //! aliased. Anything the analysis can't follow leaves the push allocating.
 
-use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt};
+use crate::ast::{Expr, FnDecl, Pattern, Program, Stmt, TemplatePart};
 use std::collections::{HashMap, HashSet};
 
 /// Push call sites, keyed `(file, line, col)`, whose list argument is uniquely
@@ -290,7 +290,11 @@ impl<'a> Analysis<'a> {
         exempt: &[&Expr],
     ) -> bool {
         match e {
-            Expr::List(..) | Expr::MapLit(..) => true,
+            // a literal is interned or freshly written and an interpolation
+            // allocates its result, so nothing else holds the value; an
+            // interned one carries no spare capacity, which is what keeps a
+            // write-through off a shared constant
+            Expr::List(..) | Expr::MapLit(..) | Expr::Str(..) => true,
             // A fold threads its seed through the folding function and returns
             // what the last call gave back, so the result is unique when the
             // seed is and the folder returns unique from a unique first
@@ -735,6 +739,81 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
         candidate = Some(name.clone());
     }
     candidate
+}
+
+/// Where a string is built by joining onto itself, and which parameter holds
+/// the builder.
+///
+/// `text_build (n - 1) "{s}x"` reads `s` to make the new string and mentions
+/// it nowhere else, so by the time the join runs `s` is finished. Asked the
+/// way record reuse is asked: every caller hands the parameter over, and every
+/// mention of it in the arm is inside this one expression. The shared fixpoint
+/// is neither consulted nor changed.
+///
+/// Returns the join sites, and the (name, arity, index) of each accumulator so
+/// the emitter can convert the seed where a caller hands one in from outside.
+pub fn string_builders(
+    program: &Program,
+) -> (HashSet<(String, usize, usize)>, HashSet<(String, usize, usize)>) {
+    let analysis = Analysis::new(program);
+    let mut sites = HashSet::new();
+    let mut accs = HashSet::new();
+    for decl in real_fns(program) {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            walk_for_builder(&analysis, decl, e, &mut sites, &mut accs);
+        }
+    }
+    (sites, accs)
+}
+
+fn walk_for_builder(
+    a: &Analysis,
+    decl: &FnDecl,
+    e: &Expr,
+    sites: &mut HashSet<(String, usize, usize)>,
+    accs: &mut HashSet<(String, usize, usize)>,
+) {
+    // a lambda runs when somebody else decides
+    if matches!(e, Expr::Lambda { .. }) {
+        return;
+    }
+    if let Expr::Str(parts, span) = e {
+        if parts.len() > 1 {
+            if let Some(TemplatePart::Interp(Expr::Ident(name, _))) = parts.first() {
+                if let Some(i) = builder_param(a, decl, name, e) {
+                    sites.insert((decl.file.clone(), span.line, span.col));
+                    accs.insert((decl.name.clone(), decl.params.len(), i));
+                }
+            }
+        }
+    }
+    for child in child_exprs(e) {
+        walk_for_builder(a, decl, child, sites, accs);
+    }
+}
+
+/// The parameter index of `name`, when every caller hands it over and this
+/// expression holds every mention of it in the arm.
+fn builder_param(a: &Analysis, decl: &FnDecl, name: &str, here: &Expr) -> Option<usize> {
+    let arity = decl.params.len();
+    let i = decl.params.iter().position(|p| matches!(p, Pattern::Var(n, _) if n == name))?;
+    let inside = count_in_expr(name, here);
+    let everywhere: usize = decl
+        .body
+        .iter()
+        .map(|s| match s {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(name, expr),
+            Stmt::Set { value, .. } => count_in_expr(name, value),
+        })
+        .sum();
+    match inside == everywhere && a.callers_hand_over(&decl.name, arity, i) {
+        true => Some(i),
+        false => None,
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,14 @@
+# a string built by joining onto itself writes into one buffer. the seed is
+# converted where it enters the group from outside, so the header predates the
+# loop's marks and survives every rewind, and the join only ever writes into
+# that header — never mints a new one, which would sit above the mark and be
+# reclaimed under the carry. 4,006 allocations before, 11 after.
+fn build 0 s
+  s
+
+fn build n s
+  build (n - 1) "{s}x"
+
+pub play =
+  made = build 4000 ""
+  print "len {length made}"
