@@ -1,0 +1,21 @@
+# a push inside a continuation that escapes into a suspended effect must not be
+# written in place. the enclosing frame "uses acc once", but that use is inside
+# a lambda the executor runs later, while the frame still holds the value.
+# marking it wrote every point over the same buffer and printed
+# [[662 624] <none> <value>]. the bytes below are the assertion; the alloc
+# count alone called that an improvement.
+import "std/math"
+
+fn outer 0 acc
+  acc
+
+fn outer n acc
+  inner 2 [] . (p -> outer (n - 1) (push acc p))
+
+fn inner 0 acc
+  acc
+
+fn inner d acc
+  math/random 1000 . (c -> inner (d - 1) (push acc c))
+
+pub play = outer 3 [] . (v -> print "points {v}")

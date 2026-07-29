@@ -202,6 +202,15 @@ impl<'a> Analysis<'a> {
             return false;
         }
         let _ = (ctx, scoped);
+        // The accumulator builtins are the ones whose result is unique when
+        // their first argument is, which the folder's contract already gives.
+        // They are not declarations, so `returns_unique` never held them.
+        if matches!(callee.as_str(), "push" | "append" | "builtin_append") && args.len() == 2 {
+            return true;
+        }
+        if callee == "put" && args.len() == 3 {
+            return true;
+        }
         self.returns_unique.contains(&(callee.clone(), args.len()))
     }
 
@@ -384,6 +393,16 @@ fn walk_for_push_in(
         }
     }
     for child in child_exprs(e) {
+        // A lambda body is not walked here. Whether a write inside one is safe
+        // depends on when the lambda runs, and only the shapes handled above
+        // answer that: a folder is applied at once, per element, to the
+        // accumulator the fold owns. Anything else may be a continuation that
+        // escapes into a suspended effect and runs while the frame that
+        // "used the value once" is still holding it — `xs . (p -> push acc p)`
+        // reads as a single use of `acc` and is not one.
+        if matches!(child, Expr::Lambda { .. }) {
+            continue;
+        }
         walk_for_push_in(a, decl, child, out, scoped);
     }
 }

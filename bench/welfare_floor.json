@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 58.89592515362565,
+  "floor": 59.04801124293253,
   "history": [
     {
       "floor": 46.33,
@@ -98,6 +98,10 @@
     {
       "floor": 58.9,
       "why": "skipping over a cursor is index arithmetic: list/drop walked and discarded one element at a time, costing a step record and an advanced cursor each. basket allocations 91,864 -> 79,952, and the merge sort pays it too (sort_shape 33,403 -> 29,470)."
+    },
+    {
+      "floor": 59.05,
+      "why": "a fold's reducer writes in place: the emitter now resolves marks inside a lifted lambda, and the analysis only makes them where it can account for when the lambda runs. to_list 4,015 -> 15, basket 79,952 -> 74,380, sort_shape 29,470 -> 24,401."
     }
   ]
 }

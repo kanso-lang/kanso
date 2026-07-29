@@ -1,0 +1,16 @@
+# a fold's reducer is applied at once, per element, to the accumulator the fold
+# owns, so a push there writes in place. a lambda that escapes into a suspended
+# effect is not that shape and must not be marked — ch09's cloud sample is the
+# one that says so. the alloc count pins which side of the rule this is on.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  copied = list/fold xs [] (a v -> push a v)
+  print "folded {length copied} first {copied[1]} last {copied[4000]}"
