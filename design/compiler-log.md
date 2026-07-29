@@ -9927,3 +9927,46 @@ Canaries green before it was believed: `effect_push_shape.kso` and
 ch09's cloud sample, the book samples, kq's suite including its
 allocator goldens, every memory-corpus stdout byte-identical, three
 cost veins unchanged. Welfare 59.16 to 59.31, held.
+
+## 2026-07-28 — the sort's halves are index ranges, not lists
+
+The basket was asked where its allocations were, once the day's other
+work had landed, and it answered plainly: sorting five hundred elements
+cost twenty-three thousand of them, more than every other item in it
+combined.
+
+The merge sort takes and drops to split, and both were being walked.
+Each half was pulled element by element to build a list that was read
+once and thrown away, at every level of the descent.
+
+A half does not need to be a list. `span xs lo hi` sorts a range of the
+array it was given, so splitting costs two integers and the only lists
+built are the merged ones, which the sort owes anyway.
+
+    sort 500 elements    23,486 allocations  ->   2,512
+    sort_shape, pinned   20,468              ->   2,513
+    sort 4,000
+        this morning     64,113,290 (insertion sort)
+        after merging       327,296
+        now                  20,014
+    basket               66,432              ->  48,477
+
+Five allocations an element, against sixteen thousand this morning.
+
+`builtin_slice` was tried first and is a good deal worse for a reason
+worth keeping: it copies each half rather than walking it, which is
+cheaper than the adapters but still a copy per level, and CI refused it
+anyway — `builtin_slice` belongs to another module and `kanso test
+lib/list` compiles the list module alone, where it is not in scope. The
+range version needs nothing from outside the module and allocates less.
+The machine caught what the local run did not, which is the argument
+for compiling each library on its own.
+
+`buf_reuse` falls with all of this, on the basket and on the sort pin,
+and that is the shape of the win rather than a cost: the counter says
+how often a push found room in a buffer somebody had already grown, and
+there are now far fewer pushes to find it.
+
+The basket only pointed here after `to_list`, `select`, `drop` and
+`take` were fixed; before that the sort was hidden behind them. That is
+the argument for a basket over a benchmark, made by accident.
