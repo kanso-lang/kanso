@@ -10292,3 +10292,47 @@ Where kq's remaining cost sits, for whoever wants it: twenty-five
 thousand byte-buffer headers, one per streamed chunk. Whether that is
 reducible is a question about kq's design rather than the compiler's,
 and it is not being answered here.
+
+## 2026-07-28 — how the byte builder actually starts, and what that costs the string one
+
+Looking again at why bytes cross a rewind and strings do not, the seed
+turns out to be the whole of it, and not in the way the earlier entries
+assumed.
+
+`text/bytes ""` does not allocate a buffer. It makes a *view* — a
+header with no storage of its own — and the header is made outside the
+loop, below every mark the loop will set. The first append allocates
+the malloc-backed buffer and writes it into **that same header**:
+`a->len += n; a->data = data; a->cap = cap; return acc`. The header
+that arrives is the header that leaves, from the first iteration
+onward, which is exactly what the shelf's licence requires.
+
+A string cannot do that, because its seed is an interned literal and
+writing through one would corrupt a shared constant. So the in-place
+join mints a fresh header on that first hop instead — and that header
+is allocated inside the loop, above the mark. If the shelf were then
+licensed to carry it by identity, it would be carrying a pointer the
+next rewind reclaims. The seed hoist is therefore a **safety**
+requirement and not a performance one, which the previous entry had
+backwards.
+
+What the change actually is, in order, so it can be done in one sitting
+rather than three:
+
+1. a conversion producing a fresh, mutable, malloc-backed string, and a
+   pass that wraps the accumulator argument at every call into the
+   group from outside it — the compiler-inserted equivalent of writing
+   `text/bytes ""` before the loop;
+2. an in-place join that only ever mutates, never mints, so the header
+   is stable from the first iteration;
+3. the shelf's licence widened to admit a string threaded through those
+   sites, conditioned on the chain rather than the type set, because
+   the safety argument holds for a malloc-backed string and fails for
+   an ordinary one.
+
+None of the three can be measured without the other two, which is why
+this is not being taken in slices. It is the third time this has been
+deferred; the first two were for want of a diagnosis and this one is a
+judgment about when to start a change whose failure mode is a dangling
+pointer in the beat machinery. The diagnosis is now complete and the
+judgment is mine rather than the code's, which is worth saying plainly.
