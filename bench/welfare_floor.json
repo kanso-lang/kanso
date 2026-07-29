@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 59.04801124293253,
+  "floor": 59.1567674736954,
   "history": [
     {
       "floor": 46.33,
@@ -102,6 +102,10 @@
     {
       "floor": 59.05,
       "why": "a fold's reducer writes in place: the emitter now resolves marks inside a lifted lambda, and the analysis only makes them where it can account for when the lambda runs. to_list 4,015 -> 15, basket 79,952 -> 74,380, sort_shape 29,470 -> 24,401."
+    },
+    {
+      "floor": 59.16,
+      "why": "a conditional folder writes in place too: fusion turns a select into 'if (p v) (push a v) a', and every path there either writes on the accumulator or hands it back. to_list over a select 4,015 -> 15, basket 74,369 -> 71,364, peak 69.2 MB -> 68.2 MB."
     }
   ]
 }

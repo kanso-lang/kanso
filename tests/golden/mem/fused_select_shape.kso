@@ -1,0 +1,16 @@
+# a select cannot be fused the way a map is, because it has to decide whether
+# to write at all: what fusion leaves is `if (p v) (push a v) a`. every path
+# there either writes on the accumulator or hands it back untouched, which is
+# the same contract a plain reducer keeps. 4,015 allocations before, 15 after.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  kept = list/to_list (list/select xs (v -> v > 1000))
+  print "kept {length kept} first {kept[1]} last {kept[3000]}"

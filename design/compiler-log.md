@@ -9776,3 +9776,45 @@ and ch09's cloud sample both still print what they should, the book
 samples verify, kq's suite is green including its allocator goldens,
 every memory-corpus stdout is byte-identical and the three cost veins
 are unchanged. Welfare does not move.
+
+## 2026-07-28 — a conditional folder writes in place too (4,015 to 15, for select)
+
+The half the entry above left. Asking the analysis to print the folder
+it was refusing showed the shape immediately, which is the second time
+that has been quicker than reasoning about it:
+
+    if ((v -> v > 0) felem3)
+       ((facc2 felem2 -> push facc2 felem2) facc3 felem3)
+       facc3
+
+A `select` cannot be fused the way a `map` is, because it has to decide
+whether to write at all. So what fusion leaves is a conditional: one arm
+writes on the accumulator, the other hands it back untouched, and the
+test it branches on does not hold the accumulator at all.
+
+That is the same contract a plain reducer keeps, said over two paths
+instead of one, so the check now asks it of every path. `folder_is_unique`
+became one recursive question — does this body either hand the
+accumulator back or apply an accumulator operation to it — that answers
+the wrapper `map` leaves, the conditional `select` leaves, and a named
+call, in the same three lines. The walk peels the same two shapes to
+find the writes.
+
+    to_list over a select   4,015 allocations  ->  15
+    the same, pinned        3,018              ->  18
+    basket                 74,369              ->  71,364
+    basket peak            69.2 MB             ->  68.2 MB
+
+Unlike the map case this one pays: everything the basket materialises
+goes through a select, which is why that entry moved eleven allocations
+and this one moves three thousand.
+
+A `take` is still 12,019 and is not this shape — its fusion carries a
+count and a done signal rather than a test over the element. Left alone
+until somebody prints it too.
+
+Canaries first, as they now always are: `effect_push_shape.kso` and
+ch09's cloud sample both print what they should, the book samples
+verify, kq's suite is green including its allocator goldens, every
+memory-corpus stdout is byte-identical, and the three cost veins are
+unchanged. Welfare 59.05 to 59.16, held.
