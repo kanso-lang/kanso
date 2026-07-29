@@ -191,35 +191,60 @@ impl<'a> Analysis<'a> {
     /// an accumulator from outside, or passes it second, could alias — and
     /// mutating in place under an alias is corruption, not a wrong answer.
     fn folder_is_unique(&self, f: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
+        let _ = (ctx, scoped);
         let Expr::Lambda { params, body, .. } = f else { return false };
         let Some((acc, _)) = params.first() else { return false };
-        let Expr::App { head, args, .. } = body.as_ref() else { return false };
-        if !matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc) {
-            return false;
+        self.body_is_folder(body.as_ref(), acc)
+    }
+
+    /// Does every path through a folder's body either hand the accumulator
+    /// back untouched or apply an accumulator operation to it?
+    ///
+    /// Fusion writes chains in two shapes and this answers both. A `map`
+    /// becomes the reducer applied where it stands — an immediately-applied
+    /// lambda wearing a wrapper. A `select` cannot be composed that way,
+    /// because it has to decide whether to write at all, so it becomes a
+    /// conditional whose arms are the write and the accumulator unchanged.
+    /// Neither is a named call, which is all the older test looked for.
+    fn body_is_folder(&self, body: &Expr, acc: &str) -> bool {
+        match body {
+            // an arm that declines to write hands the accumulator back
+            Expr::Ident(n, _) if n == acc => true,
+            Expr::App { head, args, .. } => match head.as_ref() {
+                // the wrapper: the same folder, applied where it stands
+                Expr::Lambda { params, body: inner, .. } => {
+                    let Some((inner_acc, _)) = params.first() else { return false };
+                    takes_acc_first(args, acc) && self.body_is_folder(inner, inner_acc)
+                }
+                // a conditional writes on some paths and not others, and the
+                // test it branches on must not be holding the accumulator
+                Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
+                    count_in_expr(acc, &args[0]) == 0
+                        && self.body_is_folder(&args[1], acc)
+                        && self.body_is_folder(&args[2], acc)
+                }
+                Expr::Ident(callee, _) => {
+                    if !takes_acc_first(args, acc) {
+                        return false;
+                    }
+                    // the accumulator builtins are the ones whose result is
+                    // unique when their first argument is, which the folder's
+                    // contract already gives; they are not declarations, so
+                    // `returns_unique` never held them
+                    if matches!(callee.as_str(), "push" | "append" | "builtin_append")
+                        && args.len() == 2
+                    {
+                        return true;
+                    }
+                    if callee == "put" && args.len() == 3 {
+                        return true;
+                    }
+                    self.returns_unique.contains(&(callee.clone(), args.len()))
+                }
+                _ => false,
+            },
+            _ => false,
         }
-        if args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() > 0 {
-            return false;
-        }
-        // Fusion composes a chain by applying the reducer where it stands, so
-        // the folder it leaves behind is `(a v -> (a v -> push a v) a (f v))`.
-        // An immediately-applied lambda handed the accumulator as its first
-        // argument is the same folder wearing a wrapper: ask the question of
-        // what it applies.
-        if let Expr::Lambda { .. } = head.as_ref() {
-            return self.folder_is_unique(head.as_ref(), ctx, scoped);
-        }
-        let Expr::Ident(callee, _) = head.as_ref() else { return false };
-        let _ = (ctx, scoped);
-        // The accumulator builtins are the ones whose result is unique when
-        // their first argument is, which the folder's contract already gives.
-        // They are not declarations, so `returns_unique` never held them.
-        if matches!(callee.as_str(), "push" | "append" | "builtin_append") && args.len() == 2 {
-            return true;
-        }
-        if callee == "put" && args.len() == 3 {
-            return true;
-        }
-        self.returns_unique.contains(&(callee.clone(), args.len()))
     }
 
     fn unique_in(&self, e: &Expr, ctx: &FnDecl, scoped: Option<&str>) -> bool {
@@ -358,6 +383,40 @@ fn collect_pushes(
     }
 }
 
+/// Find the writes inside a folder body, following the same two shapes the
+/// check accepts: the wrapper fusion leaves, and a conditional's arms.
+fn mark_folder_body(
+    a: &Analysis,
+    decl: &FnDecl,
+    body: &Expr,
+    out: &mut HashSet<(String, usize, usize)>,
+    acc: Option<&str>,
+) {
+    if let Expr::App { head, args, .. } = body {
+        match head.as_ref() {
+            Expr::Lambda { params, body: inner, .. } => {
+                let inner_acc = params.first().map(|(n, _)| n.as_str());
+                mark_folder_body(a, decl, inner, out, inner_acc);
+                return;
+            }
+            Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
+                mark_folder_body(a, decl, &args[1], out, acc);
+                mark_folder_body(a, decl, &args[2], out, acc);
+                return;
+            }
+            _ => {}
+        }
+    }
+    walk_for_push_in(a, decl, body, out, acc);
+}
+
+/// The accumulator arrives first and nowhere else, so the call consumes it
+/// exactly once.
+fn takes_acc_first(args: &[Expr], acc: &str) -> bool {
+    matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc)
+        && args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() == 0
+}
+
 fn walk_for_push(a: &Analysis, decl: &FnDecl, e: &Expr, out: &mut HashSet<(String, usize, usize)>) {
     walk_for_push_in(a, decl, e, out, None)
 }
@@ -392,23 +451,10 @@ fn walk_for_push_in(
             && a.folder_is_unique(&args[2], decl, scoped)
         {
             if let Expr::Lambda { params, body, .. } = &args[2] {
-                let mut inner = params.first().map(|(n, _)| n.as_str());
+                let inner = params.first().map(|(n, _)| n.as_str());
                 walk_for_push_in(a, decl, &args[0], out, scoped);
                 walk_for_push_in(a, decl, &args[1], out, scoped);
-                // peel the wrapper fusion leaves: the applied lambda is the
-                // folder, and its own first parameter is what holds the
-                // accumulator inside it
-                let mut target = body.as_ref();
-                while let Expr::App { head, args: inner_args, .. } = target {
-                    let Expr::Lambda { params: ps, body: b, .. } = head.as_ref() else { break };
-                    if !matches!(inner_args.first(), Some(Expr::Ident(n, _)) if Some(n.as_str()) == inner)
-                    {
-                        break;
-                    }
-                    inner = ps.first().map(|(n, _)| n.as_str());
-                    target = b.as_ref();
-                }
-                walk_for_push_in(a, decl, target, out, inner);
+                mark_folder_body(a, decl, body, out, inner);
                 return;
             }
         }
