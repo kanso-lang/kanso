@@ -341,6 +341,35 @@ reasoning behind a ruling is worth more than the ruling:
 What carried it: an accessor that is a function is a value. Field
 syntax hands you nothing you can give to anything else.
 
+What Haskell did, checked rather than recalled, because it is the
+field's main data point and it argues against the ruling:
+
+- Haskell 98 record fields **are** top-level selector functions, which
+  is exactly "accessors are functions". Two records sharing a field
+  name in one module was a duplicate definition, which is why Haskell
+  code carries `personName`, `dogName` prefixes.
+- `DuplicateRecordFields` (GHC 8.0) allowed the duplicates but still
+  "does not permit a field and a normal value binding to have the same
+  name".
+- GHC had type-based disambiguation for ambiguous fields and **removed
+  it**: from 9.4.1 selector names must be entirely unambiguous, with
+  `-Wambiguous-fields` warning on code that relied on the old rules.
+- `NoFieldSelectors` exists to stop generating the selectors at all,
+  and `OverloadedRecordDot` brings back `person.name` through the
+  `HasField` class.
+
+So Haskell started where this gavel points and spent twenty-five years
+walking back to dot notation with the selectors switched off.
+
+The distinction that may or may not rescue it: Haskell's selectors are
+monomorphic functions and disambiguation was a bolt-on to inference,
+which could not always know the argument type at the use site. kanso
+dispatches on argument type as its universal mechanism — `length`
+already has arms for lists, strings and maps — so a record arm is the
+ordinary case rather than an extension. That is a real difference and
+it is also exactly the kind of reasoning that talks somebody past a
+warning, so it is recorded as an argument rather than a conclusion.
+
 Still to rule, because it follows from this rather than being settled
 by it:
 
