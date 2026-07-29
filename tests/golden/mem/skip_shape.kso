@@ -1,0 +1,16 @@
+# skipping over a cursor is index arithmetic. walking and discarding one
+# element at a time costs a step record and an advanced cursor each, which the
+# alloc count here pins: dropping 3,990 of 4,000 to reach ten values allocated
+# 8,029 times before, and 50 after.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  tail = list/to_list (list/drop xs 3990)
+  print "skipped {length tail} last {tail[10]}"

@@ -9537,3 +9537,36 @@ the re-weighting and nothing else. Era 21.
 What this buys is that the next sort, or string build, or map loop that
 gets faster will show up in the number that decides whether the project
 came out ahead.
+
+## 2026-07-28 — skipping over a cursor is arithmetic (8,030 allocations to 51)
+
+The basket had been in the tree for an hour and it found this: `join`
+cost eight thousand allocations to join ten strings. The join was not
+the problem. Reaching those ten meant dropping three thousand nine
+hundred and ninety, and `drop` walked them.
+
+    fn next_skipped burn source
+      if (burn < 1) (next source) (next_skipped (burn - 1) (skip_one (next source)))
+
+One element at a time, each pull building a step record and an advanced
+cursor, each thrown away immediately. Over a cursor none of that is
+needed — where the next element is, is arithmetic — so a `skipped` arm
+that matches a cursor source jumps the index and the general arm keeps
+every other source.
+
+    dropping 3,990 of 4,000      8,030 allocations  ->  51
+    basket allocations              91,864          ->  79,952
+    sort_shape                      33,403          ->  29,470
+
+The sort pays it too, because merging halves takes and drops.
+
+The adapters were measured together while looking, and the rest of the
+picture is worth recording: a fold over four thousand elements costs
+twelve allocations, a `take 10` costs sixty-eight, and building the
+list by pushing costs ten. Those are fused or near enough. Materialising
+through `to_list` costs one allocation per element for `map` and for
+`select`, which is a cursor record per element that a fused chain does
+not pay — that is the next thread and it is not this one.
+
+Welfare 58.61 to 58.90, held. The first optimisation to land after the
+basket is one the index could not have seen the day before.

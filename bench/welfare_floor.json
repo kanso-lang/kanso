@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 58.61204475579909,
+  "floor": 58.89592515362565,
   "history": [
     {
       "floor": 46.33,
@@ -94,6 +94,10 @@
     {
       "floor": 58.61,
       "why": "the basket enters: three programs and a compile sampled too narrow a shelf, and a 20x string build and a 200x sort both left the number untouched. runtime weight redistributed proportionally (0.721 unchanged in total, 0.15 of it to the basket); compile split untouched. new terms enter at ratio one, so this move is the re-weighting alone."
+    },
+    {
+      "floor": 58.9,
+      "why": "skipping over a cursor is index arithmetic: list/drop walked and discarded one element at a time, costing a step record and an advanced cursor each. basket allocations 91,864 -> 79,952, and the merge sort pays it too (sort_shape 33,403 -> 29,470)."
     }
   ]
 }

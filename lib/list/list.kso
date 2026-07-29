@@ -290,6 +290,13 @@ fn next_sifted keep test (step e rest)
   onward = sifted keep rest test
   if (test e == keep) (step e onward) (next onward)
 
+# Skipping over a cursor is index arithmetic, not walking. The general arm
+# below pulls one element at a time and throws each away, which costs a step
+# record and an advanced cursor per element skipped — dropping 3,990 of 4,000
+# allocated 8,029 times to reach ten values.
+fn next_skipped burn (cursor at source)
+  next (cursor (at + burn) source)
+
 fn next_skipped burn source
   if (burn < 1) (next source) (next_skipped (burn - 1) (skip_one (next source)))
 
