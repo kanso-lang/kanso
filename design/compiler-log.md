@@ -10009,3 +10009,52 @@ Also worth recording: `repeated`, the other big item, is fourteen
 thousand allocations that are all string keys, `sh_str` to the byte.
 Building a key per iteration is work the program asked for, not waste,
 and it is left alone.
+
+## 2026-07-28 — what the basket has left, and one trap in it
+
+Four rounds of asking the basket where its allocations were have each
+found something, and it is worth writing down what remains before the
+answers get thinner.
+
+    repeated  14,759   a tally over sixty-four repeating keys
+    sorted     5,531   a five-hundred element sort, plus its build
+    grouped    4,116   group_by over four thousand
+    grown      4,008   two thousand distinct keys into a map
+    moved      4,005   four thousand record updates
+    built      4,004   a four-thousand character string, one append at a time
+    sliced     4,005   its own build; the slice itself is nothing
+    joined        53
+    kept          15
+    xs            10
+
+The basket began the day at 91,864 allocations and a hundred and
+thirty-one megabytes resident. It is at 36,478 and three and a half.
+
+**The trap.** `repeated` is the largest item and it computes its key
+twice:
+
+    tally_repeat (n - 1) (put m "k{n % 64}" (bump m["k{n % 64}"]))
+
+Binding the key once costs 7,388 rather than 14,759, so half of the
+largest item in the index is a subexpression written twice. It would be
+easy, and wrong, to tidy the fixture: the number would fall by seven
+thousand, welfare would rise, and nothing about the compiler would have
+changed. That is a false gain and it is being refused.
+
+The duplication stays, deliberately, because it is the honest shape of
+the opportunity. Real programs do read a key and then write it, and a
+compiler that evaluates the same pure expression once is better than
+one that evaluates it twice. Leaving it in means common-subexpression
+elimination would show up in the index as the improvement it is.
+
+What each remaining item is, so nobody re-derives it:
+
+- `repeated` — half redundant interpolation (above), half genuine
+  string keys. `sh_str` accounts for every allocation to the byte.
+- `moved` — one record per update. Reusing a dead record's storage is
+  the Perceus move and it is not begun.
+- `built` — the string accumulator, whose route is the fold-state shelf
+  and whose handover approach is dead (2026-07-28, earlier).
+- `grouped`, `grown` — roughly one allocation an element, which is the
+  element being stored. Near the floor.
+- `sorted` — five an element after today's three rounds on it.
