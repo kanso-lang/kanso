@@ -9,9 +9,11 @@
     "emitted_lines": 1893,
     "oneshot_peak_bytes": 6977052,
     "decode_peak_bytes": 24421728,
-    "encode_peak_bytes": 113071838
+    "encode_peak_bytes": 113071838,
+    "basket_allocs": 91864,
+    "basket_peak_bytes": 69206016
   },
-  "floor": 62.697827061606326,
+  "floor": 58.61204475579909,
   "history": [
     {
       "floor": 46.33,
@@ -88,6 +90,10 @@
     {
       "floor": 62.7,
       "why": "zerocopy chunks registered at handoff, freed by the frame's rewind: encodebench true peak 113M->4.6M (RSS 85->6.2MB); encode peak term joins at 0.06 so the workload's peak is priced like the other two"
+    },
+    {
+      "floor": 58.61,
+      "why": "the basket enters: three programs and a compile sampled too narrow a shelf, and a 20x string build and a 200x sort both left the number untouched. runtime weight redistributed proportionally (0.721 unchanged in total, 0.15 of it to the basket); compile split untouched. new terms enter at ratio one, so this move is the re-weighting alone."
     }
   ]
 }

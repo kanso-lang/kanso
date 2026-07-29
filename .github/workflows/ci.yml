@@ -134,6 +134,7 @@ jobs:
           ./target/release/kanso build bench/jsonbench --release
           ./target/release/kanso build bench/encodebench --release >/dev/null
           ./target/release/kanso build bench/oneshot --release >/dev/null
+          ./target/release/kanso build bench/basket --release >/dev/null
       - name: decode counters
         run: |
           KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null
@@ -156,6 +157,17 @@ jobs:
             echo "::error::golden in this PR."
             exit 1
           }
+      - name: basket counters
+        run: |
+          KANSO_COUNTERS=1 ./basket 2>counters_basket.txt >/dev/null
+          diff bench/cost_golden_basket.txt counters_basket.txt || {
+            echo "::error::basket counters diverged — the welfare index reads"
+            echo "::error::this vein, and it samples a spread of what the"
+            echo "::error::language does rather than one shelf of it. If"
+            echo "::error::intentional, update the golden in this PR."
+            exit 1
+          }
+
       - name: encode counters
         run: |
           KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null

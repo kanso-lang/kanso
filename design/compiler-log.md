@@ -9493,3 +9493,47 @@ the memory corpus counts allocations, the cost veins count bytes. A
 failure that keeps the length and destroys the contents passes all of
 them. The fixture that eventually reduces this will assert bytes, and
 so should the next one.
+
+## 2026-07-28 — the welfare index reads a basket now (62.70 to 58.61)
+
+Clay: the benchmark should do a broad basket of functions so it tracks
+real performance the way an inflation metric tracks a basket of goods.
+It was reading three programs and a compile, and what a model leaves
+out it weights at zero — a string build twenty times faster and a sort
+that shed two hundred times its allocations both left the number
+exactly where it was.
+
+`bench/basket` samples a spread: string accumulation, a tally over keys
+that repeat and a map whose key set keeps growing, a list built by
+pushing and read back by index, lazy map/select/fold, group_by and
+tally, integer and float arithmetic, record construction and field
+reads, join, slice and sort. Two terms read it, allocations and peak,
+at runtime-class weight and late satiation.
+
+Composing it found the sort in its first run, which is the argument for
+a basket in one line. It also had to be balanced afterwards: with the
+quadratic gone, sorting four thousand elements was still eighty-six
+percent of the basket's allocations, which is a single good wearing a
+basket's name. Sorting five hundred brings it to about a third.
+
+    string build 4,003   tally repeat 15,208   map grow 18,000
+    list build  12,000   index read       10   lazy map 12,015
+    select      12,014   fold          3,017   group_by 16,178
+    tally       12,205   records       4,010   join      8,041
+    slice        4,005   sort         ~32,000  arithmetic    2
+
+The arithmetic rows are two allocations and they stay, because that is
+the number that would move if integer work ever started boxing. What
+they cannot do is carry their real cost, which is cpu — a deterministic
+index cannot read a clock, so this measures allocation-shaped cost and
+says so.
+
+The number moves from 62.70 to 58.61 and none of that is a regression.
+Runtime keeps its 0.721 in total and cedes 0.15 of it to the basket,
+proportionally across the existing runtime terms; the compile third is
+untouched. New terms enter at ratio one by construction, so the drop is
+the re-weighting and nothing else. Era 21.
+
+What this buys is that the next sort, or string build, or map loop that
+gets faster will show up in the number that decides whether the project
+came out ahead.

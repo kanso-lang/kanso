@@ -1,0 +1,90 @@
+import "std/list"
+import "std/text"
+
+# Records: construct, read a field, dispatch on the type.
+type point
+  x
+  y
+
+# Building a string, one append at a time.
+fn text_build 0 s
+  s
+
+fn text_build n s
+  text_build (n - 1) "{s}x"
+
+# A tally over keys that repeat: read, add, write back.
+fn tally_repeat 0 m
+  m
+
+fn tally_repeat n m
+  tally_repeat (n - 1) (put m "k{n % 64}" (bump m["k{n % 64}"]))
+
+fn bump none
+  1
+
+fn bump v
+  v + 1
+
+# A map whose key set keeps growing.
+fn tally_grow 0 m
+  m
+
+fn tally_grow n m
+  tally_grow (n - 1) (put m "k{n}" n)
+
+# A list built by pushing, then read back by index.
+fn list_build 0 xs
+  xs
+
+fn list_build n xs
+  list_build (n - 1) (push xs n)
+
+fn list_sum 0 xs acc
+  acc + length xs
+
+fn list_sum n xs acc
+  list_sum (n - 1) xs (acc + xs[n])
+
+# Integer and float arithmetic in a tight loop.
+fn arith 0 acc
+  acc
+
+fn arith n acc
+  arith (n - 1) (acc + n * 3 - n / 2)
+
+fn arith_float 0 acc
+  acc
+
+fn arith_float n acc
+  arith_float (n - 1) (acc + 1.5 * 2.0)
+
+fn shift 0 p
+  p
+
+fn shift n p
+  shift (n - 1) (point (p.x + 1) p.y)
+
+pub fn run _
+  built = text_build 4000 ""
+  repeated = tally_repeat 4000 {:}
+  grown = tally_grow 2000 {:}
+  xs = list_build 4000 []
+  summed = list_sum 4000 xs 0
+  mapped = list/map xs (v -> v * 2)
+  kept = list/to_list (list/select mapped (v -> v > 2000))
+  folded = list/fold kept 0 (acc v -> acc + v)
+  grouped = list/group_by xs (v -> v % 16)
+  counted = list/tally (list/map xs (v -> v % 32))
+  ints = arith 4000 0
+  floats = arith_float 2000 0.0
+  moved = shift 4000 (point 0 0)
+  tail = list/drop xs 3990
+  joined = text/join (list/to_list (list/map tail (v -> "s{v}"))) ","
+  head500 = list/to_list (list/take xs 500)
+  sorted = list/sum (list/sort (list/map head500 (v -> 4000 - v)))
+  sliced = length (text/slice built 1 128)
+  a = "{length built} {length repeated} {length grown} {summed}"
+  b = "{length kept} {folded} {length grouped} {length counted}"
+  c = "{ints} {floats} {moved.x} {length joined} {sliced} {sorted}"
+  print "basket {a} {b} {c}"
