@@ -9658,3 +9658,43 @@ green on the broken compiler, and the book samples are not. A
 simulation that draws random numbers and prints the values it built is
 a byte assertion over a long pipeline, which is the shape that catches
 this class. The mem corpus, which counts, saw an improvement.
+
+## 2026-07-28 — a fold's reducer writes in place (4,015 to 15)
+
+The entry above closed a pull request rather than merging it, and said
+the win was waiting on the analysis. It was. This is the analysis.
+
+The rule that was missing is about *when a lambda runs*. A folder is
+applied at once, per element, to an accumulator the fold owns, and a
+push there is safe. A continuation is not that: `xs . (p -> push acc p)`
+reads to the analysis as a single use of `acc`, because textually it is
+one — but the lambda escapes into a suspended effect and the executor
+runs it later, while the frame that "used it once" is still holding the
+value. The walker no longer descends into lambda bodies at all; the
+fold branch above it walks the folder deliberately, and nothing else
+gets marked.
+
+With that, the emitter can carry the file into a lifted lambda without
+the marks inside one being a hazard, and `folder_is_unique` can be
+taught the accumulator builtins it never held — `push` is not a
+declaration, so `returns_unique` could not answer for it, and the check
+said no to `fold coll [] (acc x -> push acc x)`, which is `to_list`.
+
+    to_list over 4,000 elements   4,015 allocations  ->  15
+    the same fold, pinned         4,017              ->  17
+    basket                       79,952              ->  74,380
+    sort_shape                   29,470              ->  24,401
+    skip_shape                       51              ->  41
+
+Watched red both ways, which is the only reason to believe any of it.
+`effect_push_shape.kso` prints `[[876 612] [601 850] [662 624]]` and,
+with the rule removed, `[[662 624] <none> <value>]` — it pins bytes,
+because the allocation count for that program *falls* when it corrupts.
+`fold_push_shape.kso` pins the other side at seventeen allocations
+against four thousand and seventeen.
+
+Every stdout in the memory corpus is byte-identical, the three cost
+veins are unchanged, the book samples verify, and kq's suite is green
+including its own allocator goldens.
+
+Welfare 58.90 to 59.05, held.
