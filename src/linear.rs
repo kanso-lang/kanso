@@ -224,22 +224,18 @@ impl<'a> Analysis<'a> {
                         && self.body_is_folder(&args[2], acc)
                 }
                 Expr::Ident(callee, _) => {
-                    if !takes_acc_first(args, acc) {
-                        return false;
-                    }
                     // the accumulator builtins are the ones whose result is
                     // unique when their first argument is, which the folder's
                     // contract already gives; they are not declarations, so
-                    // `returns_unique` never held them
-                    if matches!(callee.as_str(), "push" | "append" | "builtin_append")
-                        && args.len() == 2
-                    {
-                        return true;
+                    // `returns_unique` never held them. They also force their
+                    // arguments, so a sibling may read the accumulator.
+                    let builtin = (matches!(callee.as_str(), "push" | "append" | "builtin_append")
+                        && args.len() == 2)
+                        || (callee == "put" && args.len() == 3);
+                    if !takes_acc_first_with(args, acc, builtin) {
+                        return false;
                     }
-                    if callee == "put" && args.len() == 3 {
-                        return true;
-                    }
-                    self.returns_unique.contains(&(callee.clone(), args.len()))
+                    builtin || self.returns_unique.contains(&(callee.clone(), args.len()))
                 }
                 _ => false,
             },
@@ -413,8 +409,21 @@ fn mark_folder_body(
 /// The accumulator arrives first and nowhere else, so the call consumes it
 /// exactly once.
 fn takes_acc_first(args: &[Expr], acc: &str) -> bool {
-    matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc)
-        && args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() == 0
+    takes_acc_first_with(args, acc, false)
+}
+
+/// The accumulator arrives first, and appears nowhere else — unless the callee
+/// is a builtin, which forces every argument before it runs. Then a read in a
+/// sibling argument of the very call that writes is finished before the write:
+/// `tally` is `fold coll {:} (m x -> put m x (bump m[x]))`, which mentions the
+/// map twice and holds it once. That is the same discount `effective_uses`
+/// already gives a bare call site, and without it a tally copied its map once
+/// an element.
+fn takes_acc_first_with(args: &[Expr], acc: &str, forced_args: bool) -> bool {
+    if !matches!(args.first(), Some(Expr::Ident(n, _)) if n == acc) {
+        return false;
+    }
+    forced_args || args[1..].iter().map(|a| count_in_expr(acc, a)).sum::<usize>() == 0
 }
 
 fn walk_for_push(a: &Analysis, decl: &FnDecl, e: &Expr, out: &mut HashSet<(String, usize, usize)>) {

@@ -9970,3 +9970,42 @@ there are now far fewer pushes to find it.
 The basket only pointed here after `to_list`, `select`, `drop` and
 `take` were fixed; before that the sort was hidden behind them. That is
 the argument for a basket over a benchmark, made by accident.
+
+## 2026-07-28 — a builtin forces its arguments, so a sibling may read the accumulator
+
+The basket was asked again and pointed at counting. A tally over four
+thousand elements cost twelve thousand allocations, a hundred and
+twenty-eight kilobytes of map headers, and near four megabytes of
+buffers — it was copying its map once an element.
+
+    tally coll
+      fold coll {:} (m x -> put m x (bump m[x]))
+
+The accumulator is first, which is what the folder check wants, but it
+appears again inside `bump m[x]`, and the check refused it for that.
+This repository already has the answer written down, one function away:
+a builtin forces every argument before it runs, so a read in a sibling
+argument of the very call that writes is finished before the write.
+`effective_uses` gives a bare call site exactly that discount and says
+so in a comment naming `put m k (bump m[k])`. The folder check had been
+written without it.
+
+    tally 4,000 elements  12,024 allocations  ->      25
+    map headers          128,000 bytes        ->       0
+    fused_tally            1,590              ->      94
+    basket                48,477              ->  36,478
+    basket max-RSS         131.3 MB           ->     3.5 MB
+
+The peak is the number that matters and it is measured as maximum
+resident set, not as an arena counter: thirty-seven times smaller,
+because a map that is copied every element leaves every intermediate
+copy behind until the region is reclaimed.
+
+Welfare 60.03 to 64.29, which is the largest move any single change has
+made. The basket's peak term carries it — that term was added this
+morning precisely because nothing else could see a cost like this one.
+
+Also worth recording: `repeated`, the other big item, is fourteen
+thousand allocations that are all string keys, `sh_str` to the byte.
+Building a key per iteration is work the program asked for, not waste,
+and it is left alone.
