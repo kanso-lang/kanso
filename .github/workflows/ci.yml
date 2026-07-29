@@ -167,6 +167,29 @@ jobs:
             exit 1
           }
 
+  downstream:
+    name: kq specs (a real program, gating)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # kq caught a compiler bug that nineteen suites, ninety-eight
+      # differential programs, three cost veins and every memory pin agreed
+      # was not there: an in-place string concat printed 267 nul bytes at
+      # exactly the right length, so every count still matched. Reducing it
+      # to a fixture here failed twice, which is the argument for running the
+      # program rather than another reduction of it. Its goldens are byte
+      # comparisons against jq over unicode, escapes and deep paths, and they
+      # cost half a minute.
+      - name: build the compiler
+        run: cargo build --release
+      - name: kq's own spec suite against this compiler
+        run: |
+          sudo apt-get install -y jq >/dev/null
+          git clone --depth 1 https://github.com/kanso-lang/kq /tmp/kq
+          cd /tmp/kq
+          KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
+
   site:
     name: site (landing sample and playground run in a browser)
     runs-on: ubuntu-latest

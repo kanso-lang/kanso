@@ -9457,3 +9457,39 @@ What comes back has to come back narrower: a licence that speaks only
 for the interpolation site it was written for, and the kq fixture in
 this repository's corpus before the optimisation returns rather than
 after.
+
+## 2026-07-28 — kq's specs gate this repository now
+
+Clay, after the revert: did you expand our suite in light of what kq
+caught? No — the reduction had been written down as step one of a
+future retry, which leaves the hole open on main in the meantime and
+gives it to nobody. So: the hole first, the optimisation whenever.
+
+Two reductions were written and neither caught it. The first walked a
+decoded document accumulating a rendering, with multibyte text in the
+fixture; identical bytes on both compilers. The second accumulated four
+thousand characters so the arena rewound under the accumulator two
+thousand times and asserted on a slice of the bytes rather than on the
+length; identical again. Both were watched against the reverted change
+re-applied, which is the only way to know a fixture is worth having,
+and neither earns its place.
+
+That is twice that guessing at the shape has been cheaper to try than
+to trust. kq is four hundred lines that decode, query and pretty-print
+with a streaming writer, and it found this in one run. So it gates
+here now: CI clones it, builds it against the compiler in the tree, and
+runs its spec suite — five unit tests, eleven fixture goldens compared
+byte for byte against `jq -S` over unicode, escapes and deep paths, and
+its two allocator goldens. Half a minute.
+
+The gate is watched red, which is the whole point: against the
+in-place concat re-applied it fails on `unicode_identity`, the same
+267 nul bytes at exactly the right length that started this.
+
+What the corpus here could not see is worth naming, because it is a
+property of the fixtures rather than of the bug. Every string pin in
+this repository asserts a count — `string_build.kso` printed a length,
+the memory corpus counts allocations, the cost veins count bytes. A
+failure that keeps the length and destroys the contents passes all of
+them. The fixture that eventually reduces this will assert bytes, and
+so should the next one.
