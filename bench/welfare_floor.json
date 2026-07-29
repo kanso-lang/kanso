@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 59.1567674736954,
+  "floor": 59.311460430366935,
   "history": [
     {
       "floor": 46.33,
@@ -106,6 +106,10 @@
     {
       "floor": 59.16,
       "why": "a conditional folder writes in place too: fusion turns a select into 'if (p v) (push a v) a', and every path there either writes on the accumulator or hands it back. to_list over a select 4,015 -> 15, basket 74,369 -> 71,364, peak 69.2 MB -> 68.2 MB."
+    },
+    {
+      "floor": 59.31,
+      "why": "taking from a cursor is a window: capped over a cursor rebuilt an advanced cursor, a step, a fresh cap and another step every element, and a bounded window carries position and limit in one record. take 12,019 -> 6,020, basket 71,364 -> 66,432, sort_shape 24,401 -> 20,468 (merging halves takes)."
     }
   ]
 }

@@ -9886,3 +9886,44 @@ No such shortcut exists for `take`: it has to yield each element it
 takes. Either the fold learns to stop, or the unfused adapter path gets
 cheaper than four records an element. Both are real work and neither is
 begun.
+
+## 2026-07-28 — taking from a cursor is a window (12,019 to 6,020)
+
+The entry above named two routes for `take` and said neither was
+begun. This is the second one, and it turns out not to need the first.
+
+Four records an element was the price, and naming them said what they
+were: an advanced cursor and a step from the inner cursor, then a fresh
+cap and another step from the wrapper. Two of those exist only because
+the cap and the cursor are separate records that both have to be
+rebuilt to advance.
+
+A window does not need two. `bounded at stop source` carries the
+position and the limit together, so advancing rebuilds one record
+instead of two, and `capped left (cursor at source)` becomes
+`bounded at (at + left - 1) source` on the way in. The general `capped`
+arm stays for every source that is not a cursor.
+
+    to_list over take 3000   12,019 allocations  ->  6,020
+    the same, pinned         12,022              ->  6,023
+    sum over take 3000       12,016              ->  6,017
+    sort_shape               24,401              ->  20,468
+    basket                   71,364              ->  66,432
+
+The sort pays it twice over, because merging halves takes them.
+
+A window trusts its limit and the source does not have to agree: taking
+nine from a list of three walked off the end and raised `missing index
+4` on the first run of the edge cases. The window says when to stop
+asking and the source says when it has run out, and the second one is
+what ends a take that asks for more than there is.
+
+Fusion is still the other route and is still not begun. This makes the
+unfused path cheaper rather than removing it, which is worth more than
+it sounds: four records an element is the price of every chain fusion
+does not cover, not only this one.
+
+Canaries green before it was believed: `effect_push_shape.kso` and
+ch09's cloud sample, the book samples, kq's suite including its
+allocator goldens, every memory-corpus stdout byte-identical, three
+cost veins unchanged. Welfare 59.16 to 59.31, held.

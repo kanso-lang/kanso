@@ -1,3 +1,8 @@
+pub type bounded
+  at
+  stop
+  source
+
 pub type capped
   left
   source
@@ -118,6 +123,9 @@ fn first_of (done _)
 fn first_of (step e _)
   e
 
+pub fn fold (bounded at stop source) init f
+  fold_go (next (bounded at stop source)) init f
+
 pub fn fold (capped left source) init f
   fold_go (next (capped left source)) init f
 
@@ -176,6 +184,9 @@ fn file_under acc k x
 pub fn index_by coll key
   fold coll {:} (acc x -> put acc (key x) x)
 
+fn iter (bounded at stop source)
+  bounded at stop source
+
 fn iter (capped left source)
   capped left source
 
@@ -232,6 +243,22 @@ pub fn min coll
   unwrap_found (fold coll (missing true) (m x -> underrank m x))
 
 pub naturals = counting 1
+
+# Taking from a cursor is a window, and a window is one record. The general
+# arm below wraps a cursor in a cap and rebuilds both every element — an
+# advanced cursor, a step, a fresh cap and another step, four records where
+# two will do.
+pub fn next (capped left (cursor at source))
+  next (bounded at (at + left - 1) source)
+
+pub fn next (bounded at stop source)
+  if (stop < at) (done true) (next_bounded at stop source)
+
+# the window says when to stop asking; the source says when it has run out,
+# and taking more than there is has to end on the second one
+fn next_bounded at stop source
+  onward = bounded (at + 1) stop source
+  if (length source < at) (done true) (step source[at]! onward)
 
 pub fn next (capped left source)
   if (left < 1) (done true) (next_capped left (next source))

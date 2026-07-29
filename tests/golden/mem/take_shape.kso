@@ -1,0 +1,16 @@
+# taking from a cursor is a window, and a window is one record. wrapping a
+# cursor in a cap rebuilds four records an element — an advanced cursor, a
+# step, a fresh cap and another step — where a bounded window carrying
+# position and limit rebuilds two. the alloc count pins which it is doing.
+import "std/list"
+
+fn build 0 xs
+  xs
+
+fn build n xs
+  build (n - 1) (push xs n)
+
+pub play =
+  xs = build 4000 []
+  head = list/to_list (list/take xs 3000)
+  print "took {length head} first {head[1]} last {head[3000]}"
