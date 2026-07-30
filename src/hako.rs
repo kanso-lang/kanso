@@ -305,33 +305,6 @@ pub fn install(root: &Path, cache: &Path, from: &[String]) -> Result<String, Str
     Ok(format!("installed {} hako(s):\n{report}", names.len()))
 }
 
-/// `kanso list` — what the lock pins. Staleness needs the remote, so it is
-/// reported when one answers and left off when none does: listing what a
-/// build will use has to work on a train.
-pub fn list(root: &Path) -> Result<String, String> {
-    let locked = read_lock(root);
-    if locked.is_empty() {
-        return Ok("hako.lock pins nothing — run `kanso install`\n".to_string());
-    }
-    let mut out = String::new();
-    for (name, pin) in &locked {
-        // An interim pin has no staleness to report — it is not on the tag
-        // series staleness is measured along — so it reports the only thing
-        // worth saying about it, which is that it is still there.
-        let mark = match interim(pin) {
-            true => " (interim pin: not a release)".to_string(),
-            false => match highest_release(name) {
-                Ok((latest, _)) if latest != pin.tag => format!(" (stale: {latest} is out)"),
-                Ok(_) => String::new(),
-                Err(_) => " (unreachable)".to_string(),
-            },
-        };
-        let short = &pin.sha[..pin.sha.len().min(12)];
-        out.push_str(&format!("{name} {} {short} {}{mark}\n", pin.tag, pin.protocol));
-    }
-    Ok(out)
-}
-
 /// `kanso update` — walk tags forward and rewrite the lock. A release is the
 /// only thing it walks to; a pin that is not a release stays where it is,
 /// which is the dev-sha discipline made structural.

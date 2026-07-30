@@ -25,7 +25,10 @@ fn main() -> ExitCode {
         let root = std::path::Path::new(&file);
         let done = match command.as_str() {
             "install" => kanso::hako::install(root, &cache, &hako_overrides()),
-            "list" => kanso::hako::list(root),
+            // `list` is a kanso program now — hako's own verb, in the
+            // language hako manages. It runs interpreted because a verb of the
+            // toolchain cannot wait on a C compiler.
+            "list" => return run_hako(vec![file.clone()]),
             _ => kanso::hako::update(root, &cache, hako_named().as_deref()),
         };
         return match done {
@@ -94,7 +97,7 @@ fn main() -> ExitCode {
         return build(&program, &file, release);
     }
     if interp {
-        return run_interpreted(&program);
+        return run_interpreted(&program, program_args());
     }
     run(&program, &file, &source, plan)
 }
@@ -160,21 +163,21 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
 /// compiles native; this path is for effects the backend doesn't lower yet
 /// (the cooperative scheduler, `sleep`, `random`), so the concurrency model
 /// can be seen before it is ported to the native and wasm engines.
-fn run_interpreted(program: &ast::Program) -> ExitCode {
+fn run_interpreted(program: &ast::Program, args: Vec<String>) -> ExitCode {
     // Interp eval depth scales with program recursion (and force-time
     // evaluation of deferred binds); pin a deep stack rather than lean on
     // the main thread's default, mirroring the oracle harness.
     std::thread::scope(|scope| {
         std::thread::Builder::new()
             .stack_size(1 << 30)
-            .spawn_scoped(scope, || run_interpreted_on_stack(program))
+            .spawn_scoped(scope, || run_interpreted_on_stack(program, args))
             .expect("spawns")
             .join()
             .expect("interpreter thread completes")
     })
 }
 
-fn run_interpreted_on_stack(program: &ast::Program) -> ExitCode {
+fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCode {
     let interp = eval::Interp::new(program);
     // Mirror the native runtime's KANSO_COUNTERS convention: semantic thunk
     // counters print to stderr at exit, byte-identical across engines.
@@ -196,8 +199,7 @@ fn run_interpreted_on_stack(program: &ast::Program) -> ExitCode {
     };
     match value {
         eval::Value::Desc(desc) => {
-            let mut executor =
-                eval::RealExecutor { program_args: program_args(), rng: eval::Rng::seeded() };
+            let mut executor = eval::RealExecutor { program_args: args, rng: eval::Rng::seeded() };
             match interp.execute(&desc, &mut executor) {
                 Ok(eval::Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
                     ExitCode::from(deliberate_exit(&info.reason).unwrap_or(1))
@@ -350,6 +352,18 @@ fn report(outcome: Result<kanso::repl::Outcome, String>) {
         },
         Err(message) => eprint!("{}", diag::paint(&message)),
     }
+}
+
+/// hako's `list`, carried in the binary as source and run on the spot.
+fn run_hako(args: Vec<String>) -> ExitCode {
+    let program = match kanso::compile_hako() {
+        Ok(program) => program,
+        Err(rendered) => {
+            eprint!("{}", diag::paint(&rendered));
+            return ExitCode::from(2);
+        }
+    };
+    run_interpreted(&program, args)
 }
 
 /// Everything after `--` belongs to the program.
