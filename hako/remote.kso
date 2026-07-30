@@ -66,3 +66,16 @@ fn ahead_rest? minor patch
 fn version tag
   parts = text/split (text/slice tag 2 (length tag)) "."
   list/to_list (list/map parts text/to_int)
+
+# A branch's head. Interim by construction: a branch moves, so the sha beside
+# it in the lock is what makes the build reproducible.
+pub fn head_of set name branch
+  argv = ["ls-remote" "--heads" (url set name) branch]
+  io/run "git" argv . only_head
+
+fn only_head p
+  rows = list/to_list (list/reject (text/split p.stdout "\n") blank?)
+  if (p.status != 0) none (first_column rows)
+
+fn first_column rows
+  if (length rows == 0) none (text/split rows[1]! "\t")[1]!

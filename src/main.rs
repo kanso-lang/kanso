@@ -17,36 +17,20 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    // hako's three verbs are kanso programs. They run interpreted because a
+    // verb of the toolchain cannot wait on a C compiler, and everything after
+    // the directory is the verb's own: the hakos to pin for `install`, the one
+    // to walk for `update`.
     if matches!(command.as_str(), "install" | "list" | "update") {
-        let cache = std::env::var("KANSO_HAKO")
-            .map(std::path::PathBuf::from)
-            .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".hako")))
-            .unwrap_or_default();
-        let root = std::path::Path::new(&file);
-        let done = match command.as_str() {
-            "install" => kanso::hako::install(root, &cache, &hako_overrides()),
-            // `list` and `update` are kanso programs now — hako's own verbs,
-            // in the language hako manages. They run interpreted because a
-            // verb of the toolchain cannot wait on a C compiler.
-            "list" => return run_hako(vec!["list".to_string(), file.clone()]),
-            "update" => {
-                let mut argv = vec!["update".to_string(), file.clone()];
-                argv.extend(hako_named());
-                return run_hako(argv);
-            }
-            _ => unreachable!("install is the only verb left in Rust"),
-        };
-        return match done {
-            Ok(report) => {
-                print!("{report}");
-                ExitCode::SUCCESS
-            }
-            Err(reason) => {
-                eprintln!("error: {reason}");
-                ExitCode::from(2)
-            }
-        };
+        let mut argv = vec![command.clone(), file.clone()];
+        match command.as_str() {
+            "install" => argv.extend(hako_overrides()),
+            "update" => argv.extend(hako_named()),
+            _ => {}
+        }
+        return run_hako(argv);
     }
+
     let require_main = command == "run" || command == "play";
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {

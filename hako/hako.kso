@@ -51,5 +51,20 @@ fn line p mark
 pub fn ran argv
   verb = argv[1]!
   dir = argv[2]!
-  only = if (length argv > 2) argv[3]! none
+  rest = list/to_list (list/drop argv 2)
+  only = if (length rest == 0) none rest[1]!
+  pinned = installing dir (overrides rest)
+  if (verb == "install") pinned (walked_or_listed verb dir only)
+
+fn walked_or_listed verb dir only
   if (verb == "list") (listing dir) (updating dir only)
+
+# `--from owner/repo@branch`, one for each hako being pinned to a branch. The
+# lock is the only home an override has: an import names identity and nothing
+# more, so the branch cannot live there.
+fn overrides rest
+  list/to_list (list/map rest split_at)
+
+fn split_at spec
+  halves = text/split spec "@"
+  [halves[1]! halves[2]!]
