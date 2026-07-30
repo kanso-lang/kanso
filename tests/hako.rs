@@ -376,10 +376,9 @@ fn an_interim_pin_is_built_against_flagged_and_never_walked_forward() {
     assert_eq!(kept, lock, "a plain install replaced the interim pin: {kept}");
 }
 
-/// hako's first verb, written in kanso. `hako/` is a module in this repo that
-/// reads a lock and reports what it pins — the same job `hako::list` does in
-/// Rust, and the beginning of moving that work into the language it manages.
-/// It runs here so it is exercised rather than merely present.
+/// `kanso list` is a kanso program. `hako/` is a module in this repo, carried
+/// in the binary as source the way the shipped library is, and run on the spot
+/// when the verb is invoked — so these exercise what a user runs, not a copy.
 ///
 /// The remote is a directory of repositories, so this needs no network and
 /// still exercises the `git ls-remote` that staleness is measured with.
@@ -396,7 +395,7 @@ fn the_kanso_listing_reads_a_lock() {
     .expect("the lock writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", "hako", "--"])
+        .args(["list"])
         .arg(&root)
         .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -423,7 +422,7 @@ fn the_kanso_listing_is_quiet_when_a_pin_is_current() {
         .expect("the lock writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", "hako", "--"])
+        .args(["list"])
         .arg(&root)
         .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -448,7 +447,7 @@ fn the_kanso_listing_says_when_a_remote_does_not_answer() {
         .expect("the lock writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", "hako", "--"])
+        .args(["list"])
         .arg(&root)
         .env("KANSO_HAKO_REMOTE", "/nonexistent-remote/")
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -472,7 +471,7 @@ fn the_kanso_listing_says_when_nothing_is_pinned() {
     std::fs::write(root.join("hako.lock"), "").expect("the lock writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", "hako", "--"])
+        .args(["list"])
         .arg(&root)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()

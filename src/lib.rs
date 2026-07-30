@@ -2044,6 +2044,24 @@ pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::
     compile_module_root(dir, require_main, &mut visited)
 }
 
+/// hako's own verbs, written in kanso and carried in the binary the way the
+/// shipped library is. There is no directory to read: an installed `kanso`
+/// has no `hako/` beside it, and the files are the ones in this checkout.
+pub fn compile_hako() -> Result<ast::Program, String> {
+    const FILES: &[(&str, &str)] = &[
+        ("hako.kso", include_str!("../hako/hako.kso")),
+        ("lock.kso", include_str!("../hako/lock.kso")),
+        ("main.kso", include_str!("../hako/main.kso")),
+        ("remote.kso", include_str!("../hako/remote.kso")),
+    ];
+    LOCK.with(|l| l.borrow_mut().clear());
+    let mut visited = std::collections::HashSet::new();
+    AMBIENT_ROOT.with(|c| c.set(true));
+    let built = compile_module_inner(std::path::Path::new("hako"), true, &mut visited, Some(FILES));
+    AMBIENT_ROOT.with(|c| c.set(false));
+    built
+}
+
 /// The root module gets the ambient imports (design/render-plan.md);
 /// dependencies never do — deps compile exactly as written.
 fn compile_module_root(
