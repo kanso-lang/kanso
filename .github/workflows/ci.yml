@@ -250,6 +250,10 @@ jobs:
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
       - run: python3 scripts/site_smoke.py
+      # the mechanical half of the writing rules. the families it cannot see —
+      # milked metaphors, manufactured triples, epigram endings — still want a
+      # read, which is why a clean run is necessary and not sufficient
+      - run: python3 scripts/prose_check.py
 
   browser:
     name: browser differential (three engines, byte-identical, headless chrome)

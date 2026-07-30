@@ -11929,3 +11929,28 @@ used sparingly is not the tell the rules are hunting.
 Worth adding to the mechanical check before shipping prose: the prescribed
 regex catches `is not X. it's Y` and misses `is not X; it is Y`, `not X—it is
 Y`, and `not a X, but Y`, which is where all thirteen of these lived.
+
+## The writing rules, made enforceable
+
+The last entry closed by noting that the prescribed grep catches one shape of
+the antithesis family and misses three, and that all thirteen tells cut from
+the book lived in the misses. A rule nothing enforces drifts back, so it is a
+script now, run over every published page in CI.
+
+Three families are mechanically detectable — the flip in its four shapes, the
+self-announcing sentence, throat-clearing — and the script says out loud that
+it cannot see the others. The milked metaphor, the manufactured triple and the
+epigram bolted to a paragraph's end still want a read, and a clean run is
+necessary rather than sufficient.
+
+It found eight on its first pass, on pages nobody had scanned: the brand page
+twice, the compiler page three times, the influences page, an appendix, and
+one false positive. The false positive is the interesting one, because it
+shows what the shape is really made of: "either it is the one rendering, or it
+does not compile, and either way she stays asleep. it is said that…" is two
+sentences, not a flip. The pattern now refuses to cross a clause-joining
+conjunction, which is what separates a denial-then-assertion from a sentence
+that merely contains "not" and later contains "it is".
+
+Run against the tree as it stood before yesterday's cleanup, it reports
+sixteen. Against the tree today, zero.
