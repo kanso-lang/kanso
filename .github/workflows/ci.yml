@@ -238,6 +238,10 @@ jobs:
       # the same std surface, asked for the awkward thing rather than the
       # wrong one: what a function ANSWERS at its edges, not what it complains
       - run: python3 scripts/behaviour_differential.py
+      # how effects COMBINE — sequenced, bound, nested, run beside each other.
+      # the executor is written twice with no shared code, so the two halves
+      # can drift anywhere the corpus does not happen to go
+      - run: python3 scripts/effects_differential.py
 
   site:
     name: site (landing sample and playground run in a browser)
