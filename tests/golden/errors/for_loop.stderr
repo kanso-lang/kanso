@@ -1,0 +1,4 @@
+error[syntax]: kanso has no `for` — repetition is recursion, and a chain of list verbs covers most of it
+  --> for_loop.kso:2:3
+   2 |   for x in [1 2 3]
+         ^

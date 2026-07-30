@@ -1,0 +1,4 @@
+error[syntax]: kanso has no `def` — a function is `fn name params`
+  --> def_keyword.kso:1:1
+   1 | def f _
+       ^
