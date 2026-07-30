@@ -11658,3 +11658,32 @@ it now shows what it was for.
 `tests/golden/micro/not_equal.kso` writes the two uses of `!` next to each
 other, because that adjacency is the whole subtlety: `xs[1]! != 2` has to be
 an index, a comparison and nothing else.
+
+## A diamond is not a cycle
+
+`import "std/json"` beside `import "std/text"` did not compile. json imports
+text, so the entry and its dependency both reach the same module — a diamond,
+which is the ordinary shape of any program with a dependency — and the loader
+answered `error: import cycle through std/text`.
+
+The set it consulted held every module ever loaded rather than the modules
+currently being loaded. A module is a cycle when it is already open, not when
+it has been opened before, so the set is now the path and a module leaves it
+when its own load finishes. Two shipped stdlib modules can be used together.
+
+What this does not fix, and it is worth being plain about: each importer still
+gets its own copy of a shared module, with its own nominal types. When those
+types stay inside their own side nothing notices — `text/slice` answers a
+string and json's parse results are json's. When a lazy enumerable crosses,
+they do: a module returning `inner/list/mapped` cannot have it consumed by the
+entry's `list/to_list`, and the reader is told `length takes a list, string,
+or map`. That is a runtime error where a compile error belongs, and the real
+answer is one identity per module rather than one per importer.
+
+Still, the trade is clear. Before, a legal program did not compile and the
+message named the wrong problem. Now the common shape works and a narrower one
+fails later than it should.
+
+Found while writing hako in kanso, which is turning out to be a better probe
+of the language than reading the compiler: `text/split` and `!=` came from the
+same exercise.
