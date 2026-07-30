@@ -300,7 +300,8 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
         return push(Slot::V(Value::NoneV));
     }
     let Slot::V(Value::Record { ty, fields }) = slot(h) else {
-        die("`set` writes a record field".to_string());
+        // the oracle names what it was handed, so this does too
+        die(format!("`set` writes a record field, not {}", render(&val(h), true)));
     };
     let position = TYPES.with(|t| {
         let types = t.borrow();
