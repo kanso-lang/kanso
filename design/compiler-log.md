@@ -11041,3 +11041,35 @@ was doing work in one section and decorating four others.
 Every number was preserved rather than re-measured; re-sitting the
 published figures is its own task and stays open. Landing, compiler and
 book pages are unchanged so far.
+
+## 2026-07-29 — two published claims were wrong, and the check was blind to one
+
+Reading the landing page for voice found two things that are not voice.
+
+**The page contradicted itself about the formatter, 214 lines apart.**
+Line 143 said "no formatter tool exists — there is nothing left to
+format", which is the language's own position and a section heading on
+the about page. Line 357 said the one binary carries "interpreter,
+native compiler, formatter, test runner". The list is now interpreter,
+native compiler, test runner and package manager, which is what the
+binary actually holds.
+
+**The about page published a different sitting from every other
+surface.** The compiler board and the landing panel agree at 0.78 /
+0.87 / 1.02 / 1.95 ms; about.html said 0.76 / 0.86 / 0.99 / 2.00. This
+is the failure CLAUDE.md already names — a later sweep once found five
+disagreeing figure sets across four pages — and the reason it recurred
+is that `cross_surface_numbers.py` reads the compiler board and the
+landing page and nothing else. A surface outside the check drifts
+silently, which is the same shape as the page-drift gate being defeated
+by a shallow clone: the guard existed, and did not cover the thing that
+moved.
+
+The check now reads about.html's sentence too, and was watched red by
+restoring the old figure. Both misses were found by reading rather than
+by any gate, which is the argument for reading.
+
+Voice, on the landing page, was the smaller job: two antithesis flips
+("what the book doesn't yet cover isn't hidden; it's not decided", "a
+performance regression isn't a surprise in production — it's a failing
+diff") and one self-announcement ("the part a stopwatch can't show").

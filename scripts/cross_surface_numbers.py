@@ -56,6 +56,23 @@ def landing_prose():
     }
 
 
+def about_prose():
+    """The about page quotes the same sitting in a sentence of its own. It was
+    left out of this check once, and carried a stale sitting for as long as
+    nobody read the two pages side by side."""
+    page = (ROOT / "docs/about.html").read_text()
+    found = re.search(
+        r"decodes in about ([0-9.]+)ms of cpu\. hand-tuned <code>serde_json</code> "
+        r"takes about ([0-9.]+)ms.*?about ([0-9.]+)ms, and go's <code>encoding/json</code> "
+        r"about ([0-9.]+)ms",
+        page,
+        re.S,
+    )
+    if not found:
+        return None
+    return {"kanso": found.group(1), "serde_json": found.group(2), "go": found.group(4)}
+
+
 def main():
     board = decode_board()
     panel = landing_panel()
@@ -89,6 +106,17 @@ def main():
                 f"kanso peak: compiler board says {board['kanso'][1]} mb, "
                 f"landing prose says {prose['kanso_mb']} mb"
             )
+
+    about = about_prose()
+    if about is None:
+        problems.append("the about page's sitting sentence has moved — this check is blind")
+    else:
+        for key, ms in about.items():
+            if key in board and board[key][0] != ms:
+                problems.append(
+                    f"{key}: compiler board says {board[key][0]} ms, "
+                    f"about page says {ms} ms"
+                )
 
     if not board or not panel:
         print("no board or panel found — the pattern this reads has moved")

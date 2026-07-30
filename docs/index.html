@@ -165,7 +165,7 @@ pub play = "kanso" . greet . print
 <span class="c"># reasonably-written rust   1.02</span>
 <span class="c"># go encoding/json          1.95</span></code></pre>
     </div>
-    <p>and the part a stopwatch can't show: kanso's speed is a <em>golden file</em>. the gauntlet performs exactly <strong data-golden="decode.allocs">7,577,414</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. <strong data-golden="decode.arena_blocks">3</strong> arena blocks across 150 decodes is the flat-memory guarantee as a constant; <strong data-golden="decode.beat_iters">151</strong> beat iterations is one rewind per decode plus one for the program itself, on the record. in a deterministic language, a performance regression isn't a surprise in production—it's a failing diff in the pull request that caused it. and the counters now count laziness too: kanso computes a value when it's demanded, or never, and on a workload where one value in twenty is used, the counters read <code>thunk_allocs=100000, thunk_evals=5000</code>—95% of the work never born, the clear form running at hand-tuned-rust speed. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">both scoreboards</a> and <a href="book/ch07.html">chapter 07</a>.</p>
+    <p>the speed is also a <em>golden file</em>. the gauntlet performs exactly <strong data-golden="decode.allocs">7,577,414</strong> allocations—the same count on every run, on every machine, on both architectures—and ci diffs it like program output. <strong data-golden="decode.arena_blocks">3</strong> arena blocks across 150 decodes is the flat-memory guarantee as a constant; <strong data-golden="decode.beat_iters">151</strong> beat iterations is one rewind per decode plus one for the program itself, on the record. in a deterministic language a performance regression shows up as a failing diff in the pull request that caused it. and the counters now count laziness too: kanso computes a value when it's demanded, or never, and on a workload where one value in twenty is used, the counters read <code>thunk_allocs=100000, thunk_evals=5000</code>—95% of the work never born, the clear form running at hand-tuned-rust speed. the mechanics, with the reproduce-it-yourself harness: <a href="compiler.html#c04">both scoreboards</a> and <a href="book/ch07.html">chapter 07</a>.</p>
   </div>
 </section>
 
@@ -328,7 +328,7 @@ three</code></pre>
       <div class="status-card">
         <span class="badge">v0.1 design freeze</span>
         <h3>the book is the canon</h3>
-        <p><a href="book/index.html">the kanso book</a> is the language, taught in order—eleven chapters where every code panel is executed against the real toolchain before it may appear on the page. what the book doesn't yet cover isn't hidden; it's not decided.</p>
+        <p><a href="book/index.html">the kanso book</a> is the language, taught in order—eleven chapters where every code panel is executed against the real toolchain before it may appear on the page. what the book does not yet cover has not been decided yet.</p>
       </div>
       <div class="status-card">
         <span class="badge">two engines</span>
@@ -354,7 +354,7 @@ three</code></pre>
     <div>
       <span class="eyebrow">quickstart</span>
       <h2 class="section-title">run it</h2>
-      <p class="lede">clone, build, run. one binary carries the whole toolchain—interpreter, native compiler, formatter, test runner—and <a href="book/ch01.html">chapter 01 of the book</a> starts here.</p>
+      <p class="lede">clone, build, run. one binary carries the whole toolchain—interpreter, native compiler, test runner, package manager—and <a href="book/ch01.html">chapter 01 of the book</a> starts here.</p>
     </div>
     <div class="code-panel">
       <div class="code-panel-title">shell</div>
