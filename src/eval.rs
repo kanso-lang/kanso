@@ -173,6 +173,7 @@ pub enum Desc {
     Env(String),
     Exists(String),
     ListDir(String),
+    Now,
     WriteFile(String, String),
     Bind(Rc<Desc>, Value),
     Sleep(u64),
@@ -185,6 +186,12 @@ pub enum Desc {
 /// the stream, which is how the differential lattice, the goldens, and any
 /// replay of a concurrent program stay byte-identical across engines.
 pub struct Rng(u64);
+
+/// A pinned clock, so a run that timestamps can be replayed exactly. Every
+/// engine reads the same variable, which is what keeps them agreeing.
+pub fn pinned_now() -> Option<i64> {
+    std::env::var("KANSO_NOW").ok().and_then(|s| s.parse::<i64>().ok())
+}
 
 impl Rng {
     pub fn seeded() -> Self {
@@ -318,6 +325,10 @@ pub trait Executor {
     /// here, not a failure, because not being configured is ordinary.
     fn env(&mut self, name: &str) -> Option<String>;
     fn exists(&mut self, path: &str) -> bool;
+    /// Milliseconds since the epoch. KANSO_NOW pins it, the way KANSO_SEED
+    /// pins the dice — a program that timestamps is otherwise unrepeatable,
+    /// and this project reproduces its runs.
+    fn now(&mut self) -> i64;
     /// Names within a directory, sorted, so what a program prints does not
     /// depend on the order a filesystem happens to hand them back.
     fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String>;
@@ -366,6 +377,15 @@ impl Executor for RealExecutor {
 
     fn exists(&mut self, path: &str) -> bool {
         std::path::Path::new(path).exists()
+    }
+
+    fn now(&mut self) -> i64 {
+        pinned_now().unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0)
+        })
     }
 
     fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
@@ -439,6 +459,11 @@ impl Executor for ScriptedExecutor {
     fn exists(&mut self, path: &str) -> bool {
         self.transcript.push(format!("exists {path:?}"));
         false
+    }
+
+    fn now(&mut self) -> i64 {
+        self.transcript.push("now".to_string());
+        0
     }
 
     fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
@@ -1060,6 +1085,7 @@ impl<'a> Interp<'a> {
         match name.strip_prefix("builtin_").unwrap_or(name) {
             "args" => return Ok(Value::Desc(Rc::new(Desc::Args))),
             "stdin" => return Ok(Value::Desc(Rc::new(Desc::Stdin))),
+            "now" => return Ok(Value::Desc(Rc::new(Desc::Now))),
             _ => {}
         }
         if let Some(decl) = self.type_decl(name) {
@@ -1456,6 +1482,10 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError { message: "write takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content))))
+            }
+            "now" => {
+                let [] = arity(args, name, span)?;
+                Ok(Value::Desc(Rc::new(Desc::Now)))
             }
             "exists" | "list_dir" => {
                 let [path] = arity(args, name, span)?;
@@ -2655,6 +2685,7 @@ impl<'a> Interp<'a> {
                 Some(value) => Value::Str(value),
                 None => Value::NoneV,
             }),
+            Desc::Now => Ok(Value::Int(BigInt::from(executor.now()))),
             Desc::Exists(path) => Ok(match executor.exists(path) {
                 true => Value::True,
                 false => Value::False,
@@ -2794,6 +2825,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
         Desc::Exists(path) => out.push_str(&format!("  exists {path:?}\n")),
+        Desc::Now => out.push_str("  now\n"),
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Bind(inner, _) => {

@@ -227,6 +227,7 @@ declare %KValue @k_b_write_err(%KValue)
 declare %KValue @k_b_env(%KValue)
 declare %KValue @k_b_exists(%KValue)
 declare %KValue @k_b_list_dir(%KValue)
+declare %KValue @k_desc_now()
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_desc_join(%KValue, %KValue)
@@ -2307,6 +2308,12 @@ impl<'a> Backend<'a> {
                     "stdin" => {
                         let t = f.tmp();
                         f.line(&format!("{t} = call %KValue @k_desc_stdin()"));
+                        f.record(&t, DESC);
+                        Ok(t)
+                    }
+                    "now" => {
+                        let t = f.tmp();
+                        f.line(&format!("{t} = call %KValue @k_desc_now()"));
                         f.record(&t, DESC);
                         Ok(t)
                     }

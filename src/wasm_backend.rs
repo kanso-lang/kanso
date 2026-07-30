@@ -820,7 +820,7 @@ impl<'a> WasmBackend<'a> {
                 let lit = self.nullary_lit(bare);
                 ctx.body.i32_const(lit as i64);
             }
-            "args" | "stdin" => {
+            "args" | "stdin" | "now" => {
                 let lit = self.str_lit(bare);
                 ctx.body.i32_const(lit as i64);
                 ctx.body.i32_const(0);

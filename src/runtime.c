@@ -2706,6 +2706,7 @@ KValue k_seq(KValue a, KValue b) {
 
 KValue k_desc_args(void) { return k_mkdesc(2, k_none(), k_none()); }
 KValue k_desc_stdin(void) { return k_mkdesc(3, k_none(), k_none()); }
+KValue k_desc_now(void) { return k_mkdesc(16, k_none(), k_none()); }
 
 KValue k_b_read_file(KValue path) {
     if (!k_not_failure(path)) return path;
@@ -2938,6 +2939,13 @@ static KValue k_exec(KDesc* d) {
         case 13: {
             const char* found = getenv(k_as_str(d->x)->data);
             return found ? k_str(found) : k_none();
+        }
+        case 16: {
+            const char* pinned = getenv("KANSO_NOW");
+            if (pinned) return k_int(atoll(pinned));
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            return k_int((long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
         }
         case 14: {
             struct stat st;

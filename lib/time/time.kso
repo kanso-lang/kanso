@@ -1,2 +1,6 @@
+# Milliseconds since the epoch. KANSO_NOW pins it, the way KANSO_SEED pins
+# the dice, so a run that timestamps can be replayed exactly.
+pub now = builtin_now
+
 pub fn sleep ms
   builtin_sleep ms

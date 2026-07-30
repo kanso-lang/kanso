@@ -202,3 +202,30 @@ fn a_set_environment_variable_reads_through() {
         );
     }
 }
+
+/// A timestamp cannot live in the corpus, so the clock is asserted with
+/// KANSO_NOW pinned — the same instrument KANSO_SEED is for the dice, and the
+/// reason a run that timestamps can be replayed at all. Both engines.
+#[test]
+fn a_pinned_clock_reads_the_same_in_both_engines() {
+    let staged = std::env::temp_dir().join("kanso-clock-probe");
+    let _ = std::fs::remove_dir_all(&staged);
+    std::fs::create_dir_all(&staged).expect("temp work dir");
+    let program = staged.join("clock_probe.kso");
+    std::fs::write(
+        &program,
+        "import \"std/time\"\n\npub play = time/now . show\n\npub fn show t\n  print \"{t}\"\n",
+    )
+    .expect("program writes");
+
+    for extra in [&[][..], &["--interp"][..]] {
+        let output = run_kanso_env(&program, extra, &[("KANSO_NOW", "1700000000000")]);
+
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "1700000000000\n",
+            "engine {extra:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
