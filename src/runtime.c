@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #if defined(__aarch64__)
 #include <arm_neon.h>
@@ -184,7 +185,8 @@ typedef struct { long long type_id; KValue inner; } KSub;
 typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
-   7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline) */
+   7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
+   12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -2714,6 +2716,16 @@ KValue k_b_read_file(KValue path) {
     return k_mkdesc(4, path, k_none());
 }
 
+/* argv is a kanso list of strings; the description carries it whole so the
+   process is not started until the description runs. */
+KValue k_b_run(KValue cmd, KValue argv) {
+    if (!k_not_failure(cmd)) return cmd;
+    if (!k_not_failure(argv)) return argv;
+    if (cmd.tag != K_STR) k_die("run takes a command string");
+    if (cmd.tag == K_STR && argv.tag != K_LIST) k_die("run takes a list of argument strings");
+    return k_mkdesc(17, cmd, argv);
+}
+
 KValue k_b_write(KValue content) {
     if (!k_not_failure(content)) return content;
     if (content.tag != K_STR) k_die("write takes a string");
@@ -2945,6 +2957,78 @@ static KValue k_exec(KDesc* d) {
         case 13: {
             const char* found = getenv(k_as_str(d->x)->data);
             return found ? k_str(found) : k_none();
+        }
+        case 17: {
+            /* Two pipes rather than popen, because both streams are wanted and
+               popen gives one. A non-zero status is an answer the caller reads,
+               so only a process that never starts is a failure. */
+            KList* args = k_as_list(d->y);
+            long long argc = args->len;
+            char** argv = malloc(sizeof(char*) * (size_t)(argc + 2));
+            argv[0] = k_as_str(d->x)->data;
+            for (long long i = 0; i < argc; i++) {
+                KValue item = args->items[i];
+                if (item.tag != K_STR) k_die("run takes a list of argument strings");
+                argv[i + 1] = k_as_str(item)->data;
+            }
+            argv[argc + 1] = NULL;
+            int outp[2], errp[2];
+            if (pipe(outp) || pipe(errp)) {
+                free(argv);
+                return k_err(k_concat(k_str("cannot start "), d->x), NULL);
+            }
+            pid_t kid = fork();
+            if (kid < 0) {
+                free(argv);
+                close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+                return k_err(k_concat(k_str("cannot start "), d->x), NULL);
+            }
+            if (kid == 0) {
+                dup2(outp[1], 1);
+                dup2(errp[1], 2);
+                close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+                execvp(argv[0], argv);
+                /* exec only returns on failure, and the status the parent reads
+                   is how it learns: 127 is what a shell reports for not-found */
+                _exit(127);
+            }
+            free(argv);
+            close(outp[1]);
+            close(errp[1]);
+            char* buf[2] = {NULL, NULL};
+            long long len[2] = {0, 0}, cap[2] = {0, 0};
+            int fds[2] = {outp[0], errp[0]};
+            for (int s = 0; s < 2; s++) {
+                cap[s] = 4096;
+                buf[s] = malloc((size_t)cap[s]);
+                for (;;) {
+                    if (len[s] == cap[s]) {
+                        cap[s] *= 2;
+                        buf[s] = realloc(buf[s], (size_t)cap[s]);
+                    }
+                    ssize_t got = read(fds[s], buf[s] + len[s], (size_t)(cap[s] - len[s]));
+                    if (got <= 0) break;
+                    len[s] += got;
+                }
+                close(fds[s]);
+            }
+            int status = 0;
+            waitpid(kid, &status, 0);
+            long long code = WIFEXITED(status) ? WEXITSTATUS(status) : 128;
+            /* a process that could not be executed is a failure, not a status:
+               the child's 127 is the only way the parent hears about it */
+            if (code == 127) {
+                free(buf[0]);
+                free(buf[1]);
+                return k_err(k_concat(k_str("cannot start "), d->x), NULL);
+            }
+            KValue triple[3];
+            triple[0] = k_int(code);
+            triple[1] = k_str_n(buf[0], len[0]);
+            triple[2] = k_str_n(buf[1], len[1]);
+            free(buf[0]);
+            free(buf[1]);
+            return k_mklist(3, triple);
         }
         case 16: {
             const char* pinned = getenv("KANSO_NOW");

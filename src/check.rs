@@ -1100,9 +1100,16 @@ fn literal_walk_expr(
                             .unwrap_or_else(|| name.clone())
                     });
                 let bare = bare.strip_prefix("builtin_").unwrap_or(&bare).to_string();
+                // A program that declares its own `run` calls its own `run`,
+                // and the arms below say what those take. Without this, every
+                // function sharing a bare name with a builtin would inherit
+                // the builtin's demands.
+                let shadowed = groups.contains_key(&(name.as_str(), args.len()));
                 for (i, arg) in args.iter().enumerate() {
                     let Some(kind) = literal_kind(arg) else { continue };
-                    let Some(allowed) = builtin_demand(&bare, i) else { continue };
+                    let Some(allowed) = builtin_demand(&bare, i).filter(|_| !shadowed) else {
+                        continue;
+                    };
                     if !allowed.contains(&kind) {
                         let want: Vec<String> =
                             allowed.iter().map(|k| describe_literal(*k).to_string()).collect();

@@ -1,0 +1,1 @@
+error[endpoint]: unhandled err reached the executor: "cannot start kanso_no_such_binary"

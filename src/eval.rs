@@ -434,7 +434,9 @@ impl Executor for RealExecutor {
         let done = std::process::Command::new(cmd)
             .args(args)
             .output()
-            .map_err(|e| format!("cannot start {cmd}: {e}"))?;
+            // no OS detail: the native engine learns of a failed exec only
+            // through the child's exit code, and the wording has to match
+            .map_err(|_| format!("cannot start {cmd}"))?;
         // a process killed by a signal carries no status of its own; 128 plus
         // the signal is what a shell reports, and a caller comparing against
         // zero gets the same answer either way

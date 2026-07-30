@@ -1,0 +1,11 @@
+import "std/io"
+
+# A process is a description like any other effect, and its answer is a record.
+# A non-zero status is what the process said rather than a failure — a caller
+# reads it and decides. Only a process that never starts raises an err.
+fn report a
+  "status {a.status} said {a.stdout}"
+
+pub play =
+  io/run "printf" ["ready"] . (a -> print (report a))
+  >> io/run "false" [] . (b -> print (report b))

@@ -276,12 +276,20 @@ def show(text):
 # program the browser declines and the phrase it declines with; the harness
 # fails if that phrase changes, and tells you to delete the entry once the
 # program starts passing. Silence is what this file exists to prevent.
-KNOWN_GAPS = {
-    # A page has no filesystem, so a program that lists a directory cannot run
-    # there. The capability is missing, not the agreement: `exists` still
-    # answers (false, for everything), and every other engine matches.
-    "tests/golden/micro/dir_listing_is_sorted.kso": "the playground has no filesystem",
-}
+def known_gaps():
+    """The gaps live in tests/golden/wasm_gaps.txt, which the cargo-test
+    harness reads too: one home, so a gap cannot close in one and stay
+    written down in the other."""
+    gaps = {}
+    for line in (ROOT / "tests/golden/wasm_gaps.txt").read_text().splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        name, answer = line.split("\t", 1)
+        gaps[name] = answer
+    return gaps
+
+
+KNOWN_GAPS = known_gaps()
 
 
 def main():
