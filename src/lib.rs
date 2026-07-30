@@ -2051,6 +2051,7 @@ pub fn compile_hako() -> Result<ast::Program, String> {
     const FILES: &[(&str, &str)] = &[
         ("cache.kso", include_str!("../hako/cache.kso")),
         ("hako.kso", include_str!("../hako/hako.kso")),
+        ("install.kso", include_str!("../hako/install.kso")),
         ("lock.kso", include_str!("../hako/lock.kso")),
         ("main.kso", include_str!("../hako/main.kso")),
         ("remote.kso", include_str!("../hako/remote.kso")),

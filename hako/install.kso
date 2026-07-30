@@ -1,0 +1,181 @@
+import "std/io"
+import "std/list"
+import "std/path"
+import "std/text"
+
+# Imports are the manifest: every `.kso` under the project is read and every
+# hako it names is required. There is no second file restating them, so the
+# tree is the thing to walk.
+pub fn sources root
+  gathered [root] []
+
+fn gathered todo found
+  more = visiting todo found
+  if (length todo == 0) (answered found) more
+
+fn visiting todo found
+  here = todo[1]!
+  rest = list/to_list (list/drop todo 1)
+  io/list_dir here . (names -> divided here rest found names [] [])
+
+fn divided here rest found names dirs files
+  done = gathered (text/concat rest dirs) (text/concat found files)
+  more = weighed here rest found names dirs files
+  if (length names == 0) done more
+
+fn weighed here rest found names dirs files
+  full = path/join here names[1]!
+  left = list/to_list (list/drop names 1)
+  onward = (d -> placed here rest found left dirs files full d)
+  io/is_dir full . onward
+
+fn placed here rest found left dirs files full d
+  divided here rest found left (added d dirs full) (kept d files full)
+
+fn added d dirs full
+  if d (push dirs full) dirs
+
+fn kept d files full
+  if d files (source_or files full)
+
+fn source_or files full
+  if (kso? full) (push files full) files
+
+fn kso? full
+  path/extension full == "kso"
+
+# `import "owner/repo"` — a std module and a relative path name no hako.
+pub fn required root
+  sources root . (files -> read_all files [])
+
+fn read_all files names
+  more = reading files names
+  if (length files == 0) (answered (list/sort names)) more
+
+fn reading files names
+  rest = list/to_list (list/drop files 1)
+  onward = (text -> read_all rest (merged names (imported text)))
+  io/read_file files[1]! . onward
+
+fn merged names found
+  list/fold found names one_of
+
+fn one_of seen name
+  if (list/any? seen (s -> s == name)) seen (push seen name)
+
+fn imported text
+  rows = text/split text "\n"
+  quoted = list/select rows (row -> text/slice row 1 8 == "import \"")
+  specs = list/to_list (list/map quoted spec_of)
+  list/to_list (list/map (list/reject specs local?) hako_name)
+
+fn spec_of row
+  after = text/split row "\""
+  after[2]!
+
+fn local? spec
+  text/slice spec 1 4 == "std/" || text/slice spec 1 1 == "."
+
+fn hako_name spec
+  parts = text/split spec "/"
+  "{parts[1]!}/{parts[2]!}"
+
+# `kanso install` — read the imports, resolve each hako, fetch it, write the
+# lock. An interim pin already in the lock survives a plain install: it is a
+# decision somebody made, and replacing it with a release would change what
+# the build compiles without anybody asking for that.
+pub fn installing dir wanted
+  required dir . (names -> begun dir wanted names)
+
+fn begun dir wanted names
+  none_wanted = io/write "no hakos are imported — nothing to install\n"
+  if (length names == 0) none_wanted (verified dir wanted names)
+
+fn verified dir wanted names
+  unknown = list/find wanted (a -> list/any? names (n -> n == a[1]!) == false)
+  if (unknown == none) (locked_at dir wanted names) (unimported unknown)
+
+# A binding is forced where it is written, so the message an unknown pin
+# would carry cannot be built beside the test for one.
+fn unimported unknown
+  why = "so pinning it would pin nothing — imports are the manifest"
+  refused "nothing imports `{unknown[1]!}`, {why}"
+
+fn locked_at dir wanted names
+  io/exists "{dir}/hako.lock" . (there -> held_by dir wanted names there)
+
+fn held_by dir wanted names there
+  if there (reading_lock dir wanted names) (settled_for dir wanted names [])
+
+fn reading_lock dir wanted names
+  io/read_file "{dir}/hako.lock" . (t -> settled_for dir wanted names (parse t))
+
+fn settled_for dir wanted names held
+  io/env "KANSO_HAKO" . (set -> at_home dir wanted names held set)
+
+fn at_home dir wanted names held set
+  io/env "HOME" . (h -> from_where dir wanted names held (cache_root set h))
+
+fn from_where dir wanted names held root
+  start = (o -> each_hako dir wanted names held root o "" "")
+  io/env "KANSO_HAKO_REMOTE" . start
+
+fn each_hako dir wanted names held root origin lines report
+  done = recorded dir lines report (length names)
+  more = one_hako dir wanted names held root origin lines report
+  if (length names == 0) done more
+
+fn one_hako dir wanted names held root origin lines report
+  n = names[1]!
+  rest = list/to_list (list/drop names 1)
+  onward = (two -> next_hako dir wanted rest held root origin lines report two)
+  speakable_name n . (_ -> chosen n wanted held root origin . onward)
+
+fn next_hako dir wanted rest held root origin lines report two
+  ls = "{lines}{two[1]!}"
+  rs = "{report}{two[2]!}"
+  each_hako dir wanted rest held root origin ls rs
+
+# A name is a hako by owner and repo; asking a domain which protocol it
+# speaks is a different question and nobody has needed it yet.
+fn speakable_name n
+  owner = (text/split n "/")[1]!
+  by_domain = "names a hako by domain, and asking a domain which protocol"
+  bad = refused "`{n}` {by_domain} it speaks is not built yet"
+  if (dotted? owner) bad (io/write "")
+
+fn dotted? owner
+  length (text/split owner ".") > 1
+
+fn chosen n wanted held root origin
+  pinned = list/find wanted (a -> a[1]! == n)
+  standing = list/find held (p -> p.name == n && release? p.tag == false)
+  plain = unasked n standing root origin
+  if (pinned == none) plain (by_branch n pinned root origin)
+
+fn by_branch n pinned root origin
+  branch = pinned[2]!
+  head_of origin n branch . (sha -> fetched_as n branch sha root origin)
+
+fn unasked n standing root origin
+  fresh = by_release n root origin
+  if (standing == none) fresh (standing_pin n standing root origin)
+
+fn standing_pin n standing root origin
+  fetched_as n standing.tag standing.sha root origin
+
+fn by_release n root origin
+  newest origin n . (found -> released n found root origin)
+
+fn released n found root origin
+  bad = refused "`{n}` publishes no vX.Y.Z release tag"
+  if (found == none) bad (fetched_as n found[1]! found[2]! root origin)
+
+fn fetched_as n tag sha root origin
+  mark = if (release? tag) "" " (interim pin)"
+  two = ["{n} {tag} {sha} git\n" "  {n} {tag}{mark}\n"]
+  fetched root n tag sha (url origin n) . (_ -> answered two)
+
+fn recorded dir lines report count
+  said = io/write "installed {count} hako(s):\n{report}"
+  io/write_file "{dir}/hako.lock" lines . (_ -> said)
