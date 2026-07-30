@@ -73,6 +73,10 @@ impl Executor for BrowserExecutor {
         false
     }
 
+    fn is_dir(&mut self, _path: &str) -> bool {
+        false
+    }
+
     /// A page has no clock the differential could agree on, so it reads zero
     /// — and a program that timestamps pins KANSO_NOW anyway.
     fn now(&mut self) -> i64 {

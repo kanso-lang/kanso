@@ -27,6 +27,12 @@ pub fn exit code
 pub fn exists path
   builtin_exists path
 
+# `exists` cannot say which a path is, and walking a tree needs to know: a
+# name that is not a directory is a file to read rather than a place to
+# descend. Answers false for a path that is not there at all.
+pub fn is_dir path
+  builtin_is_dir path
+
 # Names within a directory, sorted, so output never depends on the order a
 # filesystem happens to hand them back.
 pub fn list_dir path

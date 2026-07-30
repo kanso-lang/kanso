@@ -524,7 +524,7 @@ fn desc_yield(e: &Expr) -> Set {
             // an unset variable yields none, which is a value the consumer
             // dispatches on rather than a failure it has to trap
             Expr::Ident(n, _) if base(n) == "env" => STR | NONE,
-            Expr::Ident(n, _) if base(n) == "exists" => TRUE | FALSE,
+            Expr::Ident(n, _) if matches!(base(n), "exists" | "is_dir") => TRUE | FALSE,
             Expr::Ident(n, _) if base(n) == "list_dir" => LIST,
             Expr::Ident(n, _) if base(n) == "now" => INT,
             // an unset variable yields none, which is a value the consumer
@@ -589,7 +589,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
         "read_file" | "write" | "write_err" | "write_file" | "sleep" | "random" | "env"
-        | "exists" | "list_dir" | "now" | "run" => DESC | fails,
+        | "exists" | "is_dir" | "list_dir" | "now" | "run" => DESC | fails,
         _ => TOP,
     }
 }

@@ -190,7 +190,8 @@ typedef struct KDesc KDesc;
 struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
-   12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run */
+   12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
+   18 is_dir */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -2792,6 +2793,12 @@ KValue k_b_env(KValue name) {
     return k_mkdesc(13, name, k_none());
 }
 
+KValue k_b_is_dir(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("is_dir takes a string");
+    return k_mkdesc(18, path, k_none());
+}
+
 KValue k_b_exists(KValue path) {
     if (!k_not_failure(path)) return path;
     if (path.tag != K_STR) k_die("exists takes a string");
@@ -3083,6 +3090,11 @@ static KValue k_exec(KDesc* d) {
         case 14: {
             struct stat st;
             return k_bool(stat(k_as_str(d->x)->data, &st) == 0);
+        }
+        case 18: {
+            struct stat st;
+            int seen = stat(k_as_str(d->x)->data, &st) == 0;
+            return k_bool(seen && S_ISDIR(st.st_mode));
         }
         case 15: {
             DIR* dh = opendir(k_as_str(d->x)->data);

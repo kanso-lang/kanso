@@ -1,0 +1,12 @@
+import "std/io"
+
+# `exists` answers true for both a file and a directory, so walking a tree
+# needs the one that says which: a name to descend into, or a file to read.
+pub play =
+  io/is_dir "listing" . show
+  >> io/is_dir "listing/alpha.txt" . show
+  >> io/is_dir "listing/nope" . show
+  >> io/exists "listing/alpha.txt" . show
+
+pub fn show v
+  print "{v}"

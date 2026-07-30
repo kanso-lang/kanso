@@ -172,6 +172,7 @@ pub enum Desc {
     WriteErr(String),
     Env(String),
     Exists(String),
+    IsDir(String),
     ListDir(String),
     Now,
     WriteFile(String, String),
@@ -331,6 +332,8 @@ pub trait Executor {
     /// here, not a failure, because not being configured is ordinary.
     fn env(&mut self, name: &str) -> Option<String>;
     fn exists(&mut self, path: &str) -> bool;
+
+    fn is_dir(&mut self, path: &str) -> bool;
     /// Milliseconds since the epoch. KANSO_NOW pins it, the way KANSO_SEED
     /// pins the dice — a program that timestamps is otherwise unrepeatable,
     /// and this project reproduces its runs.
@@ -383,6 +386,10 @@ impl Executor for RealExecutor {
 
     fn exists(&mut self, path: &str) -> bool {
         std::path::Path::new(path).exists()
+    }
+
+    fn is_dir(&mut self, path: &str) -> bool {
+        std::path::Path::new(path).is_dir()
     }
 
     fn now(&mut self) -> i64 {
@@ -488,6 +495,11 @@ impl Executor for ScriptedExecutor {
     fn env(&mut self, name: &str) -> Option<String> {
         self.transcript.push(format!("env {name:?}"));
         None
+    }
+
+    fn is_dir(&mut self, path: &str) -> bool {
+        self.transcript.push(format!("is_dir {path:?}"));
+        std::path::Path::new(path).is_dir()
     }
 
     fn exists(&mut self, path: &str) -> bool {
@@ -1564,14 +1576,15 @@ impl<'a> Interp<'a> {
                 let [] = arity(args, name, span)?;
                 Ok(Value::Desc(Rc::new(Desc::Now)))
             }
-            "exists" | "list_dir" => {
+            "exists" | "is_dir" | "list_dir" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
                     return Err(RuntimeError { message: format!("{name} takes a string"), span });
                 };
-                Ok(Value::Desc(Rc::new(match name == "exists" {
-                    true => Desc::Exists(path),
-                    false => Desc::ListDir(path),
+                Ok(Value::Desc(Rc::new(match name {
+                    "exists" => Desc::Exists(path),
+                    "is_dir" => Desc::IsDir(path),
+                    _ => Desc::ListDir(path),
                 })))
             }
             "env" => {
@@ -2775,6 +2788,10 @@ impl<'a> Interp<'a> {
                 true => Value::True,
                 false => Value::False,
             }),
+            Desc::IsDir(path) => Ok(match executor.is_dir(path) {
+                true => Value::True,
+                false => Value::False,
+            }),
             Desc::ListDir(path) => Ok(match executor.list_dir(path) {
                 Ok(names) => Value::List(Rc::new(names.into_iter().map(Value::Str).collect())),
                 Err(reason) => err_value(Value::Str(reason), None),
@@ -2911,6 +2928,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
         Desc::Exists(path) => out.push_str(&format!("  exists {path:?}\n")),
+        Desc::IsDir(path) => out.push_str(&format!("  is_dir {path:?}\n")),
         Desc::Now => out.push_str("  now\n"),
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
