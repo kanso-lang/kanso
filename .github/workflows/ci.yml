@@ -126,7 +126,12 @@ jobs:
     name: cost goldens (deterministic ratchet, no clocks)
     runs-on: ubuntu-latest
     steps:
+      # the page-drift check below counts log entries since docs/compiler.html
+      # last moved, which a shallow clone cannot see: one commit holds every
+      # file, so the diff is always empty and the gate passes on anything
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: build the benchmarks
         run: |
