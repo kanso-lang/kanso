@@ -1,0 +1,101 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# `kanso update` — walk tags forward and rewrite the lock. A release is the
+# only thing it walks to; a pin that is not a release stays where it is,
+# which is the dev-sha discipline made structural.
+pub fn updating dir only
+  io/read_file "{dir}/hako.lock" . (text -> opened dir only (parse text))
+
+fn opened dir only pins
+  nothing_pinned = refused "hako.lock pins nothing — run `kanso install` first"
+  if (length pins == 0) nothing_pinned (asked dir only pins)
+
+fn asked dir only pins
+  named = list/find pins (p -> p.name == only)
+  if (only == none) (settings dir only pins) (checked dir only pins named)
+
+fn checked dir only pins named
+  missing = refused "`{only}` is not in hako.lock"
+  if (named == none) missing (walkable dir only pins named)
+
+fn walkable dir only pins named
+  stuck = refused (held_reason only named.tag)
+  if (release? named.tag) (settings dir only pins) stuck
+
+fn held_reason only tag
+  advice = "re-pin it with `kanso install --from {only}@<branch>`"
+  walks = "which is not a release, and update walks releases"
+  drop = "or drop the pin to take the newest release"
+  "`{only}` is pinned to `{tag}`, {walks} — {advice}, {drop}"
+
+fn settings dir only pins
+  io/env "KANSO_HAKO" . (set -> homed dir only pins set)
+
+fn homed dir only pins set
+  io/env "HOME" . (home -> remoted dir only pins (cache_root set home))
+
+fn remoted dir only pins root
+  start = (origin -> walked dir only pins root origin "" "" "")
+  io/env "KANSO_HAKO_REMOTE" . start
+
+fn walked dir only pins root origin lines moved held
+  done = written dir lines moved held
+  more = stepped dir only pins root origin lines moved held
+  if (length pins == 0) done more
+
+fn stepped dir only pins root origin lines moved held
+  p = pins[1]!
+  rest = list/to_list (list/drop pins 1)
+  onward = (got -> advanced dir only rest root origin lines moved held got)
+  speakable p . (_ -> resolved p only root origin . onward)
+
+fn advanced dir only rest root origin lines moved held got
+  ls = "{lines}{got[1]!}"
+  ms = "{moved}{got[2]!}"
+  hs = "{held}{got[3]!}"
+  walked dir only rest root origin ls ms hs
+
+# A protocol is a protocol rather than a host, and this toolchain speaks one.
+fn speakable p
+  cannot = "which this toolchain cannot speak"
+  bad = refused "`{p.name}` is locked to the `{p.protocol}` protocol, {cannot}"
+  if (p.protocol == "git") (io/write "") bad
+
+fn resolved p only root origin
+  mine = only == none || only == p.name
+  a_release = release? p.tag
+  interim = mine && a_release == false
+  if (mine && a_release) (forward p root origin) (kept p interim)
+
+fn kept p interim
+  row = "{p.name} {p.tag} {p.sha} {p.protocol}\n"
+  note = if interim "  {p.name} {p.tag} (interim pin)\n" ""
+  io/write "" . (_ -> [row "" note])
+
+fn forward p root origin
+  newest origin p.name . (found -> taken p root origin found)
+
+fn taken p root origin found
+  stay = kept p false
+  if (found == none) stay (moved_to p root origin found)
+
+fn moved_to p root origin found
+  row = "{p.name} {found[1]!} {found[2]!} {p.protocol}\n"
+  note = if (found[1]! == p.tag) "" "  {p.name} {p.tag} -> {found[1]!}\n"
+  got = [row note ""]
+  pulled = fetched root p.name found[1]! found[2]! (url origin p.name)
+  pulled . (_ -> answered got)
+
+fn answered x
+  io/write "" . (_ -> x)
+
+fn written dir lines moved held
+  left = if (held == "") "" "left where they are:\n{held}"
+  still = "every hako is already at its highest release\n{left}"
+  report = if (moved == "") still "updated:\n{moved}{left}"
+  io/write_file "{dir}/hako.lock" lines . (_ -> io/write report)
+
+fn refused why
+  io/write_err "error: {why}\n" . (_ -> io/exit 2)

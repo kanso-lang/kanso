@@ -34,7 +34,7 @@ fn against p set
   newest set p.name . (latest -> settled (compared latest p.tag))
 
 fn compared latest tag
-  if (latest == none) " (unreachable)" (behind latest tag)
+  if (latest == none) " (unreachable)" (behind latest[1]! tag)
 
 fn behind latest tag
   if (latest == tag) "" " (stale: {latest} is out)"
@@ -46,5 +46,10 @@ fn line p mark
   short = text/slice p.sha 1 12
   "{text/join [p.name p.tag short p.protocol] " "}{mark}\n"
 
-fn where_from argv
-  if (length argv == 0) "." argv[1]!
+# The verb and its arguments arrive the way any program's do. `kanso list`
+# and `kanso update` hand them in; there is no third caller.
+pub fn ran argv
+  verb = argv[1]!
+  dir = argv[2]!
+  only = if (length argv > 2) argv[3]! none
+  if (verb == "list") (listing dir) (updating dir only)
