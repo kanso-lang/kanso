@@ -11101,3 +11101,33 @@ The compiler page has a table of contents now, built from the page's own
 `<h2>` ids so it cannot drift from the headings it lists — the status
 badges are stripped, since a badge marks a section rather than naming
 one.
+
+## 2026-07-29 — the book, chapter one: a template and two lies
+
+Clay ruled the book a full rewrite. Chapter one goes first so the voice
+can be argued about once rather than sixteen times.
+
+**Two sentences had become false in a day.** "the binary answers to five
+commands" — there are eight, since install, list and update exist. "there
+is no package manager to configure" — there is one now. This is the same
+class as the landing page claiming the binary ships a formatter, and it
+is why a full rewrite of the book is a factual pass as much as a prose
+one: the book was accurate when written and the language moved under it.
+
+**A third lie was mine, written during the rewrite.** Replacing the
+five-verb sentence, I sent the reader to chapter 07 for the package
+verbs. The book has no hako coverage anywhere, so that promise could not
+be kept, and it was caught by grepping the chapter for its own forward
+references rather than by any gate. Naming a chapter is a claim about
+what is in it.
+
+Voice, as agreed: Metz for structure, Beck for economy, DHH's register
+only where an opinion is the feature. What went: an opening that
+announced how language books open, a line called "slightly subversive"
+before it was shown to be anything, a forward reference that told the
+reader a distinction "carries an entire chapter", and one antithesis
+flip. Longest paragraph 93 words, median 52.
+
+The panels are executed against the toolchain before they may appear, so
+the code was never in question — which is the part of this book that was
+already right.

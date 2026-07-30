@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 01</span>
 <h1>hello, kanso</h1>
 
-<p>every language book opens the same way, and there is a reason: until something runs on your machine, everything else is theory. so—clone, build, run. the toolchain is one binary, it is built with cargo, and it asks nothing else of your machine.</p>
+<p>the toolchain is one binary. you build it with cargo, and it asks nothing else of your machine. clone, build, run — then the rest of this book has somewhere to land.</p>
 
 <h2>building the toolchain</h2>
 
@@ -22,7 +22,7 @@ extra_css: /book/book.css
 <span class="s">hello, world</span></code></pre>
 </div>
 
-<p>put <code>target/release</code> on your path (or alias it—we'll write plain <code>kanso</code> from here on) and you have the whole toolchain. there is no package manager to configure, no project scaffold to generate, no manifest file asking you questions. a kanso program is a file, and the binary you just built knows how to run it, check it, test it, compile it to native code, and talk to you line by line.</p>
+<p>put <code>target/release</code> on your path — we will write plain <code>kanso</code> from here on — and you have the whole toolchain. there is no project scaffold to generate and no manifest file asking you questions. a kanso program is a file, and the binary you just built knows how to run it, check it, test it, compile it to native code, fetch what it imports, and talk to you line by line.</p>
 
 <h2>the first program</h2>
 
@@ -37,15 +37,15 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>one line, and it's a slightly subversive line. <code>print "hello, world"</code> is not a call that fires as the parser walks past—it's an expression whose value is a <em>description</em> of printing. the runtime receives that description and performs it. this distinction carries an entire chapter later, when effects turn out to be ordinary data you can inspect and test. for now, notice only that the simplest possible program is a value.</p>
+<p><code>print "hello, world"</code> is an expression, and its value is a <em>description</em> of printing. the runtime receives that description and performs it; nothing happens as the parser walks past. chapter 05 is about what follows from that. for now, notice that the simplest program there is turns out to be a value.</p>
 
 <p>notice also what isn't there. no parentheses around the argument—application is a space, <code>print "hello, world"</code>. no semicolon. no import for <code>print</code>. no <code>main</code> to wrap it in. and no room for stylistic debate: this program has exactly one legal rendering, and you just read it. the file you write is the file everyone writes.</p>
 
 <p>an entry file is a list of statements—no <code>main</code>, no ceremony marking where the program starts, because a file that runs starts at its first line. library files are the ones that declare things, and part ii covers how the two meet.</p>
 
-<h2>five verbs</h2>
+<h2>the verbs</h2>
 
-<p>the binary answers to five commands, and together they are the whole development story: <code>run</code>, <code>check</code>, <code>test</code>, <code>build</code>, and <code>repl</code>. you've already seen <code>run</code>. here is each of the others, once, doing its one job.</p>
+<p>the binary answers to eight commands. five are the daily cycle — <code>run</code>, <code>check</code>, <code>test</code>, <code>build</code>, <code>repl</code> — and three manage packages: <code>install</code>, <code>list</code>, <code>update</code>. you have already seen <code>run</code>. here is each of the others, once, doing its one job.</p>
 
 <p><code>kanso run</code> is the dev loop, and you will live in it. it builds a cached native binary behind a content hash and executes it—tens of milliseconds when the program changed, about five when it didn't, with no compiler invocation at all on a warm cache:</p>
 
@@ -102,7 +102,7 @@ defined tau
 tau is 6.28318</code></pre>
 </div>
 
-<p>five verbs, and you have the whole cycle: write a value, ask if it's legal, test it, run it, ship it as a binary—and poke at it interactively when you're not sure. everything else in this book is what goes inside the file.</p>
+<p>that is the cycle: write a value, ask whether it is legal, test it, run it, ship it as a binary, and poke at it interactively when you are unsure. the three package verbs matter once a program imports something it does not own, which is the last thing this book will teach you and the newest thing the toolchain does. everything else in this book is what goes inside the file.</p>
 
 <h2>reading your first compile error as a feature</h2>
 
@@ -124,7 +124,7 @@ greeting <span class="o">=</span> <span class="s">"hello"</span>
   </div>
 </div>
 
-<p>an unused binding is dead weight: a reader has to hold <code>greeting</code> in their head, decide whether it matters, and conclude that it doesn't. in kanso that's not a warning you can ignore into a habit—it's an error, and the program does not run until the clutter is gone. the diagnostic names the binding, points at the exact column, and stops. the fix is to delete the line, and the program is clean:</p>
+<p>an unused binding is dead weight: a reader has to hold <code>greeting</code> in their head, decide whether it matters, and conclude that it does not. in kanso it is an error rather than a warning, so the program does not run until the clutter is gone. the diagnostic names the binding, points at the column, and stops. delete the line and the program is clean:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">greeting.kso</div>
@@ -187,7 +187,7 @@ plan:
 
 <p>the three <strong>appendices</strong> are reference, not narrative: <a href="appa.html">the diagnostics catalog</a> is every error the compiler can hand you and how to read it, <a href="appb.html">the builtin reference</a> is every function you get for free, and <a href="appc.html">canonical form</a> is the exact set of formatting rules the compiler enforces—the ones that made your unused binding an error.</p>
 
-<p>you can now build the toolchain, run a program, check it, test it, compile it to a native binary, and talk to it in the repl—the whole cycle, five verbs. you've also met the compiler's temperament: it treats clutter as an error, not a preference, and it tells you exactly where. one loose thread remains from the very first program: its single line was a value, not an action, and that value was a <em>description</em>. the next chapter pulls that thread. it starts where both engines start—with values and the names you bind them to, and with the errors kanso raises to keep those names honest.</p>
+<p>you can now build the toolchain, run a program, check it, test it, compile it to a native binary, and talk to it in the repl. you have also met the compiler's temperament: clutter is an error, and it tells you where. one thread is left hanging from the first program — its single line was a value, and that value was a <em>description</em>. the next chapter starts where both engines start, with values and the names you bind them to, and with the errors kanso raises to keep those names honest.</p>
 
 <h2>exercises</h2>
 
