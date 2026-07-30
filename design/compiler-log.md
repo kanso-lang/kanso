@@ -12099,3 +12099,35 @@ it. Open thread, wants a gavel.
 Two smaller frictions the port hit: a lambda bound to a name needs parentheses
 and says `unexpected trailing tokens` without them, and `text/concat`
 concatenates lists.
+
+## A sweep over how effects combine
+
+Four sweeps asked what a value renders as, what a std function answers, what a
+wrong call says and what a byte decodes to. None asked what the executor does
+when descriptions are sequenced, bound, nested or run beside one another, and
+the executor is written twice with no shared code. Thirty-one combinations
+now run on both engines in CI.
+
+Its first run read zero disagreements, which was worth nothing: every probe
+had failed to compile and two identical errors compare equal. Checking that
+the probes actually ran is what turned up the findings, and the harness now
+builds each probe's imports from its body so an unused import cannot pass for
+agreement.
+
+A failed file read said `no such file or unreadable` on native and
+`No such file or directory (os error 2)` on the interpreter, which is Rust's
+io::Error and varies with the host's libc and the compiler's version. The
+policy was already settled for `io/run` and written into a comment there — no
+OS detail, because native learns of a failed exec only through an exit code
+and the wording has to match. Reads and writes follow it now, and the wording
+lives in one function because three executors implement the trait and two of
+them had drifted; `list_dir` had already been fixed by hand in two places,
+which is what a duplicated message looks like shortly before it breaks.
+
+A container could not hold a compound value. `[(f 1)]`, `[(1 + 2)]` and
+`{ "k":(f 1) }` were rejected as parentheses that group nothing, and removing
+them does not parse — a list element and a map value are each exactly one
+atom. The token before the open paren had no case for `[` or a map colon and
+fell through to LOOSEST, which makes every expression look loose enough to
+need no grouping. `[1 (f 1)]` worked throughout, because the preceding `1`
+ends an atom, which is why nothing had caught it.
