@@ -1,0 +1,3 @@
+import "owner/repo"
+
+print "{repo/hello 0}"

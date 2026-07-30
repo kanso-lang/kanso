@@ -10818,3 +10818,39 @@ every program that imports the module, used or not, so adding one unused
 name to `lib/time` made every importer of it decline. A fallback is
 reported and does not fail, so this would have been a silent loss of
 wasm coverage on two examples and two playground programs.
+
+## 2026-07-29 — hako, slice one: the resolution table is the keystone
+
+design/hako.md calls the import resolver the keystone, and it was the
+piece already half-built: `std/` resolved, and everything else was tried
+as a local directory *first* and then as a cache lookup. That
+fall-through is exactly what the dot-prefix ruling exists to forbid — a
+subtree called `owner/repo` answered for the hako of that name, silently,
+and which one you got depended on what happened to be on disk.
+
+Each shape now answers in one way and never falls through to another:
+`std/` the shipped library, a dot-prefixed path a directory beside the
+importer, a bare single segment a sibling module, a dotted first segment
+a domain-named hako (which no source resolves yet, and says so), and a
+bare multi-segment path the cache. That last one is the ruling made
+mechanical: it is never tried as a directory, so the ambiguity has no
+way to arise.
+
+No migration was needed, which is the ruling paying off in advance —
+every import in the tree is already `std/…`, dot-prefixed, a bare single
+segment, or `kanso-lang/vse`.
+
+**Each shape fails in its own words.** A failed import now says which
+rule judged it, rather than one catch-all listing everything it is not.
+That is the difference between "cannot resolve" and "a bare multi-segment
+path names a hako, and it is not in the cache".
+
+KANSO_HAKO moves the cache, so a test gets one of its own instead of
+reading the developer's — the same instrument as KANSO_STD, KANSO_SEED
+and now KANSO_NOW.
+
+One process note, from getting it wrong: the three new tests first shared
+a single fixture entry that one of them rewrote, and they run in
+parallel, so two failed on the third's edit. A test that rewrites shared
+state cannot run beside its neighbours; the shape test stages a module of
+its own now.

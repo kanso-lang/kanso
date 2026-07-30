@@ -366,9 +366,11 @@ fn synthesize_getters(program: &mut ast::Program) {
     program.fns.extend(arms);
 }
 
-/// Resolve one import path to a directory, per the gaveled table: `std/` is
-/// the toolchain's shipped library, `owner/repo[...]` is the hako cache, and
-/// anything else is relative to the importing module's directory.
+/// Resolve one import path to a directory, per the gaveled table. Each shape
+/// answers in exactly one way, and a shape never falls through to another —
+/// that is what makes an import's universe readable in its spelling. A bare
+/// multi-segment path is a hako name and is never tried as a local directory,
+/// so a subtree that happens to be called `owner/repo` cannot shadow one.
 fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathBuf, String> {
     if let Some(rest) = path.strip_prefix("std/") {
         let toolchain =
@@ -389,20 +391,50 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         }
         return Err(format!("error: `std/{rest}` is not in the shipped library\n"));
     }
-    let relative = base.join(path);
-    if relative.is_dir() {
-        return Ok(relative);
+    if path.starts_with("./") || path.starts_with("../") {
+        let relative = base.join(path);
+        if relative.is_dir() {
+            return Ok(relative);
+        }
+        return Err(format!(
+            "error: cannot resolve import \"{path}\" — a dot-prefixed path names \
+             a directory beside the importing module, and there is none there\n"
+        ));
     }
-    let cache = std::env::var("HOME")
-        .map(|h| std::path::PathBuf::from(h).join(".hako").join(path))
-        .unwrap_or_default();
+    if !path.contains('/') {
+        let sibling = base.join(path);
+        if sibling.is_dir() {
+            return Ok(sibling);
+        }
+        return Err(format!(
+            "error: cannot resolve import \"{path}\" — a bare name is a sibling \
+             subdirectory module, and this module has no `{path}` directory\n"
+        ));
+    }
+    let first = path.split('/').next().unwrap_or_default();
+    if first.contains('.') {
+        return Err(format!(
+            "error: cannot resolve import \"{path}\" — a dot in the first segment \
+             names a hako by domain, which no source resolves yet\n"
+        ));
+    }
+    let cache = hako_cache().join(path);
     if cache.is_dir() {
         return Ok(cache);
     }
     Err(format!(
-        "error: cannot resolve import \"{path}\" — not a sibling directory, \
-         not in the hako cache (run `kanso install`)\n"
+        "error: cannot resolve import \"{path}\" — a bare multi-segment path names \
+         a hako, and it is not in the cache (run `kanso install`)\n"
     ))
+}
+
+/// Where fetched hakos live. KANSO_HAKO moves it, which is how a test gets a
+/// cache of its own rather than reaching into the developer's.
+fn hako_cache() -> std::path::PathBuf {
+    std::env::var("KANSO_HAKO")
+        .map(std::path::PathBuf::from)
+        .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".hako")))
+        .unwrap_or_default()
 }
 
 /// The last path segment names the module at use sites: `import "std/json"`
