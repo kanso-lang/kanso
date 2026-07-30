@@ -242,6 +242,10 @@ jobs:
       # the executor is written twice with no shared code, so the two halves
       # can drift anywhere the corpus does not happen to go
       - run: python3 scripts/effects_differential.py
+      # which arm answers. dispatch is what every branch in the language is
+      # made of, and it is an arm search in one engine and a switch with guard
+      # chains in the other
+      - run: python3 scripts/dispatch_differential.py
 
   site:
     name: site (landing sample and playground run in a browser)
