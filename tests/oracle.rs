@@ -58,6 +58,10 @@ impl Executor for CollectExecutor {
         std::path::Path::new(path).exists()
     }
 
+    fn now(&mut self) -> i64 {
+        kanso::eval::pinned_now().unwrap_or(0)
+    }
+
     fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
         let entries = std::fs::read_dir(path)
             .map_err(|_| format!("cannot list {path}: no such directory or unreadable"))?;

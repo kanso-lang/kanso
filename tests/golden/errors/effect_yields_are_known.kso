@@ -1,0 +1,15 @@
+import "std/io"
+
+pub play =
+  io/exists "somewhere" . answer
+  >> io/env "SOME_VAR" . named?
+  >> io/list_dir "." . listed?
+
+fn answer b
+  b
+
+fn named? v
+  v
+
+fn listed? v
+  v

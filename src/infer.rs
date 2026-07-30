@@ -352,7 +352,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
         "true" => TRUE,
         "false" => FALSE,
         "none" => NONE,
-        "args" | "stdin" => DESC,
+        "args" | "stdin" | "now" => DESC,
         _ => {
             // a zero-field type's bare mention is its marker value
             if let Some(i) = ctx.type_names.get(name) {
@@ -508,6 +508,7 @@ fn desc_yield(e: &Expr) -> Set {
         // args the argument list
         Expr::Ident(n, _) if base(n) == "stdin" => STR,
         Expr::Ident(n, _) if base(n) == "args" => LIST,
+        Expr::Ident(n, _) if base(n) == "now" => INT,
         // an `if` yields whichever branch runs
         Expr::App { head, args, piped: false, .. }
             if matches!(head.as_ref(), Expr::Ident(n, _) if n == "if") && args.len() == 3 =>
@@ -523,6 +524,9 @@ fn desc_yield(e: &Expr) -> Set {
             Expr::Ident(n, _) if base(n) == "env" => STR | NONE,
             Expr::Ident(n, _) if base(n) == "exists" => TRUE | FALSE,
             Expr::Ident(n, _) if base(n) == "list_dir" => LIST,
+            Expr::Ident(n, _) if base(n) == "now" => INT,
+            // an unset variable yields none, which is a value the consumer
+            // dispatches on rather than a failure it has to trap
             Expr::Ident(n, _)
                 if matches!(base(n), "print" | "write" | "write_err" | "write_file" | "sleep") =>
             {
@@ -583,7 +587,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
         "read_file" | "write" | "write_err" | "write_file" | "sleep" | "random" | "env"
-        | "exists" | "list_dir" => DESC | fails,
+        | "exists" | "list_dir" | "now" => DESC | fails,
         _ => TOP,
     }
 }

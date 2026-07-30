@@ -813,6 +813,12 @@ impl Executor for RtExecutor {
         false
     }
 
+    /// A page has no clock the differential could agree on, so it reads zero
+    /// — and a program that timestamps pins KANSO_NOW anyway.
+    fn now(&mut self) -> i64 {
+        0
+    }
+
     fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
         Err(format!("the playground has no filesystem: cannot list {path}"))
     }

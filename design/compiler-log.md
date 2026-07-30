@@ -10779,3 +10779,42 @@ test going green, while an edit that fails is caught by nothing.
 The second is that `desc_yield` has no test. Every arm of it is a claim
 about what an effect produces, and a missing arm is invisible because the
 fallback is legal. That is a gap in the corpus rather than in the code.
+
+## 2026-07-29 — a clock that can be replayed, and the effect-yield gap closed
+
+**The gap named last entry turned out to be observable after all.** The
+claim was that a missing `desc_yield` arm is invisible because the
+fallback is legal. It is not: the naming rule reads those sets, and a
+consumer of an effect's value is checked against them in both
+directions. A consumer of `exists` that is not named `?` is refused; a
+consumer of `env` or `list_dir` that *is* named `?` is refused for the
+opposite reason. One error-corpus program now pins all three arms at
+once, watched red by deleting them — which is a nicer instrument than a
+unit test, because it asserts what a user sees rather than what the
+inference concluded.
+
+**`time/now` is milliseconds since the epoch, and KANSO_NOW pins it.**
+The dice already work this way, and for the same reason: a run that
+timestamps is otherwise unrepeatable, and this project replays its runs.
+Every engine reads the same variable, which is what keeps them agreeing
+— and the browser reads zero, because a page has no clock the
+differential could agree on.
+
+A timestamp cannot live in the corpus, so the assertion is a Rust test
+with the clock pinned, on both engines, exactly as the set environment
+variable was. Determinism keeps deciding which vein a behaviour belongs
+in.
+
+**Two misses, both caught by running the third engine.** `builtin_now`
+is nullary, and a bare nullary builtin is resolved on a path of its own —
+the interpreter returned a function reference until `now` joined `args`
+and `stdin` there, and inference had to learn the same thing twice, once
+for the constant's own set and once for what it yields.
+
+Then the browser differential reported four *fallbacks* where there had
+been none: `wasm_backend` did not know the name. Worth noticing why the
+blast radius was that wide — a module-level constant is compiled into
+every program that imports the module, used or not, so adding one unused
+name to `lib/time` made every importer of it decline. A fallback is
+reported and does not fail, so this would have been a silent loss of
+wasm coverage on two examples and two playground programs.
