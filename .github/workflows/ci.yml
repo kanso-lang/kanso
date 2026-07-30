@@ -41,6 +41,7 @@ jobs:
         run: |
           cargo run -- test lib/json
           cargo run -- test lib/list
+          cargo run -- test lib/path
 
   playground:
     name: playground examples (every engine)
