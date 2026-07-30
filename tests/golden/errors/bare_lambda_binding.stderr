@@ -1,0 +1,4 @@
+error[syntax]: a lambda is parenthesised: `f = (x -> …)`, not `f = x -> …`
+  --> bare_lambda_binding.kso:2:14
+   2 |   double = x -> x * 2
+                    ^
