@@ -49,20 +49,66 @@ fn release(tag: &str) -> Option<(u64, u64, u64)> {
     }
 }
 
-/// The lock, read back. Name to (tag, sha) — the two facts that make a build
-/// reproducible, and the reason no import ever names a version.
-pub fn read_lock(root: &Path) -> BTreeMap<String, (String, String)> {
+/// What a lock line says: the tag and sha that make a build reproducible, and
+/// the protocol that says how to speak to wherever the name lives.
+#[derive(Clone)]
+pub struct Pin {
+    pub tag: String,
+    pub sha: String,
+    pub protocol: String,
+}
+
+/// The lock, read back. A line without a protocol reads as git, which is what
+/// every line written before the field existed meant.
+pub fn read_lock(root: &Path) -> BTreeMap<String, Pin> {
     let mut locked = BTreeMap::new();
     let Ok(text) = std::fs::read_to_string(root.join("hako.lock")) else {
         return locked;
     };
     for line in text.lines() {
         let fields: Vec<&str> = line.split_whitespace().collect();
-        if let [name, tag, sha] = fields[..] {
-            locked.insert(name.to_string(), (tag.to_string(), sha.to_string()));
-        }
+        let (name, tag, sha, protocol) = match fields[..] {
+            [name, tag, sha] => (name, tag, sha, "git"),
+            [name, tag, sha, protocol] => (name, tag, sha, protocol),
+            _ => continue,
+        };
+        let pin =
+            Pin { tag: tag.to_string(), sha: sha.to_string(), protocol: protocol.to_string() };
+        locked.insert(name.to_string(), pin);
     }
     locked
+}
+
+/// How content is obtained from wherever a name lives: `git`, and later `hg`,
+/// `svn` or a hako server. A host is not a protocol — GitHub and GitLab both
+/// speak git, and tag listing and ref fetch are git standards, so neither
+/// earns a name here. GitHub's one extra ability, a tarball at a ref, trades
+/// a commit sha for a vendor's promise of byte-stability, which the January
+/// 2023 archive-compression change is the reason not to take.
+///
+/// Convention answers for every shape resolvable today, so nothing is asked
+/// over the network. A domain-shaped name is where a lookup would go.
+fn protocol_of(name: &str) -> Result<&'static str, String> {
+    match name.split('/').next().unwrap_or_default().contains('.') {
+        false => Ok("git"),
+        true => Err(format!(
+            "`{name}` names a hako by domain, and asking a domain which protocol \
+             it speaks is not built yet"
+        )),
+    }
+}
+
+/// The one protocol with an adapter. An unspeakable protocol is refused by
+/// name rather than attempted as git, so a lock from a newer toolchain says
+/// what it wanted instead of quietly doing something else.
+fn speakable(name: &str, protocol: &str) -> Result<(), String> {
+    match protocol {
+        "git" => Ok(()),
+        other => Err(format!(
+            "`{name}` is locked to the `{other}` protocol, which this \
+                              toolchain cannot speak"
+        )),
+    }
 }
 
 /// Every hako named by an import anywhere under `root`. Reading the sources
@@ -178,10 +224,12 @@ pub fn install(root: &Path, cache: &Path) -> Result<String, String> {
     let mut lines = Vec::new();
     let mut report = String::new();
     for name in &names {
+        let protocol = protocol_of(name)?;
+        speakable(name, protocol)?;
         let (tag, sha) = highest_release(name)?;
         fetch(cache, name, &tag, &sha)?;
         report.push_str(&format!("  {name} {tag}\n"));
-        lines.push(format!("{name} {tag} {sha}\n"));
+        lines.push(format!("{name} {tag} {sha} {protocol}\n"));
     }
     std::fs::write(root.join("hako.lock"), lines.concat())
         .map_err(|e| format!("cannot write hako.lock: {e}"))?;
@@ -197,13 +245,14 @@ pub fn list(root: &Path) -> Result<String, String> {
         return Ok("hako.lock pins nothing — run `kanso install`\n".to_string());
     }
     let mut out = String::new();
-    for (name, (tag, sha)) in &locked {
+    for (name, pin) in &locked {
         let mark = match highest_release(name) {
-            Ok((latest, _)) if latest != *tag => format!(" (stale: {latest} is out)"),
+            Ok((latest, _)) if latest != pin.tag => format!(" (stale: {latest} is out)"),
             Ok(_) => String::new(),
             Err(_) => " (unreachable)".to_string(),
         };
-        out.push_str(&format!("{name} {tag} {}{mark}\n", &sha[..sha.len().min(12)]));
+        let short = &pin.sha[..pin.sha.len().min(12)];
+        out.push_str(&format!("{name} {} {short} {}{mark}\n", pin.tag, pin.protocol));
     }
     Ok(out)
 }
@@ -223,19 +272,20 @@ pub fn update(root: &Path, cache: &Path, only: Option<&str>) -> Result<String, S
     }
     let mut lines = Vec::new();
     let mut moved = String::new();
-    for (name, (tag, sha)) in &locked {
+    for (name, pin) in &locked {
+        speakable(name, &pin.protocol)?;
         let chosen = match only.is_none_or(|one| one == name) {
-            false => (tag.clone(), sha.clone()),
+            false => (pin.tag.clone(), pin.sha.clone()),
             true => {
                 let (latest, at) = highest_release(name)?;
-                if latest != *tag {
+                if latest != pin.tag {
                     fetch(cache, name, &latest, &at)?;
-                    moved.push_str(&format!("  {name} {tag} -> {latest}\n"));
+                    moved.push_str(&format!("  {name} {} -> {latest}\n", pin.tag));
                 }
                 (latest, at)
             }
         };
-        lines.push(format!("{name} {} {}\n", chosen.0, chosen.1));
+        lines.push(format!("{name} {} {} {}\n", chosen.0, chosen.1, pin.protocol));
     }
     std::fs::write(root.join("hako.lock"), lines.concat())
         .map_err(|e| format!("cannot write hako.lock: {e}"))?;

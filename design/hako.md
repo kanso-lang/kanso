@@ -14,9 +14,12 @@ lesson, consistent with run/check/test/build/repl/play.
    IS the dependency declaration. No hako.toml, no Gemfile. `hako install`
    scans imports, resolves, fetches. Knowledge lives where it is used.
 3. **The lockfile owns versions.** Source never names a version; `hako.lock`
-   records tag + commit sha per hako. `hako update` walks tags forward and
-   the test suite absorbs the change. (The no-versions-in-Gemfile doctrine,
-   made structural: the anti-pattern is unrepresentable.)
+   records name, tag, commit sha and protocol per hako, one line each —
+   `acme/widgets v0.3.0 d9f5249e… git`. A line without a protocol reads as
+   git, which is what every line written before the field existed meant.
+   `hako update` walks tags forward and the test suite absorbs the change.
+   (The no-versions-in-Gemfile doctrine, made structural: the anti-pattern
+   is unrepresentable.)
 4. **Versions are git tags; majors are paths.** `v0.3.1` tags releases.
    Breaking majors fork the path — `kanso-lang/vse/v2` — so two majors
    coexist as distinct types (Go's mechanics; the visibility gavel's
@@ -83,8 +86,20 @@ never mix: sources are interchangeable fetchers, and the lockfile's
 `path@sha` is what makes any of them trustworthy. Rule 5's framing
 ("a server is a cache, not a redesign") becomes the definition.
 
-**`github_repo` — the v1 source, and the default for every name.**
-It knows the naming conventions:
+**`git` — the v1 protocol, and what every name resolvable today speaks.**
+A protocol is how content is obtained; a host is where it lives, and the
+two are not the same kind of thing. GitHub and GitLab both speak git, and
+tag discovery and ref fetch are git standards, so neither host earns a
+protocol of its own. The one ability GitHub adds — a tarball at a ref,
+fetchable without a git binary — trades a commit sha for a promise of
+byte-stability, and on 30 January 2023 that promise broke: Git 2.38's
+internal gzip replaced the external one, identical files produced
+different bytes, and every build system that had recorded the hash
+failed. GitHub now undertakes to hold archives stable for at least a
+year with six months' notice, which is a policy where a sha is a
+property. Protocols are `git`, and later `hg`, `svn` or a hako server.
+
+The git protocol knows the naming conventions:
 
 - *Releases* are tags `vX.Y.Z`; discovery is `git ls-remote --tags`
   (or the API where it is cheaper); fetch is a shallow clone or
@@ -106,27 +121,31 @@ preference becomes registry-then-github; a registry outage degrades to
 git, byte-identically, because the lock's sha decides what content
 *is*. Names never move, so standing one up migrates nobody.
 
-**Name authority: mechanism is declared by whoever owns the name,
+**Name authority: the protocol is declared by whoever owns the name,
 never by the importer.** Resolving a name answers "how is this
 fetched?" in exactly one place per shape:
 
-- `owner/repo` (no dot in the first segment): hard convention,
-  `github_repo`, no lookup ever — GitHub is the namespace authority
-  for that shape and the shape is the declaration.
+- `owner/repo` (no dot in the first segment): hard convention, `git`
+  at GitHub, no lookup ever — GitHub is the namespace authority for
+  that shape and the shape is the declaration. Host convention is the
+  *first* authority, not a special case of the lookup below, so a hako
+  on any known host costs no round trip.
 - Domain-shaped (`corp.dev/team/thing`): the tool asks the domain
   once — `GET https://corp.dev/team/thing?hako=1` — and the domain
-  answers a one-line statement: `mechanism: git | github_repo |
-  hako_server` plus its endpoint. A GitLab instance answers git; a
-  vanity front for GitHub answers github_repo; a true hako server
-  answers hako_server. The answer is cached in `hako.lock` beside the
-  sha, so builds never re-ask and stay byte-reproducible offline.
-- Lock overrides (`--from`) carry their mechanism in their own
+  answers a one-line statement: `protocol: git | hg | svn |
+  hako_server` plus its endpoint. Only a domain its owner runs can
+  answer this, which is why it is the fallback rather than the rule:
+  GitHub will never serve a hako endpoint, and never has to, because
+  convention already answers for `owner/repo`. The answer is cached in
+  `hako.lock` beside the sha, so builds never re-ask and stay
+  byte-reproducible offline.
+- Lock overrides (`--from`) carry their protocol in their own
   spelling: a path is a path, `@branch=x` is git.
 
-**An import never names a strategy — asking how it would is a
+**An import never names a protocol — asking how it would is a
 layering violation.** The binding is resolved *from* the name, in
 Go's order of authority, which rule 2 forces anyway: (1) the name's
-shape — `owner/repo` means `github_repo`, by convention; (2) later,
+shape — `owner/repo` means git at GitHub, by convention; (2) later,
 for full-domain names (`corp.dev/team/hako`), metadata the name's
 owner publishes at the domain (Go's `go-import` meta-tag move,
 decentralized, no registry required); (3) fetch *preference* —
