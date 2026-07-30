@@ -443,7 +443,7 @@ thanks: 800 yen</code></pre>
 
 <p>the two spellings never compete, because the compiler holds the boundary: a branch with no bindings must use the expression form, and a branch that binds must use the block. there is no <code>else if</code> — a third case is a nested <code>if</code> or, nine times out of ten, the dispatch arms the next section argues for.</p>
 
-<p>the line you never want to cross is using <code>if</code> to ask which <em>kind</em> of thing a value is. that question has a better answer, and it is the design center of the whole language. suppose a chat log carries three kinds of event. the shape-question—"which event is this?"—is not a conditional; it is three arms of one function, each unpacking the record it names:</p>
+<p>the line you never want to cross is using <code>if</code> to ask which <em>kind</em> of thing a value is. that question has a better answer, and it is the design center of the whole language. suppose a chat log carries three kinds of event. the shape-question—"which event is this?"—is answered by three arms of one function, each unpacking the record it names:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">events.kso</div>
