@@ -328,3 +328,89 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
         println!("  skipped {name} (relative import — neither host has a filesystem)");
     }
 }
+
+/// Every exported std function in the shipped library, with how many
+/// arguments it takes. Derived from `lib/` the same way
+/// `scripts/diagnostic_differential.py` derives it, because the rule is the
+/// same rule and the source is the same source — a shared list would go stale
+/// against the library it describes.
+fn std_surface() -> Vec<(String, String, usize)> {
+    let mut found = Vec::new();
+    for module in std::fs::read_dir(root().join("lib")).expect("the library reads") {
+        let module = module.expect("a module entry").path();
+        if !module.is_dir() {
+            continue;
+        }
+        let name = module.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&module)
+            .expect("a module's files")
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "kso"))
+            .collect();
+        files.sort();
+        for file in files {
+            if file.to_string_lossy().ends_with("_test.kso") {
+                continue;
+            }
+            for line in std::fs::read_to_string(&file).expect("a module file reads").lines() {
+                let Some(rest) = line.strip_prefix("pub fn ") else { continue };
+                let mut words = rest.split_whitespace();
+                let Some(fname) = words.next() else { continue };
+                let params: Vec<&str> = words.collect();
+                // a destructuring parameter means the arm takes a shape rather
+                // than a value; another arm of the group takes the value
+                if params.iter().any(|p| p.contains('(')) {
+                    continue;
+                }
+                found.push((name.clone(), fname.to_string(), params.len()));
+            }
+        }
+    }
+    found.sort();
+    found.dedup();
+    found
+}
+
+/// The diagnostics differential on the third engine. The script holds native
+/// against the interpreter; this holds wasm against native, so all three say
+/// the same thing when a program asks a std function for the wrong thing.
+#[test]
+fn the_wasm_engine_complains_the_way_the_others_do() {
+    if let Err(stale) = freshness() {
+        panic!("{stale} — run scripts/build_wasm.sh before this can prove anything");
+    }
+    let work = std::env::temp_dir().join("kanso-wasm-diagnostics");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).expect("a directory of its own");
+    let mut toolchain = Toolchain::load();
+    let (mut asked, mut declined) = (0, 0);
+    for (module, name, arity) in std_surface() {
+        if arity == 0 {
+            continue;
+        }
+        let args = vec!["bad"; arity].join(" ");
+        let source = format!(
+            "import \"std/{module}\"\n\ntype wrong\n  a\n  b\n\npub play =\n  \
+             bad = wrong 1 2\n  print \"{{{module}/{name} {args}}}\"\n"
+        );
+        let probe = work.join("probe.kso");
+        std::fs::write(&probe, &source).expect("the probe writes");
+        match toolchain.run("probe.kso", &source) {
+            Answer::Ran(_, text) => {
+                let (_, native_text) = natively(&probe);
+                assert_eq!(
+                    text, native_text,
+                    "wasm and native complain differently about {module}/{name}"
+                );
+                asked += 1;
+            }
+            // a backend that refuses the program up front has said so, which
+            // is the exemption the differential law grants an engine that
+            // declines rather than diverges
+            Answer::Declined(_) | Answer::CompileError(_) => declined += 1,
+        }
+    }
+    assert!(asked > 0, "no std function was asked for the wrong thing");
+    println!("wasm: {asked} std complaints match native, {declined} declined by the backend");
+}

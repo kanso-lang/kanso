@@ -11745,3 +11745,31 @@ a clang error appearing in all 103 answers at once.
 The harness is in CI, and a sample of the class is in the runtime corpus. The
 sweep proves the whole surface today; the golden keeps one answer pinned so a
 reader can see what the class looks like without running the sweep.
+
+## The third engine, and what it found
+
+The diagnostics harness shipped holding native against the interpreter. Two
+engines is not the law. Extending the sweep to wasm — the same probe, derived
+from `lib/` the same way rather than from a shared list that could go stale
+against the library it describes — found a disagreement on its first run, and
+it was not about wording.
+
+`io/exit` takes a status. Handed something that is not one, native and the
+interpreter both exited 1 in silence, and wasm reported the unhandled err.
+Wasm was right. A program that goes wrong computing its exit code has not said
+what it meant, and exiting 1 with nothing on stderr is indistinguishable from
+a crash nobody explained. Both endpoints now report it, and a real `exit 3`
+still exits 3.
+
+Worth noting that the oracle was the one in the wrong. The interpreter is
+authoritative for what a program computes, which is not the same as being
+correct about everything; when an engine disagrees, the question is still
+which answer is right.
+
+A correction to the entry above. That harness was described as asking every
+std function for the wrong thing "in every argument position", and it does
+not: the generator put the record in every position at once and then repeated
+the identical program once per position — 103 runs of 68 distinct programs.
+One probe per function is what it always was, and that is what it now says.
+Making each position wrong on its own would need a valid filler for the
+others, and a valid filler differs per function.

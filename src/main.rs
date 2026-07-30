@@ -329,7 +329,10 @@ fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
     }
     match fields.borrow().first() {
         Some(eval::Value::Int(code)) => Some(u8::try_from(code.clone()).unwrap_or(1)),
-        _ => Some(1),
+        // an exit_status carrying something that is not a status is not a
+        // program saying what it meant — it is one that went wrong computing
+        // the code, and the reader is owed that rather than a silent 1
+        _ => None,
     }
 }
 
