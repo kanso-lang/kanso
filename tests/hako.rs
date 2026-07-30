@@ -71,3 +71,92 @@ fn every_import_shape_names_its_own_rule() {
         assert!(stderr.contains(phrase), "`{import}` was judged by another rule: {stderr}");
     }
 }
+
+/// A hako remote made on the spot: two releases and a prerelease, so the
+/// version race has something to get wrong. Local, because install is the one
+/// part of the toolchain that reaches a network and a test should not.
+fn published(root: &Path) -> PathBuf {
+    let repo = root.join("remote/acme/widgets");
+    std::fs::create_dir_all(&repo).expect("the remote's directory");
+    let git = |args: &[&str]| {
+        let done = Command::new("git").args(args).current_dir(&repo).output().expect("git runs");
+        assert!(done.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&done.stderr));
+    };
+    std::fs::write(repo.join("widgets.kso"), "pub fn greet _\n  \"widgets v1\"\n").expect("writes");
+    git(&["init", "-q", "."]);
+    git(&["add", "-A"]);
+    git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "one"]);
+    git(&["tag", "v0.1.0"]);
+    std::fs::write(repo.join("widgets.kso"), "pub fn greet _\n  \"widgets v2\"\n").expect("writes");
+    git(&["add", "-A"]);
+    git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "two"]);
+    git(&["tag", "v0.2.0"]);
+    // neither is a release, and both would win the race if they counted: a
+    // prerelease at a higher version, and a four-component tag above both
+    git(&["tag", "v9.9.9-rc1"]);
+    git(&["tag", "v9.9.9.1"]);
+    root.join("remote")
+}
+
+/// The whole flow: an import is the manifest, install resolves the highest
+/// release and writes the lock, and the build then reads the cache with no
+/// network at all. Watched red before install: the import cannot resolve.
+#[test]
+fn install_resolves_the_highest_release_and_the_build_reads_the_cache() {
+    let root = std::env::temp_dir().join("kanso-hako-install");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import \"acme/widgets\"\n\nprint \"{widgets/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+
+    let before = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "."])
+        .env("KANSO_HAKO", &cache)
+        .current_dir(&app)
+        .output()
+        .expect("kanso runs");
+    assert!(
+        String::from_utf8_lossy(&before.stderr).contains("run `kanso install`"),
+        "an unfetched hako built anyway: {}",
+        String::from_utf8_lossy(&before.stderr)
+    );
+
+    let install = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["install", "."])
+        .env("KANSO_HAKO", &cache)
+        .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+        .current_dir(&app)
+        .output()
+        .expect("kanso install runs");
+    assert!(
+        install.status.success(),
+        "install failed: {}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+
+    let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock is written");
+    let fields: Vec<&str> = lock.split_whitespace().collect();
+    assert_eq!(fields[0], "acme/widgets");
+    assert_eq!(fields[1], "v0.2.0", "a prerelease or an older tag won the race: {lock}");
+    assert_eq!(fields[2].len(), 40, "the lock records no commit sha: {lock}");
+
+    // no remote in the environment: the build must be satisfied by the cache
+    let after = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "."])
+        .env("KANSO_HAKO", &cache)
+        .current_dir(&app)
+        .output()
+        .expect("kanso runs");
+    assert_eq!(
+        String::from_utf8_lossy(&after.stdout),
+        "widgets v2\n",
+        "{}",
+        String::from_utf8_lossy(&after.stderr)
+    );
+}

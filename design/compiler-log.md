@@ -10854,3 +10854,36 @@ a single fixture entry that one of them rewrote, and they run in
 parallel, so two failed on the third's edit. A test that rewrites shared
 state cannot run beside its neighbours; the shape test stages a module of
 its own now.
+
+## 2026-07-29 — hako, slice two: `kanso install`
+
+Imports are the manifest, so install reads them rather than a file that
+restates them: every `.kso` under the module root is scanned for import
+lines, the hako-shaped names are kept, each one's highest `vX.Y.Z` tag is
+resolved with `git ls-remote --tags`, the tag is cloned shallow into the
+cache at `name@sha`, and `hako.lock` records name, tag and sha.
+
+The compiler still never reaches the network. It reads the lock once at
+the root of a module compile and resolves each hako to its locked sha in
+the cache; a bare `name` directory still answers when there is no lock,
+so a checkout can be dropped in by hand.
+
+`KANSO_HAKO_REMOTE` moves the git base. That is not a test hook bolted
+on — the design already puts transport in user and CI configuration
+rather than in source, and it is what lets the whole flow be tested
+against a local repository with no network at all.
+
+**A watched-red that proved nothing, and what fixed it.** The version
+race was pinned with a fixture publishing `v0.1.0`, `v0.2.0` and
+`v0.2.0-rc1`. Breaking the release parser's trailing-component guard
+left the test green, because `v0.2.0-rc1` is refused by the *parse* of
+`0-rc1` and never reaches that guard — two mechanisms, one fixture, and
+the fixture only exercised one of them. Worse, the prerelease could not
+have won anyway: it ties `v0.2.0` at `(0, 2, 0)` and the comparison is
+strict.
+
+The fixture now publishes `v9.9.9-rc1` and `v9.9.9.1`, either of which
+beats every real release if it counts. Each guard was then broken alone
+and each turned the test red on its own tag. That is the
+one-guard-at-a-time rule; running it caught that the first attempt was
+asserting a coincidence.
