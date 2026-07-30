@@ -10602,3 +10602,56 @@ for a getter should be (getter, field) rather than a prefixed string, so
 there is no name to leak and no site to remember. That is a wide change
 — every function table, symbol name and diagnostic keys by String — and
 it is recorded rather than attempted here.
+
+## 2026-07-29 — stderr, and a routing bug found by asking what allows something to work
+
+**`io/write_err`, the first slice of the os surface.** Measured before
+starting: the whole builtin vocabulary is 39 names, `lib/io` exports
+five things, and none of them is stderr — so a tool's diagnostics went
+into whatever it was piped into. `lib/time` exports `sleep` and nothing
+else, so nothing can timestamp either; that is the next slice.
+
+The interesting part is the browser. A shell captures two streams and a
+reader sees stdout then stderr, so the two wasm executors keep a second
+buffer and append it after the first rather than merging as it arrives.
+Merging would have been simpler and wrong: the differential harness
+compares native's `stdout + stderr` against the browser's single text,
+so a program interleaving the two would have diverged on ordering the
+moment anybody wrote one.
+
+Also worth recording because `cargo build` cannot catch it: `wasm_rt.rs`
+is compiled only for wasm32, so a missing trait method there is
+invisible to the host build and to `cargo test`. The Executor gained one
+method and three of the five implementations were caught by the host
+compiler; the fourth needed `scripts/build_wasm.sh` and the fifth was in
+a test binary. This is the gap task #42 exists to close.
+
+**Clay, on `time kanso run examples/subtypes.kso`: "what allows this to
+work? a play function should only work in the playground... locally that
+shouldn't work, unless you do some clever hack."** It was a hack, and
+his description of the mechanism was exactly right — `compile_play`
+synthesises the invisible entry he guessed at, a `main` whose body is
+`play`. What he did not guess is that `run` takes that path too, chosen
+by `source.contains("pub play")`.
+
+A substring test on raw text decides how a file compiles, so this
+entry file was rejected:
+
+    # how to write a pub play function
+    print "hello"
+
+with `a top-level line must begin with fn, type, or a constant binding`
+— a diagnostic that names nothing about the actual cause. A string
+literal mentioning the phrase does the same. Routing now reads the parse
+(`declares_play`), which costs one extra parse of one file: the compile
+golden does not move and `kanso check` stays at 7 ms.
+
+The test harness had the same hack, and the golden written for the
+compiler fix caught it — `tests/golden.rs` picked its verb by
+`source.contains("pub play")` and so ran `kanso play` on an entry file
+whose comment mentioned it.
+
+**Left for Clay**, since it is a CLI decision rather than a bug: `run`
+accepts a `pub play` file at all, and `play` is absent from the usage
+line. His instinct is that they should be separate. Both spellings work
+today and only one is documented.

@@ -8,5 +8,9 @@ pub stdin = builtin_stdin
 pub fn write content
   builtin_write content
 
+# Diagnostics, so a tool's chatter stays out of what it is piped into.
+pub fn write_err content
+  builtin_write_err content
+
 pub fn write_file path content
   builtin_write_file path content

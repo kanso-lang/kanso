@@ -1,0 +1,6 @@
+import "std/io"
+
+pub play =
+  io/write "out one\n"
+  >> io/write_err "err one\n"
+  >> io/write "out two\n"

@@ -1,0 +1,2 @@
+# an entry file may mention `pub play` without becoming one
+print "an entry file, not a play"

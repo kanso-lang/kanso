@@ -2717,6 +2717,12 @@ KValue k_b_write(KValue content) {
     return k_mkdesc(11, content, k_none());
 }
 
+KValue k_b_write_err(KValue content) {
+    if (!k_not_failure(content)) return content;
+    if (content.tag != K_STR) k_die("write_err takes a string");
+    return k_mkdesc(12, content, k_none());
+}
+
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
@@ -2902,6 +2908,11 @@ static KValue k_exec(KDesc* d) {
         case 11: {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stdout);
+            return k_none();
+        }
+        case 12: {
+            KStr* s = k_as_str(d->x);
+            fwrite(s->data, 1, s->len, stderr);
             return k_none();
         }
         default: {

@@ -43,6 +43,10 @@ pub extern "C" fn kanso_set_file(ptr: *const u8, len: usize) {
 /// filesystem, argv, or stdin in the browser.
 struct BrowserExecutor {
     stdout: String,
+    /// Kept apart from stdout and appended after it, exactly as a shell
+    /// captures the two streams — so the browser and the native binary
+    /// agree byte for byte on a program that writes to both.
+    stderr: String,
 }
 
 impl Executor for BrowserExecutor {
@@ -53,6 +57,10 @@ impl Executor for BrowserExecutor {
 
     fn write(&mut self, text: &str) {
         self.stdout.push_str(text);
+    }
+
+    fn write_err(&mut self, text: &str) {
+        self.stderr.push_str(text);
     }
 
     fn random(&mut self, n: u64) -> u64 {
@@ -185,7 +193,7 @@ pub extern "C" fn kanso_take_rt_error() {
 #[no_mangle]
 pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
     let input = take_input(ptr, len);
-    let mut executor = BrowserExecutor { stdout: String::new() };
+    let mut executor = BrowserExecutor { stdout: String::new(), stderr: String::new() };
     let result = SESSION.with(|session| session.borrow_mut().eval(&input, &mut executor));
     match result {
         Ok(outcome) => {
@@ -194,6 +202,7 @@ pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
                 Outcome::Value(rendered) | Outcome::Executed(rendered) => rendered,
             };
             let mut text = executor.stdout;
+            text.push_str(&executor.stderr);
             if !shown.is_empty() {
                 text.push_str(&shown);
                 text.push('\n');
@@ -228,7 +237,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
             return 1;
         }
     };
-    let mut executor = BrowserExecutor { stdout: String::new() };
+    let mut executor = BrowserExecutor { stdout: String::new(), stderr: String::new() };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),
@@ -236,6 +245,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
     match outcome {
         Ok(Value::ErrV(info)) => {
             let mut text = executor.stdout;
+            text.push_str(&executor.stderr);
             text.push_str(&format!(
                 "error[endpoint]: unhandled err reached {reached}: {}\n{}",
                 render(&info.reason, true),
@@ -246,6 +256,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
         }
         Ok(Value::NoneV) if reached == "main" => {
             let mut text = executor.stdout;
+            text.push_str(&executor.stderr);
             text.push_str("error[endpoint]: unhandled none reached main\n");
             set_out(&text);
             1
@@ -256,6 +267,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
         }
         Err(runtime) => {
             let mut text = executor.stdout;
+            text.push_str(&executor.stderr);
             text.push_str(&format!("error[runtime]: {}\n", runtime.message));
             set_out(&text);
             1
