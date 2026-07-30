@@ -12157,3 +12157,43 @@ path, which makes the CLI print its usage instead of running anything.
 The shape is always the same: two silences compare equal. Every sweep now
 fails on a probe that did not compile, did not run, or said nothing, because
 a sweep that cannot tell those from agreement is not a gate.
+
+## hako is written in kanso
+
+All three verbs moved into the language hako manages: list, then update, then
+install. src/hako.rs went from 260 lines to 103 — lock parsing, version
+comparison, split_name and cached, all of which the toolchain reads for its own
+resolver and the kanso module reads through the same file.
+
+Every Rust-era test in tests/hako.rs stayed green through all three swaps and
+not one was edited. That was the point of doing it in that order: the tests
+were written against an implementation that no longer exists, so they describe
+the verb rather than the code. The assertion that mattered most is the one in
+list_marks_staleness_and_update_walks_the_lock_forward that builds with no
+remote after updating — it only passes if the fetch really landed in the cache,
+which no amount of reading the kanso source would have established.
+
+Install needed one thing the language did not have. The manifest is the
+imports, so finding it means walking every .kso under a project, and nothing
+could tell a directory from a file: `exists` answers true for both, and
+`list_dir` fails on a file with an err a bind cannot catch — a failed
+description short-circuits without running the arm, which is the railway
+working as designed. `io/is_dir` is twelve sites rather than the ten the note
+usually quotes: src/wasm.rs holds a third Executor for the browser beyond the
+interpreter's and wasm_rt's, and BUILTINS and BUILTIN_CALLS are fixed-length
+arrays whose counts move.
+
+Two things the port taught, both of which cost a debugging round.
+
+A binding is forced where it is written, not where it is used. `bad = refused
+"...{unknown[1]!}..."` sitting beside the test for an unknown pin indexes a
+none on every successful install. The message belongs in the function the
+branch calls, which reads better anyway.
+
+`list/reject` answers a recipe rather than a list, and a `length` on one
+reports a `list/sifted false list/cursor 1 [...] <fn>` — the adapter showing
+its face. That record is also a name collision waiting to happen: `sifted` and
+`grown` are adapter shapes in std/list, enrolled bare, so a helper named either
+silently joins that group. hako is one namespace across seven files, and
+`join`, `line`, `base`, `bare`, `into` and `asked` were all taken before this
+was done.
