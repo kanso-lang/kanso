@@ -177,7 +177,11 @@ typedef struct {
     KValue* sorted;       /* cached sorted+deduped [k v k v...], or NULL */
     long long sorted_len; /* deduped entry count */
 } KMap;
-typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; } KClosure;
+typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
+/* A named group handed out as a value. The emitter writes one of these per
+   wrapper as a static, so the collector never sees it, and it carries the
+   name because the group's diagnostic says which group. */
+typedef struct { void* fn; long long arity; const char* name; } KFnref;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 /* A nominal subtype wrapper: transparent to every consumer, visible only
    to dispatch, which walks the chain and prefers nearer declarations. */
@@ -773,6 +777,7 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             nc->fn = cl->fn;
             nc->env = env;
             nc->ncaps = cl->ncaps;
+            nc->arity = cl->arity;
             out.payload = k_ptr(nc);
             break;
         }
@@ -1040,6 +1045,23 @@ static const char* k_c_off(void) { return k_color_mode() ? "\x1b[0m" : ""; }
    anyway, so a type complaint carries the value that caused it. */
 static void k_die_value(const char* msg, KValue v);
 static void k_die_got(const char* msg, KValue v);
+
+static void k_itoa(char* buf, long long v);
+
+void k_die_arity(long long want, long long got) {
+    char w[24], g[24];
+    k_itoa(w, want);
+    k_itoa(g, got);
+    fprintf(stderr, "%serror[runtime]:%s this function takes %s argument(s), got %s\n",
+            k_c_err(), k_c_off(), w, g);
+    exit(1);
+}
+
+void k_die_overload(const char* name) {
+    fprintf(stderr, "%serror[runtime]:%s no overload of `%s` matches these arguments\n",
+            k_c_err(), k_c_off(), name);
+    exit(1);
+}
 
 void k_die(const char* msg) {
     fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
@@ -3357,16 +3379,16 @@ KValue k_list_lit(long long n, KValue* items) {
     return k_mklist(n, items);
 }
 
-KValue k_closure(KValue (*fn)(void*, KValue), long long ncaps, KValue* caps) {
+KValue k_closure(KValue (*fn)(void*, KValue), long long arity, long long ncaps, KValue* caps) {
     KClosure* c = k_alloc(sizeof(KClosure));
     KValue* env = k_alloc(sizeof(KValue) * (ncaps ? ncaps : 1));
     memcpy(env, caps, sizeof(KValue) * ncaps);
-    c->fn = fn; c->env = env; c->ncaps = ncaps;
+    c->fn = fn; c->env = env; c->ncaps = ncaps; c->arity = arity;
     KValue v; v.tag = K_CLOSURE; v.payload = k_ptr(c); return v;
 }
 
-KValue k_fnref(void* dispatcher) {
-    KValue v; v.tag = K_FNREF; v.payload = (long long)(intptr_t)dispatcher; return v;
+KValue k_fnref(void* described) {
+    KValue v; v.tag = K_FNREF; v.payload = (long long)(intptr_t)described; return v;
 }
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
@@ -3376,29 +3398,38 @@ KValue k_call1(KValue f, KValue a) {
     if (f.tag == K_CLOSURE) {
         if (!k_not_failure(a)) return a;
         KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity != 1) k_die_arity(c->arity, 1);
         return c->fn(c->env, a);
     }
     if (f.tag == K_FNREF) {
-        return ((KValue(*)(KValue))(intptr_t)f.payload)(a);
+        KFnref* r = (KFnref*)(intptr_t)f.payload;
+        if (r->arity != 1) k_die_overload(r->name);
+        return ((KValue(*)(KValue))r->fn)(a);
     }
     k_die("this value is not callable");
     return k_none();
 }
 
 /* Calling a lambda value with more than one argument. The closure's fn pointer
-   is stored generically; cast it to the arity the call site knows. Failures in
+   is stored generically; cast it to the arity the call site knows, which is
+   only sound once the value agrees it takes that many — a cast through the
+   wrong signature leaves the extra argument in a register the callee never
+   reads, and the call answers as though it were never written. Failures in
    the callable or any argument propagate before the body runs, matching the
-   dispatcher. Arity is checked by the type system, so no runtime arity guard. */
+   dispatcher. */
 KValue k_call2(KValue f, KValue a, KValue b) {
     if (!k_not_failure(f)) return f;
     if (!k_not_failure(a)) return a;
     if (!k_not_failure(b)) return b;
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity != 2) k_die_arity(c->arity, 2);
         return ((KValue(*)(void*, KValue, KValue))c->fn)(c->env, a, b);
     }
     if (f.tag == K_FNREF) {
-        return ((KValue(*)(KValue, KValue))(intptr_t)f.payload)(a, b);
+        KFnref* r = (KFnref*)(intptr_t)f.payload;
+        if (r->arity != 2) k_die_overload(r->name);
+        return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die("this value is not callable");
     return k_none();
@@ -3411,10 +3442,13 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (!k_not_failure(c)) return c;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
+        if (cl->arity != 3) k_die_arity(cl->arity, 3);
         return ((KValue(*)(void*, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c);
     }
     if (f.tag == K_FNREF) {
-        return ((KValue(*)(KValue, KValue, KValue))(intptr_t)f.payload)(a, b, c);
+        KFnref* r = (KFnref*)(intptr_t)f.payload;
+        if (r->arity != 3) k_die_overload(r->name);
+        return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die("this value is not callable");
     return k_none();
@@ -3428,10 +3462,13 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (!k_not_failure(d)) return d;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
+        if (cl->arity != 4) k_die_arity(cl->arity, 4);
         return ((KValue(*)(void*, KValue, KValue, KValue, KValue))cl->fn)(cl->env, a, b, c, d);
     }
     if (f.tag == K_FNREF) {
-        return ((KValue(*)(KValue, KValue, KValue, KValue))(intptr_t)f.payload)(a, b, c, d);
+        KFnref* r = (KFnref*)(intptr_t)f.payload;
+        if (r->arity != 4) k_die_overload(r->name);
+        return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die("this value is not callable");
     return k_none();

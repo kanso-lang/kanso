@@ -204,12 +204,14 @@ declare %KValue @k_cmp(%KValue, %KValue, i64)
 declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
 declare void @k_die(ptr) noreturn
+declare void @k_die_arity(i64, i64) noreturn
+declare void @k_die_overload(ptr) noreturn
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
-declare %KValue @k_closure(ptr, i64, ptr)
+declare %KValue @k_closure(ptr, i64, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
@@ -604,6 +606,15 @@ fn wsym(name: &str, arity: usize) -> String {
     match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
         true => format!("\"w_{name}_{arity}\""),
         false => format!("w_{name}_{arity}"),
+    }
+}
+
+/// The static a `k_fnref` value points at: the wrapper, its arity, and the
+/// name the diagnostic says when a call brings the wrong number of arguments.
+fn rsym(name: &str, arity: usize) -> String {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
+        true => format!("\"r_{name}_{arity}\""),
+        false => format!("r_{name}_{arity}"),
     }
 }
 
@@ -1072,6 +1083,13 @@ impl<'a> Backend<'a> {
                 "define %KValue @{}({}) {{\nentry:\n{conv}  ret %KValue %r\n}}\n",
                 wsym(name, arity),
                 params.join(", ")
+            );
+            let (label, _) = self.intern(&format!("{name}\0"));
+            let _ = writeln!(
+                self.body,
+                "@{} = private constant {{ ptr, i64, ptr }} {{ ptr @{}, i64 {arity}, ptr @{label} }}",
+                rsym(name, arity),
+                wsym(name, arity)
             );
         }
         // Lazy v1: the thunk-site dispatcher the runtime's k_force calls.
@@ -2378,7 +2396,7 @@ impl<'a> Backend<'a> {
                     let arity = arities[0];
                     self.fn_value_wrappers.push((name.clone(), arity));
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", wsym(name, arity)));
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", rsym(name, arity)));
                     return Ok(t);
                 }
                 if !arities.is_empty() {
@@ -2511,7 +2529,8 @@ impl<'a> Backend<'a> {
                 let t = f.tmp();
                 // the ccc wrapper, never the tailcc fn: C calls this pointer
                 f.line(&format!(
-                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, ptr {arr})",
+                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr})",
+                    params.len(),
                     captures.len()
                 ));
                 Ok(t)
@@ -2696,11 +2715,17 @@ impl<'a> Backend<'a> {
                     self.emit_ret(f, &value);
                     return Ok(());
                 }
+                // the arity has to match a declaration: `d_{name}_{n}` for an
+                // n nothing declares is a symbol the module never defines
                 let is_program_fn = f.lookup(name).is_none()
                     && !self.type_ids.contains_key(name.as_str())
                     && name != "err"
                     && name != "print"
-                    && self.program.fns.iter().any(|d| d.name == *name);
+                    && self
+                        .program
+                        .fns
+                        .iter()
+                        .any(|d| d.name == *name && d.params.len() == args.len());
                 if is_program_fn {
                     let n = args.len();
                     let mut emitted = Vec::new();
@@ -3206,7 +3231,11 @@ impl<'a> Backend<'a> {
         first: Option<String>,
         span: Span,
     ) -> Result<String, String> {
-        let call_arity = args.len() + first.is_some() as usize;
+        // `first` is args[0], already emitted — a pipe hands its value in as
+        // the head's first argument, it does not add one. Counting it twice
+        // made a piped call to a lambda pass the value in both positions,
+        // which the old unchecked cast to a two-argument signature dropped.
+        let call_arity = args.len();
         // A literal lambda applied on the spot is a binding, not a value:
         // bind the arguments and emit the body here, instead of building a
         // closure and dispatching through k_callN. The fusion pass composes
@@ -3216,10 +3245,12 @@ impl<'a> Backend<'a> {
         if let Expr::Lambda { params, body, .. } = head {
             if params.len() == call_arity {
                 let mut vals: Vec<String> = Vec::new();
+                let mut rest = args.iter();
                 if let Some(v) = first.clone() {
                     vals.push(v);
+                    rest.next();
                 }
-                for a in args {
+                for a in rest {
                     vals.push(self.emit_expr(f, a)?);
                 }
                 let mut bails: Vec<(String, String)> = Vec::new();
@@ -3288,10 +3319,12 @@ impl<'a> Backend<'a> {
             // and dispatch at runtime via the arity-matched k_callN.
             let callee = self.emit_expr(f, head)?;
             let mut arg_vals: Vec<String> = Vec::new();
+            let mut rest = args.iter();
             if let Some(v) = first {
                 arg_vals.push(v);
+                rest.next();
             }
-            for a in args {
+            for a in rest {
                 arg_vals.push(self.emit_expr(f, a)?);
             }
             let n = arg_vals.len();
@@ -3450,7 +3483,12 @@ impl<'a> Backend<'a> {
             f.record(&t, REC | fails);
             return Ok(t);
         }
-        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
+        // The arity has to match a real declaration. Matching on the name
+        // alone emits a call to `d_{name}_{n}` for any n the caller wrote,
+        // and a dispatcher that was never defined is invalid IR the user
+        // meets as a clang error.
+        let declared = |d: &FnDecl| d.name == *name && d.params.len() == emitted.len();
+        if !was_builtin && self.program.fns.iter().any(declared) {
             let n = emitted.len();
             let args_ir: Vec<String> =
                 emitted.iter().enumerate().map(|(i, e)| self.call_arg(f, name, n, i, e)).collect();
@@ -3523,6 +3561,24 @@ impl<'a> Backend<'a> {
             }
             f.record(&result, self.group_return_set(name, n) | fails);
             return Ok(result);
+        }
+        // Declared, but at no arity this call can reach. The interpreter
+        // reports it when the call runs, so native reports the same words at
+        // the same moment rather than refusing to build a program the oracle
+        // executes.
+        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
+            let msg = format!("no overload of `{name}` matches these arguments");
+            let (m, _) = self.intern(&format!("{msg}\0"));
+            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line("unreachable");
+            let after = f.label();
+            f.start_block(&after);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = select i1 true, %KValue {{ i64 4, i64 0 }}, %KValue {{ i64 4, i64 0 }}"
+            ));
+            f.record(&t, NONE);
+            return Ok(t);
         }
         if name == "at" && emitted.len() == 2 {
             return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));

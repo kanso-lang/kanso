@@ -927,10 +927,13 @@ fn arity_walk_expr(
 ) {
     if let Expr::App { head, args, .. } = e {
         if let Expr::Ident(name, span) = &**head {
-            // only qualified names: a bare name may be a local holding a
-            // function value, and the per-file pass already covers the rest
+            // Bare names count too. No binding may shadow a declaration —
+            // `adder = ...` beside `fn adder` is a name error — so a bare
+            // name matching a declared group is that group, and the per-file
+            // pass sees only one file of a module, which leaves every call
+            // to a sibling file unchecked.
             let known = arities.get(name.as_str());
-            if name.contains('/') && !bound.contains(name.as_str()) {
+            if !bound.contains(name.as_str()) {
                 if let Some(known) = known {
                     if !known.contains(&args.len()) && !known.contains(&0) {
                         let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();

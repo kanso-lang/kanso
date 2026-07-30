@@ -1,0 +1,3 @@
+double = (x -> x * 2)
+
+pub play = print "{double 3 4}"

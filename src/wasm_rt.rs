@@ -28,6 +28,10 @@ enum Slot {
     C {
         tidx: u32,
         env: u32,
+        /// How many arguments the body reads, or -1 where the callee sorts
+        /// arity out itself — a group's wrapper dispatches across its arms
+        /// and says `no overload` for the counts none of them take.
+        arity: i32,
     },
     Seq(u32, u32),
     Bind(u32, u32),
@@ -154,7 +158,7 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
             }
         }
     }
-    let Slot::C { tidx, env } = closure_slot(c_h) else {
+    let Slot::C { tidx, env, arity } = closure_slot(c_h) else {
         let v = slot(c_h);
         if let Slot::V(value) = v {
             if is_failure(&value) {
@@ -164,6 +168,9 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
         }
         die("this value is not callable".to_string());
     };
+    if arity >= 0 && arity as usize != arg_handles.len() {
+        die(format!("this function takes {arity} argument(s), got {}", arg_handles.len()));
+    }
     let args = push(Slot::E(Rc::new(arg_handles)));
     unsafe { k_callback(tidx, env, args) }
 }
@@ -747,10 +754,10 @@ pub extern "C" fn rt_maybe_bind(piped: u32, closure: u32) -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn rt_mkclosure(tidx: u32, ncap: u32) -> u32 {
+pub extern "C" fn rt_mkclosure(tidx: u32, ncap: u32, arity: i32) -> u32 {
     let env_handles = pop_args(ncap);
     let env = push(Slot::E(Rc::new(env_handles)));
-    push(Slot::C { tidx, env })
+    push(Slot::C { tidx, env, arity })
 }
 
 #[no_mangle]
