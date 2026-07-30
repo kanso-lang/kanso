@@ -1,4 +1,4 @@
-import "std/text"
+import { join:joined } "std/text"
 
 pub fn basename p
   text/slice p (past_separator p (length p)) (length p)
@@ -10,6 +10,21 @@ pub fn dirname p
 # the file, and reporting `gitignore` would be a lie about both.
 pub fn extension p
   after_dot (basename p)
+
+# Exactly one separator between the two, and a side that is empty
+# contributes nothing. A leading separator on the right is redundant here
+# rather than absolute, so `join base name` cannot leave base however `name`
+# was spelled — which is what a caller joining a name it did not choose
+# wants. Rust and Python let an absolute right-hand side win outright; go
+# does not, and neither does this.
+pub fn join "" right
+  right
+
+pub fn join left ""
+  left
+
+pub fn join left right
+  "{without_trailing_slash left}/{without_leading_slash right}"
 
 pub fn stem p
   before_dot (basename p)
@@ -58,3 +73,17 @@ fn upto_dot b 1
 
 fn upto_dot b at
   text/slice b 1 (at - 1)
+
+fn without_leading_slash ""
+  ""
+
+fn without_leading_slash s
+  rest = text/slice s 2 (length s)
+  if (text/slice s 1 1 == "/") (without_leading_slash rest) s
+
+fn without_trailing_slash ""
+  ""
+
+fn without_trailing_slash s
+  rest = text/slice s 1 (length s - 1)
+  if (text/slice s (length s) (length s) == "/") (without_trailing_slash rest) s
