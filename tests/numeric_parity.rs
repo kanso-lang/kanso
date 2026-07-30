@@ -55,3 +55,25 @@ fn above_the_native_ceiling_the_engines_still_disagree() {
         "native failed for some other reason: {native_err}"
     );
 }
+
+/// A literal wider than the native payload used to be truncated into it, so
+/// `1 * 18446744073709551616` printed 0 and `0 % 18446744073709551616` said
+/// "modulo by zero" — silent wrong answers, where the whole point of this
+/// build's ceiling is to refuse rather than produce one. Found by
+/// scripts/numeric_differential.py on its first run.
+#[test]
+fn a_literal_too_wide_for_the_native_build_is_refused_not_wrapped() {
+    for (program, was) in [
+        ("print (1 * 18446744073709551616)\n", "0"),
+        ("print (1 + 9223372036854775808)\n", "-9223372036854775807"),
+    ] {
+        let (code, out, err) = ran(program, &[]);
+
+        assert_ne!(code, 0, "native accepted a literal it cannot hold: {out}");
+        assert!(
+            err.contains("does not fit this build's 64-bit int"),
+            "refused for the wrong reason: {err}"
+        );
+        assert_ne!(out.trim(), was, "the old wrapped answer came back");
+    }
+}
