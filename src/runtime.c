@@ -1035,6 +1035,11 @@ static const char* k_c_err(void) {
 static const char* k_c_dim(void) { return k_color_mode() ? "\x1b[2m" : ""; }
 static const char* k_c_off(void) { return k_color_mode() ? "\x1b[0m" : ""; }
 
+/* The interpreter is the oracle and it names what it was handed. A reader
+   told only what was wanted has to guess, and the two engines have to agree
+   anyway, so a type complaint carries the value that caused it. */
+static void k_die_value(const char* msg, KValue v);
+
 void k_die(const char* msg) {
     fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
     exit(1);
@@ -1397,6 +1402,13 @@ void k_no_field(KValue v, const char* name) {
     exit(1);
 }
 
+static void k_die_value(const char* msg, KValue v) {
+    KValue shown = k_render(v, 1);
+    fprintf(stderr, "%serror[runtime]:%s %s, not %s\n", k_c_err(), k_c_off(), msg,
+            k_as_str(shown)->data);
+    exit(1);
+}
+
 KValue k_b_field(KValue v, const char* name) {
     if (!k_not_failure(v)) return v;
     if (v.tag != K_REC) {
@@ -1421,7 +1433,7 @@ KValue k_set_field(KValue target, const char* name, KValue v) {
     if (!k_not_failure(target)) return target;
     if (!k_not_failure(v)) return v;
     if (target.tag == K_SUB) target = k_sub_base(target);
-    if (target.tag != K_REC) k_die("`set` writes a record field");
+    if (target.tag != K_REC) k_die_value("`set` writes a record field", target);
     KRec* r = k_as_rec(target);
     for (long long i = 0; i < r->nfields; i++) {
         if (!strcmp(k_type_field_name(r->type_id, i), name)) {
@@ -4151,7 +4163,7 @@ KValue k_b_length(KValue v) {
         for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
         return k_int(count);
     }
-    k_die("length takes a list, string, or map");
+    k_die_value("length takes a list, string, or map", v);
     return k_none();
 }
 

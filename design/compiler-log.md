@@ -11687,3 +11687,26 @@ fails later than it should.
 Found while writing hako in kanso, which is turning out to be a better probe
 of the language than reading the compiler: `text/split` and `!=` came from the
 same exercise.
+
+## Half a type complaint
+
+`length` on a record said different things depending on which engine ran it.
+The interpreter named the value it was handed; native named only what it
+wanted. Same program, two messages, which the differential law does not allow
+and which no golden had caught because no golden asked a builtin for the wrong
+type.
+
+Native now carries the value into the message the way `k_no_field` already
+did, through a small helper rather than a second copy of the rendering. `set`
+had the same asymmetry and was aligned with it, though the block-born rule
+appears to catch that case before a program can reach the runtime, so nothing
+in the corpus proves it — recorded rather than claimed.
+
+The message matters beyond the law. This is the diagnostic a reader meets when
+a lazy list crosses a module diamond, and being told what was wanted without
+being told what arrived is most of why that failure is hard to place.
+
+Found by comparing the two engines' message tables rather than by running
+anything: two of the interpreter's `, not {}` messages had native twins that
+stopped early. That comparison is cheap and there are seventy-one `k_die`
+sites, so it is worth repeating whenever a message is added.

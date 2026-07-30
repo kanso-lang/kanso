@@ -1,0 +1,11 @@
+# A type complaint that says only what was wanted leaves the reader guessing.
+# The interpreter has always named the value; native said half as much, which
+# is a divergence the differential law does not allow and a worse message
+# besides.
+type point
+  x
+  y
+
+pub play =
+  p = point 1 2
+  print "{length p}"
