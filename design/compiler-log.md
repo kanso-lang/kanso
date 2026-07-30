@@ -11203,3 +11203,37 @@ against a harness rather than against hope.
 
 Cost, recorded so nobody puts it in CI unthinkingly: 2,265 programs took
 seven minutes, nearly all of it clang.
+
+## 2026-07-29 — exit codes, and the concept that was already there
+
+The two candidates were an `io/exit` effect on Go's shape, which drops
+whatever follows it, and letting a program's result set the status, which
+gives main's value a second meaning. Both add a concept, and the mushroom
+test says look for the one already present.
+
+It is failure. An unhandled err already exits non-zero, and a CLI's exit
+codes are a taxonomy of ways to fail. So `io/exit 2` is an err carrying
+`io/exit_status 2`, and the endpoint reads the code instead of reporting
+it. Nothing new terminates a program: the err propagates by the rule that
+exists, and everything after it is skipped because that is what an err
+already does.
+
+**The first build was wrong in a way worth keeping.** `io/write "before"
+>> io/exit 3` printed nothing and exited 3 — the effect before the exit
+never ran. `>>` builds both descriptions before either runs, so an err
+operand poisons the chain at build time. Binding instead of sequencing
+puts it right: `io/write "before" . (_ -> io/exit 3)` writes, then exits,
+because `.` is answered at run time and `Desc::Seq` already stops on a
+failing left.
+
+That is a real distinction the language had and this is the first thing
+that makes it matter, so it is written into the module rather than
+discovered by whoever hits it. Whether `>>` should refuse an err operand
+outright is a separate question and not answered here.
+
+Both endpoints — the interpreter's and the runtime's — were broken one at
+a time and each failed on its own engine, which is the shape a
+two-engine feature owes.
+
+#39 is closed: stderr, paths, environment, file existence, directory
+listing, a clock, and now exit codes.

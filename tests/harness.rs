@@ -45,3 +45,40 @@ fn check_accepts_a_module_whose_tests_read_failures() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// A deliberate exit is an err carrying a status, so it propagates by the rule
+/// that already exists and the endpoint reads its code instead of reporting an
+/// unhandled failure. Both engines, because an exit status is program output.
+#[test]
+fn a_deliberate_exit_sets_the_status_and_says_nothing() {
+    let dir = std::env::temp_dir().join("kanso-exit-status");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp work dir");
+    std::fs::write(
+        dir.join("main.kso"),
+        "import \"std/io\"\n\nio/write \"before\\n\" . (_ -> io/exit 3)\n",
+    )
+    .expect("the entry writes");
+
+    for engine in [&[][..], &["--interp"][..]] {
+        let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(".")
+            .args(engine)
+            .current_dir(&dir)
+            .output()
+            .expect("kanso runs");
+
+        assert_eq!(out.status.code(), Some(3), "engine {engine:?} lost the status");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout),
+            "before\n",
+            "the effect before the exit did not run under {engine:?}"
+        );
+        assert!(
+            String::from_utf8_lossy(&out.stderr).is_empty(),
+            "a deliberate exit reported itself as a failure: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+}

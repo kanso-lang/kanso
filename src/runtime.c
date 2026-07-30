@@ -5322,6 +5322,19 @@ static void k_report_trace(KErrBox* box) {
     }
 }
 
+/* A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
+   reads its code rather than reporting it: the program did not fail to say
+   what it meant, it said it. Returns -1 when the err is an ordinary one. */
+static int k_exit_status(KValue e) {
+    KValue reason = k_err_inner(e);
+    if (reason.tag != K_REC) return -1;
+    KRec* r = k_as_rec(reason);
+    if (strcmp(k_type_name(r->type_id), "io/exit_status")) return -1;
+    if (r->nfields < 1 || r->fields[0].tag != K_INT) return 1;
+    long long code = r->fields[0].payload;
+    return (int)(code & 0xff);
+}
+
 static void k_report_err(KValue e, const char* reached) {
     KValue r = k_render(k_err_inner(e), 1);
     fprintf(stderr, "%serror[endpoint]:%s unhandled err reached %s: %s\n",
@@ -5342,12 +5355,16 @@ int main(int argc, char** argv) {
     if (v.tag == K_DESC) {
         KValue y = k_exec(k_as_desc(v));
         if (y.tag == K_ERR) {
+            int status = k_exit_status(y);
+            if (status >= 0) return status;
             k_report_err(y, "the executor");
             return 1;
         }
         return 0;
     }
     if (v.tag == K_ERR) {
+        int status = k_exit_status(v);
+        if (status >= 0) return status;
         k_report_err(v, "main");
         return 1;
     }

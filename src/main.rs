@@ -189,6 +189,9 @@ fn run_interpreted_on_stack(program: &ast::Program) -> ExitCode {
             let mut executor =
                 eval::RealExecutor { program_args: program_args(), rng: eval::Rng::seeded() };
             match interp.execute(&desc, &mut executor) {
+                Ok(eval::Value::ErrV(info)) if deliberate_exit(&info.reason).is_some() => {
+                    ExitCode::from(deliberate_exit(&info.reason).unwrap_or(1))
+                }
                 Ok(eval::Value::ErrV(info)) => {
                     eprint!(
                         "error[endpoint]: unhandled err reached the executor: {}\n{}",
@@ -203,6 +206,9 @@ fn run_interpreted_on_stack(program: &ast::Program) -> ExitCode {
                     ExitCode::FAILURE
                 }
             }
+        }
+        eval::Value::ErrV(info) if deliberate_exit(&info.reason).is_some() => {
+            ExitCode::from(deliberate_exit(&info.reason).unwrap_or(1))
         }
         eval::Value::ErrV(info) => {
             eprint!(
@@ -304,6 +310,20 @@ fn opens_block(line: &str) -> bool {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+/// A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
+/// reads its code rather than reporting it, because the program did not fail
+/// to say what it meant — it said it.
+fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
+    let eval::Value::Record { ty, fields } = reason else { return None };
+    if &**ty != "io/exit_status" {
+        return None;
+    }
+    match fields.borrow().first() {
+        Some(eval::Value::Int(code)) => Some(u8::try_from(code.clone()).unwrap_or(1)),
+        _ => Some(1),
+    }
+}
+
 fn report(outcome: Result<kanso::repl::Outcome, String>) {
     match outcome {
         Ok(kanso::repl::Outcome::Defined(echo)) => println!("{echo}"),
