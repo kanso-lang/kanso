@@ -11073,3 +11073,31 @@ Voice, on the landing page, was the smaller job: two antithesis flips
 ("what the book doesn't yet cover isn't hidden; it's not decided", "a
 performance regression isn't a surprise in production — it's a failing
 diff") and one self-announcement ("the part a stopwatch can't show").
+
+## 2026-07-29 — the browser repl never had directives
+
+Clay, from the playground: typing `:show` answers
+
+    error[formatting]: canonical form requires no space here
+      --> repl:1:7
+       1 | it0 = :show
+
+The session wraps an expression in `it0 = …` to build its history, and
+nothing checked first whether the line was a directive. The terminal
+repl was fine, because `:`-handling lived in the CLI's own loop, behind
+`#[cfg(not(target_arch = "wasm32"))]` — so the browser could not reach
+it by construction.
+
+Two copies of a behaviour where one is unreachable is the bug, not the
+missing branch. Directives now belong to `repl::Session`, which is the
+thing both repls share, and the CLI's private copy is deleted rather
+than kept in step. The playground is also the copy of the repl most
+people meet first, which makes it the worse one to have been missing.
+
+Watched red by removing the dispatch: the tests report `it0 = :show`,
+the exact line from the report.
+
+The compiler page has a table of contents now, built from the page's own
+`<h2>` ids so it cannot drift from the headings it lists — the status
+badges are stripped, since a badge marks a section rather than naming
+one.

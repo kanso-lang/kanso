@@ -53,10 +53,37 @@ impl Session {
         format!("it{}", self.counter)
     }
 
+    /// `:`-directives talk to the session rather than to the language, so they
+    /// are answered here — where both the terminal and the browser can reach
+    /// them. Handled in the caller instead, one of the two REPLs silently
+    /// lacked them, and the browser is the copy most people meet first.
+    pub fn directive(&mut self, line: &str) -> Result<Outcome, String> {
+        let mut words = line.split_whitespace();
+        let verb = words.next().unwrap_or("");
+        let arg = words.next();
+        match (verb, arg) {
+            (":show", name) => self.show(name).map(Outcome::Value),
+            (":delete", Some(name)) => self.delete(name).map(Outcome::Value),
+            (":delete", None) => Ok(Outcome::Value("usage: :delete name".to_string())),
+            (":help", _) => Ok(Outcome::Value(
+                ":show          the whole session, as the file it is\n\
+                 :show foo      foo's definition, without running it\n\
+                 :delete foo    remove foo (refused while something still uses it)\n\
+                 :help          this list\n\
+                 repeating a declaration replaces it; ctrl-c abandons a block"
+                    .to_string(),
+            )),
+            _ => Ok(Outcome::Value(format!("unknown directive {verb} — try :help"))),
+        }
+    }
+
     pub fn eval(&mut self, input: &str, executor: &mut dyn Executor) -> Result<Outcome, String> {
         let trimmed = input.trim_end();
         if trimmed.trim().is_empty() {
             return Ok(Outcome::Value(String::new()));
+        }
+        if trimmed.trim_start().starts_with(':') {
+            return self.directive(trimmed.trim());
         }
         if !declaration_intent(trimmed) {
             return self.eval_expression(trimmed, executor);
