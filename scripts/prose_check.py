@@ -36,6 +36,10 @@ FAMILIES = {
         r"\bnot\s+(a|an|the)\s+(?:(?!\band\b|\bor\b)[^.;<]){3,50},\s+but\b",
         r"\bdoesn't\s+(?:(?!\band\b|\bor\b)[^.;<]){3,60}\.\s*it\s+\w+s\b",
     ],
+    # Telling the reader how to feel about what comes next, instead of writing
+    # it. The last five were found by reading chapter 04 after the first three
+    # families came back clean, which is what a clean run being insufficient
+    # looks like in practice.
     "self-announcing": [
         r"\bthe interesting (part|thing|question) (is|here)\b",
         r"\bhere's the thing\b",
@@ -43,6 +47,11 @@ FAMILIES = {
         r"\btake this slowly\b",
         r"\bthe trick under the trick\b",
         r"\bwhat follows is\b",
+        r"\bhere is the part (that|where)\b",
+        r"\bdeserves a (slow|careful) read\b",
+        r"\bstep back and (look|consider)\b",
+        r"\bhiding in (here|plain sight)\b",
+        r"\bthis sounds \w+ until\b",
     ],
     "throat-clearing": [
         r"<p>\s*(it is|it's) worth noting\b",

@@ -26,7 +26,7 @@ extra_css: /book/book.css
 
 <h2>the railway</h2>
 
-<p>here is the part that deletes real code from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the err passes by, untouched, and keeps moving. watch a failure born two calls deep ride all the way out:</p>
+<p>this is what deletes error handling from real programs. an err flows <em>through</em> functions, not into them. when one shows up as an argument, the function body never runs—the err passes by, untouched, and keeps moving. watch a failure born two calls deep ride all the way out:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">railway.kso</div>
@@ -53,7 +53,7 @@ extra_css: /book/book.css
 
 <p>count the lines of error handling in this program: zero. the division by zero happens inside <code>subtotal</code>; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and no station on the line can flag the train down. functions state their happy-path logic and nothing else, ever.</p>
 
-<p>the report deserves a slow read, because the err built it as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
+<p>the err built the report as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
 
 <h2>no arm can catch it</h2>
 
@@ -80,7 +80,7 @@ extra_css: /book/book.css
 
 <p><code>describe x</code> answers for ints, strings, records, markers—anything. it still never sees the err: <code>passed through describe</code>, says the trace. an err is a true exception, and kanso's position is that a true exception is by definition the case you did not plan for—so no function gets to turn one back into a value. not a helper, not a library, not <code>main</code>. there is no rescue block to write and none to import, which means there is also no dependency that can quietly eat your failures on the way up. an err rises, carrying its receipts, until the endpoint reports it.</p>
 
-<p>this sounds strict until you see what it buys. in languages with catchable exceptions, every failure is implicitly addressed to whoever catches it first, and you find out who that is at runtime. in kanso the addressing is decided in the kind of value you ship: if a failure is something callers should cope with, it must travel as a value—<code>none</code>, or a marker, or a record that names the verdict—because a value is the only thing an arm can claim. the language makes "handleable" and "value" the same word. if you want something that can be handled, don't use an exception.</p>
+<p>what the strictness buys shows up in the alternative. in languages with catchable exceptions, every failure is implicitly addressed to whoever catches it first, and you find out who that is at runtime. in kanso the addressing is decided in the kind of value you ship: if a failure is something callers should cope with, it must travel as a value—<code>none</code>, or a marker, or a record that names the verdict—because a value is the only thing an arm can claim. the language makes "handleable" and "value" the same word. if you want something that can be handled, don't use an exception.</p>
 
 <h2>none is for asking</h2>
 
@@ -157,7 +157,7 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 
 <h2>access is a decision</h2>
 
-<p>step back and look at what the last section actually handed you. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by one character. the sigil <code>xs[i]!</code> documents an invariant: this key exists, and if it doesn't, that's a bug, fail here. the plain <code>xs[i]</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
+<p>the last section handed you a choice. the same missing key can be an err that rises or a none you dispatch on—and <em>you</em> pick, per call site, by one character. the sigil <code>xs[i]!</code> documents an invariant: this key exists, and if it doesn't, that's a bug, fail here. the plain <code>xs[i]</code> documents a question: this may be absent, and absence is a case my code handles. you can't assume by accident, and you can't cope by accident:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">pocky.kso</div>
@@ -172,7 +172,7 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 
 <p>same map, same missing key as <code>menu.kso</code>—but this call site claimed pocky was on the menu, so the miss is a broken promise and the report says so. the distinction other languages leave to comments and code review, kanso puts in the call itself.</p>
 
-<p>there is a yagni argument hiding in here, and it is the honest heart of the error model. not-handling is the correct default. a handler for a failure that never recurs is speculative complexity—defensive code pays that tax on every line, up front, to guard against things that mostly never happen. kanso inverts it: assume by default, let the err rise with its receipts, and add coping <em>reactively</em>, one call site at a time, when a real failure has earned it. the happy path stays happy not because failures can't occur, but because you refused to complicate it for failures too rare to warrant it—and the endpoint rule guarantees that refusing to plan stays loudly visible the day the rare thing happens.</p>
+<p>underneath this is a yagni argument, and it is the whole of the error model: not-handling is the correct default. a handler for a failure that never recurs is speculative complexity—defensive code pays that tax on every line, up front, to guard against things that mostly never happen. kanso inverts it: assume by default, let the err rise with its receipts, and add coping <em>reactively</em>, one call site at a time, when a real failure has earned it. the happy path stays happy not because failures can't occur, but because you refused to complicate it for failures too rare to warrant it—and the endpoint rule guarantees that refusing to plan stays loudly visible the day the rare thing happens.</p>
 
 <h2>designing the sad path</h2>
 
