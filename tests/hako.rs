@@ -375,3 +375,57 @@ fn an_interim_pin_is_built_against_flagged_and_never_walked_forward() {
     let kept = std::fs::read_to_string(app.join("hako.lock")).expect("the lock survives");
     assert_eq!(kept, lock, "a plain install replaced the interim pin: {kept}");
 }
+
+/// hako's first verb, written in kanso. `hako/` is a module in this repo that
+/// reads a lock and reports what it pins — the same job `hako::list` does in
+/// Rust, and the beginning of moving that work into the language it manages.
+/// It runs here so it is exercised rather than merely present.
+#[test]
+fn the_kanso_listing_reads_a_lock() {
+    let root = std::env::temp_dir().join("kanso-hako-kanso-list");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("a directory of its own");
+    std::fs::write(
+        root.join("hako.lock"),
+        "acme/widgets v0.2.0 abc123def4567890 git\nb/c fix-thing 99aabbccddeeff00 git\n",
+    )
+    .expect("the lock writes");
+
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "hako", "--"])
+        .arg(&root)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("kanso runs");
+
+    assert_eq!(
+        String::from_utf8_lossy(&done.stdout),
+        "acme/widgets v0.2.0 abc123def456 git\n\
+         b/c fix-thing 99aabbccddee git (interim pin: not a release)\n",
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+}
+
+/// An empty lock says what to do about it.
+#[test]
+fn the_kanso_listing_says_when_nothing_is_pinned() {
+    let root = std::env::temp_dir().join("kanso-hako-kanso-empty");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("a directory of its own");
+    std::fs::write(root.join("hako.lock"), "").expect("the lock writes");
+
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "hako", "--"])
+        .arg(&root)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("kanso runs");
+
+    assert_eq!(
+        String::from_utf8_lossy(&done.stdout),
+        "hako.lock pins nothing — run `kanso install`\n",
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+}
