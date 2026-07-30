@@ -476,7 +476,7 @@ struct Backend<'a> {
 /// the runtime). Returns the value register to hand to `ret` — threading
 /// through the helper keeps the IR linear.
 fn release_cells(f: &mut FnEmit, value: &str) -> String {
-    if f.lazy_cells.is_empty() || f.parsed.contains(value) {
+    if f.lazy_cells.is_empty() || f.parsed.contains_key(value) {
         return value.to_string();
     }
     let cells = f.lazy_cells.clone();
@@ -497,7 +497,9 @@ struct FnEmit {
     versions: HashMap<String, String>,
     sets: HashMap<String, Set>,
     /// Temps carrying the by-value %parsed type rather than a boxed KValue.
-    parsed: std::collections::HashSet<String>,
+    /// Operands living in the by-value convention, and the record type
+    /// each one holds — boxing one back needs to name its type.
+    parsed: std::collections::HashMap<String, String>,
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
@@ -525,7 +527,7 @@ impl FnEmit {
             cur_label: "entry".to_string(),
             versions: HashMap::new(),
             sets: HashMap::new(),
-            parsed: std::collections::HashSet::new(),
+            parsed: std::collections::HashMap::new(),
             origin_prefix: String::new(),
             file: String::new(),
             ret_ty: "%KValue".to_string(),
@@ -563,12 +565,16 @@ impl FnEmit {
         self.versions.get(name).cloned()
     }
 
-    fn record_parsed(&mut self, operand: &str) {
-        self.parsed.insert(operand.to_string());
+    fn record_parsed(&mut self, operand: &str, ty: &str) {
+        self.parsed.insert(operand.to_string(), ty.to_string());
     }
 
     fn is_parsed(&self, operand: &str) -> bool {
-        self.parsed.contains(operand)
+        self.parsed.contains_key(operand)
+    }
+
+    fn parsed_ty(&self, operand: &str) -> Option<&str> {
+        self.parsed.get(operand).map(String::as_str)
     }
 
     fn record(&mut self, operand: &str, set: Set) {
@@ -673,6 +679,43 @@ impl<'a> Backend<'a> {
         })
     }
 
+    /// Undo the by-value convention: rebuild the record the two words hold.
+    /// The type is whatever produced the value, which the escape analysis
+    /// already knows, because only a returnable type is ever in this shape.
+    fn box_parsed(&self, f: &mut FnEmit, e: &str) -> String {
+        let ty = f.parsed_ty(e).expect("a parsed operand came from a returnable group").to_string();
+        let ty = ty.as_str();
+        let id = self.type_ids[ty];
+        let w0 = f.tmp();
+        f.line(&format!("{w0} = extractvalue %parsed {e}, 0"));
+        let w1 = f.tmp();
+        f.line(&format!("{w1} = extractvalue %parsed {e}, 1"));
+        let pos = f.tmp();
+        f.line(&format!("{pos} = lshr i64 {w0}, 8"));
+        let vtag = f.tmp();
+        f.line(&format!("{vtag} = and i64 {w0}, 255"));
+        let f0a = f.tmp();
+        f.line(&format!("{f0a} = insertvalue %KValue undef, i64 0, 0"));
+        let f0 = f.tmp();
+        f.line(&format!("{f0} = insertvalue %KValue {f0a}, i64 {pos}, 1"));
+        let f1a = f.tmp();
+        f.line(&format!("{f1a} = insertvalue %KValue undef, i64 {vtag}, 0"));
+        let f1 = f.tmp();
+        f.line(&format!("{f1} = insertvalue %KValue {f1a}, i64 {w1}, 1"));
+        let arr = f.tmp();
+        f.line(&format!("{arr} = alloca [2 x %KValue]"));
+        let p0 = f.tmp();
+        f.line(&format!("{p0} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 0"));
+        f.line(&format!("store %KValue {f0}, ptr {p0}"));
+        let p1 = f.tmp();
+        f.line(&format!("{p1} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 1"));
+        f.line(&format!("store %KValue {f1}, ptr {p1}"));
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
+        f.record(&t, REC);
+        t
+    }
+
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
         // A string this group builds by joining onto itself needs its seed
         // converted where it enters from outside: a builder writes into the
@@ -714,6 +757,19 @@ impl<'a> Backend<'a> {
             f.line(&format!("{raw} = select i1 {is_none}, i64 256, i64 {payload}"));
             return format!("i64 {raw}");
         }
+        // A register-returned record reaching a slot that wants an ordinary
+        // value has to be built back into one. The two words carry the whole
+        // record — `(field0.payload << 8 | field1.tag, field1.payload)` — so
+        // nothing is lost, but only a real record can be dispatched on, and a
+        // getter is exactly the caller that dispatches.
+        let boxed;
+        let e = match f.is_parsed(e) && self.escape.carries_ty(callee, arity, i).is_none() {
+            true => {
+                boxed = self.box_parsed(f, e);
+                boxed.as_str()
+            }
+            false => e,
+        };
         if self.escape.carries_ty(callee, arity, i).is_some() {
             if f.is_parsed(e) {
                 return format!("%parsed {e}");
@@ -1533,6 +1589,8 @@ impl<'a> Backend<'a> {
         match crate::ast::getter_field(name) {
             Some(field) if arity == 1 => {
                 let (lit, _len) = self.intern(&format!("{field}\0"));
+                // a getter never takes the by-value convention, so its
+                // parameter is already an ordinary value here
                 f.line(&format!("call void @k_no_field(%KValue %x0, ptr @{lit})"));
             }
             _ => {
@@ -1663,7 +1721,12 @@ impl<'a> Backend<'a> {
     /// Pack a register-returnable construction into its by-value form for an
     /// argument position: same two words the tail form uses, yielded as a
     /// temp instead of returned.
-    fn emit_packed_arg(&mut self, f: &mut FnEmit, args: &[Expr]) -> Result<String, String> {
+    fn emit_packed_arg(
+        &mut self,
+        f: &mut FnEmit,
+        args: &[Expr],
+        ty: &str,
+    ) -> Result<String, String> {
         let pos = self.emit_expr(f, &args[0])?;
         self.bail_on_failure(f, &pos);
         let value = self.emit_expr(f, &args[1])?;
@@ -1682,7 +1745,7 @@ impl<'a> Backend<'a> {
         f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
         f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-        f.record_parsed(&p);
+        f.record_parsed(&p, ty);
         Ok(p)
     }
 
@@ -2276,8 +2339,10 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, 0);
                     let t = f.tmp();
                     f.line(&format!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
-                    if callee_ret == "%parsed" {
-                        f.record_parsed(&t);
+                    if let Some(ty) = self.escape.returns_ty(name, 0) {
+                        if callee_ret == "%parsed" {
+                            f.record_parsed(&t, ty);
+                        }
                     }
                     f.record(&t, self.group_return_set(name, 0));
                     return Ok(t);
@@ -2626,7 +2691,12 @@ impl<'a> Backend<'a> {
                         match self.packed_arg_fields(name, n, i, arg) {
                             Some(fields) => {
                                 let fields = fields.to_vec();
-                                let p = self.emit_packed_arg(f, &fields)?;
+                                let ty = self
+                                    .escape
+                                    .carries_ty(name, n, i)
+                                    .expect("a packed argument fills a carried slot")
+                                    .to_string();
+                                let p = self.emit_packed_arg(f, &fields, &ty)?;
                                 emitted.push(String::new());
                                 packed.push(Some(p));
                             }
@@ -3363,7 +3433,14 @@ impl<'a> Backend<'a> {
             let args_ir: Vec<String> =
                 emitted.iter().enumerate().map(|(i, e)| self.call_arg(f, name, n, i, e)).collect();
             let callee_ret = self.ret_ty(name, n);
-            let beat_entry = self.beat.ids.contains_key(&(name.to_string(), n));
+            // A register-returned record comes back as two raw field words,
+            // not a tagged value, and both pops read a KValue. Reinterpreting
+            // one would hand them a pair of fields to treat as a tag and a
+            // payload, so the frontier goes unmarked instead: these calls give
+            // up the rewind rather than get it wrong.
+            let register_returned = callee_ret == "%parsed";
+            let beat_entry =
+                self.beat.ids.contains_key(&(name.to_string(), n)) && !register_returned;
             // a construction cohort: a qualified call from user code whose
             // arguments are all immutable shapes (scalars, strings) cannot
             // have its caller's storage grown by the callee, so the call's
@@ -3388,6 +3465,7 @@ impl<'a> Backend<'a> {
             // cell the caller still holds.
             let arg_heapish = heapish & !BYTES;
             let cohort_entry = !beat_entry
+                && !register_returned
                 && name.contains('/')
                 && !f.group.contains('/')
                 && !f.synthetic
@@ -3416,8 +3494,10 @@ impl<'a> Backend<'a> {
             } else {
                 t
             };
-            if callee_ret == "%parsed" {
-                f.record_parsed(&result);
+            if let Some(ty) = self.escape.returns_ty(name, n) {
+                if callee_ret == "%parsed" {
+                    f.record_parsed(&result, ty);
+                }
             }
             f.record(&result, self.group_return_set(name, n) | fails);
             return Ok(result);

@@ -1,0 +1,8 @@
+# A module that hands out a record and never reads one of its own fields.
+# That is what used to prune every getter its importers needed.
+pub type point
+  x
+  y
+
+pub fn origin _
+  point 3 4

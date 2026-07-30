@@ -103,6 +103,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     merged.fns.extend(program.fns);
     let mut merged_diags = check::check_merged(&merged, true);
     check::check_unused_private(&merged, &used, &mut merged_diags);
+    synthesize_getters(&mut merged);
     desugar_field_reads(&mut merged);
     prune_unused_getters(&mut merged);
     trmc::rewrite(&mut merged);
@@ -114,6 +115,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
             canonicalize_bare_aliases(&mut merged);
             hoist_repeated_strings(&mut merged);
             fuse_enumerable(&mut merged);
+            synthesize_getters(&mut merged);
             desugar_field_reads(&mut merged);
             prune_unused_getters(&mut merged);
             trmc::rewrite(&mut merged);
@@ -204,6 +206,7 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
+    synthesize_getters(&mut program);
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
@@ -274,6 +277,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
+    synthesize_getters(&mut program);
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
@@ -334,7 +338,15 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
 /// An enrollment clone re-declares a type it does not own, so it is skipped
 /// — the getter belongs to the module that declared the fields, and a
 /// second identical arm would collide with the first.
+/// Runs immediately before every `desugar_field_reads`, which is the point a
+/// read becomes a call and so the point the getter has to exist. It has to run
+/// more than once because a module that exposes a record but never reads its
+/// own fields prunes every getter it should have handed to its importers, and
+/// the importer is a later program. Declaring one twice is harmless by
+/// construction: a field already carrying a getter is left alone.
 fn synthesize_getters(program: &mut ast::Program) {
+    let already: std::collections::HashSet<String> =
+        program.fns.iter().filter(|f| f.is_getter()).map(|f| f.name.clone()).collect();
     let mut arms = Vec::new();
     for ty in &program.types {
         if ty.synthetic || ty.origin.is_some() {
@@ -350,6 +362,9 @@ fn synthesize_getters(program: &mut ast::Program) {
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
+            if already.contains(&ast::getter_name(field)) {
+                continue;
+            }
             arms.push(ast::FnDecl {
                 name: ast::getter_name(field),
                 is_pub: true,
@@ -2334,6 +2349,7 @@ fn compile_module_inner(
     }
     let mut diags = check::check_merged(&merged, require_main);
     check::check_unused_private(&merged, &used, &mut diags);
+    synthesize_getters(&mut merged);
     desugar_field_reads(&mut merged);
     prune_unused_getters(&mut merged);
     trmc::rewrite(&mut merged);
@@ -2350,6 +2366,7 @@ fn compile_module_inner(
     canonicalize_bare_aliases(&mut merged);
     hoist_repeated_strings(&mut merged);
     fuse_enumerable(&mut merged);
+    synthesize_getters(&mut merged);
     desugar_field_reads(&mut merged);
     prune_unused_getters(&mut merged);
     trmc::rewrite(&mut merged);

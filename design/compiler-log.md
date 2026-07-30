@@ -11479,3 +11479,50 @@ The test asks the compiler for the spelling rather than writing it out, so
 changing the encoding cannot leave it behind hunting for a string nothing
 produces any more. Making identity structural stays open; this makes it a
 choice about the design rather than a race against the next diagnostic.
+
+## Reading a field of somebody else's record
+
+Accessors became functions in the sixteen-rulings session, and the feature
+worked only inside the module that declared the type. Every module boundary
+broke it, std included: `io/exit_status 3` then `.code` failed on both
+engines, and a two-file program of eight lines failed differently on each —
+`unknown name Get_x` from the interpreter, `Get_x is not yet supported` from
+native. No library could expose a record anyone could read.
+
+Three defects, found one behind the other, each hiding the next.
+
+**Getters did not survive into the program that reads them.** They are
+synthesized per program and pruned where unreferenced, so a module that hands
+out a record and never reads one of its own fields prunes every getter its
+importers need — and the importer is a later program. The invariant is that a
+getter has to exist immediately before every `desugar_field_reads`, which is
+the point a read becomes a call. There are seven such points and only some had
+synthesis in front of them. All seven do now, idempotently.
+
+**A register-returned record was handed to the arena pops.** `k_beat_pop` and
+`k_cohort_pop` read a KValue; a by-value record is two raw field words. LLVM
+refused the module, which was the lucky outcome — reinterpreting the pair as a
+tag and a payload is what the types were asking for. Those calls now leave the
+frontier unmarked and give up the rewind instead. Welfare did not move.
+
+**A getter took the by-value convention, and that one answered wrongly.**
+The convention lets a caller pass a record's fields in registers because the
+callee's signature names the type. A getter is the one function that cannot
+take that on trust: its group is reachable with a record of any type, and
+reading `.x` off a one-field `label` unpacked two words and printed
+38877872192 where the interpreter said `geo/label has no field x`. Silent
+wrong answers are worse than the crash that preceded them, and this one was
+reachable only after the first fix — the bug was already there, waiting behind
+a name error. Getters are now excluded from the convention, and a record that
+arrives in registers is built back into one at the call site.
+
+A fourth change was written and then deleted. It made the field-error
+diagnostic name the converted parameter rather than the raw one, which was
+correct while getters still carried types and became dead the moment they
+stopped. Breaking it changed nothing, which is how it was caught.
+
+`tests/golden/fields/` holds both halves — the read that works and the read
+that must be refused — and both engines are held to both. The corpus had no
+cross-module field read at all, which is why the getter-name guard could not
+see this path; it now covers it. Each surviving fix was broken alone and
+watched fail.

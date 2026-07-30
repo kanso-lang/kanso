@@ -1,0 +1,4 @@
+import "./geo"
+
+p = geo/origin 0
+print "{p.x} {p.y}"
