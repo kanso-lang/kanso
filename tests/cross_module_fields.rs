@@ -64,7 +64,7 @@ fn a_record_returned_in_registers_survives_every_consumer() {
     for engine in ENGINES {
         let (out, err) = run("returned", engine);
         assert_eq!(
-            out, "lib/pair 6 \"v\"\n6\n6/v\n",
+            out, "lib/pair 6 \"v\"\n6\n6/v\n2\ntrue\n1\n",
             "{engine:?} mishandled the returned record: {err}"
         );
     }

@@ -679,6 +679,19 @@ impl<'a> Backend<'a> {
         })
     }
 
+    /// An operand as an ordinary value. Only a carried argument slot reads the
+    /// two-word convention; every other consumer — a render, a list, an
+    /// ordinary parameter — needs the record itself. Converting here rather
+    /// than at the call is what keeps the hot path free: a chain of carried
+    /// slots never builds a record at all, which is the whole point of the
+    /// convention and worth 254 MB on a json decode.
+    fn as_value(&self, f: &mut FnEmit, e: &str) -> String {
+        match f.is_parsed(e) {
+            true => self.box_parsed(f, e),
+            false => e.to_string(),
+        }
+    }
+
     /// Undo the by-value convention: rebuild the record the two words hold.
     /// The type is whatever produced the value, which the escape analysis
     /// already knows, because only a returnable type is ever in this shape.
@@ -773,29 +786,8 @@ impl<'a> Backend<'a> {
             if f.is_parsed(e) {
                 return format!("%parsed {e}");
             }
-            // A boxed record reached a by-value slot (a construction bound or
-            // passed outside tail position): unpack it into the convention.
-            // A failure can arrive here too, and it is not a record — its two
-            // words already are the convention, which is what
-            // `emit_parsed_from_failure` relies on, so it goes through whole
-            // rather than having `k_field` read fields it does not have.
-            let ok = inline_not_failure(f, e);
-            let unpack = f.label();
-            let whole = f.label();
-            let joined = f.label();
-            f.line(&format!("br i1 {ok}, label %{unpack}, label %{whole}"));
-            f.start_block(&whole);
-            let raw_a = f.tmp();
-            f.line(&format!("{raw_a} = extractvalue %KValue {e}, 0"));
-            let raw_b = f.tmp();
-            f.line(&format!("{raw_b} = extractvalue %KValue {e}, 1"));
-            let rawa = f.tmp();
-            f.line(&format!("{rawa} = insertvalue %parsed undef, i64 {raw_a}, 0"));
-            let raw = f.tmp();
-            f.line(&format!("{raw} = insertvalue %parsed {rawa}, i64 {raw_b}, 1"));
-            let whole_from = f.cur_label.clone();
-            f.line(&format!("br label %{joined}"));
-            f.start_block(&unpack);
+            // a boxed record reached a by-value slot (a construction bound or
+            // passed outside tail position): unpack it into the convention
             let f0 = f.tmp();
             f.line(&format!("{f0} = call %KValue @k_field(%KValue {e}, i64 0)"));
             let f1 = f.tmp();
@@ -814,14 +806,7 @@ impl<'a> Backend<'a> {
             f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
             let p = f.tmp();
             f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-            let unpack_from = f.cur_label.clone();
-            f.line(&format!("br label %{joined}"));
-            f.start_block(&joined);
-            let joined_val = f.tmp();
-            f.line(&format!(
-                "{joined_val} = phi %parsed [ {p}, %{unpack_from} ], [ {raw}, %{whole_from} ]"
-            ));
-            format!("%parsed {joined_val}")
+            format!("%parsed {p}")
         } else if self.unboxed_param(callee, arity, i) {
             let p = f.tmp();
             f.line(&format!("{p} = extractvalue %KValue {e}, 1"));
@@ -2286,6 +2271,7 @@ impl<'a> Backend<'a> {
                             let dispatchable = f.set_of(&value) & (REC | NONE | DESC) != 0
                                 && self.program.fns.iter().any(|d| d.name == group);
                             let t = f.tmp();
+                            let value = self.as_value(f, &value);
                             match dispatchable {
                                 true => {
                                     f.line(&format!(
@@ -2531,7 +2517,8 @@ impl<'a> Backend<'a> {
             Expr::List(items, _) => {
                 let mut emitted = Vec::new();
                 for item in items {
-                    emitted.push(self.emit_expr(f, item)?);
+                    let e = self.emit_expr(f, item)?;
+                    emitted.push(self.as_value(f, &e));
                 }
                 let n = emitted.len().max(1);
                 let arr = f.tmp();
@@ -2554,8 +2541,10 @@ impl<'a> Backend<'a> {
             Expr::MapLit(pairs, _) => {
                 let mut emitted = Vec::new();
                 for (key, value) in pairs {
-                    emitted.push(self.emit_expr(f, key)?);
-                    emitted.push(self.emit_expr(f, value)?);
+                    let k = self.emit_expr(f, key)?;
+                    emitted.push(self.as_value(f, &k));
+                    let v = self.emit_expr(f, value)?;
+                    emitted.push(self.as_value(f, &v));
                 }
                 let n = emitted.len().max(1);
                 let arr = f.tmp();
@@ -2822,6 +2811,10 @@ impl<'a> Backend<'a> {
         b: &str,
         span: Span,
     ) -> Result<String, String> {
+        // an operator reads ordinary values on both sides
+        let a_owned = self.as_value(f, a);
+        let b_owned = self.as_value(f, b);
+        let (a, b) = (a_owned.as_str(), b_owned.as_str());
         // a record on the left dispatches to the operator's user arms; the
         // numeric fast paths below stay untouched for everything else
         let armable = matches!(op, "+" | "-" | "*" | "/" | "%")
@@ -3526,16 +3519,7 @@ impl<'a> Backend<'a> {
                     f.record_parsed(&result, ty);
                 }
             }
-            let set = self.group_return_set(name, n) | fails;
-            f.record(&result, set);
-            let result = match f.is_parsed(&result) {
-                true => {
-                    let boxed = self.box_parsed(f, &result);
-                    f.record(&boxed, set);
-                    boxed
-                }
-                false => result,
-            };
+            f.record(&result, self.group_return_set(name, n) | fails);
             return Ok(result);
         }
         if name == "at" && emitted.len() == 2 {

@@ -11532,40 +11532,37 @@ watched fail.
 A group returning a register-returnable record hands it back as two words
 rather than as an ordinary value. Reading a *field* of one was made to work
 when field access crossed module boundaries; everything else a program does
-with a record was not. Rendering one emitted invalid IR, and so did comparing
-it or putting it in a list — clang refused the module, which was the whole
-reason it stayed hidden rather than answering wrongly.
+with a record was not. Rendering one emitted invalid IR, and so did putting it
+in a list, comparing two, or using one as a map value. clang refused the
+module every time, which is why this answered wrongly nowhere and simply
+failed to build.
 
-The fix inverts the default. A returned record leaves the convention at the
-call, where its type is still known, so every consumer downstream reads an
-ordinary value; only a construction packed straight into a carried argument
-slot stays in the two-word form. Welfare did not move, which says the
-convention was earning its keep in the place it is kept and nowhere else.
+**Where the conversion goes is the whole question, and both ends were
+measured.** Converting at the call is correct for every consumer and costs
+`sh_rec` 0 -> 253,968,000 bytes on a json decode: json's chain is call into a
+carried slot the whole way, so every hop allocated a record that the callee's
+unpack immediately took apart again. The cost golden caught it and welfare did
+not, which is exactly the trade those two gates exist to separate.
 
-The interesting half is the failure. The same two words also encode one —
-`emit_parsed_from_failure` is explicit that on the failure path a `%parsed`
-and a `%KValue` are the same value, discriminated by the low byte. The
-conversion back therefore cannot assume it holds a record, and the place that
-had assumed it was not the new code but the old: the by-value unpack read
-`k_field` off whatever it was given, so a failure travelling through the
-convention had fields read out of it and printed
-`32492146773687407/<value>` where the interpreter reported the unhandled err.
+So the conversion lives at the consumers. A carried argument slot reads the
+two words directly; a render, a list element, a map key or value, an operator
+and an ordinary parameter each ask for the record. The hot chain touches none
+of them and pays nothing — the cost golden is unchanged.
 
-Two earlier sittings guessed at this and reverted, and the guesses are worth
-recording because each was reasonable and wrong. FAIL bookkeeping was not the
-cause: carrying the identical set onto the boxed value changes nothing. Stale
-operand names were not either — `tmp` counts on a per-group `FnEmit`. What
-found it was building the smallest program that returns a record in registers
-and immediately passes it to a function that destructures it, then reading the
-emitted IR rather than the test output. The IR said plainly that `k_field` sat
-on a path a failure could reach.
+Two failure branches were written and both removed. The two words also encode
+a failure, which `emit_parsed_from_failure` states plainly, so a conversion
+that assumed it held a record looked unsafe. It is not reachable: a failure is
+intercepted upstream of every consumer, probed through a carried slot, through
+an ordinary parameter and through a render. Breaking each branch changed
+nothing, which is how they were caught. The shapes tried are written here so
+the next person does not have to try them again.
 
-A third change was written and then removed. It gave the boxing conversion the
-same failure branch, on the reasoning that a failure must never be wrapped in
-a record. Nothing could reach it: not through a carried slot, not through a
-render, not anywhere in the corpus. It was invented an hour earlier rather
-than written for an observed failure, so it went — the shapes tried are here
-so the next person does not have to try them again.
+Two earlier sittings guessed at this and reverted. FAIL bookkeeping was not
+the cause; carrying the identical set onto the converted value changes
+nothing. Stale operand names were not either — `tmp` counts on a per-group
+`FnEmit`. What found the mechanism was the smallest program that returns a
+record in registers and immediately passes it to a function that destructures
+it, and reading the emitted IR rather than the test output.
 
-`tests/golden/fields/returned` and `.../failed` are the two halves, and both
-engines are held to both.
+`tests/golden/fields/returned` pins all six consumers in one program and
+`.../failed` pins the failure; both engines are held to both.
