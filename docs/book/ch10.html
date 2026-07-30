@@ -9,8 +9,6 @@ extra_css: /book/book.css
 
 <p>nine chapters have asked you to give things up. no mutation. no loops—recursion is the only way to repeat yourself. seven small overloads where another language writes one <code>switch</code>. a reasonable person reads all that and waits for the bill: elegance this thorough must cost something once the program actually runs.</p>
 
-<p>here is the bill.</p>
-
 <table class="bench-table">
   <caption>milliseconds per decode, min of an interleaved best-of-25 run, one 188kb json document, m-series mac. the recipe is in the repo—you can run it yourself.</caption>
   <thead>
@@ -24,7 +22,7 @@ extra_css: /book/book.css
   </tbody>
 </table>
 
-<p>the tax is negative. a pure, values-only language—failure handled for you, no mutation, not one named buffer—decodes json a hair faster than <code>serde_json</code>, the parser a rust team hand-tunes for exactly this job. that is the whole chapter in one table. everything after it answers two questions: how, and how do we keep it true.</p>
+<p>the tax is negative. a pure, values-only language—failure handled for you, no mutation, not one named buffer—decodes json a hair faster than <code>serde_json</code>, the parser a rust team hand-tunes for exactly this job. the rest of the chapter answers two questions: how, and how do we keep it true.</p>
 
 <p>the honest asterisks, up front. the margin is small. of the 25 interleaved pairs, 24 went to kanso; the medians were 0.89ms to serde's 0.93ms. this is one document on one machine—"faster than serde_json on this gauntlet," not "the fastest json parser alive." and the memory stays flat while it works: about 5.8mb whether you decode once or a hundred and fifty times, because each decode hands its scratch space back before the next one starts.</p>
 
@@ -151,7 +149,7 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
   ]</code></pre>
 </div>
 
-<p>overloads in the source, one jump in the machine, at any scale. it is the same thing every chapter has landed: kanso deletes things. commas, wrappers, exceptions, mocks—and now the runtime cost of its own abstractions. what's left in the profile is only the decisions.</p>
+<p>overloads in the source, one jump in the machine, at any scale. it is the same thing every chapter has landed: kanso deletes things. commas, wrappers, exceptions, mocks—and now the runtime cost of its own abstractions.</p>
 
 <p>one more symbol is worth a glance. <code>k_b_push_mut</code>, sitting third from the top, is list-append that extends the list <em>in place</em> instead of copying it—the parser's accumulator grows without ever cloning itself, which is a big part of why <code>memmove</code> fell so far down. that trick rests on a lineage of published papers, and the full story—how the language's guardrails let the compiler get away with it, and which papers we raided to get there—lives on <a href="/compiler.html">the compiler page</a>. this chapter hands you the receipt; that page opens up the machine.</p>
 
