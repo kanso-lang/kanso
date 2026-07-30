@@ -1,0 +1,4 @@
+error[syntax]: `=` binds a name; `==` asks whether two values are equal
+  --> equality_binds.kso:1:26
+   1 | pub play = print "{if (1 = 1) "y" "n"}"
+                                ^

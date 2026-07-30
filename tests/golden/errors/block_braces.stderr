@@ -1,0 +1,4 @@
+error[syntax]: `print` is not a literal: a map's keys are literals, and a dynamic one is built with `put` — a block is indentation rather than braces
+  --> block_braces.kso:1:25
+   1 | pub play = if (1 > 0) { print "y" } else { print "n" }
+                               ^

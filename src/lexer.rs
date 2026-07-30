@@ -648,6 +648,23 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             }
             continue;
         }
+        // `f(x)` is how every C-shaped language spells a call, so it is the
+        // first thing somebody writes here, and the general spacing rule
+        // answers it by talking about spaces. Application is a space.
+        if let (Tok::Ident(name), Tok::LParen) = (prev, next) {
+            if gap == 0 {
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    format!(
+                        "application is a space, so `{name} x` calls `{name}` — \
+                         `{name}(x)` reads as `{name}` applied to nothing, then a \
+                         parenthesised `x`"
+                    ),
+                    Span { line, col: next_span.col },
+                ));
+                continue;
+            }
+        }
         let required = required_gap(prev, next);
         if gap != required {
             let wanted = match required {
