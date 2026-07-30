@@ -1,0 +1,4 @@
+error[name]: `failed?` reads a failure, which only a test may do — it belongs in a `_test.kso` file, because a package may not turn its own err into a value
+  --> harness_in_production.kso:7:20
+   7 | pub play = print "{failed? (parse "x")}"
+                          ^
