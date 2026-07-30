@@ -11850,6 +11850,15 @@ no answer for it — it is a mistake rather than a case. `chars` already answers
 the characters, and having `split s ""` mean the same thing would be a second
 way to say one thing. It says so instead, and names `chars`.
 
+The sweep itself needed correcting twice, both times for the same reason —
+a probe that does not probe. `list/to_list (list/repeat 5)` forces an
+infinite generator, which is not an awkward call but a different program that
+never ends; it timed out on both engines, and comparing two timeouts found
+them equal, so the run reported agreement. CI killed the job instead. A
+timeout is now a finding on whichever engine it happens, because calling two
+of them agreement hides the worst answer a legal call can give, and the script
+prints each probe as it goes so a kill says which one.
+
 Worth noting how it was introduced: `split` shipped four sittings ago with
 ten assertions covering separators of one and two characters, the empty
 subject, both ends and the join/split law in both directions. None of them

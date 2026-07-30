@@ -71,8 +71,11 @@ PROBES = [
     ("list", "list/to_list (list/zip [] [1])"),
     ("list", "list/tally []"),
     ("list", 'list/tally ["a" "a" "b"]'),
-    ("list", "list/to_list (list/range [])"),
-    ("list", "list/to_list (list/repeat 5)"),
+    # `repeat` and `iterate` are infinite by design, so they are taken from
+    # rather than forced — forcing one is not an awkward call, it is a
+    # different program that never ends
+    ("list", "list/to_list (list/take (list/repeat 5) 3)"),
+    ("list", "list/to_list (list/take (list/repeat 5) 0)"),
     # map: reads that miss, and the order entries come back in
     ("list", 'list/to_h [["b" 2] ["a" 1]]'),
     ("list", 'list/transform_values { "a":1 } (v -> v + 1)'),
@@ -115,19 +118,30 @@ def run(source, engine):
 def main():
     if not KANSO.exists():
         sys.exit("build the toolchain first: cargo build --release")
-    disagreed = []
+    disagreed, hung = [], []
     for module, expr in PROBES:
+        print(f"  probe: {expr}", flush=True)
         source = f'import "std/{module}"\n\npub play = print "{{{expr}}}"\n'
         native = run(source, [])
         interp = run(source, ["--interp"])
-        if native != interp:
+        # Two timeouts compare equal, and calling that agreement would hide
+        # the worst answer a legal call can give. A call that does not return
+        # is a finding on whichever engine it happens.
+        if native[0] == "TIMED OUT" or interp[0] == "TIMED OUT":
+            hung.append((expr, native, interp))
+        elif native != interp:
             disagreed.append((expr, native, interp))
-    print(f"{len(PROBES)} awkward calls, {len(disagreed)} disagree")
+    print(
+        f"{len(PROBES)} awkward calls, {len(disagreed)} disagree, {len(hung)} never returned"
+    )
+    for expr, native, interp in hung[:10]:
+        print(f"  never returned: {expr}")
+        print(f"    native={native[0]!r} interp={interp[0]!r}")
     for expr, native, interp in disagreed[:20]:
         print(f"  {expr}")
         print(f"    native: {native[1]!r} {native[2].strip()[:90]!r}")
         print(f"    interp: {interp[1]!r} {interp[2].strip()[:90]!r}")
-    if disagreed:
+    if disagreed or hung:
         print()
         print("the interpreter is the oracle: these are native's to match.")
         return 1
