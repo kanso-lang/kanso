@@ -11634,3 +11634,27 @@ samples and the panels quoting them. A trace that names a file and a line is
 pinned by every golden that prints it, which is a property of the design
 worth knowing before editing anything in std: the blast radius of a stdlib
 edit is every recorded diagnostic that passes through the file.
+
+## `!=` was declared and never lexed
+
+`!=` sits in the lexer's operator table and in the parser's comparison list,
+and typing it produced `canonical form requires exactly one space here`. The
+character dispatch turns `!` into the strict-index sigil before the operator
+table is ever consulted, so the two characters were split and the `=` read as
+a bind. The fix is the shape already used two lines below it for `=` and `==`:
+a `!` ends an index only when an `=` does not follow.
+
+Found while writing a version check in kanso, where `s != ""` is the natural
+way to say a string is not empty. Nothing in the language could say it: the
+alternative is `== false` around an equality, which is what the absence had
+been quietly teaching people to write.
+
+A golden had been recording the bug. `return_two_ifs` uses `n != 0` and its
+`.stderr` held the spacing complaint rather than the diagnostic the fixture
+was written for — so the fixture's author expected `!=` to work, and the
+golden pinned the lexer's answer instead of the compiler's. Regenerated, and
+it now shows what it was for.
+
+`tests/golden/micro/not_equal.kso` writes the two uses of `!` next to each
+other, because that adjacency is the whole subtlety: `xs[1]! != 2` has to be
+an index, a comparison and nothing else.
