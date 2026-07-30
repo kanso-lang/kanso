@@ -1,0 +1,15 @@
+# `pair` is register-returnable: two fields, never a field of another record,
+# only ever destructured. So `make` hands its answer back in two registers
+# rather than as an ordinary value, and every consumer below has to cope.
+pub type pair
+  pos
+  value
+
+pub fn make 0
+  err "empty"
+
+pub fn make n
+  pair n "v"
+
+pub fn joined (pair p v)
+  "{p}/{v}"

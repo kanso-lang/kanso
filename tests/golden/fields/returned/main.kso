@@ -1,0 +1,6 @@
+import "./lib"
+
+made = lib/make 6
+print "{made}"
+>> print "{made.pos}"
+>> print (lib/joined made)

@@ -712,7 +712,6 @@ impl<'a> Backend<'a> {
         f.line(&format!("store %KValue {f1}, ptr {p1}"));
         let t = f.tmp();
         f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
-        f.record(&t, REC);
         t
     }
 
@@ -774,8 +773,29 @@ impl<'a> Backend<'a> {
             if f.is_parsed(e) {
                 return format!("%parsed {e}");
             }
-            // a boxed record reached a by-value slot (a construction bound or
-            // passed outside tail position): unpack it into the convention
+            // A boxed record reached a by-value slot (a construction bound or
+            // passed outside tail position): unpack it into the convention.
+            // A failure can arrive here too, and it is not a record — its two
+            // words already are the convention, which is what
+            // `emit_parsed_from_failure` relies on, so it goes through whole
+            // rather than having `k_field` read fields it does not have.
+            let ok = inline_not_failure(f, e);
+            let unpack = f.label();
+            let whole = f.label();
+            let joined = f.label();
+            f.line(&format!("br i1 {ok}, label %{unpack}, label %{whole}"));
+            f.start_block(&whole);
+            let raw_a = f.tmp();
+            f.line(&format!("{raw_a} = extractvalue %KValue {e}, 0"));
+            let raw_b = f.tmp();
+            f.line(&format!("{raw_b} = extractvalue %KValue {e}, 1"));
+            let rawa = f.tmp();
+            f.line(&format!("{rawa} = insertvalue %parsed undef, i64 {raw_a}, 0"));
+            let raw = f.tmp();
+            f.line(&format!("{raw} = insertvalue %parsed {rawa}, i64 {raw_b}, 1"));
+            let whole_from = f.cur_label.clone();
+            f.line(&format!("br label %{joined}"));
+            f.start_block(&unpack);
             let f0 = f.tmp();
             f.line(&format!("{f0} = call %KValue @k_field(%KValue {e}, i64 0)"));
             let f1 = f.tmp();
@@ -794,7 +814,14 @@ impl<'a> Backend<'a> {
             f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
             let p = f.tmp();
             f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-            format!("%parsed {p}")
+            let unpack_from = f.cur_label.clone();
+            f.line(&format!("br label %{joined}"));
+            f.start_block(&joined);
+            let joined_val = f.tmp();
+            f.line(&format!(
+                "{joined_val} = phi %parsed [ {p}, %{unpack_from} ], [ {raw}, %{whole_from} ]"
+            ));
+            format!("%parsed {joined_val}")
         } else if self.unboxed_param(callee, arity, i) {
             let p = f.tmp();
             f.line(&format!("{p} = extractvalue %KValue {e}, 1"));
@@ -3499,7 +3526,16 @@ impl<'a> Backend<'a> {
                     f.record_parsed(&result, ty);
                 }
             }
-            f.record(&result, self.group_return_set(name, n) | fails);
+            let set = self.group_return_set(name, n) | fails;
+            f.record(&result, set);
+            let result = match f.is_parsed(&result) {
+                true => {
+                    let boxed = self.box_parsed(f, &result);
+                    f.record(&boxed, set);
+                    boxed
+                }
+                false => result,
+            };
             return Ok(result);
         }
         if name == "at" && emitted.len() == 2 {

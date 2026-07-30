@@ -55,6 +55,38 @@ fn a_field_the_record_lacks_is_reported_not_invented() {
     assert_eq!(answers[0], answers[1], "the engines disagree on a missing field");
 }
 
+/// A register-returnable record comes back in two registers rather than as an
+/// ordinary value, and every consumer downstream reads an ordinary one. Render
+/// it, read a field of it, and hand it to a function that destructures it —
+/// the three shapes that used to emit invalid IR or, worse, a number.
+#[test]
+fn a_record_returned_in_registers_survives_every_consumer() {
+    for engine in ENGINES {
+        let (out, err) = run("returned", engine);
+        assert_eq!(
+            out, "lib/pair 6 \"v\"\n6\n6/v\n",
+            "{engine:?} mishandled the returned record: {err}"
+        );
+    }
+}
+
+/// The same two words also encode a failure, so nothing downstream may treat
+/// one as a record. Native used to read fields off it and print a number.
+#[test]
+fn a_failure_in_the_register_convention_stays_a_failure() {
+    let mut answers = Vec::new();
+    for engine in ENGINES {
+        let (out, err) = run("failed", engine);
+        assert!(out.is_empty(), "{engine:?} printed something for a failure: {out:?}");
+        assert!(
+            err.contains("unhandled err reached main: \"empty\""),
+            "{engine:?} lost the failure: {err:?}"
+        );
+        answers.push(err);
+    }
+    assert_eq!(answers[0], answers[1], "the engines disagree on the failure");
+}
+
 /// The corpus had no program that read a field across a module boundary, so
 /// the guard in getter_identity.rs could not see this path — and this is the
 /// path where the internal name is most likely to escape, because it is the
@@ -65,7 +97,7 @@ fn neither_engine_shows_the_getter_its_internal_name() {
         let name = kanso::ast::getter_name("x");
         name.strip_suffix('x').expect("a getter is named from its field").to_string()
     };
-    for fixture in ["reads", "missing"] {
+    for fixture in ["reads", "missing", "returned", "failed"] {
         for engine in ENGINES {
             let (out, err) = run(fixture, engine);
             assert!(
