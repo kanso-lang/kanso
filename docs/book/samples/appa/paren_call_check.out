@@ -1,4 +1,4 @@
-error[formatting]: canonical form requires exactly one space here
+error[formatting]: application is a space, so `print x` calls `print` — `print(x)` reads as `print` applied to nothing, then a parenthesised `x`
   --> paren_call_check.kso:1:6
    1 | print("hi")
             ^
