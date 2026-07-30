@@ -1,19 +1,49 @@
 use kanso::{ast, diag, eval};
 use std::process::ExitCode;
 
+const VERBS: [&str; 8] = ["run", "check", "test", "build", "install", "list", "update", "repl"];
+
+const USAGE: &str = "usage: kanso <verb> [arguments]
+
+  run <file|dir> [--plan|--interp]   compile and run; --plan shows the effects
+                                     it would perform, --interp uses the oracle
+  check <file|dir>                   report what run would refuse, and stop
+  test <file|dir>                    evaluate every `test_*` constant
+  build <file|dir> [--release]       write a native binary beside the source
+  repl                               evaluate expressions as you type them
+
+  install <dir> [--from owner/repo@branch]
+                                     resolve the imports, fetch them, write
+                                     the lock; --from pins one to a branch
+  list <dir>                         what the lock pins, and what has moved on
+  update <dir> [owner/repo]          walk release pins forward, rewrite the lock
+
+";
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("repl") {
         return repl();
     }
+    // Asking for help is not a mistake, so it answers on stdout and exits
+    // clean — `kanso --help | less` showed nothing when it did neither.
+    if matches!(args.first().map(String::as_str), Some("help" | "--help" | "-h")) {
+        print!("{USAGE}");
+        return ExitCode::SUCCESS;
+    }
     let (command, file, plan, release, interp) = match parse_args(&args) {
         Some(parsed) => parsed,
         None => {
-            eprintln!(
-                "usage: kanso run <file.kso> [--plan|--interp] | kanso check <file.kso> | kanso \
-                 test <file.kso> | kanso build <file.kso> [--release] | kanso install <dir> [--from owner/repo@branch] | kanso list|update <dir> | \
-                 kanso repl"
-            );
+            // What was wrong comes before what to do about it: a bare usage
+            // dump makes the reader diff it against what they typed.
+            match args.first() {
+                None => eprintln!("kanso: no verb given"),
+                Some(verb) if VERBS.contains(&verb.as_str()) => {
+                    eprintln!("kanso: `{verb}` wants a file or directory")
+                }
+                Some(verb) => eprintln!("kanso: `{verb}` is not a verb"),
+            }
+            eprint!("{USAGE}");
             return ExitCode::from(2);
         }
     };
