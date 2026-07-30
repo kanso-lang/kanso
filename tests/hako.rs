@@ -160,3 +160,74 @@ fn install_resolves_the_highest_release_and_the_build_reads_the_cache() {
         String::from_utf8_lossy(&after.stderr)
     );
 }
+
+/// The rest of the cycle: a release lands upstream, `list` says so, `update`
+/// walks the lock forward, and the build follows — still without a network,
+/// because the cache holds what the lock names.
+#[test]
+fn list_marks_staleness_and_update_walks_the_lock_forward() {
+    let root = std::env::temp_dir().join("kanso-hako-update");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import \"acme/widgets\"\n\nprint \"{widgets/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+    let base = format!("{}/", remote.display());
+    let hako = |args: &[&str], with_remote: bool| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_kanso"));
+        command.args(args).env("KANSO_HAKO", &cache).current_dir(&app);
+        if with_remote {
+            command.env("KANSO_HAKO_REMOTE", &base);
+        } else {
+            command.env("KANSO_HAKO_REMOTE", "/nonexistent-remote/");
+        }
+        command.output().expect("kanso runs")
+    };
+
+    assert!(hako(&["install", "."], true).status.success());
+    let fresh = String::from_utf8_lossy(&hako(&["list", "."], true).stdout).into_owned();
+    assert!(fresh.contains("v0.2.0"), "{fresh}");
+    assert!(!fresh.contains("stale"), "nothing is out yet: {fresh}");
+
+    // a release lands upstream
+    let repo = remote.join("acme/widgets");
+    std::fs::write(repo.join("widgets.kso"), "pub fn greet _\n  \"widgets v3\"\n").expect("writes");
+    for args in [
+        &["add", "-A"][..],
+        &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "three"][..],
+        &["tag", "v0.3.0"][..],
+    ] {
+        assert!(Command::new("git")
+            .args(args)
+            .current_dir(&repo)
+            .output()
+            .expect("git runs")
+            .status
+            .success());
+    }
+
+    let marked = String::from_utf8_lossy(&hako(&["list", "."], true).stdout).into_owned();
+    assert!(marked.contains("stale: v0.3.0 is out"), "list did not mark it: {marked}");
+
+    assert!(hako(&["update", "."], true).status.success());
+    let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock reads");
+    assert!(lock.contains("v0.3.0"), "the lock did not move: {lock}");
+
+    // no remote: the build must still be satisfied by what update fetched
+    let built = hako(&["run", "."], false);
+    assert_eq!(
+        String::from_utf8_lossy(&built.stdout),
+        "widgets v3\n",
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+
+    // and listing works with nothing to ask
+    let offline = String::from_utf8_lossy(&hako(&["list", "."], false).stdout).into_owned();
+    assert!(offline.contains("unreachable"), "list should still answer: {offline}");
+}

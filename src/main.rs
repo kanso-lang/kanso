@@ -11,18 +11,24 @@ fn main() -> ExitCode {
         None => {
             eprintln!(
                 "usage: kanso run <file.kso> [--plan|--interp] | kanso check <file.kso> | kanso \
-                 test <file.kso> | kanso build <file.kso> [--release] | kanso install <dir> | \
+                 test <file.kso> | kanso build <file.kso> [--release] | kanso install|list|update <dir> | \
                  kanso repl"
             );
             return ExitCode::from(2);
         }
     };
-    if command == "install" {
+    if matches!(command.as_str(), "install" | "list" | "update") {
         let cache = std::env::var("KANSO_HAKO")
             .map(std::path::PathBuf::from)
             .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".hako")))
             .unwrap_or_default();
-        return match kanso::hako::install(std::path::Path::new(&file), &cache) {
+        let root = std::path::Path::new(&file);
+        let done = match command.as_str() {
+            "install" => kanso::hako::install(root, &cache),
+            "list" => kanso::hako::list(root),
+            _ => kanso::hako::update(root, &cache, hako_named().as_deref()),
+        };
+        return match done {
             Ok(report) => {
                 print!("{report}");
                 ExitCode::SUCCESS
@@ -93,6 +99,12 @@ fn main() -> ExitCode {
     run(&program, &file, &source, plan)
 }
 
+/// `kanso update <dir> [hako]` — the one verb that takes a name after its
+/// directory, so the flag loop must not judge it.
+fn hako_named() -> Option<String> {
+    std::env::args().nth(3).filter(|a| !a.starts_with("--"))
+}
+
 fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let command = args.first()?.clone();
     if command != "run"
@@ -101,11 +113,14 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
         && command != "build"
         && command != "play"
         && command != "install"
+        && command != "list"
+        && command != "update"
     {
         return None;
     }
     let file = args.get(1)?.clone();
-    let mut rest = args.iter().skip(2);
+    // `update` names a hako after its directory; every other verb takes flags
+    let mut rest = args.iter().skip(2 + usize::from(command == "update"));
     let mut plan = false;
     let mut release = false;
     let mut interp = false;
