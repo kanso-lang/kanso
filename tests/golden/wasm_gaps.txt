@@ -1,0 +1,12 @@
+# Programs the wasm engine cannot run, and the text it answers instead.
+# Read by both harnesses — tests/wasm_engine.rs under an embedded interpreter
+# and scripts/browser_differential.py under headless Chrome — so a gap is
+# stated once. A program listed here that starts passing is an error in both,
+# because a gap that closed and stayed written down is a lie about the engine.
+#
+# <path from the repo root><tab><substring the wasm engine answers>
+
+# A page has no filesystem, so a program that lists a directory cannot run
+# there. The capability is missing, not the agreement: `exists` still answers
+# (false, for everything), and every other engine matches.
+tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem
