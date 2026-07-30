@@ -4,4 +4,4 @@ fn line item cents
   "{item}: {cents}"
 
 pub fn price item
-  base_price + (length item) * 10
+  base_price + length item * 10

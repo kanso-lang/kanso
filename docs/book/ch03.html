@@ -131,8 +131,8 @@ extra_css: /book/book.css
     bob <span class="o">=</span> <span class="f">person</span> <span class="s">"bob"</span> ada
     <span class="f">ada</span><span class="o">.</span>partner <span class="o">=</span> <span class="f">bob</span>
     <span class="f">ada</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{couple.name}</span> and <span class="i">{(couple.partner).name}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{((couple.partner).partner).name}</span>"</span></code></pre>
+  <span class="f">print</span> <span class="s">"<span class="i">{couple.name}</span> and <span class="i">{couple.partner.name}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{couple.partner.partner.name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code></code></pre>

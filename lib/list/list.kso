@@ -82,8 +82,8 @@ pub fn argmin coll key
 # the predicate must be monotonic over the order — false for a prefix,
 # true for the rest — which is what lets the range halve instead of walk
 fn bisect xs p lo hi best
-  return best if (hi < lo)
-  mid = lo + ((hi - lo) / 2)
+  return best if hi < lo
+  mid = lo + (hi - lo) / 2
   here = xs[mid]!
   if (p here) (bisect xs p lo (mid - 1) here) (bisect xs p (mid + 1) hi best)
 
@@ -143,7 +143,7 @@ fn bounded_more source acc f i stop
   if (length source < i) acc (bounded_step source acc f i stop)
 
 fn bounded_step source acc f i stop
-  bounded_flat source (f acc (source[i]!)) f (i + 1) stop
+  bounded_flat source (f acc source[i]!) f (i + 1) stop
 
 pub fn fold (capped left source) init f
   fold_go (next (capped left source)) init f
@@ -179,7 +179,7 @@ pub fn fold coll init f
   fold_flat coll init f 1
 
 fn fold_flat coll acc f i
-  if (length coll < i) acc (fold_flat coll (f acc (coll[i]!)) f (i + 1))
+  if (length coll < i) acc (fold_flat coll (f acc coll[i]!) f (i + 1))
 
 fn fold_go (done _) acc _
   acc

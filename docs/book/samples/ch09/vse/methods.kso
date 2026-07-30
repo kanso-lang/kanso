@@ -30,7 +30,7 @@ fn irv_counts voters elim
 fn irv_go voters elim
   counts = irv_counts voters elim
   top = argmax counts
-  if (nvot < 2 * (counts[top])) top (irv_next voters elim counts)
+  if (nvot < 2 * counts[top]) top (irv_next voters elim counts)
 
 fn irv_next voters elim counts
   irv_go voters (push elim (min_alive counts elim))

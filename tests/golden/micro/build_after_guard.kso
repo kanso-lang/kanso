@@ -3,7 +3,7 @@ type cell
   link
 
 fn tie n
-  return none if (n < 1)
+  return none if n < 1
   pair = build
     a = cell "a" none
     b = cell "b" a

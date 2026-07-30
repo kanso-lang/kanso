@@ -83,7 +83,7 @@ fn a_program_killed_by_the_operating_system_says_what_ended_it() {
     let program = work.join("out_of_stack.kso");
     std::fs::write(
         &program,
-        "fn total n\n  return 0 if (n < 1)\n  n + total (n - 1)\n\npub play = print \"{total 2000000}\"\n",
+        "fn total n\n  return 0 if n < 1\n  n + total (n - 1)\n\npub play = print \"{total 2000000}\"\n",
     )
     .expect("program writes");
 

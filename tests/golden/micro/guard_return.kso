@@ -2,5 +2,5 @@
 pub play = print "{size 3} {size 30}"
 
 fn size n
-  return "small" if (n < 10)
+  return "small" if n < 10
   "large"

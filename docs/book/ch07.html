@@ -63,7 +63,7 @@ gomen: we do not serve pocky</code></pre>
   <span class="f">receipt</span> (<span class="f">line</span> item qty)
 
 <span class="k">fn</span> <span class="f">line</span> item qty
-  qty <span class="o">*</span> (<span class="f">price</span> item) <span class="o">+</span> service
+  qty <span class="o">*</span> price item <span class="o">+</span> service
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{checkout </span>"</span>matcha<span class="s">" 2}"</span>
 
@@ -118,9 +118,9 @@ service <span class="o">=</span> <span class="n">50</span></code></pre>
 <span class="k">fn</span> <span class="f">err?</span> _
   <span class="f">false</span>
 
-test_base_price_raw <span class="o">=</span> (<span class="f">base_price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">350</span>
+test_base_price_raw <span class="o">=</span> <span class="f">base_price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">350</span>
 
-test_dango_price <span class="o">=</span> (<span class="f">price</span> <span class="s">"dango"</span>) <span class="o">==</span> <span class="n">400</span>
+test_dango_price <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span> <span class="o">==</span> <span class="n">400</span>
 
 test_unknown_item_fails <span class="o">=</span> <span class="f">err?</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
   <div class="code-output">
@@ -139,7 +139,7 @@ test_unknown_item_fails ... ok
   <pre><code><span class="k">fn</span> <span class="f">double</span> n
   n <span class="o">*</span> <span class="n">2</span>
 
-<span class="f">test_double</span> <span class="o">=</span> (<span class="f">double</span> <span class="n">4</span>) <span class="o">==</span> <span class="n">9</span></code></pre>
+test_double <span class="o">=</span> <span class="f">double</span> <span class="n">4</span> <span class="o">==</span> <span class="n">9</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test double_test.kso</div>
     <pre><code>test_double ... FAILED (returned false)

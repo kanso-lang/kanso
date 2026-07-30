@@ -87,7 +87,7 @@ fn finish _ none
 
 fn finish cs (parsed p v)
   p2 = skip_ws cs p
-  if (p2 > (length cs)) v (fail p2 "unexpected trailing characters")
+  if (p2 > length cs) v (fail p2 "unexpected trailing characters")
 
 fn must (err reason)
   err (defect "{reason}")

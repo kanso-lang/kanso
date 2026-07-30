@@ -71,7 +71,7 @@ kanso run hello.kso  0.00s user 0.00s system  0.005 total</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"hello, <span class="i">{name}</span>"</span>
 
-<span class="f">test_greet</span> <span class="o">=</span> (<span class="f">greet</span> <span class="s">"kanso"</span>) <span class="o">==</span> <span class="s">"hello, kanso"</span></code></pre>
+test_greet <span class="o">=</span> <span class="f">greet</span> <span class="s">"kanso"</span> <span class="o">==</span> <span class="s">"hello, kanso"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test greet_test.kso</div>
     <pre><code>test_greet ... ok

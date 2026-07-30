@@ -82,7 +82,7 @@ const EXAMPLES = {
   1
 
 fn fact n
-  n * (fact (n - 1))
+  n * fact (n - 1)
 
 pub play = print "20! = {fact 20}"
 `,
@@ -167,7 +167,7 @@ pub play =
     ada.partner = bob
     [ada bob]
   a = couple[1]!
-  print "{a.name} <-> {(a.partner).name} <-> {((a.partner).partner).name}"
+  print "{a.name} <-> {a.partner.name} <-> {a.partner.partner.name}"
 `,
   contained: `# the same knot, but crossing call boundaries and then thrown away in
 # bulk. tie hands the cycle out as an ordinary return value, round_trip
@@ -207,7 +207,7 @@ pub play =
 # something that still wants a price. that is an ordinary value -- bind it,
 # name it, pass it to another function -- with no lambda and no wrapper.
 fn tax rate price
-  price + (price * rate / 100)
+  price + price * rate / 100
 
 fn quote pricer amount
   "{amount} becomes {pricer amount}"
@@ -258,7 +258,7 @@ type withdraw
   amount
 
 fn drive store actions i sub out
-  step store actions i sub out (actions[i])
+  step store actions i sub out actions[i]
 
 fn notify logger (deposit n) balance
   print "[logger] +{n} yen in -> the till holds {balance}"

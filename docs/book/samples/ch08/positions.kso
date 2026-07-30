@@ -12,7 +12,7 @@ fn decode_int s
   trailing cs (skip_ws cs q) v
 
 fn digits_end cs p
-  if (digit? (cs[p])) (digits_end cs (p + 1)) p
+  if (digit? cs[p]) (digits_end cs (p + 1)) p
 
 fn fail p reason
   err (parse_failure p reason)
@@ -21,7 +21,7 @@ fn digit? none
   false
 
 fn digit? c
-  (47 < c) && (c < 58)
+  47 < c && c < 58
 
 fn is_ws? 9
   true
@@ -53,7 +53,7 @@ fn show v
   "ok: {v}"
 
 fn skip_ws cs p
-  if (is_ws? (cs[p])) (skip_ws cs (p + 1)) p
+  if (is_ws? cs[p]) (skip_ws cs (p + 1)) p
 
 fn trailing cs p v
-  if (p > (length cs)) v (fail p "unexpected trailing characters")
+  if (p > length cs) v (fail p "unexpected trailing characters")

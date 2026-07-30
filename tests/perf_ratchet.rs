@@ -120,7 +120,7 @@ fn the_strict_index_errs_instead_of_answering_none() {
 const GUARD: &str = "main = print (pick 3)
 
 fn pick n
-  return \"low\" if (n < 10)
+  return \"low\" if n < 10
   \"high\"
 ";
 

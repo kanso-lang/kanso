@@ -10,6 +10,11 @@ pub enum Tok {
     Str(Vec<StrPart>),
     LParen,
     RParen,
+    /// The grouping the indented-argument form inserts around a continuation
+    /// line. It parses exactly as a parenthesis and is written by nobody, so
+    /// rules about what an author may write must not see it.
+    LGroup,
+    RGroup,
     LBracket,
     RBracket,
     LBrace,
@@ -196,11 +201,11 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
                         line: number,
                         col: lexed_line.end_cols.last().copied().unwrap_or(1),
                     };
-                    parent.tokens.push((Tok::LParen, open_span));
+                    parent.tokens.push((Tok::LGroup, open_span));
                     parent.end_cols.push(1);
                     parent.tokens.extend(lexed_line.tokens);
                     parent.end_cols.extend(lexed_line.end_cols);
-                    parent.tokens.push((Tok::RParen, close_span));
+                    parent.tokens.push((Tok::RGroup, close_span));
                     parent.end_cols.push(close_span.col);
                 }
                 Err(d) => diags.push(d),
@@ -259,8 +264,10 @@ fn check_partial_chain(line: &Line, diags: &mut Vec<Diagnostic>) {
     let mut depth = 0usize;
     for (i, (tok, span)) in line.tokens.iter().enumerate() {
         match tok {
-            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
-            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
+            Tok::LParen | Tok::LGroup | Tok::LBracket | Tok::LBrace => depth += 1,
+            Tok::RParen | Tok::RGroup | Tok::RBracket | Tok::RBrace => {
+                depth = depth.saturating_sub(1)
+            }
             Tok::SeqOp if depth == 0 && !leads_line(i, span) => {
                 diags.push(Diagnostic::new(
                     "formatting",
@@ -342,6 +349,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
                         | Tok::Float(_)
                         | Tok::Str(_)
                         | Tok::RParen
+                        | Tok::RGroup
                         | Tok::RBracket,
                     _
                 ))
@@ -597,8 +605,8 @@ impl Scanner {
 
 fn required_gap(prev: &Tok, next: &Tok) -> usize {
     match (prev, next) {
-        (_, Tok::RParen) | (_, Tok::RBracket) => 0,
-        (Tok::LParen, _) | (Tok::LBracket, _) => 0,
+        (_, Tok::RParen) | (_, Tok::RGroup) | (_, Tok::RBracket) => 0,
+        (Tok::LParen, _) | (Tok::LGroup, _) | (Tok::LBracket, _) => 0,
         (_, Tok::Colon) => 0,
         // field access hugs both neighbors: u.age
         (_, Tok::Dot) | (Tok::Dot, _) => 0,
@@ -625,7 +633,10 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
             }
             continue;
         }
-        if matches!((prev, next), (Tok::Ident(_) | Tok::RParen | Tok::RBracket, Tok::LBracket)) {
+        if matches!(
+            (prev, next),
+            (Tok::Ident(_) | Tok::RParen | Tok::RGroup | Tok::RBracket, Tok::LBracket)
+        ) {
             if gap > 1 {
                 diags.push(Diagnostic::new(
                     "formatting",

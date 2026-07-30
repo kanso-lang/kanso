@@ -137,7 +137,7 @@ candidate next door: -1.0</code></pre>
 <span class="k">fn</span> <span class="f">irv_go</span> voters elim
   counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
   top <span class="o">=</span> <span class="f">argmax</span> counts
-  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> counts[top]) top (<span class="f">irv_next</span> voters elim counts)
 
 <span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
   <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
@@ -236,7 +236,7 @@ candidate next door: -1.0</code></pre>
 <span class="k">fn</span> <span class="f">irv_go</span> voters elim
   counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
   top <span class="o">=</span> <span class="f">argmax</span> counts
-  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> counts[top]) top (<span class="f">irv_next</span> voters elim counts)
 
 <span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
   <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
@@ -335,7 +335,7 @@ candidate next door: -1.0</code></pre>
 <span class="k">fn</span> <span class="f">irv_go</span> voters elim
   counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
   top <span class="o">=</span> <span class="f">argmax</span> counts
-  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> counts[top]) top (<span class="f">irv_next</span> voters elim counts)
 
 <span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
   <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
@@ -434,7 +434,7 @@ candidate next door: -1.0</code></pre>
 <span class="k">fn</span> <span class="f">irv_go</span> voters elim
   counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
   top <span class="o">=</span> <span class="f">argmax</span> counts
-  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> counts[top]) top (<span class="f">irv_next</span> voters elim counts)
 
 <span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
   <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))
@@ -533,7 +533,7 @@ candidate next door: -1.0</code></pre>
 <span class="k">fn</span> <span class="f">irv_go</span> voters elim
   counts <span class="o">=</span> <span class="f">irv_counts</span> voters elim
   top <span class="o">=</span> <span class="f">argmax</span> counts
-  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> (counts[top])) top (<span class="f">irv_next</span> voters elim counts)
+  <span class="f">if</span> (nvot <span class="o">&lt;</span> <span class="n">2</span> <span class="o">*</span> counts[top]) top (<span class="f">irv_next</span> voters elim counts)
 
 <span class="k">fn</span> <span class="f">irv_next</span> voters elim counts
   <span class="f">irv_go</span> voters (<span class="f">push</span> elim (<span class="f">min_alive</span> counts elim))

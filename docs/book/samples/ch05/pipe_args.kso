@@ -1,6 +1,6 @@
 fn clamp n lo hi
-  return lo if (n < lo)
-  return hi if (hi < n)
+  return lo if n < lo
+  return hi if hi < n
   n
 
 pub play =

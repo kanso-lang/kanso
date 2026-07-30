@@ -18,10 +18,10 @@ pub play = print "sum {walk 40 0}"
 
 fn step i
   expensive = burn 20 i
-  pick (i - (i / 8 * 8) == 1) expensive
+  pick (i - i / 8 * 8 == 1) expensive
 
 fn walk 0 total
   total
 
 fn walk n total
-  walk (n - 1) (total + (step n))
+  walk (n - 1) (total + step n)

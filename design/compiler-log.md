@@ -11374,3 +11374,53 @@ The first divergence planted was in an `if takes a bool condition` message
 and the corpus never reached it, so the test passed. That is a coverage fact
 worth keeping visible: this harness is only as good as the programs it runs,
 and a green run means the corpus agrees, never that the engines do.
+
+## Parentheses that group nothing
+
+Canonical form is one rendering per program, so a pair that changes no parse
+is a second rendering of one thing. Which pairs those are is decided by the
+two tokens beside them rather than by where the parser happens to be: on the
+right an operator claims the parenthesised expression as its left operand,
+and on the left the pair is that operator's right operand, one level tighter
+because every binary operator here associates left. That keeps
+`10 - (4 - 1)` and takes `(1 * 2) + 3`.
+
+Comparisons are the exception and are written out. They do not chain, so
+unlike `+` a comparison's left operand may not be another comparison, and
+`(1 < 2) == true` keeps its parentheses.
+
+Two false positives were found by running the rule at the tree rather than at
+a test, and both were worth the trip.
+
+The first was mine. `tolerated_before` listed the tokens an atom can end with
+and omitted the closing bracket, so a `(` after a list literal read as a
+statement boundary. `step [x y] (paired lrest rrest)` became
+`step [x y] paired lrest rrest` — two arguments turned into four — and the
+cohort golden said so. The goldens are the only reason that was a five-minute
+correction rather than a shipped bug.
+
+The second is the more interesting one, and it corrects an entry above. The
+indented-argument form is implemented in the lexer, which wraps each
+continuation line's tokens in `LParen`/`RParen` at column 1. So a file
+containing no parentheses at all could raise a parenthesis diagnostic, and
+the span was not mislocated — it was a faithful record of a token nobody
+wrote. Any rule about what an author may write has to be able to tell the
+two apart, and nothing could. The synthesised pair now has its own variants,
+`LGroup`/`RGroup`, parsed identically everywhere and invisible to the rule; a
+group closes with the door it opened, so an unclosed parenthesis cannot be
+swallowed by the end of a continuation line.
+
+210 pairs came out of 53 files, plus four playground examples, three samples
+embedded in test sources, and twenty book panels. One error golden moved:
+the fixture whose text changed. Nothing else did — and the compile golden did
+not move either, which is the evidence that mattered, because a rule claiming
+to preserve the parse should emit the same IR from a sample it just edited.
+
+Each of the four guards was broken alone and watched fail. Two of them —
+the exemption for the lexer's grouping, and the non-chaining comparison —
+failed nothing on the first attempt, because the corpus had no program that
+used either. `tests/golden/micro/paren_keeps_its_work.kso` is those two
+programs, and it is the part of this change most likely to matter later: a
+guard the corpus cannot feel is a guard that rots quietly.
+
+Welfare unchanged at 65.53.

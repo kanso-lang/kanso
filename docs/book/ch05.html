@@ -119,9 +119,9 @@ kon kon</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">pipe_args.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">clamp</span> n lo hi
-  <span class="k">return</span> lo <span class="k">if</span> (n <span class="o">&lt;</span> lo)
-  <span class="k">return</span> hi <span class="k">if</span> (hi <span class="o">&lt;</span> n)
-  n
+  <span class="f">return</span> lo if n <span class="o">&lt;</span> lo
+  <span class="f">return</span> hi if hi <span class="o">&lt;</span> n
+  <span class="f">n</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
   <span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span>
@@ -176,7 +176,7 @@ hojicha</code></pre>
 <div class="code-panel">
   <div class="code-panel-title">currying.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">tax</span> rate price
-  price <span class="o">+</span> (price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>)
+  price <span class="o">+</span> price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
 
 <span class="k">fn</span> <span class="f">quote</span> pricer amount
   <span class="s">"<span class="i">{amount}</span> becomes <span class="i">{pricer amount}</span>"</span>
@@ -362,9 +362,9 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">count_lines</span> text
   <span class="f">list/count</span> (<span class="f">text/chars</span> text) (c <span class="o">-&gt;</span> c <span class="o">==</span> <span class="s">"\n"</span>)
 
-test_counts_lines <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span>) <span class="o">==</span> <span class="n">3</span>
+test_counts_lines <span class="o">=</span> <span class="f">count_lines</span> <span class="s">"matcha\nube\nhojicha\n"</span> <span class="o">==</span> <span class="n">3</span>
 
-test_empty_text_has_no_lines <span class="o">=</span> (<span class="f">count_lines</span> <span class="s">""</span>) <span class="o">==</span> <span class="n">0</span></code></pre>
+test_empty_text_has_no_lines <span class="o">=</span> <span class="f">count_lines</span> <span class="s">""</span> <span class="o">==</span> <span class="n">0</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso test core_test.kso</div>
     <pre><code>test_counts_lines ... ok

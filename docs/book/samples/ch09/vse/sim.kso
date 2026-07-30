@@ -13,12 +13,12 @@ fn dist2 p q
   sum (list/map (range (length p)) (d -> sq (p[d] - q[d])))
 
 fn means sums
-  print "plurality VSE {(sums[1]) / runs}"
-  >> print "approval  VSE {(sums[2]) / runs}"
-  >> print "score     VSE {(sums[3]) / runs}"
-  >> print "star      VSE {(sums[4]) / runs}"
-  >> print "irv       VSE {(sums[5]) / runs}"
-  >> print "minimax   VSE {(sums[6]) / runs}"
+  print "plurality VSE {sums[1] / runs}"
+  >> print "approval  VSE {sums[2] / runs}"
+  >> print "score     VSE {sums[3] / runs}"
+  >> print "star      VSE {sums[4] / runs}"
+  >> print "irv       VSE {sums[5] / runs}"
+  >> print "minimax   VSE {sums[6] / runs}"
 
 ncand = 5
 
@@ -43,12 +43,12 @@ fn sq x
 
 fn tally acc elec
   socs = socutils elec
-  p = (acc[1]) + vse socs (plurality_winner elec)
-  a = (acc[2]) + vse socs (approval_winner elec)
-  s = (acc[3]) + vse socs (score_winner elec)
-  st = (acc[4]) + vse socs (star_winner elec)
-  i = (acc[5]) + vse socs (irv_winner elec)
-  m = (acc[6]) + vse socs (minimax_winner elec)
+  p = acc[1] + vse socs (plurality_winner elec)
+  a = acc[2] + vse socs (approval_winner elec)
+  s = acc[3] + vse socs (score_winner elec)
+  st = acc[4] + vse socs (star_winner elec)
+  i = acc[5] + vse socs (irv_winner elec)
+  m = acc[6] + vse socs (minimax_winner elec)
   [p a s st i m]
 
 fn trials 0 acc

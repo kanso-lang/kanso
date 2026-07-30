@@ -1,7 +1,7 @@
 import "std/text"
 
 fn mark_from? cs p q
-  if (p > q) false (mark_step? cs (cs[p]) p q)
+  if (p > q) false (mark_step? cs cs[p] p q)
 
 # float marks: . E e
 fn mark_step? _ none _ _
@@ -39,10 +39,10 @@ fn number_char? none
   false
 
 fn number_char? c
-  (47 < c) && (c < 58)
+  47 < c && c < 58
 
 fn number_end cs p
-  if (number_char? (cs[p])) (number_end cs (p + 1)) p
+  if (number_char? cs[p]) (number_end cs (p + 1)) p
 
 fn number_ok p (err _)
   fail p "invalid number"
@@ -57,7 +57,7 @@ fn number_start? none
   false
 
 fn number_start? c
-  (47 < c) && (c < 58)
+  47 < c && c < 58
 
 fn number_value cs p q
   digits = text/slice cs p q
