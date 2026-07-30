@@ -11444,3 +11444,38 @@ Worth keeping in view: the record is right about the part that was actually
 questioned. `build` is a block expression whose last expression is the
 result, frozen at the boundary, gaveled 2026-07-19, and the playground
 example matches it.
+
+## The getter's internal name: a guard, not a rewrite
+
+A field getter is a function, and its function needs a name the compiler can
+key on. That name is an implementation detail, so every diagnostic that
+mentions a function has to remember to translate it back into the field the
+reader wrote — and each new diagnostic is a fresh chance to forget. The
+ledger's answer was to remove the name: make identity structural, `(getter,
+field)`, with nothing to leak.
+
+Before spending that — every function table and symbol name in the compiler
+keys by String — the premise was worth measuring. There is no leak today.
+Three sites decode the prefix, all three are correct, no golden anywhere in
+the tree records the internal spelling, and probing the three ways a field
+read can fail produces the field's name on both engines. The risk in the
+ledger entry is real and it is prospective.
+
+So the cheaper thing was built first: the class fails, rather than the
+instances being patched one at a time after they ship. Every program in the
+corpus runs on both engines and neither stream may contain the internal
+spelling; the three failure paths are probed directly, because they are
+reached by failing rather than by succeeding and a corpus of working programs
+says nothing about them; and the wasm harness carries the same assertion,
+which matters because that engine is the one no other test could watch.
+
+Watched red at each of the four decode sites, one at a time. The wasm one
+answered with the exact string from the incident that prompted the ledger
+entry: `no overload of Get_age matches these arguments`. Two of the three
+Rust-side breaks were caught by corpus fixtures rather than by the probes,
+so the sweep is doing work the probes do not.
+
+The test asks the compiler for the spelling rather than writing it out, so
+changing the encoding cannot leave it behind hunting for a string nothing
+produces any more. Making identity structural stays open; this makes it a
+choice about the design rather than a race against the next diagnostic.
