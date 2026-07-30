@@ -860,6 +860,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
+    check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
@@ -1469,6 +1470,33 @@ fn check_constants(program: &Program, diags: &mut Vec<Diagnostic>) {
                 "dispatch",
                 format!("`{name}` is a constant (arity 0); a constant admits no overloads"),
                 decls[1].span,
+            ));
+        }
+    }
+}
+
+/// Two arms of one group with the same shape: the second can never be
+/// reached, whichever file it is in. The ranking check below compares
+/// neighbours, which is exactly right for arms written together and blind to a
+/// module — a directory of files sharing one namespace, where the arms of a
+/// group need not sit next to each other or even in the same file. So the
+/// unreachable-arm half runs here, over the whole module at once.
+///
+/// Declarations are walked in order and each looks back, so what is reported
+/// is the later arm and the order of the reports is the order of the source.
+fn check_overlapping_arms(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let real: Vec<&FnDecl> = program.fns.iter().filter(|d| !d.synthetic).collect();
+    for (i, later) in real.iter().enumerate() {
+        let clashes = real[..i].iter().any(|earlier| {
+            earlier.name == later.name
+                && earlier.params.len() == later.params.len()
+                && same_shape(&earlier.params, &later.params)
+        });
+        if clashes {
+            diags.push(Diagnostic::new(
+                "dispatch",
+                format!("overlapping overloads of `{}` are illegal", later.name),
+                later.span,
             ));
         }
     }
