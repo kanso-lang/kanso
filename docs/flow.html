@@ -80,7 +80,7 @@ report low total           <span class="c"># needs both -- the barrier is the da
 
 <h2>what actually crosses a wall</h2>
 
-<p>here is the question that keeps coming back, answered once: <strong>nothing crosses a wall except permission.</strong></p>
+<p>the question that keeps coming back, answered once: <strong>nothing crosses a wall except permission.</strong></p>
 
 <p>the members of a group are bare lines. nobody binds their results, so their results are <em>discarded where they stand</em>—the compiler even refuses a bare line whose value could never be an effect, because a value nobody can read is a bug, not a statement. when every member settles, the group as a whole carries no value at all. the wall then asks exactly one thing: did anything above me fail?</p>
 
@@ -131,7 +131,7 @@ b <span class="o">=</span> random <span class="i">6</span>              <span cl
 
 <h2>the dot is the only place a value chooses</h2>
 
-<p>for the reader who wants the theory named once: <code>.</code> is bind—a value crosses into what comes next, and what comes next gets to look at it. <code>&gt;&gt;</code> is sequence-and-discard—run this, then that, pass nothing. and a group is the applicative layer: its shape is fixed before anything runs, no member's value can steer another member, and <em>that</em> is precisely why the compiler may run them in parallel without asking. the parallelism isn't an optimization it hopes is safe; it is safe by construction, because the syntax that would create a dependency doesn't exist there.</p>
+<p>for the reader who wants the theory named once: <code>.</code> is bind—a value crosses into what comes next, and what comes next gets to look at it. <code>&gt;&gt;</code> is sequence-and-discard—run this, then that, pass nothing. and a group is the applicative layer: its shape is fixed before anything runs, no member's value can steer another member, and <em>that</em> is precisely why the compiler may run them in parallel without asking. the parallelism is safe by construction, because the syntax that would create a dependency doesn't exist there.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">all three, one program</div>
@@ -152,7 +152,7 @@ b <span class="o">=</span> random <span class="i">6</span>              <span cl
   <li><strong><code>&gt;&gt;</code> carries no data</strong>—it carries one bit: nothing above me failed.</li>
   <li><strong>a group discards every member's value</strong>—members exist for their effects; all of them always run.</li>
   <li><strong>only failure survives a group</strong>—errs merge into one and short-circuit from the wall onward. an err is a true exception: you don't handle it, and the parallel join is the one place it pauses (to collect its siblings) before resuming its exit.</li>
-  <li><strong>parallel is the default because nothing can depend on anything</strong>—the group's syntax has no way to express a dependency, so the compiler doesn't have to prove independence; it is unrepresentable to violate.</li>
+  <li><strong>parallel is the default because nothing can depend on anything</strong>—the group's syntax has no way to express a dependency, so independence is unrepresentable to violate, and the compiler never has to prove it.</li>
 </ul>
 </div>
 

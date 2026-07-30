@@ -11988,3 +11988,33 @@ What was left alone is worth recording too. Chapter 06 and appendix A each
 restate a plain description inside a summary, and chapter 01 repeats a section
 title in its own contents list. Restating in a recap is ordinary writing, and
 churning it would be edits for their own sake.
+
+## The gate could not see contractions
+
+Two entries above report the prose gate reading zero across every page, and
+that claim was worth less than it sounded. The flip patterns matched `is not`,
+`are not`, `does not` and `doesn't`, and missed `isn't`, `aren't`, `don't` —
+which in a book written entirely in lowercase is the natural way to write the
+shape. Adding them turned zero into sixteen.
+
+They were spread wider than the book: the compiler page twice, the flow page
+three times, an appendix, chapters 05 and 06. "the parallelism isn't an
+optimization it hopes is safe; it is safe by construction" and "the
+concurrency isn't bolted onto the language; it falls out of keeping data and
+order apart" are the shape at its most fluent, which is presumably why they
+survived several readings.
+
+Five more came from reading chapter 05 and chapter 06 rather than from any
+pattern: a chapter that opened by confessing, an "interesting move", an
+architecture whose purchase was announced before being made, a sentence the
+reader was told to take literally, and a question introduced instead of
+answered. Each is a phrase, so each is on the list now.
+
+One fix introduced a fresh violation. Replacing "time to confess what" with
+"here is what" traded one self-announcing opener for another, and the gate
+caught it on the next run — which is the argument for having the gate rather
+than trusting the edit.
+
+Two pages share prose. `docs/flow.html` and chapter 06 carry the same
+sentences about groups and walls, so a tell in one is a tell in both, and a
+fix to one leaves the other. Worth knowing before editing either.

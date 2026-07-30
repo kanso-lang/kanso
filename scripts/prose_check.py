@@ -34,7 +34,10 @@ FAMILIES = {
         r"\s+(it|they|that)\s+(is|are)\b",
         r"\bnot\s+(?:(?!\band\b|\bor\b)[^.;<]){3,60}—\s*(it|they|that)\s+(is|are|does)\b",
         r"\bnot\s+(a|an|the)\s+(?:(?!\band\b|\bor\b)[^.;<]){3,50},\s+but\b",
-        r"\bdoesn't\s+(?:(?!\band\b|\bor\b)[^.;<]){3,60}\.\s*it\s+\w+s\b",
+        # the same shape in contraction: the list had only `doesn't`, so
+        # "isn't a debugger bolted on afterwards; it falls out" read clean
+        r"\b(doesn't|isn't|aren't|wasn't|weren't|don't)\s+"
+        r"(?:(?!\band\b|\bor\b)[^.;<]){3,60}[.;,]\s*(it|they|that)\s+\w+",
     ],
     # Telling the reader how to feel about what comes next, instead of writing
     # it. The last five were found by reading chapter 04 after the first three
@@ -52,6 +55,11 @@ FAMILIES = {
         r"\bstep back and (look|consider)\b",
         r"\bhiding in (here|plain sight)\b",
         r"\bthis sounds \w+ until\b",
+        r"\bthe interesting move\b",
+        r"\btime to confess\b",
+        r"\bhere is (what|the question)\b",
+        r"\bit is worth (naming|saying) (what|why)\b",
+        r"\btake that sentence literally\b",
     ],
     "throat-clearing": [
         r"<p>\s*(it is|it's) worth noting\b",
