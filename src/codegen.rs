@@ -225,6 +225,7 @@ declare %KValue @k_b_read_file(%KValue)
 declare %KValue @k_b_write(%KValue)
 declare %KValue @k_b_write_err(%KValue)
 declare %KValue @k_b_env(%KValue)
+declare %KValue @k_b_failed(%KValue)
 declare %KValue @k_b_exists(%KValue)
 declare %KValue @k_b_list_dir(%KValue)
 declare %KValue @k_desc_now()
@@ -281,7 +282,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 33] = [
+const BUILTIN_CALLS: [(&str, usize); 34] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -292,6 +293,7 @@ const BUILTIN_CALLS: [(&str, usize); 33] = [
     ("write", 1),
     ("write_err", 1),
     ("env", 1),
+    ("failed?", 1),
     ("exists", 1),
     ("list_dir", 1),
     ("write_file", 2),
@@ -3445,6 +3447,9 @@ impl<'a> Backend<'a> {
                 "put_mut"
             } else if name == "append" && in_place {
                 "append_mut"
+            } else if name == "failed?" {
+                // `?` is not a C identifier; the runtime spells it plainly
+                "failed"
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"

@@ -19,3 +19,8 @@ test_extension_when_absent = (extension "README") == ""
 test_stem_drops_the_extension = (stem "a/b/c.html") == "c"
 
 test_stem_of_a_dotfile = (stem ".gitignore") == ".gitignore"
+
+# The harness may read a failure; a package may not. This is the only place
+# in the shipped library that needs it, and it is here to keep the surface
+# exercised rather than only asserted about.
+test_a_plain_value_has_not_failed = (failed? "a/b") == false

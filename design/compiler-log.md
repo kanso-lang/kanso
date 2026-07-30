@@ -10962,3 +10962,43 @@ The lock gained the field while it has one consumer and no migration.
 Three claims, each watched red alone: install writes it, a three-field
 line still reads as git, and a protocol this toolchain cannot speak is
 refused by name rather than quietly fetched as git.
+
+## 2026-07-29 — a package can assert its own failures
+
+design/testing.md recorded two routes out and called both open. The
+second needed no ruling, which is why it could be built: a package may
+not turn its own err into a value, but the *harness* is a foreign party,
+and the rule's own mechanism proves the distinction — provenance
+attributes a rescue to the group whose **pattern** names the err, and a
+builtin has no pattern to attribute. `failed?` reads a failure and
+nothing in the package rescues anything.
+
+Left there it would have been a hole rather than a door: a general
+`failed?` lets any package branch on its own failure and hand back a
+fallback, which is exactly what the rule forbids. So it is in scope in a
+`_test.kso` file and nowhere else, gated by the file that declares the
+caller — the same shape as the gate that keeps `builtin_` names inside
+std.
+
+**Gating on the file rather than the verb was a correction made twice.**
+The first build gated on `kanso test` being the verb, which broke
+`kanso check` on any module with tests, because check compiles test
+files too. The file is the honest key: a name that exists under one verb
+and not another is a worse thing to explain than a name that lives in
+one kind of file.
+
+**It is the second hole in err's infectiousness**, beside `wrap_err`,
+and for the same reason: a builtin whose whole job is to look at a
+failure has to be asked before propagation answers for it. The first
+attempt put the check after the guard, so `failed? (parse "junk")`
+returned the err instead of `true` — the feature silently doing nothing.
+
+**A fixture that named itself out of its own test.** The error-corpus
+program proving a production file is refused was called
+`harness_outside_a_test.kso`, which ends in `_test.kso`, so the gate
+treated it as a test file and it passed for the wrong reason. Renamed.
+The suffix rule is fragile that way and worth remembering.
+
+Both guards were then broken alone: with the gate off the corpus stops
+refusing the production fixture, and with the infectiousness hole closed
+both harness tests fail rather than pass.

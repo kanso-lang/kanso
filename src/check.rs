@@ -45,6 +45,27 @@ pub const BUILTINS: [&str; 36] = [
 /// in BUILTINS is internal, reached only through std wrapper modules.
 pub const AMBIENT: [&str; 6] = ["entries", "if", "length", "print", "push", "put"];
 
+/// The harness's own vocabulary. A package may not turn its own failure into
+/// a value — that is the two-universe rule — and a test has to, or a library
+/// can never assert that its errors happen. The way out is not an exemption:
+/// the harness is a foreign party, so a *builtin* doing the reading is a
+/// stranger rescuing, which the rule already permits. Attribution proves it —
+/// an err is only ever rescued where a pattern names it, and a builtin has no
+/// pattern for a package to be blamed for.
+///
+/// It is in scope in a `_test.kso` file and nowhere else — gated by the file
+/// that declares the caller, the way `builtin_` names are gated to std. A
+/// production file cannot reach it, so the rule stands undiminished rather
+/// than carrying a hole a program could reach for. Gating on the *file*
+/// rather than on the verb also keeps `kanso check` honest: it compiles test
+/// files too, and a name that existed under one verb and not another would be
+/// a worse thing to explain than where it lives.
+pub const HARNESS: [&str; 1] = ["failed?"];
+
+fn harness_file(file: &str) -> bool {
+    file.ends_with("_test.kso")
+}
+
 pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
@@ -1232,6 +1253,7 @@ fn constructs(expr: &Expr, type_names: &HashSet<&str>) -> bool {
 
 fn collect_globals(program: &Program, diags: &mut Vec<Diagnostic>) -> HashSet<String> {
     let mut globals: HashSet<String> = AMBIENT.iter().map(|b| b.to_string()).collect();
+    globals.extend(HARNESS.iter().map(|b| b.to_string()));
     globals.insert("entry".to_string());
     globals.insert("err".to_string());
     globals.insert("wrap_err".to_string());
@@ -1621,6 +1643,8 @@ struct Resolver<'a> {
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
+    /// A `_test.kso` file may name the harness surface; nothing else may.
+    harness: bool,
 }
 
 fn check_fn_body_shadow(
@@ -1637,6 +1661,7 @@ fn check_fn_body_shadow(
         used_globals,
         diags: Vec::new(),
         std_origin: decl.file.starts_with("std/"),
+        harness: harness_file(&decl.file),
         shadowable,
         fn_arities,
     };
@@ -1909,6 +1934,17 @@ impl Resolver<'_> {
     fn resolve_name(&mut self, name: &str, span: Span) {
         if let Some(local) = self.locals.iter_mut().rev().find(|l| l.name == name) {
             local.used = true;
+            return;
+        }
+        if HARNESS.contains(&name) && !self.harness {
+            self.diags.push(Diagnostic::new(
+                "name",
+                format!(
+                    "`{name}` reads a failure, which only a test may do — it belongs in a \
+                     `_test.kso` file, because a package may not turn its own err into a value"
+                ),
+                span,
+            ));
             return;
         }
         if let Some(stripped) = name.strip_prefix("builtin_") {

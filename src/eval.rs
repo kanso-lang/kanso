@@ -1104,6 +1104,7 @@ impl<'a> Interp<'a> {
                 || self.types.contains_key(name)
                 || name == "err"
                 || crate::check::BUILTINS.contains(&name)
+                || crate::check::HARNESS.contains(&name)
                 || name
                     .strip_prefix("builtin_")
                     .is_some_and(|n| crate::check::BUILTINS.contains(&n)) =>
@@ -1461,6 +1462,17 @@ impl<'a> Interp<'a> {
                 hops: Vec::new(),
                 cause: Some(cause),
             })));
+        }
+        // the harness's hole, and the second one: `failed?` exists to look at a
+        // failure, so it must be asked before infectiousness answers for it
+        // the harness's hole, and the second one: `failed?` exists to look at a
+        // failure, so it must be asked before infectiousness answers for it
+        if name == "failed?" {
+            let [value] = arity(args, name, span)?;
+            return Ok(match is_failure(&value) {
+                true => Value::True,
+                false => Value::False,
+            });
         }
         if let Some(bad) = args.iter().find(|a| is_failure(a)) {
             return Ok(bad.clone());

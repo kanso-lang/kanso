@@ -1,0 +1,5 @@
+pub type bad_input
+  why
+
+pub fn parse s
+  err (bad_input s)

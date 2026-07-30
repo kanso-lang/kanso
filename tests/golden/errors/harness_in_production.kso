@@ -1,0 +1,7 @@
+pub type bad_input
+  why
+
+fn parse s
+  err (bad_input s)
+
+pub play = print "{failed? (parse "x")}"

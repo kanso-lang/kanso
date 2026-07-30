@@ -2726,6 +2726,12 @@ KValue k_b_write_err(KValue content) {
     return k_mkdesc(12, content, k_none());
 }
 
+/* The harness's hole in infectiousness: this is the one builtin that must
+   look at a failure rather than propagate it. */
+KValue k_b_failed(KValue v) {
+    return k_bool(!k_not_failure(v));
+}
+
 KValue k_b_env(KValue name) {
     if (!k_not_failure(name)) return name;
     if (name.tag != K_STR) k_die("env takes a string");

@@ -9,16 +9,30 @@ nothing else. What it cannot express is shared setup, grouping, or a
 readable failure narrative — every test stands alone and repeats its own
 arrangement.
 
-One thing it cannot do at all: assert about a failure the package itself
-raised. An assertion is a value, and the two-universe rule forbids a
-package producing a value from its own err (design/pending-gavels.md
-item 1). Two ways out, both open:
+One thing it could not do at all, until 2026-07-29: assert about a
+failure the package itself raised. An assertion is a value, and the
+two-universe rule forbids a package producing a value from its own err
+(design/pending-gavels.md item 1). The second of the two recorded routes
+was taken, and it needed no exemption: `failed?` is a builtin, so the
+reading is done by the toolchain rather than by the package, and
+attribution proves it — an err is only ever rescued where a *pattern*
+names it, and a builtin has no pattern for a package to be blamed for.
 
-- exempt `*_test.kso` from the rule (one line, crude, and it is a
-  file-scope hole in a language rule);
-- give assertions a toolchain surface — the harness is not the package,
-  so a builtin that reads a failure is a foreign party rescuing, legal
-  under the rule as written and needing no exemption.
+It is in scope in a `_test.kso` file and nowhere else, gated by the file
+that declares the caller, the way `builtin_` names are gated to std. A
+production file naming it is refused, so the rule stands undiminished
+rather than carrying a hole a program could reach for. Gating on the
+file rather than on the verb keeps `kanso check` honest, since check
+compiles test files too, and a name that existed under one verb and not
+another would be a worse thing to explain than where it lives.
+
+`failed?` is also the second hole in err's infectiousness, beside
+`wrap_err`: it exists to look at a failure, so it is asked before
+propagation answers for it.
+
+What is still owed is the reason a test wants more than a boolean —
+asserting *which* failure, not merely that one happened. That wants a
+way to read a reason, and it is the natural next slice.
 
 ## Where Clay wants it (2026-07-28, noted for the far queue)
 
