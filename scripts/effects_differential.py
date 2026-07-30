@@ -41,50 +41,57 @@ def source_for(body):
         return head + "pub play =\n  " + body + "\n"
     return head + "pub play = " + body + "\n"
 
-# (label, the body of `pub play`). Each is run on both engines. A body with a
-# newline in it is a block, and adjacent statements in a block are a parallel
-# group — the scheduler is deterministic, so their output is comparable.
+# (label, the body of `pub play`, what it must write). Each runs on both
+# engines, which must agree — and must write what the semantics say, because
+# two engines agreeing on a wrong answer is not the same as being right.
+#
+# A body with a newline in it is a block, and adjacent statements in a block
+# are a parallel group; the scheduler is deterministic, so their output is
+# comparable. An expectation of None means the right answer is an open
+# question and only agreement is required: `w == w` on a description answers
+# false today, where `w < w` refuses outright, and which of those is correct
+# has not been settled.
 PROBES = [
     # sequencing and binding at their simplest, so a difference here is not
     # hidden inside a harder case
-    ("write then write", 'io/write "a" >> io/write "b"'),
-    ("three writes", 'io/write "a" >> io/write "b" >> io/write "c"'),
-    ("bind ignores its value", 'io/write "a" . (_ -> io/write "b")'),
-    ("bind passes its value", 'io/env "PATH" . (v -> io/write "{v == none}")'),
-    ("bind chained twice", 'io/write "a" . (_ -> io/write "b") . (_ -> io/write "c")'),
-    ("a value re-enters", 'io/write "" . (_ -> 7) . (n -> io/write "{n}")'),
-    ("a value computed on", 'io/write "" . (_ -> 7) . (n -> io/write "{n + 1}")'),
+    ("write then write", 'io/write "a" >> io/write "b"', 'ab'),
+    ("three writes", 'io/write "a" >> io/write "b" >> io/write "c"', 'abc'),
+    ("bind ignores its value", 'io/write "a" . (_ -> io/write "b")', 'ab'),
+    ("bind passes its value", 'io/env "PATH" . (v -> io/write "{v == none}")', 'false'),
+    ("bind chained twice", 'io/write "a" . (_ -> io/write "b") . (_ -> io/write "c")', 'abc'),
+    ("a value re-enters", 'io/write "" . (_ -> 7) . (n -> io/write "{n}")', '7'),
+    ("a value computed on", 'io/write "" . (_ -> 7) . (n -> io/write "{n + 1}")', '8'),
     # nesting: a description built inside a bind, and a bind inside a bind
-    ("bind returns a bind", 'io/write "a" . (_ -> io/write "b" . (_ -> io/write "c"))'),
-    ("seq inside a bind", 'io/write "a" . (_ -> io/write "b" >> io/write "c")'),
-    ("bind after a seq", 'io/write "a" >> io/write "b" . (_ -> io/write "c")'),
+    ("bind returns a bind", 'io/write "a" . (_ -> io/write "b" . (_ -> io/write "c"))', 'abc'),
+    ("seq inside a bind", 'io/write "a" . (_ -> io/write "b" >> io/write "c")', 'abc'),
+    ("bind after a seq", 'io/write "a" >> io/write "b" . (_ -> io/write "c")', 'abc'),
     # a parallel group: adjacent statements in a block
-    ("two lines", 'io/write "a"\n  io/write "b"'),
-    ("three lines", 'io/write "a"\n  io/write "b"\n  io/write "c"'),
-    ("a wall between groups", 'io/write "a"\n  io/write "b" >> io/write "c"'),
-    ("a bind beside a write", 'io/write "a"\n  io/write "b" . (_ -> io/write "c")'),
-    ("a group of binds", 'io/env "A" . (_ -> io/write "a")\n  io/env "B" . (_ -> io/write "b")'),
+    ("two lines", 'io/write "a"\n  io/write "b"', 'ab'),
+    ("three lines", 'io/write "a"\n  io/write "b"\n  io/write "c"', 'abc'),
+    ("a wall between groups", 'io/write "a"\n  io/write "b" >> io/write "c"', 'abc'),
+    ("a bind beside a write", 'io/write "a"\n  io/write "b" . (_ -> io/write "c")', 'abc'),
+    ("a group of binds", 'io/env "A" . (_ -> io/write "a")\n  io/env "B" . (_ -> io/write "b")', 'ab'),
     # the effects that read the world, pinned so they answer the same anywhere
-    ("an unset variable", 'io/env "KANSO_NO_SUCH_VAR" . (v -> io/write "{v}")'),
-    ("a path that is not there", 'io/exists "/no/such/path" . (v -> io/write "{v}")'),
-    ("the args of no args", 'io/args . (a -> io/write "{length a}")'),
-    ("a directory that is not there", 'io/list_dir "/no/such/dir" . (v -> io/write "{v}")'),
+    ("an unset variable", 'io/env "KANSO_NO_SUCH_VAR" . (v -> io/write "{v}")', '<none>'),
+    ("a path that is not there", 'io/exists "/no/such/path" . (v -> io/write "{v}")', 'false'),
+    ("the args of no args", 'io/args . (a -> io/write "{length a}")', '0'),
+    ("a directory that is not there", 'io/list_dir "/no/such/dir" . (v -> io/write "{v}")', ''),
     # a failure inside a combination: it takes the chain with it, and the two
     # engines have to agree on where it stops and what reaches the executor
-    ("exit inside a bind", 'io/write "a" . (_ -> io/exit 3)'),
-    ("exit before a write", 'io/write "a" . (_ -> io/exit 3) . (_ -> io/write "b")'),
-    ("exit in a parallel group", 'io/write "a"\n  io/exit 3'),
-    ("a read that fails", 'io/read_file "/no/such/file" . (_ -> io/write "read")'),
-    ("a failed read, bound twice", 'io/read_file "/no/f" . (_ -> io/write "a") . (_ -> io/write "b")'),
-    ("a failed read beside a write", 'io/read_file "/no/such/file"\n  io/write "b"'),
+    ("exit inside a bind", 'io/write "a" . (_ -> io/exit 3)', 'a'),
+    ("exit before a write", 'io/write "a" . (_ -> io/exit 3) . (_ -> io/write "b")', 'a'),
+    ("exit in a parallel group", 'io/write "a"\n  io/exit 3', ''),
+    ("a read that fails", 'io/read_file "/no/such/file" . (_ -> io/write "read")', ''),
+    ("a failed read, bound twice", 'io/read_file "/no/f" . (_ -> io/write "a") . (_ -> io/write "b")', ''),
+    ("a failed read beside a write", 'io/read_file "/no/such/file"\n  io/write "b"', 'b'),
     # a description held in a local, and one used twice
-    ("a description in a local", 'w = io/write "a"\n  w >> io/write "b"'),
-    ("the same description twice", 'w = io/write "a"\n  w >> w'),
-    ("a description from a list", 'ws = [(io/write "a") (io/write "b")]\n  ws[1]! >> ws[2]!'),
-    ("a description built by a fn", 'io/write "a" >> io/write_err "e"'),
+    ("a description in a local", 'w = io/write "a"\n  w >> io/write "b"', 'ab'),
+    ("the same description twice", 'w = io/write "a"\n  w >> w', 'aa'),
+    ("a description from a list", 'ws = [(io/write "a") (io/write "b")]\n  ws[1]! >> ws[2]!', 'ab'),
+    ("a description built by a fn", 'io/write "a" >> io/write_err "e"', 'a'),
     # descriptions and the ordinary value world
-    ("a description compares", 'w = io/write "a"\n  io/write "{w == w}" >> w'),
-    ("a description renders", 'w = io/write "a"\n  io/write "{w}" >> w'),
+    ("a description compares", 'w = io/write "a"\n  io/write "{w == w}" >> w', None),
+    ("a description renders", 'w = io/write "a"\n  io/write "{w}" >> w', '<io>a'),
 ]
 
 
@@ -109,18 +116,22 @@ def run(body, engine):
 def main():
     if not KANSO.exists():
         sys.exit("build the toolchain first: cargo build --release")
-    disagreed, hung = [], []
-    for label, body in PROBES:
+    disagreed, hung, wrong = [], [], []
+    for label, body, want in PROBES:
         native = run(body, [])
         interp = run(body, ["--interp"])
         if native[0] == "TIMED OUT" or interp[0] == "TIMED OUT":
             hung.append((label, native, interp))
         elif native != interp:
             disagreed.append((label, native, interp))
+        elif want is not None and native[1] != want:
+            wrong.append((label, native[1], want))
     print(
         f"{len(PROBES)} combinations, {len(disagreed)} disagree, "
-        f"{len(hung)} never returned"
+        f"{len(hung)} never returned, {len(wrong)} wrote the wrong thing"
     )
+    for label, wrote, want in wrong:
+        print(f"  {label}: both engines wrote {wrote!r}, the semantics say {want!r}")
     for label, native, interp in hung[:10]:
         print(f"  never returned: {label}")
     for label, native, interp in disagreed[:20]:
@@ -130,6 +141,7 @@ def main():
     if disagreed or hung:
         print()
         print("the interpreter is the oracle: these are native's to match.")
+    if disagreed or hung or wrong:
         return 1
     return 0
 
