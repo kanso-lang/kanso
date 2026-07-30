@@ -805,6 +805,10 @@ impl Executor for RtExecutor {
         ERRS.with(|e| e.borrow_mut().push_str(text));
     }
 
+    fn env(&mut self, _name: &str) -> Option<String> {
+        None
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         crate::wasm::next_random(n)
     }

@@ -170,6 +170,7 @@ pub enum Desc {
     ReadFile(String),
     Write(String),
     WriteErr(String),
+    Env(String),
     WriteFile(String, String),
     Bind(Rc<Desc>, Value),
     Sleep(u64),
@@ -311,6 +312,9 @@ pub trait Executor {
     fn write(&mut self, text: &str);
     /// Diagnostics, so a tool's chatter stays out of what it is piped into.
     fn write_err(&mut self, text: &str);
+    /// An environment variable, or None when it is unset — absence is a value
+    /// here, not a failure, because not being configured is ordinary.
+    fn env(&mut self, name: &str) -> Option<String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
     /// Pause wall-clock time. The scheduler decides output *order*; sleep only
     /// makes a concurrent program take real time, so a viewer feels the
@@ -348,6 +352,10 @@ impl Executor for RealExecutor {
         use std::io::Write;
         eprint!("{text}");
         let _ = std::io::stderr().flush();
+    }
+
+    fn env(&mut self, name: &str) -> Option<String> {
+        std::env::var(name).ok()
     }
 
     fn sleep(&mut self, ms: u64) {
@@ -398,6 +406,11 @@ impl Executor for ScriptedExecutor {
 
     fn write_err(&mut self, text: &str) {
         self.transcript.push(format!("write_err {text:?}"));
+    }
+
+    fn env(&mut self, name: &str) -> Option<String> {
+        self.transcript.push(format!("env {name:?}"));
+        None
     }
 
     fn random(&mut self, n: u64) -> u64 {
@@ -1410,6 +1423,13 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError { message: "write takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content))))
+            }
+            "env" => {
+                let [name] = arity(args, name, span)?;
+                let Value::Str(name) = name else {
+                    return Err(RuntimeError { message: "env takes a string".to_string(), span });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Env(name))))
             }
             "write_err" => {
                 let [content] = arity(args, name, span)?;
@@ -2588,6 +2608,10 @@ impl<'a> Interp<'a> {
                 executor.write_err(text);
                 Ok(Value::NoneV)
             }
+            Desc::Env(name) => Ok(match executor.env(name) {
+                Some(value) => Value::Str(value),
+                None => Value::NoneV,
+            }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
@@ -2717,6 +2741,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
+        Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out);

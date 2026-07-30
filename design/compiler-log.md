@@ -10697,3 +10697,27 @@ module system rather than this slice.
 Nothing in the tree hits this today because no module both imports and
 re-declares a name. `path/join` would be the first, which is why it is
 absent rather than renamed to something unnatural.
+
+## 2026-07-29 — io/env, and absence as a value
+
+Third slice of the os surface. `io/env "HOME"` is a Desc like every other
+read, and an unset variable comes back as `none` rather than an err,
+because not being configured is ordinary rather than exceptional — the
+none-is-a-value ruling applied to the first place it naturally arises.
+
+Both browser engines answer `none` for every variable, which is honest: a
+page has no environment, and the language already has a word for that.
+No divergence to manage, because there is nothing platform-specific to
+disagree about.
+
+The test split is worth recording as a pattern for the rest of this
+surface. A *set* variable is machine-dependent, so it cannot live in the
+corpus — it is asserted in tests/golden.rs with the environment
+controlled, on both engines. The *unset* case reads the same on every
+machine, so it is an ordinary micro golden. Determinism decides which
+vein a behaviour belongs in, rather than convenience.
+
+Five Executor implementations now, and only three of them are visible to
+`cargo build`: the browser one, the wasm32-only RtExecutor, and the
+oracle's collector each needed the new method separately. That is twice
+in one day, and it is what task #42 exists to close.

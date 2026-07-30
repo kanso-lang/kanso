@@ -1,5 +1,9 @@
 pub args = builtin_args
 
+# An unset variable reads as none: not being configured is ordinary.
+pub fn env name
+  builtin_env name
+
 pub fn read_file path
   builtin_read_file path
 

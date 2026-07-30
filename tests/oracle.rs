@@ -50,6 +50,10 @@ impl Executor for CollectExecutor {
         self.stderr.push_str(text);
     }
 
+    fn env(&mut self, name: &str) -> Option<String> {
+        std::env::var(name).ok()
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         self.rng.below(n)
     }

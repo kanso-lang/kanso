@@ -176,3 +176,29 @@ fn runtime_corpus_reports_endpoint_violations() {
         }
     }
 }
+
+/// A set variable is machine-dependent, so it is asserted here with the
+/// environment controlled rather than pinned in the corpus. The unset case
+/// reads as `none` on every machine and lives in the micro corpus.
+#[test]
+fn a_set_environment_variable_reads_through() {
+    let program = manifest_dir().join("tests/golden/micro/env_unset_is_none.kso");
+    let source = std::fs::read_to_string(&program).expect("the program reads");
+    let named = source.replace("KANSO_DEFINITELY_UNSET_XYZ", "KANSO_ENV_PROBE");
+    let staged = std::env::temp_dir().join("kanso-env-probe");
+    let _ = std::fs::remove_dir_all(&staged);
+    std::fs::create_dir_all(&staged).expect("temp work dir");
+    let file = staged.join("env_probe.kso");
+    std::fs::write(&file, named).expect("program writes");
+
+    for extra in [&[][..], &["--interp"][..]] {
+        let output = run_kanso_env(&file, extra, &[("KANSO_ENV_PROBE", "supplied")]);
+
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout),
+            "unset reads as supplied\n",
+            "engine {extra:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

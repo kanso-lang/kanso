@@ -63,6 +63,12 @@ impl Executor for BrowserExecutor {
         self.stderr.push_str(text);
     }
 
+    /// A page has no environment, so every variable is unset — which is a
+    /// value the language already has.
+    fn env(&mut self, _name: &str) -> Option<String> {
+        None
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         next_random(n)
     }

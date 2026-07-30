@@ -2723,6 +2723,12 @@ KValue k_b_write_err(KValue content) {
     return k_mkdesc(12, content, k_none());
 }
 
+KValue k_b_env(KValue name) {
+    if (!k_not_failure(name)) return name;
+    if (name.tag != K_STR) k_die("env takes a string");
+    return k_mkdesc(13, name, k_none());
+}
+
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
@@ -2914,6 +2920,10 @@ static KValue k_exec(KDesc* d) {
             KStr* s = k_as_str(d->x);
             fwrite(s->data, 1, s->len, stderr);
             return k_none();
+        }
+        case 13: {
+            const char* found = getenv(k_as_str(d->x)->data);
+            return found ? k_str(found) : k_none();
         }
         default: {
             /* a bind chain is the program's outer pulse, so it runs as one
