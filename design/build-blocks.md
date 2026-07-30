@@ -11,20 +11,20 @@ proposed. Implementation is next in the ratified build order
 graph = build
   a = node "a" []
   b = node "b" [a]
-  set a peers [b]        # closes the cycle; a keeps its identity
+  a.peers = [b]          # closes the cycle; a keeps its identity
   [a b]
 ```
 
 - `build` opens a block expression; its last expression is the result,
   frozen to an ordinary immutable value at the boundary.
-- `set target field value` is the single write form. It is an
+- `target.field = value` is the single write form. It is an
   identity-preserving field write: `a` stays the same node while its
   field changes, so `b`'s existing reference to `a` sees the update.
   This is what cycle construction actually requires — rebinding cannot
   close a cycle (`a = node_with_peer a b` makes a *new* `a`).
-- `set` is grammatically legal only inside `build`. Outside, mutation
-  does not parse. The mutable universe is delimited by one greppable
-  word: auditing "where can state change?" is `grep build`.
+- A field write is grammatically legal only inside `build`. Outside,
+  mutation does not parse. The mutable universe is delimited by one
+  greppable word: auditing "where can state change?" is `grep build`.
 - No new declaration forms. No `var`, no `let mut`, no mutability
   annotation on any name, no rebinding anywhere. Bindings mean the
   same thing in every scope. Mutability is a property of the *place*,
@@ -98,6 +98,6 @@ thunks. The design survives the move cleanly — better than cleanly:
   fixed by giving the cohort one owner cell mirroring the native
   story when it matters.
 - **Rendering/equality/encode over cyclic values** need a visited
-  set or a depth rule — to be settled at implementation time (the
+  write or a depth rule — to be settled at implementation time (the
   book chapter's examples will force the answer).
 - The book chapter ships **with** the feature — panels must execute.

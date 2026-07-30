@@ -11424,3 +11424,23 @@ programs, and it is the part of this change most likely to matter later: a
 guard the corpus cannot feel is a guard that rots quietly.
 
 Welfare unchanged at 65.53.
+
+## Two reports from the site
+
+The compiler page's table of contents rendered as `01constraints buy
+freedom`. The markup carried `class="book-toc page-toc"` and the rules for
+it live in `docs/book/book.css`, which that page does not load — so the
+number and the title were two inline spans with no layout between them at
+all. The page keeps its own style block, so the rules it needs now sit in it.
+
+The second is a document that went stale rather than a bug.
+`design/build-blocks.md` still described `set target field value` as the
+single write form. The shipped spelling is `target.field = value`, and `set`
+is not merely unsupported — it is rejected with a message naming the
+replacement, which is how the staleness stayed invisible: every program was
+already correct, only the design record was not. Corrected.
+
+Worth keeping in view: the record is right about the part that was actually
+questioned. `build` is a block expression whose last expression is the
+result, frozen at the boundary, gaveled 2026-07-19, and the playground
+example matches it.
