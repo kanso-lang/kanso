@@ -49,6 +49,12 @@ fn release(tag: &str) -> Option<(u64, u64, u64)> {
     }
 }
 
+/// Whether a pin is interim: it names something that is not a release, so it
+/// is somebody's unmerged branch, and every later step has to keep saying so.
+pub fn interim(pin: &Pin) -> bool {
+    release(&pin.tag).is_none()
+}
+
 /// What a lock line says: the tag and sha that make a build reproducible, and
 /// the protocol that says how to speak to wherever the name lives.
 #[derive(Clone)]
@@ -155,6 +161,40 @@ fn remote(name: &str) -> String {
     format!("{base}{repo}")
 }
 
+/// A branch's current head. Interim by construction: a branch moves, so the
+/// sha beside it in the lock is what makes the build reproducible, and what
+/// makes re-pinning a deliberate act rather than a drift.
+fn branch_head(name: &str, branch: &str) -> Result<String, String> {
+    let url = remote(name);
+    let listing = Command::new("git")
+        .args(["ls-remote", "--heads", &url, branch])
+        .output()
+        .map_err(|e| format!("cannot run git: {e}"))?;
+    if !listing.status.success() {
+        return Err(format!(
+            "cannot reach `{name}` at {url}: {}",
+            String::from_utf8_lossy(&listing.stderr).trim()
+        ));
+    }
+    let text = String::from_utf8_lossy(&listing.stdout);
+    match text.lines().next().and_then(|line| line.split_once('\t')) {
+        Some((sha, _)) => Ok(sha.to_string()),
+        None => Err(format!("`{name}` has no branch `{branch}` at {url}")),
+    }
+}
+
+/// `--from owner/repo@branch` — the spelling of an interim pin. A name and a
+/// ref, because the name is permanent identity and the ref is where content
+/// comes from this once; an import never learns either.
+pub fn override_pin(spec: &str) -> Result<(String, String), String> {
+    match spec.split_once('@') {
+        Some((name, reference)) if !name.is_empty() && !reference.is_empty() => {
+            Ok((name.to_string(), reference.to_string()))
+        }
+        _ => Err(format!("`{spec}` is not `owner/repo@branch`")),
+    }
+}
+
 fn highest_release(name: &str) -> Result<(String, String), String> {
     let url = remote(name);
     let listing = Command::new("git")
@@ -216,19 +256,48 @@ fn fetch(cache: &Path, name: &str, tag: &str, sha: &str) -> Result<(), String> {
 }
 
 /// `kanso install` — resolve every imported hako, fetch it, write the lock.
-pub fn install(root: &Path, cache: &Path) -> Result<String, String> {
+///
+/// `--from owner/repo@branch` pins one hako to an unreleased branch. The lock
+/// is the only home an override has: an import names identity and nothing
+/// else, so trying a collaborator's branch edits a lock line rather than the
+/// source that would then have to be edited back before release.
+pub fn install(root: &Path, cache: &Path, from: &[String]) -> Result<String, String> {
     let names = required(root)?;
     if names.is_empty() {
         return Ok("no hakos are imported — nothing to install\n".to_string());
     }
+    let mut asked = BTreeMap::new();
+    for spec in from {
+        let (name, reference) = override_pin(spec)?;
+        if !names.contains(&name) {
+            return Err(format!(
+                "nothing imports `{name}`, so pinning it would pin nothing — \
+                 imports are the manifest"
+            ));
+        }
+        asked.insert(name, reference);
+    }
+    // An interim pin already in the lock survives a plain install: it is a
+    // decision somebody made, and replacing it with a release would change
+    // what the build compiles without anybody asking for that.
+    let locked = read_lock(root);
     let mut lines = Vec::new();
     let mut report = String::new();
     for name in &names {
         let protocol = protocol_of(name)?;
         speakable(name, protocol)?;
-        let (tag, sha) = highest_release(name)?;
+        let held = locked.get(name).filter(|pin| interim(pin));
+        let (tag, sha) = match (asked.get(name), held) {
+            (Some(reference), _) => (reference.clone(), branch_head(name, reference)?),
+            (None, Some(pin)) => (pin.tag.clone(), pin.sha.clone()),
+            (None, None) => highest_release(name)?,
+        };
         fetch(cache, name, &tag, &sha)?;
-        report.push_str(&format!("  {name} {tag}\n"));
+        let mark = match release(&tag) {
+            Some(_) => "",
+            None => " (interim pin)",
+        };
+        report.push_str(&format!("  {name} {tag}{mark}\n"));
         lines.push(format!("{name} {tag} {sha} {protocol}\n"));
     }
     std::fs::write(root.join("hako.lock"), lines.concat())
@@ -246,10 +315,16 @@ pub fn list(root: &Path) -> Result<String, String> {
     }
     let mut out = String::new();
     for (name, pin) in &locked {
-        let mark = match highest_release(name) {
-            Ok((latest, _)) if latest != pin.tag => format!(" (stale: {latest} is out)"),
-            Ok(_) => String::new(),
-            Err(_) => " (unreachable)".to_string(),
+        // An interim pin has no staleness to report — it is not on the tag
+        // series staleness is measured along — so it reports the only thing
+        // worth saying about it, which is that it is still there.
+        let mark = match interim(pin) {
+            true => " (interim pin: not a release)".to_string(),
+            false => match highest_release(name) {
+                Ok((latest, _)) if latest != pin.tag => format!(" (stale: {latest} is out)"),
+                Ok(_) => String::new(),
+                Err(_) => " (unreachable)".to_string(),
+            },
         };
         let short = &pin.sha[..pin.sha.len().min(12)];
         out.push_str(&format!("{name} {} {short} {}{mark}\n", pin.tag, pin.protocol));
@@ -266,17 +341,26 @@ pub fn update(root: &Path, cache: &Path, only: Option<&str>) -> Result<String, S
         return Err("hako.lock pins nothing — run `kanso install` first".to_string());
     }
     if let Some(name) = only {
-        if !locked.contains_key(name) {
+        let Some(pin) = locked.get(name) else {
             return Err(format!("`{name}` is not in hako.lock"));
+        };
+        if interim(pin) {
+            return Err(format!(
+                "`{name}` is pinned to `{}`, which is not a release, and update \
+                 walks releases — re-pin it with `kanso install --from \
+                 {name}@<branch>`, or drop the pin to take the newest release",
+                pin.tag
+            ));
         }
     }
     let mut lines = Vec::new();
     let mut moved = String::new();
+    let mut held = String::new();
     for (name, pin) in &locked {
         speakable(name, &pin.protocol)?;
-        let chosen = match only.is_none_or(|one| one == name) {
-            false => (pin.tag.clone(), pin.sha.clone()),
-            true => {
+        let mine = only.is_none_or(|one| one == name);
+        let chosen = match (mine, interim(pin)) {
+            (true, false) => {
                 let (latest, at) = highest_release(name)?;
                 if latest != pin.tag {
                     fetch(cache, name, &latest, &at)?;
@@ -284,13 +368,22 @@ pub fn update(root: &Path, cache: &Path, only: Option<&str>) -> Result<String, S
                 }
                 (latest, at)
             }
+            (true, true) => {
+                held.push_str(&format!("  {name} {} (interim pin)\n", pin.tag));
+                (pin.tag.clone(), pin.sha.clone())
+            }
+            (false, _) => (pin.tag.clone(), pin.sha.clone()),
         };
         lines.push(format!("{name} {} {} {}\n", chosen.0, chosen.1, pin.protocol));
     }
     std::fs::write(root.join("hako.lock"), lines.concat())
         .map_err(|e| format!("cannot write hako.lock: {e}"))?;
+    let left = match held.is_empty() {
+        true => String::new(),
+        false => format!("left where they are:\n{held}"),
+    };
     match moved.is_empty() {
-        true => Ok("every hako is already at its highest release\n".to_string()),
-        false => Ok(format!("updated:\n{moved}")),
+        true => Ok(format!("every hako is already at its highest release\n{left}")),
+        false => Ok(format!("updated:\n{moved}{left}")),
     }
 }

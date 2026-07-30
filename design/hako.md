@@ -63,9 +63,10 @@ are byte-reproducible from it.
 ## Commands (v1 surface, all of it)
 
 ```
-kanso install          resolve imports, fetch, write hako.lock
-kanso update [hako]    walk tags forward (all, or one), rewrite lock
-kanso list             what the lock pins, with staleness marks
+kanso install                 resolve imports, fetch, write hako.lock
+kanso install --from n@branch pin one hako to an unreleased branch
+kanso update [hako]           walk tags forward (all, or one), rewrite lock
+kanso list                    what the lock pins, with staleness marks
 ```
 
 Three subcommands on the one binary. `publish` does not exist because rule 5

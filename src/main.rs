@@ -11,7 +11,7 @@ fn main() -> ExitCode {
         None => {
             eprintln!(
                 "usage: kanso run <file.kso> [--plan|--interp] | kanso check <file.kso> | kanso \
-                 test <file.kso> | kanso build <file.kso> [--release] | kanso install|list|update <dir> | \
+                 test <file.kso> | kanso build <file.kso> [--release] | kanso install <dir> [--from owner/repo@branch] | kanso list|update <dir> | \
                  kanso repl"
             );
             return ExitCode::from(2);
@@ -24,7 +24,7 @@ fn main() -> ExitCode {
             .unwrap_or_default();
         let root = std::path::Path::new(&file);
         let done = match command.as_str() {
-            "install" => kanso::hako::install(root, &cache),
+            "install" => kanso::hako::install(root, &cache, &hako_overrides()),
             "list" => kanso::hako::list(root),
             _ => kanso::hako::update(root, &cache, hako_named().as_deref()),
         };
@@ -105,6 +105,12 @@ fn hako_named() -> Option<String> {
     std::env::args().nth(3).filter(|a| !a.starts_with("--"))
 }
 
+/// `kanso install <dir> --from owner/repo@branch`, repeatable.
+fn hako_overrides() -> Vec<String> {
+    let args: Vec<String> = std::env::args().collect();
+    args.windows(2).filter(|pair| pair[0] == "--from").map(|pair| pair[1].clone()).collect()
+}
+
 fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let command = args.first()?.clone();
     if command != "run"
@@ -124,11 +130,15 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
     let mut plan = false;
     let mut release = false;
     let mut interp = false;
-    for arg in rest.by_ref() {
+    while let Some(arg) = rest.next() {
         match arg.as_str() {
             "--plan" => plan = true,
             "--release" => release = true,
             "--interp" => interp = true,
+            // an interim pin's spelling; hako_overrides reads the values
+            "--from" if command == "install" => {
+                rest.next()?;
+            }
             // worst-case measurement: thunk nothing, force everything. The
             // env var carries it to every stage (demand runs in infer,
             // codegen, and the interp) and into the spawned native binary.

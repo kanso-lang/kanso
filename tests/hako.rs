@@ -95,6 +95,14 @@ fn published(root: &Path) -> PathBuf {
     // prerelease at a higher version, and a four-component tag above both
     git(&["tag", "v9.9.9-rc1"]);
     git(&["tag", "v9.9.9.1"]);
+    // an unreleased branch: what a collaborator is working on, and the only
+    // thing an interim pin can point at
+    git(&["checkout", "-q", "-b", "fix-thing"]);
+    std::fs::write(repo.join("widgets.kso"), "pub fn greet _\n  \"widgets unreleased\"\n")
+        .expect("writes");
+    git(&["add", "-A"]);
+    git(&["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "three"]);
+    git(&["checkout", "-q", "-"]);
     root.join("remote")
 }
 
@@ -288,4 +296,82 @@ fn the_lock_records_a_protocol_and_refuses_one_it_cannot_speak() {
         "an unspeakable protocol was not refused: {}",
         String::from_utf8_lossy(&refused.stderr)
     );
+}
+
+/// The dev-sha discipline, made structural. You can build against a
+/// collaborator's unreleased branch, and every later step refuses to let the
+/// pin go quiet: the lock records the branch rather than a version, `list`
+/// says the word interim, `update` walks tags and leaves it alone, and a
+/// plain `install` does not silently replace it with a release.
+#[test]
+fn an_interim_pin_is_built_against_flagged_and_never_walked_forward() {
+    let root = std::env::temp_dir().join("kanso-hako-interim");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import \"acme/widgets\"\n\nprint \"{widgets/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+    let kanso = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .args(args)
+            .env("KANSO_HAKO", &cache)
+            .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+            .current_dir(&app)
+            .output()
+            .expect("kanso runs")
+    };
+
+    let install = kanso(&["install", ".", "--from", "acme/widgets@fix-thing"]);
+    assert!(
+        install.status.success(),
+        "install --from failed: {}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+    let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock is written");
+    let fields: Vec<&str> = lock.split_whitespace().collect();
+    assert_eq!(fields[1], "fix-thing", "the lock did not record the branch: {lock}");
+    assert_eq!(fields[2].len(), 40, "the lock records no commit sha: {lock}");
+
+    let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "."])
+        .env("KANSO_HAKO", &cache)
+        .current_dir(&app)
+        .output()
+        .expect("kanso runs");
+    assert_eq!(
+        String::from_utf8_lossy(&built.stdout),
+        "widgets unreleased\n",
+        "the build did not read the pinned branch: {}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+
+    let listed = String::from_utf8_lossy(&kanso(&["list", "."]).stdout).to_string();
+    assert!(listed.contains("interim"), "list does not flag the pin: {listed}");
+
+    let updated = kanso(&["update", "."]);
+    let said = String::from_utf8_lossy(&updated.stdout);
+    assert!(
+        updated.status.success(),
+        "update failed: {}",
+        String::from_utf8_lossy(&updated.stderr)
+    );
+    let after = std::fs::read_to_string(app.join("hako.lock")).expect("the lock survives");
+    assert_eq!(after, lock, "update walked an interim pin forward: {said}{after}");
+
+    let named = kanso(&["update", ".", "acme/widgets"]);
+    assert!(
+        String::from_utf8_lossy(&named.stderr).contains("which is not a release"),
+        "naming an interim pin to update did not say why it cannot: {}",
+        String::from_utf8_lossy(&named.stderr)
+    );
+
+    let again = kanso(&["install", "."]);
+    assert!(again.status.success(), "install failed: {}", String::from_utf8_lossy(&again.stderr));
+    let kept = std::fs::read_to_string(app.join("hako.lock")).expect("the lock survives");
+    assert_eq!(kept, lock, "a plain install replaced the interim pin: {kept}");
 }

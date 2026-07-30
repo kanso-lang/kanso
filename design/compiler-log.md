@@ -11295,3 +11295,39 @@ as a cost.
 The play removal is unblocked. Its branch is deleted rather than rebased,
 being ten merges stale; the work is small enough to redo against a tree
 that has since gained module-aware diagnostics.
+
+## Interim pins: the lock is where an override lives
+
+hako's design gives branches three sentences — install can lock `branch@sha`,
+list marks the pin interim, update refuses to walk it forward — and none of
+the three existed. `update`'s doc comment claimed the third one anyway: "a pin
+that is not a release stays where it is, which is the dev-sha discipline made
+structural". The code below it called `highest_release` for every pin in the
+lock, unconditionally.
+
+Nothing could reach the claim's falseness yet, because nothing could write a
+non-release tag into a lock. `--from owner/repo@branch` makes it reachable, so
+the four steps arrive together: install writes the branch and its head sha,
+the build compiles that content, `list` says the pin is interim, `update`
+walks releases and leaves it, and naming it explicitly is an error that says
+what to do instead. A plain re-install keeps a pin it finds rather than
+quietly restoring a release, which is the same rule from the other side.
+
+What the old `list` did with a branch pin is the sharpest version of the bug:
+it reported `(stale: v0.2.0 is out)`. Staleness is a distance along a tag
+series, and a branch is not on one, so the answer was not merely missing — it
+was a confident statement measured against the wrong thing.
+
+Each of the four guards was broken alone and watched fail at its own
+assertion. That run also caught a process failure worth recording: an earlier
+attempt restored the file with `git checkout src/hako.rs` between breaks, and
+because the first break silently failed to apply, the checkout reverted the
+entire implementation — after which four "broken" runs would have reported
+against a file that had none of the guards in it. The `assert old in text`
+that CLAUDE.md requires is what turned that into an error instead of four
+false proofs. Restoring from a saved copy rather than from git is the fix; a
+working tree is not a checkpoint.
+
+Welfare unchanged at 65.53. No engine is touched — this is host-side CLI
+work — but the wasm build and browser differential were run before believing
+it, per the standing rule.
