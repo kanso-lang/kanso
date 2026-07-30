@@ -10655,3 +10655,45 @@ whose comment mentioned it.
 accepts a `pub play` file at all, and `play` is absent from the usage
 line. His instinct is that they should be separate. Both spellings work
 today and only one is documented.
+
+## 2026-07-29 — lib/path, and a module cannot export what its imports export
+
+**lib/path is pure kanso.** basename, dirname, extension and stem need no
+builtin, no runtime and no engine work — `text/slice` and `length` are
+enough — so the cheapest slice of the os surface is also the one with no
+differential risk. Eleven specs, gated in CI beside lib/json and
+lib/list, and the dirname arithmetic was watched red by shifting the
+index off by one, which failed exactly the three dirname specs.
+
+Two semantics chosen rather than inherited: a dotfile has no extension
+(`.gitignore` is the name, and answering `gitignore` lies about both),
+and an extension excludes its dot, because the common use compares it.
+
+**`join` is missing, and the reason is a bug.** A module cannot export a
+name that one of its own imports also exports. Reduced to four lines:
+
+    lib:  import "std/text"
+          pub fn join a b → …
+    app:  import "../lib"
+          lib/join "a" "b"
+    error[opacity]: `join` is private to module `lib`
+
+`std/text` exports `join`, so bare enrollment puts a clone of it among
+lib's declarations, and `exports.entry(name).or_insert(is_pub)` takes
+whichever lands first — the clone hides the module's own `pub`. A
+library's public surface therefore depends on what its dependencies
+happen to name, and adding an export to std/text would silently remove
+an unrelated library's.
+
+An export flag that reads only non-synthetic declarations was tried and
+REVERTED: it resolves the opacity error and then dispatches `lib/join`
+to *text's* arm, because `qualify` renames enrolled clones as though the
+module had declared them, so `text/join` literally becomes `lib/join`.
+Silently calling the wrong function is worse than a loud refusal. The
+real fix is that a bare reference to an imported name should rewrite to
+the origin's qualified name rather than the importer's, and that is the
+module system rather than this slice.
+
+Nothing in the tree hits this today because no module both imports and
+re-declares a name. `path/join` would be the first, which is why it is
+absent rather than renamed to something unnatural.
