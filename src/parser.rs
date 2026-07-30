@@ -1390,10 +1390,19 @@ impl<'a> P<'a> {
     }
 
     fn expect_done(&self) -> Result<(), Diagnostic> {
-        match self.done() {
-            true => Ok(()),
-            false => Err(self.err("unexpected trailing tokens".to_string())),
+        if self.done() {
+            return Ok(());
         }
+        // A lambda is always parenthesised, so a bare one leaves its arrow
+        // where nothing can take it. Saying only that something is left over
+        // sends the reader looking at the body.
+        let message = match self.toks.get(self.pos).map(|(t, _)| t) {
+            Some(Tok::Arrow) => {
+                "a lambda is parenthesised: `f = (x -> …)`, not `f = x -> …`".to_string()
+            }
+            _ => "unexpected trailing tokens".to_string(),
+        };
+        Err(self.err(message))
     }
 
     fn expect_kw_fn(&mut self) -> Result<(), Diagnostic> {
