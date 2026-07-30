@@ -36,6 +36,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # the wasm engine test runs docs/kanso.wasm, and the committed artifact
+      # is whatever the last author remembered to rebuild — building it here
+      # is what makes the third engine's result about this commit's source
+      - name: rebuild the engine the wasm spec runs
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sh scripts/build_wasm.sh
       - run: cargo test
       - name: the shipped library's own tests
         run: |

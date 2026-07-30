@@ -20,3 +20,19 @@ path = "src/main.rs"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[dev-dependencies]
+wasmi = "1.1.0"
+
+# wasmi interprets the whole toolchain, so an unoptimised build of it turns
+# the third engine's corpus run from seconds into minutes. Only the dependency
+# is optimised; kanso itself still builds debug, so a test still gets a
+# readable backtrace.
+[profile.dev.package.wasmi]
+opt-level = 3
+
+[profile.dev.package.wasmi_ir]
+opt-level = 3
+
+[profile.dev.package.wasmi_collections]
+opt-level = 3

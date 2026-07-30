@@ -11331,3 +11331,46 @@ working tree is not a checkpoint.
 Welfare unchanged at 65.53. No engine is touched — this is host-side CLI
 work — but the wasm build and browser differential were run before believing
 it, per the standing rule.
+
+## The third engine, inside cargo test
+
+Every test binary ran two engines, native and `--interp`, and the wasm engine
+was reached only by `scripts/browser_differential.py` through headless Chrome.
+A wasm-only divergence was therefore invisible to a local run by
+construction, which is how a dispatch failure on a synthesised getter reached
+CI in a project whose central law is that three engines agree.
+
+`docs/kanso.wasm` imports exactly one function, `env.k_callback`, so a host
+needs very little: instantiate the toolchain, compile a program to a second
+module, satisfy that module's `rt_*` imports from the first module's exports,
+and publish the program's function table into the cell `k_callback` reads.
+wasmi does it in-process, so the corpus runs in `cargo test` with no browser
+and no external toolchain.
+
+Held to the same corpus and compared the same way — against the native
+engine's merged stream and exit code, not against the `.out` goldens, which
+pin stdout alone where the wasm engine has one output area. 90 programs agree,
+one known gap, one skipped for wanting a filesystem.
+
+Proof it earns its place, rather than an argument that it should: trimming
+trailing space in `rt_template`, a hot path no other engine shares, left the
+native and interpreted golden suites green at nine passed and failed this one
+on `build_contained.kso`, printing `one hop:pong` against `one hop: pong`.
+
+Two things that would have made it a test proving nothing, both fixed:
+
+The gap list was about to become a second copy of `KNOWN_GAPS` in the Chrome
+harness. It is now `tests/golden/wasm_gaps.txt`, which both read, because two
+lists of what an engine cannot do drift and the drift is silent.
+
+The artifact is committed, and CI ran `cargo test` in a job that never built
+it — so the third engine's verdict would have been about whatever wasm the
+last author remembered to commit. That job now rebuilds it. A fresh clone
+stamps every file with the checkout time, so an mtime check alone would have
+been satisfied by an artifact that is merely as old as the source, which is
+not evidence about the source.
+
+The first divergence planted was in an `if takes a bool condition` message
+and the corpus never reached it, so the test passed. That is a coverage fact
+worth keeping visible: this harness is only as good as the programs it runs,
+and a green run means the corpus agrees, never that the engines do.
