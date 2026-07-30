@@ -2169,6 +2169,11 @@ fn apply_reexport(
     Ok(())
 }
 
+/// A module is a cycle when it is already being loaded, not when it has been
+/// loaded before: two modules that both import `std/list` are a diamond, and
+/// a diamond is the ordinary shape of any program with a dependency. So the
+/// set is the path currently open, and a module leaves it once its own load
+/// finishes.
 fn compile_module_inner(
     dir: &std::path::Path,
     require_main: bool,
@@ -2176,9 +2181,20 @@ fn compile_module_inner(
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
     let canon = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
-    if !visited.insert(canon) {
+    if !visited.insert(canon.clone()) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
+    let loaded = compile_module_loaded(dir, require_main, visited, embedded);
+    visited.remove(&canon);
+    loaded
+}
+
+fn compile_module_loaded(
+    dir: &std::path::Path,
+    require_main: bool,
+    visited: &mut std::collections::HashSet<std::path::PathBuf>,
+    embedded: Option<&[(&str, &str)]>,
+) -> Result<ast::Program, String> {
     let mut sources: Vec<(String, String)> = match embedded {
         Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
         None => {
