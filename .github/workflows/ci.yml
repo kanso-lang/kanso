@@ -232,6 +232,9 @@ jobs:
       # asks every exported std function for the wrong thing, in every
       # argument position, and requires the two engines to answer identically
       - run: python3 scripts/diagnostic_differential.py
+      # rendering is written twice — `render` in the interpreter and
+      # `k_render` in the C runtime — and every print goes through it
+      - run: python3 scripts/render_differential.py
 
   site:
     name: site (landing sample and playground run in a browser)
