@@ -10755,3 +10755,27 @@ difference is a capability rather than a disagreement, so it is a KNOWN_GAPS
 entry: the harness pins the phrase the browser declines with, fails if
 that phrase changes, and fails again with "this now passes — delete it"
 if the program ever starts working. Both directions were watched.
+
+## 2026-07-29 — an edit that silently did not apply, twice
+
+Verifying the `io/exists` commit turned up that `src/infer.rs` was never
+touched by it, and that `io/env` had the same hole a slice earlier. Both
+scripted edits targeted a match arm by its exact text, `cargo fmt` had
+since reflowed that arm onto one line, and the replacement matched
+nothing. Neither run said so.
+
+Nothing was wrong, which is why nothing caught it: a missing entry falls
+to `_ => TOP`, and TOP is a superset of DESC, so inference stayed sound
+and merely stopped knowing anything. What it cost is precision —
+`desc_yield` could not say that `env` yields a string or none, `exists` a
+boolean, `list_dir` a list, so every consumer of those saw TOP.
+
+Two things follow. The first is the rule already learned today and not
+applied thoroughly enough: a scripted edit asserts that it changed the
+file. That was done for the *reverts* in this slice and not for the
+edits, which is exactly backwards — a revert that fails is caught by the
+test going green, while an edit that fails is caught by nothing.
+
+The second is that `desc_yield` has no test. Every arm of it is a claim
+about what an effect produces, and a missing arm is invisible because the
+fallback is legal. That is a gap in the corpus rather than in the code.
