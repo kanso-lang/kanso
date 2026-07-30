@@ -11251,3 +11251,47 @@ is what CI is for, but the local run had claimed green.
 
 #39 is closed: stderr, paths, environment, file existence, directory
 listing, a clock, and now exit codes.
+
+## 2026-07-29 — the cohort regression that was not one
+
+Removing the `play` verb was parked on a measurement: staging a program
+as a module dropped `cohort_frees` from 1 to 0, and that was reported as
+the design change costing an optimization. It was not, and the mistake is
+the one this repo's rules name in full.
+
+The same program, both ways:
+
+                    allocs   alloc_bytes   arena_blocks   arena_peak
+    single file       24      8,691,344         3          4,497,184
+    two-file module   22      8,691,312         3          4,497,184
+
+Peak memory identical, arena blocks identical. The module allocates two
+fewer times — the `play` wrapper's own — which puts growth under the
+512 KB threshold the rewind is guarded on, so the cohort declines a
+rewind that would reclaim nothing. The guard working, not an
+optimization lost.
+
+What I did was read a counter as a cost without checking the thing the
+counter stands for. "Assert what a program does, not how the compiler
+reached it… peak memory that does or does not grow with the input" —
+and the escalation blocked the work behind it for a day.
+
+The finding that survives is about the test rather than the compiler:
+tests/cohort.rs asserts `cohort_frees=1`, which is an internal verdict.
+It is worth pinning that a kernel still fires, per the rule that a
+deleted kernel must turn CI red, but that assertion cannot also be read
+as a claim about the outcome — those are two different statements and
+only one of them was true here.
+
+An attempt to assert the outcome beside it went straight into the trap
+it was meant to avoid. Raising the rewind threshold out of reach and
+re-measuring showed this fixture's peak does not move whether the cohort
+fires or not — 4,497,184 both ways — so the added assertion passed with
+the kernel gone and proved nothing. It was removed rather than kept for
+appearance. For this program the counter is the only signal there is,
+which is exactly why it is asserted, and exactly why it cannot be read
+as a cost.
+
+The play removal is unblocked. Its branch is deleted rather than rebased,
+being ten merges stale; the work is small enough to redo against a tree
+that has since gained module-aware diagnostics.

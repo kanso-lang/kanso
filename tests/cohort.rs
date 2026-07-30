@@ -42,6 +42,11 @@ fn a_result_heavy_cohort_is_kept_not_copied() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(stdout, "chars 2400000\n", "stdout mismatch: {stderr}");
     assert!(stderr.contains("cohort_kept=1"), "the guard never engaged: {stderr}");
+    // An internal verdict, asserted deliberately: for this fixture the peak is
+    // the same whether the cohort fires or not, so the counter is the only
+    // signal that the kernel is still there — which is what makes it worth
+    // pinning, and what makes it wrong to read as a cost. Measured: with the
+    // rewind threshold raised out of reach, this program's peak does not move.
     assert!(stderr.contains("cohort_frees=1"), "free count moved: {stderr}");
     assert!(output.status.success());
 }
