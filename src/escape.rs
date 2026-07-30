@@ -72,6 +72,14 @@ fn analyze_inner(program: &Program) -> EscapeInfo {
             returns.insert(key, ty.clone());
         }
         for f in &program.fns {
+            // A getter is the one function that must look at what it was
+            // handed rather than trust its signature: its group is reachable
+            // with a record of any type, and the by-value convention would
+            // read two words out of a record that may hold one. Reading a
+            // field of the wrong record has to say so, not answer a number.
+            if f.is_getter() {
+                continue;
+            }
             for (i, p) in f.params.iter().enumerate() {
                 if matches!(p, Pattern::Ctor { ty: pty, .. } if pty == ty) {
                     carries.insert((f.name.clone(), f.params.len(), i), ty.clone());
