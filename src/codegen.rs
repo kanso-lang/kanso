@@ -2696,11 +2696,17 @@ impl<'a> Backend<'a> {
                     self.emit_ret(f, &value);
                     return Ok(());
                 }
+                // the arity has to match a declaration: `d_{name}_{n}` for an
+                // n nothing declares is a symbol the module never defines
                 let is_program_fn = f.lookup(name).is_none()
                     && !self.type_ids.contains_key(name.as_str())
                     && name != "err"
                     && name != "print"
-                    && self.program.fns.iter().any(|d| d.name == *name);
+                    && self
+                        .program
+                        .fns
+                        .iter()
+                        .any(|d| d.name == *name && d.params.len() == args.len());
                 if is_program_fn {
                     let n = args.len();
                     let mut emitted = Vec::new();
@@ -3450,7 +3456,12 @@ impl<'a> Backend<'a> {
             f.record(&t, REC | fails);
             return Ok(t);
         }
-        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
+        // The arity has to match a real declaration. Matching on the name
+        // alone emits a call to `d_{name}_{n}` for any n the caller wrote,
+        // and a dispatcher that was never defined is invalid IR the user
+        // meets as a clang error.
+        let declared = |d: &FnDecl| d.name == *name && d.params.len() == emitted.len();
+        if !was_builtin && self.program.fns.iter().any(declared) {
             let n = emitted.len();
             let args_ir: Vec<String> =
                 emitted.iter().enumerate().map(|(i, e)| self.call_arg(f, name, n, i, e)).collect();
@@ -3523,6 +3534,24 @@ impl<'a> Backend<'a> {
             }
             f.record(&result, self.group_return_set(name, n) | fails);
             return Ok(result);
+        }
+        // Declared, but at no arity this call can reach. The interpreter
+        // reports it when the call runs, so native reports the same words at
+        // the same moment rather than refusing to build a program the oracle
+        // executes.
+        if !was_builtin && self.program.fns.iter().any(|d| d.name == *name) {
+            let msg = format!("no overload of `{name}` matches these arguments");
+            let (m, _) = self.intern(&format!("{msg}\0"));
+            f.line(&format!("call void @k_die(ptr @{m})"));
+            f.line("unreachable");
+            let after = f.label();
+            f.start_block(&after);
+            let t = f.tmp();
+            f.line(&format!(
+                "{t} = select i1 true, %KValue {{ i64 4, i64 0 }}, %KValue {{ i64 4, i64 0 }}"
+            ));
+            f.record(&t, NONE);
+            return Ok(t);
         }
         if name == "at" && emitted.len() == 2 {
             return Ok(self.emit_at(f, &emitted[0].clone(), &emitted[1].clone(), false, span));

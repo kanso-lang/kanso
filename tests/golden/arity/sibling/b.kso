@@ -1,0 +1,2 @@
+pub fn misuse k
+  adder k 4

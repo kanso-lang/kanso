@@ -1,0 +1,2 @@
+pub fn adder n
+  (x -> n + x)
