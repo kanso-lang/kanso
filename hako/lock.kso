@@ -27,8 +27,8 @@ fn protocol_of fields
 # tag are not releases, which is what stops a version race being won by
 # something nobody published.
 pub fn release? tag
-  numbers = text/split (text/slice tag 2 (length tag)) "."
-  text/slice tag 1 1 == "v" && triple? numbers
+  parts = text/split (text/slice tag 2 (length tag)) "."
+  text/slice tag 1 1 == "v" && triple? parts
 
 fn digit? c
   code = text/char_code c

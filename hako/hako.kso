@@ -2,9 +2,9 @@ import "std/io"
 import "std/list"
 import "std/text"
 
-# hako's first verb, in the language hako manages. Reading the lock is the
-# part that needs no network: what a build will use has to be answerable on a
-# train, so it is answered from the file alone.
+# hako's first verb, in the language hako manages. Reading the lock needs no
+# network; saying whether a pin has fallen behind does, so the remote is
+# asked once per pin and a remote that does not answer says so.
 pub fn listing dir
   io/read_file "{dir}/hako.lock" . shown
 
@@ -13,15 +13,38 @@ fn shown text
 
 fn described pins
   empty = io/write "hako.lock pins nothing — run `kanso install`\n"
-  rows = io/write (text/join (list/to_list (list/map pins line)) "")
-  if (length pins == 0) empty rows
+  if (length pins == 0) empty (against_remotes pins)
 
-fn line p
+fn against_remotes pins
+  io/env "KANSO_HAKO_REMOTE" . (set -> walked pins set "")
+
+fn walked pins set acc
+  rest = list/to_list (list/drop pins 1)
+  grown = (mark -> walked rest set "{acc}{line pins[1]! mark}")
+  more = marked pins[1]! set . grown
+  if (length pins == 0) (io/write acc) more
+
+# An interim pin is not on the tag series staleness is measured along, so the
+# only thing worth saying about it is that it is interim.
+fn marked p set
+  interim = settled " (interim pin: not a release)"
+  if (release? p.tag) (against p set) interim
+
+fn against p set
+  newest set p.name . (latest -> settled (compared latest p.tag))
+
+fn compared latest tag
+  if (latest == none) " (unreachable)" (behind latest tag)
+
+fn behind latest tag
+  if (latest == tag) "" " (stale: {latest} is out)"
+
+fn settled mark
+  io/write "" . (_ -> mark)
+
+fn line p mark
   short = text/slice p.sha 1 12
-  "{text/join [p.name p.tag short p.protocol] " "}{mark p}\n"
-
-fn mark p
-  if (release? p.tag) "" " (interim pin: not a release)"
+  "{text/join [p.name p.tag short p.protocol] " "}{mark}\n"
 
 fn where_from argv
   if (length argv == 0) "." argv[1]!

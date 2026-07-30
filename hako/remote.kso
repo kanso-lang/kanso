@@ -1,0 +1,65 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Where a name is fetched from. The tests point this at a directory of
+# repositories, which is what lets them run without a network.
+pub fn base set
+  if (set == none) "https://github.com/" set
+
+pub fn url set name
+  parts = text/split name "/"
+  "{base set}{parts[1]!}/{parts[2]!}"
+
+# The highest release the remote publishes. A remote that cannot be reached
+# and one that publishes no release both answer none: neither says anything
+# about whether the pin in the lock is behind.
+pub fn newest set name
+  io/run "git" ["ls-remote" "--tags" (url set name)] . picked
+
+fn picked p
+  rows = text/split p.stdout "\n"
+  tags = list/to_list (list/map (list/reject rows blank?) tagged)
+  if (p.status != 0) none (highest tags)
+
+fn blank? row
+  row == ""
+
+# `<sha>\trefs/tags/<tag>`, and a tag an annotated object points at repeats
+# with a `^{}` suffix that names the same release.
+fn tagged row
+  fields = text/split row "refs/tags/"
+  bare (fields[length fields]!)
+
+fn bare tag
+  parts = text/split tag "^"
+  parts[1]!
+
+fn highest tags
+  releases = list/reject tags unreleased?
+  list/fold releases none later
+
+fn unreleased? tag
+  release? tag == false
+
+fn later seen tag
+  if (seen == none) tag (further seen tag)
+
+fn further seen tag
+  if (after? tag seen) tag seen
+
+# Lexicographic on the three numbers, which is why a release is exactly three.
+pub fn after? tag seen
+  a = version tag
+  b = version seen
+  ahead? (a[1]! - b[1]!) (a[2]! - b[2]!) (a[3]! - b[3]!)
+
+fn ahead? major minor patch
+  if (major != 0) (major > 0) (ahead_rest? minor patch)
+
+fn ahead_rest? minor patch
+  if (minor != 0) (minor > 0) (patch > 0)
+
+fn version tag
+  parts = text/split (text/slice tag 2 (length tag)) "."
+  list/to_list (list/map parts text/to_int)
