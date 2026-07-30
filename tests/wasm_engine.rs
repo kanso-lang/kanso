@@ -299,6 +299,12 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
                 met += 1;
             }
             (Answer::Ran(code, text), None) => {
+                // the wasm backend translates a getter's internal name too, and
+                // it is the one engine no other test can watch doing it
+                assert!(
+                    !text.contains(&kanso::ast::getter_name("")),
+                    "{name} showed a getter its internal name on wasm: {text}"
+                );
                 let (native_code, native_text) = natively(&path);
                 assert_eq!(text, native_text, "wasm and native disagree on {name}");
                 assert_eq!(code, native_code, "wasm and native exit differently on {name}");
