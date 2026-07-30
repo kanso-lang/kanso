@@ -94,3 +94,21 @@ fn an_arm_no_call_can_reach_is_refused_across_files() {
     );
     assert_eq!(code, Some(2), "a compile error exits 2");
 }
+
+/// Construction is positional and complete, and the same seam hid it as the
+/// call arity: a type declared in one file of a module and built in another
+/// was checked by nobody, and a foreign type never was. Native built the
+/// over-wide record and printed it; the interpreter refused.
+#[test]
+fn a_construction_across_files_counts_its_fields() {
+    let (_, err, code) = kanso("check", "construction", &[]);
+    assert_eq!(
+        err.lines().next(),
+        Some(
+            "error[arity]: `local` has 2 field(s), got 3 (construction is positional, \
+             fields alphabetical) (module tests/golden/arity/construction)"
+        ),
+        "check did not count the fields: {err}"
+    );
+    assert_eq!(code, Some(2), "a compile error exits 2");
+}

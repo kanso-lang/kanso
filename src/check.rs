@@ -880,6 +880,16 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
 /// diagnostic belongs. This runs on the merged program, where the
 /// dependency's arms are in scope.
 fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
+    // Construction is positional and complete, and the same seam hid it: a
+    // type declared in one file of a module and built in another was checked
+    // by nobody, and a foreign type never was. A typeset does not construct
+    // and a subtype takes the one value it wraps, so neither is entered.
+    let fields: HashMap<&str, usize> = program
+        .types
+        .iter()
+        .filter(|ty| ty.members.is_empty() && ty.parent.is_none() && !ty.fields.is_empty())
+        .map(|ty| (ty.name.as_str(), ty.fields.len()))
+        .collect();
     let mut arities: HashMap<&str, Vec<usize>> = HashMap::new();
     for decl in &program.fns {
         let slot = arities.entry(decl.name.as_str()).or_default();
@@ -891,9 +901,12 @@ fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
         if decl.synthetic {
             continue;
         }
-        let bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
+        let mut bound: HashSet<&str> = decl.params.iter().flat_map(param_names).collect();
         for stmt in &decl.body {
-            arity_walk_stmt(stmt, &arities, &bound, diags);
+            bound_in_stmt(stmt, &mut bound);
+        }
+        for stmt in &decl.body {
+            arity_walk_stmt(stmt, &arities, &fields, &bound, diags);
         }
     }
 }
@@ -908,15 +921,44 @@ fn param_names(p: &Pattern) -> Vec<&str> {
     }
 }
 
+/// Every name this declaration binds anywhere in its body — its parameters,
+/// its bindings, and the parameters of every lambda inside it. A binding may
+/// not shadow a *function* declaration, so the call half never needed this;
+/// a type's name is not covered by that rule, and `grown = (mark -> ...)`
+/// beside std/list's two-field `grown` is a legal thing to write.
+///
+/// The whole body is gathered before the walk rather than as it goes: a name
+/// bound after the line that uses it is still a name this code owns, and a
+/// check that rejects programs should err towards saying nothing.
+fn bound_in_stmt<'a>(stmt: &'a Stmt, out: &mut HashSet<&'a str>) {
+    match stmt {
+        Stmt::Bind { pattern, expr } => {
+            out.extend(param_names(pattern));
+            bound_in_expr(expr, out);
+        }
+        Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => bound_in_expr(expr, out),
+    }
+}
+
+fn bound_in_expr<'a>(e: &'a Expr, out: &mut HashSet<&'a str>) {
+    if let Expr::Lambda { params, .. } = e {
+        out.extend(params.iter().map(|(n, _)| n.as_str()));
+    }
+    for child in crate::expr_children(e) {
+        bound_in_expr(child, out);
+    }
+}
+
 fn arity_walk_stmt(
     stmt: &Stmt,
     arities: &HashMap<&str, Vec<usize>>,
+    fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
     match stmt {
         Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-            arity_walk_expr(expr, arities, bound, diags)
+            arity_walk_expr(expr, arities, fields, bound, diags)
         }
     }
 }
@@ -924,6 +966,7 @@ fn arity_walk_stmt(
 fn arity_walk_expr(
     e: &Expr,
     arities: &HashMap<&str, Vec<usize>>,
+    fields: &HashMap<&str, usize>,
     bound: &HashSet<&str>,
     diags: &mut Vec<Diagnostic>,
 ) {
@@ -936,6 +979,19 @@ fn arity_walk_expr(
             // to a sibling file unchecked.
             let known = arities.get(name.as_str());
             if !bound.contains(name.as_str()) {
+                if let Some(count) = fields.get(name.as_str()) {
+                    if args.len() != *count {
+                        diags.push(Diagnostic::new(
+                            "arity",
+                            format!(
+                                "`{name}` has {count} field(s), got {} \
+                                 (construction is positional, fields alphabetical)",
+                                args.len()
+                            ),
+                            *span,
+                        ));
+                    }
+                }
                 if let Some(known) = known {
                     if !known.contains(&args.len()) && !known.contains(&0) {
                         let mut takes: Vec<String> = known.iter().map(|a| a.to_string()).collect();
@@ -956,7 +1012,7 @@ fn arity_walk_expr(
         }
     }
     for child in crate::expr_children(e) {
-        arity_walk_expr(child, arities, bound, diags);
+        arity_walk_expr(child, arities, fields, bound, diags);
     }
 }
 
