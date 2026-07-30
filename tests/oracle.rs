@@ -89,6 +89,22 @@ impl Executor for CollectExecutor {
         std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))
     }
 
+    /// The same process the other engines start. The corpus only reaches for
+    /// POSIX binaries every machine running this suite already has, so the
+    /// comparison stays a comparison of engines rather than of installs.
+    fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
+        let done = std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .map_err(|_| format!("cannot start {cmd}"))?;
+        let status = done.status.code().map_or(128, i64::from);
+        Ok((
+            status,
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        ))
+    }
+
     fn write_file(&mut self, path: &str, _content: &str) -> Result<(), String> {
         Err(format!("the oracle does not write files: cannot write {path}"))
     }

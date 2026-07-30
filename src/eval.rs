@@ -175,6 +175,7 @@ pub enum Desc {
     ListDir(String),
     Now,
     WriteFile(String, String),
+    Run(String, Vec<String>),
     Bind(Rc<Desc>, Value),
     Sleep(u64),
     Random(u64),
@@ -318,6 +319,11 @@ pub trait Executor {
     fn args(&mut self) -> Vec<String>;
     fn stdin(&mut self) -> Result<String, String>;
     fn read_file(&mut self, path: &str) -> Result<String, String>;
+    /// Start a process and wait for it. The answer is what it wrote and the
+    /// status it ended with; a non-zero status is an outcome, not a failure,
+    /// because a caller usually wants to read it rather than be stopped by
+    /// it. `Err` is reserved for the process never starting at all.
+    fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String>;
     fn write(&mut self, text: &str);
     /// Diagnostics, so a tool's chatter stays out of what it is piped into.
     fn write_err(&mut self, text: &str);
@@ -424,6 +430,22 @@ impl Executor for RealExecutor {
         std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))
     }
 
+    fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
+        let done = std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            // no OS detail: the native engine learns of a failed exec only
+            // through the child's exit code, and the wording has to match
+            .map_err(|_| format!("cannot start {cmd}"))?;
+        // a process killed by a signal carries no status of its own; 128 plus
+        // the signal is what a shell reports, and a caller comparing against
+        // zero gets the same answer either way
+        let status = done.status.code().map_or(128, i64::from);
+        let out = String::from_utf8_lossy(&done.stdout).into_owned();
+        let errs = String::from_utf8_lossy(&done.stderr).into_owned();
+        Ok((status, out, errs))
+    }
+
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
         std::fs::write(path, content).map_err(|e| format!("cannot write {path}: {e}"))
     }
@@ -486,6 +508,11 @@ impl Executor for ScriptedExecutor {
     fn read_file(&mut self, path: &str) -> Result<String, String> {
         self.transcript.push(format!("read_file {path:?}"));
         self.files.get(path).cloned().ok_or_else(|| format!("cannot read {path}"))
+    }
+
+    fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
+        self.transcript.push(format!("run {cmd:?} {args:?}"));
+        Ok((0, String::new(), String::new()))
     }
 
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
@@ -1478,6 +1505,32 @@ impl<'a> Interp<'a> {
             return Ok(bad.clone());
         }
         match name {
+            "run" => {
+                let [cmd, args_list] = arity(args, name, span)?;
+                let Value::Str(cmd) = cmd else {
+                    return Err(RuntimeError {
+                        message: "run takes a command string".to_string(),
+                        span,
+                    });
+                };
+                let Value::List(items) = args_list else {
+                    return Err(RuntimeError {
+                        message: "run takes a list of argument strings".to_string(),
+                        span,
+                    });
+                };
+                let mut argv = Vec::new();
+                for item in items.iter() {
+                    let Value::Str(text) = item else {
+                        return Err(RuntimeError {
+                            message: "run takes a list of argument strings".to_string(),
+                            span,
+                        });
+                    };
+                    argv.push(text.clone());
+                }
+                Ok(Value::Desc(Rc::new(Desc::Run(cmd, argv))))
+            }
             "read_file" => {
                 let [path] = arity(args, name, span)?;
                 let Value::Str(path) = path else {
@@ -2685,6 +2738,16 @@ impl<'a> Interp<'a> {
                 Ok(text) => Value::Str(text),
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
+            // three answers in a list, which the std wrapper turns into a
+            // record: a builtin cannot name a type declared in kanso.
+            Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
+                Ok((status, out, errs)) => Value::List(Rc::new(vec![
+                    Value::Int(status.into()),
+                    Value::Str(out),
+                    Value::Str(errs),
+                ])),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
             Desc::Write(text) => {
                 executor.write(text);
                 Ok(Value::NoneV)
@@ -2833,6 +2896,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Args => out.push_str("  args\n"),
         Desc::Stdin => out.push_str("  stdin\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
+        Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),

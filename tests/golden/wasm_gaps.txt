@@ -10,3 +10,9 @@
 # there. The capability is missing, not the agreement: `exists` still answers
 # (false, for everything), and every other engine matches.
 tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem
+
+# A tab cannot start a process, so a program that runs one cannot run there.
+# The capability is missing, not the agreement — the playground says so by
+# name, which is what the differential law asks of an engine that declines.
+tests/golden/micro/process_run.kso	the playground cannot start processes
+tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes

@@ -11566,3 +11566,44 @@ it, and reading the emitted IR rather than the test output.
 
 `tests/golden/fields/returned` pins all six consumers in one program and
 `.../failed` pins the failure; both engines are held to both.
+
+## Starting a process
+
+`io/run cmd args` answers a record of `status`, `stdout` and `stderr`. A
+non-zero status is what the process said, so a caller reads it and decides; an
+err is kept for the process never starting. That split is the Typhoeus line in
+this project's own values, and it keeps the common path free of any rescue.
+
+The error model needed nothing new. An err raised by `std/` crosses a package
+boundary by construction — a module is foreign if it entered the build through
+any source, `std/` included — so a caller can name it in an arm already. Clay
+reached this in the design dialog and withdrew the `run!`/`run` pair he had
+proposed a moment earlier.
+
+Native forks with two pipes rather than calling popen, because both streams
+are wanted and popen gives one. A failed exec is only visible to the parent as
+the child's exit code, so the child exits 127 and the parent turns that into
+the err. The interpreter used to append the OS error string to its message;
+that wording had to go, because native cannot see it and it differs by
+platform anyway, which would have made the differential law a function of the
+operating system.
+
+A browser tab cannot start anything, so wasm declines by name. That is the
+exemption the differential law grants an engine that refuses rather than
+diverges, and the two programs are written into `tests/golden/wasm_gaps.txt`.
+
+Two things this turned up that were not about processes.
+
+The builtin type table is keyed by bare name after the module qualifier and
+any `builtin_` prefix are stripped, so a program declaring its own `run` was
+told it takes a string. Every function sharing a bare name with a builtin
+inherited that builtin's demands; `run` is only the first name common enough
+to collide. A call that resolves to a group the program declares now consults
+that group's arms and not the table.
+
+And a claim in the log above is corrected. The entry for the third engine says
+both harnesses read one gap list. Only one of them did: that change scoped its
+`git add` to `design tests` and left `scripts/` out, so the Chrome harness kept
+its own literal and the two lists have been separate ever since — the drift
+that change was written to prevent, introduced by the change itself. Both read
+the file now.

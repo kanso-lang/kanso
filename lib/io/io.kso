@@ -4,6 +4,12 @@
 pub type exit_status
   code
 
+# What a finished process leaves behind.
+pub type process
+  status
+  stderr
+  stdout
+
 pub args = builtin_args
 
 # An unset variable reads as none: not being configured is ordinary.
@@ -28,6 +34,19 @@ pub fn list_dir path
 
 pub fn read_file path
   builtin_read_file path
+
+# Starting a process is a description like any other effect. The answer is
+# three things, so the wrapper reads the builtin's list into a record: a
+# builtin cannot name a type that is declared here.
+#
+# A non-zero status is an outcome, not a failure. A caller usually wants to
+# read it — a missing repository answers 1 and that is the answer — so an err
+# is kept for the process never starting at all.
+pub fn run cmd argv
+  builtin_run cmd argv . answered
+
+fn answered r
+  process r[1]! r[3]! r[2]!
 
 pub stdin = builtin_stdin
 

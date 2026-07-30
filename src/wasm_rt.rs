@@ -842,6 +842,10 @@ impl Executor for RtExecutor {
     fn write_file(&mut self, path: &str, _content: &str) -> Result<(), String> {
         Err(format!("the playground has no filesystem: cannot write {path}"))
     }
+
+    fn run(&mut self, cmd: &str, _args: &[String]) -> Result<(i64, String, String), String> {
+        Err(format!("the playground cannot start processes: cannot run {cmd}"))
+    }
 }
 
 fn exec_slot(h: u32) -> Result<u32, String> {
