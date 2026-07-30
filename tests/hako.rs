@@ -484,3 +484,58 @@ fn the_kanso_listing_says_when_nothing_is_pinned() {
         String::from_utf8_lossy(&done.stderr)
     );
 }
+
+/// `kanso update` is a kanso program too. Its four refusals are the ones the
+/// Rust verb had, worded the same and all reaching the reader as `error:` —
+/// an expected refusal is not a place to show somebody the executor.
+#[test]
+fn the_kanso_update_refuses_for_the_stated_reasons() {
+    let root = std::env::temp_dir().join("kanso-hako-update-refusals");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("a directory of its own");
+    let update = |args: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("update")
+            .arg(&root)
+            .args(args)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (String::from_utf8_lossy(&done.stderr).into_owned(), done.status.code())
+    };
+
+    std::fs::write(root.join("hako.lock"), "").expect("the lock writes");
+    assert_eq!(
+        update(&[]),
+        ("error: hako.lock pins nothing — run `kanso install` first\n".to_string(), Some(2))
+    );
+
+    std::fs::write(root.join("hako.lock"), "acme/widgets v0.1.0 abc123def4567890 git\n")
+        .expect("the lock writes");
+    assert_eq!(
+        update(&["nope/thing"]),
+        ("error: `nope/thing` is not in hako.lock\n".to_string(), Some(2))
+    );
+
+    std::fs::write(root.join("hako.lock"), "b/c fix-thing 99aabbccddeeff00 git\n")
+        .expect("the lock writes");
+    let (interim, code) = update(&["b/c"]);
+    assert!(
+        interim.starts_with("error: `b/c` is pinned to `fix-thing`, which is not a release"),
+        "{interim}"
+    );
+    assert!(interim.contains("kanso install --from b/c@<branch>"), "{interim}");
+    assert_eq!(code, Some(2));
+
+    std::fs::write(root.join("hako.lock"), "a/b v0.1.0 abc123def4567890 hg\n")
+        .expect("the lock writes");
+    assert_eq!(
+        update(&[]),
+        (
+            "error: `a/b` is locked to the `hg` protocol, which this toolchain \
+             cannot speak\n"
+                .to_string(),
+            Some(2)
+        )
+    );
+}

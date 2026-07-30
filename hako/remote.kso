@@ -11,9 +11,10 @@ pub fn url set name
   parts = text/split name "/"
   "{base set}{parts[1]!}/{parts[2]!}"
 
-# The highest release the remote publishes. A remote that cannot be reached
-# and one that publishes no release both answer none: neither says anything
-# about whether the pin in the lock is behind.
+# The highest release the remote publishes, as `[tag sha]` — update needs
+# both, and a tag without the commit it named is not something to lock. A
+# remote that cannot be reached and one that publishes no release both answer
+# none: neither says anything about whether the pin in the lock is behind.
 pub fn newest set name
   io/run "git" ["ls-remote" "--tags" (url set name)] . picked
 
@@ -27,9 +28,11 @@ fn blank? row
 
 # `<sha>\trefs/tags/<tag>`, and a tag an annotated object points at repeats
 # with a `^{}` suffix that names the same release.
+# `<sha>\trefs/tags/<tag>`
 fn tagged row
   fields = text/split row "refs/tags/"
-  bare (fields[length fields]!)
+  columns = text/split row "\t"
+  [(bare (fields[length fields]!)) columns[1]!]
 
 fn bare tag
   parts = text/split tag "^"
@@ -39,14 +42,14 @@ fn highest tags
   releases = list/reject tags unreleased?
   list/fold releases none later
 
-fn unreleased? tag
-  release? tag == false
+fn unreleased? pair
+  release? pair[1]! == false
 
-fn later seen tag
-  if (seen == none) tag (further seen tag)
+fn later seen pair
+  if (seen == none) pair (further seen pair)
 
-fn further seen tag
-  if (after? tag seen) tag seen
+fn further seen pair
+  if (after? pair[1]! seen[1]!) pair seen
 
 # Lexicographic on the three numbers, which is why a release is exactly three.
 pub fn after? tag seen

@@ -25,11 +25,16 @@ fn main() -> ExitCode {
         let root = std::path::Path::new(&file);
         let done = match command.as_str() {
             "install" => kanso::hako::install(root, &cache, &hako_overrides()),
-            // `list` is a kanso program now — hako's own verb, in the
-            // language hako manages. It runs interpreted because a verb of the
-            // toolchain cannot wait on a C compiler.
-            "list" => return run_hako(vec![file.clone()]),
-            _ => kanso::hako::update(root, &cache, hako_named().as_deref()),
+            // `list` and `update` are kanso programs now — hako's own verbs,
+            // in the language hako manages. They run interpreted because a
+            // verb of the toolchain cannot wait on a C compiler.
+            "list" => return run_hako(vec!["list".to_string(), file.clone()]),
+            "update" => {
+                let mut argv = vec!["update".to_string(), file.clone()];
+                argv.extend(hako_named());
+                return run_hako(argv);
+            }
+            _ => unreachable!("install is the only verb left in Rust"),
         };
         return match done {
             Ok(report) => {

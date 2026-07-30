@@ -2049,10 +2049,12 @@ pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::
 /// has no `hako/` beside it, and the files are the ones in this checkout.
 pub fn compile_hako() -> Result<ast::Program, String> {
     const FILES: &[(&str, &str)] = &[
+        ("cache.kso", include_str!("../hako/cache.kso")),
         ("hako.kso", include_str!("../hako/hako.kso")),
         ("lock.kso", include_str!("../hako/lock.kso")),
         ("main.kso", include_str!("../hako/main.kso")),
         ("remote.kso", include_str!("../hako/remote.kso")),
+        ("update.kso", include_str!("../hako/update.kso")),
     ];
     LOCK.with(|l| l.borrow_mut().clear());
     let mut visited = std::collections::HashSet::new();
