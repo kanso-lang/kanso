@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <errno.h>
 #include <time.h>
+#include <dirent.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #if defined(__aarch64__)
@@ -2729,6 +2731,18 @@ KValue k_b_env(KValue name) {
     return k_mkdesc(13, name, k_none());
 }
 
+KValue k_b_exists(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("exists takes a string");
+    return k_mkdesc(14, path, k_none());
+}
+
+KValue k_b_list_dir(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("list_dir takes a string");
+    return k_mkdesc(15, path, k_none());
+}
+
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
@@ -2924,6 +2938,42 @@ static KValue k_exec(KDesc* d) {
         case 13: {
             const char* found = getenv(k_as_str(d->x)->data);
             return found ? k_str(found) : k_none();
+        }
+        case 14: {
+            struct stat st;
+            return k_bool(stat(k_as_str(d->x)->data, &st) == 0);
+        }
+        case 15: {
+            DIR* dh = opendir(k_as_str(d->x)->data);
+            if (!dh) {
+                return k_err(k_concat(k_concat(k_str("cannot list "), d->x),
+                                      k_str(": no such directory or unreadable")), NULL);
+            }
+            long long cap = 16, n = 0;
+            KValue* items = malloc(sizeof(KValue) * cap);
+            struct dirent* e;
+            while ((e = readdir(dh))) {
+                if (!strcmp(e->d_name, ".") || !strcmp(e->d_name, "..")) continue;
+                if (n == cap) { cap *= 2; items = realloc(items, sizeof(KValue) * cap); }
+                items[n++] = k_str(e->d_name);
+            }
+            closedir(dh);
+            /* sorted, so what a program prints never depends on the order a
+               filesystem happened to hand the names back */
+            for (long long i = 1; i < n; i++) {
+                KValue key = items[i];
+                long long j = i - 1;
+                while (j >= 0 && strcmp(k_as_str(items[j])->data, k_as_str(key)->data) > 0) {
+                    items[j + 1] = items[j];
+                    j--;
+                }
+                items[j + 1] = key;
+            }
+            /* k_mklist copies into an arena buffer; k_list_own would demand
+               that this array already be one */
+            KValue out = k_mklist(n, items);
+            free(items);
+            return out;
         }
         default: {
             /* a bind chain is the program's outer pulse, so it runs as one

@@ -10721,3 +10721,37 @@ Five Executor implementations now, and only three of them are visible to
 `cargo build`: the browser one, the wasm32-only RtExecutor, and the
 oracle's collector each needed the new method separately. That is twice
 in one day, and it is what task #42 exists to close.
+
+## 2026-07-29 — io/exists and io/list_dir, and a listing that cannot wobble
+
+Fourth slice of the os surface. Two decisions worth recording, and two
+bugs that only showed because both engines were run.
+
+**A listing is sorted, in both engines.** A directory hands its names
+back in whatever order it likes, so an unsorted listing makes a program's
+output depend on the filesystem — the same class of thing the seeded RNG
+exists to rule out. Sorting is the cheapest way to make the behaviour a
+property of the program rather than of the disk, and it is what lets the
+result be a golden at all.
+
+**A `?` name answers true or false; an effect answers a description.**
+`exists` reads like it wants the mark, and it cannot have it: the value
+it returns is a Desc, and the naming rule fires on a `?` group whose set
+holds no boolean. That is the rule being right rather than in the way —
+the question is answered when the effect runs, not when it is built. So
+`io/exists` is unmarked, and the bool arrives at whatever consumes it.
+
+**Native returned `[0 0]`,** because `k_list_own` takes ownership of an
+arena buffer and I handed it a malloc'd array, then freed it underneath.
+`k_mklist` copies into the right kind of buffer. Nothing in the type
+system was going to catch that.
+
+**The two engines printed different words for a missing directory** —
+the native runtime's own phrasing against Rust's `io::Error`. Aligned on
+the native wording, since what a program prints is held byte-identical.
+
+**The browser cannot list a directory, and now says so out loud.** The
+difference is a capability rather than a disagreement, so it is a KNOWN_GAPS
+entry: the harness pins the phrase the browser declines with, fails if
+that phrase changes, and fails again with "this now passes — delete it"
+if the program ever starts working. Both directions were watched.
