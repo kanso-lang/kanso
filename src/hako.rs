@@ -187,3 +187,60 @@ pub fn install(root: &Path, cache: &Path) -> Result<String, String> {
         .map_err(|e| format!("cannot write hako.lock: {e}"))?;
     Ok(format!("installed {} hako(s):\n{report}", names.len()))
 }
+
+/// `kanso list` — what the lock pins. Staleness needs the remote, so it is
+/// reported when one answers and left off when none does: listing what a
+/// build will use has to work on a train.
+pub fn list(root: &Path) -> Result<String, String> {
+    let locked = read_lock(root);
+    if locked.is_empty() {
+        return Ok("hako.lock pins nothing — run `kanso install`\n".to_string());
+    }
+    let mut out = String::new();
+    for (name, (tag, sha)) in &locked {
+        let mark = match highest_release(name) {
+            Ok((latest, _)) if latest != *tag => format!(" (stale: {latest} is out)"),
+            Ok(_) => String::new(),
+            Err(_) => " (unreachable)".to_string(),
+        };
+        out.push_str(&format!("{name} {tag} {}{mark}\n", &sha[..sha.len().min(12)]));
+    }
+    Ok(out)
+}
+
+/// `kanso update` — walk tags forward and rewrite the lock. A release is the
+/// only thing it walks to; a pin that is not a release stays where it is,
+/// which is the dev-sha discipline made structural.
+pub fn update(root: &Path, cache: &Path, only: Option<&str>) -> Result<String, String> {
+    let locked = read_lock(root);
+    if locked.is_empty() {
+        return Err("hako.lock pins nothing — run `kanso install` first".to_string());
+    }
+    if let Some(name) = only {
+        if !locked.contains_key(name) {
+            return Err(format!("`{name}` is not in hako.lock"));
+        }
+    }
+    let mut lines = Vec::new();
+    let mut moved = String::new();
+    for (name, (tag, sha)) in &locked {
+        let chosen = match only.is_none_or(|one| one == name) {
+            false => (tag.clone(), sha.clone()),
+            true => {
+                let (latest, at) = highest_release(name)?;
+                if latest != *tag {
+                    fetch(cache, name, &latest, &at)?;
+                    moved.push_str(&format!("  {name} {tag} -> {latest}\n"));
+                }
+                (latest, at)
+            }
+        };
+        lines.push(format!("{name} {} {}\n", chosen.0, chosen.1));
+    }
+    std::fs::write(root.join("hako.lock"), lines.concat())
+        .map_err(|e| format!("cannot write hako.lock: {e}"))?;
+    match moved.is_empty() {
+        true => Ok("every hako is already at its highest release\n".to_string()),
+        false => Ok(format!("updated:\n{moved}")),
+    }
+}

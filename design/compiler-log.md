@@ -10887,3 +10887,31 @@ beats every real release if it counts. Each guard was then broken alone
 and each turned the test red on its own tag. That is the
 one-guard-at-a-time rule; running it caught that the first attempt was
 asserting a coincidence.
+
+## 2026-07-29 — hako, slice three: `list` and `update` close the v1 surface
+
+Three subcommands is the whole of what design/hako.md specifies, and all
+three exist now. `list` prints what the lock pins; `update` walks tags
+forward and rewrites it.
+
+**`list` works on a train.** Staleness needs the remote, so it is
+reported when one answers and the entry is marked unreachable when none
+does. Listing what a build will use is not a network operation, and a
+tool that refuses to answer offline would be lying about where its
+information lives — the lock is on disk.
+
+**`update` walks to releases only.** A pin that is not a `vX.Y.Z` tag
+stays where it is, which is the dev-sha discipline made structural
+rather than remembered: you can build against an unreleased branch, and
+nothing will quietly carry you off it.
+
+The full cycle is pinned in one test — install, list clean, a release
+lands upstream, list marks it stale, update moves the lock, and the
+build follows with the remote pointed at nothing. That last step is the
+one that matters: it proves the cache holds what the lock names, which
+is the whole claim of a lockfile.
+
+Both claims were watched red on their own. Making `update` re-lock the
+tag it already had left the lock unmoved; making `list` never mark
+staleness left the mark absent. One at a time, because two guards under
+one fixture is how the version race went wrong an hour ago.
