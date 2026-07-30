@@ -11,11 +11,28 @@ fn main() -> ExitCode {
         None => {
             eprintln!(
                 "usage: kanso run <file.kso> [--plan|--interp] | kanso check <file.kso> | kanso \
-                 test <file.kso> | kanso build <file.kso> [--release] | kanso repl"
+                 test <file.kso> | kanso build <file.kso> [--release] | kanso install <dir> | \
+                 kanso repl"
             );
             return ExitCode::from(2);
         }
     };
+    if command == "install" {
+        let cache = std::env::var("KANSO_HAKO")
+            .map(std::path::PathBuf::from)
+            .or_else(|_| std::env::var("HOME").map(|h| std::path::PathBuf::from(h).join(".hako")))
+            .unwrap_or_default();
+        return match kanso::hako::install(std::path::Path::new(&file), &cache) {
+            Ok(report) => {
+                print!("{report}");
+                ExitCode::SUCCESS
+            }
+            Err(reason) => {
+                eprintln!("error: {reason}");
+                ExitCode::from(2)
+            }
+        };
+    }
     let require_main = command == "run" || command == "play";
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
@@ -83,6 +100,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
         && command != "test"
         && command != "build"
         && command != "play"
+        && command != "install"
     {
         return None;
     }

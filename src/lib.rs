@@ -8,6 +8,7 @@ pub mod diag;
 pub mod dispatch;
 pub mod escape;
 pub mod eval;
+pub mod hako;
 pub mod infer;
 pub mod inline;
 pub mod lexer;
@@ -418,9 +419,23 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
              names a hako by domain, which no source resolves yet\n"
         ));
     }
-    let cache = hako_cache().join(path);
-    if cache.is_dir() {
-        return Ok(cache);
+    // the lock decides which fetched tree a name means; without one, a bare
+    // name in the cache still answers, so a checkout can be dropped in by hand
+    let cache = hako_cache();
+    if let Some((name, module)) = hako::split_name(path) {
+        if let Some((_, sha)) = LOCK.with(|l| l.borrow().get(&name).cloned()) {
+            let mut dir = hako::cached(&cache, &name, &sha);
+            if let Some(rest) = module {
+                dir = dir.join(rest);
+            }
+            if dir.is_dir() {
+                return Ok(dir);
+            }
+        }
+    }
+    let plain = cache.join(path);
+    if plain.is_dir() {
+        return Ok(plain);
     }
     Err(format!(
         "error: cannot resolve import \"{path}\" — a bare multi-segment path names \
@@ -2009,6 +2024,7 @@ pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
 /// A module is a directory: every .kso file in it shares one namespace.
 /// Canonical ordering holds per file; an overload group lives in one file.
 pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::Program, String> {
+    LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
     let mut visited = std::collections::HashSet::new();
     compile_module_root(dir, require_main, &mut visited)
 }
@@ -2027,6 +2043,12 @@ fn compile_module_root(
 }
 
 thread_local! {
+    /// The lock read from the module root, so every import in a build sees the
+    /// same pins. Empty when there is no lock, which is what lets a cache
+    /// entry answer by bare name.
+    static LOCK: std::cell::RefCell<std::collections::BTreeMap<String, (String, String)>> =
+        const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+
     static AMBIENT_ROOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
 }
 
