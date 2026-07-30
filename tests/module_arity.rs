@@ -75,3 +75,22 @@ fn no_engine_hands_the_reader_llvm() {
         }
     }
 }
+
+/// The same rule the ranking pass enforces between neighbours, applied across
+/// a module. Two arms with the same shape mean the second can never be
+/// reached, and a module is a directory of files whose arms need not sit next
+/// to each other — so the neighbour comparison could not see it, and two
+/// files each declaring `twice _` compiled and silently picked one.
+#[test]
+fn an_arm_no_call_can_reach_is_refused_across_files() {
+    let (_, err, code) = kanso("check", "overlap", &[]);
+    assert_eq!(
+        err.lines().next(),
+        Some(
+            "error[dispatch]: overlapping overloads of `twice` are illegal \
+             (module tests/golden/arity/overlap)"
+        ),
+        "check did not report the unreachable arm: {err}"
+    );
+    assert_eq!(code, Some(2), "a compile error exits 2");
+}
