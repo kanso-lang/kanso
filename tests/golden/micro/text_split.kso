@@ -1,0 +1,13 @@
+import "std/text"
+
+# Every occurrence ends a piece and an empty piece is a piece, which is what
+# makes split and join inverses. The last two lines are that law both ways.
+pub play =
+  print "{text/split "a,b,c" ","}"
+  >> print "{text/split "a,,b" ","}"
+  >> print "{text/split "abc" ","}"
+  >> print "{text/split "a::b" "::"}"
+  >> print "{text/split "" ","}"
+  >> print "{text/split ",a," ","}"
+  >> print "{text/join (text/split "a/b/c" "/") "/"}"
+  >> print "{text/split (text/join ["a" "b"] "-") "-"}"
