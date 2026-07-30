@@ -54,6 +54,21 @@ impl Executor for CollectExecutor {
         std::env::var(name).ok()
     }
 
+    fn exists(&mut self, path: &str) -> bool {
+        std::path::Path::new(path).exists()
+    }
+
+    fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
+        let entries = std::fs::read_dir(path)
+            .map_err(|_| format!("cannot list {path}: no such directory or unreadable"))?;
+        let mut names: Vec<String> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        Ok(names)
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         self.rng.below(n)
     }

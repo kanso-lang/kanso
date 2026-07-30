@@ -171,6 +171,8 @@ pub enum Desc {
     Write(String),
     WriteErr(String),
     Env(String),
+    Exists(String),
+    ListDir(String),
     WriteFile(String, String),
     Bind(Rc<Desc>, Value),
     Sleep(u64),
@@ -315,6 +317,10 @@ pub trait Executor {
     /// An environment variable, or None when it is unset — absence is a value
     /// here, not a failure, because not being configured is ordinary.
     fn env(&mut self, name: &str) -> Option<String>;
+    fn exists(&mut self, path: &str) -> bool;
+    /// Names within a directory, sorted, so what a program prints does not
+    /// depend on the order a filesystem happens to hand them back.
+    fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
     /// Pause wall-clock time. The scheduler decides output *order*; sleep only
     /// makes a concurrent program take real time, so a viewer feels the
@@ -356,6 +362,23 @@ impl Executor for RealExecutor {
 
     fn env(&mut self, name: &str) -> Option<String> {
         std::env::var(name).ok()
+    }
+
+    fn exists(&mut self, path: &str) -> bool {
+        std::path::Path::new(path).exists()
+    }
+
+    fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
+        // the wording matches the native runtime's, since the three engines
+        // are held byte-identical on what a program prints
+        let entries = std::fs::read_dir(path)
+            .map_err(|_| format!("cannot list {path}: no such directory or unreadable"))?;
+        let mut names: Vec<String> = entries
+            .filter_map(Result::ok)
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        Ok(names)
     }
 
     fn sleep(&mut self, ms: u64) {
@@ -411,6 +434,16 @@ impl Executor for ScriptedExecutor {
     fn env(&mut self, name: &str) -> Option<String> {
         self.transcript.push(format!("env {name:?}"));
         None
+    }
+
+    fn exists(&mut self, path: &str) -> bool {
+        self.transcript.push(format!("exists {path:?}"));
+        false
+    }
+
+    fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
+        self.transcript.push(format!("list_dir {path:?}"));
+        Ok(Vec::new())
     }
 
     fn random(&mut self, n: u64) -> u64 {
@@ -1423,6 +1456,16 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError { message: "write takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content))))
+            }
+            "exists" | "list_dir" => {
+                let [path] = arity(args, name, span)?;
+                let Value::Str(path) = path else {
+                    return Err(RuntimeError { message: format!("{name} takes a string"), span });
+                };
+                Ok(Value::Desc(Rc::new(match name == "exists" {
+                    true => Desc::Exists(path),
+                    false => Desc::ListDir(path),
+                })))
             }
             "env" => {
                 let [name] = arity(args, name, span)?;
@@ -2612,6 +2655,14 @@ impl<'a> Interp<'a> {
                 Some(value) => Value::Str(value),
                 None => Value::NoneV,
             }),
+            Desc::Exists(path) => Ok(match executor.exists(path) {
+                true => Value::True,
+                false => Value::False,
+            }),
+            Desc::ListDir(path) => Ok(match executor.list_dir(path) {
+                Ok(names) => Value::List(Rc::new(names.into_iter().map(Value::Str).collect())),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
@@ -2742,6 +2793,8 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
+        Desc::Exists(path) => out.push_str(&format!("  exists {path:?}\n")),
+        Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out);

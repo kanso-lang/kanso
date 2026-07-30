@@ -1,0 +1,9 @@
+import "std/io"
+
+pub play =
+  io/exists "listing" . show
+  >> io/exists "listing/nope" . show
+  >> io/list_dir "listing" . show
+
+pub fn show v
+  print "{v}"

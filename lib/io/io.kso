@@ -4,6 +4,16 @@ pub args = builtin_args
 pub fn env name
   builtin_env name
 
+# A description of work answers a description, so it takes no `?` — the
+# mark belongs to a function that answers true or false directly.
+pub fn exists path
+  builtin_exists path
+
+# Names within a directory, sorted, so output never depends on the order a
+# filesystem happens to hand them back.
+pub fn list_dir path
+  builtin_list_dir path
+
 pub fn read_file path
   builtin_read_file path
 

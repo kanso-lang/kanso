@@ -809,6 +809,14 @@ impl Executor for RtExecutor {
         None
     }
 
+    fn exists(&mut self, _path: &str) -> bool {
+        false
+    }
+
+    fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String> {
+        Err(format!("the playground has no filesystem: cannot list {path}"))
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         crate::wasm::next_random(n)
     }
