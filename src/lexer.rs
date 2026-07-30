@@ -300,12 +300,49 @@ fn check_needless_continuation(line: &Line, diags: &mut Vec<Diagnostic>) {
     for piece in &pieces[1..] {
         width += 1 + (piece.1 - piece.0);
     }
-    if width <= MAX_WIDTH {
-        diags.push(Diagnostic::new(
-            "formatting",
-            format!("needless continuation: this statement fits on one line ({width} characters)"),
-            pieces[1].2,
-        ));
+    if width > MAX_WIDTH {
+        return;
+    }
+    // A statement that opens an indented block is read as one long line, so
+    // somebody who wrote `for x in xs` and indented under it is told their
+    // statement fits on one line — true of the tokens, and nothing to do with
+    // what they meant. kanso has no form that opens a block this way.
+    if let Some((Tok::Ident(head), span)) = line.tokens.first() {
+        if let Some(instead) = kanso_form_for(head) {
+            diags.push(Diagnostic::new(
+                "syntax",
+                format!("kanso has no `{head}` — {instead}"),
+                *span,
+            ));
+            return;
+        }
+    }
+    diags.push(Diagnostic::new(
+        "formatting",
+        format!("needless continuation: this statement fits on one line ({width} characters)"),
+        pieces[1].2,
+    ));
+}
+
+/// What kanso uses instead of a keyword the reader brought with them. Only
+/// the ones that open a block reach here, because only those are mistaken for
+/// a continued statement.
+fn kanso_form_for(head: &str) -> Option<&'static str> {
+    match head {
+        "for" | "while" | "loop" | "repeat" | "until" => {
+            Some("repetition is recursion, and a chain of list verbs covers most of it")
+        }
+        "def" | "func" | "function" | "define" => Some("a function is `fn name params`"),
+        "class" | "struct" | "record" | "data" => {
+            Some("a record is `type name` with its fields indented under it")
+        }
+        "switch" | "match" | "case" | "when" => {
+            Some("dispatch is one arm per shape, written as separate `fn` clauses")
+        }
+        "try" | "catch" | "except" | "rescue" => {
+            Some("a failure rides the same rails as a value; an arm names the err")
+        }
+        _ => None,
     }
 }
 

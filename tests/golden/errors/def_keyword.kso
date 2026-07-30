@@ -1,0 +1,4 @@
+def f _
+  1
+
+pub play = print "{f 0}"
