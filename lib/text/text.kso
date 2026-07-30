@@ -28,6 +28,12 @@ pub fn join parts sep
 pub fn slice s from to
   builtin_slice s from to
 
+# An empty separator occurs everywhere, so the rule below gives no answer for
+# it — it is a mistake rather than a case, and `chars` is what it was reaching
+# for. Saying so beats scanning a string that never advances.
+pub fn split _ ""
+  err "split needs a separator; text/chars answers the characters"
+
 # Every occurrence of `sep` ends a piece, and an empty piece is a piece:
 # splitting "a,,b" answers three parts, and splitting "" answers one empty
 # one. That is what makes split and join inverses of each other.
