@@ -11864,3 +11864,38 @@ ten assertions covering separators of one and two characters, the empty
 subject, both ends and the join/split law in both directions. None of them
 was the zero-length separator, because a test suite written by the author of
 a function tests what the author was thinking about. The sweep was not.
+
+## What compiling a module costs
+
+Every sample in `bench/compile_golden.txt` is one file with no imports, so the
+loader, enrollment and qualification cost whatever they like. That mattered
+this session, because the loader changed and nothing pinned it.
+
+A directory sample — an entry, a local module beside it, and the standard
+library each pulls in — measures 6324 emitted lines and 6223 expression visits
+against a few hundred for any single-file sample. Roughly twenty times the
+work of any construct sampled before, entirely unmeasured.
+
+It earns its place rather than merely existing. Removing the idempotence guard
+from getter synthesis, which this session added and nothing measured, moves it
+to 6356 lines and 6237 visits; every single-file sample stays exactly where it
+was. A sitting earlier a field-reading sample was tried for the same purpose
+and dropped, because no break could be found that moved it and not `records`.
+This one has one.
+
+It lives in its own file, and that is the part worth remembering. The welfare
+index sums rounds, visits and lines across every row of the compile golden, so
+adding a sample there is indistinguishable from the compiler getting worse by
+the size of the sample — welfare read 55.70 against a 65.53 floor the moment
+the row landed. Neither answer the doctrine offers fits: the change is not
+worse, and the weights are not wrong. The basis is what moved. Re-baselining
+to absorb it would have banked a loss that never happened and hidden the next
+real one, so the index keeps its fixed sample set and coverage grows beside
+it.
+
+Also measured this sitting, and not acted on: `kanso check` on kq reads about
+7.8 ms of work against a published 6.6, and kanso-json 6.6 against 6.1. This
+box had been building continuously all session, so that is evidence about the
+machine as much as the compiler, and #23 exists precisely because the numbers
+want an idle one. The published figures stay until somebody sits them
+properly.

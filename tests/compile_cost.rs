@@ -20,6 +20,29 @@ fn work_for(source: &str) -> (u64, u64) {
     kanso::infer::work::taken()
 }
 
+/// A sample that is a directory rather than a string, so the module loader is
+/// on the path being measured. Every other sample is one file with no
+/// imports, which leaves enrollment, qualification and the dependency walk
+/// costing whatever they like.
+fn module_dir(name: &str) -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/compile").join(name)
+}
+
+fn ir_for_module(name: &str) -> String {
+    let program = kanso::compile_module(&module_dir(name), true).expect("module compiles");
+    kanso::codegen::emit_ir(&program).expect("module lowers to IR")
+}
+
+fn work_for_module(name: &str) -> (u64, u64) {
+    let program = kanso::compile_module(&module_dir(name), true).expect("module compiles");
+    kanso::infer::work::reset();
+    let _ = kanso::infer::infer(&program);
+    kanso::infer::work::taken()
+}
+
+/// Directory samples, measured the same way and reported in the same file.
+const MODULES: &[&str] = &["module"];
+
 /// Counts that move only when the emitter's output does.
 fn shape(ir: &str) -> (usize, usize, usize, usize) {
     let lines = ir.lines().filter(|l| !l.trim().is_empty()).count();
@@ -112,6 +135,44 @@ fn compile_cost_matches_the_golden() {
         )
         .expect("string write");
     }
+    let mut modules = String::new();
+    for name in MODULES {
+        let ir = ir_for_module(name);
+        let (lines, calls, branches, defines) = shape(&ir);
+        let (rounds, visits) = work_for_module(name);
+        writeln!(
+            modules,
+            "{name} lines={lines} calls={calls} branches={branches} defines={defines} \
+             rounds={rounds} visits={visits}"
+        )
+        .expect("string write");
+    }
+    // A separate file, because the welfare index sums every row of the one
+    // above: adding a sample there would read as a regression the size of the
+    // sample, and re-baselining to absorb it would bank a loss that never
+    // happened. The index keeps its fixed basis; coverage grows here.
+    let module_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("bench/compile_golden_modules.txt");
+    if std::env::var("KANSO_REGEN_COMPILE_GOLDEN").is_ok() {
+        let header = "\
+# What compiling a MODULE costs — an entry, a local module beside it, and the
+# standard library each pulls in. Every sample in compile_golden.txt is a
+# single file with no imports, which left the loader, enrollment and
+# qualification costing whatever they liked.
+#
+# Kept apart from that file because the welfare index sums its rows: a sample
+# added there reads as a regression the size of the sample.
+";
+        std::fs::write(&module_path, format!("{header}{modules}")).expect("module golden writes");
+    }
+    let stored_modules = std::fs::read_to_string(&module_path).unwrap_or_default();
+    let expected_modules: String =
+        stored_modules.lines().filter(|l| !l.starts_with('#')).map(|l| format!("{l}\n")).collect();
+    assert_eq!(
+        modules, expected_modules,
+        "the cost of compiling a module moved. that is allowed — say which way \
+         and why, then regenerate with KANSO_REGEN_COMPILE_GOLDEN=1"
+    );
     let golden_path =
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bench/compile_golden.txt");
     if std::env::var("KANSO_REGEN_COMPILE_GOLDEN").is_ok() {

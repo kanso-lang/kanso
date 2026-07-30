@@ -1,0 +1,6 @@
+import "./geo"
+
+here = geo/origin 0
+scaled = geo/doubled [1 2 3]
+
+print "{here.x} {here.y} {scaled}"
