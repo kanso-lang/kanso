@@ -1,0 +1,41 @@
+import "std/list"
+import "std/text"
+
+# A lock line is `name tag sha protocol`. A line written before the protocol
+# field existed means git, which was the only thing anything spoke then.
+pub type pin
+  name
+  protocol
+  sha
+  tag
+
+pub fn parse text
+  lines = text/split text "\n"
+  list/to_list (list/map (list/reject lines empty?) parsed)
+
+fn empty? row
+  row == ""
+
+fn parsed row
+  fields = text/split row " "
+  pin fields[1]! (protocol_of fields) fields[3]! fields[2]!
+
+fn protocol_of fields
+  if (length fields > 3) fields[4]! "git"
+
+# A release is `vX.Y.Z` and nothing else. A prerelease and a four-component
+# tag are not releases, which is what stops a version race being won by
+# something nobody published.
+pub fn release? tag
+  numbers = text/split (text/slice tag 2 (length tag)) "."
+  text/slice tag 1 1 == "v" && triple? numbers
+
+fn digit? c
+  code = text/char_code c
+  code >= 48 && code <= 57
+
+fn number? s
+  s != "" && list/all? (text/chars s) digit?
+
+fn triple? parts
+  length parts == 3 && list/all? parts number?

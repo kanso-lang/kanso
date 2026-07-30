@@ -1,0 +1,27 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# hako's first verb, in the language hako manages. Reading the lock is the
+# part that needs no network: what a build will use has to be answerable on a
+# train, so it is answered from the file alone.
+pub fn listing dir
+  io/read_file "{dir}/hako.lock" . shown
+
+fn shown text
+  described (parse text)
+
+fn described pins
+  empty = io/write "hako.lock pins nothing — run `kanso install`\n"
+  rows = io/write (text/join (list/to_list (list/map pins line)) "")
+  if (length pins == 0) empty rows
+
+fn line p
+  short = text/slice p.sha 1 12
+  "{text/join [p.name p.tag short p.protocol] " "}{mark p}\n"
+
+fn mark p
+  if (release? p.tag) "" " (interim pin: not a release)"
+
+fn where_from argv
+  if (length argv == 0) "." argv[1]!
