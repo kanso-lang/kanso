@@ -1,0 +1,13 @@
+import "std/list"
+
+pub type point
+  x
+  y
+
+# forced rather than lazy: a lazy list cannot cross a module boundary yet,
+# which is its own open question and not what this sample measures
+pub fn doubled xs
+  list/to_list (list/map xs (n -> n * 2))
+
+pub fn origin _
+  point 0 0

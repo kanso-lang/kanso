@@ -1,0 +1,8 @@
+# What compiling a MODULE costs — an entry, a local module beside it, and the
+# standard library each pulls in. Every sample in compile_golden.txt is a
+# single file with no imports, which left the loader, enrollment and
+# qualification costing whatever they liked.
+#
+# Kept apart from that file because the welfare index sums its rows: a sample
+# added there reads as a regression the size of the sample.
+module lines=6324 calls=1217 branches=551 defines=132 rounds=7 visits=6223
