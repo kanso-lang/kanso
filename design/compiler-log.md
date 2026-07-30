@@ -12131,3 +12131,29 @@ atom. The token before the open paren had no case for `[` or a map colon and
 fell through to LOOSEST, which makes every expression look loose enough to
 need no grouping. `[1 (f 1)]` worked throughout, because the preceding `1`
 ends an atom, which is why nothing had caught it.
+
+## Whole modules on disk
+
+The seam between a module's files had hidden two bugs, both found by accident,
+so it has a sweep now: fifteen modules written to disk, each run through
+`kanso check` and, where it compiles, through both engines.
+
+It found a third the same day. Two arms of one group with the same shape mean
+the second can never be reached, and one file already says so. Two files of
+one module compiled and silently picked the first, because the rule compares
+neighbours — exactly right for arms written together, blind to a directory
+whose arms need not sit next to each other. The unreachable-arm half runs over
+the merged module now; the ordering half stays per-file, since arms in
+different files have no authored order to enforce.
+
+Three harnesses in one day produced a confident number about nothing, each in
+a different costume. The effects sweep read zero disagreements with every
+probe failing to compile. The dispatch sweep had a probe whose expression
+parsed as subtraction and another that printed nothing. This one gave each
+engine its own temporary directory — and a diagnostic names the module it is
+about, so two directories are two names — and passed `--interp` before the
+path, which makes the CLI print its usage instead of running anything.
+
+The shape is always the same: two silences compare equal. Every sweep now
+fails on a probe that did not compile, did not run, or said nothing, because
+a sweep that cannot tell those from agreement is not a gate.
