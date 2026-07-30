@@ -1,0 +1,7 @@
+import "std/text"
+
+# An empty separator occurs everywhere, so "every occurrence ends a piece"
+# gives no answer for it. Scanning for one never advanced: native looped and
+# the interpreter ran out of stack. It is a mistake, and `chars` is what it
+# was reaching for.
+pub play = print "{text/split "abc" ""}"

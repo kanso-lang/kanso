@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached main: "split needs a separator; text/chars answers the characters"
+  born in text/split at std/text/text.kso:35

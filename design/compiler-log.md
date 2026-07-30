@@ -11826,3 +11826,41 @@ A sweep that finds nothing has to be shown capable of finding something, or it
 is a guard that cannot fail. Rendering `true` as `True` in the C runtime was
 caught. Nudging the ryu call by one ulp was caught eleven times over, which is
 the float coverage doing its job specifically.
+
+## What the library answers at its edges
+
+The diagnostics sweep asks std functions for the wrong thing and compares the
+complaints. This asks for the awkward thing and compares the answers: a slice
+starting past the end, a take of more than there is, a sort of things that
+compare equal, a round landing on a half, a map read that misses. Every probe
+is a legal call, so a disagreement means one engine is wrong about the
+library's contract — and where the contract does not say, that is worth
+knowing too.
+
+Sixty-two calls. One finding, and it was mine.
+
+`text/split` with an empty separator did not return. Native looped and the
+interpreter exhausted its stack, because the scan advances by the separator's
+length and that length was zero. The sweep found it by timing out, which is a
+louder finding than a wording difference and one no golden would have caught,
+since nobody writes that call on purpose.
+
+An empty separator occurs everywhere, so "every occurrence ends a piece" gives
+no answer for it — it is a mistake rather than a case. `chars` already answers
+the characters, and having `split s ""` mean the same thing would be a second
+way to say one thing. It says so instead, and names `chars`.
+
+The sweep itself needed correcting twice, both times for the same reason —
+a probe that does not probe. `list/to_list (list/repeat 5)` forces an
+infinite generator, which is not an awkward call but a different program that
+never ends; it timed out on both engines, and comparing two timeouts found
+them equal, so the run reported agreement. CI killed the job instead. A
+timeout is now a finding on whichever engine it happens, because calling two
+of them agreement hides the worst answer a legal call can give, and the script
+prints each probe as it goes so a kill says which one.
+
+Worth noting how it was introduced: `split` shipped four sittings ago with
+ten assertions covering separators of one and two characters, the empty
+subject, both ends and the join/split law in both directions. None of them
+was the zero-length separator, because a test suite written by the author of
+a function tests what the author was thinking about. The sweep was not.
