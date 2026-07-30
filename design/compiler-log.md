@@ -11235,5 +11235,19 @@ Both endpoints — the interpreter's and the runtime's — were broken one at
 a time and each failed on its own engine, which is the shape a
 two-engine feature owes.
 
+**And the wasm build broke, in a way local gates hid.** Inserting the
+helper above `fn report` put it between that function and its
+`#[cfg(not(target_arch = "wasm32"))]`, so the attribute landed on the new
+function instead: it vanished from the wasm build while its callers
+stayed. An attribute belongs to the item after it, and inserting text
+there silently reassigns it.
+
+Locally this was invisible because the gate run said
+`sh scripts/build_wasm.sh >/dev/null 2>&1 && …` — the build failed, the
+`&&` short-circuited, and a later re-run of the differential read a
+stale docs/kanso.wasm and reported everything passing. Suppressing the
+output of the one command that would have said so. CI caught it, which
+is what CI is for, but the local run had claimed green.
+
 #39 is closed: stderr, paths, environment, file existence, directory
 listing, a clock, and now exit codes.

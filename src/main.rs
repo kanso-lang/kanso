@@ -309,7 +309,6 @@ fn opens_block(line: &str) -> bool {
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 /// A deliberate exit is an err whose reason is `io/exit_status`. The endpoint
 /// reads its code rather than reporting it, because the program did not fail
 /// to say what it meant — it said it.
@@ -324,6 +323,7 @@ fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn report(outcome: Result<kanso::repl::Outcome, String>) {
     match outcome {
         Ok(kanso::repl::Outcome::Defined(echo)) => println!("{echo}"),
