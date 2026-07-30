@@ -11607,3 +11607,30 @@ both harnesses read one gap list. Only one of them did: that change scoped its
 its own literal and the two lists have been separate ever since — the drift
 that change was written to prevent, introduced by the change itself. Both read
 the file now.
+
+## text/split
+
+`std/text` wrapped thirteen builtins and offered no way to take a string
+apart. Every language kanso is measured against has one — Go's
+`strings.Split`, Rust's `str::split`, Ruby's `String#split` — and the first
+thing a lock-file parser or an argument reader needs is exactly that. It costs
+no builtin: `slice` and `length` are enough, so it is fourteen lines of kanso
+in a module that had been fourteen wrappers.
+
+Every occurrence ends a piece and an empty piece is a piece. That is what
+makes split and join inverses, and the golden asserts the law in both
+directions rather than only listing examples.
+
+The tests are a micro golden rather than a `_test.kso` beside the module,
+because `std/text` is the wrapper layer itself: compiled as an ordinary
+directory its `builtin_` names are gated, so a test living next to it cannot
+run. A golden runs on all three engines, which is more than the alternative
+would have given anyway.
+
+Three goldens moved that had nothing to do with splitting. An err's
+provenance names `std/text/text.kso:35`, and adding a function above
+`to_int` made that line 41 — so `endpoint_trace` moved, and so did two book
+samples and the panels quoting them. A trace that names a file and a line is
+pinned by every golden that prints it, which is a property of the design
+worth knowing before editing anything in std: the blast radius of a stdlib
+edit is every recorded diagnostic that passes through the file.

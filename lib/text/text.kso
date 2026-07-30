@@ -28,6 +28,12 @@ pub fn join parts sep
 pub fn slice s from to
   builtin_slice s from to
 
+# Every occurrence of `sep` ends a piece, and an empty piece is a piece:
+# splitting "a,,b" answers three parts, and splitting "" answers one empty
+# one. That is what makes split and join inverses of each other.
+pub fn split s sep
+  scan s sep 1 1 []
+
 pub fn to_float x
   builtin_to_float x
 
@@ -36,3 +42,15 @@ pub fn to_int s
 
 pub fn utf8 codes
   builtin_utf8 codes
+
+fn scan s sep from at acc
+  last = at + length sep - 1
+  return push acc (slice s from (length s)) if last > length s
+  scan_on s sep from at acc (slice s at last == sep)
+
+fn scan_on s sep from at acc true
+  after = at + length sep
+  scan s sep after after (push acc (slice s from (at - 1)))
+
+fn scan_on s sep from at acc false
+  scan s sep from (at + 1) acc
