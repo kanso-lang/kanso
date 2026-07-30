@@ -11710,3 +11710,7 @@ Found by comparing the two engines' message tables rather than by running
 anything: two of the interpreter's `, not {}` messages had native twins that
 stopped early. That comparison is cheap and there are seventy-one `k_die`
 sites, so it is worth repeating whenever a message is added.
+
+A book sample was printing the shorter half. `appa/runtime_mismatch` exists
+to show a reader what a runtime type error looks like, and what it had been
+showing them was the engine that said less.
