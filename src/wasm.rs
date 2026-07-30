@@ -99,6 +99,10 @@ impl Executor for BrowserExecutor {
         Err(format!("the playground has no filesystem: cannot read {path}"))
     }
 
+    fn run(&mut self, cmd: &str, _args: &[String]) -> Result<(i64, String, String), String> {
+        Err(format!("the playground cannot start processes: cannot run {cmd}"))
+    }
+
     fn write_file(&mut self, path: &str, _content: &str) -> Result<(), String> {
         Err(format!("the playground has no filesystem: cannot write {path}"))
     }

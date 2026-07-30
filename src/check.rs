@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::{HashMap, HashSet};
 
-pub const BUILTINS: [&str; 36] = [
+pub const BUILTINS: [&str; 37] = [
     "append",
     "args",
     "bytes",
@@ -25,6 +25,7 @@ pub const BUILTINS: [&str; 36] = [
     "random",
     "read_file",
     "render_value",
+    "run",
     "round",
     "sleep",
     "slice",
@@ -983,6 +984,7 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("exists", &[&[Str]]),
         ("list_dir", &[&[Str]]),
         ("read_file", &[&[Str]]),
+        ("run", &[&[Str], &[List]]),
         ("write_file", &[&[Str], &[Str]]),
         ("push", &[&[List]]),
         ("put", &[&[Map]]),
