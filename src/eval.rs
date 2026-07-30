@@ -169,6 +169,7 @@ pub enum Desc {
     Stdin,
     ReadFile(String),
     Write(String),
+    WriteErr(String),
     WriteFile(String, String),
     Bind(Rc<Desc>, Value),
     Sleep(u64),
@@ -308,6 +309,8 @@ pub trait Executor {
     fn stdin(&mut self) -> Result<String, String>;
     fn read_file(&mut self, path: &str) -> Result<String, String>;
     fn write(&mut self, text: &str);
+    /// Diagnostics, so a tool's chatter stays out of what it is piped into.
+    fn write_err(&mut self, text: &str);
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
     /// Pause wall-clock time. The scheduler decides output *order*; sleep only
     /// makes a concurrent program take real time, so a viewer feels the
@@ -339,6 +342,12 @@ impl Executor for RealExecutor {
         use std::io::Write;
         print!("{text}");
         let _ = std::io::stdout().flush();
+    }
+
+    fn write_err(&mut self, text: &str) {
+        use std::io::Write;
+        eprint!("{text}");
+        let _ = std::io::stderr().flush();
     }
 
     fn sleep(&mut self, ms: u64) {
@@ -385,6 +394,10 @@ impl Executor for ScriptedExecutor {
 
     fn write(&mut self, text: &str) {
         self.transcript.push(format!("write {text:?}"));
+    }
+
+    fn write_err(&mut self, text: &str) {
+        self.transcript.push(format!("write_err {text:?}"));
     }
 
     fn random(&mut self, n: u64) -> u64 {
@@ -1397,6 +1410,16 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError { message: "write takes a string".to_string(), span });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Write(content))))
+            }
+            "write_err" => {
+                let [content] = arity(args, name, span)?;
+                let Value::Str(content) = content else {
+                    return Err(RuntimeError {
+                        message: "write_err takes a string".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::WriteErr(content))))
             }
             "write_file" => {
                 let [path, content] = arity(args, name, span)?;
@@ -2561,6 +2584,10 @@ impl<'a> Interp<'a> {
                 executor.write(text);
                 Ok(Value::NoneV)
             }
+            Desc::WriteErr(text) => {
+                executor.write_err(text);
+                Ok(Value::NoneV)
+            }
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
@@ -2689,6 +2716,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Stdin => out.push_str("  stdin\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
+        Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out);

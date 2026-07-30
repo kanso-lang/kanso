@@ -282,10 +282,24 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
 /// Route a single source file to the right compile for a verb, by content:
 /// `pub play` is a play library, bare statements are an entry, definitions
 /// alone are a library (runnable only under a library verb like `test`).
+/// Does this file declare `pub play`? Answered off the parse, so comments and
+/// string literals cannot change how a file compiles. A file that does not
+/// parse declares nothing, and the compile it is routed to reports the syntax
+/// error properly.
+fn declares_play(source: &str) -> bool {
+    let Ok(lexed) = lexer::lex(source) else { return false };
+    let Ok(program) = parser::parse(&lexed) else { return false };
+    program.fns.iter().any(|d| d.is_pub && d.name == "play")
+}
+
 /// The CLI and the browser share this so the engines never diverge on which
 /// compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
-    let has_play = source.contains("pub play");
+    // Which compile a file gets is decided by what it declares, not by what
+    // its text happens to contain: a comment or a string mentioning `pub
+    // play` used to reroute the whole file and reject a valid entry with a
+    // diagnostic that named none of this.
+    let has_play = declares_play(source);
     let has_defs = source
         .lines()
         .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));

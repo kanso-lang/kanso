@@ -30,6 +30,7 @@ fn expected(path: &Path, extension: &str) -> String {
 struct CollectExecutor {
     program_args: Vec<String>,
     stdout: String,
+    stderr: String,
     rng: kanso::eval::Rng,
 }
 
@@ -41,6 +42,12 @@ impl Executor for CollectExecutor {
 
     fn write(&mut self, text: &str) {
         self.stdout.push_str(text);
+    }
+
+    /// The oracle captures what a shell would: stderr after stdout, so a
+    /// program writing to both compares against the other engines as-is.
+    fn write_err(&mut self, text: &str) {
+        self.stderr.push_str(text);
     }
 
     fn random(&mut self, n: u64) -> u64 {
@@ -105,17 +112,21 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
         program_args,
         rng: kanso::eval::Rng::from_seed(2_685_821_657_736_338_717),
         stdout: String::new(),
+        stderr: String::new(),
     };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
         other => ("main", Ok(other)),
     };
     let thunk_stats = interp.thunk_stats.render();
+    // what the program wrote to stderr precedes whatever the endpoint reports,
+    // which is the order the native binary emits them in
+    let wrote = executor.stderr;
     match outcome {
         Ok(Value::ErrV(info)) => Evaluation {
             status: 1,
             stderr: format!(
-                "error[endpoint]: unhandled err reached {reached}: {}\n{}",
+                "{wrote}error[endpoint]: unhandled err reached {reached}: {}\n{}",
                 render(&info.reason, true),
                 trace_lines(&info)
             ),
@@ -124,13 +135,11 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
         },
         Ok(Value::NoneV) if reached == "main" => Evaluation {
             status: 1,
-            stderr: "error[endpoint]: unhandled none reached main\n".to_string(),
+            stderr: format!("{wrote}error[endpoint]: unhandled none reached main\n"),
             stdout: executor.stdout,
             thunk_stats,
         },
-        Ok(_) => {
-            Evaluation { status: 0, stderr: String::new(), stdout: executor.stdout, thunk_stats }
-        }
+        Ok(_) => Evaluation { status: 0, stderr: wrote, stdout: executor.stdout, thunk_stats },
         Err(runtime) => Evaluation {
             status: 1,
             stderr: format!("error[runtime]: {}\n", runtime.message),

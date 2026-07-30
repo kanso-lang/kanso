@@ -22,7 +22,9 @@ fn run_kanso(program: &Path, extra: &[&str]) -> Output {
 
 fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
     let source = std::fs::read_to_string(program).unwrap_or_default();
-    let verb = match source.contains("pub play") {
+    // what the file declares, not what its text mentions: a comment naming
+    // `pub play` must not change which verb a golden runs under
+    let verb = match source.lines().any(|l| l.trim_start().starts_with("pub play")) {
         true => "play",
         false => "run",
     };

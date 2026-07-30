@@ -39,6 +39,10 @@ thread_local! {
     static TYPES: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
     static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
     static PRINTS: RefCell<String> = const { RefCell::new(String::new()) };
+    /// Kept apart from stdout and appended after it, the way a shell captures
+    /// the two streams — so this engine and the native binary agree byte for
+    /// byte on a program that writes to both.
+    static ERRS: RefCell<String> = const { RefCell::new(String::new()) };
     static INTERP: RefCell<Option<Interp<'static>>> = const { RefCell::new(None) };
 }
 
@@ -797,6 +801,10 @@ impl Executor for RtExecutor {
         PRINTS.with(|p| p.borrow_mut().push_str(text));
     }
 
+    fn write_err(&mut self, text: &str) {
+        ERRS.with(|e| e.borrow_mut().push_str(text));
+    }
+
     fn random(&mut self, n: u64) -> u64 {
         crate::wasm::next_random(n)
     }
@@ -850,6 +858,7 @@ fn exec_slot(h: u32) -> Result<u32, String> {
 /// (status, text) mirroring the native binary's endpoint behavior.
 pub fn exec_main(h: u32) -> (i32, String) {
     PRINTS.with(|p| p.borrow_mut().clear());
+    ERRS.with(|e| e.borrow_mut().clear());
     let outcome = match slot(h) {
         Slot::V(Value::Desc(_)) | Slot::Seq(..) | Slot::Bind(..) => match exec_slot(h) {
             Ok(y) => match slot(y) {
@@ -880,6 +889,7 @@ pub fn exec_main(h: u32) -> (i32, String) {
     };
     let (status, tail) = outcome.expect("outcome");
     let mut text = PRINTS.with(|p| p.borrow().clone());
+    text.push_str(&ERRS.with(|e| e.borrow().clone()));
     text.push_str(&tail);
     (status, text)
 }
