@@ -11804,3 +11804,25 @@ wrapped Rust string literal. Both said the same thing badly in different ways.
 That the oracle's own message was malformed is worth noting beside the
 `io/exit` finding above. Being authoritative about what a program computes is
 not the same as being right about everything it says.
+
+## How a value prints, swept
+
+Rendering is written twice — `render` in the interpreter and `k_render` in the
+C runtime — and every `print` passes through it, which makes it the widest
+place in the compiler where two implementations have to agree character for
+character. The project already calls it divergence-prone beside float
+formatting and utf-8. Those two had harnesses; this did not.
+
+Sixty-eight values: both ends of the integer range, floats that are integers
+and floats that need every digit, negative zero, arithmetic that lands on a
+float, strings that are nothing but escapes, three scripts of text, empty and
+nested containers, maps written in two orders, records holding records.
+
+Nothing disagreed, which is the answer worth reporting rather than the one
+worth being disappointed by — the two implementations already match across a
+surface nobody had checked at once.
+
+A sweep that finds nothing has to be shown capable of finding something, or it
+is a guard that cannot fail. Rendering `true` as `True` in the C runtime was
+caught. Nudging the ryu call by one ulp was caught eleven times over, which is
+the float coverage doing its job specifically.
