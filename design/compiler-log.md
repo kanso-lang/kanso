@@ -11526,3 +11526,43 @@ that must be refused — and both engines are held to both. The corpus had no
 cross-module field read at all, which is why the getter-name guard could not
 see this path; it now covers it. Each surviving fix was broken alone and
 watched fail.
+
+## A record that comes back in registers
+
+A group returning a register-returnable record hands it back as two words
+rather than as an ordinary value. Reading a *field* of one was made to work
+when field access crossed module boundaries; everything else a program does
+with a record was not. Rendering one emitted invalid IR, and so did putting it
+in a list, comparing two, or using one as a map value. clang refused the
+module every time, which is why this answered wrongly nowhere and simply
+failed to build.
+
+**Where the conversion goes is the whole question, and both ends were
+measured.** Converting at the call is correct for every consumer and costs
+`sh_rec` 0 -> 253,968,000 bytes on a json decode: json's chain is call into a
+carried slot the whole way, so every hop allocated a record that the callee's
+unpack immediately took apart again. The cost golden caught it and welfare did
+not, which is exactly the trade those two gates exist to separate.
+
+So the conversion lives at the consumers. A carried argument slot reads the
+two words directly; a render, a list element, a map key or value, an operator
+and an ordinary parameter each ask for the record. The hot chain touches none
+of them and pays nothing — the cost golden is unchanged.
+
+Two failure branches were written and both removed. The two words also encode
+a failure, which `emit_parsed_from_failure` states plainly, so a conversion
+that assumed it held a record looked unsafe. It is not reachable: a failure is
+intercepted upstream of every consumer, probed through a carried slot, through
+an ordinary parameter and through a render. Breaking each branch changed
+nothing, which is how they were caught. The shapes tried are written here so
+the next person does not have to try them again.
+
+Two earlier sittings guessed at this and reverted. FAIL bookkeeping was not
+the cause; carrying the identical set onto the converted value changes
+nothing. Stale operand names were not either — `tmp` counts on a per-group
+`FnEmit`. What found the mechanism was the smallest program that returns a
+record in registers and immediately passes it to a function that destructures
+it, and reading the emitted IR rather than the test output.
+
+`tests/golden/fields/returned` pins all six consumers in one program and
+`.../failed` pins the failure; both engines are held to both.

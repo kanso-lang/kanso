@@ -679,6 +679,19 @@ impl<'a> Backend<'a> {
         })
     }
 
+    /// An operand as an ordinary value. Only a carried argument slot reads the
+    /// two-word convention; every other consumer — a render, a list, an
+    /// ordinary parameter — needs the record itself. Converting here rather
+    /// than at the call is what keeps the hot path free: a chain of carried
+    /// slots never builds a record at all, which is the whole point of the
+    /// convention and worth 254 MB on a json decode.
+    fn as_value(&self, f: &mut FnEmit, e: &str) -> String {
+        match f.is_parsed(e) {
+            true => self.box_parsed(f, e),
+            false => e.to_string(),
+        }
+    }
+
     /// Undo the by-value convention: rebuild the record the two words hold.
     /// The type is whatever produced the value, which the escape analysis
     /// already knows, because only a returnable type is ever in this shape.
@@ -712,7 +725,6 @@ impl<'a> Backend<'a> {
         f.line(&format!("store %KValue {f1}, ptr {p1}"));
         let t = f.tmp();
         f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
-        f.record(&t, REC);
         t
     }
 
@@ -2259,6 +2271,7 @@ impl<'a> Backend<'a> {
                             let dispatchable = f.set_of(&value) & (REC | NONE | DESC) != 0
                                 && self.program.fns.iter().any(|d| d.name == group);
                             let t = f.tmp();
+                            let value = self.as_value(f, &value);
                             match dispatchable {
                                 true => {
                                     f.line(&format!(
@@ -2504,7 +2517,8 @@ impl<'a> Backend<'a> {
             Expr::List(items, _) => {
                 let mut emitted = Vec::new();
                 for item in items {
-                    emitted.push(self.emit_expr(f, item)?);
+                    let e = self.emit_expr(f, item)?;
+                    emitted.push(self.as_value(f, &e));
                 }
                 let n = emitted.len().max(1);
                 let arr = f.tmp();
@@ -2527,8 +2541,10 @@ impl<'a> Backend<'a> {
             Expr::MapLit(pairs, _) => {
                 let mut emitted = Vec::new();
                 for (key, value) in pairs {
-                    emitted.push(self.emit_expr(f, key)?);
-                    emitted.push(self.emit_expr(f, value)?);
+                    let k = self.emit_expr(f, key)?;
+                    emitted.push(self.as_value(f, &k));
+                    let v = self.emit_expr(f, value)?;
+                    emitted.push(self.as_value(f, &v));
                 }
                 let n = emitted.len().max(1);
                 let arr = f.tmp();
@@ -2795,6 +2811,10 @@ impl<'a> Backend<'a> {
         b: &str,
         span: Span,
     ) -> Result<String, String> {
+        // an operator reads ordinary values on both sides
+        let a_owned = self.as_value(f, a);
+        let b_owned = self.as_value(f, b);
+        let (a, b) = (a_owned.as_str(), b_owned.as_str());
         // a record on the left dispatches to the operator's user arms; the
         // numeric fast paths below stay untouched for everything else
         let armable = matches!(op, "+" | "-" | "*" | "/" | "%")
