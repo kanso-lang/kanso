@@ -222,6 +222,17 @@ jobs:
           cd /tmp/kq
           KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
 
+  diagnostics:
+    name: diagnostics differential (both engines say the same thing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      # asks every exported std function for the wrong thing, in every
+      # argument position, and requires the two engines to answer identically
+      - run: python3 scripts/diagnostic_differential.py
+
   site:
     name: site (landing sample and playground run in a browser)
     runs-on: ubuntu-latest
