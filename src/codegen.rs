@@ -2158,7 +2158,17 @@ impl<'a> Backend<'a> {
             Expr::Guard { .. } => {
                 Err("native backend: a return guard sits only in tail position".to_string())
             }
-            Expr::Int(n, _) => Ok(format!("{{ i64 0, i64 {n} }}")),
+            // A literal wider than the payload used to be truncated into it,
+            // so `1 * 18446744073709551616` answered 0 — a wrong answer that
+            // looked right, which is the one thing this build's ceiling is
+            // supposed to refuse rather than produce.
+            Expr::Int(n, _) => match i64::try_from(n) {
+                Ok(fits) => Ok(format!("{{ i64 0, i64 {fits} }}")),
+                Err(_) => Err(format!(
+                    "native backend: the literal {n} does not fit this build's 64-bit \
+                     int (spec int is arbitrary precision)"
+                )),
+            },
             Expr::Float(x, _) => {
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_float(double 0x{:016X})", x.to_bits()));

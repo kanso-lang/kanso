@@ -11164,3 +11164,42 @@ Resolution is Clay's and is recorded as task #46: bignum in the native
 runtime, a 64-bit ceiling in the oracle, or an accepted divergence. The
 first is the only one that keeps the oracle's meaning, and it is real
 work on a hot path.
+
+## 2026-07-29 — the harness found a wrong answer on its first run
+
+#46's resolution is bignum in the native runtime, and the project's own
+rule says a precision kernel gets its differential harness before its
+core. Writing that harness first paid immediately, which is the argument
+for the rule.
+
+scripts/numeric_differential.py generates whole programs — the boundary
+the differential law actually governs is what a program prints — and
+runs each through both engines. It batches, because a native run invokes
+clang and a process per case is minutes where a process per batch is
+seconds; a batch that disagrees is then split to the case.
+
+**It found silent wrong answers, not the documented ceiling.**
+
+    print (1 * 18446744073709551616)   native 0        interp 18446744073709551616
+    print (1 + 9223372036854775808)    native -92233…  interp 9223372036854775809
+    print (0 % 18446744073709551616)   native "modulo by zero"
+
+A source literal wider than the payload was formatted straight into the
+IR, where it truncated modulo 2^64, and arithmetic then proceeded on the
+wrong value. The overflow guards only ever covered *arithmetic* —
+`__builtin_mul_overflow` and its siblings — so a literal walked past
+them. Chapter 02 tells the reader "a wrong answer that looks right is
+the most expensive kind of bug. kanso will not produce one", and this
+produced three.
+
+Native now refuses the literal, which is what the ceiling was always
+supposed to mean. The wasm backend keeps the value as a BigInt through a
+literal table and was never affected.
+
+What remains of #46 is the real work: the engines still disagree above
+the ceiling, deliberately, with the interpreter exact and native
+refusing. That is bignum in the runtime, and it is now a change made
+against a harness rather than against hope.
+
+Cost, recorded so nobody puts it in CI unthinkingly: 2,265 programs took
+seven minutes, nearly all of it clang.
