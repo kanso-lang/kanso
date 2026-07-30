@@ -3267,8 +3267,8 @@ static KValue k_schedule(KDesc* join) {
 
 /* Exported (not static): the codegen prelude's inline k_truthy calls this on
    its cold path, so the die message lives in exactly one place. */
-long long k_truthy_bad(void) {
-    k_die("an if condition is true or false");
+long long k_truthy_bad(KValue v) {
+    k_die_got("an if condition is true or false", v);
     return 0;
 }
 
@@ -3280,7 +3280,7 @@ long long k_truthy_bad(void) {
 long long k_truthy(KValue v) {
     if (v.tag == K_TRUE) return 1;
     if (v.tag == K_FALSE) return 0;
-    return k_truthy_bad();
+    return k_truthy_bad(v);
 }
 
 /* ---- slice 2: lists, maps, closures, builtins ---- */
@@ -4086,7 +4086,8 @@ KValue k_b_at(KValue container, KValue index) {
         }
         return k_none();
     }
-    k_die("at takes a list or string with a 1-based position, or a map with a key");
+    /* `at` is what the builtin is called; indexing is what the reader wrote */
+    k_die("indexing takes a list or string with a 1-based position, or a map with a key");
     return k_none();
 }
 

@@ -2302,19 +2302,17 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
         }
         (Value::Str(text), Value::Int(i)) => {
             let idx = usize::try_from(i.clone()).ok();
-            Ok(
-                match idx.and_then(|i| i.checked_sub(1)).and_then(|i| text.chars().nth(i)) {
-                    Some(c) => Value::Str(c.to_string()),
-                    None => Value::NoneV,
-                },
-            )
+            Ok(match idx.and_then(|i| i.checked_sub(1)).and_then(|i| text.chars().nth(i)) {
+                Some(c) => Value::Str(c.to_string()),
+                None => Value::NoneV,
+            })
         }
         (Value::Map(entries), Value::Int(_) | Value::Str(_)) => {
             let key = map_key(index, span)?;
             Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
         }
         _ => Err(RuntimeError {
-            message: "indexing takes a list or string with a 1-based position, or a map                       with a key"
+            message: "indexing takes a list or string with a 1-based position, or a map with a key"
                 .to_string(),
             span,
         }),

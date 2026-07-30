@@ -1,0 +1,9 @@
+# Construction is positional and complete. Native used to build a `point` with
+# one field and carry on; reading the missing field then said `point` has no
+# field `y`, which is a lie about the type — the type has it, that value did
+# not. The compiler knows both counts, so it says so before anything runs.
+type point
+  x
+  y
+
+pub play = print "{point 1}"

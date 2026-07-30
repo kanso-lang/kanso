@@ -1,0 +1,4 @@
+error[arity]: `point` has 2 field(s), got 1 (construction is positional, fields alphabetical)
+  --> construction_is_complete.kso:9:20
+   9 | pub play = print "{point 1}"
+                          ^

@@ -11773,3 +11773,34 @@ the identical program once per position — 103 runs of 68 distinct programs.
 One probe per function is what it always was, and that is what it now says.
 Making each position wrong on its own would need a valid filler for the
 others, and a valid filler differs per function.
+
+## What the language says, not just what the library says
+
+The diagnostics sweep covered std functions. The language writes its own
+messages too — arity, indexing, dispatch, arithmetic, construction — and each
+engine writes them separately. Fourteen probes for those paths found three
+disagreements, and one was not about words.
+
+**A construction could be incomplete.** `point 1`, where `point` declares two
+fields, was rejected by the interpreter at runtime and accepted by native,
+which built a record with one field and printed it. Reading the missing field
+then answered ``point` has no field `y``, which is a lie about the type: the
+type has `y`, that value did not, because it was allowed to exist.
+
+Neither engine's behaviour was right. A function called with the wrong number
+of arguments is already a compile error, and a construction is positional and
+complete, so the compiler knows both counts before anything runs. It is now
+the same kind of error at the same time, which is a better answer than the
+oracle's and removes the runtime check from both engines rather than adding
+one to native.
+
+The other two were words. `if` on a non-bool named what it wanted and not what
+it got on native, which needed threading the value through the codegen
+prelude's inlined twin as well as the runtime's own copy. And indexing a
+number said `at` on native — the builtin's name, not the reader's — while the
+interpreter's version of the same sentence carried a run of spaces left by a
+wrapped Rust string literal. Both said the same thing badly in different ways.
+
+That the oracle's own message was malformed is worth noting beside the
+`io/exit` finding above. Being authoritative about what a program computes is
+not the same as being right about everything it says.

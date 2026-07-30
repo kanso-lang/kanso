@@ -77,6 +77,57 @@ def program(module, name, arity):
     )
 
 
+# The library sweep above covers what std says. These cover what the LANGUAGE
+# says: arity, indexing, dispatch, arithmetic, construction. Each engine writes
+# these messages separately too, so each can drift separately.
+LANGUAGE = [
+    ("too many arguments", "fn one a\n  a\n\npub play = print \"{one 1 2}\"\n"),
+    ("too few arguments", "fn two a b\n  a\n\npub play = print \"{two 1}\"\n"),
+    (
+        "a field the record lacks",
+        "type point\n  x\n\npub play =\n  p = point 1\n  print \"{p.y}\"\n",
+    ),
+    (
+        "a field of a non-record",
+        "pub play =\n  n = 5\n  print \"{n.x}\"\n",
+    ),
+    (
+        "a strict index past the end",
+        "pub play =\n  xs = [1 2]\n  print \"{xs[9]!}\"\n",
+    ),
+    (
+        "a strict index at zero",
+        "pub play =\n  xs = [1 2]\n  print \"{xs[0]!}\"\n",
+    ),
+    ("division by zero", "pub play =\n  n = 0\n  print \"{1 / n}\"\n"),
+    ("remainder by zero", "pub play =\n  n = 0\n  print \"{1 % n}\"\n"),
+    (
+        "adding a string to a number",
+        "pub play =\n  s = \"a\"\n  print \"{1 + s}\"\n",
+    ),
+    (
+        "comparing a record to a number",
+        "type point\n  x\n\npub play =\n  p = point 1\n  print \"{p < 2}\"\n",
+    ),
+    (
+        "an if condition that is not a bool",
+        "pub play =\n  n = 5\n  print \"{if n 1 2}\"\n",
+    ),
+    (
+        "constructing with the wrong count",
+        "type point\n  x\n  y\n\npub play = print \"{point 1}\"\n",
+    ),
+    (
+        "no arm matches",
+        "fn only 0\n  \"zero\"\n\npub play =\n  n = 7\n  print \"{only n}\"\n",
+    ),
+    (
+        "indexing something that is not a collection",
+        "pub play =\n  n = 5\n  print \"{n[1]!}\"\n",
+    ),
+]
+
+
 def answer(source, engine):
     with tempfile.TemporaryDirectory() as work:
         entry = pathlib.Path(work) / "probe.kso"
@@ -104,7 +155,16 @@ def main():
         checked += 1
         if native != interp:
             disagreed.append((module, name, native, interp))
-    print(f"{checked} std functions asked for the wrong thing, {len(disagreed)} disagree")
+    for label, source in LANGUAGE:
+        native = answer(source, [])
+        interp = answer(source, ["--interp"])
+        checked += 1
+        if native != interp:
+            disagreed.append(("language", label, native, interp))
+    print(
+        f"{checked} probes ({len(surface())} std functions and {len(LANGUAGE)} language "
+        f"paths), {len(disagreed)} disagree"
+    )
     for module, name, native, interp in disagreed[:20]:
         print(f"  {module}/{name}")
         print(f"    native: code={native[0]} err={native[2].strip()[:150]!r}")
