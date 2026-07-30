@@ -204,12 +204,14 @@ declare %KValue @k_cmp(%KValue, %KValue, i64)
 declare %KValue @k_desc_print(%KValue)
 declare %KValue @k_seq(%KValue, %KValue)
 declare void @k_die(ptr) noreturn
+declare void @k_die_arity(i64, i64) noreturn
+declare void @k_die_overload(ptr) noreturn
 declare { i64, i1 } @llvm.sadd.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.ssub.with.overflow.i64(i64, i64)
 declare { i64, i1 } @llvm.smul.with.overflow.i64(i64, i64)
 declare %KValue @k_list_lit(i64, ptr)
 declare %KValue @k_map_lit(i64, ptr)
-declare %KValue @k_closure(ptr, i64, ptr)
+declare %KValue @k_closure(ptr, i64, i64, ptr)
 declare %KValue @k_fnref(ptr)
 declare %KValue @k_env_get(ptr, i64)
 declare %KValue @k_b_at(%KValue, %KValue)
@@ -604,6 +606,15 @@ fn wsym(name: &str, arity: usize) -> String {
     match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
         true => format!("\"w_{name}_{arity}\""),
         false => format!("w_{name}_{arity}"),
+    }
+}
+
+/// The static a `k_fnref` value points at: the wrapper, its arity, and the
+/// name the diagnostic says when a call brings the wrong number of arguments.
+fn rsym(name: &str, arity: usize) -> String {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
+        true => format!("\"r_{name}_{arity}\""),
+        false => format!("r_{name}_{arity}"),
     }
 }
 
@@ -1072,6 +1083,13 @@ impl<'a> Backend<'a> {
                 "define %KValue @{}({}) {{\nentry:\n{conv}  ret %KValue %r\n}}\n",
                 wsym(name, arity),
                 params.join(", ")
+            );
+            let (label, _) = self.intern(&format!("{name}\0"));
+            let _ = writeln!(
+                self.body,
+                "@{} = private constant {{ ptr, i64, ptr }} {{ ptr @{}, i64 {arity}, ptr @{label} }}",
+                rsym(name, arity),
+                wsym(name, arity)
             );
         }
         // Lazy v1: the thunk-site dispatcher the runtime's k_force calls.
@@ -2378,7 +2396,7 @@ impl<'a> Backend<'a> {
                     let arity = arities[0];
                     self.fn_value_wrappers.push((name.clone(), arity));
                     let t = f.tmp();
-                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", wsym(name, arity)));
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{})", rsym(name, arity)));
                     return Ok(t);
                 }
                 if !arities.is_empty() {
@@ -2511,7 +2529,8 @@ impl<'a> Backend<'a> {
                 let t = f.tmp();
                 // the ccc wrapper, never the tailcc fn: C calls this pointer
                 f.line(&format!(
-                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, ptr {arr})",
+                    "{t} = call %KValue @k_closure(ptr @w_{lifted}, i64 {}, i64 {}, ptr {arr})",
+                    params.len(),
                     captures.len()
                 ));
                 Ok(t)
@@ -3212,7 +3231,11 @@ impl<'a> Backend<'a> {
         first: Option<String>,
         span: Span,
     ) -> Result<String, String> {
-        let call_arity = args.len() + first.is_some() as usize;
+        // `first` is args[0], already emitted — a pipe hands its value in as
+        // the head's first argument, it does not add one. Counting it twice
+        // made a piped call to a lambda pass the value in both positions,
+        // which the old unchecked cast to a two-argument signature dropped.
+        let call_arity = args.len();
         // A literal lambda applied on the spot is a binding, not a value:
         // bind the arguments and emit the body here, instead of building a
         // closure and dispatching through k_callN. The fusion pass composes
@@ -3222,10 +3245,12 @@ impl<'a> Backend<'a> {
         if let Expr::Lambda { params, body, .. } = head {
             if params.len() == call_arity {
                 let mut vals: Vec<String> = Vec::new();
+                let mut rest = args.iter();
                 if let Some(v) = first.clone() {
                     vals.push(v);
+                    rest.next();
                 }
-                for a in args {
+                for a in rest {
                     vals.push(self.emit_expr(f, a)?);
                 }
                 let mut bails: Vec<(String, String)> = Vec::new();
@@ -3294,10 +3319,12 @@ impl<'a> Backend<'a> {
             // and dispatch at runtime via the arity-matched k_callN.
             let callee = self.emit_expr(f, head)?;
             let mut arg_vals: Vec<String> = Vec::new();
+            let mut rest = args.iter();
             if let Some(v) = first {
                 arg_vals.push(v);
+                rest.next();
             }
-            for a in args {
+            for a in rest {
                 arg_vals.push(self.emit_expr(f, a)?);
             }
             let n = arg_vals.len();

@@ -93,7 +93,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_builtin", params: 2, returns: true },
         Import { name: "rt_seq", params: 2, returns: true },
         Import { name: "rt_maybe_bind", params: 2, returns: true },
-        Import { name: "rt_mkclosure", params: 2, returns: true },
+        Import { name: "rt_mkclosure", params: 3, returns: true },
         Import { name: "rt_call", params: 2, returns: true },
         Import { name: "rt_envget", params: 2, returns: true },
         Import { name: "rt_die", params: 1, returns: false },
@@ -830,6 +830,7 @@ impl<'a> WasmBackend<'a> {
                 let widx = self.fn_wrapper(name)?;
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);
+                ctx.body.i32_const(-1);
                 ctx.body.call(RT_MKCLOSURE);
             }
             _ => return Err(format!("unsupported name `{name}`")),
@@ -929,6 +930,7 @@ impl<'a> WasmBackend<'a> {
         }
         ctx.body.i32_const(tidx as i64);
         ctx.body.i32_const(captures.len() as i64);
+        ctx.body.i32_const(params.len() as i64);
         ctx.body.call(RT_MKCLOSURE);
         Ok(())
     }
@@ -1162,6 +1164,7 @@ impl<'a> WasmBackend<'a> {
                 }
                 ctx.body.i32_const(tidx as i64);
                 ctx.body.i32_const(rest as i64);
+                ctx.body.i32_const(-1);
                 ctx.body.call(RT_MKCLOSURE);
                 Ok(())
             }
@@ -1202,6 +1205,7 @@ impl<'a> WasmBackend<'a> {
                 }
                 ctx.body.i32_const(tidx as i64);
                 ctx.body.i32_const(rest as i64);
+                ctx.body.i32_const(-1);
                 ctx.body.call(RT_MKCLOSURE);
                 Ok(())
             }

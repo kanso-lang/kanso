@@ -76,7 +76,11 @@ impl Toolchain {
         let mut linker = Linker::new(&engine);
         let callback = Func::wrap(
             &mut store,
-            |mut caller: Caller<'_, Dispatch>, handle: i32, env: i32, arg: i32| -> i32 {
+            |mut caller: Caller<'_, Dispatch>,
+             handle: i32,
+             env: i32,
+             arg: i32|
+             -> Result<i32, wasmi::Error> {
                 let table = caller.data().0.borrow().expect("a closure ran before main");
                 let target = table
                     .get(&mut caller, handle as u64)
@@ -85,10 +89,12 @@ impl Toolchain {
                     .and_then(|f| f.val().copied().copied())
                     .expect("the table entry is a function");
                 let mut out = [Val::I32(0)];
-                target
-                    .call(&mut caller, &[Val::I32(env), Val::I32(arg)], &mut out)
-                    .expect("the closure body runs");
-                out[0].i32().expect("a closure answers an i32")
+                // A program that dies inside a closure body aborts, and an
+                // abort is a trap. Expecting success here turned every such
+                // diagnostic into a panic in the harness, so the engine looked
+                // silent on the one path where a lambda reports anything.
+                target.call(&mut caller, &[Val::I32(env), Val::I32(arg)], &mut out)?;
+                Ok(out[0].i32().expect("a closure answers an i32"))
             },
         );
         linker.define("env", "k_callback", callback).expect("k_callback is the one import");

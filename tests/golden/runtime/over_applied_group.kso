@@ -1,0 +1,6 @@
+fn adder n
+  n + 1
+
+pub play =
+  f = adder
+  print "{f 3 4}"

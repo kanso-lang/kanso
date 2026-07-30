@@ -567,7 +567,13 @@ fn cached_program_binary(ir: &str) -> std::io::Result<std::path::PathBuf> {
     if binary.exists() {
         return Ok(binary);
     }
-    let ll_path = std::env::temp_dir().join(format!("kanso_run_{key:016x}.ll"));
+    // The process writing the IR owns the file it hands clang. Two runs of
+    // the same program share a key, so a shared path let one truncate and
+    // rewrite what the other's clang was already reading — which surfaces as
+    // a segmentation fault inside LLVM's assembly lexer, blamed on the
+    // program rather than on the race.
+    let ll_path =
+        std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}.ll", std::process::id()));
     std::fs::write(&ll_path, ir)?;
     let staging = std::env::temp_dir().join(format!("kanso_run_{key:016x}_{}", std::process::id()));
     let ll = ll_path.to_string_lossy().into_owned();
