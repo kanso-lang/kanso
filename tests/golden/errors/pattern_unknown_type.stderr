@@ -1,0 +1,4 @@
+error[name]: `poynt` is not a type, so a binding cannot destructure with it
+  --> pattern_unknown_type.kso:2:9
+   2 |   poynt a = 1
+               ^

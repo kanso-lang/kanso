@@ -1,0 +1,4 @@
+error[name]: `let` is not a type, so a binding cannot destructure with it — a binding is `x = …`, with no keyword
+  --> let_binding.kso:2:7
+   2 |   let x = 1
+             ^
