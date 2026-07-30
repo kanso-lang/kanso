@@ -231,3 +231,61 @@ fn list_marks_staleness_and_update_walks_the_lock_forward() {
     let offline = String::from_utf8_lossy(&hako(&["list", "."], false).stdout).into_owned();
     assert!(offline.contains("unreachable"), "list should still answer: {offline}");
 }
+
+/// The protocol says how content is obtained from wherever the name lives.
+/// It is derived by convention, written into the lock, and refused by name
+/// when this toolchain cannot speak it — so a lock from a newer toolchain
+/// says what it wanted rather than quietly being fetched some other way.
+#[test]
+fn the_lock_records_a_protocol_and_refuses_one_it_cannot_speak() {
+    let root = std::env::temp_dir().join("kanso-hako-protocol");
+    let _ = std::fs::remove_dir_all(&root);
+    let remote = published(&root);
+    let cache = root.join("cache");
+    let app = root.join("app");
+    std::fs::create_dir_all(&app).expect("the app's directory");
+    std::fs::write(
+        app.join("main.kso"),
+        "import \"acme/widgets\"\n\nprint \"{widgets/greet 0}\"\n",
+    )
+    .expect("the entry writes");
+    let hako = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .args(args)
+            .env("KANSO_HAKO", &cache)
+            .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+            .current_dir(&app)
+            .output()
+            .expect("kanso runs")
+    };
+
+    assert!(hako(&["install", "."]).status.success());
+    let lock = std::fs::read_to_string(app.join("hako.lock")).expect("the lock reads");
+    let fields: Vec<&str> = lock.split_whitespace().collect();
+    assert_eq!(fields.len(), 4, "the lock records no protocol: {lock}");
+    assert_eq!(fields[3], "git");
+
+    // a line written before the field existed still means git
+    std::fs::write(app.join("hako.lock"), format!("{} {} {}\n", fields[0], fields[1], fields[2]))
+        .expect("the lock writes");
+    let old = hako(&["run", "."]);
+    assert_eq!(
+        String::from_utf8_lossy(&old.stdout),
+        "widgets v2\n",
+        "a three-field lock stopped working: {}",
+        String::from_utf8_lossy(&old.stderr)
+    );
+
+    // and one this toolchain cannot speak is refused by name
+    std::fs::write(
+        app.join("hako.lock"),
+        format!("{} {} {} hako_server\n", fields[0], fields[1], fields[2]),
+    )
+    .expect("the lock writes");
+    let refused = hako(&["update", "."]);
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("cannot speak"),
+        "an unspeakable protocol was not refused: {}",
+        String::from_utf8_lossy(&refused.stderr)
+    );
+}

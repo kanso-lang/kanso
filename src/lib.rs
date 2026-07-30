@@ -423,8 +423,8 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     // name in the cache still answers, so a checkout can be dropped in by hand
     let cache = hako_cache();
     if let Some((name, module)) = hako::split_name(path) {
-        if let Some((_, sha)) = LOCK.with(|l| l.borrow().get(&name).cloned()) {
-            let mut dir = hako::cached(&cache, &name, &sha);
+        if let Some(pin) = LOCK.with(|l| l.borrow().get(&name).cloned()) {
+            let mut dir = hako::cached(&cache, &name, &pin.sha);
             if let Some(rest) = module {
                 dir = dir.join(rest);
             }
@@ -2046,7 +2046,7 @@ thread_local! {
     /// The lock read from the module root, so every import in a build sees the
     /// same pins. Empty when there is no lock, which is what lets a cache
     /// entry answer by bare name.
-    static LOCK: std::cell::RefCell<std::collections::BTreeMap<String, (String, String)>> =
+    static LOCK: std::cell::RefCell<std::collections::BTreeMap<String, hako::Pin>> =
         const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
 
     static AMBIENT_ROOT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };

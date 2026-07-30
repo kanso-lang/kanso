@@ -10915,3 +10915,50 @@ Both claims were watched red on their own. Making `update` re-lock the
 tag it already had left the lock unmoved; making `list` never mark
 staleness left the mark absent. One at a time, because two guards under
 one fixture is how the version race went wrong an hour ago.
+
+## 2026-07-29 — a host is not a protocol
+
+Clay, on how a dependency's source type is specified: "there's no way to
+get github to tell you what kind of hako server it is. that makes no
+sense." Then, when the answer swung too far: "git is one adapter. there
+could be a subversion adapter, or CVS, or hako server protocol. we need
+a MECHANISM descriptor."
+
+Both are right, and the reason they looked contradictory was a category
+error sitting in the design's own list: `mechanism: git | github_repo |
+hako_server`. Two of those are protocols. One is a host. Once they are
+separated, both objections resolve at once — a descriptor is needed,
+because hg and svn and a hako server are genuinely different adapters,
+and GitHub is never asked for one, because a host is not a protocol and
+its protocol is convention.
+
+**What killed `github_repo` as a protocol was evidence, not taste.** The
+argument for it was a capability: a tarball at a ref, fetchable with no
+git binary. That trades a commit sha for a promise. On 30 January 2023
+GitHub deployed Git 2.38, whose internal gzip replaced the external one;
+identical files produced different bytes, and every build system holding
+a recorded hash broke. GitHub now undertakes to hold archives stable for
+at least a year with six months' notice — a policy where a sha is a
+property. Tag discovery and ref fetch are git standards, so what is left
+of the host as a protocol is an optimization that verifies worse.
+
+Two arguments of mine were wrong on the way and are recorded so neither
+comes back. "Git is the universal mechanism" flattened a capability
+difference into a performance one — hg and svn exist, and a hako server
+speaks something else entirely. Then "github_repo is just an
+optimization" made the same mistake in the other direction, before the
+tarball evidence showed it was true for a different reason than I had.
+
+**The name.** `mechanism` names nothing, since everything is one;
+`adapter` names a pattern rather than a domain thing; `service` fails the
+test that killed `github_repo`, because git is not a service and GitHub
+is; `source` is a place, and keeping it alongside a second word is what
+produced the confusion. `protocol` is what actually varies. The doc now
+uses one word, and host convention is stated as the *first* authority
+rather than a special case of the domain lookup, so a hako on a known
+host costs no round trip.
+
+The lock gained the field while it has one consumer and no migration.
+Three claims, each watched red alone: install writes it, a three-field
+line still reads as git, and a protocol this toolchain cannot speak is
+refused by name rather than quietly fetched as git.
