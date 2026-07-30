@@ -65,14 +65,14 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>the same rule catches the reflex you brought from every c-descended language: parentheses hugging a call. a call is a name, one space, its arguments—no parentheses to open, so the space is missing where one is required:</p>
+<p>the reflex you brought from every c-descended language is parentheses hugging a call. a call is a name, one space, its arguments, and the compiler says so by name:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">paren_call_check.kso</div>
   <pre><code><span class="f">print</span>(<span class="s">"hi"</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso check paren_call_check.kso</div>
-    <pre><code><span class="k">error[formatting]</span>: canonical form requires exactly one space here
+    <pre><code><span class="k">error[formatting]</span>: application is a space, so `print x` calls `print` — `print(x)` reads as `print` applied to nothing, then a parenthesised `x`
 <span class="c">  --&gt; paren_call_check.kso:1:6</span>
    1 | print("hi")
             <span class="k">^</span></code></pre>

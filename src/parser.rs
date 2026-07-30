@@ -1590,7 +1590,14 @@ impl<'a> P<'a> {
                 self.pos += 1;
                 Ok(())
             }
-            false => Err(self.err("expected `)`".to_string())),
+            // `=` binds a name and every C-shaped language spells comparison
+            // with it at least sometimes, so say which one is wanted rather
+            // than which bracket is missing.
+            false => match self.peek() {
+                Some(Tok::Bind) => Err(self
+                    .err("`=` binds a name; `==` asks whether two values are equal".to_string())),
+                _ => Err(self.err("expected `)`".to_string())),
+            },
         }
     }
 
@@ -2003,6 +2010,20 @@ impl<'a> P<'a> {
             Expr::Str(parts, _) if parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))) => {
                 Ok(())
             }
+            // An identifier here has two readings and the parser cannot tell
+            // them apart: somebody meant a map keyed by a variable, or they
+            // meant a block, because every C-shaped language spells one with
+            // braces. Naming one reading tells the other reader the wrong
+            // thing, so name both.
+            Expr::Ident(name, span) => Err(Diagnostic::new(
+                "syntax",
+                format!(
+                    "`{name}` is not a literal: a map's keys are literals, and a \
+                     dynamic one is built with `put` — a block is indentation \
+                     rather than braces"
+                ),
+                *span,
+            )),
             _ => Err(Diagnostic::new(
                 "syntax",
                 "map literal keys are literals; build dynamic maps with `put`".to_string(),
