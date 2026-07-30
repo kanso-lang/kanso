@@ -229,7 +229,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>width is rendering only—it never changes how many statements a body has. an over-wide statement doesn't split into two statements; it stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
+<p>width is rendering only—it never changes how many statements a body has. an over-wide statement stays one statement, wrapped across continuation lines. there are exactly two continuation forms, and they are the same two tokens that express ordering everywhere else: <code>.</code> for a data-flow pipe, and <code>&gt;&gt;</code> for a pure sequence. each step lands on its own line, indented two past the statement, one step per line.</p>
 
 <p>here is a sequence too wide for one line. its first step stays on the <code>main =</code> line; each further <code>&gt;&gt;</code> step drops to a continuation line at indent plus two:</p>
 
