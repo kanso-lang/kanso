@@ -5435,7 +5435,10 @@ static int k_exit_status(KValue e) {
     if (reason.tag != K_REC) return -1;
     KRec* r = k_as_rec(reason);
     if (strcmp(k_type_name(r->type_id), "io/exit_status")) return -1;
-    if (r->nfields < 1 || r->fields[0].tag != K_INT) return 1;
+    /* an exit_status carrying something that is not a status is not a program
+       saying what it meant — it is one that went wrong computing the code, and
+       the reader is owed that rather than a silent 1 */
+    if (r->nfields < 1 || r->fields[0].tag != K_INT) return -1;
     long long code = r->fields[0].payload;
     return (int)(code & 0xff);
 }

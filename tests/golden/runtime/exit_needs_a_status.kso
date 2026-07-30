@@ -1,0 +1,12 @@
+import "std/io"
+
+# `exit` takes a status. Handed something that is not one, the program did not
+# say what it meant — it went wrong computing the code, and every engine says
+# so rather than exiting 1 in silence.
+type wrong
+  a
+  b
+
+pub play =
+  bad = wrong 1 2
+  print "{io/exit bad}"

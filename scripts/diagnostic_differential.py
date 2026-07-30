@@ -8,11 +8,16 @@ golden corpus pins the diagnostics it happens to contain, and no golden asked
 a std function for the wrong type until one was written by hand and turned up
 `length` saying half as much on native as on the interpreter.
 
-So this asks every exported std function for the wrong thing, in every
-argument position, and requires both engines to answer identically. A record
-is the wrong thing for nearly everything and is never a literal, so it slips
-past the compile-time literal check and reaches the runtime path where the
-messages are written separately for each engine.
+So this asks every exported std function for the wrong thing and requires both
+engines to answer identically. A record is the wrong thing for nearly
+everything and is never a literal, so it slips past the compile-time literal
+check and reaches the runtime path where the messages are written separately
+for each engine.
+
+One probe per function, with the record in every argument position at once.
+That reaches whichever type check the function makes first, which is the one
+whose wording can drift; making each position wrong on its own would need a
+valid filler for the others, and a valid filler differs per function.
 
 Agreement is the requirement. A disagreement is a finding, and so is a crash
 with no message at all.
@@ -61,8 +66,8 @@ def surface():
     return sorted(set(found))
 
 
-def program(module, name, arity, position):
-    args = " ".join("bad" if i == position else "bad" for i in range(arity))
+def program(module, name, arity):
+    args = " ".join(["bad"] * arity)
     return (
         f'import "std/{module}"\n\n'
         + PRELUDE
@@ -93,16 +98,15 @@ def main():
     for module, name, arity in surface():
         if arity == 0:
             continue
-        for position in range(arity):
-            source = program(module, name, arity, position)
-            native = answer(source, [])
-            interp = answer(source, ["--interp"])
-            checked += 1
-            if native != interp:
-                disagreed.append((module, name, position, native, interp))
-    print(f"{checked} probes across {len(surface())} std functions, {len(disagreed)} disagree")
-    for module, name, position, native, interp in disagreed[:20]:
-        print(f"  {module}/{name} argument {position + 1}")
+        source = program(module, name, arity)
+        native = answer(source, [])
+        interp = answer(source, ["--interp"])
+        checked += 1
+        if native != interp:
+            disagreed.append((module, name, native, interp))
+    print(f"{checked} std functions asked for the wrong thing, {len(disagreed)} disagree")
+    for module, name, native, interp in disagreed[:20]:
+        print(f"  {module}/{name}")
         print(f"    native: code={native[0]} err={native[2].strip()[:150]!r}")
         print(f"    interp: code={interp[0]} err={interp[2].strip()[:150]!r}")
     if disagreed:

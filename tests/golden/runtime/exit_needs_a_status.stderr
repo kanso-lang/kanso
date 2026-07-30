@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached main: io/exit_status wrong 1 2
+  born in io/exit at std/io/io.kso:23
