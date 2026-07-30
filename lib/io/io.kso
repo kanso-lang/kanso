@@ -1,8 +1,20 @@
+# A deliberate exit status. Exiting is a way of failing, so it is an err,
+# which means it propagates by the rule that already exists and everything
+# after it is skipped without a second mechanism for stopping a program.
+pub type exit_status
+  code
+
 pub args = builtin_args
 
 # An unset variable reads as none: not being configured is ordinary.
 pub fn env name
   builtin_env name
+
+# Reach it by binding, not by sequencing: `write "…" . (_ -> exit 2)` runs the
+# write and then exits, where `write "…" >> exit 2` builds both descriptions
+# before either runs, and the err takes the whole chain with it.
+pub fn exit code
+  err (exit_status code)
 
 # A description of work answers a description, so it takes no `?` — the
 # mark belongs to a function that answers true or false directly.
