@@ -58,6 +58,10 @@ impl Executor for CollectExecutor {
         std::path::Path::new(path).exists()
     }
 
+    fn is_dir(&mut self, path: &str) -> bool {
+        std::path::Path::new(path).is_dir()
+    }
+
     fn now(&mut self) -> i64 {
         kanso::eval::pinned_now().unwrap_or(0)
     }

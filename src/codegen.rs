@@ -229,6 +229,7 @@ declare %KValue @k_b_write_err(%KValue)
 declare %KValue @k_b_env(%KValue)
 declare %KValue @k_b_failed(%KValue)
 declare %KValue @k_b_exists(%KValue)
+declare %KValue @k_b_is_dir(%KValue)
 declare %KValue @k_b_list_dir(%KValue)
 declare %KValue @k_desc_now()
 declare %KValue @k_b_write_file(%KValue, %KValue)
@@ -285,7 +286,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 35] = [
+const BUILTIN_CALLS: [(&str, usize); 36] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -298,6 +299,7 @@ const BUILTIN_CALLS: [(&str, usize); 35] = [
     ("env", 1),
     ("failed?", 1),
     ("exists", 1),
+    ("is_dir", 1),
     ("list_dir", 1),
     ("write_file", 2),
     ("run", 2),
