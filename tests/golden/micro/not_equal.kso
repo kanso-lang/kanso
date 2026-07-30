@@ -1,0 +1,10 @@
+# `!=` shares its first character with the strict-index sigil, so the two are
+# written next to each other here: a `!` only ends an index when an `=` does
+# not follow it.
+xs = [1 2 3]
+
+print "{1 != 2}"
+>> print "{"a" != "a"}"
+>> print "{xs[1]! != 2}"
+>> print "{xs[1]! == 1}"
+>> print "{[1 2] != [1 3]}"
