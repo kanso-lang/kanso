@@ -689,8 +689,27 @@ pub fn check_file_shadow(
             arities.push(decl.params.len());
         }
     }
+    // A construction is positional and complete: `point 1` where `point`
+    // declares two fields is the same mistake as calling a two-argument
+    // function with one, and the compiler knows both counts. A typeset never
+    // constructs and a subtype takes the one value it wraps, so neither is
+    // entered here.
+    let type_arity: std::collections::HashMap<String, usize> = program
+        .types
+        .iter()
+        .filter(|t| t.members.is_empty() && t.parent.is_none() && !t.fields.is_empty())
+        .map(|t| (t.name.clone(), t.fields.len()))
+        .collect();
     for decl in &program.fns {
-        check_fn_body_shadow(decl, &globals, used_globals, &mut diags, shadowable, &fn_arities);
+        check_fn_body_shadow(
+            decl,
+            &globals,
+            used_globals,
+            &mut diags,
+            shadowable,
+            &fn_arities,
+            &type_arity,
+        );
     }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     diags
@@ -1649,6 +1668,9 @@ struct Resolver<'a> {
     /// group must match one (arity 0 opts out: a constant's value may be
     /// callable, which only the runtime can arbitrate).
     fn_arities: &'a std::collections::HashMap<String, Vec<usize>>,
+    /// How many fields each record type declares. Construction is positional,
+    /// so an application of a type name has to hand over all of them.
+    type_arity: &'a std::collections::HashMap<String, usize>,
     /// std-origin files (stamped `std/...` by the loader) may name internal
     /// builtins through the builtin_ prefix; nothing else may.
     std_origin: bool,
@@ -1663,6 +1685,7 @@ fn check_fn_body_shadow(
     diags: &mut Vec<Diagnostic>,
     shadowable: &HashSet<String>,
     fn_arities: &std::collections::HashMap<String, Vec<usize>>,
+    type_arity: &std::collections::HashMap<String, usize>,
 ) {
     let mut resolver = Resolver {
         globals,
@@ -1673,6 +1696,7 @@ fn check_fn_body_shadow(
         harness: harness_file(&decl.file),
         shadowable,
         fn_arities,
+        type_arity,
     };
     for param in &decl.params {
         resolver.bind_pattern(param);
@@ -1876,6 +1900,19 @@ impl Resolver<'_> {
                 if let Expr::Ident(name, span) = &**head {
                     let local = self.locals.iter().any(|l| &l.name == name);
                     if !local {
+                        if let Some(fields) = self.type_arity.get(name.as_str()) {
+                            if args.len() != *fields {
+                                self.diags.push(Diagnostic::new(
+                                    "arity",
+                                    format!(
+                                        "`{name}` has {fields} field(s), got {} \
+                                         (construction is positional, fields alphabetical)",
+                                        args.len()
+                                    ),
+                                    *span,
+                                ));
+                            }
+                        }
                         if let Some(arities) = self.fn_arities.get(name.as_str()) {
                             if !arities.contains(&args.len()) && !arities.contains(&0) {
                                 let mut known: Vec<String> =

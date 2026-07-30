@@ -144,7 +144,7 @@ chkf:
 no:
   ret i64 0
 bad:
-  %r = call i64 @k_truthy_bad()
+  %r = call i64 @k_truthy_bad(%KValue %v)
   ret i64 %r
 }
 define internal i64 @k_check_tag(%KValue %v, i64 %t) alwaysinline {
@@ -170,7 +170,7 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
   %r = zext i1 %c to i64
   ret i64 %r
 }
-declare i64 @k_truthy_bad()
+declare i64 @k_truthy_bad(%KValue)
 
 declare %KValue @k_caf_freeze(%KValue)
 declare %KValue @k_str_n(ptr, i64)
