@@ -17,8 +17,9 @@ lesson, consistent with run/check/test/build/repl/play.
    records name, tag, commit sha and protocol per hako, one line each —
    `acme/widgets v0.3.0 d9f5249e… git`. A line without a protocol reads as
    git, which is what every line written before the field existed meant.
-   `hako update` walks tags forward and the test suite absorbs the change. (The no-versions-in-Gemfile doctrine,
-   made structural: the anti-pattern is unrepresentable.)
+   `hako update` walks tags forward and the test suite absorbs the change.
+   (The no-versions-in-Gemfile doctrine, made structural: the anti-pattern
+   is unrepresentable.)
 4. **Versions are git tags; majors are paths.** `v0.3.1` tags releases.
    Breaking majors fork the path — `kanso-lang/vse/v2` — so two majors
    coexist as distinct types (Go's mechanics; the visibility gavel's
