@@ -18,7 +18,7 @@ lib = (
     'fn loop _ 0 acc\n'
     '  acc\n\n'
     'fn loop cs n acc\n'
-    '  loop cs (n - 1) (acc + (length (decode cs)))\n'
+    '  loop cs (n - 1) (acc + length (decode cs))\n'
 )
 open('bench/jsonbench/bench.kso', 'w').write(lib)
 open('bench/jsonbench/main.kso', 'w').write('import "std/io"\n\nio/read_file "bench/large.json" . go\n')
