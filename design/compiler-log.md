@@ -12018,3 +12018,84 @@ than trusting the edit.
 Two pages share prose. `docs/flow.html` and chapter 06 carry the same
 sentences about groups and walls, so a tell in one is a tell in both, and a
 fix to one leaves the other. Worth knowing before editing either.
+
+## A module's files could not check each other's arities
+
+A module is a directory of files sharing one namespace, and the pass that
+checks a call's argument count against the arms that could answer it sees one
+file. Every call across that boundary went unchecked, entry files included:
+their statements are always a separate file from the declarations they call.
+Codegen then emitted `d_adder_2` for a group declaring only `d_adder_1`, and
+the reader met the assembler — an undefined symbol quoted out of a temporary
+LLVM file.
+
+The merged pass that would have caught it already existed, added when the same
+bug was found for imported groups, and looked only at qualified names on the
+reasoning that a bare name might be a local holding a function value. It
+cannot be: no binding may shadow a declaration, so a bare name matching a
+declared group is that group. Dropping the restriction closes both cases and
+found nothing false across the corpus.
+
+Two codegen guards stay behind it, because the check exempts groups with a
+nullary arm — a constant may hold a function of any arity, which is not
+knowable statically. Isolating them one at a time against each fixture: the
+entry case needs the direct-call guard alone; the sibling case needs the
+tail-call guard to divert off `musttail` and the direct-call guard to stop the
+emission. Neither is redundant, and testing them as a batch would have said
+only that something in the pair mattered.
+
+## Over-applying a function value answered anyway, on two engines
+
+That exemption is real, so the runtime is the only place the case can be
+caught, and it was not catching it. `k_call2` cast a one-argument closure's
+pointer to a two-argument signature and called it, so the extra argument sat
+in a register the callee never reads: `double 3 4` gave 6 on native and on
+wasm where the interpreter reported the arity. A group handed out as a value
+did the same and answered 4. The comment above the call helpers said arity was
+checked by the type system; it was not, and it is gone.
+
+A closure now carries how many arguments its body reads, and a group handed
+out as a value points at a static carrying its arity and its name — the group
+diagnostic names the group, so the name has to travel with the pointer.
+
+The guard then fired on correct code, which is how it found the next one. A
+piped call passed its value twice: `first` is `args[0]` already emitted, the
+declared-group path skipped it, and the other two argument-assembly paths
+pushed it and then walked `args` from the start. `4 . (x -> x + 1)` compiled
+to `k_call2(f, 4, 4)`, and the unchecked cast dropped the duplicate, which is
+why nothing had noticed.
+
+## Two builds of one program shared the file they wrote
+
+CI segfaulted inside clang with an invitation to report a bug against LLVM,
+on a test whose program was fine. Two tests in tests/hako.rs compile the same
+program, and a program's IR went to a path keyed by the program alone, so one
+process truncated and rewrote the file while the other's clang was reading it.
+A half-read module walks LLVM's assembly lexer off the end of its buffer.
+
+The corruption is not deterministic and eight racing processes would not
+reproduce it on a Mac. The defect is deterministic and is what the test pins:
+two processes compiling one program must not be handed the same file. Each now
+writes the file it hands its own compiler.
+
+The wasm harness could not have reported any of this. A program that dies
+inside a closure body aborts, an abort is a trap, and the harness expected the
+call to succeed — so every diagnostic a lambda can raise arrived as a panic in
+the test rather than as a message to compare.
+
+## hako's first verbs, in the language hako manages
+
+`kanso list` now exists twice: in Rust, and as a kanso module in the repo that
+reads a lock, reports what it pins, and asks each remote through `io/run`
+whether the pin has fallen behind. Both are exercised; the Rust one still owns
+the CLI.
+
+The port paid for one thing worth naming. A listing is an effect per pin
+folded into one write, and a value re-enters an effect chain only by writing
+nothing to stdout: `io/write "" . (_ -> x)`. Every program that runs one effect
+per element of a list needs that function and the io surface has no name for
+it. Open thread, wants a gavel.
+
+Two smaller frictions the port hit: a lambda bound to a name needs parentheses
+and says `unexpected trailing tokens` without them, and `text/concat`
+concatenates lists.

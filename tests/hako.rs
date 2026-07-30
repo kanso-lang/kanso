@@ -380,28 +380,84 @@ fn an_interim_pin_is_built_against_flagged_and_never_walked_forward() {
 /// reads a lock and reports what it pins — the same job `hako::list` does in
 /// Rust, and the beginning of moving that work into the language it manages.
 /// It runs here so it is exercised rather than merely present.
+///
+/// The remote is a directory of repositories, so this needs no network and
+/// still exercises the `git ls-remote` that staleness is measured with.
 #[test]
 fn the_kanso_listing_reads_a_lock() {
     let root = std::env::temp_dir().join("kanso-hako-kanso-list");
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).expect("a directory of its own");
+    let remote = published(&root);
     std::fs::write(
         root.join("hako.lock"),
-        "acme/widgets v0.2.0 abc123def4567890 git\nb/c fix-thing 99aabbccddeeff00 git\n",
+        "acme/widgets v0.1.0 abc123def4567890 git\nb/c fix-thing 99aabbccddeeff00 git\n",
     )
     .expect("the lock writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .args(["run", "hako", "--"])
         .arg(&root)
+        .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .expect("kanso runs");
 
     assert_eq!(
         String::from_utf8_lossy(&done.stdout),
-        "acme/widgets v0.2.0 abc123def456 git\n\
+        "acme/widgets v0.1.0 abc123def456 git (stale: v0.2.0 is out)\n\
          b/c fix-thing 99aabbccddee git (interim pin: not a release)\n",
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+}
+
+/// A pin at the release the remote publishes carries no mark at all.
+#[test]
+fn the_kanso_listing_is_quiet_when_a_pin_is_current() {
+    let root = std::env::temp_dir().join("kanso-hako-kanso-current");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("a directory of its own");
+    let remote = published(&root);
+    std::fs::write(root.join("hako.lock"), "acme/widgets v0.2.0 abc123def4567890 git\n")
+        .expect("the lock writes");
+
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "hako", "--"])
+        .arg(&root)
+        .env("KANSO_HAKO_REMOTE", format!("{}/", remote.display()))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("kanso runs");
+
+    assert_eq!(
+        String::from_utf8_lossy(&done.stdout),
+        "acme/widgets v0.2.0 abc123def456 git\n",
+        "{}",
+        String::from_utf8_lossy(&done.stderr)
+    );
+}
+
+/// A remote nobody can reach is reported, never guessed at.
+#[test]
+fn the_kanso_listing_says_when_a_remote_does_not_answer() {
+    let root = std::env::temp_dir().join("kanso-hako-kanso-unreachable");
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).expect("a directory of its own");
+    std::fs::write(root.join("hako.lock"), "acme/widgets v0.1.0 abc123def4567890 git\n")
+        .expect("the lock writes");
+
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .args(["run", "hako", "--"])
+        .arg(&root)
+        .env("KANSO_HAKO_REMOTE", "/nonexistent-remote/")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("kanso runs");
+
+    assert_eq!(
+        String::from_utf8_lossy(&done.stdout),
+        "acme/widgets v0.1.0 abc123def456 git (unreachable)\n",
         "{}",
         String::from_utf8_lossy(&done.stderr)
     );
