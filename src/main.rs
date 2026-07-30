@@ -268,7 +268,7 @@ fn repl() -> ExitCode {
         };
         if buffer.is_empty() && line.starts_with(':') {
             let _ = editor.add_history_entry(&line);
-            directive(&line, &mut session);
+            report(session.directive(&line));
             continue;
         }
         let submit = match buffer.is_empty() {
@@ -301,33 +301,6 @@ fn repl() -> ExitCode {
 fn opens_block(line: &str) -> bool {
     let head = line.strip_prefix("pub ").unwrap_or(line);
     head.starts_with("fn ") || head.starts_with("type ") || line.ends_with('=')
-}
-
-/// `:`-directives talk to the session itself, outside the language's grammar.
-#[cfg(not(target_arch = "wasm32"))]
-fn directive(line: &str, session: &mut kanso::repl::Session) {
-    let mut words = line.split_whitespace();
-    let verb = words.next().unwrap_or("");
-    let arg = words.next();
-    match (verb, arg) {
-        (":show", name) => match session.show(name) {
-            Ok(text) => println!("{text}"),
-            Err(message) => eprint!("{}", diag::paint(&message)),
-        },
-        (":delete", Some(name)) => match session.delete(name) {
-            Ok(echo) => println!("{echo}"),
-            Err(message) => eprint!("{}", diag::paint(&message)),
-        },
-        (":delete", None) => eprintln!("usage: :delete name"),
-        (":help", _) => {
-            println!(":show          the whole session, as the file it is");
-            println!(":show foo      foo's definition, without running it");
-            println!(":delete foo    remove foo (refused while something still uses it)");
-            println!(":help          this list");
-            println!("repeating a declaration replaces it; ctrl-c abandons a block");
-        }
-        _ => eprintln!("unknown directive {verb} — try :help"),
-    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]

@@ -137,3 +137,33 @@ fn show_renders_the_session_as_a_canonical_file() {
     let ada_at = file.find("fn ada").unwrap();
     assert!(user_at < ada_at, "types come before functions:\n{file}");
 }
+
+/// Directives are answered by the session, so both REPLs have them. They used
+/// to be handled in the terminal's own loop, which the browser never runs —
+/// so the playground wrapped `:show` into `it0 = :show` and reported a
+/// formatting error on a directive the terminal accepted. This test drives the
+/// same entry point the browser does.
+#[test]
+fn directives_are_answered_by_the_session_itself() {
+    let mut session = Session::new();
+
+    assert!(value(&mut session, ":help").contains(":show foo"));
+}
+
+#[test]
+fn a_directive_never_becomes_a_binding() {
+    let mut session = Session::new();
+    value(&mut session, "tau = 6.28");
+
+    let shown = value(&mut session, ":show");
+
+    assert!(shown.contains("tau"), "the session did not answer :show: {shown}");
+    assert!(!shown.contains("it0"), "the directive was bound as history: {shown}");
+}
+
+#[test]
+fn an_unknown_directive_says_so_rather_than_failing_to_parse() {
+    let mut session = Session::new();
+
+    assert!(value(&mut session, ":nonsense").contains("try :help"));
+}

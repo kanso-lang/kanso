@@ -138,6 +138,20 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds of cpu per decode — 2026-07-27, on a quiet desktop, load average under five. the four run interleaved, and each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. cpu time rather than wall time because it is the precise instrument — it counts only what the process spent, so a passing background task cannot inflate it. one caveat it carries: cpu time bills every thread, so go's collector threads count against it, and go's wall figure is 1.80 rather than 1.95. shorter is faster.</p>
 
+<ul class="book-toc page-toc">
+  <li><a href="#idea"><span class="ch-num">01</span><span class="ch-title">constraints buy freedom</span></a></li>
+  <li><a href="#journey"><span class="ch-num">02</span><span class="ch-title">the journey, honestly</span></a></li>
+  <li><a href="#c11"><span class="ch-num">03</span><span class="ch-title">the strict tier: rewinding arenas</span></a></li>
+  <li><a href="#ladder"><span class="ch-num">04</span><span class="ch-title">the last stretch to serde</span></a></li>
+  <li><a href="#license"><span class="ch-num">05</span><span class="ch-title">the rest of the license</span></a></li>
+  <li><a href="#deep"><span class="ch-num">06</span><span class="ch-title">the deep end</span></a></li>
+  <li><a href="#lazy"><span class="ch-num">07</span><span class="ch-title">the lazy bet</span></a></li>
+  <li><a href="#ledger"><span class="ch-num">techniques</span><span class="ch-title">the ledger</span></a></li>
+  <li><a href="#c04"><span class="ch-num">08</span><span class="ch-title">the receipts</span></a></li>
+  <li><a href="#surface"><span class="ch-num">09</span><span class="ch-title">the surface a program needs</span></a></li>
+  <li><a href="#coda"><span class="ch-num">coda</span><span class="ch-title">the mushroom test</span></a></li>
+</ul>
+
 <table class="bench-table">
   <thead>
     <tr><th>decoder</th><th class="bar-cell"></th><th class="num">ms/decode</th><th class="num">peak mem</th></tr>
