@@ -16,3 +16,7 @@ tests/golden/micro/dir_listing_is_sorted.kso	the playground has no filesystem
 # name, which is what the differential law asks of an engine that declines.
 tests/golden/micro/process_run.kso	the playground cannot start processes
 tests/golden/runtime/run_cannot_start.kso	the playground cannot start processes
+
+# The same missing filesystem, on the read side: a page cannot open a file to
+# find it absent, so it says why rather than reporting the absence.
+tests/golden/runtime/read_missing_file.kso	the playground has no filesystem

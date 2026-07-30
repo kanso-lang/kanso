@@ -1287,6 +1287,11 @@ fn tolerated_before(tok: Option<&Tok>) -> u8 {
         Some(Tok::Op(op)) => level(op) + 1,
         Some(tok) if ends_an_atom(tok) => ATOM,
         Some(Tok::SeqOp | Tok::Pipe) => OR,
+        // A container element and a map's value are each exactly one atom —
+        // `[one 1]` is two elements and `{ "k":one 1 }` does not parse — so
+        // parentheses there are the only way to write anything else, and
+        // calling them superfluous makes the value unwritable.
+        Some(Tok::LBracket | Tok::LGroup | Tok::Colon) => ATOM,
         _ => LOOSEST,
     }
 }

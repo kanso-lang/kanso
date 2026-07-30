@@ -427,7 +427,7 @@ impl Executor for RealExecutor {
     }
 
     fn read_file(&mut self, path: &str) -> Result<String, String> {
-        std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))
+        read_file_text(path)
     }
 
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
@@ -447,8 +447,20 @@ impl Executor for RealExecutor {
     }
 
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
-        std::fs::write(path, content).map_err(|e| format!("cannot write {path}: {e}"))
+        std::fs::write(path, content).map_err(|_| format!("cannot write {path}"))
     }
+}
+
+/// Reading a file, worded once. The native runtime has a fixed message and
+/// three executors implement this trait, so an OS string interpolated in any
+/// one of them is a divergence waiting to happen — and it was one: the
+/// interpreter said `No such file or directory (os error 2)` where native said
+/// `no such file or unreadable`. The fixed wording is also the only one that
+/// does not change with the host's libc or this compiler's version, which a
+/// reproducible diagnostic cannot afford.
+pub fn read_file_text(path: &str) -> Result<String, String> {
+    std::fs::read_to_string(path)
+        .map_err(|_| format!("cannot read {path}: no such file or unreadable"))
 }
 
 #[derive(Default)]

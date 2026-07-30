@@ -86,7 +86,7 @@ impl Executor for CollectExecutor {
     }
 
     fn read_file(&mut self, path: &str) -> Result<String, String> {
-        std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))
+        kanso::eval::read_file_text(path)
     }
 
     /// The same process the other engines start. The corpus only reaches for
