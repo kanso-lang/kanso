@@ -1,0 +1,11 @@
+import "std/path"
+
+# One separator between the two, an empty side contributing nothing, and a
+# leading separator on the right treated as redundant rather than absolute:
+# `join base name` cannot leave base however name was spelled.
+pub play =
+  plain = [(path/join "a" "b") (path/join "a/" "b") (path/join "a" "/b")]
+  many = [(path/join "a///" "///b") (path/join "/" "b")]
+  rooted = path/join "/etc" "hosts"
+  empties = [(path/join "" "b") (path/join "a" "") (path/join "" "")]
+  print "{plain} {many} {rooted} {empties}"
