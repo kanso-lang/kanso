@@ -11627,7 +11627,10 @@ directory its `builtin_` names are gated, so a test living next to it cannot
 run. A golden runs on all three engines, which is more than the alternative
 would have given anyway.
 
-One golden moved that had nothing to do with splitting. `endpoint_trace`
-pins an err's provenance, which names `std/text/text.kso:35` — and adding a
-function above `to_int` made that line 41. A trace that names a file and a
-line is a golden that any edit to that file can move.
+Three goldens moved that had nothing to do with splitting. An err's
+provenance names `std/text/text.kso:35`, and adding a function above
+`to_int` made that line 41 — so `endpoint_trace` moved, and so did two book
+samples and the panels quoting them. A trace that names a file and a line is
+pinned by every golden that prints it, which is a property of the design
+worth knowing before editing anything in std: the blast radius of a stdlib
+edit is every recorded diagnostic that passes through the file.
