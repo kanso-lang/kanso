@@ -1039,6 +1039,7 @@ static const char* k_c_off(void) { return k_color_mode() ? "\x1b[0m" : ""; }
    told only what was wanted has to guess, and the two engines have to agree
    anyway, so a type complaint carries the value that caused it. */
 static void k_die_value(const char* msg, KValue v);
+static void k_die_got(const char* msg, KValue v);
 
 void k_die(const char* msg) {
     fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
@@ -1399,6 +1400,13 @@ void k_no_field(KValue v, const char* name) {
     KRec* r = k_as_rec(v);
     fprintf(stderr, "%serror[runtime]:%s `%s` has no field `%s`\n", k_c_err(), k_c_off(),
             k_type_name(r->type_id), name);
+    exit(1);
+}
+
+static void k_die_got(const char* msg, KValue v) {
+    KValue shown = k_render(v, 0);
+    fprintf(stderr, "%serror[runtime]:%s %s, got %s\n", k_c_err(), k_c_off(), msg,
+            k_as_str(shown)->data);
     exit(1);
 }
 
@@ -2777,7 +2785,8 @@ KValue k_b_list_dir(KValue path) {
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
-    if (path.tag != K_STR || content.tag != K_STR) k_die("write_file takes strings");
+    if (path.tag != K_STR || content.tag != K_STR)
+        k_die("write_file takes a path and content strings");
     return k_mkdesc(5, path, content);
 }
 
@@ -2815,13 +2824,13 @@ KValue k_maybe_bind(KValue piped, KValue closure) {
 
 KValue k_desc_sleep(KValue ms) {
     if (!k_not_failure(ms)) return ms;
-    if (ms.tag != K_INT) k_die("sleep takes milliseconds (an int)");
+    if (ms.tag != K_INT) k_die_got("sleep takes milliseconds (an int)", ms);
     return k_mkdesc(8, ms, k_none());
 }
 
 KValue k_desc_random(KValue n) {
     if (!k_not_failure(n)) return n;
-    if (n.tag != K_INT) k_die("random takes a bound (an int)");
+    if (n.tag != K_INT) k_die_got("random takes a bound (an int)", n);
     return k_mkdesc(9, n, k_none());
 }
 
@@ -4593,7 +4602,7 @@ KValue k_b_sqrt(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return k_float(sqrt((double)v.payload));
     if (v.tag == K_FLOAT) return k_float(sqrt(k_as_f(v)));
-    k_die("sqrt takes a number");
+    k_die_got("sqrt takes a number", v);
     return k_none();
 }
 
@@ -4601,7 +4610,7 @@ KValue k_b_round(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return v;
     if (v.tag == K_FLOAT) return k_int((long long)llround(k_as_f(v)));
-    k_die("round takes a number");
+    k_die_got("round takes a number", v);
     return k_none();
 }
 

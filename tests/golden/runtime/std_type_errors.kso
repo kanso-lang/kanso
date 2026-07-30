@@ -1,0 +1,13 @@
+import "std/math"
+
+# The diagnostics differential asks every std function for the wrong thing in
+# every argument position and requires both engines to answer identically.
+# This is one of the answers, kept so the corpus holds a sample of the class
+# rather than trusting the sweep alone.
+type wrong
+  a
+  b
+
+pub play =
+  bad = wrong 1 2
+  print "{math/sqrt bad}"

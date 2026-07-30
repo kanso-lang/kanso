@@ -11714,3 +11714,34 @@ sites, so it is worth repeating whenever a message is added.
 A book sample was printing the shorter half. `appa/runtime_mismatch` exists
 to show a reader what a runtime type error looks like, and what it had been
 showing them was the engine that said less.
+
+## A differential harness for what the engines say
+
+The last entry found `length` saying half as much on native as on the
+interpreter, and closed with the observation that comparing the two message
+tables is cheap and worth repeating. Doing it by hand found two. A harness
+found six more on its first run, and there is no reason to think hand-reading
+would have found the seventh.
+
+`scripts/diagnostic_differential.py` asks every exported std function for the
+wrong thing, in every argument position, and requires both engines to answer
+identically — 103 probes across 68 functions. A record is the wrong argument
+for all of them and cannot be written as a literal, so it slips past the
+compile-time literal check and reaches the runtime path, which is where each
+engine's messages are written separately and where they drift.
+
+Six disagreements, all the same shape: native named what it wanted and not
+what it got. `write_file` differed in wording outright. All now match the
+oracle.
+
+Two things about how this went are worth keeping.
+
+`cargo build` does not compile runtime.c. Naming a parameter that did not
+exist there compiled clean and only failed when a kanso program was built,
+which is the trap the standing rules already name for wasm_rt.rs — the C
+runtime has the same one, and the harness is what surfaced it, in the form of
+a clang error appearing in all 103 answers at once.
+
+The harness is in CI, and a sample of the class is in the runtime corpus. The
+sweep proves the whole surface today; the golden keeps one answer pinned so a
+reader can see what the class looks like without running the sweep.
