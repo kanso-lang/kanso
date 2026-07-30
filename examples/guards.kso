@@ -2,8 +2,8 @@
 # guard into the untaken branch, so a fired guard makes the rest of the
 # body unreachable -- flat to read, nested in the tree.
 fn describe n
-  return "below zero" if (n < 0)
-  return "past a thousand" if (1000 < n)
+  return "below zero" if n < 0
+  return "past a thousand" if 1000 < n
   "ordinary {n}"
 
 pub play =

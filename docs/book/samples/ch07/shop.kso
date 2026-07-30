@@ -5,7 +5,7 @@ pub fn checkout item qty
   receipt (line item qty)
 
 fn line item qty
-  qty * (price item) + service
+  qty * price item + service
 
 pub play = print "{checkout "matcha" 2}"
 

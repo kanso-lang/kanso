@@ -10,4 +10,4 @@ fn subtotal cents people
   with_tip share
 
 fn with_tip share
-  share + (share / 10)
+  share + share / 10

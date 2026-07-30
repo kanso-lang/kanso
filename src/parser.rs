@@ -676,8 +676,10 @@ fn parse_return(line: &Line) -> Result<(Expr, Expr, Span), Diagnostic> {
     let mut splits = Vec::new();
     for (i, (tok, _)) in line.tokens.iter().enumerate().skip(1) {
         match tok {
-            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
-            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
+            Tok::LParen | Tok::LGroup | Tok::LBracket | Tok::LBrace => depth += 1,
+            Tok::RParen | Tok::RGroup | Tok::RBracket | Tok::RBrace => {
+                depth = depth.saturating_sub(1)
+            }
             Tok::Ident(name) if depth == 0 && name == "if" => splits.push(i),
             _ => {}
         }
@@ -1215,8 +1217,10 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
     let mut bind_at = None;
     for (i, (tok, _)) in line.tokens.iter().enumerate() {
         match tok {
-            Tok::LParen | Tok::LBracket | Tok::LBrace => depth += 1,
-            Tok::RParen | Tok::RBracket | Tok::RBrace => depth = depth.saturating_sub(1),
+            Tok::LParen | Tok::LGroup | Tok::LBracket | Tok::LBrace => depth += 1,
+            Tok::RParen | Tok::RGroup | Tok::RBracket | Tok::RBrace => {
+                depth = depth.saturating_sub(1)
+            }
             Tok::Bind if depth == 0 => {
                 bind_at = Some(i);
                 break;
@@ -1247,16 +1251,115 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
     Ok(Stmt::Bind { pattern, expr })
 }
 
+/// How loosely an expression may bind, tightest last. Canonical form is one
+/// rendering per program, so a paren pair that groups nothing is a second
+/// rendering of the same thing and the grammar rejects it.
+const LOOSEST: u8 = 0;
+const OR: u8 = 1;
+const AND: u8 = 2;
+const CMP: u8 = 3;
+const ADD: u8 = 4;
+const MUL: u8 = 5;
+const APP: u8 = 6;
+const ATOM: u8 = 7;
+
+/// What a pair is worth is decided by the two tokens beside it. On the right,
+/// an operator claims the parenthesised expression as its left operand, so the
+/// pair earns its place only when what it wraps binds more loosely than that
+/// operator. Adjacency is application, which binds tightest of all.
+fn tolerated_after(tok: Option<&Tok>) -> u8 {
+    match tok {
+        // a comparison does not chain, so unlike the left-associative
+        // operators its left operand may not itself be one
+        Some(Tok::Op(op)) if level(op) == CMP => CMP + 1,
+        Some(Tok::Op(op)) => level(op),
+        Some(Tok::Dot | Tok::LBracket) => ATOM,
+        Some(tok) if starts_an_atom(tok) => ATOM,
+        _ => LOOSEST,
+    }
+}
+
+/// On the left, the pair is that operator's *right* operand, and every
+/// operator here associates left — so the right side holds one level tighter,
+/// which is what makes `10 - (4 - 1)` keep its parentheses.
+fn tolerated_before(tok: Option<&Tok>) -> u8 {
+    match tok {
+        Some(Tok::Op(op)) => level(op) + 1,
+        Some(tok) if ends_an_atom(tok) => ATOM,
+        Some(Tok::SeqOp | Tok::Pipe) => OR,
+        _ => LOOSEST,
+    }
+}
+
+/// Adjacency is application, so anything that can begin an atom claims what
+/// follows it as an argument.
+fn starts_an_atom(tok: &Tok) -> bool {
+    matches!(
+        tok,
+        Tok::Ident(_)
+            | Tok::Int(_)
+            | Tok::Float(_)
+            | Tok::Str(_)
+            | Tok::Underscore
+            | Tok::LParen
+            | Tok::LGroup
+            | Tok::LBracket
+            | Tok::LBrace
+    )
+}
+
+/// The mirror: anything an atom can end with. A closing bracket belongs here
+/// as much as a name does — `step [x y] (paired l r)` passes two arguments,
+/// and reading the `[x y]` as a statement boundary turns it into four.
+fn ends_an_atom(tok: &Tok) -> bool {
+    matches!(
+        tok,
+        Tok::Ident(_)
+            | Tok::Int(_)
+            | Tok::Float(_)
+            | Tok::Str(_)
+            | Tok::RParen
+            | Tok::RGroup
+            | Tok::RBracket
+            | Tok::RBrace
+            | Tok::Bang
+    )
+}
+
+fn level(op: &str) -> u8 {
+    match op {
+        "||" => OR,
+        "&&" => AND,
+        "<" | "<=" | ">" | ">=" | "==" | "!=" => CMP,
+        "+" | "-" => ADD,
+        "*" | "/" | "%" => MUL,
+        _ => LOOSEST,
+    }
+}
+
 pub struct P<'a> {
     toks: &'a [(Tok, Span)],
     ends: &'a [usize],
     pub pos: usize,
     line: usize,
+    /// The loosest operator consumed since the enclosing `(`. A paren scope
+    /// saves and restores it, so a nested pair is judged on its own contents.
+    loosest: u8,
 }
 
 impl<'a> P<'a> {
+    fn tok_at(&self, i: usize) -> Option<&Tok> {
+        self.toks.get(i).map(|(tok, _)| tok)
+    }
+
+    /// An operator was taken at this level; the loosest one inside the
+    /// current parentheses is what decides whether they did anything.
+    fn consumed(&mut self, level: u8) {
+        self.loosest = self.loosest.min(level);
+    }
+
     pub fn new(toks: &'a [(Tok, Span)], ends: &'a [usize], line: usize) -> Self {
-        P { toks, ends, pos: 0, line }
+        P { toks, ends, pos: 0, line, loosest: ATOM }
     }
 
     fn last_end(&self) -> usize {
@@ -1457,12 +1560,23 @@ impl<'a> P<'a> {
     }
 
     fn expect_rparen(&mut self) -> Result<(), Diagnostic> {
-        match self.peek() {
-            Some(Tok::RParen) => {
+        self.expect_close(true)
+    }
+
+    /// A group closes with the door it opened: an author's `)` for an
+    /// author's `(`, and the lexer's for the lexer's. Crossing them would let
+    /// an unclosed parenthesis be swallowed by the end of a continuation line.
+    fn expect_close(&mut self, written: bool) -> Result<(), Diagnostic> {
+        let wanted = match written {
+            true => Tok::RParen,
+            false => Tok::RGroup,
+        };
+        match self.peek() == Some(&wanted) {
+            true => {
                 self.pos += 1;
                 Ok(())
             }
-            _ => Err(self.err("expected `)`".to_string())),
+            false => Err(self.err("expected `)`".to_string())),
         }
     }
 
@@ -1566,6 +1680,7 @@ impl<'a> P<'a> {
         while let Some(Tok::Op("||")) = self.peek() {
             let span = self.span_here();
             self.pos += 1;
+            self.consumed(OR);
             let rhs = self.parse_and()?;
             lhs = logical_if(lhs, Expr::Ident("true".to_string(), span), rhs, span);
         }
@@ -1577,6 +1692,7 @@ impl<'a> P<'a> {
         while let Some(Tok::Op("&&")) = self.peek() {
             let span = self.span_here();
             self.pos += 1;
+            self.consumed(AND);
             let rhs = self.parse_cmp()?;
             lhs = logical_if(lhs, rhs, Expr::Ident("false".to_string(), span), span);
         }
@@ -1591,6 +1707,7 @@ impl<'a> P<'a> {
                 let op = *op;
                 let span = self.span_here();
                 self.pos += 1;
+                self.consumed(CMP);
                 let rhs = self.parse_add()?;
                 return Ok(Expr::BinOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs), span });
             }
@@ -1604,6 +1721,7 @@ impl<'a> P<'a> {
             let op = *op;
             let span = self.span_here();
             self.pos += 1;
+            self.consumed(ADD);
             let rhs = self.parse_mul()?;
             lhs = Expr::BinOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs), span };
         }
@@ -1616,6 +1734,7 @@ impl<'a> P<'a> {
             let op = *op;
             let span = self.span_here();
             self.pos += 1;
+            self.consumed(MUL);
             let rhs = self.parse_app()?;
             lhs = Expr::BinOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs), span };
         }
@@ -1638,6 +1757,7 @@ impl<'a> P<'a> {
                     | Tok::Float(_)
                     | Tok::Str(_)
                     | Tok::LParen
+                    | Tok::LGroup
                     | Tok::LBracket
                     | Tok::LBrace
             )
@@ -1653,6 +1773,7 @@ impl<'a> P<'a> {
         match args.is_empty() {
             true => Ok(head),
             false => {
+                self.consumed(APP);
                 let span = head.span();
                 Ok(Expr::App { head: Box::new(head), args, span, piped: false })
             }
@@ -1800,7 +1921,9 @@ impl<'a> P<'a> {
                 self.pos += 1;
                 Ok(Expr::List(items, span))
             }
-            Some(Tok::LParen) => {
+            Some(Tok::LParen | Tok::LGroup) => {
+                let written = matches!(self.peek(), Some(Tok::LParen));
+                let opened = self.pos;
                 self.pos += 1;
                 if let Some(arrow_end) = self.lambda_lookahead() {
                     let mut params = Vec::new();
@@ -1818,9 +1941,11 @@ impl<'a> P<'a> {
                     self.expect_rparen()?;
                     return Ok(Expr::Lambda { params, body: Box::new(body), span });
                 }
+                let outer = std::mem::replace(&mut self.loosest, ATOM);
                 let inner = self.parse_expr()?;
+                let inside = std::mem::replace(&mut self.loosest, outer);
                 let rparen_span = self.span_here();
-                self.expect_rparen()?;
+                self.expect_close(written)?;
                 // `(expr):type` — the upcast; the colon binds tight to the
                 // closing paren, so map pairs never collide with it
                 if matches!(self.peek(), Some(Tok::Colon)) {
@@ -1838,6 +1963,19 @@ impl<'a> P<'a> {
                         let (ty, _) = self.expect_ident("a type name")?;
                         return Ok(Expr::Upcast { expr: Box::new(inner), ty, span });
                     }
+                }
+                // an upcast returns above: there the parentheses are the
+                // syntax rather than a grouping choice
+                let before = tolerated_before(opened.checked_sub(1).and_then(|i| self.tok_at(i)));
+                let after = tolerated_after(self.peek());
+                if written && inside >= before.max(after) {
+                    return Err(Diagnostic::new(
+                        "formatting",
+                        "these parentheses group nothing — the expression parses \
+                         the same without them"
+                            .to_string(),
+                        span,
+                    ));
                 }
                 Ok(inner)
             }

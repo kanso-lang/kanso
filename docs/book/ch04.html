@@ -42,7 +42,7 @@ extra_css: /book/book.css
   <span class="f">with_tip</span> share
 
 <span class="k">fn</span> <span class="f">with_tip</span> share
-  share <span class="o">+</span> (share <span class="o">/</span> <span class="n">10</span>)</code></pre>
+  share <span class="o">+</span> share <span class="o">/</span> <span class="n">10</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run railway.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached main: "division by zero"
@@ -218,7 +218,7 @@ not a flag</code></pre>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">first_major</span> lines
-  <span class="f">major_of</span> (lines[<span class="n">1</span>])
+  <span class="f">major_of</span> lines[<span class="n">1</span>]
 
 <span class="k">fn</span> <span class="f">major_of</span> none
   <span class="f">err</span> <span class="s">"no version line"</span>

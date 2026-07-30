@@ -1,0 +1,18 @@
+# A comparison does not chain, so its left operand may not be one: these
+# parentheses are the only thing that makes the line parse.
+fn settled? a b
+  (a < b) == true
+
+# The indented-argument form is spelled by wrapping each continuation line in
+# a grouping the lexer inserts, and what the lexer wraps is not what an author
+# wrote — so the rule against parentheses that group nothing must not see it.
+fn describe one two three
+  "{one}/{two}/{three}"
+
+pub play =
+  line = describe
+    "a name long enough that this call will not fit on any one line"
+    "a second name that is also long enough to force the wrap"
+    "and a third"
+  print "{settled? 1 2}"
+  >> print line

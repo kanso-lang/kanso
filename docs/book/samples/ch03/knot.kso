@@ -8,5 +8,5 @@ pub play =
     bob = person "bob" ada
     ada.partner = bob
     ada
-  print "{couple.name} and {(couple.partner).name}"
-  >> print "back where we started: {((couple.partner).partner).name}"
+  print "{couple.name} and {couple.partner.name}"
+  >> print "back where we started: {couple.partner.partner.name}"

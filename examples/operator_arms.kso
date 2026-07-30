@@ -9,8 +9,8 @@ fn + (money a) (money b)
   money (a + b)
 
 pub play =
-  lunch = (money 350) + (money 125)
-  tea = (money 190) + (money 235)
+  lunch = money 350 + money 125
+  tea = money 190 + money 235
   total = lunch + tea
   print "lunch {lunch}, tea {tea}, day {total}"
 

@@ -60,8 +60,8 @@ main = print (describe 3)
         "main = print (rank 42)
 
 fn rank n
-  return \"low\" if (n < 10)
-  return \"high\" if (100 < n)
+  return \"low\" if n < 10
+  return \"high\" if 100 < n
   \"middle\"
 ",
     ),

@@ -13,6 +13,6 @@ fn outer 0 t
   t
 
 fn outer n t
-  outer (n - 1) (t + (once 0))
+  outer (n - 1) (t + once 0)
 
 pub play = print "total {outer 40 0}"

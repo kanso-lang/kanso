@@ -6,4 +6,4 @@ pub play =
   print "that costs {price}"
 
 fn to_string (money cents)
-  "${cents / 100}.{cents - (cents / 100 * 100)}"
+  "${cents / 100}.{cents - cents / 100 * 100}"
