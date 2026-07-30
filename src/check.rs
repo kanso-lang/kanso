@@ -861,6 +861,7 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
+    check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
@@ -879,6 +880,45 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
 /// undefined symbol from the assembler — compiler internals, where a
 /// diagnostic belongs. This runs on the merged program, where the
 /// dependency's arms are in scope.
+/// A binding's pattern naming a type nobody declared. `poynt a = 1` passed
+/// check and reached the emitter, which answered `native backend: unknown
+/// type` — the backend's own words, for a name the reader typed. The
+/// interpreter said something better and different, so the two engines
+/// disagreed about a program neither should have accepted.
+///
+/// Parameter patterns were already covered: an arm taking an undeclared type
+/// never matches, and arm selection says so.
+fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let declared: HashSet<&str> = program.types.iter().map(|ty| ty.name.as_str()).collect();
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        for stmt in &decl.body {
+            let Stmt::Bind { pattern: Pattern::Ctor { ty, fields }, .. } = stmt else {
+                continue;
+            };
+            if declared.contains(ty.as_str()) || fields.is_empty() {
+                continue;
+            }
+            // `let x = 1` reads as destructuring a `let`, which is how every
+            // language that spells a binding with a keyword arrives here.
+            let bound = param_names(&fields[0]).first().copied().unwrap_or_default();
+            let instead = match ty.as_str() {
+                "let" | "var" | "const" | "val" => {
+                    format!(" — a binding is `{bound} = …`, with no keyword")
+                }
+                _ => String::new(),
+            };
+            diags.push(Diagnostic::new(
+                "name",
+                format!("`{ty}` is not a type, so a binding cannot destructure with it{instead}"),
+                other_span(&fields[0]),
+            ));
+        }
+    }
+}
+
 fn check_call_arities(program: &Program, diags: &mut Vec<Diagnostic>) {
     // Construction is positional and complete, and the same seam hid it: a
     // type declared in one file of a module and built in another was checked
