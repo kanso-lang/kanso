@@ -11002,3 +11002,42 @@ The suffix rule is fragile that way and worth remembering.
 Both guards were then broken alone: with the gate off the corpus stops
 refusing the production fixture, and with the infectiousness hole closed
 both harness tests fail rather than pass.
+
+## 2026-07-29 — about.html rewritten, and the voice named
+
+Clay: the site should read like a well-written guide for go or kotlin or
+rust, "free of LLM garbage", in the voice of a prominent author rather
+than a machine's idea of one.
+
+The mechanical grep in CLAUDE.md was clean on every page, which is the
+warning that file already gives — necessary, not sufficient. Reading
+about.html found the failures the regex cannot see.
+
+**One paragraph ran four hundred words.** It carried both engines, the
+json benchmark, four competitors' timings, the lazy scoreboard, the
+scheduler, the arenas, and three separate tuning fixes, with the memory
+model in a parenthesis inside a parenthesis. It is now six paragraphs;
+the longest on the page is 146 words and the median is 65.
+
+**Three milked metaphors, which is the named failure.** "go dodged the
+dragon. kanso saddled it." "the interpreter is the conscience, the
+compiler is the muscle." A section staged as "a mystery in three acts",
+with act one, act two and act three as headings. All gone; the content
+they decorated is intact.
+
+**Self-announcement throughout**: "this is the best story in the
+repository", "here's the payoff, the part that matters to someone who
+will never read a proof", "read that carefully", "we're aware of how
+that sounds. we're comfortable." A page that tells the reader how to
+feel about the next sentence has not yet written it.
+
+**The voice, settled.** Metz for structure — one idea, a concrete
+example, then the rule drawn out of it. Beck for economy: short
+sentences, results stated rather than insisted on. DHH's register only
+where an opinion genuinely is the feature, which on this page is
+canonical form and the absent formatter, and nowhere else. The swagger
+was doing work in one section and decorating four others.
+
+Every number was preserved rather than re-measured; re-sitting the
+published figures is its own task and stays open. Landing, compiler and
+book pages are unchanged so far.
