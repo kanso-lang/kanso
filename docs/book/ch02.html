@@ -7,7 +7,7 @@ extra_css: /book/book.css
 <span class="eyebrow">chapter 02</span>
 <h1>values and bindings</h1>
 
-<p>chapter 01 closed on a small subversion: a program is a value. take that literally and the rest of the language follows. a binding is a name, one space, <code>=</code>, one space, a value; an entry file is a run of such bindings and the statements that use them. that's the complete ceremony:</p>
+<p>chapter 01 ended on a program that was one binding and one statement. that is the whole of it. a binding is a name, one space, <code>=</code>, one space, a value; an entry file is a run of such bindings and the statements that use them:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">binding.kso</div>
@@ -21,7 +21,7 @@ name <span class="o">=</span> <span class="s">"clay"</span>
   </div>
 </div>
 
-<p>the braces in a string are not a template mini-language; they hold any expression, evaluated in place. put arithmetic between them and it runs:</p>
+<p>the braces hold any expression, evaluated in place. put arithmetic between them and it runs:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">interp.kso</div>
@@ -62,7 +62,7 @@ days <span class="o">=</span> <span class="n">365000000</span>
   </div>
 </div>
 
-<p>a wrong answer that looks right is the most expensive kind of bug. kanso will not produce one. the same instinct governs division by zero—there is no answer, so there is no fiction; the failure becomes a value that rides straight to the program's endpoint (chapter 04 is entirely about this rail):</p>
+<p>division by zero is handled the same way. there is no answer to give, so the failure becomes a value that travels to the program's endpoint (chapter 04 is entirely about this rail):</p>
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
@@ -77,7 +77,7 @@ days <span class="o">=</span> <span class="n">365000000</span>
 
 <h2>floats, and how they meet ints</h2>
 
-<p>a <code>float</code> is the ieee double you already know—written with a decimal point, and it always renders with one, so a float is never mistaken for an int on the page. the interesting question is what happens when the two meet. an int divided by an int stays in integer arithmetic and discards the fractional part—<code>7 / 2</code> is <code>3</code>, not <code>3.5</code>. but the moment a float enters the expression, the int widens to meet it, and the result is a float:</p>
+<p>a <code>float</code> is the ieee double you already know—written with a decimal point, and it always renders with one, so a float is never mistaken for an int on the page. what happens when the two meet is worth setting out. an int divided by an int stays in integer arithmetic and discards the fractional part—<code>7 / 2</code> is <code>3</code>, not <code>3.5</code>. but the moment a float enters the expression, the int widens to meet it, and the result is a float:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">widen.kso</div>
@@ -141,7 +141,7 @@ sum 6 len 3 first 3</code></pre>
   </div>
 </div>
 
-<p>one operation, two spellings, no overlap: <code>xs[i]!</code> says "this is present," plain <code>xs[i]</code> says "this might not be." the choice is a sentence about your data, and the compiler holds you to it.</p>
+<p>one operation with two spellings. <code>xs[i]!</code> says the element is there; plain <code>xs[i]</code> says it might not be. which one you write is a claim about your data, and the compiler holds you to it.</p>
 
 <h2>maps</h2>
 
@@ -251,7 +251,7 @@ x <span class="o">=</span> <span class="n">2</span>
   </div>
 </div>
 
-<p>the rule is not fussiness—it is what lets the compiler know exactly when each value dies, which in turn is what lets kanso free memory precisely with no garbage collector (chapter 10). a value that is written and never read is dead on arrival, and the compiler says so.</p>
+<p>the rule is what lets the compiler know exactly when each value dies, which is what lets kanso free memory precisely with no garbage collector (chapter 10). a value written and never read was never needed, and the compiler says so.</p>
 
 <h2>no name is ever shadowed</h2>
 

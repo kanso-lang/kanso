@@ -11899,3 +11899,33 @@ box had been building continuously all session, so that is evidence about the
 machine as much as the compiler, and #23 exists precisely because the numbers
 want an idle one. The published figures stay until somebody sits them
 properly.
+
+## The book's machine tells
+
+The writing rules name a handful of families and give a grep for one of them.
+The grep is clean across the book and has been for a while, which says less
+than it looks: the rules say so themselves, that a clean grep is necessary and
+not sufficient.
+
+Reading chapter 02 found six. It opened by announcing itself ("chapter 01
+closed on a small subversion... take that literally and the rest of the
+language follows"), flipped an antithesis on the first technical point ("the
+braces are not a template mini-language; they hold any expression"), ended a
+paragraph on an epigram ("a wrong answer that looks right is the most
+expensive kind of bug"), assembled a triple for cadence ("one operation, two
+spellings, no overlap"), cleared its throat ("the interesting question is what
+happens when the two meet"), and flipped again on the rebind rule ("the rule
+is not fussiness—it is what lets the compiler know").
+
+A wider pattern than the prescribed one — the antithesis family rather than
+its single most common shape — found seven more across five other chapters.
+All fixed; the book now reads zero.
+
+What stays is the first person, which is a character rather than a slip:
+`mugi` speaks in tip blocks and says "i hand you the failure as a value". Two
+of those in chapter 02 and one in chapter 04, none in the body prose. A device
+used sparingly is not the tell the rules are hunting.
+
+Worth adding to the mechanical check before shipping prose: the prescribed
+regex catches `is not X. it's Y` and misses `is not X; it is Y`, `not X—it is
+Y`, and `not a X, but Y`, which is where all thirteen of these lived.

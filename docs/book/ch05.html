@@ -43,7 +43,7 @@ pouring</code></pre>
   </div>
 </div>
 
-<p><code>kanso run quiet.kso</code> prints nothing and exits zero. the answer 42 was computed and discarded, because printing is not a thing that happens to values—it is a value, and this program never built one. ask for the plan and the toolchain says so in as many words.</p>
+<p><code>kanso run quiet.kso</code> prints nothing and exits zero. the answer 42 was computed and discarded, because a print is itself a value, and this program never built one. ask for the plan and the toolchain says so in as many words.</p>
 
 <p>second: a value can be bound to a name, and a name can be used more than once. an io doesn't remember having run, because it hasn't—splice it in three times and the program means three prints:</p>
 
