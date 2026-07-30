@@ -224,7 +224,7 @@ failed: division by zero</code></pre>
             <pre><code>20! = 2432902008176640000</code></pre>
           </div>
         </div>
-        <p>literal <code>0</code> outranks the generic overload—the base case is dispatch, not a conditional. and <code>int</code> is arbitrary-precision by default, so 20! just works.</p>
+        <p>literal <code>0</code> outranks the generic overload—the base case is dispatch, not a conditional. and <code>int</code> is arbitrary-precision by design, so 20! just works — the interpreter is exact today and the native build refuses rather than wrapping while its bignum arithmetic is built.</p>
       </div>
 
       <div class="showcase-cell">

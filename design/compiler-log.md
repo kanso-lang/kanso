@@ -11131,3 +11131,36 @@ flip. Longest paragraph 93 words, median 52.
 The panels are executed against the toolchain before they may appear, so
 the code was never in question — which is the part of this book that was
 already right.
+
+## 2026-07-29 — the engines disagree about big integers, and nothing said so
+
+Rewriting chapter 02 meant checking a claim it makes, and the claim was
+half true in a way worth recording. `print (9223372036854775807 * 2)`:
+
+    native: error[runtime]: integer overflow (int64 native build; …)
+    interp: 18446744073709551614
+
+The two engines produce different results for the same program, which is
+the one thing the differential law forbids. It is deliberate — the native
+message says so in its own words, and ch02 tells the reader the current
+build backs int with 64 bits while the spec says otherwise. A known gap,
+honestly documented in the place a reader meets it.
+
+**What was wrong is that nothing pinned it.** No program in the corpus
+crosses 2^63, so the golden corpus and the browser differential both
+pass, and a change to either engine would have gone unnoticed in either
+direction. That is now the third instance of one shape in two days: the
+page-drift gate defeated by a shallow clone, cross_surface_numbers not
+reading about.html, and a differential law with no case on the line it
+governs. Each guard was correct and did not cover the thing that moved.
+
+tests/numeric_parity.rs pins both answers and says which is the oracle,
+so closing the gap is what breaks it. The landing page also claimed
+`int` is "arbitrary-precision by default" without qualification; its
+example is honest, since 20! is under the ceiling, but the sentence was
+not, and it now says what each engine does.
+
+Resolution is Clay's and is recorded as task #46: bignum in the native
+runtime, a 64-bit ceiling in the oracle, or an accepted divergence. The
+first is the only one that keeps the oracle's meaning, and it is real
+work on a hot path.
