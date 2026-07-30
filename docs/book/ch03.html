@@ -15,7 +15,7 @@ extra_css: /book/book.css
 
 <p>writing the type on a field is an error, not a style preference. <code>artist:string</code> gets you <em>a record field carries no type—write <code>artist</code> and let the compiler infer what it holds</em>, because the annotation only repeats what the program already says and then sits there waiting to disagree with it. the language server shows you what a field actually holds when you hover it, which is the same information without a second copy to maintain.</p>
 
-<p>a written type earns its place where it <em>restricts</em> below what use would permit, and that place is a type of its own. <code>type state archived draft published</code> says the set is closed at three, which no amount of reading the program can tell you—a set nobody has exceeded yet looks exactly like a set nobody can exceed. that one you write down.</p>
+<p>a written type earns its place where it <em>restricts</em> below what use would permit, and that place is a type of its own. <code>type state archived draft published</code> says the set is closed at three, which no amount of reading the program can tell you. that one you write down.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">reading.kso</div>
@@ -111,7 +111,7 @@ extra_css: /book/book.css
   </div>
 </div>
 
-<p>that parameter pattern is doing something bigger than convenience, and the rest of the chapter is about what.</p>
+<p>that parameter pattern is also how kanso chooses between overloads, which is the subject of the rest of the chapter.</p>
 
 <h2>two records that point at each other</h2>
 
@@ -141,7 +141,7 @@ extra_css: /book/book.css
 
 <p><code>none</code> holds ada's place while she waits for bob, and the assignment on the fourth line closes the loop. when the block ends the whole group freezes: nothing in it can be assigned again. what leaves the block is ordinary immutable data that happens to contain a cycle, so you can walk the ring as far as you like—<code>((couple.partner).partner)</code> is ada again—and no code downstream has to defend against a half-built record, because a half-built record never leaves.</p>
 
-<p>the freeze earns its keep twice. it is what lets the type say <code>partner:person</code> instead of some nullable stand-in, and it is what keeps the memory model simple, which ch10 returns to: everything a block creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
+<p>the freeze buys two things. it is what lets the type say <code>partner:person</code> instead of some nullable stand-in, and it is what keeps the memory model simple, which ch10 returns to: everything a block creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
 
 <h2>the only switch</h2>
 

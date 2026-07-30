@@ -11954,3 +11954,37 @@ that merely contains "not" and later contains "it is".
 
 Run against the tree as it stood before yesterday's cleanup, it reports
 sixteen. Against the tree today, zero.
+
+## Reading what the checker cannot see
+
+The prose gate came back clean on every page, which the gate itself says is
+necessary and not sufficient. Reading two chapters closely found eight more.
+
+Chapter 03 had reused a sentence it liked. "a set nobody has exceeded yet
+looks exactly like a set nobody can exceed" appeared twice, two sections
+apart, making the same point both times — the smell test the rules describe,
+where the line you were proud of is the line to check. It stays where it
+lands, in the section about typesets, and the earlier one says its point
+plainly. Two smaller repeats went with it.
+
+Chapter 04 had five sentences telling the reader how to feel about the next
+one: "here is the part that deletes real code", "the report deserves a slow
+read", "step back and look at what the last section handed you", "there is a
+yagni argument hiding in here", "this sounds strict until you see what it
+buys". Each says the thing now instead of introducing it.
+
+Those five were phrases, which means the family was detectable all along and
+the list was just short. It has them now, and against the chapter as it stood
+an hour ago it reports all five. That is the useful shape of this work:
+reading finds a phrasing, the phrasing joins the list, and the next one is
+caught without a read.
+
+A repeated-formulation detector was written and not kept. Six-word phrases
+appearing twice in a page finds the chapter 03 sentence, and also finds CSS
+declarations, echoed shell commands and navigation lists — signal too thin to
+gate on, and a noisy gate is worse than none. It stays a lens to run by hand.
+
+What was left alone is worth recording too. Chapter 06 and appendix A each
+restate a plain description inside a summary, and chapter 01 repeats a section
+title in its own contents list. Restating in a recap is ordinary writing, and
+churning it would be edits for their own sake.
