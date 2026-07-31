@@ -149,6 +149,9 @@ impl<'a> Analysis<'a> {
     /// expression that consumes it. Nothing here touches `linear_params`, so
     /// what a push or a put is allowed to do is unchanged.
     fn callers_hand_over(&self, name: &str, arity: usize, i: usize) -> bool {
+        if self.escapes_as_value(name, arity) {
+            return false;
+        }
         self.program.fns.iter().all(|caller| {
             caller.body.iter().all(|stmt| {
                 let e = match stmt {
@@ -157,6 +160,26 @@ impl<'a> Analysis<'a> {
                     Stmt::Set { value, .. } => value,
                 };
                 self.callsites_unique(caller, e, name, arity, i)
+            })
+        })
+    }
+
+    /// Is this group ever mentioned as a value rather than called?
+    ///
+    /// Handing a group to a fold, or currying it, means it is called from
+    /// somewhere no call site in this program describes — and a question about
+    /// what every caller hands over then has no calls to look at and answers
+    /// yes for free. The seed a fold carries in never reaches a conversion
+    /// site, so a parameter marked an accumulator on that answer arrives at
+    /// the runtime as a plain string it was promised it could write into.
+    fn escapes_as_value(&self, name: &str, arity: usize) -> bool {
+        self.program.fns.iter().any(|d| {
+            d.body.iter().any(|s| {
+                let e = match s {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                    Stmt::Set { value, .. } => value,
+                };
+                mentioned_as_value(e, name, arity)
             })
         })
     }
@@ -739,6 +762,23 @@ fn sole_finished_record(a: &Analysis, decl: &FnDecl, args: &[Expr]) -> Option<St
         candidate = Some(name.clone());
     }
     candidate
+}
+
+/// Every mention of `name` in `e` that is not the head of an application of
+/// exactly `arity` arguments — a bare reference, or a partial application.
+fn mentioned_as_value(e: &Expr, name: &str, arity: usize) -> bool {
+    if let Expr::Ident(n, _) = e {
+        return n == name;
+    }
+    if let Expr::App { head, args, .. } = e {
+        let called = matches!(head.as_ref(), Expr::Ident(n, _) if n == name) && args.len() == arity;
+        let escaping_head = match called {
+            true => false,
+            false => mentioned_as_value(head, name, arity),
+        };
+        return escaping_head || args.iter().any(|a| mentioned_as_value(a, name, arity));
+    }
+    child_exprs(e).into_iter().any(|c| mentioned_as_value(c, name, arity))
 }
 
 /// A set of source positions, or of (group, arity, index) triples — the two

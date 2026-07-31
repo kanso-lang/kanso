@@ -1,0 +1,128 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Differential check of the utf-8 validator against an independent reference.
+#
+# The validator's text is extracted from src/runtime.c at run time rather than
+# copied, so this cannot drift from the function it checks. The reference in
+# scripts/utf8/harness.c is a plain scalar decoder written straight from the
+# grammar, so agreement between them is evidence rather than a tautology.
+#
+# Exhaustive over every string of three bytes or fewer, then sampled over the
+# lengths that straddle the sixteen-byte vector boundary.
+sig_head = "static KValue k_utf8_bad(const char* data, long long len,"
+
+sig_tail = " const char* origin) \{"
+
+signature = "{sig_head}{sig_tail}"
+
+harness_sig = "static int harness_utf8_ok(const char* data, long long len) \{"
+
+extracted_path = "target/extracted.h"
+
+binary_path = "target/utf8_harness"
+
+head_a = "#include <stdint.h>\n#if defined(__aarch64__)\n"
+
+head_b = "#include <arm_neon.h>\n#elif defined(__x86_64__)\n"
+
+head_c = "#include <tmmintrin.h>\n#endif\n"
+
+header = "{head_a}{head_b}{head_c}"
+
+fn body_of src
+  parts = text/split src signature
+  start = "{signature}{parts[2]!}"
+  text/slice start 1 (closing_brace start 0 1)
+
+# The function ends at the brace that closes the one its signature opens.
+fn closing_brace src depth i
+  at_brace src depth i (text/slice src i i)
+
+fn at_brace _ 1 i "}"
+  i
+
+fn at_brace src depth i "\{"
+  closing_brace src (depth + 1) (i + 1)
+
+fn at_brace src depth i "}"
+  closing_brace src (depth - 1) (i + 1)
+
+fn at_brace src depth i _
+  closing_brace src depth (i + 1)
+
+# `return k_err(...)` reports which byte was bad; the harness only compares a
+# yes or no, so every failure arm answers the same 0. The argument list holds
+# no semicolon, so the statement ends at the first one.
+fn no_err body
+  parts = text/split body "return k_err("
+  list/fold (list/to_list (list/drop parts 1)) parts[1]! rejoined
+
+fn rejoined acc chunk
+  tail = text/split chunk ";"
+  rest = text/join (list/to_list (list/drop tail 1)) ";"
+  "{acc}return 0;{rest}"
+
+fn swapped src from to
+  text/join (text/split src from) to
+
+fn as_harness src
+  body = no_err (body_of src)
+  named = swapped body signature harness_sig
+  ok = swapped named "return k_none();" "return 1;"
+  counted = swapped ok "k_stat_utf8_bytes += len;" ""
+  "{header}{counted}\n"
+
+# The validator's x86 path is written in ssse3 intrinsics, which clang refuses
+# to compile unless the target is told it has them.
+fn flags_for "x86_64"
+  ["-mssse3"]
+
+fn flags_for _
+  []
+
+fn built flags
+  head = text/concat ["-O2"] flags
+  tail = ["-o" binary_path "scripts/utf8/harness.c" "-Itarget"]
+  io/run "clang" (text/concat head tail)
+
+fn trimmed ""
+  ""
+
+fn trimmed s
+  dropped s (text/slice s (length s) (length s))
+
+fn dropped s "\n"
+  trimmed (text/slice s 1 (length s - 1))
+
+fn dropped s _
+  s
+
+pub play = io/read_file "src/runtime.c" . (src -> written (as_harness src))
+
+fn written source
+  io/write_file extracted_path source . (_ -> io/run "uname" ["-m"])
+    . (u -> compiled (trimmed u.stdout))
+
+fn compiled arch
+  built (flags_for arch) . checked
+
+fn checked b
+  ran (b.status == 0) b.stderr
+
+fn ran false trouble
+  io/write_err trouble . (_ -> io/exit 1)
+
+fn ran true _
+  io/run binary_path [] . reported
+
+fn reported r
+  io/write "{trimmed r.stdout}\n" . (_ -> verdict r.status)
+
+fn verdict 0
+  io/write "PASS  the validator agrees with the reference everywhere checked\n"
+
+fn verdict _
+  io/write_err "FAIL  the validator and the reference disagree\n"
+    . (_ -> io/exit 1)
