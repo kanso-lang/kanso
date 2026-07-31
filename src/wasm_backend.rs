@@ -949,8 +949,13 @@ impl<'a> WasmBackend<'a> {
             return self.emit_piped(ctx, head, args, span);
         }
         // an inlined single-use binding can leave a lambda in call
-        // position; it is an ordinary closure, built then applied
-        if matches!(head, Expr::Lambda { .. }) {
+        // position; it is an ordinary closure, built then applied. A value
+        // keyword arrives the same way — inlining `list/map [1 2] none` puts
+        // `none` where the callee goes — and the runtime names what it cannot
+        // call, which is the sentence the other two engines print.
+        let keyword_head =
+            matches!(head, Expr::Ident(n, _) if matches!(n.as_str(), "true" | "false" | "none"));
+        if keyword_head || matches!(head, Expr::Lambda { .. }) {
             for arg in args {
                 self.emit_expr(ctx, arg, false)?;
                 ctx.body.call(RT_ARG);

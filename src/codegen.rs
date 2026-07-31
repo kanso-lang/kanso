@@ -3319,8 +3319,15 @@ impl<'a> Backend<'a> {
             // A local binding is a value. So is a top-level constant (a nullary
             // group) invoked with arguments and no arm at that arity: it holds a
             // function value, and `f x` calls that value, not a group named `f`.
+            //
+            // So is a value keyword, which is spelled like a name and reaches
+            // this position when a callback is inlined: `list/map [1 2] none`
+            // puts `none` where the callee goes. A number there takes the
+            // computed path already and dies naming itself, and these must say
+            // the same words rather than the emitter's.
             Expr::Ident(name, _) => {
-                f.lookup(name).is_some()
+                matches!(name.as_str(), "true" | "false" | "none")
+                    || f.lookup(name).is_some()
                     || (call_arity >= 1
                         && self.program.fns.iter().any(|d| d.name == *name && d.params.is_empty())
                         && !self
