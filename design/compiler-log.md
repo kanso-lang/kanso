@@ -12482,3 +12482,37 @@ arena or in a carry buffer, and whether it is a copy or an original. That
 separates an evacuation that missed a value from one that produced a bad copy.
 The fix is not attempted here: the evacuation is the most performance-sensitive
 code in the runtime, and rewriting it is a conversation rather than an edit.
+
+## The evacuation copies everything it reaches, and it is still wrong
+
+Two eliminations worth having, because both looked like the answer.
+
+The first was thunks. `k_is_heap` does not list `K_THUNK`, `k_deep_copy` has no
+case for one, and `k_copy_size` counts it as nothing — so an unforced thunk
+crossing a step would keep pointers into the region that step rewinds. That
+story fit every symptom, including the one language-level change that fixes the
+program: forcing the accumulator before it crosses the boundary makes native
+answer what the interpreter answers. Adding the three cases — a size case, and
+a copy case that evacuates the arguments in place so the refcounted cell keeps
+its memoisation — never fires. No thunk is reached by the walk at all. The
+accumulator arrives as a plain list.
+
+The second was the copy-skipping guard. `k_deep_copy` returns a value untouched
+when `k_survives` says it sits below the mark, and a wrong answer there would
+share a doomed pointer. Disabling that guard entirely, so every reachable value
+is copied, leaves the corruption exactly where it was.
+
+Which is the useful thing to know: the evacuation copies everything it reaches
+and the program still dies, so the stale pointer arrives by a path the walk
+never visits. At the fault both the list and the string inside it report as
+living in the arena, and the address the string held is the one `k_mkdesc` was
+handed for the next description.
+
+What is left to look at is the step that answers something other than a
+description. The chain's loop returns through `k_beat_pop` there, whose copy is
+conditional on the carry having been used, and this program takes that path on
+its last step. After that, the values codegen holds across a boundary in a
+register or a constant cell rather than in the walked graph.
+
+Every change described here was reverted. The tree carries the reproduction and
+its test, nothing else.
