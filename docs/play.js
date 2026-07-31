@@ -219,6 +219,20 @@ pub play =
   >> print "the other: {quote luxury 250}"
   >> print "and the same partial again: {local 100}"
 `,
+  running: `# & supplies arguments; it never runs anything. supply every argument an
+# arm takes and you still have a value -- one that is waiting to be called.
+# () is what calls it, and the two are complements: & gives without running,
+# () runs without giving.
+fn tax rate price
+  price + price * rate / 100
+
+pub play =
+  local = &tax 8
+  on_250 = &tax 8 250
+  print "still waiting: {on_250}"
+  >> print "supplied one, called with the other: {local 250}"
+  >> print "supplied both, then called: {on_250()}"
+`,
   join: `# two effects with no order between them -- parallel is the default, so
 # plain lines say it. the >> is the wall: serving happens only after both.
 # failures accumulate: if both sides err you get both reasons.

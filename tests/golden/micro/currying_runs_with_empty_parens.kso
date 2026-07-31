@@ -1,0 +1,7 @@
+fn brewable? temp
+  60 < temp && temp < 85
+
+pub play =
+  cold = &brewable? 30
+  warm = &brewable? 70
+  print "{cold()} {warm()}"

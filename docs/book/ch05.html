@@ -196,6 +196,27 @@ and again: 108</code></pre>
 
 <p>the sigil is doing real work, and it is required. <code>tax 8</code> on its own is a call, and a call short of every arm is an error — so a bare application can never mean "wait for more". with overloading, whether an application has finished cannot be read off the text: if <code>tax</code> also had a one-argument arm, <code>tax 8</code> would be a completed call, and the partial you meant would be unreachable. <code>&amp;</code> is how you say which one you meant, and it means the answer cannot change when somebody adds an arm tomorrow.</p>
 
+<p><code>&amp;</code> supplies arguments and never runs anything, and that stays true when there is nothing left to supply. <code>&amp;tax 8 250</code> has handed over both arguments and is still a value — one that is waiting to be called. <code>()</code> is what calls it:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">running.kso</div>
+  <pre><code><span class="k">fn</span> <span class="f">tax</span> rate price
+  price <span class="o">+</span> price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  on_250 <span class="o">=</span> &amp;tax <span class="n">8</span> <span class="n">250</span>
+  <span class="f">print</span> <span class="s">"still waiting: <span class="i">{on_250}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"called: <span class="i">{on_250()}</span>"</span></code></pre>
+</div>
+
+<div class="code-panel">
+  <div class="code-panel-title">kanso run running.kso</div>
+  <pre><code>still waiting: &lt;fn&gt;
+called: 270</code></pre>
+</div>
+
+<p>so the two are complements: <code>&amp;</code> gives without running, <code>()</code> runs without giving. A value that still wants arguments cannot be run this way — <code>()</code> brings none, and an arm that wants one does not match.</p>
+
 <h2>the rest of the i/o vocabulary</h2>
 
 <p>writing is an io too. <code>write_file path content</code> describes putting a string at a path, and it composes with everything you've seen—here a wall sequences a write before a read of the same file, and a dot hands the read's contents onward:</p>

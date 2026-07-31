@@ -247,6 +247,7 @@ declare %KValue @k_carry_take(i64)
 declare void @k_beat_iter_carry()
 declare %KValue @k_beat_pop(%KValue)
 declare %KValue @k_cohort_pop(%KValue)
+declare %KValue @k_call0(%KValue)
 declare %KValue @k_call1(%KValue, %KValue)
 declare %KValue @k_call2(%KValue, %KValue, %KValue)
 declare %KValue @k_call3(%KValue, %KValue, %KValue, %KValue)
@@ -2213,14 +2214,17 @@ impl<'a> Backend<'a> {
                 .program
                 .fns
                 .iter()
-                .filter(|d| d.name == name && d.params.len() > supplied.len())
+                .filter(|d| d.name == name && d.params.len() >= supplied.len())
                 .map(|d| d.params.len())
                 .collect();
             seen.sort_unstable();
             seen.dedup();
             seen
         };
-        // Currying past every arm is the one real error: nothing can finish it.
+        // Currying past every arm is the one real error: `&` supplies without
+        // running, so supplying an arm's last argument is a partial like any
+        // other — the value waits to be called rather than being a call. What
+        // nothing can finish is more arguments than any arm accepts.
         if arities.is_empty() {
             return Err(format!(
                 "native backend: `&{name}` holds {} argument(s), and no `{name}` takes more",
@@ -2559,8 +2563,11 @@ impl<'a> Backend<'a> {
                 self.emit_binop(f, op, &a, &b, *span)
             }
             Expr::Lambda { params, body, .. } => {
-                if params.is_empty() || params.len() > 4 {
-                    return Err("native backend: a lambda takes 1 to 4 parameters".to_string());
+                // No lower bound: `&add 1 2` supplies an arm's last argument
+                // and the value it leaves waits to be called, which is a
+                // closure of no parameters.
+                if params.len() > 4 {
+                    return Err("native backend: a lambda takes at most 4 parameters".to_string());
                 }
                 let param_names: Vec<String> = params.iter().map(|(n, _)| n.clone()).collect();
                 let mut idents = Vec::new();
@@ -3397,9 +3404,9 @@ impl<'a> Backend<'a> {
                 arg_vals.push(self.emit_expr(f, a)?);
             }
             let n = arg_vals.len();
-            if n == 0 || n > 4 {
+            if n > 4 {
                 return Err(format!(
-                    "native backend: a function value takes 1 to 4 arguments, got {n}"
+                    "native backend: a function value takes at most 4 arguments, got {n}"
                 ));
             }
             let arg_ir: String = arg_vals.iter().map(|v| format!(", %KValue {v}")).collect();

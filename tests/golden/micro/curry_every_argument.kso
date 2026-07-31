@@ -1,0 +1,6 @@
+fn add a b
+  a + b
+
+pub play =
+  both = &add 1 2
+  print "{both}"

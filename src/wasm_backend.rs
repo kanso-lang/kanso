@@ -143,11 +143,14 @@ fn partial_lambda(
     let mut arities: Vec<usize> = program
         .fns
         .iter()
-        .filter(|d| d.name == name && d.params.len() > supplied.len())
+        .filter(|d| d.name == name && d.params.len() >= supplied.len())
         .map(|d| d.params.len())
         .collect();
     arities.sort_unstable();
     arities.dedup();
+    // `&` supplies without running, so an arm's last argument is a partial
+    // like any other and the value waits to be called. Only more arguments
+    // than any arm accepts is unfinishable.
     if arities.is_empty() {
         return Err(format!(
             "browser backend: `&{name}` holds {} argument(s), and no `{name}` takes more",
