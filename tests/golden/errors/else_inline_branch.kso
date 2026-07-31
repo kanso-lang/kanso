@@ -1,0 +1,7 @@
+fn sign n
+  if (n > 0)
+    up = "up"
+    up
+  else "down"
+
+pub play = print "{sign 5}"

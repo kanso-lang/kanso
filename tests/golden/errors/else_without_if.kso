@@ -1,0 +1,6 @@
+fn sign n
+  else
+    x = 1
+    x
+
+pub play = print "{sign 5}"

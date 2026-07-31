@@ -1,0 +1,4 @@
+error[formatting]: a branch that binds names needs the block form: put `else` at the `if`'s indent and a block beneath each
+  --> else_inline_branch.kso:3:5
+   3 |     up = "up"
+           ^
