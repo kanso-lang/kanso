@@ -245,7 +245,7 @@ jobs:
       # which arm answers. dispatch is what every branch in the language is
       # made of, and it is an arm search in one engine and a switch with guard
       # chains in the other
-      - run: python3 scripts/dispatch_differential.py
+      - run: ./target/release/kanso play scripts/dispatch_differential.kso
       # whole modules on disk: what a directory of files sharing one namespace
       # lets through and what it refuses. the seam that hid two bugs already
       - run: python3 scripts/module_differential.py

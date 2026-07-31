@@ -1,0 +1,302 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# The declarations a probe compiles, a name for the case, the expression whose
+# answer is printed, and the arm that must answer it.
+type arm
+  decls
+  label
+  shown
+  wants
+
+# Dispatch is the mechanism the language is built on: there is no `if` on type,
+# no `match` statement, no method table — a group's arms are the whole story,
+# and every feature that looks like control flow is arms underneath. It is
+# written twice, once as the interpreter's arm search and once as the emitter's
+# switch and guard chains, and nothing was comparing the two on the cases that
+# decide an arm rather than the cases that happen to appear in the corpus.
+#
+# What is probed is which arm answers, not what the arm computes: each probe
+# returns a marker naming the arm, so a difference reads as `native took the
+# literal arm where the interpreter took the wildcard` rather than as a number.
+#
+# Order matters and is part of the contract — arms are tried as written — so
+# probes deliberately overlap: a literal that a wildcard would also match, a
+# narrow record pattern beside a wide one, an err arm beside a value arm.
+kanso = "target/release/kanso"
+
+probe = "target/dispatch_probe.kso"
+
+# A legal probe that never returns is a finding, and a louder one than a
+# wording difference — so every run is under `timeout`, which answers 124 when
+# it fires. A box without `timeout` cannot start it, and an err says so rather
+# than the sweep quietly losing the property.
+limit = "20"
+
+decls0 = "fn which 0\n  \"zero\"\n\nfn which _\n  \"any\"\n"
+
+decls1 = "fn which \"a\"\n  \"the a\"\n\nfn which _\n  \"any\"\n"
+
+decls2 = "fn which true\n  \"yes\"\n\nfn which false\n  \"no\"\n"
+
+decls3 = "fn which none\n  \"nothing\"\n\nfn which _\n  \"something\"\n"
+
+decls4 = "fn which _\n  \"one\"\n\nfn which _ _\n  \"two\"\n"
+
+decls5a = "type point\n  x\n  y\n\nfn which (point a b)\n  \"\{a}-\{b}\"\n"
+
+decls5b = "\nfn which _\n  \"any\"\n"
+
+decls5 = "{decls5a}{decls5b}"
+
+decls6a = "type point\n  x\n  y\n\ntype label\n  text\n\nfn which (point _ "
+
+decls6b = "_)\n  \"point\"\n\nfn which _\n  \"any\"\n"
+
+decls6 = "{decls6a}{decls6b}"
+
+decls7a = "type point\n  x\n  y\n\nfn which (point (point _ _) _)\n  \"nest"
+
+decls7b = "ed\"\n\nfn which _\n  \"any\"\n"
+
+decls7 = "{decls7a}{decls7b}"
+
+decls8a = "type point\n  x\n  y\n\nfn which (point 0 _)\n  \"on the axis\""
+
+decls8b = "\n\nfn which _\n  \"any\"\n"
+
+decls8 = "{decls8a}{decls8b}"
+
+decls9a = "type point\n  x\n  y\n\nfn which (point 0 0)\n  \"origin\"\n\nfn"
+
+decls9b = " which (point 0 _)\n  \"axis\"\n\nfn which _\n  \"any\"\n"
+
+decls9 = "{decls9a}{decls9b}"
+
+decls10 = "fn which (err _)\n  \"failed\"\n\nfn which _\n  \"fine\"\n"
+
+decls11 = "fn which 1\n  \"one\"\n\nfn which _\n  \"any\"\n"
+
+decls12 = "fn which \"\"\n  \"empty\"\n\nfn which _\n  \"any\"\n"
+
+pa = arm decls0 "a literal beats a later wildcard" "which 0" "zero"
+
+pb = arm decls0 "a wildcard takes what no literal claims" "which 7" "any"
+
+pc = arm decls1 "a string literal arm" "which \"a\"" "the a"
+
+pd = arm decls1 "a string literal that misses" "which \"b\"" "any"
+
+pe = arm decls2 "true and false are separate arms" "which false" "no"
+
+pf = arm decls3 "none is an arm of its own" "which none" "nothing"
+
+pg = arm decls3 "a value is not none" "which 0" "something"
+
+ph = arm decls4 "arity picks the group" "which 1 2" "two"
+
+pi = arm decls5 "a record pattern binds its fields" "which (point 1 2)" "1-2"
+
+pj = arm
+  decls6
+  "a record pattern declines another type"
+  "which (label \"l\")"
+  "any"
+
+pk = arm decls7 "a nested record pattern" "which (point (point 1 2) 3)" "nested"
+
+pl = arm decls7 "a nested pattern that does not nest" "which (point 1 2)" "any"
+
+pm = arm
+  decls8
+  "a literal inside a record pattern"
+  "which (point 0 5)"
+  "on the axis"
+
+pn = arm decls8 "the same pattern, other value" "which (point 1 5)" "any"
+
+po = arm
+  decls9
+  "the first of two overlapping records"
+  "which (point 0 0)"
+  "origin"
+
+pp = arm
+  decls9
+  "the second of two overlapping records"
+  "which (point 0 9)"
+  "axis"
+
+pq = arm decls10 "an err arm beside a value arm" "which (err \"boom\")" "failed"
+
+pr = arm decls10 "a value where an err arm waits" "which 1" "fine"
+
+ps = arm decls11 "a bool is not an int" "which true" "any"
+
+pt = arm decls0 "a computed zero is a zero" "which (1 - 1)" "zero"
+
+pu = arm decls12 "a string arm and an empty string" "which \"\"" "empty"
+
+pv = arm
+  decls0
+  "a group called through a value"
+  "f = which\n  print \"\{f 0}\""
+  "zero"
+
+cases0 = text/concat [pa] [pb]
+
+cases1 = text/concat cases0 [pc]
+
+cases2 = text/concat cases1 [pd]
+
+cases3 = text/concat cases2 [pe]
+
+cases4 = text/concat cases3 [pf]
+
+cases5 = text/concat cases4 [pg]
+
+cases6 = text/concat cases5 [ph]
+
+cases7 = text/concat cases6 [pi]
+
+cases8 = text/concat cases7 [pj]
+
+cases9 = text/concat cases8 [pk]
+
+cases10 = text/concat cases9 [pl]
+
+cases11 = text/concat cases10 [pm]
+
+cases12 = text/concat cases11 [pn]
+
+cases13 = text/concat cases12 [po]
+
+cases14 = text/concat cases13 [pp]
+
+cases15 = text/concat cases14 [pq]
+
+cases16 = text/concat cases15 [pr]
+
+cases17 = text/concat cases16 [ps]
+
+cases18 = text/concat cases17 [pt]
+
+cases19 = text/concat cases18 [pu]
+
+cases = text/concat cases19 [pv]
+
+# A probe whose expression spans lines is a block under `pub play`; a single
+# expression is printed inline.
+fn shaped a true
+  "{a.decls}\npub play = print \"\{{a.shown}}\"\n"
+
+fn shaped a false
+  "{a.decls}\npub play =\n  {a.shown}\n"
+
+fn source_for a
+  shaped a (length (text/split a.shown "\n") == 1)
+
+fn asked argv
+  io/run "timeout" (text/concat [limit kanso] argv)
+
+fn hung? 124
+  true
+
+fn hung? _
+  false
+
+fn ran source
+  io/write_file probe source . (_ -> both)
+
+both = asked ["play" probe] . against
+
+fn against native
+  asked ["play" probe "--interp"] . (interp -> answer native interp)
+
+fn answer n i
+  stalled n i (hung? n.status || hung? i.status)
+
+fn stalled _ _ true
+  "never returned"
+
+fn stalled n i false
+  same = n.status == i.status && n.stdout == i.stdout
+  agreed n i (same && n.stderr == i.stderr)
+
+fn agreed _ _ false
+  "disagree"
+
+fn agreed n _ true
+  n.stdout
+
+# A probe that did not compile, did not run, or printed nothing is not the
+# engines agreeing about dispatch — it is two identical silences, which compare
+# equal and mean nothing. Every probe names the arm that answered.
+fn judged a "never returned"
+  "  {a.label}: never returned\n"
+
+fn judged a "disagree"
+  "  {a.label}: the engines disagree\n"
+
+fn judged a ""
+  "  {a.label}: printed nothing\n"
+
+fn judged a took
+  right a (text/split took "\n")[1]!
+
+fn right a line
+  verdict a line (line == a.wants)
+
+fn verdict _ _ true
+  ""
+
+fn verdict a line false
+  "  {a.label}: took {line}, the rules say {a.wants}\n"
+
+fn told ""
+  io/write "" . (_ -> 0)
+
+fn told line
+  io/write line . (_ -> 1)
+
+fn swept arms count
+  onward arms count (length arms == 0)
+
+fn onward _ count true
+  io/write "" . (_ -> count)
+
+fn onward arms count false
+  rest = list/to_list (list/drop arms 1)
+  a = arms[1]!
+  ran (source_for a) . (v -> reported a rest count v)
+
+fn reported a rest count v
+  told (judged a v) . (n -> swept rest (count + n))
+
+# A probe that lost its interpolation prints a plain string, which both engines
+# render identically — so the sweep agrees with itself about nothing.
+sample = "d\npub play = print \"\{1}\"\n"
+
+complaint = "the probe shape changed: probes must interpolate\n"
+
+check = arm "d" "l" "1" "w"
+
+banner = "{length cases} dispatch cases\n"
+
+pub play = begun (source_for check == sample)
+
+fn begun false
+  io/write_err complaint . (_ -> io/exit 2)
+
+fn begun true
+  counted 0 . finished
+
+fn counted _
+  io/write banner . (_ -> swept cases 0)
+
+fn finished 0
+  io/write "0 wrong\n"
+
+fn finished n
+  io/write "{n} wrong\n" . (_ -> io/exit 1)

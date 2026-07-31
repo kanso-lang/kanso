@@ -12540,3 +12540,22 @@ agreement, which is exactly the trap this sweep was built to avoid and it
 caught its author. A divergence that uses the module it imports —
 `text/slice "abcdef" 1 18446744073709551616` — is reported by name with both
 answers beside it.
+
+## The dispatch sweep in kanso
+
+scripts/dispatch_differential.py is gone. The kanso version runs the same 22
+cases and reports the same answer, with the timeout and the hang report.
+
+Two things the corpus needed. Thirteen distinct declaration sets serve
+twenty-two probes, so they are named once and shared — which reads better than
+the python's repetition did, since a case that reuses a declaration set now says
+so. And a declaration set is a multi-line program held as one string, too long
+for a line, so each is assembled from pieces. `text/concat` is for lists and
+refuses two strings; interpolation is how strings join, and `"{a}{b}"` is
+shorter than the call would have been anyway.
+
+Four failure paths were watched: a wrong expectation names the case and the arm
+that answered, a probe that does not compile is reported as printing nothing
+rather than counted as agreement, the shape guard refuses to start when the
+interpolation breaks, and a probe under the limit is reported as never
+returning.
