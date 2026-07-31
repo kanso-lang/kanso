@@ -12446,3 +12446,39 @@ The interpreter's copy of the line is honest, because it counts frames.
 Changing it is not free: the three engines were deliberately aligned on that
 one sentence, so a real deep recursion would start diverging in wording if only
 two of them moved. Recorded for a ruling rather than changed.
+
+## Where the null string comes from, as far as it goes
+
+A watchpoint on the corrupted string's data field names the writer: `k_mkdesc`,
+building the description for an `io/write`, allocating at the exact address the
+string occupied. The allocator handed out memory from a region that had been
+rewound.
+
+The machinery is the bind chain's beat, in the default arm of `k_exec`. A chain
+runs as one bracketed loop: each step executes, hands its yield to the
+continuation, and the description the continuation returns is evacuated through
+the carry buffers before the step's region is swept. The survivor set is
+exactly what is reachable from that returned description. Something live is not
+in it.
+
+What has been ruled out, each with a probe watched firing somewhere else so the
+silence means something. `k_str_n` and the in-place string accumulator never
+build a string with a length and no data. `k_b_push_into` is never reached on
+this path — an unconditional die there stays silent here and fires for an
+ordinary push. `k_copy_alloc` never overruns the carry buffer. The aliasing
+fast path in the string copy is not it either: disabling it entirely leaves the
+corruption exactly where it was. And `k_deep_copy` does walk a closure's
+captures, so a value a continuation holds is in principle evacuated.
+
+One false lead is worth writing down because it looked like the answer for
+twenty minutes. Registering each string as it enters a list and scanning on
+every allocation does fire — and means nothing, because the evacuation copies
+survivors and then legitimately reclaims the originals. A probe watching the
+original watches a value that is supposed to die. Only the null seen at the
+join is evidence.
+
+What is left is to trap at the join and ask whether that string sits in the
+arena or in a carry buffer, and whether it is a copy or an original. That
+separates an evacuation that missed a value from one that produced a bad copy.
+The fix is not attempted here: the evacuation is the most performance-sensitive
+code in the runtime, and rewriting it is a conversation rather than an edit.
