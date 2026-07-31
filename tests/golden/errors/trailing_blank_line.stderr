@@ -1,0 +1,4 @@
+error[formatting]: the file may not end with a blank line
+  --> trailing_blank_line.kso:2:1
+   2 | 
+       ^

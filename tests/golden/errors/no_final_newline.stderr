@@ -1,0 +1,4 @@
+error[formatting]: file must end with exactly one newline
+  --> no_final_newline.kso:1:1
+   1 | pub play = print "x"
+       ^

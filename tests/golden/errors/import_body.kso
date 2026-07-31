@@ -1,0 +1,4 @@
+import "std/list"
+  x
+
+pub play = print "x"

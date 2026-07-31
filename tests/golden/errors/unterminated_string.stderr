@@ -1,0 +1,4 @@
+error[syntax]: unterminated string
+  --> unterminated_string.kso:1:18
+   1 | pub play = print "abc
+                        ^

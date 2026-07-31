@@ -1,0 +1,4 @@
+error[syntax]: a re-export has no body
+  --> reexport_body.kso:2:3
+   2 |   x
+         ^

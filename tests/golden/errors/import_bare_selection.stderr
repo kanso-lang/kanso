@@ -1,0 +1,4 @@
+error[syntax]: an unrenamed selection is redundant — the compiler prunes unused imports and bare access is the default; braces hold theirs:yours renames
+  --> import_bare_selection.kso:1:15
+   1 | import { join } "std/text"
+                     ^
