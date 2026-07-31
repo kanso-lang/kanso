@@ -94,32 +94,66 @@ fn this_host_has_something_that_reads_ir() {
     );
 }
 
-/// And the emitter's own output, on a program that reaches the paths the
-/// defect lived on: a bound thunk in a function whose arguments can fail.
+/// And the emitter's own output, over the micro corpus — every construct the
+/// emitter has a distinct path for, which is what that corpus is. Both
+/// invalid-IR defects this project has had were found by accident on a laptop
+/// whose clang happens to verify, so a check that reads one program is a check
+/// that would have found neither.
 #[test]
 fn the_ir_kanso_writes_passes_that_verifier() {
     let Some(tool) = verifier() else {
         return; // the test above is the one that reports this
     };
     let dir = std::env::temp_dir().join("kanso_ir_written");
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("the directory is made");
-    let source = dir.join("written.kso");
-    std::fs::copy(manifest_dir().join("tests/golden/micro/bound_thunk_across_arms.kso"), &source)
-        .expect("the fixture copies");
 
-    let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("build")
-        .arg("written.kso")
-        .current_dir(&dir)
-        .output()
-        .expect("kanso runs");
-    assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
+    let corpus = manifest_dir().join("tests/golden/micro");
+    let mut programs: Vec<PathBuf> = std::fs::read_dir(&corpus)
+        .expect("the corpus is there")
+        .filter_map(|entry| {
+            let path = entry.expect("the entry reads").path();
+            (path.extension()? == "kso").then_some(path)
+        })
+        .collect();
+    programs.sort();
+    assert!(programs.len() > 30, "the corpus moved: only {} programs", programs.len());
 
-    let checked = read_ir(tool, &dir.join("written.ll")).expect("the verifier runs");
+    let refused: Vec<String> = programs
+        .iter()
+        .filter_map(|program| {
+            let name = program.file_stem().expect("kso files have names");
+            let source = dir.join(program.file_name().expect("kso files have names"));
+            std::fs::copy(program, &source).expect("the program copies");
+
+            let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
+                .arg("build")
+                .arg(source.file_name().expect("kso files have names"))
+                .current_dir(&dir)
+                .output()
+                .expect("kanso runs");
+            if !built.status.success() {
+                let said = String::from_utf8_lossy(&built.stderr);
+                return Some(format!("{name:?} does not build: {said}"));
+            }
+
+            let written = dir.join(name).with_extension("ll");
+            let checked = read_ir(tool, &written).expect("the verifier runs");
+            match checked.status.success() {
+                true => None,
+                false => {
+                    let said = String::from_utf8_lossy(&checked.stderr);
+                    Some(format!("{name:?}: {said}"))
+                }
+            }
+        })
+        .collect();
 
     assert!(
-        checked.status.success(),
-        "kanso wrote IR {tool} refuses: {}",
-        String::from_utf8_lossy(&checked.stderr)
+        refused.is_empty(),
+        "{tool} refuses the IR kanso wrote for {} of {} programs:\n{}",
+        refused.len(),
+        programs.len(),
+        refused.join("\n")
     );
 }
