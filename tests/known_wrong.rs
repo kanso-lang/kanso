@@ -51,3 +51,27 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
     assert_eq!(out, "1: a gave a\n", "the oracle's answer changed");
     assert_eq!(code, Some(0));
 }
+
+/// Task #72. An effect handed to a parameter nobody reads never happens, and
+/// nothing says so. Laziness means an argument that is never forced is never
+/// evaluated, so the write is not performed — the same shape as Haskell's
+/// `const "x" (putStrLn "y")`.
+///
+/// It is recorded rather than accepted because the language already refuses
+/// the neighbouring mistake: a function whose body does io must hand the io
+/// back, or it "would abandon the effects above it". That check reads a
+/// function's own body, so this one walks past it.
+#[test]
+fn an_effect_handed_to_a_parameter_nobody_reads_never_happens() {
+    let fixture = "an_effect_handed_over_and_ignored.kso";
+    let dropped = "dropped it\n";
+
+    let (native, native_err, native_code) = run(fixture, &[]);
+    let (interp, _, interp_code) = run(fixture, &["--interp"]);
+
+    assert_eq!(native, dropped, "native performed the write — task #72 is fixed, delete this");
+    assert_eq!(interp, dropped, "the oracle performed the write — task #72 is fixed, delete this");
+    assert_eq!(native_err, "", "a diagnostic appeared: {native_err}");
+    assert_eq!(native_code, Some(0));
+    assert_eq!(interp_code, Some(0));
+}
