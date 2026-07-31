@@ -1,10 +1,9 @@
-# Task #70's remainder. `agreed` takes five parameters, so two of its arguments
-# travel on the stack — and it holds a `musttail` call, which only `tailcc`
-# permits across an arity, so it keeps that convention where a plain function
-# no longer does. The non-tail call into it still corrupts an argument, here a
-# literal-cache pointer, so the runtime dereferences 5 and faults. `kanso run`
-# calls any fault running out of stack; the backtrace is five frames and the
-# call graph has no cycle in it.
+# `agreed` takes five parameters, so two of its arguments travel on the stack,
+# and it holds a musttail — which only `tailcc` permits across an arity — so it
+# keeps that convention where a plain function no longer does. A non-tail call
+# into it used to corrupt an argument; here the corrupted one was a
+# literal-cache pointer, so the runtime dereferenced 5 and faulted, and `kanso
+# run` called that running out of stack.
 type row
   mb
   ms

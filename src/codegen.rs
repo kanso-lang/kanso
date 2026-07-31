@@ -3784,41 +3784,119 @@ fn ir_bytes(bytes: &[u8]) -> String {
 /// not all fit in registers is miscompiled on arm64 — five KValues want ten
 /// argument registers and there are eight, and the two that spill come back
 /// holding each other's values (task #70). So the convention is kept for the
-/// functions a `musttail` reaches and dropped from the rest.
+/// functions a musttail reaches, on both ends of every such edge, and dropped
+/// from the rest.
+///
+/// A function that needs the convention AND spills is reached through a
+/// trampoline: one `tailcc` call per frame is lowered correctly, and it is
+/// only the second one in a frame that comes back wrong.
 ///
 /// The set is read out of the emitted text rather than recomputed, because a
 /// second copy of "when do we musttail" would drift from the first and the
 /// symptom of drift is silent corruption.
 fn narrow_tailcc(ir: String) -> String {
-    let mut keep: std::collections::HashSet<&str> = std::collections::HashSet::new();
-    let mut current: Option<&str> = None;
+    let mut keep: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut current: Option<String> = None;
     for line in ir.lines() {
         if let Some(rest) = line.strip_prefix("define ") {
-            current = rest.split('@').nth(1).and_then(|s| s.split('(').next());
+            current = symbol_of(rest);
         }
         if line.contains("musttail call") {
             // both ends of a musttail edge must agree on the convention
-            if let Some(callee) = line.split('@').nth(1).and_then(|s| s.split('(').next()) {
+            if let Some(callee) = symbol_of(line) {
                 keep.insert(callee);
             }
-            if let Some(name) = current {
+            if let Some(name) = current.clone() {
                 keep.insert(name);
             }
         }
     }
+    // Kept functions whose arguments do not all fit in the eight registers
+    // AArch64 passes them in. The count is the same on every host so the ir is
+    // too; x86 passes fewer and does not exhibit the defect anyway.
+    let mut trampolines: Vec<String> = Vec::new();
+    let mut spilling: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for line in ir.lines() {
+        let Some(rest) = line.strip_prefix("define tailcc ") else { continue };
+        let Some(name) = symbol_of(rest) else { continue };
+        if !keep.contains(&name) {
+            continue;
+        }
+        let Some(open) = rest.find('(') else { continue };
+        let Some(close) = rest.rfind(')') else { continue };
+        let params: Vec<&str> = match rest[open + 1..close].trim().is_empty() {
+            true => Vec::new(),
+            false => rest[open + 1..close].split(", ").collect(),
+        };
+        let types: Vec<&str> = params.iter().filter_map(|p| p.split_whitespace().next()).collect();
+        let registers: usize = types.iter().map(|t| register_width(t)).sum();
+        if registers <= 8 {
+            continue;
+        }
+        let ret = rest[..open].split('@').next().unwrap_or("%KValue").trim().to_string();
+        let taken: Vec<String> =
+            types.iter().enumerate().map(|(i, ty)| format!("{ty} %a{i}")).collect();
+        let handed: Vec<String> =
+            types.iter().enumerate().map(|(i, ty)| format!("{ty} %a{i}")).collect();
+        trampolines.push(format!(
+            "define {ret} @{}({}) {{\nentry:\n  %r = call tailcc {ret} @{}({})\n  ret {ret} %r\n}}\n",
+            trampoline_name(&name),
+            taken.join(", "),
+            quoted(&name),
+            handed.join(", ")
+        ));
+        spilling.insert(name);
+    }
+
     let mut out = String::with_capacity(ir.len());
     for line in ir.lines() {
-        match line.contains("tailcc ") {
-            false => out.push_str(line),
-            true => {
-                let named = line.split('@').nth(1).and_then(|s| s.split('(').next());
-                match named.is_some_and(|n| keep.contains(n)) {
-                    true => out.push_str(line),
-                    false => out.push_str(&line.replace("tailcc ", "")),
-                }
-            }
+        let named = symbol_of(line);
+        let reroute = !line.contains("musttail call")
+            && line.contains("call tailcc ")
+            && named.as_ref().is_some_and(|n| spilling.contains(n));
+        if reroute {
+            let name = named.expect("checked above");
+            let call = format!("@{}(", quoted(&name));
+            let through = format!("@{}(", trampoline_name(&name));
+            out.push_str(&line.replace("call tailcc ", "call ").replace(&call, &through));
+        } else if line.contains("tailcc ") && !named.as_ref().is_some_and(|n| keep.contains(n)) {
+            out.push_str(&line.replace("tailcc ", ""));
+        } else {
+            out.push_str(line);
         }
         out.push('\n');
     }
+    for t in trampolines {
+        out.push_str(&t);
+    }
     out
+}
+
+/// The first symbol a line names, without its quotes.
+fn symbol_of(line: &str) -> Option<String> {
+    let at = line.find('@')?;
+    let rest = &line[at + 1..];
+    match rest.starts_with('"') {
+        true => rest[1..].split('"').next().map(str::to_string),
+        false => rest.split('(').next().map(|s| s.trim().to_string()),
+    }
+}
+
+fn quoted(name: &str) -> String {
+    match name.contains('/') {
+        true => format!("\"{name}\""),
+        false => name.to_string(),
+    }
+}
+
+fn trampoline_name(name: &str) -> String {
+    quoted(&format!("{name}.c"))
+}
+
+/// How many argument registers a parameter of this type occupies.
+fn register_width(ty: &str) -> usize {
+    match ty {
+        "%KValue" | "%parsed" => 2,
+        _ => 1,
+    }
 }
