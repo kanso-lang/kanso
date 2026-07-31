@@ -833,8 +833,11 @@ impl<'a> WasmBackend<'a> {
             _ if !self.program.fns.iter().any(|d| d.name == name)
                 && crate::codegen::BUILTIN_CALLS.iter().any(|(b, a)| *b == bare && *a <= 4) =>
             {
-                let arity =
-                    crate::codegen::BUILTIN_CALLS.iter().find(|(b, _)| *b == bare).expect("found").1;
+                let arity = crate::codegen::BUILTIN_CALLS
+                    .iter()
+                    .find(|(b, _)| *b == bare)
+                    .expect("found")
+                    .1;
                 let widx = self.builtin_wrapper(bare, arity)?;
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);
