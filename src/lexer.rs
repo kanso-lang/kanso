@@ -658,8 +658,7 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
 }
 
 fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnostic>) {
-    for (at, (pair, prev_end)) in
-        lexed_line.tokens.windows(2).zip(&lexed_line.end_cols).enumerate()
+    for (at, (pair, prev_end)) in lexed_line.tokens.windows(2).zip(&lexed_line.end_cols).enumerate()
     {
         let (prev, _) = &pair[0];
         let (next, next_span) = &pair[1];
@@ -708,11 +707,7 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
                          parenthesised `x`"
                     ),
                 };
-                diags.push(Diagnostic::new(
-                    "formatting",
-                    said,
-                    Span { line, col: next_span.col },
-                ));
+                diags.push(Diagnostic::new("formatting", said, Span { line, col: next_span.col }));
                 continue;
             }
         }
