@@ -1,0 +1,40 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+fn ran x
+  io/write "" . (_ -> inner x)
+
+fn inner x
+  io/write "" . (_ -> x)
+
+fn judged x v
+  wanted x v (v == "b")
+
+fn wanted _ _ true
+  ""
+
+fn wanted x v false
+  "{x} gave {v}"
+
+fn noted found ""
+  found
+
+fn noted found report
+  push found report
+
+fn swept items found
+  onward items found (length items == 0)
+
+fn onward _ found true
+  found
+
+fn onward items found false
+  more = list/to_list (list/drop items 1)
+  x = items[1]!
+  ran x . (v -> swept more (noted found (judged x v)))
+
+pub play = swept ["a" "b"] [] . told
+
+fn told f
+  io/write "{length f}: {text/join f " "}\n"
