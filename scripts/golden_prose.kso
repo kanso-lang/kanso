@@ -1,0 +1,245 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Prose numbers that quote a golden must match it, mechanically.
+#
+# The panels learned this discipline first: book_panels rewrites any code or
+# output panel that drifts from its sample. Prose lagged behind — the landing
+# page and the compiler page each quoted an allocation count the ratchet had
+# long since moved past, and nothing but a manual sweep could notice. This
+# closes the class: any element carrying a data-golden attribute names a
+# counter, and its text must equal that counter's current value.
+#
+#     <strong data-golden="decode.allocs">8,341,214</strong>
+#
+# `decode.` keys read bench/cost_golden.txt, `encode.` keys read
+# bench/cost_golden_encode.txt. The displayed text may use thousands
+# separators; comparison strips them. `--write` rewrites drifted numbers in
+# place, preserving the separator style; the bare run reports and fails, which
+# is what ci wants.
+#
+# What the walk carries down and never changes.
+type job
+  decode
+  encode
+  write
+
+# One page as the scan sees it: what to call it in a report, and whether the
+# report is of a rewrite or of a refusal.
+type page
+  name
+  verb
+
+# What one file's scan leaves behind.
+type sweep
+  drift
+  notes
+  out
+
+marker = "data-golden=\""
+
+decode_golden = "bench/cost_golden.txt"
+
+encode_golden = "bench/cost_golden_encode.txt"
+
+fn counters src
+  lines = text/split src "\n"
+  list/to_list (list/select lines assignment?)
+
+fn assignment? l
+  parts = text/split l "="
+  length parts == 2
+
+fn key_of l
+  parts = text/split l "="
+  parts[1]!
+
+fn value_of l
+  parts = text/split l "="
+  parts[2]!
+
+fn value_for lines key
+  hit = list/to_list (list/select lines (l -> key_of l == key))
+  answered hit (length hit == 0)
+
+fn answered _ true
+  ""
+
+fn answered hit false
+  value_of hit[1]!
+
+fn stripped s
+  text/join (text/split s ",") ""
+
+fn grouped s
+  more s (length s > 3)
+
+fn more s false
+  s
+
+fn more s true
+  head = text/slice s 1 (length s - 3)
+  tail = text/slice s (length s - 2) (length s)
+  "{grouped head},{tail}"
+
+fn styled n ","
+  grouped n
+
+fn styled n _
+  n
+
+fn separator shown
+  marks = text/split shown ","
+  comma_or_not (length marks > 1)
+
+fn comma_or_not true
+  ","
+
+fn comma_or_not false
+  ""
+
+# The attribute names a family and a counter within it; only these two exist.
+fn golden_for j "decode"
+  j.decode
+
+fn golden_for j "encode"
+  j.encode
+
+fn golden_for _ _
+  []
+
+fn after_first parts sep
+  text/join (list/to_list (list/drop parts 1)) sep
+
+fn basename path
+  parts = text/split path "/"
+  parts[length parts]!
+
+fn html? name
+  text/slice name (length name - 4) (length name) == ".html"
+
+pub play = io/args . (given -> loaded (asks_write? given))
+
+fn asks_write? given
+  list/any? given (a -> a == "--write")
+
+fn loaded write
+  io/read_file decode_golden . (d -> with_decode write (counters d))
+
+fn with_decode write decode
+  io/read_file encode_golden . (e -> started (job decode (counters e) write))
+
+fn started j
+  io/list_dir "docs" . (names -> walked j "docs" (list/to_list names) 0)
+    . (drift -> finished drift j.write)
+
+fn finished drift write
+  io/write "{drift} golden-quoting number(s) drifted\n"
+    . (_ -> stopped drift write)
+
+fn stopped 0 _
+  io/write ""
+
+fn stopped _ true
+  io/write ""
+
+fn stopped _ false
+  io/exit 1
+
+fn walked j dir names drift
+  onward j dir names drift (length names == 0)
+
+fn onward _ _ _ drift true
+  drift
+
+fn onward j dir names drift false
+  rest = list/to_list (list/drop names 1)
+  here = "{dir}/{names[1]!}"
+  io/is_dir here . (d -> entered j here d dir rest drift)
+
+fn entered j here true dir rest drift
+  io/list_dir here . (names -> walked j here (list/to_list names) drift)
+    . (n -> walked j dir rest n)
+
+fn entered j here false dir rest drift
+  read_or_skip j here (html? here) dir rest drift
+
+fn read_or_skip j _ false dir rest drift
+  walked j dir rest drift
+
+fn read_or_skip j here true dir rest drift
+  io/read_file here . (src -> visited j here src dir rest drift)
+
+fn visited j here src dir rest drift
+  found = scanned j here src
+  told found.notes . (_ -> saved j here found)
+    . (_ -> walked j dir rest (drift + found.drift))
+
+fn told ""
+  0
+
+fn told notes
+  io/write notes
+
+fn saved j here found
+  writing_back j.write (found.drift > 0) here found.out
+
+fn writing_back true true here out
+  io/write_file here out
+
+fn writing_back false _ _ _
+  0
+
+fn writing_back _ false _ _
+  0
+
+# Everything before the first marker is untouched, and every piece after one
+# begins with the key it names.
+fn scanned j here src
+  pieces = text/split src marker
+  rest = list/to_list (list/drop pieces 1)
+  seen = page (basename here) (verb_for j.write)
+  list/fold rest (sweep 0 "" pieces[1]!) (s c -> tagged s c j seen)
+
+fn verb_for true
+  "rewrote"
+
+fn verb_for false
+  "drifted"
+
+fn tagged s chunk j seen
+  quoted = text/split chunk "\""
+  key = quoted[1]!
+  after = after_first quoted "\""
+  keyed s key after j seen
+
+fn keyed s key after j seen
+  named = text/split key "."
+  lines = golden_for j named[1]!
+  compared s key after seen (value_for lines named[2]!)
+
+fn compared s key after seen ""
+  note = "UNKNOWN KEY {key} in {seen.name}\n"
+  sweep (s.drift + 1) "{s.notes}{note}" "{s.out}{marker}{key}\"{after}"
+
+fn compared s key after seen actual
+  opened = text/split after ">"
+  head = opened[1]!
+  body = after_first opened ">"
+  closed = text/split body "<"
+  judged s key head closed[1]! body seen actual
+
+fn judged s key head shown body seen actual
+  settled s key head shown body seen actual (stripped shown == actual)
+
+fn settled s key head _ body _ _ true
+  sweep s.drift s.notes "{s.out}{marker}{key}\"{head}>{body}"
+
+fn settled s key head shown body seen actual false
+  want = styled actual (separator shown)
+  tail = after_first (text/split body "<") "<"
+  said = "{seen.verb}: {seen.name} :: {key} shows {shown}"
+  note = "{said}, golden says {want}\n"
+  out = "{s.out}{marker}{key}\"{head}>{want}<{tail}"
+  sweep (s.drift + 1) "{s.notes}{note}" out
