@@ -1,0 +1,4 @@
+error[syntax]: an import path is a plain string
+  --> an_import_path_is_a_plain_string.kso:1:8
+   1 | import "std/{name}"
+              ^

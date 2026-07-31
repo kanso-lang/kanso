@@ -9,12 +9,8 @@
 # tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
 # that is neither pinned nor listed here, and fails again when a listed one
 # becomes pinned, so the line gets deleted rather than left lying.
-a re-export is `pub name` or `pub theirs:yours`
-a rename is theirs:yours
 a rename is tight: `field:name`
 a whole module re-exports by its own name; rename exports one at a time
-an import ends with its path string
-an import path is a plain string
 an inline constant has no indented block
 canonical form requires at most one space here
 expected a constant name

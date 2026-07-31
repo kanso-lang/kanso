@@ -1,0 +1,5 @@
+import "std/text"
+
+pub split join
+
+pub play = print "x"
