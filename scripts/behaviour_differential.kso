@@ -195,10 +195,10 @@ fn hung? _
 fn ran source
   io/write_file probe source . (_ -> both)
 
-both = asked ["play" probe] . against
+both = asked ["run" probe] . against
 
 fn against native
-  asked ["play" probe "--interp"] . (interp -> answer native interp)
+  asked ["run" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status || hung? i.status)

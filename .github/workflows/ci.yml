@@ -160,14 +160,14 @@ jobs:
       - name: nothing worsens unless something improves
         run: |
           git fetch origin main --depth 1
-          python3 scripts/trend_gate.py origin/main
+          ./target/release/kanso run scripts/trend_gate.kso -- origin/main
       # the log is the chronology and the page is what a reader is shown; the
       # second used to follow the first by memory, and memory let ten shipped
       # optimisations land in a day without the page moving once
       - name: the page keeps up with the log
         run: |
           git fetch origin main --depth 1 || true
-          ./target/release/kanso play scripts/page_drift.kso
+          ./target/release/kanso run scripts/page_drift.kso
       - name: one-shot counters
         run: |
           KANSO_COUNTERS=1 ./oneshot 2>counters_oneshot.txt >/dev/null
@@ -234,18 +234,18 @@ jobs:
       - run: python3 scripts/diagnostic_differential.py
       # rendering is written twice — `render` in the interpreter and
       # `k_render` in the C runtime — and every print goes through it
-      - run: ./target/release/kanso play scripts/render_differential.kso
+      - run: ./target/release/kanso run scripts/render_differential.kso
       # the same std surface, asked for the awkward thing rather than the
       # wrong one: what a function ANSWERS at its edges, not what it complains
-      - run: ./target/release/kanso play scripts/behaviour_differential.kso
+      - run: ./target/release/kanso run scripts/behaviour_differential.kso
       # how effects COMBINE — sequenced, bound, nested, run beside each other.
       # the executor is written twice with no shared code, so the two halves
       # can drift anywhere the corpus does not happen to go
-      - run: ./target/release/kanso play scripts/effects_differential.kso
+      - run: ./target/release/kanso run scripts/effects_differential.kso
       # which arm answers. dispatch is what every branch in the language is
       # made of, and it is an arm search in one engine and a switch with guard
       # chains in the other
-      - run: ./target/release/kanso play scripts/dispatch_differential.kso
+      - run: ./target/release/kanso run scripts/dispatch_differential.kso
       # whole modules on disk: what a directory of files sharing one namespace
       # lets through and what it refuses. the seam that hid two bugs already
       - run: python3 scripts/module_differential.py

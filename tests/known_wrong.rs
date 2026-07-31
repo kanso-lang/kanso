@@ -11,7 +11,7 @@ use std::process::Command;
 
 fn run(fixture: &str, engine: &[&str]) -> (String, String, Option<i32>) {
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("play")
+        .arg("run")
         .arg(format!("tests/golden/known_wrong/{fixture}"))
         .args(engine)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -49,5 +49,28 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
     let (out, err, code) = run("push_through_nested_binds.kso", &["--interp"]);
     assert_eq!(err, "");
     assert_eq!(out, "1: a gave a\n", "the oracle's answer changed");
+    assert_eq!(code, Some(0));
+}
+
+/// Task #59. A binding whose value becomes a thunk, in a function whose
+/// arguments can be errs, emits invalid LLVM IR: `release_cells` releases every
+/// registered cell at every return, including the failure blocks the thunk's
+/// creation does not dominate. The interpreter runs the same program.
+///
+/// Inlining the binding avoids it, which is the shape of the defect: the cell
+/// is created inside the arm's body and released in blocks reached from the
+/// other branch.
+#[test]
+fn a_bound_thunk_is_released_where_it_is_not_dominated() {
+    let (_, err, code) = run("thunk_release_not_dominated.kso", &[]);
+    assert!(
+        err.contains("Instruction does not dominate all uses"),
+        "native no longer emits invalid IR — task #59 is fixed, delete this: {err}"
+    );
+    assert_eq!(code, Some(1));
+
+    let (out, err, code) = run("thunk_release_not_dominated.kso", &["--interp"]);
+    assert_eq!(err, "");
+    assert_eq!(out, "true\n", "the oracle's answer changed");
     assert_eq!(code, Some(0));
 }

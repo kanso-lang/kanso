@@ -12559,3 +12559,38 @@ that answered, a probe that does not compile is reported as printing nothing
 rather than counted as agreement, the shape guard refuses to start when the
 interpolation breaks, and a probe under the limit is reported as never
 returning.
+
+## The trend gate in kanso, and two defects it walked into
+
+scripts/trend_gate.py is gone. The kanso version produces byte-identical output
+on both paths it has — the improving one and the pure regression that fails —
+checked by diffing the two implementations against the same base.
+
+It is the first port that is a program rather than a corpus, and it wanted
+things the sweeps did not. Counters are summed across lines, and there is no
+map insert to fold into, so the pairs are grouped by name and each group summed
+— which reads better than the accumulator would have. A map cannot be asked for
+its keys either: mapping over one yields values, so names come from the pair
+list, sorted, with a fold dropping repeats. And `text/concat` joins lists, so
+strings join by interpolation.
+
+Two defects came out of it.
+
+The first is a native miscompile, and it is loud: a binding whose value becomes
+a thunk, in a function whose arguments can be errs, emits invalid LLVM IR.
+`release_cells` walks every registered cell at every return and emits a release,
+with no regard for whether the cell's creation dominates that block — the arm's
+body creates it, and the error-propagation blocks reached from the other branch
+release it. Twenty-six lines reduce it, the interpreter runs the same program,
+and the fix wants a snapshot of the cell list taken before the body, which the
+emitter does not keep. Inlining the binding avoids it, which is what the script
+does.
+
+The second is mine. Every sweep ported so far invoked `kanso play`, and there
+is no such verb — the CLI's own usage lists `run`, and a playground example is
+a library whose `pub play` an entrypoint file imports and runs. The binary
+accepts `play` anyway, in three places in main.rs and one dispatch arm in
+lib.rs, while omitting it from the usage; it half-works, running a file but
+answering "`play` is not a verb" the moment an argument follows. Every script
+and CI line here now says `run`. Removing the verb reaches the book samples and
+the panels that print it, so it is recorded rather than done.
