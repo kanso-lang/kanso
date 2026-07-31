@@ -287,7 +287,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 37] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 37] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -440,6 +440,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         body: String::new(),
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
+        builtin_value_wrappers: Vec::new(),
         caf_cells: Vec::new(),
         caf_fills: Vec::new(),
         demand: crate::demand::analyze(program),
@@ -470,6 +471,9 @@ struct Backend<'a> {
     body: String,
     lift_counter: usize,
     fn_value_wrappers: Vec<(String, usize)>,
+    /// (builtin, arity) pairs a program hands out as values, each needing a
+    /// wrapper a dynamic call can reach.
+    builtin_value_wrappers: Vec<(String, usize)>,
     /// One cache cell per frozen constant, emitted as globals at the end.
     caf_cells: Vec<String>,
     /// (cell, builder) pairs filled by @k_caf_init before main runs.
@@ -1091,9 +1095,35 @@ impl<'a> Backend<'a> {
             let (label, _) = self.intern(&format!("{name}\0"));
             let _ = writeln!(
                 self.body,
-                "@{} = private constant {{ ptr, i64, ptr }} {{ ptr @{}, i64 {arity}, ptr @{label} }}",
+                "@{} = private constant {{ ptr, i64, ptr, i64 }} \
+                 {{ ptr @{}, i64 {arity}, ptr @{label}, i64 0 }}",
                 rsym(name, arity),
                 wsym(name, arity)
+            );
+        }
+        self.builtin_value_wrappers.sort();
+        self.builtin_value_wrappers.dedup();
+        let builtins = self.builtin_value_wrappers.clone();
+        for (name, arity) in &builtins {
+            let arity = *arity;
+            let params: Vec<String> = (0..arity).map(|i| format!("%KValue %a{i}")).collect();
+            let call_args: Vec<String> = (0..arity).map(|i| format!("%KValue %a{i}")).collect();
+            let held = format!("builtin.{name}");
+            let _ = writeln!(
+                self.body,
+                "define %KValue @{}({}) {{\nentry:\n  %r = call %KValue @k_b_{name}({})\n  \
+                 ret %KValue %r\n}}\n",
+                wsym(&held, arity),
+                params.join(", "),
+                call_args.join(", ")
+            );
+            let (label, _) = self.intern(&format!("{name}\0"));
+            let _ = writeln!(
+                self.body,
+                "@{} = private constant {{ ptr, i64, ptr, i64 }} \
+                 {{ ptr @{}, i64 {arity}, ptr @{label}, i64 1 }}",
+                rsym(&held, arity),
+                wsym(&held, arity)
             );
         }
         // Lazy v1: the thunk-site dispatcher the runtime's k_force calls.
@@ -2423,7 +2453,21 @@ impl<'a> Backend<'a> {
                          (only 1-4 argument functions over plain values are supported)"
                     ));
                 }
-                match name.strip_prefix("builtin_").unwrap_or(name.as_str()) {
+                let bare = name.strip_prefix("builtin_").unwrap_or(name.as_str());
+                // A builtin is a function too, and `apply length "ab"` hands it
+                // over the same way a declared group is handed over. The
+                // interpreter calls it; the wrapper below is what lets a
+                // compiled `k_callN` reach the same C entry.
+                if let Some((_, arity)) = BUILTIN_CALLS.iter().find(|(b, _)| *b == bare) {
+                    if (1..=4).contains(arity) {
+                        self.builtin_value_wrappers.push((bare.to_string(), *arity));
+                        let t = f.tmp();
+                        let sym = rsym(&format!("builtin.{bare}"), *arity);
+                        f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
+                        return Ok(t);
+                    }
+                }
+                match bare {
                     "true" => Ok("{ i64 2, i64 0 }".to_string()),
                     "false" => Ok("{ i64 3, i64 0 }".to_string()),
                     "none" => Ok("{ i64 4, i64 0 }".to_string()),

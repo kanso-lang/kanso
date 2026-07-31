@@ -1,0 +1,4 @@
+fn apply f x
+  f x
+
+pub play = print "{apply length "ab"}"

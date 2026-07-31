@@ -180,8 +180,10 @@ typedef struct {
 typedef struct { KValue (*fn)(void*, KValue); void* env; long long ncaps; long long arity; } KClosure;
 /* A named group handed out as a value. The emitter writes one of these per
    wrapper as a static, so the collector never sees it, and it carries the
-   name because the group's diagnostic says which group. */
-typedef struct { void* fn; long long arity; const char* name; } KFnref;
+   name because the group's diagnostic says which group. `builtin` says which
+   sentence a wrong argument count gets: a group's arms are what did not
+   match, where a builtin takes one count and can say which. */
+typedef struct { void* fn; long long arity; const char* name; long long builtin; } KFnref;
 typedef struct { long long type_id; long long nfields; KValue* fields; } KRec;
 /* A nominal subtype wrapper: transparent to every consumer, visible only
    to dispatch, which walks the chain and prefers nearer declarations. */
@@ -1067,6 +1069,18 @@ void k_die_overload(const char* name) {
 void k_die(const char* msg) {
     fprintf(stderr, "%serror[runtime]:%s %s\n", k_c_err(), k_c_off(), msg);
     exit(1);
+}
+
+/* A function value called with a count it does not take. A group names the
+   arms that did not match; a builtin takes exactly one count and says both,
+   which is the sentence the interpreter prints. */
+static void k_die_ref_arity(KFnref* r, long long got) {
+    if (!r->builtin) k_die_overload(r->name);
+    char w[24], g[24], said[128];
+    k_itoa(w, r->arity);
+    k_itoa(g, got);
+    snprintf(said, sizeof said, "`%s` takes %s argument(s), got %s", r->name, w, g);
+    k_die(said);
 }
 
 /* Hand-rolled lld formatting: the vfprintf machinery showed up hot in
@@ -3438,7 +3452,7 @@ KValue k_call1(KValue f, KValue a) {
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
-        if (r->arity != 1) k_die_overload(r->name);
+        if (r->arity != 1) k_die_ref_arity(r, 1);
         return ((KValue(*)(KValue))r->fn)(a);
     }
     k_die_not_callable(f);
@@ -3463,7 +3477,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
-        if (r->arity != 2) k_die_overload(r->name);
+        if (r->arity != 2) k_die_ref_arity(r, 2);
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
     k_die_not_callable(f);
@@ -3482,7 +3496,7 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
-        if (r->arity != 3) k_die_overload(r->name);
+        if (r->arity != 3) k_die_ref_arity(r, 3);
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
     k_die_not_callable(f);
@@ -3502,7 +3516,7 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     }
     if (f.tag == K_FNREF) {
         KFnref* r = (KFnref*)(intptr_t)f.payload;
-        if (r->arity != 4) k_die_overload(r->name);
+        if (r->arity != 4) k_die_ref_arity(r, 4);
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
     k_die_not_callable(f);
