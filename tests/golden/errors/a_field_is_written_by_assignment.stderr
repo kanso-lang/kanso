@@ -1,0 +1,8 @@
+error[name]: a field is written by assignment inside a `build` block: `target.field = value`
+  --> a_field_is_written_by_assignment.kso:7:5
+   7 |     set x n 2
+           ^
+error[name]: unknown name `n`
+  --> a_field_is_written_by_assignment.kso:7:11
+   7 |     set x n 2
+                 ^
