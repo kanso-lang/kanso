@@ -40,6 +40,43 @@ pub fn split _ ""
 pub fn split s sep
   builtin_split s sep
 
+# What a captured line arrives wearing: a process hands back its newline, a
+# file its trailing blank line, and every caller wanted the sentence. The set
+# is written here rather than held as a constant, because a constant is built
+# whether or not a program ever trims anything.
+fn padding? c
+  length (split " \t\n\r" c) > 1
+
+# Both ends, by index: shedding one character at a time copies what is left on
+# every step, which on a long string is the difference between a scan and a
+# quadratic.
+pub fn trim s
+  from_front s 1 (length s)
+
+fn from_front s at n
+  past_the_end s at n (at > n)
+
+fn past_the_end _ _ _ true
+  ""
+
+fn past_the_end s at n false
+  step_in s at n (padding? (slice s at at))
+
+fn step_in s at n true
+  from_front s (at + 1) n
+
+fn step_in s at n false
+  from_back s at n
+
+fn from_back s from at
+  step_back s from at (padding? (slice s at at))
+
+fn step_back s from at true
+  from_back s from (at - 1)
+
+fn step_back s from at false
+  slice s from at
+
 pub fn to_float x
   builtin_to_float x
 

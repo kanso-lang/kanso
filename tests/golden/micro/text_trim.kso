@@ -1,0 +1,13 @@
+import "std/text"
+
+# Both ends, and the cases that are not "a word with spaces around it": a
+# string that is all padding, an empty one, and one wearing the newline a
+# captured process hands back.
+pub play =
+  print "[{text/trim "  hi  "}]"
+  >> print "[{text/trim "line\n"}]"
+  >> print "[{text/trim ""}]"
+  >> print "[{text/trim "   "}]"
+  >> print "[{text/trim "no padding"}]"
+  >> print "[{text/trim "\t\n mid dle \r\n"}]"
+  >> print "[{text/trim "→ arrow ←"}]"
