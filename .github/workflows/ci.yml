@@ -106,7 +106,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ./target/release/kanso run scripts/utf8_differential.kso
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          cargo build --release
+          ./target/release/kanso run scripts/utf8_differential.kso
 
   fingerprints:
     name: asset digests (every reference rewritten, site still runs)
