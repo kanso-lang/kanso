@@ -577,7 +577,9 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "utf8" => STR | ERR | fails,
         "render_value" => STR | fails,
         "length" => INT | fails,
-        "push" | "concat" | "chars" | "entries" | "sort" | "filter" => LIST | fails,
+        "push" | "concat" | "chars" | "split" | "entries" | "sort" | "filter" => {
+            LIST | fails
+        }
         "map" => LIST | fails,
         "put" => MAP | fails,
         "join" => STR | fails,
