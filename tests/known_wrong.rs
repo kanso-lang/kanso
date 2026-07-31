@@ -34,7 +34,21 @@ fn run(fixture: &str, engine: &[&str]) -> (String, String, Option<i32>) {
 /// step must be followed by another step. Neither records nor processes nor
 /// files are involved. `--strict` fails the same way, so it is not thunk
 /// memoization, and breaking the continuation lambda into named functions
-/// makes it disappear, so it is the emitted shape rather than the semantics.
+/// makes this reduction disappear, so it is the emitted shape rather than the
+/// semantics.
+///
+/// The naming workaround does not hold at size. Porting the module sweep to
+/// kanso hit the same fault in a program of that shape, and lifting its
+/// continuation into a named function changed nothing. So the reduction's
+/// workaround is a property of the reduction.
+///
+/// That program also pins the ordering. A case that reports a fault followed
+/// by one that does not is the shape that dies; fault-then-fault and
+/// clean-then-fault both run. So it takes an accumulator that is already
+/// holding heap-built text and then a later step that does not add to it —
+/// which is when the block the accumulator lives in stops being the one being
+/// written, and the rewind takes it. `scripts/module_differential.kso` runs
+/// under `--interp` in CI for this reason.
 ///
 /// What is NOT known: why. The reduction stops here.
 #[test]
