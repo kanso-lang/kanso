@@ -37,3 +37,17 @@ type ascription is tight: `
 type ascription is tight: `_:type`
 typeset members appear in alphabetical order
 unterminated escape
+
+# Widening the gate found these. The scan it replaced stopped a message at the
+# first comma a lowercase word followed, which for a message that holds such a
+# comma left the quote unclosed and the call site invisible — twenty-four of
+# them. Six now have goldens; these eight need a program that reaches them,
+# and none of them is hard, only unwritten.
+a `.` continuation line sits directly under its statement,
+a subtype or typeset declaration is one line; fields belong
+an entry file holds statements only; definitions live in
+binding patterns are irrefutable: names and nested constructor patterns
+nothing follows this `return` — the body needs a result for
+only `if` and `build` open an indented block; other calls take
+parallel statements are unordered by default — write them as
+unused expression: every non-final line binds a name (sequence

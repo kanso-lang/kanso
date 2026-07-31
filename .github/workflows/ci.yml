@@ -290,7 +290,7 @@ jobs:
       - run: python3 scripts/module_differential.py
       # a diagnostic with no golden can be reworded, weakened or lost with
       # nothing going red — the corpus grew by whoever remembered
-      - run: python3 scripts/diagnostic_coverage.py
+      - run: ./target/release/kanso run scripts/diagnostic_coverage.kso
 
   site:
     name: site (landing sample and playground run in a browser)

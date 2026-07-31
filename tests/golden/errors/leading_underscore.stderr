@@ -1,0 +1,8 @@
+error[naming]: leading underscores are retired: privacy is `pub`'s absence, and `_` alone is the wildcard
+  --> leading_underscore.kso:1:11
+   1 | fn _helper x
+                 ^
+error[naming]: leading underscores are retired: privacy is `pub`'s absence, and `_` alone is the wildcard
+  --> leading_underscore.kso:4:27
+   4 | pub play = print "{_helper 1}"
+                                 ^

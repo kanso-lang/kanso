@@ -1,0 +1,4 @@
+error[syntax]: an `if` block header holds the condition alone; branches sit beneath it
+  --> if_header_holds_the_condition.kso:2:3
+   2 |   if true 1
+         ^
