@@ -224,8 +224,20 @@ fn source_for body false
 fn shaped body
   source_for body (length (text/split body "\n") == 1)
 
+# A legal probe that never returns is a finding, and a louder one than a
+# wording difference — so every run is under `timeout`, which answers 124 when
+# it fires. A box without `timeout` cannot start it, and an err says so rather
+# than the sweep quietly losing the property.
+limit = "20"
+
 fn asked argv
-  io/run kanso argv
+  io/run "timeout" (text/concat [limit kanso] argv)
+
+fn hung? 124
+  true
+
+fn hung? _
+  false
 
 fn ran source
   io/write_file probe source . (_ -> both)
@@ -236,6 +248,12 @@ fn against native
   asked ["play" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
+  stalled n i (hung? n.status || hung? i.status)
+
+fn stalled _ _ true
+  "never returned"
+
+fn stalled n i false
   same = n.status == i.status && n.stdout == i.stdout
   agreed n i (same && n.stderr == i.stderr)
 
@@ -244,6 +262,9 @@ fn agreed _ _ false
 
 fn agreed n _ true
   n.stdout
+
+fn judged s "never returned"
+  "  {s.label}: never returned\n"
 
 fn judged s "disagree"
   "  {s.label}: the engines disagree\n"

@@ -12403,3 +12403,46 @@ three that did are functions now.
 
 Whether `.` should stop demanding the indent is a canon question and is
 recorded as one, not changed.
+
+## A sweep that could not report a hang, because I dropped it
+
+Both python sweeps ran their probes under a timeout and treated a probe that
+never returned as a finding — the loudest one they had, since two silences
+compare equal and read as agreement. The kanso ports carried neither the
+timeout nor the report, and I did not say so. A hang would have hung CI rather
+than failing it.
+
+Restored by running every probe under `timeout`, which answers 124 when it
+fires. A box without `timeout` cannot start it and the err says so, which is
+the loud way to lose the property rather than the quiet one. Both sweeps were
+watched reporting every probe as never returning under a one-millisecond
+limit, and exiting non-zero for it.
+
+The mistake worth naming is not the missing timeout. It is that a port is a
+place where a property disappears without anything going red, because the
+thing being replaced is deleted in the same commit. Nothing compares the two.
+
+## What the stack-exhaustion message was hiding
+
+Under lldb the reduction from the previous entry is not a stack overflow at
+all. The process dies with EXC_BAD_ACCESS at address zero inside memmove, and
+the link register names the caller: `k_b_join`. A probe there confirms an
+element of the list being joined is tagged as a string with a length and a
+null data pointer.
+
+The string is not built that way. Probes on `k_str_n` and on the in-place
+string accumulator both stay silent, so it is valid when constructed and null
+when read. `k_b_push_into` is never reached on this path — an unconditional
+die there does not fire for the reduction and does fire for an ordinary push,
+so the probe was live. What nulls the pointer is still unknown.
+
+Which leaves a second thing, cheaper and separable. src/main.rs maps any
+SIGSEGV to "the program ran out of stack: recursion went deeper than the stack
+holds", and src/wasm.rs says the same for a trap nothing recorded. Neither can
+know that. It is a confident sentence about a cause the compiler has not
+established, and it cost an hour of looking for recursion that was not there.
+The interpreter's copy of the line is honest, because it counts frames.
+
+Changing it is not free: the three engines were deliberately aligned on that
+one sentence, so a real deep recursion would start diverging in wording if only
+two of them moved. Recorded for a ruling rather than changed.
