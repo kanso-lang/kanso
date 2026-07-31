@@ -1,0 +1,4 @@
+error[syntax]: an `if` block header is `if condition`
+  --> an_if_header_is_the_condition_alone.kso:3:3
+   3 |   if
+         ^

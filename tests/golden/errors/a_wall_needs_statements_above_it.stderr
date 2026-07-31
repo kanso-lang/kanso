@@ -1,0 +1,4 @@
+error[syntax]: nothing to sequence: a `>>` wall needs statements above it
+  --> a_wall_needs_statements_above_it.kso:4:3
+   4 |   >> io/write "a"
+         ^

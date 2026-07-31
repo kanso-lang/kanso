@@ -9,12 +9,10 @@
 # tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
 # that is neither pinned nor listed here, and fails again when a listed one
 # becomes pinned, so the line gets deleted rather than left lying.
-a field is written by assignment inside a `build` block: `target.field = value`
 a re-export is `pub name` or `pub theirs:yours`
 a rename is theirs:yours
 a rename is tight: `field:name`
 a whole module re-exports by its own name; rename exports one at a time
-an `if` block header is `if condition`
 an import ends with its path string
 an import path is a plain string
 an inline constant has no indented block
@@ -23,7 +21,6 @@ expected a constant name
 expected a top-level declaration (`fn` or `type`)
 map literal keys are literals; build dynamic maps with `put`
 no import offers a pub `
-nothing to sequence: a `>>` wall needs statements above it
 private type `
 unterminated escape
 
