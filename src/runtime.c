@@ -2657,6 +2657,12 @@ KValue k_div(KValue a, KValue b, const char* origin) {
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_err(k_str("division by zero"), origin);
+        /* the one signed division that overflows: the least integer over -1
+           is one past the greatest, which C leaves undefined and this machine
+           answers by wrapping. Every other overflow here is loud, and a wrong
+           number is worse than a refusal. */
+        if (a.payload == INT64_MIN && b.payload == -1)
+            k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
         return k_int(a.payload / b.payload);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) {
