@@ -1,0 +1,7 @@
+type body
+  text
+
+type slug body
+  extra
+
+pub play = print "x"

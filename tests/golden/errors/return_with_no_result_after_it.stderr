@@ -1,0 +1,4 @@
+error[syntax]: nothing follows this `return` — the body needs a result for when the condition does not fire
+  --> return_with_no_result_after_it.kso:2:3
+   2 |   return "a" if x > 1
+         ^

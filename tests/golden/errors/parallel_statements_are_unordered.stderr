@@ -1,0 +1,4 @@
+error[syntax]: parallel statements are unordered by default — write them as separate lines; sequence with `>>`
+  --> parallel_statements_are_unordered.kso:2:9
+   2 |   a = 1 & 2
+               ^

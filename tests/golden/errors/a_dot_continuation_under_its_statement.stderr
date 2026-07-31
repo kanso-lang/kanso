@@ -1,0 +1,4 @@
+error[formatting]: a `.` continuation line sits directly under its statement, indented two spaces deeper
+  --> a_dot_continuation_under_its_statement.kso:6:1
+   6 |   . twice
+       ^

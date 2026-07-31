@@ -1,0 +1,7 @@
+type point
+  x
+
+pub play =
+  p = point 1
+  point 9 = p
+  print "x"

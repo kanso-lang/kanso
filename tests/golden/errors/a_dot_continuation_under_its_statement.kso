@@ -1,0 +1,7 @@
+fn twice x
+  x + x
+
+pub play =
+  n = 1 . twice
+  . twice
+  print "{n}"
