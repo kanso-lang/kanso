@@ -1,0 +1,4 @@
+error[syntax]: an import is `import "path"`
+  --> import_takes_a_path_string.kso:1:1
+   1 | import std/io
+       ^

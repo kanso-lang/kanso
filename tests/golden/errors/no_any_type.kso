@@ -1,0 +1,4 @@
+type user
+  name:any
+
+pub play = print "x"

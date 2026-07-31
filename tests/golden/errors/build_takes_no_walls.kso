@@ -1,0 +1,5 @@
+pub play =
+  b = build
+    x = 1
+    >> x
+  print "{b}"

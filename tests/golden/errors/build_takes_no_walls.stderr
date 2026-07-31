@@ -1,0 +1,4 @@
+error[syntax]: a `build` body already runs top to bottom; `>>` walls have no place here
+  --> build_takes_no_walls.kso:4:5
+   4 |     >> x
+           ^

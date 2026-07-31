@@ -1,0 +1,8 @@
+error[type]: there is no `any` type; leave the annotation off for a field or parameter that accepts anything
+  --> no_any_type.kso:2:3
+   2 |   name:any
+         ^
+error[type]: a record field carries no type — write `name` and let the compiler infer what it holds
+  --> no_any_type.kso:2:3
+   2 |   name:any
+         ^

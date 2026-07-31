@@ -1,0 +1,4 @@
+fn _helper x
+  x
+
+pub play = print "{_helper 1}"
