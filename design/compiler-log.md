@@ -12632,3 +12632,22 @@ verifier a program meets is decided by the machine it is built on. Nothing in
 this repo checks the emitted IR itself. A program can still pass every check the
 project has and fail on a contributor's laptop, and the next one of these will
 be found the same way this one was: by somebody writing a program.
+
+## The perf record in kanso
+
+scripts/perf_record.py is gone. The kanso version writes the same twenty-nine
+keys with the same values, compared as parsed objects rather than as text —
+kanso maps are sorted by key and python dicts keep insertion order, and the
+record is appended to a jsonl file that something else parses, so the order was
+never the contract.
+
+Two things it wanted. `json/encode` takes a map, and a map is built from pairs,
+so the whole record is assembled as a pair list and handed over once. And an
+application inside a list literal is ambiguous — `["subject" text/join rest " "]`
+reads as four elements, not a pair — so anything computed goes into a name
+first. That is the second port to hit it and it is worth stating plainly: inside
+a list literal, an element that is a call needs parentheses or a name.
+
+The workflow step lost its python twice over. The record is written by the
+kanso program, and the commit message that used to shell into python to read
+one key out of the json now asks git for the short sha it already knows.

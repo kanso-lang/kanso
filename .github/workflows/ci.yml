@@ -295,8 +295,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
       - name: record this commit
-        run: python3 scripts/perf_record.py > /tmp/record.json
+        run: ./target/release/kanso run scripts/perf_record.kso > /tmp/record.json
       - name: append to the history branch
         run: |
           git config user.name "kanso-ci"
@@ -315,7 +316,7 @@ jobs:
           # keep the file bounded; the chart shows a trend, not an archive
           tail -n 500 history.jsonl > history.tmp && mv history.tmp history.jsonl
           git add -f history.jsonl
-          git commit -m "perf: $(python3 -c "import json;print(json.load(open('/tmp/record.json'))['commit'])")" || exit 0
+          git commit -m "perf: $(git rev-parse --short "$GITHUB_SHA")" || exit 0
           git push origin perf-history
 
   # Non-blocking: reports the kanso-vs-serde decode ratio to the run summary.
