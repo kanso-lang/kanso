@@ -4099,6 +4099,42 @@ KValue k_b_chars(KValue sv) {
     return k_list_own(items, count);
 }
 
+/* One pass over the bytes. utf-8 is self-synchronizing, so a separator that
+   is itself valid utf-8 can only match where a codepoint begins, and a byte
+   search needs no codepoint arithmetic to stay on boundaries. The scan this
+   replaced asked `length` and `slice` at every position, both of which count
+   codepoints from the start, so splitting a hundred kilobytes cost seconds. */
+KValue k_b_split(KValue sv, KValue sepv) {
+    if (!k_not_failure(sv)) return sv;
+    if (!k_not_failure(sepv)) return sepv;
+    if (sv.tag != K_STR || sepv.tag != K_STR) k_die("split takes two strings");
+    KStr* s = k_as_str(sv);
+    KStr* sep = k_as_str(sepv);
+    if (sep->len <= 0) k_die("split needs a separator");
+    long count = 1;
+    for (long i = 0; i + sep->len <= s->len; ) {
+        if (memcmp(s->data + i, sep->data, (size_t)sep->len) == 0) {
+            count++;
+            i += sep->len;
+        } else {
+            i++;
+        }
+    }
+    KValue* items = k_buf(count);
+    long at = 0, from = 0, n = 0;
+    while (at + sep->len <= s->len) {
+        if (memcmp(s->data + at, sep->data, (size_t)sep->len) == 0) {
+            items[n++] = k_str_n(s->data + from, at - from);
+            at += sep->len;
+            from = at;
+        } else {
+            at++;
+        }
+    }
+    items[n++] = k_str_n(s->data + from, s->len - from);
+    return k_list_own(items, n);
+}
+
 KValue k_b_is_desc(KValue v) {
     if (!k_not_failure(v)) return v;
     return k_bool(v.tag == K_DESC);

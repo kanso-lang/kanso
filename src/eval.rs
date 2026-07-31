@@ -1771,6 +1771,24 @@ impl<'a> Interp<'a> {
                     )),
                 }
             }
+            "split" => {
+                let [text, sep] = arity(args, name, span)?;
+                let (Value::Str(text), Value::Str(sep)) = (&text, &sep) else {
+                    return Err(RuntimeError {
+                        message: "split takes two strings".to_string(),
+                        span,
+                    });
+                };
+                if sep.is_empty() {
+                    return Err(RuntimeError {
+                        message: "split needs a separator".to_string(),
+                        span,
+                    });
+                }
+                let list =
+                    text.split(sep.as_str()).map(|p| Value::Str(p.to_string())).collect::<Vec<_>>();
+                Ok(Value::List(Rc::new(list)))
+            }
             "chars" => {
                 let [text] = arity(args, name, span)?;
                 let Value::Str(text) = &text else {

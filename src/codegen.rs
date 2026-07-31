@@ -219,6 +219,7 @@ declare %KValue @k_b_is_desc(%KValue)
 declare %KValue @k_index(%KValue, %KValue, ptr)
 declare %KValue @k_b_bytes(%KValue)
 declare %KValue @k_b_chars(%KValue)
+declare %KValue @k_b_split(%KValue, %KValue)
 declare %KValue @k_b_concat(%KValue, %KValue)
 declare %KValue @k_b_utf8(%KValue, ptr)
 declare %KValue @k_desc_args()
@@ -286,7 +287,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-const BUILTIN_CALLS: [(&str, usize); 36] = [
+const BUILTIN_CALLS: [(&str, usize); 37] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -307,6 +308,7 @@ const BUILTIN_CALLS: [(&str, usize); 36] = [
     ("utf8", 1),
     ("char_code", 1),
     ("chars", 1),
+    ("split", 2),
     ("entries", 1),
     ("filter", 2),
     ("from_code", 1),
