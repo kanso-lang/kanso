@@ -127,7 +127,24 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 
 /// `kanso play`: the playground's convention at the terminal. The file is a
 /// library defining `pub play`; the synthesized entry runs it.
+/// A `play` file: one source with its imports, and a `pub play` to run.
 pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
+    compile_one(file, source, true, false)
+}
+
+/// The repl's session: the same thing without an entry point, so a prompt can
+/// import a module and reach it. An unused binding at a prompt is exploration
+/// rather than a mistake, so those are dropped here and nowhere else.
+pub fn compile_repl(file: &str, source: &str) -> Result<ast::Program, String> {
+    compile_one(file, source, false, true)
+}
+
+fn compile_one(
+    file: &str,
+    source: &str,
+    require_play: bool,
+    drop_unused: bool,
+) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     synthesize_getters(&mut program);
@@ -153,6 +170,10 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     mark_bare_quals(&program, &exports, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
+    if drop_unused {
+        // An import at a prompt is used on the next line, not this one.
+        diags.retain(|d| d.kind != "unused");
+    }
     if !diags.is_empty() {
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         return Err(diag::render(&diags, file, source));
@@ -174,6 +195,9 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut diags = check::resolve_markers(&mut program, &all_markers);
     diags.extend(check::check_typesets(&program, &all_type_names));
     diags.extend(check::check_file_shadow(&program, &extern_globals, &mut used, &shadowable));
+    if drop_unused {
+        diags.retain(|d| d.kind != "unused");
+    }
     diags.sort_by_key(|d| (d.span.line, d.span.col));
     if !diags.is_empty() {
         return Err(diag::render(&diags, file, source));
@@ -186,22 +210,26 @@ pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
         return Err(diag::render(&merged_diags, file, source));
     }
     let has_play = program.fns.iter().any(|d| d.name == "play" && d.is_pub);
-    if !has_play {
+    if require_play && !has_play {
         return Err(format!(
             "error: nothing to play — define `pub play`, or point `kanso run` \
              at an entry file\n  --> {file}\n"
         ));
     }
     let span = diag::Span { line: 1, col: 1 };
-    program.fns.push(ast::FnDecl {
-        name: "main".to_string(),
-        params: Vec::new(),
-        body: vec![ast::Stmt::Expr(ast::Expr::Ident("play".to_string(), span))],
-        span,
-        is_pub: false,
-        file: file.to_string(),
-        synthetic: false,
-    });
+    // A session has no entry point until somebody writes one, and a `main`
+    // calling a `play` that is not there would name nothing.
+    if has_play {
+        program.fns.push(ast::FnDecl {
+            name: "main".to_string(),
+            params: Vec::new(),
+            body: vec![ast::Stmt::Expr(ast::Expr::Ident("play".to_string(), span))],
+            span,
+            is_pub: false,
+            file: file.to_string(),
+            synthetic: false,
+        });
+    }
     canonicalize_types(&mut program);
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);

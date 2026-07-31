@@ -167,3 +167,60 @@ fn an_unknown_directive_says_so_rather_than_failing_to_parse() {
 
     assert!(value(&mut session, ":nonsense").contains("try :help"));
 }
+
+/// The repl used to parse and check its session text directly, which resolved
+/// no imports at all — the whole shipped library was unreachable from a
+/// prompt, and `import "std/list"` answered `expected an expression` because
+/// every line was wrapped as `itN = …`.
+#[test]
+fn a_prompt_can_import_and_reach_the_library() {
+    let mut session = Session::new();
+    let mut executor = ScriptedExecutor::default();
+
+    let echo = session.eval("import \"std/list\"", &mut executor).expect("the import lands");
+    assert!(
+        matches!(&echo, Outcome::Defined(said) if said == "imported list"),
+        "{}",
+        rendered(&echo)
+    );
+
+    let answer = session.eval("list/sum [1 2 3]", &mut executor).expect("the module is reachable");
+    assert_eq!(rendered(&answer), "6");
+}
+
+/// A path naming no module leaves the session as it was, rather than half
+/// committing an import the next line would trip over.
+#[test]
+fn an_import_that_names_nothing_changes_nothing() {
+    let mut session = Session::new();
+    let mut executor = ScriptedExecutor::default();
+
+    assert!(session.eval("import \"std/nope\"", &mut executor).is_err());
+
+    let echo = session.eval("import \"std/list\"", &mut executor).expect("the real one lands");
+    assert!(
+        matches!(&echo, Outcome::Defined(said) if said == "imported list"),
+        "{}",
+        rendered(&echo)
+    );
+}
+
+/// `:show` calls the session "the file it is", so the imports open it.
+#[test]
+fn the_shown_session_opens_with_its_imports() {
+    let mut session = Session::new();
+    let mut executor = ScriptedExecutor::default();
+    session.eval("import \"std/list\"", &mut executor).expect("the import lands");
+    session.eval("list/sum [1 2 3]", &mut executor).expect("the module is reachable");
+
+    let shown = session.show(None).expect("the session shows");
+
+    assert!(shown.starts_with("import \"std/list\"\n"), "{shown}");
+    assert!(shown.contains("it0 = list/sum [1 2 3]"), "{shown}");
+}
+
+fn rendered(outcome: &Outcome) -> String {
+    match outcome {
+        Outcome::Defined(s) | Outcome::Value(s) | Outcome::Executed(s) => s.clone(),
+    }
+}
