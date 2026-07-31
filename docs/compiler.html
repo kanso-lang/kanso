@@ -543,6 +543,15 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>the faster-than-rust thesis, stated honestly: not "beat rust at a microbenchmark loop"—llvm emits the same instructions for both. the winnable claim is beating <em>idiomatic</em> rust on allocation-heavy real workloads, because the arenas eliminate the defensive clones the borrow checker pushes people into, fusion is unconditional under purity, speculation specializes what monomorphization can't see, and the cost model schedules parallelism the user never wrote. getting that performance out of rust asks a great deal of the programmer; the aim for kanso is to ask it of the compiler instead.</p>
 
+<p><strong>12. skipping the getters a program never reads <span class="status status-declined">built, measured, declined</span></strong> — every field of every type declares an accessor arm so the name resolves wherever it is read, and a later pass deletes the ones nothing mentions. compiling the json module builds 134 of them and deletes all 134, which reads like free work to skip: ask which accessors the program mentions, and build only those.</p>
+
+<p>it is slower. jsonbench goes 8.79 to 9.24&nbsp;ms and the basket 6.57 to 6.92, held across three interleaved before-and-after passes, best of nine runs of twenty compiles each. the reason is the shape of what was traded. an unbuilt arm saves a struct and a vector push; deciding not to build it costs a walk of every expression in the program, and across a module that walk runs once per file over the union of all of them. the deletion pass already walks the program for the same reason, so the second walk buys nothing the first had not already paid for.</p>
+
+<p>there is a version of this that could pay: compute the mention set once and let both synthesis and deletion read it. that needs the set to survive inlining and fusion, which move calls around between the two points, and the saving on the other side is 134 vector pushes. recorded here so the arithmetic does not have to be redone.</p>
+
+<p>the attempt found a real defect on the way, which is the usual reason to build one. suppressing an arm per file broke a getter of a sibling module's type used as a value — <code>list/map ps _.x</code>, where one file declares the type and another reads the field — because a file asked about itself alone cannot see its sibling's read. the module differential caught it and the union across files fixed it, but nothing in <code>cargo test</code> would have.</p>
+
+
 <h2 id="lazy"><span class="sec-num">07</span>the lazy bet<span class="status status-shipped">v1 shipped</span></h2>
 
 <p>the newest ruling is the largest since the arenas: kanso is lazy. write <code>foo = expensive_calculation</code> and nothing runs; the computation is noted, and it happens when—if—the value is actually used. a value behind a conditional that turns out false is never computed at all. the motive is the one that runs through this whole page: don't pay for work that never reaches the answer.</p>

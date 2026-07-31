@@ -12852,3 +12852,31 @@ representative handful rather than all of them. Left open deliberately.
 The general lesson is the one the five-parameter defect already taught from the
 other direction: a green reading is a claim about the machine that produced it.
 Here the machine was not even asking the question.
+
+## The getters nobody reads cost less than not building them
+
+134 accessor arms are built per compile of the json module and all 134 are
+deleted again by `prune_unused_getters`. Skipping them looked like free work,
+and the earlier attempt at it (#593) failed for a reason that was mis-recorded,
+so this went back to it with the correction in hand: count reads from field
+syntax as well as desugared calls, so asking before or after `desugar_field_reads`
+gives the same answer.
+
+That works, and it is slower. jsonbench 8.79 to 9.24 ms, the basket 6.57 to
+6.92, held across three interleaved before-and-after passes at best-of-nine of
+twenty compiles. An unbuilt arm saves a struct and a vector push. Deciding not
+to build it costs a walk of every expression in the program, and in a module
+that walk runs over the union of every file. The deletion pass already walks
+for the same information later, so the second walk buys nothing.
+
+A version that could pay computes the mention set once and lets both synthesis
+and deletion read it. That needs the set to survive inlining and fusion, which
+move calls between the two points, against a saving of 134 vector pushes.
+Recorded rather than attempted.
+
+The attempt earned its keep on the way. Suppressing per file broke a getter of
+a sibling module's type used as a value — one file declares the type, another
+reads the field, and a file asked about itself alone cannot see that. Baseline
+0 wrong, the attempt 1 wrong, and the union across files fixed it. Only
+`scripts/module_differential.py` catches that shape; nothing in `cargo test`
+does, which is worth knowing independently of whether this idea ever returns.
