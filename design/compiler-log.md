@@ -12267,3 +12267,26 @@ What is still open is the semantics rather than the agreement. An out-of-range
 slice answers an empty string silently, where a missing index errs — so
 `menu["pocky"]!` tells you what went wrong and `text/slice s 1 99` hands back
 something that looks like an answer. Worth a gavel; recorded, not decided.
+
+## The first script in kanso
+
+scripts/page_drift.py is gone and scripts/page_drift.kso runs in CI in its
+place. It is 70 lines against the python's 51, and the difference is almost
+entirely that a chain of `io/write` cannot hold a paragraph: the 80-column
+rule splits what python kept as one triple-quoted block.
+
+Writing it found two things the compiler owns. `text/slice` disagreed one past
+the end, which is the entry above. And a first draft ended the failing branch
+with `>> io/exit 1`, which exits without writing anything — `exit` is an err
+and `>>` builds both sides before either runs, so a sequenced exit takes the
+writes with it. lib/io/io.kso says exactly that, five lines above the
+declaration, and the draft was written without reading it. The bind form
+`. (_ -> io/exit 1)` is the one that runs what came first.
+
+A third thing is the language's, not a bug: `entries` is already a
+declaration, so binding that name is refused. That is the collision the hako
+port hit six times, and it will keep happening until a reader can find out what
+a bare enrollment brought in without grepping lib/.
+
+Twenty-one scripts left. The order will be smallest-first, because each one
+that lands is a python file deleted rather than a rewrite half-done.
