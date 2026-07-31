@@ -1199,9 +1199,20 @@ impl<'a> Interp<'a> {
             Value::Closure(closure) => self.call_closure(&closure, args, span),
             Value::TableFn(handle) => foreign_call(handle, args, span),
             Value::Partial(callee, supplied) => {
-                let mut all = supplied.as_ref().clone();
-                all.extend(args);
-                self.apply_partial(callee.as_ref().clone(), all, span, frame)
+                // `()` runs a partial rather than supplying more to it, so an
+                // empty argument list is the call form and never an
+                // accumulation of nothing. A partial still short of every arm
+                // has nothing to run, and says how many it is short by.
+                match args.is_empty() {
+                    true => {
+                        self.run_partial(callee.as_ref().clone(), supplied.as_ref(), span, frame)
+                    }
+                    false => {
+                        let mut all = supplied.as_ref().clone();
+                        all.extend(args);
+                        self.apply_partial(callee.as_ref().clone(), all, span, frame)
+                    }
+                }
             }
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
@@ -1209,6 +1220,47 @@ impl<'a> Interp<'a> {
                 span,
             }),
         }
+    }
+
+    /// Every argument count the callee answers, smallest first.
+    fn arities_of(&self, callee: &Value) -> Vec<usize> {
+        match callee {
+            Value::FnRef(name) => {
+                let mut found: Vec<usize> = self
+                    .fns
+                    .get(name.as_ref())
+                    .map(|decls| decls.iter().map(|d| d.params.len()).collect())
+                    .unwrap_or_default();
+                found.sort_unstable();
+                found.dedup();
+                found
+            }
+            Value::Closure(c) => vec![c.params.len()],
+            _ => Vec::new(),
+        }
+    }
+
+    /// `foo()` on a partial. Complete, it is the call the partial was built
+    /// for; short, it is an arity error naming what is still missing, which is
+    /// the count the compiled engines report from the closure they lowered it
+    /// to.
+    fn run_partial(
+        &self,
+        callee: Value,
+        supplied: &[Value],
+        span: Span,
+        frame: &Frame,
+    ) -> EvalResult {
+        let arities = self.arities_of(&callee);
+        if arities.contains(&supplied.len()) {
+            return self.call(callee, supplied.to_vec(), span, frame);
+        }
+        let waiting = arities.iter().filter(|a| **a > supplied.len()).min().copied();
+        let short = waiting.map(|a| a - supplied.len()).unwrap_or(0);
+        Err(RuntimeError {
+            message: format!("this function takes {short} argument(s), got 0"),
+            span,
+        })
     }
 
     fn call_closure(&self, closure: &ClosureData, args: Vec<Value>, span: Span) -> EvalResult {
@@ -1242,20 +1294,7 @@ impl<'a> Interp<'a> {
         span: Span,
         frame: &Frame,
     ) -> EvalResult {
-        let arities: Vec<usize> = match &callee {
-            Value::FnRef(name) => {
-                let mut found: Vec<usize> = self
-                    .fns
-                    .get(name.as_ref())
-                    .map(|decls| decls.iter().map(|d| d.params.len()).collect())
-                    .unwrap_or_default();
-                found.sort_unstable();
-                found.dedup();
-                found
-            }
-            Value::Closure(c) => vec![c.params.len()],
-            _ => Vec::new(),
-        };
+        let arities = self.arities_of(&callee);
         if arities.contains(&args.len()) {
             return self.call(callee, args, span, frame);
         }
