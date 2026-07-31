@@ -1,0 +1,129 @@
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/text"
+
+# One line of the performance history the compiler page charts.
+#
+# Only machine-invariant numbers go in. The counters are algorithm-level events
+# and the compile golden counts fixpoint rounds and expression visits, so a
+# noisy runner cannot move them — a change here is somebody's deliberate edit,
+# which is exactly the trend worth publishing. Wall-clock belongs on the board
+# Clay measures by hand, not here.
+#
+# Three veins feed it: what decoding costs, what encoding costs, and what
+# deciding and emitting cost the compiler.
+#
+# Decode: the flat-memory guarantee, the rewind count, and each kernel's
+# presence. A kernel silently dropped in a merge turns one of these to zero.
+decode_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
+
+decode_b = ["el_parses" "utf8_bytes" "find2_calls" "bytes_peak"]
+
+decode_watched = text/concat decode_a decode_b
+
+# Encode: the write path, where the builder and the float renderer live.
+encode_a = ["allocs" "arena_blocks" "ryu_renders" "append_fast"]
+
+encode_b = ["append_grow" "utf8_zerocopy" "bytes_peak"]
+
+encode_watched = text/concat encode_a encode_b
+
+# One shot: decode, hold, print — the peak the rewinds cannot hide.
+oneshot_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "bytes_peak"]
+
+# What deciding cost, and what got written.
+work_keys = ["rounds" "visits" "lines" "calls" "branches" "defines"]
+
+work_names = ["compile_rounds" "compile_visits" "emitted_lines"]
+
+work_more = ["emitted_calls" "emitted_branches" "emitted_defines"]
+
+work_out = text/concat work_names work_more
+
+fn watched? group name
+  list/any? group (g -> g == name)
+
+fn pair? l
+  length (text/split l "=") == 2
+
+fn kept prefix l
+  parts = text/split l "="
+  tally = text/to_int parts[2]!
+  ["{prefix}{parts[1]!}" tally]
+
+fn named l
+  (text/split l "=")[1]!
+
+# The cost goldens are one `name=value` to a line, so a line is a pair.
+fn counters text group prefix
+  lines = list/select (text/split text "\n") pair?
+  mine = list/select lines (l -> watched? group (named l))
+  list/to_list (list/map mine (l -> kept prefix l))
+
+fn body? l
+  text/slice l 1 1 != "#" && length l > 0
+
+fn fields_of l
+  list/to_list (list/select (text/split l " ") pair?)
+
+fn value_in fields key
+  found = list/select fields (f -> named f == key)
+  first_or_zero (list/to_list found)
+
+fn first_or_zero fs
+  amount fs (length fs == 0)
+
+fn amount _ true
+  0
+
+fn amount fs false
+  text/to_int (text/split fs[1]! "=")[2]!
+
+# The compile golden is many fields to a line, one line per sample, and the
+# published number is the total across them.
+fn total_for lines key
+  amounts = list/map lines (l -> value_in (fields_of l) key)
+  list/sum (list/to_list amounts)
+
+fn compile_work text
+  lines = list/to_list (list/select (text/split text "\n") body?)
+  totals = list/map work_keys (k -> total_for lines k)
+  list/to_list (list/zip work_out (list/to_list totals))
+
+fn asked argv
+  io/run "git" argv
+
+fn head_line r
+  (text/split r.stdout "\n")[1]!
+
+fn described line
+  parts = text/split line " "
+  rest = list/to_list (list/drop parts 2)
+  subject = text/join rest " "
+  [["commit" parts[1]!] ["date" parts[2]!] ["subject" subject]]
+
+pub play = asked ["log" "-1" "--format=%h %cI %s"] . stamped
+
+fn stamped r
+  io/read_file "bench/cost_golden.txt" . (d -> with_decode (head_line r) d)
+
+fn with_decode line d
+  io/read_file "bench/cost_golden_encode.txt" . (e -> with_encode line d e)
+
+fn with_encode line d e
+  io/read_file "bench/cost_golden_oneshot.txt" . (o -> with_oneshot line d e o)
+
+fn with_oneshot line d e o
+  io/read_file "bench/compile_golden.txt" . (c -> recorded line d e o c)
+
+fn recorded line d e o c
+  decode = counters d decode_watched ""
+  encode = counters e encode_watched "encode_"
+  oneshot = counters o oneshot_watched "oneshot_"
+  veins = text/concat decode encode
+  rest = text/concat oneshot (compile_work c)
+  written (text/concat (described line) (text/concat veins rest))
+
+fn written pairs
+  io/write "{json/encode (list/to_h pairs)}\n"
