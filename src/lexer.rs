@@ -658,7 +658,8 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
 }
 
 fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnostic>) {
-    for (pair, prev_end) in lexed_line.tokens.windows(2).zip(&lexed_line.end_cols) {
+    for (at, (pair, prev_end)) in lexed_line.tokens.windows(2).zip(&lexed_line.end_cols).enumerate()
+    {
         let (prev, _) = &pair[0];
         let (next, next_span) = &pair[1];
         let gap = next_span.col.saturating_sub(*prev_end);
@@ -690,15 +691,23 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         // answers it by talking about spaces. Application is a space.
         if let (Tok::Ident(name), Tok::LParen) = (prev, next) {
             if gap == 0 {
-                diags.push(Diagnostic::new(
-                    "formatting",
-                    format!(
+                // `foo()` has no `x` to be parenthesised, and telling its
+                // author about one describes a program they did not write.
+                let empty = matches!(lexed_line.tokens.get(at + 2), Some((Tok::RParen, _)));
+                let said = match empty {
+                    true => format!(
+                        "application is a space, so `{name} x` calls `{name}` and \
+                         `{name}` alone is the function — `{name}()` reads as \
+                         `{name}` followed by an empty parenthesis, which names \
+                         nothing"
+                    ),
+                    false => format!(
                         "application is a space, so `{name} x` calls `{name}` — \
                          `{name}(x)` reads as `{name}` applied to nothing, then a \
                          parenthesised `x`"
                     ),
-                    Span { line, col: next_span.col },
-                ));
+                };
+                diags.push(Diagnostic::new("formatting", said, Span { line, col: next_span.col }));
                 continue;
             }
         }
