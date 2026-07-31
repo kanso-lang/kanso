@@ -16,9 +16,9 @@ fn ruled? _ true before after
 fn ruled? _ _ _ _
   false
 
-# The binding becomes a thunk created inside the arm's body, and the emitter
-# releases every registered cell at every return — including the failure blocks
-# the creation does not dominate.
+# The binding becomes a thunk created inside one arm's body. Every return used
+# to release every registered cell, including the blocks reached without
+# running that body, which is a use LLVM's verifier refuses.
 fn worsened? bare before after
   low = found? bare tags
   ruled? low (found? bare tags) before after

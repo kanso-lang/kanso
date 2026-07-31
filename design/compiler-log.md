@@ -12602,3 +12602,33 @@ lib.rs, while omitting it from the usage; it half-works, running a file but
 answering "`play` is not a verb" the moment an argument follows. Every script
 and CI line here now says `run`. Removing the verb reaches the book samples and
 the panels that print it, so it is recorded rather than done.
+
+## A cell belongs to the arm that made it
+
+The invalid IR from the previous entry is fixed, and the fix is one line in two
+places. `release_cells` walks every cell the frame has registered; the cells are
+registered while an arm's body is emitted; and the blocks that follow — the next
+arm's body, and the parameter-failure blocks after all the arms — are reached
+without running that body. Releasing a cell there is a use of a register the
+block is not dominated by, which is what LLVM refused.
+
+So each arm now starts from the watermark the frame had before any arm ran, and
+the parameter-failure blocks return to it. A cell belongs to the arm that made
+it, and to the returns that arm dominates.
+
+Nothing was leaked by releasing less. An arm's own returns still release its own
+cells, because those returns sit inside the body that created them; what went
+away were releases on paths where the cell had never been created. No cost
+golden moved and no mem counter moved, which is the evidence: the deleted calls
+were only ever emitted into blocks that do not execute.
+
+The reproduction moved out of the known-wrong corpus and into the micro corpus,
+where it now asserts the right answer on every engine rather than recording a
+defect. It was watched failing on the old emitter first.
+
+What remains open is the other half. macOS refused that IR and linux compiled
+and ran it, and the message comes from clang rather than from kanso — so which
+verifier a program meets is decided by the machine it is built on. Nothing in
+this repo checks the emitted IR itself. A program can still pass every check the
+project has and fail on a contributor's laptop, and the next one of these will
+be found the same way this one was: by somebody writing a program.
