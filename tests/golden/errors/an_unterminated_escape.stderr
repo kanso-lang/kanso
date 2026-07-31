@@ -1,0 +1,4 @@
+error[syntax]: unterminated escape
+  --> an_unterminated_escape.kso:1:22
+   1 | pub play = print "abc\
+                            ^
