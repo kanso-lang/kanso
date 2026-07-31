@@ -427,7 +427,7 @@ x <span class="o">=</span> <span class="n">2</span>
   <span class="s">"hi, <span class="i">{name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run no_main.kso</div>
-    <pre><code>error: `no_main.kso` is a library — nothing to run. give the module a main.kso entry, or define `pub play` and use `kanso play`</code></pre>
+    <pre><code>error: `no_main.kso` is a library — nothing to run. give the module a main.kso entry, or define a `pub play` for `run` to find</code></pre>
   </div>
 </div>
 
@@ -731,7 +731,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{weigh 1000000}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso play deep_recursion.kso</div>
+    <div class="code-panel-title">kanso run deep_recursion.kso</div>
     <pre><code><span class="k">error[runtime]</span>: the program ran out of stack: recursion went deeper than the stack holds</code></pre>
   </div>
 </div>
@@ -744,7 +744,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/range 1 5)}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso play imported_arity.kso</div>
+    <div class="code-panel-title">kanso run imported_arity.kso</div>
     <pre><code><span class="k">error[arity]</span>: no 2-argument arm of `list/range` (arms take 1)
 <span class="c">  --&gt; imported_arity.kso:3:34</span>
    3 | pub play = print "{list/to_list (list/range 1 5)}"
@@ -761,7 +761,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{twice "a string"}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso play literal_arg_type.kso</div>
+    <div class="code-panel-title">kanso run literal_arg_type.kso</div>
     <pre><code><span class="k">error[type]</span>: no arm of `twice` takes a string here (arms take int)
 <span class="c">  --&gt; literal_arg_type.kso:4:26</span>
    4 | pub play = print "{twice "a string"}"
@@ -775,7 +775,7 @@ size <span class="o">=</span> <span class="n">9</span>
   <div class="code-panel-title">builtin_arg_type.kso</div>
   <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{length 5}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso play builtin_arg_type.kso</div>
+    <div class="code-panel-title">kanso run builtin_arg_type.kso</div>
     <pre><code><span class="k">error[type]</span>: `length` takes a list, a map, or a string here, not an int
 <span class="c">  --&gt; builtin_arg_type.kso:1:27</span>
    1 | pub play = print "{length 5}"

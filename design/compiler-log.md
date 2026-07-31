@@ -12741,3 +12741,24 @@ The key is the whole program now, hashed. What is worth keeping is that the
 comment above it already promised one directory per program — the isolation was
 described correctly and implemented on a prefix, and the suite was one test away
 from two of its members quietly trading answers.
+
+## There is no `kanso play`
+
+The verb is gone from the binary. `run` is what a reader types; a file's
+`pub play` is what `run` finds, and a playground example is a library whose
+entry point imports it. The usage text never listed `play`, which is how it
+survived: undocumented, reachable, and half-working — it ran a file and
+answered "`play` is not a verb" the moment an argument followed.
+
+It did damage twice before it went. The golden harness chose its verb from the
+source, so every fixture declaring `pub play` ran under `play`, which
+short-circuited the dispatch before the library check — the `run` path for a
+play file had no coverage at all, and a diagnostic that answered a syntax error
+with a sentence about libraries sat there unseen. And the sentence itself
+recommended the verb: a reader with a typo was told to define the `pub play`
+they had written and use a command that does not exist.
+
+Three test harnesses and four pages named it too. What is worth keeping is the
+shape of the mistake rather than the verb: a second way to start a program,
+never documented, that the tests preferred — so the tests exercised a path no
+reader could take, and the path readers do take went unwatched.

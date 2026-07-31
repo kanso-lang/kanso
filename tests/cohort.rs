@@ -8,7 +8,7 @@ use std::process::Command;
 fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort");
     let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("play")
+        .arg("run")
         .arg("cohort_bound.kso")
         .env("KANSO_COUNTERS", "1")
         .current_dir(dir)
@@ -31,7 +31,7 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
 fn a_result_heavy_cohort_is_kept_not_copied() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort");
     let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("play")
+        .arg("run")
         .arg("cohort_kept.kso")
         .env("KANSO_COUNTERS", "1")
         .current_dir(dir)

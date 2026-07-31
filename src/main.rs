@@ -61,7 +61,7 @@ fn main() -> ExitCode {
         return run_hako(argv);
     }
 
-    let require_entry = command == "run" || command == "play";
+    let require_entry = command == "run";
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
         true => match kanso::compile_module(path, require_entry) {
@@ -139,7 +139,6 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
         && command != "check"
         && command != "test"
         && command != "build"
-        && command != "play"
         && command != "install"
         && command != "list"
         && command != "update"
@@ -169,7 +168,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             _ => return None,
         }
     }
-    if (plan || interp) && command != "run" && command != "play" {
+    if (plan || interp) && command != "run" {
         return None;
     }
     if release && command != "build" {

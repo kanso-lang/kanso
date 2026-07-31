@@ -12,7 +12,7 @@ fn run(name: &str, source: &str) -> String {
     let path = dir.join("prog.kso");
     std::fs::write(&path, source).expect("write fixture");
     let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("play")
+        .arg("run")
         .arg("prog.kso")
         .current_dir(&dir)
         .output()
