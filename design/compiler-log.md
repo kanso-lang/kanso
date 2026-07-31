@@ -12319,3 +12319,41 @@ them, and refuses to start if it changed. That guard was watched firing.
 Related: scripts/numeric_differential.py is in the repo and is not wired into
 CI. It reports real disagreements today. That is task #46 — the engines
 disagree and nothing pins it — with the sweep sitting right there unrun.
+
+## The effects sweep, and a stack that ran out for no visible reason
+
+scripts/effects_differential.py is gone; the kanso version runs the same 31
+combinations and agrees. Two things came with it.
+
+The first is readable, and it is the record with indented arguments. A probe is
+a body, a label and what it must write, and written as
+
+    bind_value = shape
+      "io/env \"PATH\" . (v -> io/write \"\{v == none}\")"
+      "bind passes its value"
+      "false"
+
+it reads better than the python tuple did, because the three fields are on
+three lines with nothing between them. A single-expression constant must begin
+on its `=` line, so the constructor goes there and the arguments indent under
+it.
+
+The second has no diagnosis yet. The first draft accumulated its reports into a
+list through the bind chain — `ran … . (v -> swept more (noted found (judged s
+v)))` — and that runs out of stack. Not deeply: three probes fail as readily as
+thirty-one, so it is unbounded recursion rather than depth. What decides it is
+whether the report is a constant. `"a probe wrote the wrong thing"` is fine at
+thirty-one; `"{s.label}"`, `"{wrote}"` and `"{s.want}"` each independently blow
+the stack at three.
+
+Three minimal programs of the same shape — recursion through a bind
+accumulating with `push`, a top-level constant description, dispatch on a
+literal `""` — all run correctly, so the reduction has not been found. That is
+recorded as task #57 with the exact reproduction, and it is worth finding:
+accumulate-through-a-chain is the shape every remaining sweep wants, and a
+stack overflow caused by interpolating a string is not something a reader could
+predict.
+
+The sweep as shipped writes each report where it is found and accumulates an
+int, which is better output anyway — a failure prints as it happens rather than
+at the end.
