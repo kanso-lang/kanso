@@ -167,7 +167,7 @@ jobs:
       - name: the page keeps up with the log
         run: |
           git fetch origin main --depth 1 || true
-          python3 scripts/page_drift.py
+          ./target/release/kanso play scripts/page_drift.kso
       - name: one-shot counters
         run: |
           KANSO_COUNTERS=1 ./oneshot 2>counters_oneshot.txt >/dev/null
