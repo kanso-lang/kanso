@@ -2684,6 +2684,11 @@ KValue k_mod(KValue a, KValue b, const char* origin) {
     if (!k_not_failure(b)) return b;
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_err(k_str("modulo by zero"), origin);
+        /* the least integer modulo -1 is zero, and zero fits — but the
+           quotient it is computed from does not, and x86's division traps
+           on the pair. ARM answers without trapping, which is why this
+           crashed only on the machine nobody was testing on. */
+        if (a.payload == INT64_MIN && b.payload == -1) return k_int(0);
         return k_int(a.payload % b.payload);
     }
     if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {

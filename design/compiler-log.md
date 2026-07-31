@@ -12786,3 +12786,17 @@ that is said in the workflow rather than left to be discovered.
 
 Watched red the way a gate should be: with the division guard removed it
 reports one disagreement and names it.
+
+And it earned itself on its first run in CI, by finding a crash the machine it
+was written on cannot produce. The least integer modulo minus one is zero, and
+zero fits — but the quotient it is computed from does not, and x86's division
+traps on the pair where ARM answers. So the same program printed 0 on the
+laptop and died with a floating-point exception on linux. Native answers zero
+now, because zero is what the oracle says and what fits; unlike the division,
+there is nothing here to refuse.
+
+That is the second time in two days a defect has turned on which machine built
+the program, after the invalid IR one verifier accepted and another refused.
+The pattern is worth naming: a differential law between engines does not say
+anything about a differential between hosts, and the only gate that has ever
+caught one is the one that runs somewhere else.

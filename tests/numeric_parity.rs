@@ -104,3 +104,22 @@ fn the_least_integer_divided_by_minus_one_is_refused_not_wrapped() {
     assert_ne!(code, 0, "native answered instead of refusing: {out:?}");
     assert!(err.contains("integer overflow"), "refused for another reason: {err}");
 }
+
+/// The least integer modulo -1 is zero, and zero fits — but the quotient it is
+/// computed from does not, and x86's division traps on the pair. ARM answers
+/// without trapping, so this crashed with SIGFPE only on linux, where nobody
+/// was looking: the gate below found it on its first CI run.
+///
+/// Unlike the division, native does not refuse here. The answer exists and the
+/// oracle gives it, so native gives it too.
+#[test]
+fn the_least_integer_modulo_minus_one_is_zero_on_both_engines() {
+    let program = "print (-9223372036854775808 % -1)\n";
+
+    let (code, out, err) = ran(program, &[]);
+    let (_, interp, _) = ran(program, &["--interp"]);
+
+    assert_eq!(interp, "0\n", "the oracle stopped being exact");
+    assert_eq!(out, interp, "native disagrees with the oracle: {err}");
+    assert_eq!(code, 0, "native failed: {err}");
+}
