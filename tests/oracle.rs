@@ -159,7 +159,7 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
     };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
-        other => ("main", Ok(other)),
+        other => ("the entry", Ok(other)),
     };
     let thunk_stats = interp.thunk_stats.render();
     // what the program wrote to stderr precedes whatever the endpoint reports,
@@ -176,9 +176,9 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
             stdout: executor.stdout,
             thunk_stats,
         },
-        Ok(Value::NoneV) if reached == "main" => Evaluation {
+        Ok(Value::NoneV) if reached == "the entry" => Evaluation {
             status: 1,
-            stderr: format!("{wrote}error[endpoint]: unhandled none reached main\n"),
+            stderr: format!("{wrote}error[endpoint]: unhandled none reached the entry\n"),
             stdout: executor.stdout,
             thunk_stats,
         },

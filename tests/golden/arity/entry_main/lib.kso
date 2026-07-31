@@ -1,0 +1,2 @@
+pub fn main x
+  x + 1

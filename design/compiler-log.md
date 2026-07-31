@@ -12197,3 +12197,50 @@ its face. That record is also a name collision waiting to happen: `sifted` and
 silently joins that group. hako is one namespace across seven files, and
 `join`, `line`, `base`, `bare`, `into` and `asked` were all taken before this
 was done.
+
+## The compiler was claiming the name `main`
+
+There is no `main` in kanso. `main.kso` is the file a directory is run
+through, and that is the whole of it: a file program runs its bare statements
+or its `pub play`. But the compiler synthesised its entry as a declaration
+literally named `main`, in the user's namespace, and a name in a namespace is
+a name somebody can collide with.
+
+Three shapes came out of that. A file writing `main = "my main"` beside a
+`pub play` ran `my main` and never ran `play` — the documented entry point
+silently did not happen. A module file writing `fn main x` was refused with
+"`main` is a constant (arity 0); a constant admits no overloads", a complaint
+about a declaration the reader never wrote. And a module whose entry called
+its own `main` was told "`main` is defined in terms of itself, so it has no
+value", which is true only because the synthesised entry had taken the name
+and then been overwritten by it.
+
+The fix is the one the getters already use. A getter is named `Get_{field}`
+and source identifiers are lowercase, so no program can spell it and a field
+never takes a name away from anything. The entry is now `Entry` on the same
+grounds, and `main` is an ordinary name a program may use for whatever it
+likes. A trace renders it through `frame_name`, so a reader is never shown a
+declaration they did not write.
+
+Two things fell out. `check_main` had an arm complaining that "`main` takes no
+parameters" — reachable only through a user's `main`, so it was part of the
+defect rather than a check. What remains is whether an entry exists at all,
+and it now says which file is missing: "a directory runs through `main.kso`,
+and this module has none". And the endpoint report said "unhandled err reached
+main" on all three engines, naming a thing that does not exist; it now says
+"reached the entry", which reads against the neighbouring "reached the
+executor" the way it always should have.
+
+The unit-test harnesses in beat, dispatch, escape, linear, eval and
+perf_ratchet were all asking `compile` for an entry while handing it sources
+that only declare things. `compile` never synthesises one — only the entry
+paths in lib.rs do — so the demand was being met by the fixture's own `main`.
+They now compile as the libraries they are. The five compile-cost samples were
+the same: a file with definitions and no `pub play` is refused by `run` as a
+library, so those samples were never runnable programs, and their `main` was
+only ever an ordinary constant that happened to satisfy the check.
+
+Compile cost fell five lines, one call and one define per sample, because a
+library no longer emits a `k_user_main` stub calling an entry it does not
+have. Rounds and visits did not move: the emitter changed and the front end
+did not. Welfare 65.53 -> 65.56, banked.

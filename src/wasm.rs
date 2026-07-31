@@ -267,7 +267,7 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
     let mut executor = BrowserExecutor { stdout: String::new(), stderr: String::new() };
     let (reached, outcome) = match value {
         Value::Desc(desc) => ("the executor", interp.execute(&desc, &mut executor)),
-        other => ("main", Ok(other)),
+        other => ("the entry", Ok(other)),
     };
     match outcome {
         Ok(Value::ErrV(info)) => {
@@ -281,10 +281,10 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
             set_out(&text);
             1
         }
-        Ok(Value::NoneV) if reached == "main" => {
+        Ok(Value::NoneV) if reached == "the entry" => {
             let mut text = executor.stdout;
             text.push_str(&executor.stderr);
-            text.push_str("error[endpoint]: unhandled none reached main\n");
+            text.push_str("error[endpoint]: unhandled none reached the entry\n");
             set_out(&text);
             1
         }

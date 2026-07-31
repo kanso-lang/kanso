@@ -1239,14 +1239,14 @@ mod tests {
     use crate::infer;
 
     fn compiled(src: &str) -> (crate::ast::Program, infer::Inference) {
-        let program = crate::compile("test.kso", src, true).unwrap();
+        let program = crate::compile("test.kso", src, false).unwrap();
         let inference = infer::infer(&program);
         (program, inference)
     }
 
     fn loops_of(src: &str) -> std::collections::HashSet<(String, usize)> {
         // the tests assert membership; the cluster ids are irrelevant here
-        let program = crate::compile("test.kso", src, true).unwrap();
+        let program = crate::compile("test.kso", src, false).unwrap();
         let inference = infer::infer(&program);
         beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program))
             .ids

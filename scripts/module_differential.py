@@ -153,7 +153,7 @@ CASES = [
         "a module with no entry",
         {"a.kso": "pub fn only _\n  1\n"},
         "run refuses",
-        "error[name]: a program defines `main`",
+        "error[name]: a directory runs through `main.kso`, and this module has none",
     ),
 ]
 

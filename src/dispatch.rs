@@ -197,7 +197,7 @@ mod tests {
         // `pick` dispatches on int literals but its discriminator comes from
         // `length`, not `at` on bytes, so the sentinel would be unsound.
         let src = "main = print \"{pick (length [1 2 3])}\"\n\nfn pick 1\n  \"one\"\n\nfn pick 2\n  \"two\"\n\nfn pick _\n  \"other\"\n";
-        let program = crate::compile("test.kso", src, true).unwrap();
+        let program = crate::compile("test.kso", src, false).unwrap();
         let inference = crate::infer::infer(&program);
         let d = byte_dispatched(&program, &inference);
         assert!(!d.contains(&("pick".to_string(), 1, 0)), "pick is not byte-dispatched, got {d:?}");

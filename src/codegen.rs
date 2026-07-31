@@ -1106,10 +1106,16 @@ impl<'a> Backend<'a> {
         }
         let _ =
             writeln!(self.body, "define void @k_caf_init() {{\nentry:\n{fills}  ret void\n}}\n");
-        self.body.push_str(
-            "define %KValue @k_user_main() {\nentry:\n  %r = call tailcc %KValue \
-             @d_main_0()\n  ret %KValue %r\n}\n",
-        );
+        // A library has no entry to call, and a stub calling one that is not
+        // there is a symbol the linker would ask about.
+        if self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
+            let entry = dsym(crate::ast::ENTRY, 0);
+            let _ = writeln!(
+                self.body,
+                "define %KValue @k_user_main() {{\nentry:\n  %r = call tailcc %KValue \
+             @{entry}()\n  ret %KValue %r\n}}\n"
+            );
+        }
         // A declaration the program never calls is a line the compile golden
         // counts and the reader scrolls past. Keep a declare only when its
         // symbol appears somewhere outside the declare itself — in the body,
@@ -1428,7 +1434,7 @@ impl<'a> Backend<'a> {
         for (k, decl) in decls.iter().enumerate() {
             f.start_block(&arm_labels[k]);
             f.versions.clear();
-            f.origin_prefix = format!("{} at {}", decl.name, decl.file);
+            f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
             f.file = decl.file.clone();
             f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {
@@ -1585,7 +1591,7 @@ impl<'a> Backend<'a> {
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
             f.versions.clear();
-            f.origin_prefix = format!("{} at {}", decl.name, decl.file);
+            f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
             f.file = decl.file.clone();
             f.synthetic = decl.synthetic;
             for (i, pattern) in decl.params.iter().enumerate() {

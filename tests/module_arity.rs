@@ -112,3 +112,27 @@ fn a_construction_across_files_counts_its_fields() {
     );
     assert_eq!(code, Some(2), "a compile error exits 2");
 }
+
+/// A module's entry is synthesized from main.kso's statements, so a module
+/// that declares its own `main` collides with it. Both halves of what is
+/// wrong get said: a constant admits no overloads, and the entry takes none.
+#[test]
+fn a_module_with_no_entry_file_names_the_file() {
+    let (_, err, code) = kanso("run", "no_entry", &[]);
+
+    assert!(err.contains("a directory runs through `main.kso`, and this module has none"), "{err}");
+    assert_eq!(code, Some(2));
+}
+
+#[test]
+fn main_is_a_name_a_module_may_use() {
+    // The entry a directory is run through is compiled in under a name no
+    // program can spell, so `main` is free: `main.kso` names the file, and
+    // nothing about that reserves the word inside it.
+    for engine in [&[][..], &["--interp"][..]] {
+        let (out, err, code) = kanso("run", "entry_main", engine);
+        assert_eq!(err, "", "{engine:?}");
+        assert_eq!(out, "42\n", "{engine:?}");
+        assert_eq!(code, Some(0), "{engine:?}");
+    }
+}

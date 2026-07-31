@@ -22,12 +22,12 @@ pub mod wasm_backend;
 pub mod wasm_encode;
 pub mod wasm_rt;
 
-pub fn compile(file: &str, source: &str, require_main: bool) -> Result<ast::Program, String> {
+pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     synthesize_getters(&mut program);
     stamp_file(&mut program, file);
-    let diags = check::check(&mut program, require_main);
+    let diags = check::check(&mut program, require_entry);
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
@@ -221,7 +221,7 @@ fn compile_one(
     // calling a `play` that is not there would name nothing.
     if has_play {
         program.fns.push(ast::FnDecl {
-            name: "main".to_string(),
+            name: ast::ENTRY.to_string(),
             params: Vec::new(),
             body: vec![ast::Stmt::Expr(ast::Expr::Ident("play".to_string(), span))],
             span,
@@ -2066,10 +2066,10 @@ pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
 
 /// A module is a directory: every .kso file in it shares one namespace.
 /// Canonical ordering holds per file; an overload group lives in one file.
-pub fn compile_module(dir: &std::path::Path, require_main: bool) -> Result<ast::Program, String> {
+pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast::Program, String> {
     LOCK.with(|l| *l.borrow_mut() = hako::read_lock(dir));
     let mut visited = std::collections::HashSet::new();
-    compile_module_root(dir, require_main, &mut visited)
+    compile_module_root(dir, require_entry, &mut visited)
 }
 
 /// hako's own verbs, written in kanso and carried in the binary the way the
@@ -2097,11 +2097,11 @@ pub fn compile_hako() -> Result<ast::Program, String> {
 /// dependencies never do — deps compile exactly as written.
 fn compile_module_root(
     dir: &std::path::Path,
-    require_main: bool,
+    require_entry: bool,
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
 ) -> Result<ast::Program, String> {
     AMBIENT_ROOT.with(|c| c.set(true));
-    let result = compile_module_inner(dir, require_main, visited, None);
+    let result = compile_module_inner(dir, require_entry, visited, None);
     AMBIENT_ROOT.with(|c| c.set(false));
     result
 }
@@ -2225,7 +2225,7 @@ fn apply_reexport(
 /// finishes.
 fn compile_module_inner(
     dir: &std::path::Path,
-    require_main: bool,
+    require_entry: bool,
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
@@ -2233,14 +2233,14 @@ fn compile_module_inner(
     if !visited.insert(canon.clone()) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
-    let loaded = compile_module_loaded(dir, require_main, visited, embedded);
+    let loaded = compile_module_loaded(dir, require_entry, visited, embedded);
     visited.remove(&canon);
     loaded
 }
 
 fn compile_module_loaded(
     dir: &std::path::Path,
-    require_main: bool,
+    require_entry: bool,
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
     embedded: Option<&[(&str, &str)]>,
 ) -> Result<ast::Program, String> {
@@ -2412,7 +2412,7 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    let mut diags = check::check_merged(&merged, require_main);
+    let mut diags = check::check_merged(&merged, require_entry);
     check::check_unused_private(&merged, &used, &mut diags);
     synthesize_getters(&mut merged);
     desugar_field_reads(&mut merged);

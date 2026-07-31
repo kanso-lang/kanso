@@ -61,10 +61,10 @@ fn main() -> ExitCode {
         return run_hako(argv);
     }
 
-    let require_main = command == "run" || command == "play";
+    let require_entry = command == "run" || command == "play";
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
-        true => match kanso::compile_module(path, require_main) {
+        true => match kanso::compile_module(path, require_entry) {
             Ok(program) => (program, String::new()),
             Err(rendered) => {
                 eprint!("{}", diag::paint(&rendered));
@@ -243,14 +243,14 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
         }
         eval::Value::ErrV(info) => {
             eprint!(
-                "error[endpoint]: unhandled err reached main: {}\n{}",
+                "error[endpoint]: unhandled err reached the entry: {}\n{}",
                 eval::render(&info.reason, true),
                 eval::trace_lines(&info)
             );
             ExitCode::FAILURE
         }
         eval::Value::NoneV => {
-            eprintln!("error[endpoint]: unhandled none reached main");
+            eprintln!("error[endpoint]: unhandled none reached the entry");
             ExitCode::FAILURE
         }
         _ => ExitCode::SUCCESS,

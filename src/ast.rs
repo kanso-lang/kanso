@@ -161,6 +161,22 @@ pub const GETTER_BINDER: &str = "Read";
 /// Every type declaring the same field lands in one group, and it is never
 /// module-qualified: reading a field is structural, so it needs nothing
 /// brought into scope.
+/// The declaration a directory's `main.kso`, or a file's `pub play`, is
+/// compiled into. Source identifiers are lowercase, so no program can spell
+/// this — which is the point. The entry belongs to the compiler, and `main`
+/// stays an ordinary name a program may use for whatever it likes.
+pub const ENTRY: &str = "Entry";
+
+/// How a declaration names itself in an err's trace. The entry is the
+/// compiler's, so a reader shown its internal name would be shown a
+/// declaration they never wrote.
+pub fn frame_name(name: &str) -> &str {
+    match name == ENTRY {
+        true => "the entry",
+        false => name,
+    }
+}
+
 pub fn getter_name(field: &str) -> String {
     format!("Get_{field}")
 }

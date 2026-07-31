@@ -95,7 +95,7 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     }
     let span = stmt_lines.first().map(head_span).unwrap_or(Span { line: 1, col: 1 });
     let main = FnDecl {
-        name: "main".to_string(),
+        name: crate::ast::ENTRY.to_string(),
         params: Vec::new(),
         body,
         span,

@@ -82,15 +82,19 @@ result  <span class="o">=</span> <span class="f">try_send</span> bytes        <s
 
 <div class="code-panel">
   <div class="code-panel-title">an err reaching the top<span class="fk-tag fk-real">shipped</span></div>
-  <pre><code><span class="k">fn</span> <span class="f">price</span> item
-  <span class="f">_base_price</span> item <span class="o">+</span> <span class="n">50</span>     <span class="c"># + 50 never runs on the sad track</span>
+  <pre><code><span class="f">menu</span> <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
 
-<span class="f">main</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
+<span class="k">fn</span> <span class="f">base_price</span> item
+  <span class="f">menu</span>[item]<span class="o">!</span>
+
+<span class="k">fn</span> <span class="f">price</span> item
+  <span class="f">base_price</span> item <span class="o">+</span> <span class="n">50</span>     <span class="c"># + 50 never runs on the sad track</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">price</span> <span class="s">"pocky"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run</div>
-    <pre><code>error[endpoint]: unhandled err reached main: we do not serve pocky
-  born in _base_price
-  passed through price ← main</code></pre>
+    <div class="code-panel-title">kanso play</div>
+    <pre><code>error[endpoint]: unhandled err reached the entry: "missing index "pocky""
+  born in base_price at pocky.kso:4</code></pre>
   </div>
 </div>
 

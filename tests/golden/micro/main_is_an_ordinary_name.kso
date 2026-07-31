@@ -1,0 +1,3 @@
+main = "an ordinary binding"
+
+pub play = print "{main}, and play is the entry"

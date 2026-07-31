@@ -7,14 +7,14 @@
 use std::fmt::Write as _;
 
 fn ir_for(source: &str) -> String {
-    let program = kanso::compile("sample.kso", source, true).expect("sample compiles");
+    let program = kanso::compile("sample.kso", source, false).expect("sample compiles");
     kanso::codegen::emit_ir(&program).expect("sample lowers to IR")
 }
 
 /// The processing the emitted text cost: how many times the fixpoint went
 /// round, and how many expressions it looked at getting there.
 fn work_for(source: &str) -> (u64, u64) {
-    let program = kanso::compile("sample.kso", source, true).expect("sample compiles");
+    let program = kanso::compile("sample.kso", source, false).expect("sample compiles");
     kanso::infer::work::reset();
     let _ = kanso::infer::infer(&program);
     kanso::infer::work::taken()

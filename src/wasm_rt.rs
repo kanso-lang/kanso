@@ -911,13 +911,13 @@ pub fn exec_main(h: u32) -> (i32, String) {
         Slot::V(Value::ErrV(info)) => Some((
             1,
             format!(
-                "error[endpoint]: unhandled err reached main: {}\n{}",
+                "error[endpoint]: unhandled err reached the entry: {}\n{}",
                 render(&info.reason, true),
                 trace_lines(&info)
             ),
         )),
         Slot::V(Value::NoneV) => {
-            Some((1, "error[endpoint]: unhandled none reached main\n".to_string()))
+            Some((1, "error[endpoint]: unhandled none reached the entry\n".to_string()))
         }
         _ => Some((0, String::new())),
     };
