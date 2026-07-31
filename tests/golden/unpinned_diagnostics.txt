@@ -24,6 +24,19 @@ private type `
 # another sitting writing programs for them. Neither is deleted, because both
 # arms are the safe side of a fork — see task #69.
 #
+# The other four are each answered first by a check added later, verified by
+# trying them rather than by reading. An inline constant never reaches the
+# parser carrying a block: the lexer folds an indented line into its head
+# unless that head opens one, and a `>>` or `.` continuation is legal, so the
+# shape does not exist. A non-identifier in a constant's name position is
+# refused first by "a top-level line must begin with `fn`, `type`, or a
+# constant binding". An indented line at the top level is refused first by the
+# indentation rule or the blank-line rule. And the private-type message fires
+# on a leading underscore, which the naming rule retired.
+#
+# That is the pattern worth naming: a diagnostic can be shadowed by a better
+# one added later, and nobody notices, because it simply stops appearing.
+#
 # The indented-block rule cannot fire because the lexer decides, before the
 # parser sees anything, which indented lines stay lines. `is_block_header`
 # keeps a deeper line only under `if`, `x = if`, `else`, `build` or
