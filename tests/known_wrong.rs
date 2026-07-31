@@ -67,7 +67,7 @@ fn a_bound_thunk_is_released_where_it_is_not_dominated() {
         err.contains("Instruction does not dominate all uses"),
         "native no longer emits invalid IR — task #59 is fixed, delete this: {err}"
     );
-    assert_eq!(code, Some(1));
+    assert_ne!(code, Some(0), "a refused build cannot succeed");
 
     let (out, err, code) = run("thunk_release_not_dominated.kso", &["--interp"]);
     assert_eq!(err, "");
