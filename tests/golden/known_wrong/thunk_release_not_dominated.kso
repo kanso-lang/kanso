@@ -1,0 +1,30 @@
+import "std/text"
+
+tags = ["a" "b"]
+
+counts = { "a":1 "b":2 }
+
+fn found? name group
+  name == group[1]!
+
+fn ruled? true _ before after
+  after > before
+
+fn ruled? _ true before after
+  after < before
+
+fn ruled? _ _ _ _
+  false
+
+# The binding becomes a thunk created inside the arm's body, and the emitter
+# releases every registered cell at every return — including the failure blocks
+# the creation does not dominate.
+fn worsened? bare before after
+  low = found? bare tags
+  ruled? low (found? bare tags) before after
+
+fn asked? name
+  bare = text/slice name 1 (length name)
+  worsened? bare counts[name]! counts["b"]!
+
+pub play = print "{asked? "a"}"

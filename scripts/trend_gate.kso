@@ -1,0 +1,375 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# The welfare gate already forces a sentence when one of its seven terms
+# regresses, and the cost goldens already refuse silent movement. The seam
+# between them: a PR can regenerate a golden, bank a welfare rise, and still
+# worsen a counter the chart shows — permanent slots, emitted lines — with no
+# written trade. The literal-interning entry did exactly that, and the rise sat
+# unexplained until somebody read the chart.
+#
+# So: diff every golden counter this branch changed against main's copy,
+# classify each move by the direction tables below, and look for each worsened?
+# counter's name in the branch's compiler-log delta. The reflection is the
+# sentence; this only refuses silence.
+#
+# What is enforced, per Clay's rule: nothing may get worse unless at least one
+# other thing got better — a pure regression fails outright. A genuine trade
+# (worsened? here, improved there) passes this gate and is arbitrated by the
+# welfare scalar, which weighs the sides. The name-each-worsening listing stays
+# advisory: the sentence is reflection, not enforcement.
+#
+# A finding is the counter's name, which way it went, and the line to print.
+type move
+  key
+  say
+  worse
+
+# Presence counters (kernel pins) are news in either direction, but the hard
+# golden diff already forces those to be deliberate; here they are
+# down-is-worse so a dropped kernel reads as a worsening and wants its sentence.
+lower_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
+
+lower_b = ["bytes_malloc" "thunk_allocs" "thunk_escaped" "thunk_live_exit"]
+
+lower_c = ["arena_peak_bytes" "bytes_peak" "sh_str" "sh_rec" "sh_buf"]
+
+lower_d = ["sh_map" "sh_bytes" "lines" "calls" "branches" "defines"]
+
+lower_e = ["rounds" "visits"]
+
+lower_ab = text/concat lower_a lower_b
+
+lower_cd = text/concat lower_c lower_d
+
+lower = text/concat lower_ab (text/concat lower_cd lower_e)
+
+higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
+
+higher_b = ["buf_reuse" "thunk_frees"]
+
+higher = text/concat higher_a higher_b
+
+bench_a = [["bench/cost_golden.txt" ""]]
+
+bench_encode = [["bench/cost_golden_encode.txt" "encode_"]]
+
+bench_b = [["bench/cost_golden_oneshot.txt" "oneshot_"]]
+
+bench_c = [["bench/cost_golden_basket.txt" "basket_"]]
+
+bench_compile = [["bench/compile_golden.txt" ""]]
+
+bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
+
+bench_goldens = text/concat bench_ab (text/concat bench_c bench_compile)
+
+mem_dir = "tests/golden/mem"
+
+advice = "movement is fine; silence is not. say why in design/compiler-log.md."
+
+fn asked argv
+  io/run "git" argv
+
+fn field? f
+  length (text/split f "=") == 2
+
+fn digit? c
+  c >= "0" && c <= "9"
+
+fn unsigned v
+  minus? v (text/slice v 1 1 == "-")
+
+fn minus? v true
+  text/slice v 2 (length v)
+
+fn minus? v false
+  v
+
+fn numeric? v
+  body = unsigned v
+  length body > 0 && list/all? (text/chars body) digit?
+
+fn pair_of prefix f
+  parts = text/split f "="
+  ["{prefix}{parts[1]!}" parts[2]!]
+
+fn body? l
+  text/slice l 1 1 != "#" && length l > 0
+
+fn on_line prefix line
+  fields = list/select (text/split line " ") field?
+  list/to_list (list/map fields (f -> pair_of prefix f))
+
+fn joined acc more
+  text/concat acc more
+
+# Every pinned counter in one text, as [name value] pairs. Duplicate names
+# across lines are summed, the way the python's dict was.
+fn counted text prefix
+  lines = list/select (text/split text "\n") body?
+  all = list/to_list (list/map lines (l -> on_line prefix l))
+  flat = list/to_list (list/fold all [] joined)
+  list/to_list (list/select flat (p -> numeric? p[2]!))
+
+fn totals pairs
+  by_name = list/group_by pairs first_of
+  list/transform_values by_name total_of
+
+fn total_of ps
+  list/sum (list/to_list (list/map ps (p -> text/to_int p[2]!)))
+
+fn names_of pairs
+  sorted = list/to_list (list/sort (list/to_list (list/map pairs first_of)))
+  list/to_list (list/fold sorted [] once)
+
+fn first_of p
+  p[1]!
+
+fn once acc name
+  fresh acc name (length acc == 0 || acc[length acc]! != name)
+
+fn fresh acc name true
+  push acc name
+
+fn fresh acc _ false
+  acc
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+fn found? name group
+  list/any? group (g -> g == name)
+
+# A counter's direction, and `false` for one no table names — the golden diff
+# already forces those to be deliberate.
+fn worsened? bare before after
+  ruled? (found? bare lower) (found? bare higher) before after
+
+fn ruled? true _ before after
+  after > before
+
+fn ruled? _ true before after
+  after < before
+
+fn ruled? _ _ _ _
+  false
+
+# Thousands separators, so a counter reads the way the chart prints it.
+fn commas n
+  signed "{n}" (n < 0)
+
+fn signed s true
+  "-{grouped (text/slice s 2 (length s))}"
+
+fn signed s false
+  grouped s
+
+fn grouped s
+  short s (length s <= 3)
+
+fn short s true
+  s
+
+fn short s false
+  head = text/slice s 1 (length s - 3)
+  tail = text/slice s (length s - 2) (length s)
+  "{grouped head},{tail}"
+
+fn from_git base path
+  asked ["show" "{base}:{path}"] . (r -> answered r.status r.stdout)
+
+fn answered 0 text
+  text
+
+fn answered _ _
+  ""
+
+fn added? l
+  text/slice l 1 1 == "+"
+
+fn log_delta base
+  argv = ["diff" base "--" "design/compiler-log.md"]
+  asked argv . (r -> plus_lines r.stdout)
+
+fn plus_lines out
+  kept = list/select (text/split out "\n") added?
+  text/join (list/to_list (list/map kept (l -> text/slice l 2 (length l)))) "\n"
+
+# A fixture this branch adds has nothing to be compared against, and counting
+# its counters as movement would read every new pin as a regression.
+fn against _ "" found
+  io/write "" . (_ -> found)
+
+fn against golden base_text found
+  io/read_file golden[1]!
+    . (ours -> weighed golden golden[2]! base_text ours found)
+
+fn weighed golden prefix base_text ours found
+  mine = counted ours prefix
+  theirs = counted base_text prefix
+  names = names_of (text/concat mine theirs)
+  mine_t = totals mine
+  theirs_t = totals theirs
+  moves = list/map names (n -> judged golden n mine_t theirs_t)
+  text/concat found (list/to_list (list/select moves real?))
+
+fn real? m
+  m.key != ""
+
+fn judged golden name mine theirs
+  before = or_zero theirs[name]
+  after = or_zero mine[name]
+  unchanged golden name before after (before == after)
+
+fn unchanged _ _ _ _ true
+  move "" "" false
+
+fn unchanged golden name before after false
+  bare = bare_name name golden[2]!
+  worse = worsened? bare before after
+  told golden name before after worse
+
+fn bare_name name ""
+  name
+
+fn bare_name name prefix
+  text/slice name (length prefix + 1) (length name)
+
+fn told golden name before after worse
+  arrow = arrow_of worse
+  line = "{arrow}: {name} {commas before} -> {commas after}  ({golden[1]!})\n"
+  move name line worse
+
+fn arrow_of true
+  "worsened"
+
+fn arrow_of false
+  "improved"
+
+# The mem corpus is a counter vein like the others, and allocation shape is
+# exactly the kind of thing that moves quietly: a change can worsen every .mem
+# file in the tree without a sentence anywhere. Each fixture is prefixed by its
+# own name so a move says which program it came from.
+fn mem? name
+  text/slice name (length name - 3) (length name) == ".mem"
+
+fn mem_golden name
+  stem = text/slice name 1 (length name - 4)
+  ["{mem_dir}/{name}" "{stem}_"]
+
+fn mem_goldens names
+  kept = list/select names mem?
+  list/to_list (list/map kept mem_golden)
+
+fn every_golden names
+  text/concat bench_goldens (mem_goldens names)
+
+fn walked base goldens found
+  onward base goldens found (length goldens == 0)
+
+fn onward _ _ found true
+  io/write "" . (_ -> found)
+
+fn onward base goldens found false
+  rest = list/to_list (list/drop goldens 1)
+  g = goldens[1]!
+  from_git base g[1]!
+    . (base_text -> against g base_text found)
+    . (grown -> walked base rest grown)
+
+fn base_of args
+  given args (length args == 0)
+
+fn given _ true
+  "origin/main"
+
+fn given args false
+  args[1]!
+
+pub play = io/args . (a -> started (base_of a))
+
+fn started base
+  io/list_dir mem_dir . (names -> gathered base names)
+
+fn gathered base names
+  walked base (every_golden names) [] . (ms -> priced base ms)
+
+fn priced base ms
+  log_delta base . (added -> verdict ms added)
+
+fn verdict moves added
+  worse = list/to_list (list/select moves (m -> m.worse))
+  better = list/to_list (list/reject moves (m -> m.worse))
+  said moves . (_ -> weighed_up moves worse better added)
+
+fn weighed_up moves worse better added
+  quiet = list/to_list (list/select worse (m -> silent? added m))
+  unpriced quiet . (_ -> summary moves quiet . (_ -> ruling worse better))
+
+# The summary only speaks when nothing went unpriced; a listing already said
+# more than it would.
+fn summary moves quiet
+  spoken moves (length quiet == 0)
+
+fn spoken _ false
+  io/write ""
+
+fn spoken moves true
+  summarised moves
+
+fn said moves
+  io/write (text/join (list/to_list (list/map moves say_of)) "")
+
+fn say_of m
+  m.say
+
+# A worsening wants its counter named somewhere in this branch's log delta.
+# The listing is advisory: the sentence is reflection, not enforcement.
+fn silent? added m
+  not_named? added m.key
+
+fn not_named? haystack needle
+  length (text/split haystack needle) == 1
+
+fn unpriced quiet
+  listed quiet (length quiet == 0)
+
+fn listed _ true
+  io/write ""
+
+fn summarised moves
+  any_moved (length moves > 0)
+
+fn any_moved false
+  io/write ""
+
+fn any_moved true
+  io/write "every changed counter is priced (or improved).\n"
+
+fn listed quiet false
+  io/write "\nUNPRICED — these worsened with no sentence naming them in the\n"
+  >> io/write "compiler-log delta of this branch:\n"
+  >> io/write (text/join (list/to_list (list/map quiet key_line)) "")
+  >> io/write "{advice}\n"
+
+fn key_line m
+  "  {m.key}\n"
+
+fn ruling worse better
+  settled (length worse > 0 && length better == 0)
+
+fn settled true
+  refused 0 . (_ -> io/exit 1)
+
+fn refused _
+  io/write "\nFAIL  a pure regression: something got worse and nothing got\n"
+  >> io/write "better. that trade has no other side, and it is the one move\n"
+  >> io/write "the gate refuses outright.\n"
+
+fn settled false
+  io/write ""
