@@ -60,17 +60,25 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
 /// Inlining the binding avoids it, which is the shape of the defect: the cell
 /// is created inside the arm's body and released in blocks reached from the
 /// other branch.
+/// The refusal is the host's, not the compiler's: the same source is rejected
+/// by macOS's LLVM and accepted by linux CI's, so only the interpreter's answer
+/// can be asserted everywhere. That split is itself part of the finding — one
+/// program, two verdicts, decided by which machine built it.
 #[test]
 fn a_bound_thunk_is_released_where_it_is_not_dominated() {
+    let (out, err, code) = run("thunk_release_not_dominated.kso", &["--interp"]);
+    assert_eq!(err, "");
+    assert_eq!(out, "true\n", "the oracle's answer changed");
+    assert_eq!(code, Some(0));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn the_bound_thunk_is_refused_by_the_host_that_verifies_it() {
     let (_, err, code) = run("thunk_release_not_dominated.kso", &[]);
     assert!(
         err.contains("Instruction does not dominate all uses"),
         "native no longer emits invalid IR — task #59 is fixed, delete this: {err}"
     );
     assert_ne!(code, Some(0), "a refused build cannot succeed");
-
-    let (out, err, code) = run("thunk_release_not_dominated.kso", &["--interp"]);
-    assert_eq!(err, "");
-    assert_eq!(out, "true\n", "the oracle's answer changed");
-    assert_eq!(code, Some(0));
 }

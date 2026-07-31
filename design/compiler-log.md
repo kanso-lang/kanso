@@ -12586,6 +12586,14 @@ and the fix wants a snapshot of the cell list taken before the body, which the
 emitter does not keep. Inlining the binding avoids it, which is what the script
 does.
 
+The refusal turns out to be the host's. macOS rejects that IR and linux CI
+compiles and runs it, from the same source, which is worse than a plain bug: a
+program can pass every check the project has and fail on the machine somebody
+writes it on. Whether linux accepts it because its verifier never runs on that
+path or because the emitted text differs is not established, and it is worth
+knowing — invalid IR that one verifier tolerates is not a milder problem than
+invalid IR.
+
 The second is mine. Every sweep ported so far invoked `kanso play`, and there
 is no such verb — the CLI's own usage lists `run`, and a playground example is
 a library whose `pub play` an entrypoint file imports and runs. The binary
