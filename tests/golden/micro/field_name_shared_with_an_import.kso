@@ -1,0 +1,13 @@
+import "std/list"
+
+# A local type declaring a field name an imported type also uses turns `.at`
+# into a call to a getter group, and the imported type's arm has to be in it.
+# Without one the read fails saying the field does not exist, which is a lie:
+# the same read works in a program that declares no type of its own.
+type here
+  at
+
+pub play =
+  mine = here 1
+  theirs = list/cursor 5 [1 2 3]
+  print "{mine.at} {theirs.at}"

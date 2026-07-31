@@ -384,11 +384,26 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
 /// the importer is a later program. Declaring one twice is harmless by
 /// construction: a field already carrying a getter is left alone.
 fn synthesize_getters(program: &mut ast::Program) {
-    let already: std::collections::HashSet<String> =
-        program.fns.iter().filter(|f| f.is_getter()).map(|f| f.name.clone()).collect();
+    // Keyed by the type as well as the field. One getter group holds an arm
+    // per type that has the field, and skipping on the name alone would let
+    // the first type through and leave every later one unreadable.
+    let already: std::collections::HashSet<(String, String)> = program
+        .fns
+        .iter()
+        .filter(|f| f.is_getter())
+        .filter_map(|f| match f.params.first() {
+            Some(ast::Pattern::Ctor { ty, .. }) => Some((f.name.clone(), ty.clone())),
+            _ => None,
+        })
+        .collect();
     let mut arms = Vec::new();
     for ty in &program.types {
-        if ty.synthetic || ty.origin.is_some() {
+        // An imported type needs arms here too. The dependency synthesised its
+        // own and then pruned the ones it did not itself read, so a field only
+        // this program reads arrives with no getter at all — and while nothing
+        // else declares that field the read stays a direct one and works, so
+        // the hole opens exactly when a local type names the same field.
+        if ty.synthetic {
             continue;
         }
         for (index, (field, _, span)) in ty.fields.iter().enumerate() {
@@ -401,7 +416,7 @@ fn synthesize_getters(program: &mut ast::Program) {
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
-            if already.contains(&ast::getter_name(field)) {
+            if already.contains(&(ast::getter_name(field), ty.name.clone())) {
                 continue;
             }
             arms.push(ast::FnDecl {
