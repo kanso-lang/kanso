@@ -1160,7 +1160,7 @@ impl<'a> Backend<'a> {
         }
         out.push('\n');
         out.push_str(&self.body);
-        Ok(out)
+        Ok(narrow_tailcc(out))
     }
 
     fn intern(&mut self, text: &str) -> (String, usize) {
@@ -3772,6 +3772,53 @@ fn ir_bytes(bytes: &[u8]) -> String {
                 let _ = write!(out, "\\{byte:02X}");
             }
         }
+    }
+    out
+}
+
+/// `tailcc` where it is needed, the C convention everywhere else.
+///
+/// A `musttail` call may cross an arity or a type only under `tailcc`, so the
+/// beat machinery's guaranteed tail calls need it. Every other call does not,
+/// and paying for it is not free: a non-tail `call tailcc` whose arguments do
+/// not all fit in registers is miscompiled on arm64 — five KValues want ten
+/// argument registers and there are eight, and the two that spill come back
+/// holding each other's values (task #70). So the convention is kept for the
+/// functions a `musttail` reaches and dropped from the rest.
+///
+/// The set is read out of the emitted text rather than recomputed, because a
+/// second copy of "when do we musttail" would drift from the first and the
+/// symptom of drift is silent corruption.
+fn narrow_tailcc(ir: String) -> String {
+    let mut keep: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    let mut current: Option<&str> = None;
+    for line in ir.lines() {
+        if let Some(rest) = line.strip_prefix("define ") {
+            current = rest.split('@').nth(1).and_then(|s| s.split('(').next());
+        }
+        if line.contains("musttail call") {
+            // both ends of a musttail edge must agree on the convention
+            if let Some(callee) = line.split('@').nth(1).and_then(|s| s.split('(').next()) {
+                keep.insert(callee);
+            }
+            if let Some(name) = current {
+                keep.insert(name);
+            }
+        }
+    }
+    let mut out = String::with_capacity(ir.len());
+    for line in ir.lines() {
+        match line.contains("tailcc ") {
+            false => out.push_str(line),
+            true => {
+                let named = line.split('@').nth(1).and_then(|s| s.split('(').next());
+                match named.is_some_and(|n| keep.contains(n)) {
+                    true => out.push_str(line),
+                    false => out.push_str(&line.replace("tailcc ", "")),
+                }
+            }
+        }
+        out.push('\n');
     }
     out
 }
