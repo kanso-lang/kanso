@@ -139,11 +139,6 @@ pub extern "C" fn kanso_out_len() -> usize {
     OUT.with(|out| out.borrow().len())
 }
 
-#[no_mangle]
-pub extern "C" fn kanso_reset() {
-    SESSION.with(|session| *session.borrow_mut() = Session::new());
-}
-
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static WASM_BYTES: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };

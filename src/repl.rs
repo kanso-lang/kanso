@@ -70,10 +70,17 @@ impl Session {
             (":show", name) => self.show(name).map(Outcome::Value),
             (":delete", Some(name)) => self.delete(name).map(Outcome::Value),
             (":delete", None) => Ok(Outcome::Value("usage: :delete name".to_string())),
+            (":reset", _) => {
+                self.units.clear();
+                self.imports.clear();
+                self.counter = 0;
+                Ok(Outcome::Value("session cleared".to_string()))
+            }
             (":help", _) => Ok(Outcome::Value(
                 ":show          the whole session, as the file it is\n\
                  :show foo      foo's definition, without running it\n\
                  :delete foo    remove foo (refused while something still uses it)\n\
+                 :reset         forget everything and start over\n\
                  :help          this list\n\
                  repeating a declaration replaces it; ctrl-c abandons a block"
                     .to_string(),
