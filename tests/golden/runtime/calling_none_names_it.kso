@@ -1,0 +1,3 @@
+import "std/list"
+
+pub play = print "{list/to_list (list/map [1 2] none)}"
