@@ -2961,6 +2961,18 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
     }
 }
 
+/// A lazy sequence has no length to count — `naturals` would never finish —
+/// so refusing it is right. But the reader who wrote `length (map …)` is one
+/// call from what they wanted, and the message may as well say which.
+fn lazy_hint(v: &Value) -> &'static str {
+    match v {
+        Value::Record { ty, .. } if ty.starts_with("list/") => {
+            " — a lazy sequence becomes a list with list/to_list"
+        }
+        _ => "",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3023,17 +3035,5 @@ mod tests {
         let Value::ErrV(info) = value else { panic!("expected an err") };
         assert_eq!(info.origin.as_deref(), Some("main at spec.kso:4"));
         assert_eq!(info.hops.iter().map(|h| &**h).collect::<Vec<_>>(), ["grade"]);
-    }
-}
-
-/// A lazy sequence has no length to count — `naturals` would never finish —
-/// so refusing it is right. But the reader who wrote `length (map …)` is one
-/// call from what they wanted, and the message may as well say which.
-fn lazy_hint(v: &Value) -> &'static str {
-    match v {
-        Value::Record { ty, .. } if ty.starts_with("list/") => {
-            " — a lazy sequence becomes a list with list/to_list"
-        }
-        _ => "",
     }
 }
