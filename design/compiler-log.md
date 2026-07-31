@@ -12516,3 +12516,27 @@ register or a constant cell rather than in the walked graph.
 
 Every change described here was reverted. The tree carries the reproduction and
 its test, nothing else.
+
+## The behaviour sweep, and a probe that agreed with itself
+
+scripts/behaviour_differential.py is gone. The kanso version runs the same 66
+awkward calls and reports the same number, with the timeout and the hang report
+the earlier ports had to have restored to them.
+
+The corpus was generated from the python rather than retyped, because sixty-six
+expressions carrying quotes, backslashes and braces are sixty-six chances to
+introduce a difference nobody would find. What the generator has to know is
+that a list literal is one line and a line is eighty characters, and that a
+multibyte character is one character and several bytes — the first attempt
+measured width in bytes and wrote lines the compiler refused.
+
+Watching it fail took three tries and the first two are the interesting ones. A
+probe that never returns is caught, and the shape guard fires when the
+interpolation breaks. But the obvious way to inject a real disagreement — the
+bignum literal the numeric sweep reports — does not disagree here, because the
+probe carries an import it does not use, and an unused import is an error both
+engines make identically. Two engines failing the same way is the shape of
+agreement, which is exactly the trap this sweep was built to avoid and it
+caught its author. A divergence that uses the module it imports —
+`text/slice "abcdef" 1 18446744073709551616` — is reported by name with both
+answers beside it.
