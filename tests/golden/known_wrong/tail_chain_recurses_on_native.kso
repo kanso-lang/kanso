@@ -1,9 +1,10 @@
-# Task #70. Two calls into the same three-deep chain of tail calls, differing
-# only in a literal. The interpreter walks it iteratively; the native build
-# recurses, and whether that reaches the end of the stack is the host's answer
-# rather than the compiler's — it dies on macOS and arm, and finishes on the
-# linux runner. Removing any one layer — calling `claimed` directly, or
-# narrowing `agreed` to three parameters — makes it iterate there too.
+# Task #70, wearing a crash. `agreed` takes five parameters, so two of its
+# arguments travel on the stack, and the dev build's `tailcc` call corrupts
+# one — here it is a literal-cache pointer, so the runtime dereferences 5.
+# `kanso run` calls that running out of stack. It is not: the backtrace is
+# five frames deep and the call graph has no cycle in it. See
+# five_parameters_corrupt_the_second_call.kso for the same defect answering
+# quietly instead.
 type row
   mb
   ms
