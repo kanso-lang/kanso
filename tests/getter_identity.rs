@@ -44,13 +44,9 @@ fn corpus() -> Vec<PathBuf> {
 
 /// Everything the reader sees: both streams, from one engine.
 fn seen(program: &Path, engine: &[&str]) -> String {
-    let source = std::fs::read_to_string(program).unwrap_or_default();
-    let verb = match source.lines().any(|l| l.trim_start().starts_with("pub play")) {
-        true => "play",
-        false => "run",
-    };
+    // `run` is the verb; a file's `pub play` is what `run` finds
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg(verb)
+        .arg("run")
         .arg(program.file_name().expect("programs have names"))
         .args(engine)
         .env("KANSO_SEED", "2685821657736338717")

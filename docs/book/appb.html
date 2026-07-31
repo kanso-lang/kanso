@@ -410,7 +410,7 @@ zero non-positive</code></pre>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">relabel</span> (<span class="f">low_read</span> <span class="n">0</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso play wrap_err.kso</div>
+    <div class="code-panel-title">kanso run wrap_err.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: config_bad "app.conf"
   born in relabel at wrap_err.kso:11
   caused by: disk_torn "/etc/x"
@@ -485,7 +485,7 @@ third</code></pre>
   <span class="o">&gt;&gt;</span> <span class="f">io/write</span> <span class="s">"between these"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"; print ends the line"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso play write_stream.kso</div>
+    <div class="code-panel-title">kanso run write_stream.kso</div>
     <pre><code>no newline between these; print ends the line</code></pre>
   </div>
 </div>

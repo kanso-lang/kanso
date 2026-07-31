@@ -350,13 +350,12 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     let has_play = declared.unwrap_or(false);
     let library_verb = command == "test";
     match (command, has_play, has_defs) {
-        ("play", _, _) => compile_play(file, source),
         (_, true, _) if !library_verb => compile_play(file, source),
         ("check", false, true) => compile_library(file, source),
         (_, false, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the \
-             module a main.kso entry, or define `pub play` and use \
-             `kanso play`\n"
+             module a main.kso entry, or define a `pub play` for `run` to \
+             find\n"
         )),
         _ if library_verb => compile_library(file, source),
         _ => compile_entry(file, source),

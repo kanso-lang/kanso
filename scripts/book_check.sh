@@ -50,7 +50,6 @@ for out in docs/book/samples/*/*.out; do
     rm -rf "$tmp"
   else
     verb="$mode"
-    if [ "$mode" = run ] && grep -q "pub play" "$dir/$name" 2>/dev/null; then verb=play; fi
     actual=$( (cd "$dir" && env $env_prefix "$KANSO" "$verb" "$name" $extra 2>&1) ) || true
   fi
   if [ "$actual" != "$(cat "$out")" ]; then
