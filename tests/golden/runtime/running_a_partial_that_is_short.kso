@@ -1,0 +1,6 @@
+fn add3 a b c
+  a + b + c
+
+pub play =
+  one = &add3 1
+  print "{one()}"
