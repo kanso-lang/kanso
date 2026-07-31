@@ -1,0 +1,4 @@
+error[syntax]: `else` needs an `if` block directly above it
+  --> else_without_if.kso:2:3
+   2 |   else
+         ^
