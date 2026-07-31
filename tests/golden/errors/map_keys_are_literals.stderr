@@ -1,0 +1,4 @@
+error[syntax]: map literal keys are literals; build dynamic maps with `put`
+  --> map_keys_are_literals.kso:2:9
+   2 |   m = { [1]: "a" }
+               ^

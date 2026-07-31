@@ -1,0 +1,4 @@
+error[formatting]: a rename is tight: `field:name`
+  --> a_keyed_rename_is_tight.kso:6:15
+   6 |   { admin name: who } = user false "clay"
+                     ^
