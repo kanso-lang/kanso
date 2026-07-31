@@ -3598,6 +3598,19 @@ KValue k_map_lit(long long n, KValue* flat_pairs) {
     KValue mv; mv.tag = K_MAP; mv.payload = k_ptr(m); return mv;
 }
 
+/* Only an int or a string keys a map, which is what the interpreter has
+   always said. Native used to take anything, so a float made a key that
+   nothing could look up by equality — `1 == 1.0` is false — while sorting
+   next to its integer twin. */
+static void k_check_map_key(KValue key) {
+    if (key.tag == K_INT || key.tag == K_STR) return;
+    KValue shown = k_render(key, 1);
+    KStr* s = k_as_str(shown);
+    char said[256];
+    snprintf(said, sizeof said, "%.*s is not usable as a map key", (int)s->len, s->data);
+    k_die(said);
+}
+
 KValue k_b_put(KValue mv, KValue key, KValue val);
 
 /* The same put at a site the linearity analysis proved unique: the map is
@@ -3685,6 +3698,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
     if (!k_not_failure(key)) return key;
     if (!k_not_failure(val)) return val;
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
+    k_check_map_key(key);
     KMap* m = k_as_map(mv);
     if (k_map_replace(m, key, val)) {
         return mv;
@@ -3722,6 +3736,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     if (!k_not_failure(key)) return key;
     if (!k_not_failure(val)) return val;
     if (mv.tag != K_MAP) k_die("put takes a map, a key, and a value");
+    k_check_map_key(key);
     KMap* m = k_as_map(mv);
     KBuf* buf = k_buf_of(m->pairs);
     if (__builtin_expect(k_stats_on > 0, 0)) k_stat_sh_map += (long long)sizeof(KMap);
