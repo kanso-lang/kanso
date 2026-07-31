@@ -3,4 +3,4 @@ fn brewable? temp
 
 pub play =
   foo = brewable?
-  print foo()
+  print "{foo()}"

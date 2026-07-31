@@ -691,23 +691,21 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         // answers it by talking about spaces. Application is a space.
         if let (Tok::Ident(name), Tok::LParen) = (prev, next) {
             if gap == 0 {
-                // `foo()` has no `x` to be parenthesised, and telling its
-                // author about one describes a program they did not write.
-                let empty = matches!(lexed_line.tokens.get(at + 2), Some((Tok::RParen, _)));
-                let said = match empty {
-                    true => format!(
-                        "application is a space, so `{name} x` calls `{name}` and \
-                         `{name}` alone is the function — `{name}()` reads as \
-                         `{name}` followed by an empty parenthesis, which names \
-                         nothing"
-                    ),
-                    false => format!(
+                // `foo()` runs a value that is waiting to be called, which is
+                // what `&` leaves when it has supplied every argument. Only a
+                // parenthesis holding something is the C-shaped call.
+                if matches!(lexed_line.tokens.get(at + 2), Some((Tok::RParen, _))) {
+                    continue;
+                }
+                diags.push(Diagnostic::new(
+                    "formatting",
+                    format!(
                         "application is a space, so `{name} x` calls `{name}` — \
                          `{name}(x)` reads as `{name}` applied to nothing, then a \
                          parenthesised `x`"
                     ),
-                };
-                diags.push(Diagnostic::new("formatting", said, Span { line, col: next_span.col }));
+                    Span { line, col: next_span.col },
+                ));
                 continue;
             }
         }

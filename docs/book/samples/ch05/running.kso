@@ -1,0 +1,7 @@
+fn tax rate price
+  price + price * rate / 100
+
+pub play =
+  on_250 = &tax 8 250
+  print "still waiting: {on_250}"
+  >> print "called: {on_250()}"

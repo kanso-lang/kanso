@@ -3442,6 +3442,25 @@ KValue k_fnref(void* described) {
 
 KValue k_env_get(void* env, long long i) { return ((KValue*)env)[i]; }
 
+/* `foo()` runs a value that was waiting to be called — what `&` leaves when it
+   has supplied every argument an arm takes. No arguments arrive, so there is
+   nothing to propagate but the callable itself. */
+KValue k_call0(KValue f) {
+    if (!k_not_failure(f)) return f;
+    if (f.tag == K_CLOSURE) {
+        KClosure* c = (KClosure*)(intptr_t)f.payload;
+        if (c->arity != 0) k_die_arity(c->arity, 0);
+        return ((KValue(*)(void*))c->fn)(c->env);
+    }
+    if (f.tag == K_FNREF) {
+        KFnref* r = (KFnref*)(intptr_t)f.payload;
+        if (r->arity != 0) k_die_ref_arity(r, 0);
+        return ((KValue(*)(void))r->fn)();
+    }
+    k_die_not_callable(f);
+    return k_none();
+}
+
 KValue k_call1(KValue f, KValue a) {
     if (!k_not_failure(f)) return f;
     if (f.tag == K_CLOSURE) {

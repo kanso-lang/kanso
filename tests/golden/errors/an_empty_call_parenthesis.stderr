@@ -1,4 +1,0 @@
-error[formatting]: application is a space, so `foo x` calls `foo` and `foo` alone is the function — `foo()` reads as `foo` followed by an empty parenthesis, which names nothing
-  --> an_empty_call_parenthesis.kso:6:12
-   6 |   print foo()
-                  ^

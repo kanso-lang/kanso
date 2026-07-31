@@ -1814,6 +1814,19 @@ impl<'a> P<'a> {
                 expr = Expr::Field { base: Box::new(expr), name, span };
                 continue;
             }
+            // `foo()` runs a value waiting to be called — the complement of
+            // `&`, which supplies without running. It hugs its value the way
+            // an index does, and it is empty by construction: a parenthesis
+            // with something in it is the C-shaped call the lexer refuses.
+            let runs = matches!(self.peek(), Some(Tok::LParen))
+                && self.span_here().col == self.last_end()
+                && matches!(self.toks.get(self.pos + 1).map(|(t, _)| t), Some(Tok::RParen));
+            if runs {
+                let span = self.span_here();
+                self.pos += 2;
+                expr = Expr::App { head: Box::new(expr), args: Vec::new(), piped: false, span };
+                continue;
+            }
             let tight = matches!(self.peek(), Some(Tok::LBracket))
                 && self.span_here().col == self.last_end();
             if !tight {
