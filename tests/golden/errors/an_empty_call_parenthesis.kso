@@ -1,0 +1,6 @@
+fn brewable? temp
+  60 < temp && temp < 85
+
+pub play =
+  foo = brewable?
+  print foo()
