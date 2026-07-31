@@ -11,3 +11,5 @@ pub play =
   >> print "{text/split ",a," ","}"
   >> print "{text/join (text/split "a/b/c" "/") "/"}"
   >> print "{text/split (text/join ["a" "b"] "-") "-"}"
+  >> print "{text/split "héllo→wörld" "→"}"
+  >> print "{text/split "a→→b→→c" "→→"}"
