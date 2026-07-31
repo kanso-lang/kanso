@@ -51,3 +51,19 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
     assert_eq!(out, "1: a gave a\n", "the oracle's answer changed");
     assert_eq!(code, Some(0));
 }
+
+/// Task #70. Two calls into the same three-deep chain of tail calls, differing
+/// only in the literal that picks an arm at the bottom. The interpreter
+/// answers both; the native build recurses until the stack is gone, which is a
+/// divergence rather than a slow path — the program has no recursion in it.
+#[test]
+fn a_chain_of_tail_calls_recurses_on_native_and_not_on_the_oracle() {
+    let fixture = "tail_chain_recurses_on_native.kso";
+    let (_, native_err, native_code) = run(fixture, &[]);
+    let (interp_out, _, interp_code) = run(fixture, &["--interp"]);
+
+    assert!(native_err.contains("ran out of stack"), "native said: {native_err}");
+    assert_eq!(native_code, Some(1));
+    assert_eq!(interp_out, "[differ kanso p 9 ms\ndiffer kanso p 9 mb\n]\n");
+    assert_eq!(interp_code, Some(0));
+}

@@ -1,0 +1,36 @@
+# Task #70. Two calls into the same three-deep chain of tail calls, differing
+# only in a literal, and the native build recurses until the stack is gone.
+# The interpreter answers both. Removing any one layer — calling `claimed`
+# directly, or narrowing `agreed` to three parameters — makes it run.
+type row
+  mb
+  ms
+  name
+
+fn mine r "ms"
+  r.ms
+
+fn mine r _
+  r.mb
+
+fn agreed _ _ _ _ true
+  ""
+
+fn agreed r shown where what false
+  "differ {r.name} {where} {shown} {what}\n"
+
+fn claimed _ "" _ _
+  ""
+
+fn claimed r shown where what
+  agreed r shown where what (mine r what == shown)
+
+fn against board _ shown where what
+  claimed board[1]! shown where what
+
+pub play =
+  one = row "4.1" "0.78" "kanso"
+  board = push [] one
+  k = against board "kanso" "9" "p" "ms"
+  m = against board "kanso" "9" "p" "mb"
+  print "[{k}{m}]"
