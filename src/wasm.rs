@@ -225,8 +225,12 @@ pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
     let result = SESSION.with(|session| session.borrow_mut().eval(&input, &mut executor));
     match result {
         Ok(outcome) => {
+            // `Defined` already carries the whole echo — `defined foo`,
+            // `redefined greet`, `imported list` — which the terminal prints
+            // as it stands. Prefixing it here said `defined defined foo` on
+            // the copy of the repl most people meet.
             let shown = match outcome {
-                Outcome::Defined(names) => format!("defined {names}"),
+                Outcome::Defined(echo) => echo,
                 Outcome::Value(rendered) | Outcome::Executed(rendered) => rendered,
             };
             let mut text = executor.stdout;

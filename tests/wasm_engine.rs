@@ -420,3 +420,53 @@ fn the_wasm_engine_complains_the_way_the_others_do() {
     assert!(asked > 0, "no std function was asked for the wrong thing");
     println!("wasm: {asked} std complaints match native, {declined} declined by the backend");
 }
+
+impl Toolchain {
+    /// One line at the playground's prompt, the way the page sends it.
+    fn prompt(&mut self, line: &str) -> (i32, String) {
+        let (ptr, len) = self.write(line);
+        let code = self.i32_call("kanso_repl_eval", &[Val::I32(ptr), Val::I32(len)]);
+        (code, self.output())
+    }
+}
+
+/// The page is the copy of the repl most people meet, and nothing drove it.
+/// The session compiles the way a file does now, so an import at the prompt
+/// has to reach the shipped library here too — a browser has no filesystem,
+/// and the modules are carried in the binary for exactly this.
+#[test]
+fn the_playground_prompt_reaches_the_library() {
+    let mut toolchain = Toolchain::load();
+
+    let (code, said) = toolchain.prompt("import \"std/list\"");
+    assert_eq!(code, 0, "the import was refused: {said}");
+    assert_eq!(said.trim(), "imported list", "{said}");
+
+    let (code, answer) = toolchain.prompt("list/sum [1 2 3]");
+    assert_eq!(code, 0, "the module was unreachable: {answer}");
+    assert_eq!(answer.trim(), "6", "{answer}");
+}
+
+/// A path naming no module leaves the page's session as it was.
+#[test]
+fn the_playground_prompt_refuses_a_module_that_is_not_there() {
+    let mut toolchain = Toolchain::load();
+
+    let (code, said) = toolchain.prompt("import \"std/nope\"");
+    assert_eq!(code, 1, "a missing module was accepted: {said}");
+    assert!(said.contains("not in the shipped library"), "{said}");
+
+    let (code, said) = toolchain.prompt("import \"std/math\"");
+    assert_eq!(code, 0, "the session did not survive: {said}");
+    assert_eq!(said.trim(), "imported math", "{said}");
+}
+
+/// The page's echo for an ordinary declaration, which is where the doubling
+/// shows if there is one.
+#[test]
+fn the_playground_echoes_a_declaration_once() {
+    let mut toolchain = Toolchain::load();
+    let (code, said) = toolchain.prompt("fn doubled n\n  n * 2");
+    assert_eq!(code, 0, "{said}");
+    assert_eq!(said.trim(), "defined doubled", "{said}");
+}
