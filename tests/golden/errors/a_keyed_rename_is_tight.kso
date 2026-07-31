@@ -1,0 +1,7 @@
+type user
+  admin
+  name
+
+pub play =
+  { admin name: who } = user false "clay"
+  print "{who} {admin}"

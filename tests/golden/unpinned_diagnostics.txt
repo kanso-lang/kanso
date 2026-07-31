@@ -9,12 +9,10 @@
 # tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
 # that is neither pinned nor listed here, and fails again when a listed one
 # becomes pinned, so the line gets deleted rather than left lying.
-a rename is tight: `field:name`
 a whole module re-exports by its own name; rename exports one at a time
 an inline constant has no indented block
 expected a constant name
 expected a top-level declaration (`fn` or `type`)
-map literal keys are literals; build dynamic maps with `put`
 no import offers a pub `
 private type `
 
