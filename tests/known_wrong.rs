@@ -52,13 +52,30 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
     assert_eq!(code, Some(0));
 }
 
-/// Task #70. Two calls into the same three-deep chain of tail calls, differing
-/// only in the literal that picks an arm at the bottom. The interpreter walks
-/// it iteratively and always answers. The native build recurses, and whether
-/// that reaches the end of the stack depends on the host: it dies on macOS and
-/// arm, and finishes on the linux runner. So this pins the interpreter's answer
-/// and accepts either native outcome, because asserting the one this laptop
-/// gives would go red on a machine where the defect is merely latent.
+/// Task #70. A function of five parameters answers differently the second time
+/// it is called with the same arguments: the first argument arrives holding the
+/// second's value. Five KValues want ten argument registers and AArch64 has
+/// eight, so two travel on the stack and the dev build's `tailcc` call gets
+/// that wrong. Silent corruption, not a crash — the interpreter and the
+/// -flto release build both answer correctly.
+#[test]
+fn five_parameters_corrupt_the_second_call_on_the_dev_build() {
+    let fixture = "five_parameters_corrupt_the_second_call.kso";
+    let right = "[2 1 3 4 5][2 1 3 4 5]\n";
+    let (native_out, _, _) = run(fixture, &[]);
+    let (interp_out, _, interp_code) = run(fixture, &["--interp"]);
+
+    assert_eq!(interp_out, right);
+    assert_eq!(interp_code, Some(0));
+    assert_eq!(native_out, "[2 1 3 4 5][2 2 3 4 5]\n", "native no longer corrupts — delete this");
+}
+
+/// Task #70, the same defect wearing a crash. A three-deep chain of tail calls
+/// where the middle one takes five parameters: the corrupted argument is a
+/// literal-cache pointer, so the runtime dereferences 5 and dies. `kanso run`
+/// reports that as running out of stack, which it is not — the backtrace is
+/// five frames deep and the call graph has no cycle in it. Whether it faults
+/// at all is the host's answer, so this accepts either outcome.
 #[test]
 fn a_chain_of_tail_calls_recurses_on_native_where_the_oracle_loops() {
     let fixture = "tail_chain_recurses_on_native.kso";
@@ -70,6 +87,6 @@ fn a_chain_of_tail_calls_recurses_on_native_where_the_oracle_loops() {
     assert_eq!(interp_code, Some(0));
     assert!(
         native_err.contains("ran out of stack") || native_out == expected,
-        "native neither answered nor ran out of stack: out={native_out:?} err={native_err:?}"
+        "native neither answered nor died: out={native_out:?} err={native_err:?}"
     );
 }
