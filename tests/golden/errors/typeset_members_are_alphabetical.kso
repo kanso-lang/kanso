@@ -1,0 +1,9 @@
+type a
+  x
+
+type b
+  y
+
+type pair b a
+
+pub play = print "x"

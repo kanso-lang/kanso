@@ -1,0 +1,4 @@
+error[formatting]: typeset members appear in alphabetical order
+  --> typeset_members_are_alphabetical.kso:7:11
+   7 | type pair b a
+                 ^

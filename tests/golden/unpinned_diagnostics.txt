@@ -9,33 +9,22 @@
 # tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
 # that is neither pinned nor listed here, and fails again when a listed one
 # becomes pinned, so the line gets deleted rather than left lying.
-`else` opens a branch: indent its statements beneath it
-a field annotation binds tight: `name:type`
 a field is written by assignment inside a `build` block: `target.field = value`
-a map pair is tight: `key:value`
 a re-export is `pub name` or `pub theirs:yours`
 a rename is theirs:yours
 a rename is tight: `field:name`
-a single-expression constant is written inline: `
-a value with no parameters is a constant: `
 a whole module re-exports by its own name; rename exports one at a time
 an `if` block header is `if condition`
-an entry file needs at least one statement
 an import ends with its path string
 an import path is a plain string
 an inline constant has no indented block
-an upcast binds tight: `(expr):type`
 canonical form requires at most one space here
 expected a constant name
 expected a top-level declaration (`fn` or `type`)
 map literal keys are literals; build dynamic maps with `put`
 no import offers a pub `
-nothing follows the final `>>` wall
 nothing to sequence: a `>>` wall needs statements above it
 private type `
-type ascription is tight: `
-type ascription is tight: `_:type`
-typeset members appear in alphabetical order
 unterminated escape
 
 # Widening the gate found these. The scan it replaced stopped a message at the

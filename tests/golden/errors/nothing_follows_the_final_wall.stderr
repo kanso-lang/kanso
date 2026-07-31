@@ -1,0 +1,4 @@
+error[syntax]: nothing follows the final `>>` wall
+  --> nothing_follows_the_final_wall.kso:5:3
+   5 |   >>
+         ^

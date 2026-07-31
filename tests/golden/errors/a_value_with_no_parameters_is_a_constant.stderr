@@ -1,0 +1,4 @@
+error[formatting]: a value with no parameters is a constant: `greeting = ...`
+  --> a_value_with_no_parameters_is_a_constant.kso:1:4
+   1 | fn greeting
+          ^
