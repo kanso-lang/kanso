@@ -470,3 +470,17 @@ fn the_playground_echoes_a_declaration_once() {
     assert_eq!(code, 0, "{said}");
     assert_eq!(said.trim(), "defined doubled", "{said}");
 }
+
+/// The page gets the directive too, because directives live on the session.
+#[test]
+fn the_playground_prompt_can_start_over() {
+    let mut toolchain = Toolchain::load();
+    toolchain.prompt("fn doubled n\n  n * 2");
+
+    let (code, said) = toolchain.prompt(":reset");
+    assert_eq!(code, 0, "{said}");
+    assert_eq!(said.trim(), "session cleared", "{said}");
+
+    let (code, gone) = toolchain.prompt("doubled 4");
+    assert_eq!(code, 1, "the declaration survived the reset: {gone}");
+}

@@ -224,3 +224,35 @@ fn rendered(outcome: &Outcome) -> String {
         Outcome::Defined(s) | Outcome::Value(s) | Outcome::Executed(s) => s.clone(),
     }
 }
+
+/// Neither repl could clear a session. The page carried a `kanso_reset`
+/// export for a control nobody had built, and the terminal had no directive
+/// at all — so a visitor who defined something wrong reloaded the tab.
+/// Directives live on the session precisely so both copies get them.
+#[test]
+fn reset_forgets_the_session() {
+    let mut session = Session::new();
+    let mut executor = ScriptedExecutor::default();
+    session.eval("import \"std/list\"", &mut executor).expect("the import lands");
+    session.eval("fn doubled n\n  n * 2", &mut executor).expect("the fn lands");
+
+    let echo = session.eval(":reset", &mut executor).expect("reset answers");
+
+    assert_eq!(rendered(&echo), "session cleared");
+    assert_eq!(session.show(None).expect("show answers"), "the session is empty");
+    assert!(session.eval("doubled 4", &mut executor).is_err(), "the fn survived");
+    assert!(session.eval("list/sum [1]", &mut executor).is_err(), "the import survived");
+}
+
+/// The counter starts over, so the next answer is `it0` again.
+#[test]
+fn reset_starts_the_names_over() {
+    let mut session = Session::new();
+    let mut executor = ScriptedExecutor::default();
+    session.eval("1 + 1", &mut executor).expect("an expression evaluates");
+    assert_eq!(session.next_it(), "it1");
+
+    session.eval(":reset", &mut executor).expect("reset answers");
+
+    assert_eq!(session.next_it(), "it0");
+}
