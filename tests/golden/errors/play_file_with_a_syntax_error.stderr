@@ -1,0 +1,4 @@
+error[syntax]: unterminated interpolation
+  --> play_file_with_a_syntax_error.kso:4:19
+   4 | pub play = print "{doubled 3"
+                         ^

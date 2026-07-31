@@ -12688,3 +12688,23 @@ written compactly where python indented it, which is invisible to its only
 reader and will show as a reformat the first time somebody banks a gain. And
 the path that establishes a floor when none exists is not ported: it has run
 once in the project's life and cannot run again while the file is committed.
+
+## A syntax error reported as a shape
+
+`kanso run` on a file with `pub play` and a typo answered "is a library —
+nothing to run", and told the reader to define the `pub play` they had already
+written. The real diagnostic was only visible under `check`.
+
+The cause is that the dispatch asks whether a file declares `pub play` by
+parsing it, and a parse failure answered no. A file that does not parse has no
+shape yet, so deciding it is a library describes something nobody can read.
+A file of bare statements also fails that parse and is not an error — it is an
+entry — so the rule narrows to files that declare something: those have said
+what they are, and a failure to parse them is a syntax error to report.
+
+The corpus could not have caught this, because its harness chose the verb from
+the source: a file declaring `pub play` ran under `play`, which short-circuits
+the dispatch before the library check. That is the same verb the CLI does not
+document and should not have, doing damage rather than sitting there — the
+harness now runs everything under `run`, which is what a reader types, and two
+fixtures that had been reporting the wrong message were found by the change.

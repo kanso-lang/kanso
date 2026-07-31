@@ -21,13 +21,10 @@ fn run_kanso(program: &Path, extra: &[&str]) -> Output {
 }
 
 fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
-    let source = std::fs::read_to_string(program).unwrap_or_default();
-    // what the file declares, not what its text mentions: a comment naming
-    // `pub play` must not change which verb a golden runs under
-    let verb = match source.lines().any(|l| l.trim_start().starts_with("pub play")) {
-        true => "play",
-        false => "run",
-    };
+    // `run` is the verb; a file's `pub play` is what `run` finds, not a
+    // different way to start it. Choosing a verb from the source also meant
+    // the corpus never exercised the path `run` takes for a play file.
+    let verb = "run";
     let mut command = Command::new(env!("CARGO_BIN_EXE_kanso"));
     // goldens pin the dice; a bare run seeds from entropy
     command.env("KANSO_SEED", "2685821657736338717");

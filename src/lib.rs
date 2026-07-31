@@ -319,10 +319,14 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
 /// string literals cannot change how a file compiles. A file that does not
 /// parse declares nothing, and the compile it is routed to reports the syntax
 /// error properly.
-fn declares_play(source: &str) -> bool {
-    let Ok(lexed) = lexer::lex(source) else { return false };
-    let Ok(program) = parser::parse(&lexed) else { return false };
-    program.fns.iter().any(|d| d.is_pub && d.name == "play")
+/// Whether the file declares `pub play`, or None when it does not parse at
+/// all. A source with a syntax error has no shape yet, and calling it a
+/// library hides the error behind a sentence about libraries — the reader is
+/// told to add an entry point they already wrote.
+fn declares_play(source: &str) -> Option<bool> {
+    let lexed = lexer::lex(source).ok()?;
+    let program = parser::parse(&lexed).ok()?;
+    Some(program.fns.iter().any(|d| d.is_pub && d.name == "play"))
 }
 
 /// The CLI and the browser share this so the engines never diverge on which
@@ -332,10 +336,18 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     // its text happens to contain: a comment or a string mentioning `pub
     // play` used to reroute the whole file and reject a valid entry with a
     // diagnostic that named none of this.
-    let has_play = declares_play(source);
+    let declared = declares_play(source);
     let has_defs = source
         .lines()
         .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
+    // A file of bare statements never parses as a library, and that is not an
+    // error — it is an entry. But a file that declares things and still does
+    // not parse has a syntax error, and answering it with the shape of the
+    // file tells the reader to add an entry point they already wrote.
+    if declared.is_none() && has_defs {
+        return compile_play(file, source);
+    }
+    let has_play = declared.unwrap_or(false);
     let library_verb = command == "test";
     match (command, has_play, has_defs) {
         ("play", _, _) => compile_play(file, source),
