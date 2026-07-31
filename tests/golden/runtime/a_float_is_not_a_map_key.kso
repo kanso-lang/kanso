@@ -1,0 +1,6 @@
+# The interpreter has always refused a float key. Native accepted one and
+# built a two-entry map — and since `1 == 1.0` is false, a map could hold
+# both 1 and 1.0 as separate keys while sorting them adjacent.
+pub play =
+  m = put { 1:"a" } 2.5 "b"
+  print "{m}"
