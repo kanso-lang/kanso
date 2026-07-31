@@ -41,10 +41,14 @@ unterminated escape
 # Widening the gate found these. The scan it replaced stopped a message at the
 # first comma a lowercase word followed, which for a message that holds such a
 # comma left the quote unclosed and the call site invisible — twenty-four of
-# them. Eleven now have goldens. Of the three left, the entry-file rule needs
-# a directory rather than a file and so is pinned by a test instead; the other
-# two have resisted every program tried, because a different check answers
-# first every time — which may mean they cannot be reached at all.
-an entry file holds statements only; definitions live in
+# them. Twelve now have goldens or a test. The two left may not be reachable
+# at all, which is a different thing from unwritten, and neither is deleted on
+# that suspicion alone — see task #69 for what was tried.
+#
+# For the indented-block rule: children under a call fold into it as arguments
+# (a wrong count answers with an arity error), a binding child answers about
+# `=`, a short head answers about a needless continuation, and an `else` under
+# a non-`if` head answers that `else` needs an `if` above it. Every route in
+# is held by an earlier and better diagnostic.
 only `if` and `build` open an indented block; other calls take
 unused expression: every non-final line binds a name (sequence

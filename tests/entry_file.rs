@@ -1,0 +1,44 @@
+//! What an entry file may hold.
+//!
+//! A directory's main.kso is the entry: statements, run top to bottom. A `fn`
+//! or a `type` in it belongs in a library file beside it, and saying so is the
+//! difference between a reader moving the declaration and a reader wondering
+//! why their program does nothing.
+//!
+//! This is a test rather than a golden because the rule needs a directory to
+//! reach, and the error corpus holds single files. The coverage gate counts an
+//! assertion here as pinning the message, which is what keeps the diagnostic
+//! from being reworded or lost.
+
+use std::process::Command;
+
+fn run(engine: &[&str]) -> (String, Option<i32>) {
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg("tests/golden/entryfile/defs_in_the_entry")
+        .args(engine)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("kanso runs");
+    (String::from_utf8_lossy(&done.stderr).into_owned(), done.status.code())
+}
+
+/// Both engines refuse it, and refuse it in the same words: the file is parsed
+/// before either of them is chosen, so a difference here would mean the
+/// parsers had drifted apart.
+#[test]
+fn a_definition_in_the_entry_file_is_refused_by_both_engines() {
+    // one line, deliberately: the coverage gate looks for the message as a
+    // contiguous string, and a wrapped literal hides it the same way the
+    // compiler's own wrapped literal hides the rest of the sentence
+    let said =
+        "error[syntax]: an entry file holds statements only; definitions live in library files";
+
+    let (native, native_code) = run(&[]);
+    let (interp, interp_code) = run(&["--interp"]);
+
+    assert_eq!(native.lines().next(), Some(said));
+    assert_eq!(interp.lines().next(), Some(said));
+    assert_eq!(native_code, Some(2));
+    assert_eq!(interp_code, Some(2));
+}
