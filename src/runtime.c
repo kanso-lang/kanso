@@ -4483,7 +4483,7 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
         }
         if (from < 1 || from > to || start < 0) return k_str_n("", 0);
         if (end < 0) end = s->len;
-        if (seen < to) return k_str_n("", 0);
+        if (seen <= to) return k_str_n("", 0);
         return k_str_n(s->data + start, end - start);
     }
     k_die("slice takes a list or string");
