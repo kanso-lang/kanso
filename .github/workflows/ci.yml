@@ -106,7 +106,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 scripts/welfare.py
+      - run: ./target/release/kanso run scripts/welfare.kso
       - name: prose numbers match the golden they quote
         run: python3 scripts/golden_prose.py
       - name: one sitting, published once
