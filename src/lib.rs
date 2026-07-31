@@ -396,6 +396,16 @@ fn synthesize_getters(program: &mut ast::Program) {
             _ => None,
         })
         .collect();
+    // Only the fields something reads. Every arm this skips would be deleted
+    // by prune_unused_getters a moment later, and there are a great many of
+    // them: an imported module brings its types, and each type brings a field
+    // per getter nobody asked for.
+    let mut read = std::collections::HashSet::new();
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            mentions_in_stmt(stmt, &mut read);
+        }
+    }
     let mut arms = Vec::new();
     for ty in &program.types {
         // An imported type needs arms here too. The dependency synthesised its
@@ -416,7 +426,9 @@ fn synthesize_getters(program: &mut ast::Program) {
                     false => ast::Pattern::Wildcard(*span),
                 })
                 .collect();
-            if already.contains(&(ast::getter_name(field), ty.name.clone())) {
+            if already.contains(&(ast::getter_name(field), ty.name.clone()))
+                || !read.contains(&ast::getter_name(field))
+            {
                 continue;
             }
             arms.push(ast::FnDecl {
@@ -1423,6 +1435,12 @@ fn mentions_in_stmt(stmt: &ast::Stmt, out: &mut std::collections::HashSet<String
 
 fn mentions_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) {
     match e {
+        // Before desugaring a read is still `x.name`; after it, a call to the
+        // getter. Both count, so this answers the same set either side of it.
+        ast::Expr::Field { base, name, .. } => {
+            out.insert(ast::getter_name(name));
+            mentions_in_expr(base, out);
+        }
         ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
             out.insert(name.clone());
             // a qualified read reaches the same getter under its bare name
