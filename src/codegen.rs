@@ -1588,8 +1588,15 @@ impl<'a> Backend<'a> {
                 f.line(&format!("%x{i}s = insertvalue %KValue %x{i}sa, i64 %x{i}w1, 1"));
             }
         }
+        // A releasable cell is created inside an arm's body, so it exists only
+        // in blocks that body dominates. The next arm's blocks and the
+        // parameter-failure blocks below are reached without running it, and
+        // releasing it there emits a use LLVM's verifier refuses. The cells
+        // an arm registers are its own: each arm starts from this watermark.
+        let cells_before = f.lazy_cells.len();
         for (k, decl) in decls.iter().enumerate() {
             let fail = format!("fail{k}");
+            f.lazy_cells.truncate(cells_before);
             f.versions.clear();
             f.origin_prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
             f.file = decl.file.clone();
@@ -1609,6 +1616,7 @@ impl<'a> Backend<'a> {
             self.emit_fn_body(&mut f, &decl.body)?;
             f.start_block(&fail);
         }
+        f.lazy_cells.truncate(cells_before);
         for i in 0..arity {
             let val = match self.escape.carries_ty(name, arity, i).is_some() {
                 true => format!("%x{i}s"),
