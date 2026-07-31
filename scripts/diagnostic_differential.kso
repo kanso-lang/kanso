@@ -232,6 +232,16 @@ langm_src = "{langm_src_head}{langm_src_tail}"
 
 langm = [langm_says langm_src]
 
+# A float where a map wants a key. The record probe cannot reach this: it
+# puts a wrong value in EVERY position, so `put` answers about its first
+# argument and never looks at the key. Native accepted one and built a map
+# holding 1 and 1.0 as separate keys, which the oracle had always refused.
+lango_says = "a float as a map key"
+
+lango_src = "pub play =\n  m = put \{ 1:\"a\" } 2.5 \"b\"\n  print \"\{m}\"\n"
+
+lango = [lango_says lango_src]
+
 langn_says = "indexing something that is not a collection"
 
 langn_src = "pub play =\n  n = 5\n  print \"\{n[1]!}\"\n"
@@ -262,7 +272,9 @@ lang_all10 = text/concat lang_all9 [langl]
 
 lang_all11 = text/concat lang_all10 [langm]
 
-language = text/concat lang_all11 [langn]
+lang_all12 = text/concat lang_all11 [langn]
+
+language = text/concat lang_all12 [lango]
 
 # Every probe here is meant to fail, so two engines failing identically is the
 # expected reading and an engine that cannot run at all is indistinguishable
