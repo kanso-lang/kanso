@@ -41,14 +41,22 @@ unterminated escape
 # Widening the gate found these. The scan it replaced stopped a message at the
 # first comma a lowercase word followed, which for a message that holds such a
 # comma left the quote unclosed and the call site invisible — twenty-four of
-# them. Twelve now have goldens or a test. The two left may not be reachable
-# at all, which is a different thing from unwritten, and neither is deleted on
-# that suspicion alone — see task #69 for what was tried.
+# them. Twelve now have goldens or a test. The two below are different: no
+# program can reach either, and the mechanism is named here so nobody spends
+# another sitting writing programs for them. Neither is deleted, because both
+# arms are the safe side of a fork — see task #69.
 #
-# For the indented-block rule: children under a call fold into it as arguments
-# (a wrong count answers with an arity error), a binding child answers about
-# `=`, a short head answers about a needless continuation, and an `else` under
-# a non-`if` head answers that `else` needs an `if` above it. Every route in
-# is held by an earlier and better diagnostic.
+# The indented-block rule cannot fire because the lexer decides, before the
+# parser sees anything, which indented lines stay lines. `is_block_header`
+# keeps a deeper line only under `if`, `x = if`, `else`, `build` or
+# `x = build`; under anything else the line is folded into its head as one
+# more argument. So `parse_block_construct` is only ever handed a head it
+# already accepts, and `else` is taken by its callers first.
+#
+# The unused-expression rule cannot fire because the parser handles both
+# halves of it. `reject_never_effect` refuses a non-final literal, list, map,
+# lambda or binary operation with its own message, and consecutive expression
+# statements are folded into one `Seq`, so a body never holds a non-final
+# `Stmt::Expr` for the checker to complain about.
 only `if` and `build` open an indented block; other calls take
 unused expression: every non-final line binds a name (sequence
