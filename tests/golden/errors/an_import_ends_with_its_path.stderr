@@ -1,0 +1,4 @@
+error[syntax]: an import ends with its path string
+  --> an_import_ends_with_its_path.kso:1:8
+   1 | import { split:cut } "std/text" extra
+              ^

@@ -1,0 +1,3 @@
+import "std/{name}"
+
+pub play = print "x"

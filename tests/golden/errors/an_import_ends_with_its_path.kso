@@ -1,0 +1,3 @@
+import { split:cut } "std/text" extra
+
+pub play = print "{cut "a,b" ","}"

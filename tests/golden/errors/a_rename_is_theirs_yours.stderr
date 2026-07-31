@@ -1,0 +1,4 @@
+error[syntax]: a rename is theirs:yours
+  --> a_rename_is_theirs_yours.kso:1:17
+   1 | import { split: } "std/text"
+                       ^
