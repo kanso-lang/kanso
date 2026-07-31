@@ -68,15 +68,15 @@ fn harness_file(file: &str) -> bool {
     file.ends_with("_test.kso")
 }
 
-pub fn check(program: &mut Program, require_main: bool) -> Vec<Diagnostic> {
+pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     let markers = marker_names(program);
     let type_names = program.types.iter().map(|t| t.name.clone()).collect();
     let mut used = HashSet::new();
     let mut diags = resolve_markers(program, &markers);
     diags.extend(check_typesets(program, &type_names));
     diags.extend(check_file(program, &HashSet::new(), &mut used));
-    if require_main {
-        check_main(program, &mut diags);
+    if require_entry {
+        check_entry(program, &mut diags);
     }
     check_unused_private(program, &used, &mut diags);
     diags.sort_by_key(|d| (d.span.line, d.span.col));
@@ -766,7 +766,7 @@ fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
         // boolean field be `drained?`) that is not this check's to answer
         if decl.synthetic
             || decl.is_getter()
-            || decl.name == "main"
+            || decl.name == crate::ast::ENTRY
             || decl.name == "play"
             || short.starts_with("test_")
         {
@@ -850,7 +850,7 @@ fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnost
     }
 }
 
-pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
+pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
@@ -868,8 +868,8 @@ pub fn check_merged(program: &Program, require_main: bool) -> Vec<Diagnostic> {
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }
-    if require_main {
-        check_main(program, &mut diags);
+    if require_entry {
+        check_entry(program, &mut diags);
     }
     diags
 }
@@ -1755,19 +1755,17 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
     })
 }
 
-fn check_main(program: &Program, diags: &mut Vec<Diagnostic>) {
-    match program.fns.iter().find(|d| d.name == "main") {
-        Some(main) if !main.params.is_empty() => diags.push(Diagnostic::new(
-            "signature",
-            "`main` takes no parameters".to_string(),
-            main.span,
-        )),
-        Some(_) => {}
-        None => diags.push(Diagnostic::new(
+/// A directory is run through the file `main.kso`, and a file through its
+/// `pub play`. Either way the entry is compiled in under a name no program can
+/// spell, so what is missing here is the file or the `play` — never a
+/// declaration the reader was supposed to write called `main`.
+fn check_entry(program: &Program, diags: &mut Vec<Diagnostic>) {
+    if !program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
+        diags.push(Diagnostic::new(
             "name",
-            "a program defines `main`".to_string(),
+            "a directory runs through `main.kso`, and this module has none".to_string(),
             Span { line: 1, col: 1 },
-        )),
+        ));
     }
 }
 

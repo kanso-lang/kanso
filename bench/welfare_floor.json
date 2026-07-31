@@ -13,7 +13,7 @@
     "basket_allocs": 91864,
     "basket_peak_bytes": 69206016
   },
-  "floor": 65.52894321190618,
+  "floor": 65.55690343050694,
   "history": [
     {
       "floor": 46.33,
@@ -138,6 +138,10 @@
     {
       "floor": 65.53,
       "why": "a string built by joining onto itself writes into one buffer: the seed is converted where it enters the group from outside, so its header predates the loop's marks and survives every rewind, and the join only ever writes into that header. basket string build 4,004 allocations -> 9, 100,000 appends 162 ms -> 10.3 ms, basket 24,102 -> 20,107."
+    },
+    {
+      "floor": 65.56,
+      "why": "a library no longer emits an entry stub calling an entry it does not have: the compiler stopped claiming the name `main`, so a file with definitions and no `pub play` is compiled as the library it always was. emitted lines fall five per sample."
     }
   ]
 }

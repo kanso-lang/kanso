@@ -5,7 +5,7 @@
 //! other half is the cost golden (bench/cost_golden.txt) diffed in CI.
 
 fn ir_for(source: &str) -> String {
-    let program = kanso::compile("spec.kso", source, true).expect("spec program compiles");
+    let program = kanso::compile("spec.kso", source, false).expect("spec program compiles");
     kanso::codegen::emit_ir(&program).expect("spec program lowers to IR")
 }
 

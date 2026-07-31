@@ -272,8 +272,9 @@ impl<'a> WasmBackend<'a> {
             let idx = self.module.declare(*arity as u32);
             self.dispatchers.insert((name.clone(), *arity), idx);
         }
-        let Some(main_idx) = self.dispatchers.get(&("main".to_string(), 0)).copied() else {
-            return Err("no main".to_string());
+        let Some(main_idx) = self.dispatchers.get(&(crate::ast::ENTRY.to_string(), 0)).copied()
+        else {
+            return Err("no entry".to_string());
         };
         self.module.set_main(main_idx);
         for (name, arity, decls) in &groups {
@@ -320,7 +321,7 @@ impl<'a> WasmBackend<'a> {
             Ctx { body: Body::new(arity as u32), scope: HashMap::new(), prefix: String::new() };
         for decl in decls {
             ctx.scope.clear();
-            ctx.prefix = format!("{} at {}", decl.name, decl.file);
+            ctx.prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
             ctx.body.block_void();
             for (i, pattern) in decl.params.iter().enumerate() {
                 self.emit_pattern(&mut ctx, i as u32, pattern)?;

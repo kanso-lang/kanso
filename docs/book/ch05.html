@@ -276,7 +276,7 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
   </div>
 </div>
 
-<p>read the wording against chapter 04. there the message ended "reached main," because main was the endpoint of evaluation. here it ends "reached the executor": evaluation finished long ago, <code>main</code> was a perfectly healthy io, and the failure happened while the runtime was walking it. the err rides the same railway, and the diagnostic still names where it was born. failure during effects isn't a special kind of failure; it's the same value on the same rails, with the endpoint moved one stop later.</p>
+<p>read the wording against chapter 04. there the message ended "reached the entry," because the entry was where evaluation stopped. here it ends "reached the executor": evaluation finished long ago and handed back a perfectly healthy io, and the failure happened while the runtime was walking it. the err rides the same railway, and the diagnostic still names where it was born. the endpoint has moved one stop later, and that is the whole difference.</p>
 
 <p>a file that isn't there fails the same way:</p>
 

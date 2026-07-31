@@ -1,4 +1,4 @@
-error[endpoint]: unhandled err reached main: config_bad "app.conf"
+error[endpoint]: unhandled err reached the entry: config_bad "app.conf"
   born in relabel at wrap_cause.kso:11
   caused by: disk_torn "/etc/x"
   born in low_read at wrap_cause.kso:8

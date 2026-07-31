@@ -5523,11 +5523,11 @@ int main(int argc, char** argv) {
     if (v.tag == K_ERR) {
         int status = k_exit_status(v);
         if (status >= 0) return status;
-        k_report_err(v, "main");
+        k_report_err(v, "the entry");
         return 1;
     }
     if (v.tag == K_NONE) {
-        fprintf(stderr, "%serror[endpoint]:%s unhandled none reached main\n", k_c_err(), k_c_off());
+        fprintf(stderr, "%serror[endpoint]:%s unhandled none reached the entry\n", k_c_err(), k_c_off());
         return 1;
     }
     return 0;

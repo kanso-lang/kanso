@@ -44,9 +44,12 @@ def raised():
 
 
 def pinned():
-    return "\n".join(
-        p.read_text(errors="ignore") for p in ROOT.glob("tests/golden/**/*.stderr")
-    )
+    """Where a message's exact text is checked. A `.stderr` in the corpus is
+    the usual home, but a diagnostic a golden cannot reach — one that needs a
+    whole module on disk, say — is pinned by an assertion in a test, and that
+    counts."""
+    files = list(ROOT.glob("tests/golden/**/*.stderr")) + list(ROOT.glob("tests/*.rs"))
+    return "\n".join(p.read_text(errors="ignore") for p in files)
 
 
 def listed():

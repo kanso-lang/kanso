@@ -79,7 +79,7 @@ fn a_failure_in_the_register_convention_stays_a_failure() {
         let (out, err) = run("failed", engine);
         assert!(out.is_empty(), "{engine:?} printed something for a failure: {out:?}");
         assert!(
-            err.contains("unhandled err reached main: \"empty\""),
+            err.contains("unhandled err reached the entry: \"empty\""),
             "{engine:?} lost the failure: {err:?}"
         );
         answers.push(err);

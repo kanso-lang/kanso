@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn record_in_a_list_escapes() {
         let src = "type pt\n  x\n  y\n\nmain = print \"{length [(mk 1 2) (mk 3 4)]}\"\n\nfn mk a b\n  pt a b\n";
-        let program = crate::compile("test.kso", src, true).unwrap();
+        let program = crate::compile("test.kso", src, false).unwrap();
         assert!(
             !register_returnable(&program, &crate::infer::infer(&program)).contains("pt"),
             "pt escapes into a list"
@@ -459,7 +459,7 @@ mod tests {
     #[test]
     fn construct_then_destructure_is_returnable() {
         let src = "type pair\n  a\n  b\n\nfn add (pair x y)\n  x + y\n\nmain = print \"{add (mk 5)}\"\n\nfn mk n\n  pair n n\n";
-        let program = crate::compile("test.kso", src, true).unwrap();
+        let program = crate::compile("test.kso", src, false).unwrap();
         assert!(
             register_returnable(&program, &crate::infer::infer(&program)).contains("pair"),
             "pair is construct-then-destructure"

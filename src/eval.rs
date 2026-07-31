@@ -81,7 +81,7 @@ pub struct ErrInfo {
 pub type Frame = Option<Rc<str>>;
 
 fn frame_of(decl: &FnDecl) -> Frame {
-    Some(Rc::from(format!("{} at {}", decl.name, decl.file)))
+    Some(Rc::from(format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file)))
 }
 
 pub fn origin_at(frame: &Frame, span: Span) -> Option<Rc<str>> {
@@ -746,8 +746,8 @@ impl<'a> Interp<'a> {
     }
 
     pub fn run_main(&self) -> EvalResult {
-        let main = self.fns.get("main").expect("checked: main exists")[0];
-        self.eval_body_of(main, None)
+        let entry = self.fns.get(crate::ast::ENTRY).expect("checked: an entry exists")[0];
+        self.eval_body_of(entry, None)
     }
 
     pub fn run_named(&self, name: &str) -> Option<EvalResult> {
@@ -2946,13 +2946,20 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
 mod tests {
     use super::*;
 
+    /// The value of the constant `main` in this source. It is an ordinary name
+    /// here, chosen because these fixtures read as programs; the entry a real
+    /// program runs is the compiler's and cannot be written.
     fn run_main(source: &str) -> Value {
         let lexed = crate::lexer::lex(source).expect("lexes");
         let mut program = crate::parser::parse(&lexed).expect("parses");
-        let diags = crate::check::check(&mut program, true);
+        let diags = crate::check::check(&mut program, false);
         assert!(diags.is_empty(), "unexpected diagnostics: {diags:?}");
         let interp = Interp::new(&program);
-        interp.run_main().map_err(|e| e.message).expect("runs")
+        interp
+            .run_named("main")
+            .expect("a constant named main")
+            .map_err(|e| e.message)
+            .expect("runs")
     }
 
     #[test]
@@ -2986,9 +2993,13 @@ mod tests {
     #[test]
     fn errs_carry_their_origin_and_dispatcher_hops() {
         let source = "fn grade outcome\n  \"grade {outcome}\"\n\nmain = grade (1 / 0)\n";
-        let program = crate::compile("spec.kso", source, true).expect("compiles");
+        let program = crate::compile("spec.kso", source, false).expect("compiles");
         let interp = Interp::new(&program);
-        let value = interp.run_main().map_err(|e| e.message).expect("runs");
+        let value = interp
+            .run_named("main")
+            .expect("a constant named main")
+            .map_err(|e| e.message)
+            .expect("runs");
 
         let Value::ErrV(info) = value else { panic!("expected an err") };
         assert_eq!(info.origin.as_deref(), Some("main at spec.kso:4"));

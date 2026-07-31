@@ -842,7 +842,7 @@ mod tests {
         // xs is pushed twice, so neither push uniquely owns it — mutating in
         // place would corrupt the other reference. Must stay allocating.
         let src = "fn dup xs\n  a = push xs 1\n  b = push xs 2\n  push a b\n\nmain = print \"{length (dup [1 2 3])}\"\n";
-        let program = crate::compile("test.kso", src, true).unwrap();
+        let program = crate::compile("test.kso", src, false).unwrap();
         assert!(in_place_pushes(&program).is_empty(), "aliased pushes must not be marked in-place");
     }
 }
