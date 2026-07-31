@@ -1,0 +1,12 @@
+# The interpreter has always named the value that could not be called;
+# native said only that something could not be. Same divergence the length
+# message had, in a different builtin.
+#
+# The number arrives through a binding rather than written at the call, so
+# every engine reaches the runtime check — the browser backend declines a
+# literal in head position before it gets there.
+import "std/list"
+
+pub play =
+  not_a_function = 5
+  print "{list/to_list (list/map [1 2] not_a_function)}"

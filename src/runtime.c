@@ -3362,6 +3362,17 @@ static void k_buf_donate(KValue* items) {
 
 static void k_buf_flush(void) { memset(k_buf_free, 0, sizeof(k_buf_free)); }
 
+/* Naming the value is the difference between "something here is wrong" and
+   "you passed 5 where a function goes". The interpreter has always named it;
+   native said half as much, which the differential law does not allow. */
+static void k_die_not_callable(KValue f) {
+    KValue shown = k_render(f, 0);
+    KStr* s = k_as_str(shown);
+    char said[256];
+    snprintf(said, sizeof said, "`%.*s` is not callable", (int)s->len, s->data);
+    k_die(said);
+}
+
 static KValue* k_buf(long long cap) {
     int c = k_buf_class(cap);
     if (c >= 0 && k_buf_free[c]) {
@@ -3430,7 +3441,7 @@ KValue k_call1(KValue f, KValue a) {
         if (r->arity != 1) k_die_overload(r->name);
         return ((KValue(*)(KValue))r->fn)(a);
     }
-    k_die("this value is not callable");
+    k_die_not_callable(f);
     return k_none();
 }
 
@@ -3455,7 +3466,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
         if (r->arity != 2) k_die_overload(r->name);
         return ((KValue(*)(KValue, KValue))r->fn)(a, b);
     }
-    k_die("this value is not callable");
+    k_die_not_callable(f);
     return k_none();
 }
 
@@ -3474,7 +3485,7 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
         if (r->arity != 3) k_die_overload(r->name);
         return ((KValue(*)(KValue, KValue, KValue))r->fn)(a, b, c);
     }
-    k_die("this value is not callable");
+    k_die_not_callable(f);
     return k_none();
 }
 
@@ -3494,7 +3505,7 @@ KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
         if (r->arity != 4) k_die_overload(r->name);
         return ((KValue(*)(KValue, KValue, KValue, KValue))r->fn)(a, b, c, d);
     }
-    k_die("this value is not callable");
+    k_die_not_callable(f);
     return k_none();
 }
 
