@@ -1,0 +1,4 @@
+error[syntax]: a whole module re-exports by its own name; rename exports one at a time
+  --> a_whole_module_reexported_under_a_new_name.kso:3:5
+   3 | pub text:t
+           ^

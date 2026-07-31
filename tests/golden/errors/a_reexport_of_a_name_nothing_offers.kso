@@ -1,0 +1,5 @@
+import "std/text"
+
+pub nonexistent
+
+pub play = print "{text/split "a" ","}"
