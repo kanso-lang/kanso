@@ -1,0 +1,4 @@
+error[syntax]: unexpected character `;`
+  --> stray_semicolon.kso:1:21
+   1 | pub play = print "a";
+                           ^

@@ -1,0 +1,4 @@
+error[formatting]: comments are `#`
+  --> comment_slashes.kso:1:1
+   1 | // a greeting
+       ^

@@ -1,0 +1,4 @@
+pub area
+  x
+
+pub play = print "x"

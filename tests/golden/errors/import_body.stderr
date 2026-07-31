@@ -1,0 +1,4 @@
+error[syntax]: an import has no body
+  --> import_body.kso:2:3
+   2 |   x
+         ^

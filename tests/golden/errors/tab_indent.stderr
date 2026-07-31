@@ -1,0 +1,4 @@
+error[formatting]: tabs are not part of the canonical grammar; indent with spaces
+  --> tab_indent.kso:2:1
+   2 | 	1
+       ^

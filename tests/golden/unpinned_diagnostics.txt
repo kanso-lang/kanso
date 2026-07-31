@@ -15,7 +15,6 @@ a field annotation binds tight: `name:type`
 a field is written by assignment inside a `build` block: `target.field = value`
 a map pair is tight: `key:value`
 a program defines `main`
-a re-export has no body
 a re-export is `pub name` or `pub theirs:yours`
 a rename is theirs:yours
 a rename is tight: `field:name`
@@ -25,27 +24,18 @@ a whole module re-exports by its own name; rename exports one at a time
 an `if` block header is `if condition`
 an entry file needs at least one statement
 an import ends with its path string
-an import has no body
 an import path is a plain string
 an inline constant has no indented block
 an upcast binds tight: `(expr):type`
-braces hold theirs:yours renames
 canonical form requires at most one space here
-comments are `#`
 expected a constant name
 expected a top-level declaration (`fn` or `type`)
-file must end with exactly one newline
 map literal keys are literals; build dynamic maps with `put`
 no import offers a pub `
 nothing follows the final `>>` wall
 nothing to sequence: a `>>` wall needs statements above it
 private type `
-tabs are not part of the canonical grammar; indent with spaces
-the file may not begin with a blank line
-the file may not end with a blank line
 type ascription is tight: `
 type ascription is tight: `_:type`
 typeset members appear in alphabetical order
-unexpected character `
 unterminated escape
-unterminated string

@@ -1,0 +1,2 @@
+// a greeting
+pub play = print "x"
