@@ -1,0 +1,4 @@
+error[formatting]: canonical form requires at most one space here
+  --> at_most_one_space_after_a_colon.kso:2:10
+   2 |   name:  string
+                ^
