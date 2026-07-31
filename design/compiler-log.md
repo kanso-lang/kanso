@@ -12244,3 +12244,26 @@ Compile cost fell five lines, one call and one define per sample, because a
 library no longer emits a `k_user_main` stub calling an entry it does not
 have. Rounds and visits did not move: the emitter changed and the front end
 did not. Welfare 65.53 -> 65.56, banked.
+
+## One past the end
+
+`text/slice "ab" 1 3` answered `"ab"` on native and `""` on the interpreter.
+The oracle is the interpreter, whose rule is flat: `from >= 1 && from <= to &&
+to <= len`, and anything else is empty. The C walks codepoints and counts one
+position past the last, so its guard `seen < to` let `to == len + 1` through
+and returned the whole string. Lists were never affected — that path compares
+lengths directly.
+
+The sweep had probed `text/slice "abcdef" 1 99` and called the edge covered.
+Far past the end and one past the end are not the same probe, and an
+off-by-one only ever lives in the second. Four boundary cases went in beside
+it, and a micro golden pins the string and list paths together.
+
+Found while porting scripts/page_drift.py to kanso, which is the argument for
+that port on its own: the first ten minutes of writing a real program against
+the standard library surfaced a divergence eight differential sweeps had not.
+
+What is still open is the semantics rather than the agreement. An out-of-range
+slice answers an empty string silently, where a missing index errs — so
+`menu["pocky"]!` tells you what went wrong and `text/slice s 1 99` hands back
+something that looks like an answer. Worth a gavel; recorded, not decided.
