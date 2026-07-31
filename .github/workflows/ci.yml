@@ -50,6 +50,34 @@ jobs:
           cargo run -- test lib/list
           cargo run -- test lib/path
 
+  other-host:
+    # Every other job runs on linux, and two defects in two days turned on
+    # which machine built the program: an IR that macOS refused and linux ran,
+    # and a modulo that answers on ARM and raises a floating-point exception on
+    # x86. Each host caught what the other could not see. The differential law
+    # compares engines; nothing was comparing hosts.
+    #
+    # This runs the suite and the arithmetic sweep on the other one. It is the
+    # only job here that is not linux, and macOS minutes bill at a multiple —
+    # so it is the suite and the sweep, not the whole board.
+    name: the other host (macos, arm)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # the same reason the linux suite rebuilds it: the committed artifact is
+      # whatever the last author remembered, and a stale one would fail this
+      # job for a reason that has nothing to do with the host
+      - name: rebuild the engine the wasm spec runs
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sh scripts/build_wasm.sh
+      - run: cargo test
+      - name: integer arithmetic, on the architecture linux is not
+        run: |
+          cargo build --release
+          python3 scripts/numeric_differential.py 0
+
   playground:
     name: playground examples (every engine)
     runs-on: ubuntu-latest

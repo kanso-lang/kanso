@@ -12800,3 +12800,21 @@ the program, after the invalid IR one verifier accepted and another refused.
 The pattern is worth naming: a differential law between engines does not say
 anything about a differential between hosts, and the only gate that has ever
 caught one is the one that runs somewhere else.
+
+## The other host
+
+Every job in this repo ran on linux, and two defects in two days turned on
+which machine built the program. An IR that macOS refused and linux compiled
+and ran, so the native engine's verdict on a program depended on the host. And
+a modulo that answers on ARM and raises a floating-point exception on x86, which
+the laptop could not produce and the first CI run found immediately.
+
+Each host caught what the other could not see, which is the whole argument: the
+differential law compares the three engines, and nothing was comparing the two
+architectures they run on. A green board meant green on one machine.
+
+There is a macOS job now. It runs the suite and the arithmetic sweep, not the
+whole board, because those minutes bill at a multiple and the rest of the board
+is not host-sensitive. If that cost is not worth paying, the thing to keep is
+the knowledge rather than the job: a local run is evidence about one machine,
+and both of this week's defects were invisible from where they were written.
