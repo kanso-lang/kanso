@@ -12357,3 +12357,49 @@ predict.
 The sweep as shipped writes each report where it is found and accumulates an
 int, which is better output anyway — a failure prints as it happens rather than
 at the end.
+
+## Native runs out of stack where the interpreter answers
+
+A walk over a list where each step is an effect, accumulating conditionally —
+one arm returns the accumulator unchanged, the other pushes a value derived
+from the step's answer — runs the native engine out of stack. The interpreter
+answers correctly, so this is the differential law rather than a deep chain.
+
+Thirty-nine lines reduce it, in tests/golden/known_wrong, pinned by a test that
+asserts what the compiler does today and says to delete itself when that
+changes. Isolating one element at a time: two nested binds are needed and one
+is not enough; the accumulated value must be derived, since a constant pushes
+fine at thirty-one steps; the failing step must be followed by another, since a
+lone failing step and a failing step in last position both pass. Records,
+processes and files are all absent from the reduction. `--strict` fails the
+same way, so it is not thunk memoization.
+
+The tell that it is codegen rather than semantics: breaking the continuation
+lambda into named functions makes it disappear. What was ruled out along the
+way — dispatch on a literal arm, the top-level constant being a CAF, aliasing
+through the identity arm — is recorded in task #57 so nobody pays for it twice.
+`d_noted_2` does compile its identity arm to a bare return of its argument and
+its other arm to `k_b_push_mut`, which looked like the answer and was not:
+defeating the in-place decision changes nothing.
+
+No diagnosis. The reduction stops there, and the next move is a backtrace of
+the native recursion or a diff of the emitted IR against the form that works.
+
+## Where a continuation line sits
+
+Clay's objection: indentation means arguments, so a `>>` or `.` continuing a
+chain should sit at its statement's column, not two deeper. Reading the lexer
+against that, the two operators do not agree — `>>` is accepted at the
+statement's column and `.` is refused there, with a diagnostic requiring the
+two spaces. A chain mixing them cannot be written consistently at all, which is
+why the first drafts indented both.
+
+The scripts written so far no longer indent any continuation. Where a chain
+mixed the two operators it became a function ending in a single-line `.`, which
+reads better anyway: the sequencing is one thing and the exit is another. Top
+level is the case the rule cannot reach — a line at column zero must begin a
+declaration, so a constant's chain has nowhere to sit but indented, and the
+three that did are functions now.
+
+Whether `.` should stop demanding the indent is a canon question and is
+recorded as one, not changed.

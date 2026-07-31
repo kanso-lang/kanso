@@ -124,22 +124,25 @@ fn noted found expr verdict
 # and reports every value green. That is what a first draft of this file did,
 # and it is the third time this project has produced a confident number about
 # nothing. So the shape of one probe is checked before any of them run.
+complaint = "the probe shape changed: probes must interpolate\n"
+
 sample = "pub play = print \"\{1}\"\n"
 
 pub play = begun (plain "1" == sample)
 
 fn begun false
-  io/write_err "the probe shape changed: probes must interpolate\n"
-    . (_ -> io/exit 2)
+  io/write_err complaint . (_ -> io/exit 2)
 
 fn begun true
   swept plain values [] . (a -> swept typed shaped a . reported)
 
 fn reported found
+  said found . (_ -> io/exit (sound (length found)))
+
+fn said found
   count = length values + length shaped
   io/write "{count} values rendered, {length found} disagree\n"
-    >> io/write (text/join found "")
-    . (_ -> io/exit (sound (length found)))
+  >> io/write (text/join found "")
 
 fn sound 0
   0
