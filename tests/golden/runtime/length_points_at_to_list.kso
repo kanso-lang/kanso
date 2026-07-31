@@ -1,0 +1,7 @@
+# A lazy sequence is not a list, and refusing it is right — `list/naturals`
+# has no length to count. But the reader who wrote `length (list/map …)` is
+# one call away from what they wanted, and the message used to stop at what
+# it would not accept.
+import "std/list"
+
+pub play = print "{length (list/map [1 2 3] (n -> n))}"

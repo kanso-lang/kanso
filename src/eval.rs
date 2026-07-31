@@ -2070,8 +2070,9 @@ impl<'a> Interp<'a> {
                     Value::Map(entries) => Ok(Value::Int(BigInt::from(entries.len()))),
                     other => Err(RuntimeError {
                         message: format!(
-                            "length takes a list, string, or map, not {}",
-                            render(&other, true)
+                            "length takes a list, string, or map, not {}{}",
+                            render(&other, true),
+                            lazy_hint(&other)
                         ),
                         span,
                     }),
@@ -2957,6 +2958,18 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
         Desc::Random(n) => out.push_str(&format!("  random {n}\n")),
         Desc::Nil => {}
+    }
+}
+
+/// A lazy sequence has no length to count — `naturals` would never finish —
+/// so refusing it is right. But the reader who wrote `length (map …)` is one
+/// call from what they wanted, and the message may as well say which.
+fn lazy_hint(v: &Value) -> &'static str {
+    match v {
+        Value::Record { ty, .. } if ty.starts_with("list/") => {
+            " — a lazy sequence becomes a list with list/to_list"
+        }
+        _ => "",
     }
 }
 

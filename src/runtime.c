@@ -4269,6 +4269,24 @@ KValue k_b_length(KValue v) {
         for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
         return k_int(count);
     }
+    /* A lazy sequence has no length to count — `naturals` would never
+       finish — so refusing it is right. But the reader who wrote
+       `length (map …)` is one call from what they wanted, and the message
+       may as well say which. Built by hand because k_die_value puts the
+       value last and the hint belongs after it. */
+    if (v.tag == K_REC) {
+        const char* ty = k_type_name(k_as_rec(v)->type_id);
+        if (ty && strncmp(ty, "list/", 5) == 0) {
+            KValue shown = k_render(v, 1);
+            KStr* s = k_as_str(shown);
+            char said[1024];
+            snprintf(said, sizeof said,
+                     "length takes a list, string, or map, not %.*s — a lazy "
+                     "sequence becomes a list with list/to_list",
+                     (int)s->len, s->data);
+            k_die(said);
+        }
+    }
     k_die_value("length takes a list, string, or map", v);
     return k_none();
 }
