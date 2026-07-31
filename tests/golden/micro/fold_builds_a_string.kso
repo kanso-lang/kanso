@@ -1,0 +1,10 @@
+import "std/list"
+
+# The fold's function is handed over as a value, so no call site in this
+# program passes the seed and there is nowhere to convert it into a builder.
+# Marking `acc` an accumulator anyway leaves the runtime holding a plain
+# string where it was promised one it may write into.
+fn glued acc chunk
+  "{acc}-{chunk}"
+
+pub play = print "{list/fold ["b" "c"] "a" glued}"
