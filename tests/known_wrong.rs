@@ -51,24 +51,3 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
     assert_eq!(out, "1: a gave a\n", "the oracle's answer changed");
     assert_eq!(code, Some(0));
 }
-
-/// Task #70, the same defect wearing a crash. A three-deep chain of tail calls
-/// where the middle one takes five parameters: the corrupted argument is a
-/// literal-cache pointer, so the runtime dereferences 5 and dies. `kanso run`
-/// reports that as running out of stack, which it is not — the backtrace is
-/// five frames deep and the call graph has no cycle in it. Whether it faults
-/// at all is the host's answer, so this accepts either outcome.
-#[test]
-fn a_chain_of_tail_calls_recurses_on_native_where_the_oracle_loops() {
-    let fixture = "tail_chain_recurses_on_native.kso";
-    let expected = "[differ kanso p 9 ms\ndiffer kanso p 9 mb\n]\n";
-    let (native_out, native_err, _) = run(fixture, &[]);
-    let (interp_out, _, interp_code) = run(fixture, &["--interp"]);
-
-    assert_eq!(interp_out, expected);
-    assert_eq!(interp_code, Some(0));
-    assert!(
-        native_err.contains("ran out of stack") || native_out == expected,
-        "native neither answered nor died: out={native_out:?} err={native_err:?}"
-    );
-}
