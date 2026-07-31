@@ -12708,3 +12708,36 @@ the dispatch before the library check. That is the same verb the CLI does not
 document and should not have, doing damage rather than sitting there — the
 harness now runs everything under `run`, which is what a reader types, and two
 fixtures that had been reporting the wrong message were found by the change.
+
+## The one division that answers wrongly
+
+`-9223372036854775808 / -1` printed the least integer again, with exit zero.
+The true quotient is one past the greatest, which C leaves undefined and this
+machine answers by wrapping. Every other overflow on this build refuses — `+`,
+`-` and `*` all guard with the compiler's checked builtins — so this was the
+single place the native engine produced a wrong number instead of a diagnostic.
+It now raises the same overflow the others do.
+
+It was found by asking what the numeric sweep's four hundred and seventeen
+disagreements actually are. The sweep matched a known-ceiling message of
+"integer overflow", which catches the runtime overflow and not the refusal to
+compile a literal too wide, so most of its report was one known limit said four
+hundred times. Classified against the message the compiler prints, the four
+hundred and seventeen are three hundred and ninety-six literals too wide, one
+hundred and sixty-four runtime overflows, and this. A number that large stops
+being read, and the one entry worth reading was inside it.
+
+## Twelve digits are not a program
+
+Adding that test made the numeric suite flaky — a different test failed on each
+run, and each passed alone. The tests share a work directory keyed by the first
+twelve digits of the program, and `9223372036854775807 * 2` opens with the same
+twelve as `-9223372036854775808 / -1`. Two tests then wrote into one directory
+and deleted each other's entry mid-run, and one read the other's answer: the
+ceiling test was handed the division's number and reported that the oracle had
+stopped being exact.
+
+The key is the whole program now, hashed. What is worth keeping is that the
+comment above it already promised one directory per program — the isolation was
+described correctly and implemented on a prefix, and the suite was one test away
+from two of its members quietly trading answers.

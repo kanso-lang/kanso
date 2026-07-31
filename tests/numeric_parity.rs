@@ -1,10 +1,17 @@
 use std::process::Command;
 
 fn ran(program: &str, extra: &[&str]) -> (i32, String, String) {
-    // one directory per program and engine: these run in parallel, and a
-    // shared work dir means one test deletes another's entry mid-run
-    let key: String = program.chars().filter(|c| c.is_ascii_digit()).take(12).collect();
-    let dir = std::env::temp_dir().join(format!("kanso-numeric-{key}-{}", extra.len()));
+    // One directory per program and engine: these run in parallel, and a
+    // shared work dir means one test deletes another's entry mid-run. The key
+    // is the whole program, hashed — twelve digits of it collided the moment a
+    // fourth test arrived, because `9223372036854775807 * 2` and
+    // `-9223372036854775808 / -1` open with the same twelve, and the two tests
+    // then read each other's answers.
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    program.hash(&mut hasher);
+    extra.hash(&mut hasher);
+    let dir = std::env::temp_dir().join(format!("kanso-numeric-{:016x}", hasher.finish()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp work dir");
     std::fs::write(dir.join("main.kso"), program).expect("the entry writes");
@@ -76,4 +83,24 @@ fn a_literal_too_wide_for_the_native_build_is_refused_not_wrapped() {
         );
         assert_ne!(out.trim(), was, "the old wrapped answer came back");
     }
+}
+
+/// The only signed division that overflows: the least integer over -1 is one
+/// past the greatest. C leaves it undefined and this machine answered by
+/// wrapping, so native printed the least integer again — a wrong number, with
+/// exit 0, where every other overflow on this build is a refusal.
+///
+/// Found by classifying what scripts/numeric_differential.py reports: of 417
+/// disagreements, 396 were literals too wide to compile and 164 were the loud
+/// runtime overflow. This was the one left over.
+#[test]
+fn the_least_integer_divided_by_minus_one_is_refused_not_wrapped() {
+    let program = "print (-9223372036854775808 / -1)\n";
+
+    let (code, out, err) = ran(program, &[]);
+    let (_, interp, _) = ran(program, &["--interp"]);
+
+    assert_eq!(interp, "9223372036854775808\n", "the oracle stopped being exact");
+    assert_ne!(code, 0, "native answered instead of refusing: {out:?}");
+    assert!(err.contains("integer overflow"), "refused for another reason: {err}");
 }
