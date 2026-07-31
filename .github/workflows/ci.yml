@@ -241,7 +241,7 @@ jobs:
       # how effects COMBINE — sequenced, bound, nested, run beside each other.
       # the executor is written twice with no shared code, so the two halves
       # can drift anywhere the corpus does not happen to go
-      - run: python3 scripts/effects_differential.py
+      - run: ./target/release/kanso play scripts/effects_differential.kso
       # which arm answers. dispatch is what every branch in the language is
       # made of, and it is an arm search in one engine and a switch with guard
       # chains in the other
