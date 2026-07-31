@@ -52,34 +52,6 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
     assert_eq!(code, Some(0));
 }
 
-/// Task #70. A function of five parameters answers differently the second time
-/// it is called with the same arguments: the first argument arrives holding the
-/// second's value. Five KValues want ten argument registers, AArch64 has eight,
-/// so two travel on the stack and a non-tail `call tailcc` gets that wrong.
-/// Silent corruption, not a crash, and only on arm — the x86 runner answers
-/// correctly, which is why nothing caught it. So this pins the interpreter and
-/// names the one wrong answer arm is allowed to give.
-#[test]
-fn five_parameters_corrupt_the_second_call_on_arm() {
-    let fixture = "five_parameters_corrupt_the_second_call.kso";
-    let right = "[2 1 3 4 5][2 1 3 4 5]\n";
-    let corrupt = "[2 1 3 4 5][2 2 3 4 5]\n";
-    let (native_out, _, _) = run(fixture, &[]);
-    let (interp_out, _, interp_code) = run(fixture, &["--interp"]);
-
-    assert_eq!(interp_out, right);
-    assert_eq!(interp_code, Some(0));
-    assert!(
-        native_out == right || native_out == corrupt,
-        "native gave a third answer: {native_out:?}"
-    );
-    assert_eq!(
-        native_out == right,
-        !cfg!(target_arch = "aarch64"),
-        "arm should corrupt and x86 should not; delete this entry when arm stops"
-    );
-}
-
 /// Task #70, the same defect wearing a crash. A three-deep chain of tail calls
 /// where the middle one takes five parameters: the corrupted argument is a
 /// literal-cache pointer, so the runtime dereferences 5 and dies. `kanso run`

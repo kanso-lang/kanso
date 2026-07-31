@@ -1,0 +1,11 @@
+# Five KValues want ten argument registers and arm64 has eight, so two travel
+# on the stack. A non-tail `call tailcc` got those two wrong: called twice with
+# the same arguments, the second call saw its first argument holding the
+# second's value — silently, and only on arm.
+fn joined p1 p2 p3 p4 p5
+  "{p2} {p1} {p3} {p4} {p5}"
+
+pub play =
+  a = joined "1" "2" "3" "4" "5"
+  b = joined "1" "2" "3" "4" "5"
+  print "[{a}][{b}]"
