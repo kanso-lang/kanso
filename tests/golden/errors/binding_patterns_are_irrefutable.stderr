@@ -1,0 +1,4 @@
+error[syntax]: binding patterns are irrefutable: names and nested constructor patterns only
+  --> binding_patterns_are_irrefutable.kso:6:9
+   6 |   point 9 = p
+               ^

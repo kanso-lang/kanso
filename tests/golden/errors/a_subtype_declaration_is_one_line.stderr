@@ -1,0 +1,4 @@
+error[syntax]: a subtype or typeset declaration is one line; fields belong to records
+  --> a_subtype_declaration_is_one_line.kso:4:11
+   4 | type slug body
+                 ^

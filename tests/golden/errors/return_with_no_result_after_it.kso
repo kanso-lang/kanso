@@ -1,0 +1,4 @@
+fn f x
+  return "a" if x > 1
+
+pub play = print "{f 2}"
