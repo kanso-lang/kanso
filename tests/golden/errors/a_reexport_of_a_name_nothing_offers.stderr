@@ -1,0 +1,4 @@
+error[name]: no import offers a pub `nonexistent` to re-export
+  --> a_reexport_of_a_name_nothing_offers.kso:3:5
+   3 | pub nonexistent
+           ^

@@ -158,7 +158,8 @@ fn compile_one(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -257,7 +258,8 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -2146,6 +2148,37 @@ thread_local! {
 /// onto this module's surface. A qualifier elevates its module's whole
 /// surface; a lone name elevates that export wherever imports offer it;
 /// `theirs:yours` clones under the new name instead.
+/// A lone file's re-exports, held to the rule a module's are held to.
+///
+/// The two diagnostics `apply_reexport` raises used to be reachable only once
+/// a module was merged, so `pub nothing_offers_this` in a single file was
+/// accepted and did nothing. A file has imports and a dependency surface like
+/// any module, which is everything the check needs.
+fn check_reexports(
+    program: &ast::Program,
+    dep_program: &mut ast::Program,
+    import_list: &[ast::Import],
+    file: &str,
+    source: &str,
+) -> Result<(), String> {
+    let was_pub: std::collections::HashSet<String> = dep_program
+        .fns
+        .iter()
+        .filter(|f| f.is_pub)
+        .map(|f| f.name.clone())
+        .chain(dep_program.types.iter().filter(|t| t.is_pub).map(|t| t.name.clone()))
+        .collect();
+    let import_quals: Vec<String> = import_list
+        .iter()
+        .map(|i| i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string()))
+        .collect();
+    for re in &program.reexports {
+        apply_reexport(dep_program, &was_pub, &import_quals, re)
+            .map_err(|d| diag::render(&[d], file, source))?;
+    }
+    Ok(())
+}
+
 fn apply_reexport(
     dep_program: &mut ast::Program,
     was_pub: &std::collections::HashSet<String>,
