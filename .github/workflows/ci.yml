@@ -141,7 +141,7 @@ jobs:
       - run: cargo build --release
       - run: ./target/release/kanso run scripts/welfare.kso
       - name: prose numbers match the golden they quote
-        run: python3 scripts/golden_prose.py
+        run: ./target/release/kanso run scripts/golden_prose.kso
       - name: one sitting, published once
         run: python3 scripts/cross_surface_numbers.py
 
