@@ -142,7 +142,7 @@ Only Clay arms, disarms or retimes it.
 ### The welfare number only goes up
 
 - **One scalar covers runtime and compile cost together**, because the
-  per-counter goldens cannot see a trade. `scripts/welfare.py` weighs decode
+  per-counter goldens cannot see a trade. `scripts/welfare.kso` weighs decode
   allocations and arena blocks, encode allocations and arena blocks, fixpoint
   rounds, expression visits and emitted lines into a single score. **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs

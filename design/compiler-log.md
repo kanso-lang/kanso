@@ -12651,3 +12651,40 @@ a list literal, an element that is a call needs parentheses or a name.
 The workflow step lost its python twice over. The record is written by the
 kanso program, and the commit message that used to shell into python to read
 one key out of the json now asks git for the short sha it already knows.
+
+## The objective, in the language it scores
+
+scripts/welfare.py is gone. The kanso version prints byte-identical output on
+the reporting path — the score, every changed term with its percentage, the
+terms that got worse with what each cost — and the same exit code on both
+failure paths. Only the wrapping of the two failure paragraphs differs, because
+eighty columns is a rule here and was not there, and the tool now calls itself
+`welfare` rather than `welfare.py`.
+
+Three things the port found, and the first two are the language's.
+
+An application inside a list literal is not an application. `[named l (amount
+l)]` builds three elements — the function, the line, and the amount — because
+space separates elements inside brackets, so a call there needs parentheses. It
+is the grammar rather than a bug, and it had already cost two earlier ports;
+this one it cost twice, once in the counter parser and once in the record of
+measured terms. Both times the symptom was a map that came back nearly empty.
+
+`/` on two integers truncates. Every ratio in this program is one integer over
+another, so the score came out at 43 against 65 and every percentage read
+`+0.0%`, which looks like a bug in the arithmetic and is the arithmetic working
+as specified. The numerator enters as a float now, through one named function
+so there is one place to be wrong.
+
+The third is mine, and worth writing down because it hid behind the other two:
+`list/reject` keeps what the predicate rejects. Asking it for the terms missing
+from the baseline returned the terms present in it, which overwrote the
+baseline with today's numbers, which made every ratio one, which is a score of
+exactly the weighted sum of a third. A wrong answer that looks like a plausible
+answer is the expensive kind.
+
+Two differences remain, both stated rather than hidden. The floor file is
+written compactly where python indented it, which is invisible to its only
+reader and will show as a reformat the first time somebody banks a gain. And
+the path that establishes a floor when none exists is not ported: it has run
+once in the project's life and cannot run again while the file is committed.
