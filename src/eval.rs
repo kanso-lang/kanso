@@ -1673,7 +1673,7 @@ impl<'a> Interp<'a> {
                 let [list, item] = arity(args, name, span)?;
                 let Value::List(items) = &list else {
                     return Err(RuntimeError {
-                        message: "push takes a list and a value".to_string(),
+                        message: format!("push takes a list and a value{}", lazy_hint(&list)),
                         span,
                     });
                 };
@@ -2355,9 +2355,11 @@ pub fn index_value(container: Value, index: Value, span: Span) -> EvalResult {
             let key = map_key(index, span)?;
             Ok(entries.get(&key).cloned().unwrap_or(Value::NoneV))
         }
-        _ => Err(RuntimeError {
-            message: "indexing takes a list or string with a 1-based position, or a map with a key"
-                .to_string(),
+        (base, _) => Err(RuntimeError {
+            message: format!(
+                "indexing takes a list or string with a 1-based position, or a map with a key{}",
+                lazy_hint(base)
+            ),
             span,
         }),
     }
