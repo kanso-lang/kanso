@@ -234,7 +234,7 @@ jobs:
       - run: python3 scripts/diagnostic_differential.py
       # rendering is written twice — `render` in the interpreter and
       # `k_render` in the C runtime — and every print goes through it
-      - run: python3 scripts/render_differential.py
+      - run: ./target/release/kanso play scripts/render_differential.kso
       # the same std surface, asked for the awkward thing rather than the
       # wrong one: what a function ANSWERS at its edges, not what it complains
       - run: python3 scripts/behaviour_differential.py

@@ -12290,3 +12290,32 @@ a bare enrollment brought in without grepping lib/.
 
 Twenty-one scripts left. The order will be smallest-first, because each one
 that lands is a python file deleted rather than a rewrite half-done.
+
+## The render sweep, in kanso, and what it nearly hid
+
+scripts/render_differential.py is gone. The kanso version runs the same 68
+values through both engines in 1.3 seconds and reports the same number.
+
+Getting there found two things about writing kanso, and one about writing
+sweeps. A list literal is one line and a line is eighty characters, so a corpus
+of sixty strings cannot be a literal at all — it is named in groups and joined
+with `text/concat`, which reads better than the python's flat block did. And
+`paired` is a `std/list` adapter type enrolled bare, so a helper by that name
+is an arity error against a type the reader never mentioned. That is the third
+collision of this kind in two ports.
+
+The third thing is the one worth keeping. A probe is written as
+`print "\{{expr}}"` — a literal brace, then the interpolation, then a literal
+brace. The first draft wrote `\\{expr}`, which emits a backslash and the bare
+text, so every probe file was a plain string with no interpolation in it. Both
+engines printed it identically. The sweep reported 68 values rendered, 0
+disagree, and had compared nothing at all.
+
+It was caught by injecting a value known to diverge — the bignum literal the
+numeric sweep already reports — and finding the sweep still said zero. So the
+file now checks the shape of one probe against a literal before running any of
+them, and refuses to start if it changed. That guard was watched firing.
+
+Related: scripts/numeric_differential.py is in the repo and is not wired into
+CI. It reports real disagreements today. That is task #46 — the engines
+disagree and nothing pins it — with the sweep sitting right there unrun.
