@@ -1,6 +1,6 @@
 use crate::ast::Program;
 use crate::eval::{render, Desc, Executor, Interp, Value};
-use crate::{check, diag, lexer, parser};
+use crate::{diag, lexer, parser};
 
 /// One committed input: a declaration (all arms of one name), or a synthetic
 /// `itN` constant wrapping an expression.
@@ -23,6 +23,11 @@ impl Unit {
 }
 
 pub struct Session {
+    /// Imports open a file, so they are kept apart from the declarations and
+    /// written first. Sorted and deduplicated, because the grammar wants them
+    /// alphabetical and refuses the same path twice — the repl canonicalizes
+    /// on the reader's behalf here as it does for declaration order.
+    imports: Vec<String>,
     units: Vec<Unit>,
     counter: usize,
 }
@@ -45,7 +50,7 @@ impl Default for Session {
 
 impl Session {
     pub fn new() -> Self {
-        Session { units: Vec::new(), counter: 0 }
+        Session { imports: Vec::new(), units: Vec::new(), counter: 0 }
     }
 
     /// The name the next expression result will be bound to.
@@ -85,6 +90,9 @@ impl Session {
         if trimmed.trim_start().starts_with(':') {
             return self.directive(trimmed.trim());
         }
+        if trimmed.trim_start().starts_with("import ") {
+            return self.import(trimmed.trim());
+        }
         if !declaration_intent(trimmed) {
             return self.eval_expression(trimmed, executor);
         }
@@ -119,6 +127,21 @@ impl Session {
             }
         }
         Ok(Outcome::Value(lines.join("\n")))
+    }
+
+    /// An import joins the session's file rather than being evaluated. It is
+    /// committed only if the session still compiles with it, so a path that
+    /// names no module leaves the session as it was.
+    fn import(&mut self, line: &str) -> Result<Outcome, String> {
+        if self.imports.iter().any(|i| i == line) {
+            return Ok(Outcome::Defined(format!("already imported: {line}")));
+        }
+        let mut wanted = self.imports.clone();
+        wanted.push(line.to_string());
+        wanted.sort();
+        compile_units(&wanted, &self.units)?;
+        self.imports = wanted;
+        Ok(Outcome::Defined(format!("imported {}", short_of(line))))
     }
 
     /// Arms accumulate as overloads of a name — dispatch is open, so a new
@@ -166,7 +189,7 @@ impl Session {
                 }
             }
         }
-        let _ = compile_units(&candidate)?;
+        let _ = compile_units(&self.imports, &candidate)?;
         self.units = candidate;
         Ok(Outcome::Defined(echo.join(", ")))
     }
@@ -179,7 +202,7 @@ impl Session {
         }
         let mut candidate = self.units.clone();
         candidate.retain(|u| u.name != name);
-        match compile_units(&candidate) {
+        match compile_units(&self.imports, &candidate) {
             Ok(_) => {
                 self.units = candidate;
                 Ok(format!("deleted {name}"))
@@ -196,7 +219,7 @@ impl Session {
         match name {
             None => match self.units.is_empty() {
                 true => Ok("the session is empty".to_string()),
-                false => Ok(assemble(&self.units).trim_end().to_string()),
+                false => Ok(assemble_with(&self.imports, &self.units).trim_end().to_string()),
             },
             Some(n) => self
                 .units
@@ -223,7 +246,7 @@ impl Session {
             arms: vec![(name.clone(), source)],
             is_type: false,
         });
-        let program = compile_units(&candidate)?;
+        let program = compile_units(&self.imports, &candidate)?;
         let interp = Interp::new(&program);
         let result = interp.run_named(&name).expect("just-committed constant resolves");
         let value = match result {
@@ -252,29 +275,33 @@ fn execute(interp: &Interp, desc: &Desc, executor: &mut dyn Executor) -> Result<
     }
 }
 
-fn compile_units(units: &[Unit]) -> Result<Program, String> {
-    let source = assemble(units);
-    let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, "repl", &source))?;
-    let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, "repl", &source))?;
-    for decl in &mut program.fns {
-        decl.file = "repl".to_string();
-    }
-    let diags: Vec<diag::Diagnostic> =
-        check::check(&mut program, false).into_iter().filter(|d| d.kind != "unused").collect();
-    match diags.is_empty() {
-        true => Ok(program),
-        false => Err(diag::render(&diags, "repl", &source)),
-    }
+/// The session compiles the way a `play` file does, so an import at the
+/// prompt reaches the same modules a file would. It used to parse and check
+/// the text directly, which resolved no imports at all — the standard library
+/// was unreachable from the repl.
+fn compile_units(imports: &[String], units: &[Unit]) -> Result<Program, String> {
+    crate::compile_repl("repl", &assemble_with(imports, units))
 }
 
 /// The session rendered as its canonical file: types first, then values,
 /// each alphabetical — the repl canonicalizes on the user's behalf, so
 /// declaration order at the prompt is exploration order, never an error.
-fn assemble(units: &[Unit]) -> String {
+fn assemble_with(imports: &[String], units: &[Unit]) -> String {
     let mut sorted: Vec<&Unit> = units.iter().collect();
     sorted.sort_by_key(|u| (!u.is_type, u.name.as_str()));
-    let sources: Vec<String> = sorted.iter().map(|u| u.source()).collect();
+    let mut sources: Vec<String> = Vec::new();
+    if !imports.is_empty() {
+        sources.push(imports.join("\n"));
+    }
+    sources.extend(sorted.iter().map(|u| u.source()));
     format!("{}\n", sources.join("\n\n"))
+}
+
+/// The qualifier an import brings in, for the echo: `import "std/list"` is
+/// answered with `list`.
+fn short_of(line: &str) -> String {
+    let path = line.split('"').nth(1).unwrap_or_default();
+    path.rsplit('/').next().unwrap_or(path).to_string()
 }
 
 /// An arm's dispatch signature, canonically rendered: name, arity, and the
