@@ -53,17 +53,23 @@ fn native_runs_out_of_stack_where_the_interpreter_answers() {
 }
 
 /// Task #70. Two calls into the same three-deep chain of tail calls, differing
-/// only in the literal that picks an arm at the bottom. The interpreter
-/// answers both; the native build recurses until the stack is gone, which is a
-/// divergence rather than a slow path — the program has no recursion in it.
+/// only in the literal that picks an arm at the bottom. The interpreter walks
+/// it iteratively and always answers. The native build recurses, and whether
+/// that reaches the end of the stack depends on the host: it dies on macOS and
+/// arm, and finishes on the linux runner. So this pins the interpreter's answer
+/// and accepts either native outcome, because asserting the one this laptop
+/// gives would go red on a machine where the defect is merely latent.
 #[test]
-fn a_chain_of_tail_calls_recurses_on_native_and_not_on_the_oracle() {
+fn a_chain_of_tail_calls_recurses_on_native_where_the_oracle_loops() {
     let fixture = "tail_chain_recurses_on_native.kso";
-    let (_, native_err, native_code) = run(fixture, &[]);
+    let expected = "[differ kanso p 9 ms\ndiffer kanso p 9 mb\n]\n";
+    let (native_out, native_err, _) = run(fixture, &[]);
     let (interp_out, _, interp_code) = run(fixture, &["--interp"]);
 
-    assert!(native_err.contains("ran out of stack"), "native said: {native_err}");
-    assert_eq!(native_code, Some(1));
-    assert_eq!(interp_out, "[differ kanso p 9 ms\ndiffer kanso p 9 mb\n]\n");
+    assert_eq!(interp_out, expected);
     assert_eq!(interp_code, Some(0));
+    assert!(
+        native_err.contains("ran out of stack") || native_out == expected,
+        "native neither answered nor ran out of stack: out={native_out:?} err={native_err:?}"
+    );
 }

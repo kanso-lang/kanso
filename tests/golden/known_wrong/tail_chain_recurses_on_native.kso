@@ -1,7 +1,9 @@
 # Task #70. Two calls into the same three-deep chain of tail calls, differing
-# only in a literal, and the native build recurses until the stack is gone.
-# The interpreter answers both. Removing any one layer — calling `claimed`
-# directly, or narrowing `agreed` to three parameters — makes it run.
+# only in a literal. The interpreter walks it iteratively; the native build
+# recurses, and whether that reaches the end of the stack is the host's answer
+# rather than the compiler's — it dies on macOS and arm, and finishes on the
+# linux runner. Removing any one layer — calling `claimed` directly, or
+# narrowing `agreed` to three parameters — makes it iterate there too.
 type row
   mb
   ms
