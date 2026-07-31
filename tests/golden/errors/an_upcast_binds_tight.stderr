@@ -1,0 +1,4 @@
+error[formatting]: an upcast binds tight: `(expr):type`
+  --> an_upcast_binds_tight.kso:8:14
+   8 |   print "{(s): body}"
+                    ^

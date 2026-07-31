@@ -1,0 +1,6 @@
+pub play =
+  n = 1
+  if n > 0
+    "yes"
+  else
+  "no"

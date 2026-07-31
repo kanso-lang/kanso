@@ -1,0 +1,4 @@
+error[formatting]: a map pair is tight: `key:value`
+  --> a_map_pair_is_tight.kso:2:12
+   2 |   m = { "a": 1 }
+                  ^

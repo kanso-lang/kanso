@@ -1,0 +1,4 @@
+error[formatting]: a field annotation binds tight: `name:type`
+  --> a_field_annotation_binds_tight.kso:2:7
+   2 |   name: string
+             ^

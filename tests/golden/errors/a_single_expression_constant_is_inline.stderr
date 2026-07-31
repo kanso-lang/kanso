@@ -1,0 +1,4 @@
+error[formatting]: a single-expression constant is written inline: `greeting = ...`
+  --> a_single_expression_constant_is_inline.kso:1:1
+   1 | greeting =
+       ^

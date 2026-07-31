@@ -1,0 +1,4 @@
+fn greeting
+  "hello"
+
+pub play = print greeting

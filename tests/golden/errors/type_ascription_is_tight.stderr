@@ -1,0 +1,4 @@
+error[formatting]: type ascription is tight: `x:type`
+  --> type_ascription_is_tight.kso:1:7
+   1 | fn f x: int
+             ^

@@ -1,0 +1,4 @@
+error[syntax]: `else` opens a branch: indent its statements beneath it
+  --> else_opens_a_branch.kso:5:3
+   5 |   else
+         ^

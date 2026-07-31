@@ -1,0 +1,4 @@
+type user
+  name: string
+
+pub play = print "x"

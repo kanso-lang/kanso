@@ -1,0 +1,8 @@
+type body
+  text
+
+type slug body
+
+pub play =
+  s = slug "x"
+  print "{(s): body}"
