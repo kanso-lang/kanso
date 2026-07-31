@@ -76,8 +76,20 @@ fn plain expr
 fn typed expr
   "{prelude}pub play = print \"\{{expr}}\"\n"
 
+# A legal probe that never returns is a finding, and a louder one than a
+# wording difference — so every run is under `timeout`, which answers 124 when
+# it fires. A box without `timeout` cannot start it, and an err says so rather
+# than the sweep quietly losing the property.
+limit = "20"
+
 fn asked argv
-  io/run kanso argv
+  io/run "timeout" (text/concat [limit kanso] argv)
+
+fn hung? 124
+  true
+
+fn hung? _
+  false
 
 # The probe is written once and read by both engines, so a difference is the
 # engines and never two different files.
@@ -90,6 +102,12 @@ fn matched native
   asked ["play" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
+  stalled n i (hung? n.status || hung? i.status)
+
+fn stalled n i true
+  "  never returned: native {n.status} interp {i.status}\n"
+
+fn stalled n i false
   same = n.status == i.status && n.stdout == i.stdout
   agreed n i (same && n.stderr == i.stderr)
 
