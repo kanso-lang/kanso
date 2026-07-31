@@ -240,6 +240,12 @@ jobs:
       # the same std surface, asked for the awkward thing rather than the
       # wrong one: what a function ANSWERS at its edges, not what it complains
       - run: ./target/release/kanso run scripts/behaviour_differential.kso
+      # integer arithmetic across the two engines. Run with no random rounds:
+      # every random draw lands past the native ceiling, so the rounds spend
+      # ten minutes re-confirming what the 561 edge cases already say. The
+      # edges are what straddle the boundary; run it with rounds by hand to
+      # probe further.
+      - run: python3 scripts/numeric_differential.py 0
       # how effects COMBINE — sequenced, bound, nested, run beside each other.
       # the executor is written twice with no shared code, so the two halves
       # can drift anywhere the corpus does not happen to go

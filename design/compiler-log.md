@@ -12762,3 +12762,27 @@ Three test harnesses and four pages named it too. What is worth keeping is the
 shape of the mistake rather than the verb: a second way to start a program,
 never documented, that the tests preferred — so the tests exercised a path no
 reader could take, and the path readers do take went unwatched.
+
+## The numeric sweep can gate now
+
+It reports zero. Two things had to be true first, and only one of them was
+tonight's fix.
+
+The sweep matched a known-ceiling message of "integer overflow", which is what
+the runtime says when an operation overflows. It is not what the compiler says
+when a literal is too wide to fit — that is a different sentence, and matching
+only the first counted three hundred and ninety-six refusals as bugs. A report
+of four hundred and seventeen disagreements is a number nobody reads twice, and
+the one real entry in it went unread for as long as the sweep has existed. The
+ceiling is two voices now, and both are named.
+
+With the division fixed and the classification corrected, two thousand one
+hundred and sixty-three programs run clean: five hundred and sixty-one at the
+ceiling, nothing unexplained. It runs in CI, with no random rounds — every
+random draw lands past the ceiling, so the rounds cost ten minutes to
+re-confirm what the edge cases already say. The edges are what straddle the
+boundary. Running it with rounds by hand is still the way to probe further, and
+that is said in the workflow rather than left to be discovered.
+
+Watched red the way a gate should be: with the division guard removed it
+reports one disagreement and names it.

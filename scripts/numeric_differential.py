@@ -21,10 +21,19 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 KANSO = ROOT / "target/release/kanso"
 
-# The one divergence this project has accepted and pinned (task #46): above the
-# native ceiling the oracle is exact and the native build refuses. Every other
-# disagreement is a bug.
-KNOWN = "integer overflow"
+# The divergence this project has accepted and pinned (task #46): above the
+# native ceiling the oracle is exact and the native build refuses. It refuses in
+# two voices — a literal too wide is caught while compiling, and an operation
+# that overflows is caught while running — and matching only the second counted
+# the first as four hundred bugs. Every other disagreement is a bug.
+CEILING = (
+    "integer overflow",
+    "does not fit this build's 64-bit int",
+)
+
+
+def at_ceiling(native, interp):
+    return any(m in native[2] or m in interp[2] for m in CEILING)
 
 EDGES = [
     0, 1, -1, 2, -2, 7, -7, 10, 255, 256, -256,
@@ -93,7 +102,7 @@ def main():
         same, native, interp = agree([case])
         if same:
             continue
-        if KNOWN in native[2] or KNOWN in interp[2]:
+        if at_ceiling(native, interp):
             known += 1
             continue
         bad.append((program([case]).strip(), native, interp))
@@ -113,7 +122,7 @@ def main():
     if known == 0:
         print()
         print("nothing reached the native ceiling — either the gap closed, in")
-        print("which case delete KNOWN here and in tests/numeric_parity.rs, or")
+        print("which case delete CEILING here and in tests/numeric_parity.rs, or")
         print("the ranges above stopped straddling it.")
         return 1
     return 0
