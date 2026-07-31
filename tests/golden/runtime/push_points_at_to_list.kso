@@ -1,0 +1,5 @@
+# Same gap as length had: a structural operation refuses a lazy sequence,
+# correctly, and used to stop at what it would not take.
+import "std/list"
+
+pub play = print "{push (list/map [1 2] (n -> n)) 9}"

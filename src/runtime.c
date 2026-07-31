@@ -1392,6 +1392,7 @@ KValue k_concat(KValue a, KValue b) {
 }
 
 extern const char* k_type_name(long long type_id);
+static const char* k_lazy_hint(KValue v);
 extern long long k_type_field_count(long long type_id);
 extern const char* k_type_field_name(long long type_id, long long i);
 KValue k_render(KValue v, long long quote);
@@ -4183,7 +4184,15 @@ KValue k_b_at(KValue container, KValue index) {
         return k_none();
     }
     /* `at` is what the builtin is called; indexing is what the reader wrote */
-    k_die("indexing takes a list or string with a 1-based position, or a map with a key");
+    {
+        const char* hint = k_lazy_hint(container);
+        char said[256];
+        snprintf(said, sizeof said,
+                 "indexing takes a list or string with a 1-based position, or a map "
+                 "with a key%s",
+                 hint ? hint : "");
+        k_die(said);
+    }
     return k_none();
 }
 
@@ -4197,7 +4206,12 @@ KValue k_index(KValue container, KValue key, const char* origin) {
 
 static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     if (!k_not_failure(lv)) return lv;
-    if (lv.tag != K_LIST) k_die("push takes a list and a value");
+    if (lv.tag != K_LIST) {
+        const char* hint = k_lazy_hint(lv);
+        char said[128];
+        snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
+        k_die(said);
+    }
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < buf->cap) {
@@ -4242,7 +4256,12 @@ KValue k_b_push(KValue lv, KValue item) { return k_b_push_into(lv, item, 0); }
    push (a uniquely-owned list is never off-frontier unless it just grew). */
 KValue k_b_push_mut(KValue lv, KValue item) {
     if (!k_not_failure(lv)) return lv;
-    if (lv.tag != K_LIST) k_die("push takes a list and a value");
+    if (lv.tag != K_LIST) {
+        const char* hint = k_lazy_hint(lv);
+        char said[128];
+        snprintf(said, sizeof said, "push takes a list and a value%s", hint ? hint : "");
+        k_die(said);
+    }
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < buf->cap) {
@@ -4252,6 +4271,16 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         return lv;
     }
     return k_b_push_into(lv, item, 1);
+}
+
+/* A lazy sequence refused by a structural operation: the reader is one call
+   from what they wanted, and every one of these messages used to stop at what
+   it would not take. Answers NULL for anything that is not one. */
+static const char* k_lazy_hint(KValue v) {
+    if (v.tag != K_REC) return NULL;
+    const char* ty = k_type_name(k_as_rec(v)->type_id);
+    if (!ty || strncmp(ty, "list/", 5) != 0) return NULL;
+    return " — a lazy sequence becomes a list with list/to_list";
 }
 
 KValue k_b_length(KValue v) {
