@@ -12818,3 +12818,37 @@ whole board, because those minutes bill at a multiple and the rest of the board
 is not host-sensitive. If that cost is not worth paying, the thing to keep is
 the knowledge rather than the job: a local run is evidence about one machine,
 and both of this week's defects were invisible from where they were written.
+
+## Nobody was reading the IR
+
+The open half of the thunk-release entry is answered, and the answer is worse
+than either guess in it. macOS refused that IR and linux compiled and ran it
+from identical source; the question was whether the linux verifier never ran or
+the emitted text differed. It is the first. clang runs LLVM's verifier only
+when clang itself was built with assertions — Apple's is, the linux image's is
+not — so `clang -c` on a .ll there parses the module, generates code from it,
+and checks nothing. Every native program CI has ever built went through that
+path. The emitter's output has been unchecked on the machine that gates merges
+for as long as there has been one.
+
+A five-line fixture settles it: a register defined in one arm and used in a
+block that arm does not reach. macOS answers `Instruction does not dominate all
+uses` and exits 1. Linux prints the target-triple warning and exits 0.
+
+The fix needed no new dependency. `opt` and `llvm-as` are built with assertions
+wherever they are built at all, and one of them is already on the linux runner —
+so the check asks each candidate in turn, clang last, and refuses to believe an
+answer about the emitter until one of them has refused the bad fixture. A host
+with neither says so instead of passing. Both jobs are green, which means the
+IR kanso writes for the program that carried the defect is now actually read,
+on both hosts, for the first time.
+
+What this does not do is verify every program the corpus compiles — it verifies
+one, chosen because it reaches the paths the defect lived on. Widening it is
+cheap and the reason to wait is that a per-program verify costs a process per
+program; the shape to prefer is probably one verify over the .ll of a
+representative handful rather than all of them. Left open deliberately.
+
+The general lesson is the one the five-parameter defect already taught from the
+other direction: a green reading is a claim about the machine that produced it.
+Here the machine was not even asking the question.
