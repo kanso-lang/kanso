@@ -1,0 +1,4 @@
+fn doubled n
+  n * 2
+
+pub play = print "{doubled 3"
