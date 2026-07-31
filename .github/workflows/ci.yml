@@ -76,7 +76,7 @@ jobs:
       - name: integer arithmetic, on the architecture linux is not
         run: |
           cargo build --release
-          python3 scripts/numeric_differential.py 0
+          ./target/release/kanso run scripts/numeric_differential.kso -- 0
 
   playground:
     name: playground examples (every engine)
@@ -276,7 +276,7 @@ jobs:
       # ten minutes re-confirming what the 561 edge cases already say. The
       # edges are what straddle the boundary; run it with rounds by hand to
       # probe further.
-      - run: python3 scripts/numeric_differential.py 0
+      - run: ./target/release/kanso run scripts/numeric_differential.kso -- 0
       # how effects COMBINE — sequenced, bound, nested, run beside each other.
       # the executor is written twice with no shared code, so the two halves
       # can drift anywhere the corpus does not happen to go
