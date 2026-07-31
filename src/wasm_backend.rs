@@ -827,6 +827,20 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(0);
                 ctx.body.call(RT_BUILTIN);
             }
+            // A builtin is handed over the same way a group is: `apply length
+            // "ab"` reaches it through a dynamic call, which needs something
+            // in the table to land on.
+            _ if !self.program.fns.iter().any(|d| d.name == name)
+                && crate::codegen::BUILTIN_CALLS.iter().any(|(b, a)| *b == bare && *a <= 4) =>
+            {
+                let arity =
+                    crate::codegen::BUILTIN_CALLS.iter().find(|(b, _)| *b == bare).expect("found").1;
+                let widx = self.builtin_wrapper(bare, arity)?;
+                ctx.body.i32_const(widx as i64);
+                ctx.body.i32_const(0);
+                ctx.body.i32_const(-1);
+                ctx.body.call(RT_MKCLOSURE);
+            }
             _ if self.program.fns.iter().any(|d| d.name == name) => {
                 let widx = self.fn_wrapper(name)?;
                 ctx.body.i32_const(widx as i64);
@@ -881,6 +895,60 @@ impl<'a> WasmBackend<'a> {
         let msg = self.str_lit(&format!("no overload of `{name}` matches these arguments"));
         body.i32_const(msg as i64);
         body.call(RT_DIE);
+        body.unreachable();
+        self.module.define(fn_idx, body);
+        Ok(widx)
+    }
+
+    /// The table function a builtin handed out as a value lands on. A builtin
+    /// takes exactly one count, so a call bringing another says which count
+    /// it takes and which it brought — the sentence the interpreter prints,
+    /// spelled once per count a dynamic call can carry.
+    fn builtin_wrapper(&mut self, name: &str, arity: usize) -> Result<u32, String> {
+        let key = format!("builtin.{name}");
+        if let Some(widx) = self.wrappers.get(&key) {
+            return Ok(*widx);
+        }
+        let fn_idx = self.module.declare(2);
+        self.module.table.push(fn_idx);
+        let widx = (self.module.table.len() - 1) as u32;
+        self.wrappers.insert(key, widx);
+        let mut body = Body::new(2);
+        let len = body.local();
+        body.local_get(1);
+        body.call(RT_LIST_LEN);
+        body.local_set(len);
+        body.local_get(len);
+        body.i32_const(arity as i64);
+        body.op(0x46); // i32.eq
+        body.if_void();
+        for i in 0..arity {
+            body.local_get(1);
+            body.i32_const(i as i64);
+            body.call(RT_ENVGET);
+            body.call(RT_ARG);
+        }
+        let lit = self.str_lit(name);
+        body.i32_const(lit as i64);
+        body.i32_const(arity as i64);
+        body.call(RT_BUILTIN);
+        body.ret();
+        body.end();
+        for got in 1..=4 {
+            if got == arity {
+                continue;
+            }
+            let said = format!("`{name}` takes {arity} argument(s), got {got}");
+            let msg = self.str_lit(&said);
+            body.local_get(len);
+            body.i32_const(got as i64);
+            body.op(0x46); // i32.eq
+            body.if_void();
+            body.i32_const(msg as i64);
+            body.call(RT_DIE);
+            body.unreachable();
+            body.end();
+        }
         body.unreachable();
         self.module.define(fn_idx, body);
         Ok(widx)
