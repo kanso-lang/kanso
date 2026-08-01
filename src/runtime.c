@@ -3455,8 +3455,18 @@ static int k_buf_class(long long cap) {
     return size == cap ? c : -1;
 }
 
+/* How many slots a buffer holds, whatever regime it was allocated in.
+   `cap` is about to carry two facts — the size, and whether the storage came
+   from the arena or from malloc, the way KBytes already encodes its regime in
+   the sign of its own cap. Every capacity question goes through here so the
+   marker lands in one place instead of at each comparison, and so a site that
+   forgets to normalise cannot silently read a negative size as "no room". */
+static long long k_buf_cap(const KBuf* b) { return b->cap < 0 ? -b->cap : b->cap; }
+
 static void k_buf_donate(KValue* items) {
     KBuf* b = k_buf_of(items);
+    /* a malloc'd buffer has no business on the arena's shelf */
+    if (b->cap < 0) return;
     int c = k_buf_class(b->cap);
     if (c < 0) return;
     b->used = (long long)(intptr_t)k_buf_free[c];
@@ -3837,7 +3847,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         return mv;
     }
     KBuf* buf = k_buf_of(m->pairs);
-    if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
+    if (buf->used == m->len * 2 && m->len * 2 + 2 <= k_buf_cap(buf)) {
         m->pairs[m->len * 2] = key;
         m->pairs[m->len * 2 + 1] = val;
         buf->used += 2;
@@ -3877,7 +3887,7 @@ KValue k_b_put(KValue mv, KValue key, KValue val) {
     KValue ov; ov.tag = K_MAP; ov.payload = k_ptr(out);
     out->sorted = NULL;
     out->sorted_len = 0;
-    if (buf->used == m->len * 2 && m->len * 2 + 2 <= buf->cap) {
+    if (buf->used == m->len * 2 && m->len * 2 + 2 <= k_buf_cap(buf)) {
         /* frontier-owned: claim the next pair slot in place (O(1)), leaving
            the key unsorted and any duplicate to be resolved on read */
         m->pairs[m->len * 2] = key;
@@ -4382,7 +4392,7 @@ static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     KList* l = k_as_list(lv);
     if (mutate && !k_born_this_beat(l)) mutate = 0;
     KBuf* buf = k_buf_of(l->items);
-    if (buf->used == l->len && l->len < buf->cap) {
+    if (buf->used == l->len && l->len < k_buf_cap(buf)) {
         /* this list is the frontier of its buffer: claim the next slot */
         l->items[l->len] = item;
         buf->used++;
@@ -4432,7 +4442,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
     }
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
-    if (buf->used == l->len && l->len < buf->cap && k_born_this_beat(l)) {
+    if (buf->used == l->len && l->len < k_buf_cap(buf) && k_born_this_beat(l)) {
         l->items[l->len] = item;
         buf->used++;
         l->len++;
