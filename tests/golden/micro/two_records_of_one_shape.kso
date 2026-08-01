@@ -1,0 +1,17 @@
+type alpha
+  one
+  two
+
+type beta
+  one
+  two
+
+fn seen (alpha a b)
+  "alpha {a} {b}"
+
+fn seen (beta a b)
+  "beta {a} {b}"
+
+pub play =
+  print "{seen (alpha 1 2)}"
+  >> print "{seen (beta 3 4)}"
