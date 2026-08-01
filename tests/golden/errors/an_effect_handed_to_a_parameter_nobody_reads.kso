@@ -1,0 +1,15 @@
+# An effect is a description, and a description nobody forces never happens.
+# `ignored` reads none of what it is handed, so the write cannot occur — and
+# the language's stated position has always been the opposite: a body that does
+# io must hand the io back, or it "would abandon the effects above it". That
+# check reads a function's own body, so for a long time an effect abandoned
+# inside somebody else's parameter walked past it and the program printed
+# "dropped it" on both engines with nothing said.
+import "std/io"
+
+fn ignored _
+  "dropped it"
+
+pub play =
+  r = ignored (io/write "this write never happens\n")
+  print r

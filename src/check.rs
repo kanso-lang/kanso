@@ -90,6 +90,78 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
     diags
 }
 
+/// An effect is a description, and a description that nobody forces never
+/// happens. The language already refuses the neighbouring mistake — a body
+/// that does io must hand the io back, or it "would abandon the effects above
+/// it" — but that reads a function's own body, so an effect abandoned inside
+/// somebody else's parameter walked straight past it.
+///
+/// Only the unambiguous case is refused: every arm of the group discards the
+/// position, so there is no reading of the program where the effect happens.
+/// A group where one arm reads the parameter and another does not is a real
+/// question and a different one.
+fn check_effect_discarded(program: &Program, diags: &mut Vec<Diagnostic>) {
+    use crate::infer::DESC;
+    let inference = crate::infer::infer(program);
+
+    let mut returns: std::collections::HashMap<(&str, usize), crate::infer::Set> =
+        Default::default();
+    // a position every arm throws away
+    let mut discarded: std::collections::HashMap<(&str, usize, usize), bool> = Default::default();
+    for (i, d) in program.fns.iter().enumerate() {
+        let key = (d.name.as_str(), d.params.len());
+        *returns.entry(key).or_insert(0) |= inference.returns[i];
+        for (pos, param) in d.params.iter().enumerate() {
+            let wildcard = matches!(param, Pattern::Wildcard(_));
+            let slot = discarded.entry((d.name.as_str(), d.params.len(), pos)).or_insert(true);
+            *slot &= wildcard;
+        }
+    }
+
+    let describes = |e: &Expr| -> bool {
+        let Expr::App { head, args, piped: false, .. } = e else { return false };
+        let Expr::Ident(name, _) = head.as_ref() else { return false };
+        returns.get(&(name.as_str(), args.len())).is_some_and(|s| s & DESC != 0)
+    };
+
+    let walk = |e: &Expr, diags: &mut Vec<Diagnostic>| {
+        let Expr::App { head, args, piped: false, .. } = e else { return };
+        let Expr::Ident(name, _) = head.as_ref() else { return };
+        if !returns.contains_key(&(name.as_str(), args.len())) {
+            return;
+        }
+        for (pos, arg) in args.iter().enumerate() {
+            if !describes(arg) {
+                continue;
+            }
+            if !discarded.get(&(name.as_str(), args.len(), pos)).copied().unwrap_or(false) {
+                continue;
+            }
+            diags.push(Diagnostic::new(
+                "effect",
+                format!(
+                    "`{name}` reads none of what it is handed here, so this effect \
+                     never happens — hand it back, or give `{name}` a name for it"
+                ),
+                arg.span(),
+            ));
+        }
+    };
+
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            let mut stack = vec![e];
+            while let Some(cur) = stack.pop() {
+                walk(cur, diags);
+                stack.extend(crate::expr_children(cur));
+            }
+        }
+    }
+}
+
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
@@ -872,6 +944,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
+    check_effect_discarded(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }
