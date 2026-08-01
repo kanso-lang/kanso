@@ -306,7 +306,10 @@ jobs:
       - run: python3 scripts/site_smoke.py
       # the mechanical half of the writing rules. the families it cannot see —
       # milked metaphors, manufactured triples, epigram endings — still want a
-      # read, which is why a clean run is necessary and not sufficient
+      # read, which is why a clean run is necessary and not sufficient.
+      # the gate is a kanso program now, so this job needs the toolchain it
+      # was previously only building for the browser
+      - run: cargo build --release
       - run: ./target/release/kanso run scripts/prose_check.kso
 
   browser:
