@@ -13276,3 +13276,47 @@ builds matches nothing, and every page keeps its undigested references. The log
 still listed five assets and five digests, because the digesting half worked.
 A port that agrees on what it prints and not on what it wrote is the shape this
 repository keeps meeting; the tree diff is what catches it.
+
+## A correction: nested std paths were never the problem
+
+The entry above for `std/sha256` says the module failed across an import under
+`std/crypto/sha256` and worked under `std/sha256`, and concludes the defect is
+nested paths in the embedded-std table. That conclusion is wrong, and the
+retraction belongs here rather than as an edit, because the log is what the
+history is read from.
+
+The two runs were not comparable. A std module is embedded with `include_str!`,
+so what `kanso run` executes is the snapshot taken when the compiler was last
+built. Every test of the nested path ran against a stale snapshot from before
+the module's own bugs were fixed; the move to a flat path edited `src/lib.rs`,
+which forced `cargo build`, which re-embedded the fixed file. Same source, two
+compilers. The trap was written up in the same entry as a lesson about watching
+a golden fail, and it had already been paid for one paragraph earlier without
+being recognised.
+
+Putting the byte-identical file back at `std/crypto/sha256` today, with the
+compiler rebuilt, gives the right digest. Nested paths work. Task #95 is
+withdrawn.
+
+What is real is the other half, which that mistake had explained away. From a
+disk module — no embedding involved, so nothing stale — `compress start w 8
+false` still answers on the interpreter and refuses on native with "`+` is not
+defined for these values". Instrumenting the failure prints tags 0 and 8: an
+integer and a DESCRIPTION, in a program whose only io is its final print. So a
+description reaches a register that should hold a number.
+
+What is known about it. Entering the loop at round 16 or later is fine and 12
+or earlier is not, and the boundary is the index range touched rather than the
+number of rounds: starting at 1 and stopping at 49 fails, starting at 16 and
+running 49 rounds does not. Replacing either table read — the constant `rounds`
+or the parameter `w` — with a literal makes it pass, so it needs both. Binding
+the reads to locals first does not help, and neither does moving the call out
+of an interpolation. The emitted IR guards both index sites correctly: each
+tests for the bytes tag and otherwise calls `k_index`, so indexing is not it.
+Three reductions built around two indexed lists in one loop all agree across
+engines, so the reduction is still missing something.
+
+It does not reach the shipped digest: every vector passes on both engines,
+because `hex` enters the loop at round one through `turned` rather than being
+handed a starting round. That is luck rather than safety, and the entry is
+filed as what it is — a native engine that refuses where the oracle answers.
