@@ -61,10 +61,21 @@ pub mod work {
     thread_local! {
         static ROUNDS: Cell<u64> = const { Cell::new(0) };
         static VISITS: Cell<u64> = const { Cell::new(0) };
+        static PASSES: Cell<u64> = const { Cell::new(0) };
     }
     pub fn reset() {
         ROUNDS.with(|c| c.set(0));
         VISITS.with(|c| c.set(0));
+        PASSES.with(|c| c.set(0));
+    }
+    /// One whole-program inference. Rounds and visits say what a pass costs;
+    /// this says how many the front end asks for, which is the number a new
+    /// diagnostic can raise without either of the others moving.
+    pub fn pass() {
+        PASSES.with(|c| c.set(c.get() + 1));
+    }
+    pub fn passes() -> u64 {
+        PASSES.with(Cell::get)
     }
     pub fn round() {
         ROUNDS.with(|c| c.set(c.get() + 1));
@@ -79,6 +90,7 @@ pub mod work {
 }
 
 pub fn infer(program: &Program) -> Inference {
+    work::pass();
     let mut groups: HashMap<(&str, usize), Vec<usize>> = HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);

@@ -13497,3 +13497,39 @@ cost of leaving it closed is now measured rather than assumed: any fold that
 builds a temporary per element — a derived key, a formatted field, a parsed
 token — retains the whole input, and every language kanso means to compete with
 runs that in constant memory.
+
+## The front end inferred the whole program twice, and nothing could see it
+
+The perf check that every change is supposed to carry found one I had shipped
+myself. `check_effect_discarded` opened with `crate::infer::infer(program)`,
+which is what `check_predicates` already did a few lines above it, so every
+`check_merged` ran whole-program inference twice over the same program. Ten
+passes to compile the json decoder, where five would do.
+
+Nothing caught it, and the reason is worth writing down. `bench/compile_golden.txt`
+counts rounds and visits — but `tests/compile_cost.rs` produces those numbers by
+resetting the counter and then running exactly one pass of its own, so the
+golden measures what a pass costs and is structurally blind to how many the
+front end asks for. A diagnostic that calls `infer` for itself raises the real
+cost while leaving both numbers where they were. Every gate in the repository
+stayed green through it.
+
+So inference is computed once in `check_merged` and handed to the three checks
+that read it. Ten passes become five, and `tests/inference_passes.rs` pins the
+count with the same standing as the compile golden: a watched trend, not a
+floor, and moving it costs a sentence here naming the pass and the reason.
+Watched red by restoring the duplicates — 15 against 5.
+
+Interleaved on one sitting, `kanso check` over kq, best of five batches of
+forty, alternating binaries: **12.50 ms before, 11.00 ms after**, repeated and
+stable. About 2.4 ms of each is process startup measured against a one-line
+file, so the work itself falls from roughly 10.1 ms to 8.6 ms — a seventh of
+the front end for a change that deletes work rather than adding cleverness.
+
+Every cost golden is unchanged, welfare holds at 65.56, and the browser
+differential reads 162/0. Two things this does not settle: the published 6.6 ms
+for kq was taken on 2026-07-25 and does not reproduce on this box even after
+the win, which is task #23 and wants a quiet machine rather than a louder
+claim; and five passes is not obviously the floor either — codegen, escape
+analysis and the two in main.rs each infer again, and whether those can share
+is a separate question with a separate answer.
