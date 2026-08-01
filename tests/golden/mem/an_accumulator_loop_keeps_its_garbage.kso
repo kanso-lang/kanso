@@ -1,0 +1,20 @@
+# A fold that allocates a temporary each time round and threads a map. The
+# temporary is never stored: it is bound, its length is read, and it is
+# dropped. Threading an int instead, the same loop reclaims every one of them.
+#
+# Threading a map it reclaims none, because the cluster carries no beat
+# bracket at all and so has no rewind point anywhere in it. The numbers below
+# are that: allocs and arena blocks that grow with the iteration count for a
+# live set of one map with one key.
+#
+# This golden exists to be regenerated. When a threaded container's storage
+# moves out of the rewound region, the bracket can be emitted and these
+# numbers fall — and the diff is the evidence that it worked.
+fn go 0 m
+  print (length (entries m))
+
+fn go n m
+  junk = "k{n % 17}"
+  go (n - 1) (put m "k1" (m["k1"]! + length junk))
+
+pub play = go 20000 { "k1":0 }

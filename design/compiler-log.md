@@ -13707,3 +13707,42 @@ over 1.6M iterations, and the temporary retained even when it is never stored.
 What changed is the shape of the work: a runtime change to where a growing
 container allocates when it is the thing being threaded, not a rule relaxed in
 beat.rs.
+
+## The retention becomes a number CI watches
+
+The accumulator finding was a paragraph in this log and nothing in the tree.
+It is a mem golden now: a fold that allocates a temporary each iteration,
+never stores it, and threads a map.
+
+    beat_iters=0
+    allocs=28,241
+    sh_str=903,424
+
+Twenty thousand iterations, a live set of one map with one key, and 903 kb of
+strings still held at exit. The first line is the defect stated as a count —
+no rewind happens anywhere in the loop, so nothing is ever reclaimed. Watched
+red by moving `beat_iters` to 20,000, which the golden refuses.
+
+The golden exists to be regenerated. When a threaded container's storage moves
+out of the rewound region, the bracket can be emitted, `beat_iters` climbs to
+match the iteration count and `sh_str` collapses — and the diff on this file
+is the evidence that it worked rather than a claim that it did.
+
+Nothing else moves: four cost goldens unchanged, welfare 65.56, the browser
+differential 162/0, the full suite green on three engines.
+
+The mechanism for the fix is also now identified, and it is smaller than the
+last entry supposed. `k_b_append_into` already chooses where a grown buffer
+lives, at run time, with no help from the compiler:
+
+    dies = mutate ? (k_survives(a, NULL) && !k_survives(a, inner)) : 1;
+
+A header the innermost rewind reclaims gets arena storage; a header below the
+mark — the accumulator threading a beat — gets malloc, "because arena storage
+above the mark would vanish under it". So the question of which containers are
+accumulators is not one the compiler has to answer. `k_survives` answers it
+per value, per growth, at the moment it matters. The same test in
+`k_b_push_mut` and `k_b_put_mut` gives a list or map accumulator storage a
+rewind cannot reach, which is the missing half; the other half is a regime
+marker so a malloc'd buffer is freed rather than shelved or double-freed, and
+`beat.rs` admitting the cluster only after that lands.
