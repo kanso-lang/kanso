@@ -1,0 +1,5 @@
+# The file ends before the closing quotes do, so the block never closes and
+# the message points at the line that opened it.
+x = """
+  one
+  two

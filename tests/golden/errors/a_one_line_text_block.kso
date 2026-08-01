@@ -1,0 +1,7 @@
+# One line of text is a one-line string; the block form says the value has
+# lines in it.
+x = """
+  only
+"""
+
+pub play = print x

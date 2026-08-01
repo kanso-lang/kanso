@@ -1,0 +1,18 @@
+# A text block opens at the end of a statement's line, holds its content two
+# spaces deeper, and closes with a `"""` alone at the opening indent. Every
+# content line contributes its text and a newline, the last one included, so
+# the value here is the one the escaped single line beside it used to spell.
+fn filed name body
+  "{name}:{length body}"
+
+one = filed "a.kso" """
+  fn quiet _
+    "hush"
+
+  pub fn loud n
+    quiet n
+"""
+
+two = filed "a.kso" "fn quiet _\n  \"hush\"\n\npub fn loud n\n  quiet n\n"
+
+pub play = print "{one} {two} {one == two}"

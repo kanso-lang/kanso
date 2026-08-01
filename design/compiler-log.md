@@ -13076,3 +13076,44 @@ the real risk, and its mitigation is that the three heaviest files are
 differential gates with pinned output — the rewrite lands with those goldens
 untouched, because a regenerated golden during this migration would be
 indistinguishable from a bug.
+
+## Text blocks, built
+
+The gavel above, implemented. `"""` at the end of a statement's line opens a
+block; content sits two spaces deeper; a `"""` alone at the opening indent
+closes it. The value is every content line's text plus a newline, the last one
+included, and it is byte-identical to the escaped single line it replaces —
+which is the property the whole thing has to have, because the migration is
+otherwise indistinguishable from a bug.
+
+Two structural changes and one shared piece. `lex` iterates an indexed slice
+now rather than `source.lines()`, because a block's lines are consumed where
+they are found: a blank line inside a block never reaches `blank_lines`, so the
+parser's statement grouping never sees it. Interpolation moved out of
+`lex_string` into a method both string forms call, so `{expr}` inside a block
+reports against the line it was written on rather than the line the block
+opened on.
+
+Content lines skip the width cap and nothing else — the tab rule and the
+trailing-whitespace rule still apply to them, the second one load-bearing:
+it is what makes "a blank line contributes exactly one newline" true rather
+than approximately true.
+
+Eight refusals, each with a golden in the error corpus and each watched fail
+first. Two of them were wrong on the first pass and the goldens caught it:
+`x = """ oops` was accepted and silently dropped ` oops`, and `""" tail` blamed
+the indentation rather than saying the fence holds its line alone.
+
+`scripts/dispatch_differential.kso` is migrated as the first real use: thirteen
+probe programs, three of which had been split across two constants each with a
+name invented for the line limit — `decls9a` ends mid-token at `\n\nfn` and
+`decls9b` picks up at ` which`, which is exactly the seam a typo hides in. All
+three seams are gone. The sweep still reports 22 cases and 0 wrong, and every
+recorded answer is unchanged, so the probes are the same programs.
+
+One verification note worth keeping, because it nearly caused a false alarm.
+Checking the rewrite by comparing lengths, twelve of thirteen matched and
+`decls5` looked two bytes short. It was the checker that was wrong: the
+comparison counted `\{` as two characters where the value holds one. Resolving
+the literal by hand gave 73 both ways. A verification that disagrees with the
+thing it verifies is not evidence until you know which one is lying.

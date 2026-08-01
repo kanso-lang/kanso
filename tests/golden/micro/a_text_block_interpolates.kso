@@ -1,0 +1,11 @@
+# Interpolation and the literal-brace escape read inside a block exactly as
+# they do in a one-line string, which is what lets a program that writes a
+# program stop spelling a brace three ways at once.
+name = "world"
+
+said = """
+  hello {name}
+  a brace: \{x}
+"""
+
+pub play = print "{length said}|{said}"

@@ -1,0 +1,12 @@
+error[syntax]: a text block opens at the end of its line — nothing follows `"""`
+  --> a_text_block_opens_at_the_line_end.kso:3:8
+   3 | x = """ oops
+              ^
+error[syntax]: a text block's lines sit 2 spaces in, under the `"""` that opened it — this one is at column 1
+  --> a_text_block_opens_at_the_line_end.kso:8:1
+   8 | pub play = print x
+       ^
+error[formatting]: a text block holds two or more lines; one line is written `"..."`
+  --> a_text_block_opens_at_the_line_end.kso:6:1
+   6 | """
+       ^

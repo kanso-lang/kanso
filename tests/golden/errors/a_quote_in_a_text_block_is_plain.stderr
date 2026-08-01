@@ -1,0 +1,4 @@
+error[formatting]: a quote inside a text block is written plainly
+  --> a_quote_in_a_text_block_is_plain.kso:4:5
+   4 |   say \"hush\"
+           ^

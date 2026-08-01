@@ -1,0 +1,8 @@
+# A line break already says newline, so the escape that also says it is one
+# spelling too many.
+x = """
+  one\ntwo
+  three
+"""
+
+pub play = print x

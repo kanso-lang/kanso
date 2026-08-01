@@ -1,0 +1,4 @@
+error[formatting]: a newline inside a text block is a line break, not `\n`
+  --> a_newline_in_a_text_block_is_a_line_break.kso:4:4
+   4 |   one\ntwo
+          ^

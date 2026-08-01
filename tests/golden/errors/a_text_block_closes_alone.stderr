@@ -1,0 +1,4 @@
+error[syntax]: the closing `"""` sits alone on its line
+  --> a_text_block_closes_alone.kso:5:1
+   5 | """ tail
+       ^

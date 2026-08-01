@@ -1,0 +1,4 @@
+error[formatting]: a text block holds two or more lines; one line is written `"..."`
+  --> a_one_line_text_block.kso:3:5
+   3 | x = """
+           ^
