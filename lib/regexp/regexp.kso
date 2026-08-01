@@ -46,6 +46,7 @@ type group
 type ahead
   node
   wanted
+  pad
 
 type edge
   kind
@@ -254,7 +255,7 @@ fn read_repeat chars at
   suffixed chars base (at_quantifier? chars base.pos)
 
 fn at_quantifier? chars at
-  at <= length chars && in? "*+?" chars[at]!
+  at <= length chars && in? "*+?\{" chars[at]!
 
 fn in? set c
   length (text/split set c) > 1
@@ -263,11 +264,48 @@ fn suffixed _ base false
   base
 
 fn suffixed chars base true
+  braced chars base (chars[base.pos]! == "\{")
+
+fn braced chars base false
   mark = chars[base.pos]!
   after = base.pos + 1
   lazy = after <= length chars && chars[after]! == "?"
   bounds = spans mark
   parsed (rep base.node bounds[1]! bounds[2]! (lazy == false)) (past after lazy)
+
+# `{3,60}`, `{3,}` and `{3}`. The comma decides whether there is a ceiling and
+# the digit after it decides what the ceiling is.
+fn braced chars base true
+  low = digits chars (base.pos + 1) 0
+  with_ceiling chars base low (chars[low.pos]! == ",")
+
+fn with_ceiling chars base low false
+  closed chars base low.node low.node (low.pos + 1)
+
+fn with_ceiling chars base low true
+  unbounded chars base low (chars[low.pos + 1]! == "}")
+
+fn unbounded chars base low true
+  closed chars base low.node no_ceiling (low.pos + 2)
+
+fn unbounded chars base low false
+  high = digits chars (low.pos + 1) 0
+  closed chars base low.node high.node (high.pos + 1)
+
+fn closed chars base least most after
+  lazy = after <= length chars && chars[after]! == "?"
+  parsed (rep base.node least most (lazy == false)) (past after lazy)
+
+fn digits chars at acc
+  taking chars at acc (at <= length chars && in? "0123456789" chars[at]!)
+
+fn taking _ at acc false
+  parsed acc at
+
+fn taking chars at acc true
+  ten = acc * 10
+  digit = text/char_code chars[at]! - text/char_code "0"
+  digits chars (at + 1) (ten + digit)
 
 fn past after true
   after + 1
@@ -290,7 +328,30 @@ fn read_atom chars at
   opened chars at chars[at]!
 
 fn opened chars at "("
+  special chars at (at + 1 <= length chars && chars[at + 1]! == "?")
+
+fn special chars at false
   inner = read_alt chars (at + 1)
+  parsed (group inner.node 0) (inner.pos + 1)
+
+fn special chars at true
+  marked chars at chars[at + 2]!
+
+# `(?:` groups without capturing, `(?=` and `(?!` look ahead without consuming.
+fn marked chars at ":"
+  inner = read_alt chars (at + 3)
+  parsed inner.node (inner.pos + 1)
+
+fn marked chars at "="
+  inner = read_alt chars (at + 3)
+  parsed (ahead inner.node true 0) (inner.pos + 1)
+
+fn marked chars at "!"
+  inner = read_alt chars (at + 3)
+  parsed (ahead inner.node false 0) (inner.pos + 1)
+
+fn marked chars at _
+  inner = read_alt chars (at + 3)
   parsed (group inner.node 0) (inner.pos + 1)
 
 fn opened chars at "["
@@ -431,6 +492,19 @@ fn or_else _ _ _ _ _ _ won
 
 fn walked (group node _) s at slots k
   walked node s at slots k
+
+# Lookahead consumes nothing: the inner pattern is asked whether it can match
+# here, the answer is compared with what the sigil wanted, and the walk carries
+# on from where it started either way.
+fn walked (ahead node wanted _) s at slots k
+  saw = walked node s at slots (to -> to)
+  matched_here at k (peeked? saw == wanted)
+
+fn peeked? none
+  false
+
+fn peeked? _
+  true
 
 fn walked (lit c) s at _ k
   matched_one s at k (at <= length s && text/slice s at at == c)

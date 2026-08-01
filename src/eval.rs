@@ -2285,7 +2285,12 @@ impl<'a> Interp<'a> {
 
     fn force(&self, value: Value) -> EvalResult {
         match value {
-            Value::Closure(c) if c.params.is_empty() => self.eval(&c.body, &c.env, &c.frame),
+            // A nullary closure's body can answer with a thunk, and scrutiny
+            // wants a value rather than the next cell.
+            Value::Closure(c) if c.params.is_empty() => {
+                let answered = self.eval(&c.body, &c.env, &c.frame)?;
+                self.force_thunk(answered)
+            }
             other => self.force_thunk(other),
         }
     }
@@ -2294,28 +2299,31 @@ impl<'a> Interp<'a> {
     /// overwrite the cell, drop the captures. Never touches nullary closures
     /// — those are `if`'s deferred branches, forced only by `if` itself.
     fn force_thunk(&self, value: Value) -> EvalResult {
-        match value {
-            Value::Thunk(cell) => {
-                self.thunk_stats.forces.set(self.thunk_stats.forces.get() + 1);
-                let state = std::mem::replace(&mut *cell.borrow_mut(), ThunkState::Blackhole);
-                match state {
-                    ThunkState::Forced(v) => {
-                        *cell.borrow_mut() = ThunkState::Forced(v.clone());
-                        Ok(v)
-                    }
-                    ThunkState::Pending { expr, env, frame } => {
-                        self.thunk_stats.evals.set(self.thunk_stats.evals.get() + 1);
-                        let v = self.eval(&expr, &env, &frame)?;
-                        *cell.borrow_mut() = ThunkState::Forced(v.clone());
-                        Ok(v)
-                    }
-                    ThunkState::Blackhole => Err(RuntimeError {
+        let mut value = value;
+        loop {
+            let Value::Thunk(cell) = value else {
+                return Ok(value);
+            };
+            self.thunk_stats.forces.set(self.thunk_stats.forces.get() + 1);
+            let state = std::mem::replace(&mut *cell.borrow_mut(), ThunkState::Blackhole);
+            match state {
+                ThunkState::Forced(v) => {
+                    *cell.borrow_mut() = ThunkState::Forced(v.clone());
+                    value = v;
+                }
+                ThunkState::Pending { expr, env, frame } => {
+                    self.thunk_stats.evals.set(self.thunk_stats.evals.get() + 1);
+                    let v = self.eval(&expr, &env, &frame)?;
+                    *cell.borrow_mut() = ThunkState::Forced(v.clone());
+                    value = v;
+                }
+                ThunkState::Blackhole => {
+                    return Err(RuntimeError {
                         message: "a lazy binding demands its own value".to_string(),
                         span: Span { line: 0, col: 0 },
-                    }),
+                    })
                 }
             }
-            other => Ok(other),
         }
     }
 }

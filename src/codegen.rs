@@ -3431,7 +3431,13 @@ impl<'a> Backend<'a> {
             unreachable!("non-ident heads take the computed path");
         };
         if name == "if" {
+            // A condition the demand analysis deferred arrives as a thunk, and
+            // asking a thunk whether it is true reads the thunk rather than the
+            // answer. Force before testing: `maybe_force` emits nothing where
+            // the set proves there is no thunk, so a strict condition is
+            // unchanged.
             let cond = self.emit_expr(f, &args[0])?;
+            let cond = self.maybe_force(f, cond);
             let nf = f.tmp();
             f.line(&format!("{nf} = call i64 @k_not_failure(%KValue {cond})"));
             let ok = f.tmp();
