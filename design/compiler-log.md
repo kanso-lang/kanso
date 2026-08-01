@@ -13792,3 +13792,46 @@ unchanged, welfare 65.56.
 Watched red both ways: the refusal disabled answers `false` again, and the
 native cross-type arm removed answers `eq false` while every other relation
 stays put.
+
+## Four hundred commits of history nobody was drawing
+
+Clay asked for a long view: one large chart, several lines, hundreds of
+commits, tracking what a chunk of real work costs over weeks. The data already
+existed. A CI job named "perf history (published to the compiler page)" has
+appended a row of counters to an orphan `perf-history` branch on every merge to
+main since 25 July, and 412 rows had accumulated with nothing rendering them.
+It shows as "skipping" on every pull request because it only runs on main,
+which is how a job can be seen going past for a week without anyone noticing it
+produces something.
+
+`scripts/trend_chart.kso` reads that file and writes an svg into the page
+between two markers, so the chart is regenerated rather than edited. Each
+series is scaled against its own range: eight million allocations and fifteen
+hundred emitted lines cannot share an axis and stay readable, so what the chart
+shows is shape — which way a number went and when it stepped.
+
+Three of four candidate series are drawn. `encode_allocs` is excluded by the
+rule that a key must appear in every row: it starts at row 53, and plotting it
+would draw a cliff from zero on the day the counter was added rather than a
+change in the compiler. Over the window decode allocations fall 14,799,465 to
+7,577,414, arena blocks five to three, emitted lines 1,868 to 1,534.
+
+Deterministic counters rather than wall clock, which Clay confirmed. Four
+hundred commits of shared-runner timing would be mostly jitter; a counter moves
+only when somebody changes the compiler, so every step is a real edit with a
+pull request behind it.
+
+Two findings from doing it. `compile_rounds` and `compile_visits` have been
+constant at 11 and 135 for all 412 rows, so there is no compile-speed line to
+draw: the compile golden measures a five-line sample, and `kanso check` over kq
+moved 12.5 ms to 11.0 ms today without either number twitching. A trend chart
+wants that measurement taken on a real program. And the utility score cannot be
+plotted at all yet — `scripts/welfare.kso` landed on 30 July, and it reads a
+basket vein the recorder does not capture, so the fifth line waits on the
+recorder learning both.
+
+Written in kanso, and it found a language gotcha worth recording: a list
+literal is space-separated, so `[plotted "a" "b" "c"]` is a four-element list
+holding the function and three strings rather than a list holding one call.
+The type error names the field read that failed rather than the list, which is
+correct and still took a minute to place.
