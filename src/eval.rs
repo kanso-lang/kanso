@@ -2004,6 +2004,44 @@ impl<'a> Interp<'a> {
                     }),
                 }
             }
+            "bit_and" | "bit_or" | "bit_xor" => {
+                let [a, b] = arity(args, name, span)?;
+                let (x, y) = match (whole(a, name, span)?, whole(b, name, span)?) {
+                    (Ok(x), Ok(y)) => (x, y),
+                    (Err(bad), _) | (_, Err(bad)) => return Ok(bad),
+                };
+                let bits = match name {
+                    "bit_and" => x & y,
+                    "bit_or" => x | y,
+                    _ => x ^ y,
+                };
+                Ok(Value::Int(bits.into()))
+            }
+            "bit_not" => {
+                let [a] = arity(args, name, span)?;
+                match whole(a, name, span)? {
+                    Ok(x) => Ok(Value::Int((!x).into())),
+                    Err(bad) => Ok(bad),
+                }
+            }
+            "bit_shl" | "bit_shr" => {
+                let [a, b] = arity(args, name, span)?;
+                let (bits, by) = match (whole(a, name, span)?, whole(b, name, span)?) {
+                    (Ok(x), Ok(y)) => (x, y),
+                    (Err(bad), _) | (_, Err(bad)) => return Ok(bad),
+                };
+                if !(0..=63).contains(&by) {
+                    return Err(RuntimeError {
+                        message: format!("{} shifts by 0 to 63 places, got {by}", spelled(name)),
+                        span,
+                    });
+                }
+                let out = match name {
+                    "bit_shl" => ((bits as u64) << by) as i64,
+                    _ => bits >> by,
+                };
+                Ok(Value::Int(out.into()))
+            }
             "sqrt" => {
                 let [x] = arity(args, name, span)?;
                 match x {
@@ -2280,6 +2318,35 @@ impl<'a> Interp<'a> {
             other => Ok(other),
         }
     }
+}
+
+/// A bitwise operand. Failures travel through as themselves, the way every
+/// builtin lets them; anything else is the type complaint native prints, in
+/// the same words. Native's ints are 64 bits wide by construction, so a value
+/// too wide to be one is a case only the interpreter can reach.
+fn whole(v: Value, name: &str, span: Span) -> Result<Result<i64, Value>, RuntimeError> {
+    if is_failure(&v) {
+        return Ok(Err(v));
+    }
+    let said = spelled(name);
+    match &v {
+        Value::Int(n) => match n.to_i64() {
+            Some(w) => Ok(Ok(w)),
+            None => Err(RuntimeError {
+                message: format!("{said} takes whole numbers that fit 64 bits"),
+                span,
+            }),
+        },
+        other => Err(RuntimeError {
+            message: format!("{said} takes whole numbers, got {}", render(other, false)),
+            span,
+        }),
+    }
+}
+
+/// The name the reader wrote, from the builtin the wrapper forwards to.
+fn spelled(name: &str) -> &str {
+    name.strip_prefix("bit_").unwrap_or(name)
 }
 
 fn arity<const N: usize>(

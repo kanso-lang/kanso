@@ -1,0 +1,27 @@
+# Bitwise, over whole numbers 64 bits wide.
+#
+# Named rather than spelled with operators: `&` is the currying sigil and `>>`
+# is the ordering wall, and a half-set where `and` and `shr` read differently
+# from `or` and `xor` is worse than one uniform package.
+#
+# A shift moves by 0 to 63 places. Anything else is undefined in the machine
+# and answers differently by host, so it is refused rather than guessed at.
+# Shifting right keeps the sign, which is what go, rust and java all spell
+# `>>`.
+pub fn and a b
+  builtin_bit_and a b
+
+pub fn not a
+  builtin_bit_not a
+
+pub fn or a b
+  builtin_bit_or a b
+
+pub fn shl a places
+  builtin_bit_shl a places
+
+pub fn shr a places
+  builtin_bit_shr a places
+
+pub fn xor a b
+  builtin_bit_xor a b

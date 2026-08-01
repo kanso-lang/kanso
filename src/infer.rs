@@ -586,6 +586,7 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "from_code" => STR | ERR | fails,
         "char_code" => INT | fails,
         "sum" => INT | fails,
+        "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
         "read_file" | "write" | "write_err" | "write_file" | "sleep" | "random" | "env"

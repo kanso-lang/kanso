@@ -1733,6 +1733,7 @@ fn load_dependencies(
             "std/io" => Some(("io", &[("io.kso", include_str!("../lib/io/io.kso"))])),
             "std/text" => Some(("text", &[("text.kso", include_str!("../lib/text/text.kso"))])),
             "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
+            "std/bits" => Some(("bits", &[("bits.kso", include_str!("../lib/bits/bits.kso"))])),
             "std/path" => Some(("path", &[("path.kso", include_str!("../lib/path/path.kso"))])),
             "std/regexp" => {
                 Some(("regexp", &[("regexp.kso", include_str!("../lib/regexp/regexp.kso"))]))
