@@ -150,7 +150,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: python3 scripts/grammar_check.py
+      # the check is a kanso program, so the job compiles the toolchain it runs
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - run: ./target/release/kanso run scripts/grammar_check.kso
 
   book:
     name: book samples (every panel executed, outputs verified)
