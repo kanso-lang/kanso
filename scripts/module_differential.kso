@@ -203,9 +203,9 @@ w1d = filed "dep/dep.kso" dep_src
 
 w1a = filed "app/main.kso" app_src
 
-w1l = "a module's own pub, shadowed by a dependency's name (task #53)"
+w1l = "a module's own pub, shadowed by a dependency's name (task #51)"
 
-w1said = "`join` is private to module `dep`"
+w1said = "an import of `dep` exports `join` too and took the name"
 
 w1 = kase w1l [w1d w1a] "app" "check refuses" w1said
 

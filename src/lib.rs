@@ -52,11 +52,11 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (dep_program, exports, shadowed) = load_dependencies(&base, &import_list, &mut visited)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
-            private_uses(stmt, &exports, &mut diags);
+            private_uses(stmt, &exports, &shadowed, &mut diags);
         }
     }
     let mut quals = std::collections::HashSet::new();
@@ -158,12 +158,13 @@ fn compile_one(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (mut dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, exports, shadowed) =
+        load_dependencies(&base, &import_list, &mut visited)?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
-            private_uses(stmt, &exports, &mut diags);
+            private_uses(stmt, &exports, &shadowed, &mut diags);
         }
     }
     let mut quals = std::collections::HashSet::new();
@@ -258,12 +259,13 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (mut dep_program, exports) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, exports, shadowed) =
+        load_dependencies(&base, &import_list, &mut visited)?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
-            private_uses(stmt, &exports, &mut diags);
+            private_uses(stmt, &exports, &shadowed, &mut diags);
         }
     }
     let mut quals = std::collections::HashSet::new();
@@ -1334,6 +1336,7 @@ fn qualify(
     dep: &mut ast::Program,
     qual: &str,
     exports: &mut std::collections::HashMap<String, bool>,
+    shadowed: &mut std::collections::HashSet<String>,
 ) {
     // A getter's declaration is left bare below, because one group answers a
     // field name across every module. Its calls have to be left bare too: a
@@ -1364,7 +1367,23 @@ fn qualify(
         // the type it matches on belongs to this module and is being renamed
         // under it, so the arm has to follow or it matches nothing.
         if !f.is_getter() {
-            exports.entry(format!("{qual}/{}", f.name)).or_insert(f.is_pub);
+            // A module that declares a name one of its imports also exports
+            // has two claims on one qualified spelling: its own declaration
+            // and the bare-enrollment clone of the import. First writer wins,
+            // which is the clone whenever the loader reached the import
+            // first — so the module's own `pub` read as private from outside.
+            // The claim is remembered so the refusal can say what happened.
+            let key = format!("{qual}/{}", f.name);
+            let taken = exports.get(&key).copied();
+            match (taken, f.synthetic) {
+                (Some(false), false) if f.is_pub => {
+                    shadowed.insert(key.clone());
+                }
+                (Some(_), _) => {}
+                (None, _) => {
+                    exports.insert(key.clone(), f.is_pub);
+                }
+            }
             f.name = format!("{qual}/{}", f.name);
         }
         let mut bound = Vec::new();
@@ -1699,7 +1718,10 @@ fn load_dependencies(
     base: &std::path::Path,
     imports: &[ast::Import],
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
-) -> Result<(ast::Program, std::collections::HashMap<String, bool>), String> {
+) -> Result<
+    (ast::Program, std::collections::HashMap<String, bool>, std::collections::HashSet<String>),
+    String,
+> {
     let mut dep_program = ast::Program {
         fns: Vec::new(),
         types: Vec::new(),
@@ -1707,6 +1729,7 @@ fn load_dependencies(
         reexports: Vec::new(),
     };
     let mut exports = std::collections::HashMap::new();
+    let mut shadowed = std::collections::HashSet::new();
     for import in imports {
         let path = &import.path;
         let qual_owned;
@@ -1767,7 +1790,7 @@ fn load_dependencies(
                 qualified.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports);
+            qualify(&mut dep, qual, &mut exports, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -1793,7 +1816,7 @@ fn load_dependencies(
             ));
         }
         let mut dep = compile_module_inner(&dep_dir, false, visited, None)?;
-        qualify(&mut dep, qual, &mut exports);
+        qualify(&mut dep, qual, &mut exports, &mut shadowed);
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
@@ -1849,7 +1872,7 @@ fn load_dependencies(
             }
         }
     }
-    Ok((dep_program, exports))
+    Ok((dep_program, exports, shadowed))
 }
 
 /// Bare uses count too: a bare `select` that any import exports marks that
@@ -2029,33 +2052,39 @@ fn expr_span(e: &ast::Expr) -> &diag::Span {
 fn private_uses(
     stmt: &ast::Stmt,
     exports: &std::collections::HashMap<String, bool>,
+    shadowed: &std::collections::HashSet<String>,
     diags: &mut Vec<diag::Diagnostic>,
 ) {
     fn walk(
         e: &ast::Expr,
         exports: &std::collections::HashMap<String, bool>,
+        shadowed: &std::collections::HashSet<String>,
         diags: &mut Vec<diag::Diagnostic>,
     ) {
         if let ast::Expr::Ident(name, span) = e {
             if let Some(false) = exports.get(name.as_str()) {
                 let (module, base) = name.rsplit_once('/').unwrap_or(("", name));
-                diags.push(diag::Diagnostic::new(
-                    "opacity",
-                    format!(
-                        "`{base}` is private to module `{module}` — only pub names cross an import"
-                    ),
-                    *span,
-                ));
+                let shadow = format!(
+                    "`{module}` declares `{base}` pub, but an import of `{module}` exports `{base}` too and took the name — rename that import inside `{module}`"
+                );
+                let private = format!(
+                    "`{base}` is private to module `{module}` — only pub names cross an import"
+                );
+                let said = match shadowed.contains(name.as_str()) {
+                    true => shadow,
+                    false => private,
+                };
+                diags.push(diag::Diagnostic::new("opacity", said, *span));
             }
         }
         for child in expr_children(e) {
-            walk(child, exports, diags);
+            walk(child, exports, shadowed, diags);
         }
     }
     match stmt {
-        ast::Stmt::Bind { expr, .. } => walk(expr, exports, diags),
-        ast::Stmt::Expr(e) => walk(e, exports, diags),
-        ast::Stmt::Set { value, .. } => walk(value, exports, diags),
+        ast::Stmt::Bind { expr, .. } => walk(expr, exports, shadowed, diags),
+        ast::Stmt::Expr(e) => walk(e, exports, shadowed, diags),
+        ast::Stmt::Set { value, .. } => walk(value, exports, shadowed, diags),
     }
 }
 
@@ -2375,7 +2404,7 @@ fn compile_module_loaded(
             }
         }
     }
-    let (mut dep_program, exports) = load_dependencies(dir, &import_list, visited)?;
+    let (mut dep_program, exports, shadowed) = load_dependencies(dir, &import_list, visited)?;
     // A module's surface is its own. Dependency pubs demote at this
     // boundary — importers of this module see none of them — and only an
     // explicit re-export puts an imported name back on the surface, as a
@@ -2462,7 +2491,7 @@ fn compile_module_loaded(
         let mut diags = Vec::new();
         for decl in &program.fns {
             for stmt in &decl.body {
-                private_uses(stmt, &exports, &mut diags);
+                private_uses(stmt, &exports, &shadowed, &mut diags);
             }
         }
         diags.extend(unused_imports(&program.imports, &quals));
