@@ -13650,3 +13650,26 @@ not hitting CORS — but inlining removes the question along with the flag.
 So the port is ordinary kanso: `io/write_file` builds the page, `io/run` calls
 chrome once, `std/json` reads the payload back. No new builtin, no new engine
 surface, nothing to hold byte-identical across three engines.
+
+## A correction: the synchronous browser harness does not scale to the corpus
+
+The entry above says the last two python scripts need no browser automation,
+on the strength of a synchronous page answering two programs promptly. Run
+against the real corpus it does not: 162 cases hang, and chrome is killed at
+the 600-second timeout without ever printing a dom.
+
+The proof was too small and the entry overstated it. What is established is
+narrow and still useful — sync instantiation works, a blocking XMLHttpRequest
+reads the engine from `file://` without a server, `--dump-dom` prints a page
+whose work finished before load, and none of that needs a background process,
+a kill, or an http server. What is not established is that a corpus-sized run
+finishes at all under those conditions, and the difference between two cases
+and a hundred and sixty-two is exactly where the claim needed evidence.
+
+Unknown which of two shapes it is: a page doing minutes of synchronous work on
+the main thread before load ever fires, or one corpus program that does not
+terminate under the sync path when it did under the async one. Deciding that
+is a bisect over the corpus, not an argument.
+
+The python gate is untouched and green at 162/0. Nothing shipped against the
+claim, which is the one thing that went right here.
