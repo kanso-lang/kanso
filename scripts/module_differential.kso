@@ -173,7 +173,19 @@ c15said = "{c15head} module has none"
 
 c15 = kase "a module with no entry" [c15a] "" "run refuses" c15said
 
-cases = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15]
+c16head = "type spot\n  from\n  to\n\npub fn reach n\n"
+
+c16src = "{c16head}  s = spot n 9\n  s.from\n"
+
+c16a = filed "dep/dep.kso" c16src
+
+c16m = filed "app/main.kso" "import \"../dep\"\n\nprint \"\{dep/reach 3}\"\n"
+
+c16l = "a module reading a field of its own record, imported"
+
+c16 = kase c16l [c16a c16m] "app" "prints" "3\n"
+
+cases = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
 
 # Behaviour that is wrong, and known to be wrong. Recorded the way
 # tests/golden/wasm_gaps.txt records an engine's declines: a defect written

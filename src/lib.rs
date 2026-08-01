@@ -1335,7 +1335,15 @@ fn qualify(
     qual: &str,
     exports: &mut std::collections::HashMap<String, bool>,
 ) {
-    let owned: std::collections::HashSet<String> = check::declared_names(dep);
+    // A getter's declaration is left bare below, because one group answers a
+    // field name across every module. Its calls have to be left bare too: a
+    // dependency that reads a field of its own record was qualifying the call
+    // to `dep/Get_x` against a declaration that had kept the plain name, and
+    // the importer's build asked for a group nothing declares.
+    let getters: std::collections::HashSet<String> =
+        dep.fns.iter().filter(|f| f.is_getter()).map(|f| f.name.clone()).collect();
+    let owned: std::collections::HashSet<String> =
+        check::declared_names(dep).into_iter().filter(|n| !getters.contains(n)).collect();
     for ty in &mut dep.types {
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
         ty.name = format!("{qual}/{}", ty.name);
@@ -1351,13 +1359,14 @@ fn qualify(
         }
     }
     for f in &mut dep.fns {
-        // a getter is structural, not owned: one group per field name across
-        // every module, reachable without an import
-        if f.is_getter() {
-            continue;
+        // A getter is structural, not owned: one group per field name across
+        // every module, reachable without an import. Only its NAME is exempt —
+        // the type it matches on belongs to this module and is being renamed
+        // under it, so the arm has to follow or it matches nothing.
+        if !f.is_getter() {
+            exports.entry(format!("{qual}/{}", f.name)).or_insert(f.is_pub);
+            f.name = format!("{qual}/{}", f.name);
         }
-        exports.entry(format!("{qual}/{}", f.name)).or_insert(f.is_pub);
-        f.name = format!("{qual}/{}", f.name);
         let mut bound = Vec::new();
         for p in &mut f.params {
             rewrite_pattern(p, qual, &owned);
