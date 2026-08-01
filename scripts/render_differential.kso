@@ -68,7 +68,12 @@ more_records = ["[(point 1 2)]" "point none 1" "point 0.5 1.0"]
 
 shaped = text/concat records more_records
 
-prelude = "type point\n  x\n  y\n\n"
+prelude = """
+  type point
+    x
+    y
+
+"""
 
 fn plain expr
   "pub play = print \"\{{expr}}\"\n"

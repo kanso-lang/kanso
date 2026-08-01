@@ -38,7 +38,12 @@ param_chars = "abcdefghijklmnopqrstuvwxyz0123456789_()?"
 
 # What a wrong argument is made of. A record is wrong for every std function
 # and cannot be written as a literal, so the literal checker lets it through.
-prelude = "type wrong\n  a\n  b\n\n"
+prelude = """
+  type wrong
+    a
+    b
+
+"""
 
 fn in? set c
   length (text/split set c) > 1
@@ -140,95 +145,157 @@ fn program_for line
   module = parts[1]!
   name = parts[2]!
   arity = text/to_int parts[3]!
-  head = "import \"std/{module}\"\n\n{prelude}pub play =\n  bad = wrong 1 2\n"
   call = "{module}/{name}{args_for arity}"
-  "{head}  print \"\{{call}}\"\n"
+  """
+    import "std/{module}"
+
+    {prelude}pub play =
+      bad = wrong 1 2
+      print "\{{call}}"
+  """
 
 # What the LANGUAGE says: arity, indexing, dispatch, arithmetic,
 # construction. Each engine writes these separately too.
 langa_says = "too many arguments"
 
-langa_src = "fn one a\n  a\n\npub play = print \"\{one 1 2}\"\n"
+langa_src = """
+  fn one a
+    a
+
+  pub play = print "\{one 1 2}"
+"""
 
 langa = [langa_says langa_src]
 
 langb_says = "too few arguments"
 
-langb_src = "fn two a b\n  a\n\npub play = print \"\{two 1}\"\n"
+langb_src = """
+  fn two a b
+    a
+
+  pub play = print "\{two 1}"
+"""
 
 langb = [langb_says langb_src]
 
 langc_says = "a field the record lacks"
 
-langc_src = "type point\n  x\n\npub play =\n  p = point 1\n  print \"\{p.y}\"\n"
+langc_src = """
+  type point
+    x
+
+  pub play =
+    p = point 1
+    print "\{p.y}"
+"""
 
 langc = [langc_says langc_src]
 
 langd_says = "a field of a non-record"
 
-langd_src = "pub play =\n  n = 5\n  print \"\{n.x}\"\n"
+langd_src = """
+  pub play =
+    n = 5
+    print "\{n.x}"
+"""
 
 langd = [langd_says langd_src]
 
 lange_says = "a strict index past the end"
 
-lange_src = "pub play =\n  xs = [1 2]\n  print \"\{xs[9]!}\"\n"
+lange_src = """
+  pub play =
+    xs = [1 2]
+    print "\{xs[9]!}"
+"""
 
 lange = [lange_says lange_src]
 
 langf_says = "a strict index at zero"
 
-langf_src = "pub play =\n  xs = [1 2]\n  print \"\{xs[0]!}\"\n"
+langf_src = """
+  pub play =
+    xs = [1 2]
+    print "\{xs[0]!}"
+"""
 
 langf = [langf_says langf_src]
 
 langg_says = "division by zero"
 
-langg_src = "pub play =\n  n = 0\n  print \"\{1 / n}\"\n"
+langg_src = """
+  pub play =
+    n = 0
+    print "\{1 / n}"
+"""
 
 langg = [langg_says langg_src]
 
 langh_says = "remainder by zero"
 
-langh_src = "pub play =\n  n = 0\n  print \"\{1 % n}\"\n"
+langh_src = """
+  pub play =
+    n = 0
+    print "\{1 % n}"
+"""
 
 langh = [langh_says langh_src]
 
 langi_says = "adding a string to a number"
 
-langi_src = "pub play =\n  s = \"a\"\n  print \"\{1 + s}\"\n"
+langi_src = """
+  pub play =
+    s = "a"
+    print "\{1 + s}"
+"""
 
 langi = [langi_says langi_src]
 
 langj_says = "comparing a record to a number"
 
-langj_src_head = "type point\n  x\n\npub play =\n"
+langj_src = """
+  type point
+    x
 
-langj_src_tail = "  p = point 1\n  print \"\{p < 2}\"\n"
-
-langj_src = "{langj_src_head}{langj_src_tail}"
+  pub play =
+    p = point 1
+    print "\{p < 2}"
+"""
 
 langj = [langj_says langj_src]
 
 langk_says = "an if condition that is not a bool"
 
-langk_src = "pub play =\n  n = 5\n  print \"\{if n 1 2}\"\n"
+langk_src = """
+  pub play =
+    n = 5
+    print "\{if n 1 2}"
+"""
 
 langk = [langk_says langk_src]
 
 langl_says = "constructing with the wrong count"
 
-langl_src = "type point\n  x\n  y\n\npub play = print \"\{point 1}\"\n"
+langl_src = """
+  type point
+    x
+    y
+
+  pub play = print "\{point 1}"
+"""
 
 langl = [langl_says langl_src]
 
 langm_says = "no arm matches"
 
-langm_src_head = "fn only 0\n  \"zero\"\n\npub play =\n"
+langm_src = """
+  fn only 0
+    "zero"
 
-langm_src_tail = "  n = 7\n  print \"\{only n}\"\n"
-
-langm_src = "{langm_src_head}{langm_src_tail}"
+  pub play =
+    n = 7
+    print "\{only n}"
+"""
 
 langm = [langm_says langm_src]
 
@@ -238,13 +305,21 @@ langm = [langm_says langm_src]
 # holding 1 and 1.0 as separate keys, which the oracle had always refused.
 lango_says = "a float as a map key"
 
-lango_src = "pub play =\n  m = put \{ 1:\"a\" } 2.5 \"b\"\n  print \"\{m}\"\n"
+lango_src = """
+  pub play =
+    m = put \{ 1:"a" } 2.5 "b"
+    print "\{m}"
+"""
 
 lango = [lango_says lango_src]
 
 langn_says = "indexing something that is not a collection"
 
-langn_src = "pub play =\n  n = 5\n  print \"\{n[1]!}\"\n"
+langn_src = """
+  pub play =
+    n = 5
+    print "\{n[1]!}"
+"""
 
 langn = [langn_says langn_src]
 
