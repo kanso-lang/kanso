@@ -48,6 +48,15 @@ type ahead
   wanted
   pad
 
+# Looking back is looking ahead from a place already passed, so it needs to
+# know how far back to stand. Only a pattern of one fixed width can say, which
+# is every lookbehind anyone writes; a variable one answers a failure rather
+# than a wrong position.
+type behind
+  node
+  wanted
+  wide
+
 type edge
   kind
 
@@ -117,6 +126,27 @@ fn named m
 # still advances one character, or the walk would not end.
 pub fn find_all pattern s
   gathering (compiled pattern) s 1 []
+
+# Does the pattern match starting exactly here? A scanner walking a line one
+# token at a time asks this rather than "is it anywhere after here", because
+# the answer decides what the character at this position is.
+pub fn match_at pattern s at
+  anchored (compiled pattern) s at
+
+fn anchored prog s at
+  fitting prog s at (at > length s + 1)
+
+fn fitting _ _ _ true
+  none
+
+fn fitting prog s at false
+  reached_at s at (walked prog.node s at [] (to caught -> arrival to caught))
+
+fn reached_at _ _ none
+  none
+
+fn reached_at _ at end
+  hit at end.to (caught_in_order end.caught 1 [])
 
 # The same walk, keeping where each match sat. A caller reporting a finding
 # needs the position to name a line, which the text alone cannot give back.
@@ -301,7 +331,55 @@ fn compiled pattern
   chars = text/chars body
   parsed_body = read_alt chars 1
   marked_body = flagged parsed_body.node flags.node
-  numbered marked_body 1 . (n -> program n.node (starters n.node))
+  numbered marked_body 1 . (n -> settled n.node)
+
+# A lookbehind has to know how far back to stand, so one whose width varies is
+# refused rather than quietly never matching. Answering an err here reaches
+# whoever called find or match?, which is where a broken pattern belongs.
+fn settled node
+  refused node (loose_behind? node)
+
+fn refused _ true
+  err "a lookbehind matches one fixed width"
+
+fn refused node false
+  program node (starters node)
+
+fn loose_behind? (behind _ _ wide)
+  wide < 0
+
+fn loose_behind? (group node _)
+  loose_behind? node
+
+fn loose_behind? (ahead node _ _)
+  loose_behind? node
+
+fn loose_behind? (rep node _ _ _)
+  loose_behind? node
+
+fn loose_behind? (seq parts)
+  any_loose? parts 1
+
+fn loose_behind? (alt branches)
+  any_loose? branches 1
+
+fn any_loose? parts at
+  seeking_loose? parts at (at > length parts)
+
+fn seeking_loose? _ _ true
+  false
+
+fn seeking_loose? parts at false
+  found_loose? parts at (loose_behind? parts[at]!)
+
+fn found_loose? _ _ true
+  true
+
+fn found_loose? parts at false
+  any_loose? parts (at + 1)
+
+fn loose_behind? _
+  false
 
 # Which characters a match can begin with, or "" for anything. A zero-width
 # node at the front decides nothing, so the answer comes from what follows it;
@@ -357,6 +435,9 @@ fn zero_width? (edge _)
   true
 
 fn zero_width? (ahead _ _ _)
+  true
+
+fn zero_width? (behind _ _ _)
   true
 
 fn zero_width? (rep _ least _ _)
@@ -455,6 +536,9 @@ fn rewritten (group node slot) blind crossing
 fn rewritten (ahead node wanted pad) blind crossing
   ahead (rewritten node blind crossing) wanted pad
 
+fn rewritten (behind node wanted wide) blind crossing
+  behind (rewritten node blind crossing) wanted wide
+
 fn rewritten (rep node least most greedy) blind crossing
   rep (rewritten node blind crossing) least most greedy
 
@@ -525,6 +609,10 @@ fn numbered (rep node least most greedy) at
 fn numbered (ahead node wanted pad) at
   inner = numbered node at
   slotted (ahead inner.node wanted pad) inner.next
+
+fn numbered (behind node wanted wide) at
+  inner = numbered node at
+  slotted (behind inner.node wanted wide) inner.next
 
 fn numbered node at
   slotted node at
@@ -660,6 +748,78 @@ fn special chars at true
   marked chars at chars[at + 2]!
 
 # `(?:` groups without capturing, `(?=` and `(?!` look ahead without consuming.
+fn marked chars at "<"
+  looking chars at chars[at + 3]!
+
+fn looking chars at "="
+  inner = read_alt chars (at + 4)
+  parsed (behind inner.node true (wide_as inner.node)) (inner.pos + 1)
+
+fn looking chars at "!"
+  inner = read_alt chars (at + 4)
+  parsed (behind inner.node false (wide_as inner.node)) (inner.pos + 1)
+
+fn looking chars at _
+  inner = read_alt chars (at + 4)
+  parsed (behind inner.node true (wide_as inner.node)) (inner.pos + 1)
+
+# How many characters a pattern always consumes, or -1 when it varies.
+fn wide_as (lit _)
+  1
+
+fn wide_as (cls _ _)
+  1
+
+fn wide_as (dot _)
+  1
+
+fn wide_as (edge _)
+  0
+
+fn wide_as (group node _)
+  wide_as node
+
+fn wide_as (seq parts)
+  summed parts 1 0
+
+fn summed parts at acc
+  summing parts at acc (at > length parts || acc < 0)
+
+fn summing _ _ acc true
+  acc
+
+fn summing parts at acc false
+  one = wide_as parts[at]!
+  summed parts (at + 1) (added acc one (one < 0))
+
+fn added _ _ true
+  0 - 1
+
+fn added acc one false
+  acc + one
+
+fn wide_as (alt branches)
+  agreed branches 2 (wide_as branches[1]!)
+
+fn agreed branches at so_far
+  agreeing branches at so_far (at > length branches || so_far < 0)
+
+fn agreeing _ _ so_far true
+  so_far
+
+fn agreeing branches at so_far false
+  one = wide_as branches[at]!
+  agreed branches (at + 1) (matched_width so_far one (one == so_far))
+
+fn matched_width so_far _ true
+  so_far
+
+fn matched_width _ _ false
+  0 - 1
+
+fn wide_as _
+  0 - 1
+
 fn marked chars at ":"
   inner = read_alt chars (at + 3)
   parsed inner.node (inner.pos + 1)
@@ -820,8 +980,31 @@ fn capturing s at slot to caught k
   k to (push caught (grabbed slot (text/slice s at (to - 1))))
 
 # Lookahead consumes nothing: the inner pattern is asked whether it can match
-# here, the answer is compared with what the sigil wanted, and the walk carries
+# here, the answer is compared? with what the sigil wanted, and the walk carries
 # on from where it started either way.
+# Standing back the pattern's own width and asking whether it reaches here.
+# A width that varies cannot say where to stand, so it never matches.
+fn walked (behind node wanted wide) s at slots k
+  matched_here at slots k (looked_back? node wanted wide s at)
+
+fn looked_back? node wanted wide s at
+  reachable = wide >= 0 && at - wide >= 1
+  compared? node wanted wide s at reachable
+
+fn compared? _ wanted _ _ _ false
+  wanted == false
+
+fn compared? node wanted wide s at true
+  from = at - wide
+  saw = walked node s from [] (to caught -> arrival to caught)
+  landed_back? saw at wanted
+
+fn landed_back? none _ wanted
+  wanted == false
+
+fn landed_back? saw at wanted
+  (saw.to == at) == wanted
+
 fn walked (ahead node wanted _) s at slots k
   saw = walked node s at slots (to caught -> arrival to caught)
   matched_here at slots k (peeked? saw == wanted)
