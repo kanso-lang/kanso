@@ -254,14 +254,7 @@ jobs:
       - name: kq's own spec suite against this compiler
         run: |
           sudo apt-get install -y jq >/dev/null
-          # TEMPORARY, and deleted by the follow-up that restores this line.
-          # kq pins its own allocator counters against whatever compiler it is
-          # handed, and this change moves one of them, so the two repositories
-          # gate each other: kq's CI builds kanso from main, and this job runs
-          # kq's check. Pointing at the branch that carries kq's regenerated
-          # golden lets both land green rather than forcing one red merge.
-          git clone --depth 1 --branch carry-dedup-after-interior-fix \
-            https://github.com/kanso-lang/kq /tmp/kq
+          git clone --depth 1 https://github.com/kanso-lang/kq /tmp/kq
           cd /tmp/kq
           KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
 
