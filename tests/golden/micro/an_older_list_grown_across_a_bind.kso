@@ -1,0 +1,40 @@
+# The list `inner` starts from is built before the chain's first bind, so it
+# sits below the mark every step of the chain rewinds to, while the buffer a
+# push allocates for it sits above. Writing through that header left a list
+# that survives the rewind pointing at storage the rewind reclaimed, and the
+# next step's copy read whatever the arena had put there — a crash, and the
+# interpreter answering 5 all along.
+import "std/io"
+import "std/list"
+import "std/text"
+
+fn outer dirs at acc
+  outing dirs at acc (at > length dirs)
+
+fn outing _ _ acc true
+  print (length acc)
+
+fn outing dirs at acc false
+  inner dirs at acc dirs[at]! 1 []
+
+fn inner dirs at acc kids k acc2
+  innering dirs at acc kids k acc2 (k > length kids)
+
+fn innering dirs at acc _ _ acc2 true
+  outer dirs (at + 1) (joined acc acc2)
+
+fn innering dirs at acc kids k acc2 false
+  on = (_ -> one dirs at acc kids k acc2)
+  io/write "" . on
+
+fn one dirs at acc kids k acc2
+  inner dirs at acc kids (k + 1) (push acc2 kids[k]!)
+
+fn joined a b
+  list/to_list (text/concat a b)
+
+d1 = ["a1" "a2" "a3" "a4"]
+
+d2 = ["b1"]
+
+pub play = outer [d1 d2] 1 []

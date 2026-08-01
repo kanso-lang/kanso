@@ -12924,3 +12924,58 @@ panel quotes. Reading only what the panels name is both correct and small.
 Matching each panel pattern once per chapter rather than once per pass took it
 from 47 s to 2.8 s — the second match was not merely twice the work, which is
 its own thread to pull.
+
+## Task #57, and why the reduction could not say why
+
+The entry in `tests/known_wrong.rs` ended "what is NOT known: why. The
+reduction stops here." It ran the native engine out of stack on a walk whose
+steps are effects and whose accumulator grows conditionally, while the
+interpreter answered. It pinned `scripts/module_differential.kso` to `--interp`
+in CI and it had been open for months.
+
+The port of `book_panels` met the same fault in a bigger program, and a bigger
+program turned out to be easier to read than the reduction. Delta-debugging its
+input took 442 files to 11 and then to nothing at all — a 33-line program with
+no filesystem in it. From there the mechanism was visible in one run of a
+structural validator: a KList header the copy walk called a survivor, whose
+items buffer was not one.
+
+The accumulator is built before the chain's first bind, so its header sits
+below the mark every step rewinds to. A push that outgrows the buffer allocates
+the new one above that mark and writes the pointer into the old header. The
+rewind reclaims the buffer; the header survives; the next step's copy reads
+whatever the arena has since put in that space. The crash lands in
+`k_deep_copy` or `k_copy_size` reading a node whose length or pointer is
+nonsense, and `main.rs` calls any SIGSEGV stack exhaustion, which is what sent
+the earlier reduction looking at recursion depth.
+
+The byte builder already guards this exact case: `k_b_append_into` computes
+`dies = k_survives(a, NULL) && !k_survives(a, inner)` and takes malloc rather
+than arena when the header predates the inner mark. The list push had no
+equivalent. It does now — in-place push requires a header born inside the
+current beat, and every older one takes the copying path the in-place form is
+an optimisation of. The test is conservative on purpose: a header in an older
+block answers no and pays a copy, because walking the block list to be sure
+costs more than the copy saves.
+
+The first version of the test was conservative — a header outside the head
+block answered no and paid a copy — and CI priced that at 1,050 extra
+allocations in a 7.58 million allocation decode, plus a handful in encode and
+one-shot. Small, but a rise with nothing on the other side, which is the one
+move the trend gate refuses outright and rightly. Settling the question exactly
+when the fast path cannot (the head block answers without a walk; anything else
+falls back to `k_survives`) takes every vein back to its old number to the
+allocation. Welfare holds at 65.56.
+
+Worth saying plainly: the local suite passes the cost goldens without ever
+running the benchmarks, so "no counter moves" was a claim made before it was
+measured, and CI caught it. Regenerating a golden is not the same as checking
+one.
+
+One neighbouring hypothesis is recorded and NOT acted on. `k_deep_copy` gives a
+copied empty list `cap = 1` where `used = 0`, so the copy has a spare slot, and
+the frontier push would claim it — writing an element into a carry buffer the
+next step overwrites. That is the same shape of error one layer over, and
+setting the capacity to the length closes it. No program could be made to fail
+on it: with the guard in place the constructed cases all pass, so the change
+would be a defence with nothing behind it. Written down rather than shipped.

@@ -1,3 +1,8 @@
+# A walk where each step is an effect and the accumulator grows conditionally:
+# one arm answers it unchanged, the other pushes text derived from the step.
+# The list is older than the chain's mark, so a push that grew it in place
+# left it pointing at a buffer the next step's rewind reclaimed. It ran the
+# native engine out of stack for months while the interpreter answered.
 import "std/io"
 import "std/list"
 import "std/text"
