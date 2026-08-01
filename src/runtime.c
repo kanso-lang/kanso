@@ -4267,6 +4267,24 @@ KValue k_index(KValue container, KValue key, const char* origin) {
     return found;
 }
 
+/* A header allocated before the current beat mark survives the rewind that
+   ends a step of a bind chain; storage allocated after it does not. Writing
+   through an older header leaves a surviving list pointing at a buffer the
+   rewind reclaims, or holding an element it is about to take. Only a header
+   born inside this beat may be mutated; every other one takes the copying
+   path, which is what the in-place form is an optimisation of.
+
+   The test is conservative on purpose: a header in an older block answers no
+   and pays a copy, where walking the block list to be sure would cost more
+   than the copy saves on the path this guards. */
+static int k_born_this_beat(const void* p) {
+    if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX || !k_blocks) return 1;
+    KMark* m = &k_beat_stack[k_beat_depth - 1];
+    const char* q = (const char*)p;
+    if (q < (const char*)(k_blocks + 1) || q >= k_arena) return 0;
+    return k_blocks != m->block || q >= (const char*)m->ptr;
+}
+
 static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) {
@@ -4276,6 +4294,7 @@ static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
         k_die(said);
     }
     KList* l = k_as_list(lv);
+    if (mutate && !k_born_this_beat(l)) mutate = 0;
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < buf->cap) {
         /* this list is the frontier of its buffer: claim the next slot */
@@ -4327,7 +4346,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
     }
     KList* l = k_as_list(lv);
     KBuf* buf = k_buf_of(l->items);
-    if (buf->used == l->len && l->len < buf->cap) {
+    if (buf->used == l->len && l->len < buf->cap && k_born_this_beat(l)) {
         l->items[l->len] = item;
         buf->used++;
         l->len++;

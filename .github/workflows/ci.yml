@@ -291,7 +291,7 @@ jobs:
       # whole modules on disk: what a directory of files sharing one namespace
       # lets through and what it refuses. the seam that hid two bugs already
       # --interp: see the note at the top of the sweep (task #57)
-      - run: ./target/release/kanso run scripts/module_differential.kso --interp
+      - run: ./target/release/kanso run scripts/module_differential.kso
       # a diagnostic with no golden can be reworded, weakened or lost with
       # nothing going red — the corpus grew by whoever remembered
       - run: ./target/release/kanso run scripts/diagnostic_coverage.kso

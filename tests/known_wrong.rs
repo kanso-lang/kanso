@@ -24,48 +24,6 @@ fn run(fixture: &str, engine: &[&str]) -> (String, String, Option<i32>) {
     )
 }
 
-/// Task #57. A walk over a list where each step is an effect, accumulating
-/// conditionally — one arm returns the accumulator unchanged, the other pushes
-/// a value derived from the step's answer — runs the native engine out of
-/// stack. The interpreter, which is the oracle, answers correctly.
-///
-/// What is isolated: two NESTED binds are needed (one bind runs fine), the
-/// accumulated value must be derived rather than constant, and the failing
-/// step must be followed by another step. Neither records nor processes nor
-/// files are involved. `--strict` fails the same way, so it is not thunk
-/// memoization, and breaking the continuation lambda into named functions
-/// makes this reduction disappear, so it is the emitted shape rather than the
-/// semantics.
-///
-/// The naming workaround does not hold at size. Porting the module sweep to
-/// kanso hit the same fault in a program of that shape, and lifting its
-/// continuation into a named function changed nothing. So the reduction's
-/// workaround is a property of the reduction.
-///
-/// That program also pins the ordering. A case that reports a fault followed
-/// by one that does not is the shape that dies; fault-then-fault and
-/// clean-then-fault both run. So it takes an accumulator that is already
-/// holding heap-built text and then a later step that does not add to it —
-/// which is when the block the accumulator lives in stops being the one being
-/// written, and the rewind takes it. `scripts/module_differential.kso` runs
-/// under `--interp` in CI for this reason.
-///
-/// What is NOT known: why. The reduction stops here.
-#[test]
-fn native_runs_out_of_stack_where_the_interpreter_answers() {
-    let (_, err, code) = run("push_through_nested_binds.kso", &[]);
-    assert!(
-        err.contains("the program ran out of stack"),
-        "native no longer overflows — task #57 is fixed, delete this test: {err}"
-    );
-    assert_eq!(code, Some(1));
-
-    let (out, err, code) = run("push_through_nested_binds.kso", &["--interp"]);
-    assert_eq!(err, "");
-    assert_eq!(out, "1: a gave a\n", "the oracle's answer changed");
-    assert_eq!(code, Some(0));
-}
-
 /// Task #72. An effect handed to a parameter nobody reads never happens, and
 /// nothing says so. Laziness means an argument that is never forced is never
 /// evaluated, so the write is not performed — the same shape as Haskell's
