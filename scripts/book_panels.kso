@@ -1,0 +1,704 @@
+import "std/io"
+import "std/list"
+import "std/regexp"
+import "std/text"
+
+# Book panels render their sample files. Without an argument this reports every
+# panel whose title names a sample and whose body has drifted from it; with
+# `--write` it regenerates those bodies from source through the highlighter.
+#
+# The panels are the book's claim about what the compiler says. A sample that
+# changes and a panel that does not is the page quoting a compiler that no
+# longer exists, which is the thing this exists to catch.
+type token
+  text
+  at
+
+# One sample, read once at the start, so that deciding a panel is pure.
+type source_file
+  path
+  body
+
+# Where a chapter's panels are: the ones quoting a sample, and the ones
+# quoting a recorded run.
+type panels
+  src
+  out
+
+# A rewritten chapter, how many of its panels moved, and what to say about it.
+type outcome
+  text
+  drift
+  log
+
+chapters = "docs/book"
+
+keywords = ["fn" "pub" "type" "import"]
+
+ops = [">>" "->" "==" "!=" "<=" ">=" "=" "<" ">" "+" "-" "*" "/" "."]
+
+str_tok = "\"(?:\\\\.|[^\"\\\\])*\""
+
+ident_tok = "[a-z_][a-zA-Z0-9_/]*[?!]?"
+
+num_tok = "[0-9]+\\.[0-9]+|[0-9]+"
+
+op_tok = ">>|->|==|!=|<=|>=|[=<>+\\-*/.]"
+
+token_pattern = "{str_tok}|#[^\n]*|{ident_tok}|{num_tok}|{op_tok}|."
+
+whole_ident = "^{ident_tok}$"
+
+whole_num = "^(?:[0-9]+\\.[0-9]+|[0-9]+)$"
+
+panel_title = "<div class=\"code-panel-title\">"
+
+src_head = "({panel_title}([a-z_0-9/]+\\.kso)[^<]*</div>"
+
+src_pattern = "(?s){src_head}\\s*<pre><code>)(.*?)(</code></pre>)"
+
+out_head = "({panel_title}(KANSO_COUNTERS=1 )?kanso"
+
+out_tail = "(?:run|check|test|build|play)[^<]*?([a-z_0-9/]+)\\.kso[^<]*</div>"
+
+out_pattern = "(?s){out_head} {out_tail}\\s*<pre><code>)(.*?)(</code></pre>)"
+
+pub play = io/args . (given -> over_chapters (writing? given))
+
+fn writing? given
+  length (list/to_list (list/select given (a -> a == "--write"))) > 0
+
+# Every path under a chapter's samples, so a panel can be resolved to a file
+# without asking the filesystem anything: a substitution walk that could take a
+# bind half way through would have to carry the whole chapter through it.
+fn walk_all path after
+  io/is_dir path . (there -> walk_there path there after)
+
+fn walk_there _ false after
+  after []
+
+fn walk_there path true after
+  io/list_dir path . (names -> walk_names path names 1 [] after)
+
+fn walk_names path names at acc after
+  walking_names path names at acc after (at > length names)
+
+fn walking_names _ _ _ acc after true
+  after acc
+
+fn walking_names path names at acc after false
+  kid = "{path}/{names[at]!}"
+  io/is_dir kid . (d -> walk_kid path names at acc after kid d)
+
+fn walk_kid path names at acc after kid true
+  on = (deep -> walk_names path names (at + 1) (joined acc deep) after)
+  walk_all kid on
+
+fn walk_kid path names at acc after kid false
+  walk_names path names (at + 1) (push acc kid) after
+
+fn joined a b
+  list/to_list (text/concat a b)
+
+# Only the samples this chapter's panels name are read. A chapter's directory
+# also holds files no panel quotes, and one of them is large.
+fn read_each wanted at acc after
+  reading wanted at acc after (at > length wanted)
+
+fn reading _ _ acc after true
+  after acc
+
+fn reading wanted at acc after false
+  path = wanted[at]!
+  on = (body -> read_next wanted at acc after path body)
+  io/read_file path . on
+
+fn read_next wanted at acc after path body
+  read_each wanted (at + 1) (push acc (source_file path body)) after
+
+fn over_chapters write
+  on = (names -> chapter_loop (only_chapters names) 1 0 write)
+  io/list_dir chapters . on
+
+fn only_chapters names
+  list/sort (list/to_list (list/select names (n -> chapter? n)))
+
+fn chapter? n
+  regexp/match? "^(ch[0-9]+|app[a-z])\\.html$" n
+
+fn chapter_loop names at drift write
+  walking names at drift write (at > length names)
+
+fn walking _ _ drift write true
+  reported drift write
+
+fn walking names at drift write false
+  name = names[at]!
+  on = (raw -> one_chapter names at drift write name raw)
+  io/read_file "{chapters}/{name}" . on
+
+fn one_chapter names at drift write name raw
+  dir = dir_of name
+  on = (paths -> with_paths names at drift write name raw dir paths)
+  walk_all dir on
+
+fn with_paths names at drift write name raw dir paths
+  seen = found_in raw
+  wanted = needed seen dir paths
+  on = (files -> with_files names at drift write name raw seen files dir)
+  read_each wanted 1 [] on
+
+# Both panel shapes, matched once. Each pattern is a lazy `.*?` over the whole
+# chapter, which is the expensive thing this program does.
+fn found_in raw
+  panels (regexp/matches src_pattern raw) (regexp/matches out_pattern raw)
+
+# The path each panel resolves to, once, so a sample two panels share is read
+# once and a sample nothing names is not read at all.
+fn needed p dir paths
+  from_src = wanted_src p.src dir paths 1 []
+  wanted_out p.out dir paths 1 from_src
+
+fn wanted_src ms dir paths at acc
+  sourcing ms dir paths at acc (at > length ms)
+
+fn sourcing _ _ _ _ acc true
+  acc
+
+fn sourcing ms dir paths at acc false
+  found = sample_at paths dir ms[at]!.groups[2]!
+  wanted_src ms dir paths (at + 1) (noted acc found)
+
+fn wanted_out ms dir paths at acc
+  recording ms dir paths at acc (at > length ms)
+
+fn recording _ _ _ _ acc true
+  acc
+
+fn recording ms dir paths at acc false
+  m = ms[at]!
+  parts = text/split m.groups[3]! "/"
+  base = "{parts[length parts]!}{counters_of m.groups[2]!}"
+  wanted_out ms dir paths (at + 1) (noted acc (out_at paths dir base))
+
+fn noted acc ""
+  acc
+
+fn noted acc found
+  again acc found (holds? acc found)
+
+fn again acc _ true
+  acc
+
+fn again acc found false
+  push acc found
+
+fn with_files names at drift write name raw p files dir
+  first = rebuilt raw p.src name dir files write 1
+  both = rebuilt first.text p.out name dir files write 2
+  said = told first both
+  on = (_ -> next_chapter names at drift write name raw said)
+  io/write said.log . on
+
+fn dir_of name
+  "{chapters}/samples/{(text/split name ".")[1]!}"
+
+fn told first both
+  outcome both.text (first.drift + both.drift) "{first.log}{both.log}"
+
+fn next_chapter names at drift write name raw said
+  saved "{chapters}/{name}" raw said.text write
+    . (_ -> chapter_loop names (at + 1) (drift + said.drift) write)
+
+fn saved path raw text write
+  keeping path text (write == false || text == raw)
+
+fn keeping _ _ true
+  io/write ""
+
+fn keeping path text false
+  io/write_file path text
+
+# A python `PANEL.sub(fn, text)` in the small: walk the matches, copy the gap
+# before each, append what the fixer answered, and finish with the tail.
+fn rebuilt raw found name dir files write shape
+  stitched raw found 1 1 "" 0 "" name dir files write shape
+
+fn stitched raw found at from acc drift log name dir files write shape
+  stitching raw found at from acc drift log name dir files write shape
+    (at > length found)
+
+fn stitching raw _ _ from acc drift log _ _ _ _ _ true
+  outcome "{acc}{span_of raw from (length raw)}" drift log
+
+fn stitching raw found at from acc drift log name dir files write shape false
+  m = found[at]!
+  gap = span_of raw from (m.from - 1)
+  said = fixed raw m name dir files write shape
+  grown = "{acc}{gap}{said.text}"
+  moved = drift + said.drift
+  more = "{log}{said.log}"
+  stitched raw found (at + 1) m.to grown moved more name dir files write shape
+
+fn span_of raw from to
+  empty_span raw from to (from > to || from > length raw)
+
+fn empty_span _ _ _ true
+  ""
+
+fn empty_span raw from to false
+  text/slice raw from (least to (length raw))
+
+fn least a b
+  smaller a b (a < b)
+
+fn smaller a _ true
+  a
+
+fn smaller _ b false
+  b
+
+fn fixed raw m name dir files write 1
+  sample = m.groups[2]!
+  found = sample_at (path_list files) dir sample
+  no_sample raw m sample name files write found (found == "")
+
+fn fixed raw m name dir files write _
+  parts = text/split m.groups[3]! "/"
+  base = "{parts[length parts]!}{counters_of m.groups[2]!}"
+  found = out_at (path_list files) dir base
+  no_recorded raw m base name files write found (found == "")
+
+fn path_list files
+  list/to_list (list/map files (f -> f.path))
+
+fn counters_of ""
+  ""
+
+fn counters_of _
+  "_counters"
+
+# The sample sits beside its chapter, or one directory deeper. A name that is
+# nowhere is left alone: the panel may be quoting something this does not own.
+fn sample_at paths dir name
+  here = "{dir}/{name}"
+  deeper paths dir name here (holds? paths here)
+
+fn holds? paths path
+  length (list/to_list (list/select paths (p -> p == path))) > 0
+
+fn deeper _ _ _ here true
+  here
+
+fn deeper paths dir name _ false
+  want = length (text/split dir "/") + 2
+  hits = list/select paths (p -> one_deep? p dir name want)
+  sole (list/to_list hits)
+
+fn one_deep? path dir name want
+  parts = text/split path "/"
+  deep? parts path dir name want (length parts == want)
+
+fn deep? _ _ _ _ _ false
+  false
+
+fn deep? parts path dir name _ true
+  parts[length parts]! == name && starts? path "{dir}/"
+
+fn starts? s pre
+  text/slice s 1 (length pre) == pre
+
+fn ends? s suf
+  text/slice s (length s - length suf + 1) (length s) == suf
+
+# A recorded run may live anywhere under the chapter's samples, and a name that
+# is there twice is ambiguous: leave the panel alone rather than guess.
+fn out_at paths dir base
+  want = "/{base}.out"
+  hits = list/select paths (p -> under? p dir want)
+  sole (list/to_list hits)
+
+fn under? path dir want
+  starts? path "{dir}/" && ends? path want
+
+fn sole hits
+  only hits (length hits == 1)
+
+fn only _ false
+  ""
+
+fn only hits true
+  hits[1]!
+
+fn body_of files path
+  (list/to_list (list/select files (f -> f.path == path)))[1]!.body
+
+fn no_sample raw m _ _ _ _ _ true
+  outcome (whole_of raw m) 0 ""
+
+fn no_sample raw m sample name files write found false
+  weighed raw m (body_of files found) sample name write
+
+fn weighed raw m src sample name write
+  same = trimmed (strip_tags m.groups[3]!) == trimmed src
+  settled raw m src sample name write same
+
+fn settled raw m _ _ _ _ true
+  outcome (whole_of raw m) 0 ""
+
+fn settled raw m src sample name write false
+  swapped raw m src write "{verb write}: {name} :: {sample}\n"
+
+fn swapped raw m _ false said
+  outcome (whole_of raw m) 1 said
+
+fn swapped _ m src true said
+  outcome "{m.groups[1]!}{render src}{m.groups[4]!}" 1 said
+
+fn no_recorded raw m _ _ _ _ _ true
+  outcome (whole_of raw m) 0 ""
+
+fn no_recorded raw m base name files write found false
+  weighed_out raw m (body_of files found) base name write
+
+fn weighed_out raw m rec base name write
+  same = trimmed (strip_tags m.groups[4]!) == trimmed rec
+  settled_out raw m rec base name write same
+
+fn settled_out raw m _ _ _ _ true
+  outcome (whole_of raw m) 0 ""
+
+fn settled_out raw m rec base name write false
+  swapped_out raw m rec write "{verb write}: {name} :: {base}.out\n"
+
+fn swapped_out raw m _ false said
+  outcome (whole_of raw m) 1 said
+
+fn swapped_out _ m rec true said
+  outcome "{m.groups[1]!}{render_output rec}{m.groups[5]!}" 1 said
+
+fn verb true
+  "rewrote"
+
+fn verb false
+  "drifted"
+
+fn whole_of raw m
+  text/slice raw m.from (m.to - 1)
+
+fn trimmed s
+  without_tail s (length s == 0)
+
+fn without_tail s true
+  s
+
+fn without_tail s false
+  shed s (text/slice s (length s) (length s) == "\n")
+
+fn shed s false
+  s
+
+fn shed s true
+  trimmed (text/slice s 1 (length s - 1))
+
+fn in? hay needle
+  length (text/split hay needle) > 1
+
+# What the panel body says, with its markup taken off, so it can be compared
+# with the file it claims to show.
+fn strip_tags body
+  unescaped (regexp/replace_all "<[^>]+>" body "")
+
+fn unescaped s
+  amp = regexp/replace_all "&lt;" s "<"
+  gt = regexp/replace_all "&gt;" amp ">"
+  regexp/replace_all "&amp;" gt "&"
+
+fn escaped s
+  amp = regexp/replace_all "&" s "&amp;"
+  lt = regexp/replace_all "<" amp "&lt;"
+  regexp/replace_all ">" lt "&gt;"
+
+fn render source
+  lines = text/split (trimmed source) "\n"
+  joined_lines lines 1 []
+
+fn joined_lines lines at acc
+  joining lines at acc (at > length lines)
+
+fn joining _ _ acc true
+  text/join acc "\n"
+
+fn joining lines at acc false
+  joined_lines lines (at + 1) (push acc (highlight lines[at]!))
+
+fn highlight line
+  toks = tokens_of line
+  painted toks 1 ""
+
+fn tokens_of line
+  hits = regexp/matches token_pattern line
+  cut = (h -> token (text/slice line h.from (h.to - 1)) h.from)
+  list/to_list (list/map hits cut)
+
+fn painted toks at acc
+  painting toks at acc (at > length toks)
+
+fn painting _ _ acc true
+  acc
+
+fn painting toks at acc false
+  painted toks (at + 1) "{acc}{one_token toks at}"
+
+fn one_token toks at
+  t = toks[at]!
+  classed toks at t.text (text/slice t.text 1 1)
+
+fn classed _ _ t "\""
+  highlight_string t
+
+fn classed _ _ t "#"
+  "<span class=\"c\">{escaped t}</span>"
+
+fn classed toks at t _
+  by_shape toks at t (word? keywords t)
+
+fn by_shape _ _ t true
+  "<span class=\"k\">{t}</span>"
+
+fn by_shape toks at t false
+  numeric toks at t (regexp/match? whole_num t)
+
+fn numeric _ _ t true
+  "<span class=\"n\">{t}</span>"
+
+fn numeric toks at t false
+  operator toks at t (word? ops t)
+
+fn operator _ _ t true
+  "<span class=\"o\">{escaped t}</span>"
+
+fn operator toks at t false
+  namelike toks at t (regexp/match? whole_ident t)
+
+fn namelike toks at t true
+  mark_ident toks at t
+
+fn namelike _ _ t false
+  escaped t
+
+fn word? set t
+  length (list/to_list (list/select set (w -> w == t))) > 0
+
+# A string literal: its interpolations get their own span, inside the string's.
+fn highlight_string t
+  body = text/slice t 2 (length t - 1)
+  "<span class=\"s\">\"{interpolated body 1 ""}\"</span>"
+
+fn interpolated body at acc
+  weaving body at acc (at > length body)
+
+fn weaving _ _ acc true
+  acc
+
+fn weaving body at acc false
+  opens body at acc (text/slice body at at == "\{")
+
+fn opens body at acc true
+  shut = closing body (at + 1) 1
+  inner = text/slice body at (shut - 1)
+  interpolated body shut "{acc}<span class=\"i\">{escaped inner}</span>"
+
+fn opens body at acc false
+  stop = next_open body at
+  interpolated body stop "{acc}{escaped (text/slice body at (stop - 1))}"
+
+fn closing body at depth
+  shutting body at depth (at > length body || depth == 0)
+
+fn shutting _ at _ true
+  at
+
+fn shutting body at depth false
+  closing body (at + 1) (depth + step_of (text/slice body at at))
+
+fn step_of "\{"
+  1
+
+fn step_of "}"
+  0 - 1
+
+fn step_of _
+  0
+
+fn next_open body at
+  scanning body at (at > length body)
+
+fn scanning _ at true
+  at
+
+fn scanning body at false
+  found_open body at (text/slice body at at == "\{")
+
+fn found_open _ at true
+  at
+
+fn found_open body at false
+  next_open body (at + 1)
+
+# An identifier is painted as a function where it is being declared or applied.
+# The neighbours that decide it are the nearest tokens that are not spaces,
+# except for the bracket that makes it an index, which has to be touching.
+fn mark_ident toks at t
+  before = near toks (at - 1) (0 - 1)
+  after = near toks (at + 1) 1
+  decided t before after (nth_text toks (at + 1))
+
+fn near toks at step
+  stepping toks at step (at < 1 || at > length toks)
+
+fn stepping _ _ _ true
+  ""
+
+fn stepping toks at step false
+  here = toks[at]!.text
+  kept toks at step here (trimmed_blank here == "")
+
+fn kept toks at step _ true
+  near toks (at + step) step
+
+fn kept _ _ _ here false
+  here
+
+fn nth_text toks at
+  off_end toks at (at > length toks)
+
+fn off_end _ _ true
+  ""
+
+fn off_end toks at false
+  toks[at]!.text
+
+fn trimmed_blank s
+  regexp/replace_all "[ \t]" s ""
+
+fn decided t before after next
+  declared t before after next (before == "fn" || before == "pub")
+
+fn declared t _ _ _ true
+  "<span class=\"f\">{t}</span>"
+
+fn declared t before after next false
+  typed t before after next (before == "type")
+
+fn typed t _ _ _ true
+  t
+
+fn typed t before after next false
+  indexed t before after (next == "[")
+
+fn indexed t _ _ true
+  t
+
+fn indexed t before after false
+  heads t before after (head_spot? before)
+
+fn head_spot? ""
+  true
+
+fn head_spot? b
+  word? ["=" ">>" "." "(" "->"] b
+
+fn heads t _ _ false
+  t
+
+fn heads t _ after true
+  applied? t after (argumentish? after)
+
+fn argumentish? ""
+  true
+
+fn argumentish? a
+  starts_arg? a (regexp/match? whole_ident a || regexp/match? whole_num a)
+
+fn starts_arg? _ true
+  true
+
+fn starts_arg? a false
+  word? ["(" "["] a || text/slice a 1 1 == "\""
+
+fn applied? t _ true
+  "<span class=\"f\">{t}</span>"
+
+fn applied? t after false
+  trailing t (word? [">>" "."] after)
+
+fn trailing t true
+  "<span class=\"f\">{t}</span>"
+
+fn trailing t false
+  t
+
+# A recorded run: diagnostics get their tag painted, the source pointer and the
+# caret line get their own colour, everything else is escaped as it stands.
+fn render_output text
+  lines = text/split (trimmed text) "\n"
+  out_lines lines 1 []
+
+fn out_lines lines at acc
+  outing lines at acc (at > length lines)
+
+fn outing _ _ acc true
+  text/join acc "\n"
+
+fn outing lines at acc false
+  out_lines lines (at + 1) (push acc (one_out lines[at]!))
+
+fn one_out line
+  tagged line (regexp/match? "^(error|warning)\\[[a-z]+\\]" line)
+
+fn tagged line true
+  parts = text/split line ":"
+  rest = text/join (list/to_list (list/drop parts 1)) ":"
+  "<span class=\"k\">{escaped parts[1]!}</span>:{escaped rest}"
+
+fn tagged line false
+  pointed line (starts? (lstripped line) "-->")
+
+fn lstripped line
+  regexp/replace_all "^[ \t]+" line ""
+
+fn pointed line true
+  "<span class=\"c\">{escaped line}</span>"
+
+fn pointed line false
+  carets line (caret_only? line)
+
+fn caret_only? line
+  bare = regexp/replace_all "[ \t^]" line ""
+  bare == "" && in? line "^"
+
+fn carets line true
+  at = (regexp/matches "\\^" line)[1]!.from
+  before = text/slice line 1 (at - 1)
+  rest = escaped (text/slice line at (length line))
+  "{before}<span class=\"k\">{rest}</span>"
+
+fn carets line false
+  escaped line
+
+fn reported drift write
+  quiet = write || drift == 0
+  io/write "{drift} panel(s) {done_word write}\n" . (_ -> ending quiet)
+
+fn done_word true
+  "rewritten"
+
+fn done_word false
+  "drifted"
+
+fn ending true
+  io/write ""
+
+fn ending false
+  io/exit 1

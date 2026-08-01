@@ -1,0 +1,15 @@
+# `stepping?` takes five parameters, so two of its arguments travel on the
+# stack, and it holds a musttail, so it is reached through a trampoline. The
+# trampoline's name was built by a quoter that only knew about `/`, so a
+# function whose name carries `?` — or any other sigil a name may hold — was
+# emitted as a bare llvm identifier and clang refused the whole module.
+fn reached? a b c d e
+  stepping? a b c d e (a > 3)
+
+fn stepping? _ b c d e true
+  b && c && d && e
+
+fn stepping? a b c d e false
+  reached? (a + 1) b c d e
+
+pub play = print (reached? 1 true true true false)
