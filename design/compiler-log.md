@@ -13363,3 +13363,25 @@ the second one for reasons a small program does not reproduce. The golden is
 therefore a trimmed copy of std/sha256 rather than something shorter, and its
 header says so: it exists to fail rather than to hash, and the two are not kept
 in step.
+
+## A correction: the declined fix was incoherent, not blocked
+
+The entry above records that refusing the beat bracket for a thunk argument
+"breaks regexp_slice_two … removing the bracket surfaces something else, which
+is its own thread". There is no other thread. The bracket and the loop's own
+`k_beat_iter` are two halves of one mechanism, and removing one without the
+other is broken by construction.
+
+Reading the emitted IR says so plainly. `regexp/flag_end`, `regexp/ending_flag`,
+`regexp/digits` and `regexp/taking` each call `k_beat_iter` in their bodies —
+they are beat loops. The declined change removed two of the ten `k_beat_push`
+call sites in that program while leaving those bodies alone, so a loop entered
+without a mark of its own iterated against whichever mark was on top, and the
+rewind between iterations reclaimed a caller's live memory. The failure it
+produced, a `list/bounded` adapter arriving where a regexp node belonged, is
+that and not a second defect.
+
+So the option is not "declined because it exposes another bug" but "declined
+because it is half a change". Anyone returning to it has to un-classify the
+loop as well, which is a much larger move and buys nothing over the memo rule
+that shipped.
