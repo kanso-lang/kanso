@@ -1,0 +1,12 @@
+import "std/bits"
+
+fn add a b
+  a + b
+
+pub play =
+  inc = &add 1
+  print "sigil still hugs: {inc 5}"
+  >> print "tighter than ==: {12 & 10 == 8}"
+  >> print "looser than +:   {1 | 2 + 4}"
+  >> print "same as named:   {12 & 10 == bits/and 12 10}"
+  >> print "chained:         {1 | 2 | 4 ^ 1}"

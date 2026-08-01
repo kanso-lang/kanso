@@ -2622,6 +2622,33 @@ fn accumulate_failures(left: Value, right: Value) -> Value {
     }
 }
 
+/// The name the runtime prints for a bitwise operator, which is the name of
+/// the std/bits function it shares its meaning with.
+fn spelled_op(op: &str) -> &str {
+    match op {
+        "&" => "and",
+        "|" => "or",
+        _ => "xor",
+    }
+}
+
+/// The three bitwise operators share a shape: both sides must fit the machine
+/// word the compiled engines use, and the answer is an int.
+fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
+    let (Some(x), Some(y)) = (a.to_i64(), b.to_i64()) else {
+        return Err(RuntimeError {
+            message: format!("`{op}` takes whole numbers that fit 64 bits"),
+            span,
+        });
+    };
+    let bits = match op {
+        "&" => x & y,
+        "|" => x | y,
+        _ => x ^ y,
+    };
+    Ok(Value::Int(bits.into()))
+}
+
 pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame) -> EvalResult {
     if is_failure(&left) {
         return Ok(left);
@@ -2650,6 +2677,31 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
             true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
             false => Ok(Value::Int(a % b)),
         },
+        // Bitwise, over whole numbers only. Native's ints are 64 bits wide by
+        // construction, so a value too wide to be one is a case only the
+        // interpreter can reach, and it says so rather than answering.
+        ("&", Value::Int(a), Value::Int(b)) => bitwise("&", a, b, span),
+        ("|", Value::Int(a), Value::Int(b)) => bitwise("|", a, b, span),
+        ("^", Value::Int(a), Value::Int(b)) => bitwise("^", a, b, span),
+        // Anything else meeting a bitwise operator is the type complaint the
+        // compiled engines print, in their words: the operator and the named
+        // function in std/bits are one operation, so they answer alike.
+        ("&" | "|" | "^", other, _) if !matches!(other, Value::Int(_)) => Err(RuntimeError {
+            message: format!(
+                "{} takes whole numbers, got {}",
+                spelled_op(op),
+                render(other, false)
+            ),
+            span,
+        }),
+        ("&" | "|" | "^", _, other) => Err(RuntimeError {
+            message: format!(
+                "{} takes whole numbers, got {}",
+                spelled_op(op),
+                render(other, false)
+            ),
+            span,
+        }),
         ("+", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a + b)),
         ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),

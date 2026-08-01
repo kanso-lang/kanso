@@ -581,7 +581,13 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
         12 => "<",
         13 => ">",
         14 => "<=",
-        _ => ">=",
+        15 => ">=",
+        20 => "&",
+        21 => "|",
+        // The last arm used to be `>=`, so a code this did not know compared
+        // instead of saying so. Every code is named now.
+        22 => "^",
+        other => die(format!("no operator for code {other}")),
     };
     match eval_binop(op, val(a), val(b), SPAN0, &None) {
         Ok(v) => push(Slot::V(v)),

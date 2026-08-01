@@ -762,6 +762,9 @@ impl<'a> WasmBackend<'a> {
             ">" => Ok(13),
             "<=" => Ok(14),
             ">=" => Ok(15),
+            "&" => Ok(20),
+            "|" => Ok(21),
+            "^" => Ok(22),
             other => Err(format!("unsupported operator `{other}`")),
         }
     }

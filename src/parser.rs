@@ -1258,10 +1258,14 @@ const LOOSEST: u8 = 0;
 const OR: u8 = 1;
 const AND: u8 = 2;
 const CMP: u8 = 3;
-const ADD: u8 = 4;
-const MUL: u8 = 5;
-const APP: u8 = 6;
-const ATOM: u8 = 7;
+/// Bitwise binds tighter than comparison, which is the fix for C's famous
+/// mistake — `a & b == c` there means `a & (b == c)`, and nobody has ever
+/// wanted that. Looser than arithmetic, so `a & b + 1` adds first.
+const BITS: u8 = 4;
+const ADD: u8 = 5;
+const MUL: u8 = 6;
+const APP: u8 = 7;
+const ATOM: u8 = 8;
 
 /// What a pair is worth is decided by the two tokens beside it. On the right,
 /// an operator claims the parenthesised expression as its left operand, so the
@@ -1336,6 +1340,7 @@ fn level(op: &str) -> u8 {
         "||" => OR,
         "&&" => AND,
         "<" | "<=" | ">" | ">=" | "==" | "!=" => CMP,
+        "&" | "|" | "^" => BITS,
         "+" | "-" => ADD,
         "*" | "/" | "%" => MUL,
         _ => LOOSEST,
@@ -1684,15 +1689,6 @@ impl<'a> P<'a> {
 
     fn parse_join(&mut self) -> Result<Expr, Diagnostic> {
         let lhs = self.parse_or()?;
-        if let Some(Tok::Op("&")) = self.peek() {
-            return Err(Diagnostic::new(
-                "syntax",
-                "parallel statements are unordered by default — write them as \
-                 separate lines; sequence with `>>`"
-                    .to_string(),
-                self.span_here(),
-            ));
-        }
         Ok(lhs)
     }
 
@@ -1721,7 +1717,7 @@ impl<'a> P<'a> {
     }
 
     fn parse_cmp(&mut self) -> Result<Expr, Diagnostic> {
-        let lhs = self.parse_add()?;
+        let lhs = self.parse_bits()?;
         let cmp = ["<", "<=", ">", ">=", "==", "!="];
         if let Some(Tok::Op(op)) = self.peek() {
             if cmp.contains(op) {
@@ -1732,6 +1728,22 @@ impl<'a> P<'a> {
                 let rhs = self.parse_add()?;
                 return Ok(Expr::BinOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs), span });
             }
+        }
+        Ok(lhs)
+    }
+
+    /// `&`, `|` and `^` over whole numbers. The glyphs are free here because
+    /// space is semantic: `&add` hugs its name and is the partial sigil, which
+    /// the atom parser reads; a spaced `&` can only be this.
+    fn parse_bits(&mut self) -> Result<Expr, Diagnostic> {
+        let mut lhs = self.parse_add()?;
+        while let Some(Tok::Op(op @ ("&" | "|" | "^"))) = self.peek() {
+            let op = *op;
+            let span = self.span_here();
+            self.pos += 1;
+            self.consumed(BITS);
+            let rhs = self.parse_add()?;
+            lhs = Expr::BinOp { op, lhs: Box::new(lhs), rhs: Box::new(rhs), span };
         }
         Ok(lhs)
     }
