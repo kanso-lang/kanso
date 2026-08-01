@@ -1,0 +1,205 @@
+import "std/io"
+import "std/list"
+import "std/path"
+import "std/regexp"
+import "std/sha256"
+import "std/text"
+
+# Content-digest the site's assets, the way rails does.
+#
+# A digest in the filename means a browser can never hold half of a matched
+# pair: kanso-engine.js and play.js are separate downloads that must agree, and
+# a timestamp query only narrows that window rather than closing it. It also
+# lets the digested files be served immutable, so an unrelated deploy costs a
+# visitor nothing.
+#
+# Run against a built site directory: every asset is copied to its digested
+# name, every reference is rewritten, and the undigested copies are left in
+# place for anything that links to them by hand.
+type named
+  asset
+  digested
+
+# The order is the dependency order, not the alphabet: kanso-engine.js fetches
+# the wasm module by name rather than through a tag, so its own text has to be
+# rewritten before it is hashed, or it names a module that no longer exists.
+front = ["style.css" "kanso.wasm" "play.js"]
+
+back = ["landing-play.js" "kanso-engine.js"]
+
+assets = list/to_list (text/concat front back)
+
+pub play = io/args . (given -> with_args given)
+
+fn with_args given
+  usage (length given != 1) given
+
+fn usage true _
+  io/write_err "usage: fingerprint.kso <site-dir>\n" . (_ -> io/exit 2)
+
+fn usage false given
+  over_assets given[1]! 1 []
+
+fn over_assets site at names
+  walking site at names (at > length assets)
+
+fn walking site _ names true
+  over_pages site names
+
+fn walking site at names false
+  asset = assets[at]!
+  source = path/join site asset
+  io/exists source . (there -> one_asset site at names asset source there)
+
+fn one_asset _ _ _ asset _ false
+  io/write_err "missing asset: {asset}\n" . (_ -> io/exit 1)
+
+fn one_asset site at names asset source true
+  io/read_file source . (raw -> rewritten site at names asset source raw)
+
+# A javascript asset names the ones digested before it, so its own text is
+# rewritten and written back before the digest is taken.
+fn rewritten site at names asset source raw
+  fixed = self_references raw names 1
+  on = (_ -> digested site at names asset fixed)
+  saved source fixed (raw == fixed) . on
+
+fn saved _ _ true
+  io/write ""
+
+fn saved source fixed false
+  io/write_file source fixed
+
+fn self_references raw names at
+  quoting raw names at (at > length names)
+
+fn quoting raw _ _ true
+  raw
+
+fn quoting raw names at false
+  one = names[at]!
+  swapped = text/join (text/split raw "'{one.asset}'") "'{one.digested}'"
+  self_references swapped names (at + 1)
+
+fn digested site at names asset raw
+  short = text/slice (sha256/hex (text/bytes raw)) 1 16
+  stem = path/stem asset
+  name = "{stem}-{short}.{path/extension asset}"
+  on = (_ -> over_assets site (at + 1) (push names (named asset name)))
+  io/write_file (path/join site name) raw . on
+
+# Every page and every script, however deep, with each asset's name rewritten
+# to its digested one. The tags carry a build-time query today, which the
+# digest replaces.
+fn over_pages site names
+  under site . (pages -> page_loop pages 1 names site)
+
+fn page_loop pages at names site
+  paging pages at names site (at > length pages)
+
+fn paging _ _ names _ true
+  reported names 1
+
+fn paging pages at names site false
+  page = pages[at]!
+  on = (raw -> one_page pages at names site page raw)
+  io/read_file page . on
+
+fn one_page pages at names site page raw
+  fixed = references raw names 1
+  written page raw fixed . (_ -> page_loop pages (at + 1) names site)
+
+fn written page _ fixed
+  io/write_file page fixed
+
+fn references raw names at
+  pointing raw names at (at > length names)
+
+fn pointing raw _ _ true
+  raw
+
+fn pointing raw names at false
+  one = names[at]!
+  pattern = "/{quoted one.asset}(\\?[^\"']*)?"
+  swapped = regexp/replace_all pattern raw "/{one.digested}"
+  references swapped names (at + 1)
+
+# A literal in a pattern's position: every character that is not a letter or a
+# digit is spelled with a backslash, which is what re.escape does and what the
+# asset names need for their dots. A replacement here is literal text — there
+# are no backreferences — so the escaping walks the characters.
+fn quoted s
+  escaping s 1 ""
+
+fn escaping s at acc
+  marking s at acc (at > length s)
+
+fn marking _ _ acc true
+  acc
+
+fn marking s at acc false
+  escaping s (at + 1) "{acc}{marked (text/slice s at at)}"
+
+fn marked c
+  guarded c (regexp/match? "^[a-zA-Z0-9]$" c)
+
+fn guarded c true
+  c
+
+fn guarded c false
+  "\\{c}"
+
+fn under dir
+  io/list_dir dir . (names -> walk_names dir names 1 [])
+
+fn walk_names dir names at acc
+  walking_names dir names at acc (at > length names)
+
+fn walking_names _ _ _ acc true
+  acc
+
+fn walking_names dir names at acc false
+  kid = path/join dir names[at]!
+  io/is_dir kid . (d -> walk_kid dir names at acc kid d)
+
+fn walk_kid dir names at acc kid true
+  on = (deep -> walk_names dir names (at + 1) (joined acc deep))
+  under kid . on
+
+fn walk_kid dir names at acc kid false
+  walk_names dir names (at + 1) (kept acc kid (rewritable? kid))
+
+fn kept acc _ false
+  acc
+
+fn kept acc kid true
+  push acc kid
+
+fn rewritable? kid
+  ends? kid ".html" || ends? kid ".js"
+
+fn ends? s suffix
+  text/slice s (length s - length suffix + 1) (length s) == suffix
+
+fn joined a b
+  list/to_list (text/concat a b)
+
+fn reported names at
+  telling names at (at > length names)
+
+fn telling _ _ true
+  io/write ""
+
+fn telling names at false
+  one = names[at]!
+  io/write "{padded one.asset} -> {one.digested}\n"
+    . (_ -> reported names (at + 1))
+
+fn padded s
+  padding s (length s > 19)
+
+fn padding s true
+  s
+
+fn padding s false
+  padded "{s} "

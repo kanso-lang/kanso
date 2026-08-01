@@ -13250,3 +13250,29 @@ reads and does not change what `kanso run` executes until the compiler is
 rebuilt. Breaking a round constant and seeing the golden unchanged is that, not
 a test that cannot fail — `cargo build --release` between the edit and the run
 makes it go red, which is where the eight wrong digests came from.
+
+## Only the two that need a browser are still python
+
+`scripts/fingerprint.py` is a kanso program. It was the last one blocked on a
+capability rather than on effort, and std/sha256 unblocked it; what remains is
+`browser_differential.py` and `site_smoke.py`, both of which drive headless
+Chrome.
+
+Nothing new was needed beyond the digest. A binary read-write round trip is
+byte-identical — `io/read_file` then `io/write_file` reproduces the 1.3 MB wasm
+module exactly — so copying an asset to its digested name is the same two calls
+a text file takes.
+
+Verified against the python on the real site: identical log lines, identical
+exit codes on all three paths (a run that works, a directory missing an asset,
+and no argument at all), and `diff -rq` silent across all 497 files of the
+resulting tree.
+
+That last one is the check that mattered, and the first version failed it while
+looking right. `re.escape` becomes a walk over the characters here, because a
+replacement in std/regexp is literal text with no backreferences — so
+`replace_all "([^a-zA-Z0-9])" s "\\$1"` answers `play\$1js`, the pattern it
+builds matches nothing, and every page keeps its undigested references. The log
+still listed five assets and five digests, because the digesting half worked.
+A port that agrees on what it prints and not on what it wrote is the shape this
+repository keeps meeting; the tree diff is what catches it.

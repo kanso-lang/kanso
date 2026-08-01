@@ -122,7 +122,8 @@ jobs:
           destination: ./_site
       - name: the jekyll container owns _site, so take it back
         run: sudo chown -R "$USER" ./_site
-      - run: python3 scripts/fingerprint.py ./_site
+      - run: cargo build --release
+      - run: ./target/release/kanso run scripts/fingerprint.kso -- ./_site
       - name: no undigested reference survives
         run: |
           if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then
