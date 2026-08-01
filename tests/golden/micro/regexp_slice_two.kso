@@ -1,0 +1,10 @@
+import "std/regexp"
+
+pub play =
+  print "class:     {regexp/find "[a-z]+" "xabcde 12"}"
+  >> print "bounded:   {regexp/find "[a-z]\{3,5}" "xabcde 12"}"
+  >> print "exact:     {regexp/find "[0-9]\{4}" "12 3456"}"
+  >> print "at least:  {regexp/find "a\{2,}" "baaad"}"
+  >> print "noncap:    {regexp/find "(?:ab)+" "xababy"}"
+  >> print "ahead yes: {regexp/find "foo(?=bar)" "foobar foobaz"}"
+  >> print "ahead no:  {regexp/find "foo(?!bar)" "foobar foobaz"}"

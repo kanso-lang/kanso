@@ -1,0 +1,7 @@
+class:     xabcde
+bounded:   xabcd
+exact:     3456
+at least:  aaa
+noncap:    abab
+ahead yes: foo
+ahead no:  foo
