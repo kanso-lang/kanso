@@ -578,6 +578,66 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
 
 static size_t k_copy_size(KValue v, KMark* m);
 
+/* A node below the mark survives the rewind; the storage it points at does
+   not necessarily, and sharing the node shares whatever is left of it. That
+   happens whenever a value taken out of a carry buffer is built into a fresh
+   node — the node lands in the arena, its field still points at the buffer,
+   and the buffer is retired two carries later. So a node is only shareable
+   when its own interior is a survivor too; otherwise it is copied, and the
+   copy walks the field that left. Only the immediate interior is asked
+   about, which keeps the walk pruning at everything that has not left. */
+static int k_slots_survive(const KValue* slots, long long n, KMark* m) {
+    for (long long i = 0; i < n; i++) {
+        if (!k_is_heap(slots[i].tag)) continue;
+        if (!k_survives((const void*)(intptr_t)slots[i].payload, m)) return 0;
+    }
+    return 1;
+}
+
+static int k_interior_survives(KValue v, const void* p, KMark* m) {
+    switch (v.tag) {
+        /* A builder's storage is malloc'd precisely so a rewind cannot reach
+           it, and a positive cap is what says so. Copying one would strip the
+           cap and the next append would find a plain string where it left a
+           builder. */
+        case K_STR: {
+            KStr* st = (KStr*)p;
+            return st->cap > 0 || k_survives(st->data, m);
+        }
+        case K_BYTES: {
+            KBytes* b = (KBytes*)p;
+            return b->cap > 0 || k_survives(b->data, m);
+        }
+        case K_LIST: {
+            KList* l = (KList*)p;
+            return k_survives(l->items, m) && k_slots_survive(l->items, l->len, m);
+        }
+        case K_MAP: {
+            KMap* mp = (KMap*)p;
+            return k_survives(mp->pairs, m) && k_slots_survive(mp->pairs, 2 * mp->len, m);
+        }
+        case K_REC: {
+            KRec* r = (KRec*)p;
+            return k_survives(r->fields, m) && k_slots_survive(r->fields, r->nfields, m);
+        }
+        case K_CLOSURE: {
+            KClosure* cl = (KClosure*)p;
+            return k_survives(cl->env, m) && k_slots_survive((KValue*)cl->env, cl->ncaps, m);
+        }
+        case K_DESC: {
+            KDesc* d = (KDesc*)p;
+            KValue pair[2] = { d->x, d->y };
+            return k_slots_survive(pair, 2, m);
+        }
+        default: return 1;
+    }
+}
+
+/* Shareable: the node and its interior both outlive the rewind. */
+static int k_shareable(KValue v, const void* p, KMark* m) {
+    return k_survives(p, m) && k_interior_survives(v, p, m);
+}
+
 /* The cohort guard sizes a survivor only until the verdict is settled: a
    walk past the budget already means "keep", and the seen-map the walk
    feeds would otherwise grow with the whole survivor. Zero disables the
@@ -596,7 +656,7 @@ static size_t k_copy_size(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
     if (k_copy_size_budget && k_copy_size_spent > k_copy_size_budget) return 0;
     const void* p = (const void*)(intptr_t)v.payload;
-    if (k_survives(p, m)) return 0;
+    if (k_shareable(v, p, m)) return 0;
     if (k_copy_seen_check(p)) return 0;
     size_t n = 0;
     switch (v.tag) {
@@ -677,7 +737,7 @@ static void k_copy_map_put(const void* p, void* copy) {
 static KValue k_deep_copy(KValue v, KCopy* cp) {
     if (!k_is_heap(v.tag)) return v;
     void* p = (void*)(intptr_t)v.payload;
-    if (k_survives(p, cp->mark)) return v;
+    if (k_shareable(v, p, cp->mark)) return v;
     {
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == p) {
