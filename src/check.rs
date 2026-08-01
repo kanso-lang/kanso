@@ -218,9 +218,13 @@ fn err_value_scan(expr: &Expr, found: &mut Vec<Span>) {
     }
 }
 
-fn check_effect_discarded(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn check_effect_discarded(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
     use crate::infer::DESC;
-    let inference = crate::infer::infer(program);
+    // inference is handed in: one pass serves every check that reads it
 
     let mut returns: std::collections::HashMap<(&str, usize), crate::infer::Set> =
         Default::default();
@@ -283,9 +287,13 @@ fn check_effect_discarded(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// The gavel makes a receiver responsible for a none it can be handed, and
 /// lets the caller discharge that by resolving first. The report belongs at
 /// the argument, because that is the line an author edits.
-fn check_none_exhaustive(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn check_none_exhaustive(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
     use crate::infer::NONE;
-    let inference = crate::infer::infer(program);
+    // inference is handed in: one pass serves every check that reads it
 
     // group -> joined return set, and whether any arm names none at a position
     let mut returns: std::collections::HashMap<(&str, usize), crate::infer::Set> =
@@ -949,9 +957,13 @@ pub fn check_unused_private(
 /// `?` name must answer with true/false (err allowed — a predicate over
 /// fallible work stays a predicate), and a group answering only in booleans
 /// must carry the `?`. Mixed sets are exempt in the unmarked direction.
-fn check_predicates(program: &Program, diags: &mut Vec<Diagnostic>) {
+fn check_predicates(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
     use crate::infer::{ERR, FALSE, TRUE};
-    let inference = crate::infer::infer(program);
+    // inference is handed in: one pass serves every check that reads it
     let mut groups: std::collections::HashMap<&str, (crate::infer::Set, crate::diag::Span)> =
         std::collections::HashMap::new();
     for (i, decl) in program.fns.iter().enumerate() {
@@ -1049,9 +1061,13 @@ fn field_reads_expr(e: &Expr, declared: &HashSet<&str>, diags: &mut Vec<Diagnost
 
 pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
+    // Three checks read what inference knows, and inference over a whole
+    // program is the most expensive thing the front end does. One pass,
+    // handed round.
+    let inference = crate::infer::infer(program);
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
-    check_predicates(program, &mut diags);
+    check_predicates(program, &inference, &mut diags);
     check_arm_ties(program, &mut diags);
     check_build_blocks(program, &mut diags);
     check_sub_parents(program, &mut diags);
@@ -1062,10 +1078,10 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
-    check_effect_discarded(program, &mut diags);
+    check_effect_discarded(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
-        check_none_exhaustive(program, &mut diags);
+        check_none_exhaustive(program, &inference, &mut diags);
     }
     if require_entry {
         check_entry(program, &mut diags);
