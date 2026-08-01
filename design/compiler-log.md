@@ -13145,3 +13145,61 @@ exactly where such a guard could have been cancelled out. It was not, and that
 was verified rather than assumed: breaking the builder's interpolation makes the
 guard say "the probe shape changed: probes must interpolate" and exit 2. The
 same check was run against `effects_differential`.
+
+## The copy walk shared a node and never looked inside it
+
+The second half of the walk fault, and the same invariant as #635 one level
+over. `k_deep_copy` and `k_copy_size` prune at any node `k_survives` calls a
+survivor: below the mark, it outlives the rewind, so share it and stop. What
+they never ask is whether the storage it points at outlives the rewind too. A
+value taken out of a carry buffer and built into a fresh record leaves that
+record in the arena with a field still aimed at the buffer; the walk shares the
+record, never rewrites the field, and two carries later the buffer is retired
+under it.
+
+Three findings agreed before anything was changed. A validator in the bind
+driver put the bad node at `next` → the continuation closure → capture 3 →
+element 8 → field 0, and that string's header sat inside `k_carries[2].from`
+with its sixteen bytes already reading back as a KValue. A second check —
+report every node the walk SHARES whose interior has left the live arena —
+named four: one list and three records. And removing only the `free` from the
+grow path in `k_beat_iter_carry` made the program answer correctly, as did
+never reusing a carry buffer at all. Both leak; neither is a fix; together they
+proved the reference was live rather than merely suspicious.
+
+So a node is shareable only when it and its immediate interior both survive:
+the storage pointer, and the element payloads one level down, asked in both
+passes so the sizer and the copier agree about what they are doing. The walk
+still prunes everywhere nothing has left, which is what keeps a carry priced by
+new data rather than by live data.
+
+The exception is a builder, and the benchmark found it rather than the
+reasoning. A builder's storage is malloc'd exactly so a rewind cannot reach it,
+and a positive `cap` is what says so; copying one strips the cap, and the next
+append finds a plain string where it left a builder. The basket said
+"a string builder was expected here" and that is now a case in the interior
+test rather than a lesson learned twice.
+
+Priced. `encode_allocs` 16,259,944 → 16,263,934 and `encode_alloc_bytes`
+853,379,792 → 853,724,528, a rise of 0.025%; `effect_push_shape_allocs` 84 → 90
+and `effect_push_shape_alloc_bytes` 3,392 → 3,600. All four are the copies this
+now makes instead of sharing something it should not have shared, and there is
+no version of the fix that does not pay them — a node whose interior has left
+the region has to be copied or it is wrong. The decode, one-shot and basket
+veins are unchanged and welfare holds at 65.56. The gate also reads
+`encode_carry_dedup` 0 → 6,800 as an improvement; it is not one. That
+counter rises because the walk reaches the same node more often, which is a
+consequence of copying more rather than a saving, and the sign convention
+happens to flatter it. The honest trade is a fifth of a percent of encode
+allocations for a native engine that stops answering wrongly.
+
+What took the longest was not the fix but the test. Every self-contained
+reduction failed — the string-doubling trick that cut #635 to thirty-three
+lines does nothing here — and a first generated-tree test passed WITH the bug,
+because it named its tree `tree` and short paths mean short strings mean a
+different allocation sequence. Sweeping the root name's length settled it: the
+fault appears at eighteen characters and holds from there through thirty. So
+the test builds its tree under a twenty-four character relative name, which is
+the same on every machine, and the input is now specified in all three of the
+things that matter — the file sizes, the directory shape, and the length of the
+path each record ends up holding.
