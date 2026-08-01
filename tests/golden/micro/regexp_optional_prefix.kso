@@ -1,0 +1,12 @@
+import "std/regexp"
+
+# A part that may match nothing does not decide where a match can start, and a
+# group that did not take part is a group with no text rather than the end of
+# the list. Both were wrong: `a*b` answered `b`, and every capture after an
+# absent one was dropped.
+pub play =
+  print "starred:  {regexp/find "a*b" "aab"}"
+  >> print "optional: {regexp/find "(a)?(b)" "ab"}"
+  >> print "both:     {regexp/groups "(a)?(b)" "ab"}"
+  >> print "skipped:  {regexp/groups "(a)?(b)" "b"}"
+  >> print "anchored: {regexp/find "^(pub )?(fn) x" "fn x"}"
