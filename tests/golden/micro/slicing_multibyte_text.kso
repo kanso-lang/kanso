@@ -1,0 +1,12 @@
+import "std/text"
+
+pub play =
+  mixed = "aé漢z"
+  one = text/slice mixed 1 1
+  two = text/slice mixed 2 2
+  three = text/slice mixed 3 3
+  print "length {length mixed}"
+  >> print "each {one} {two} {three}"
+  >> print "span {text/slice mixed 2 3}"
+  >> print "ascii {text/slice "abcd" 2 3}"
+  >> print "past {text/slice mixed 3 9}"

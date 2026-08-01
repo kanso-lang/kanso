@@ -4342,6 +4342,24 @@ static const char* k_lazy_hint(KValue v) {
     return " — a lazy sequence becomes a list with list/to_list";
 }
 
+/* How many characters a string holds. Counting codepoints is a walk of the
+   whole string, and `length` sits in the guard of every loop a kanso program
+   writes over text — `at > length s` — so counting it each time makes an
+   ordinary character walk quadratic. Reading 128 kb one character at a time
+   took 8.2 seconds before this.
+
+   The count rides in `cap`, which an ordinary string does not use, encoded
+   negative so nothing that asks `cap > 0` about a builder is confused. The
+   header stays sixteen bytes: widening it would move the survivor ratio the
+   cohort guard reads. A builder may still grow, so it counts every time. */
+static long long k_str_chars(KStr* s) {
+    if (s->cap < 0) return -(long long)s->cap - 1;
+    long long count = 0;
+    for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
+    if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
+    return count;
+}
+
 KValue k_b_length(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_LIST) return k_int(k_as_list(v)->len);
@@ -4351,12 +4369,7 @@ KValue k_b_length(KValue v) {
         k_map_sorted(k_as_map(v), &n);
         return k_int(n);
     }
-    if (v.tag == K_STR) {
-        KStr* s = k_as_str(v);
-        long count = 0;
-        for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
-        return k_int(count);
-    }
+    if (v.tag == K_STR) return k_int(k_str_chars(k_as_str(v)));
     /* A lazy sequence has no length to count — `naturals` would never
        finish — so refusing it is right. But the reader who wrote
        `length (map …)` is one call from what they wanted, and the message
@@ -4625,6 +4638,13 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
     }
     if (container.tag == K_STR) {
         KStr* s = k_as_str(container);
+        /* Every character one byte, so a position is an offset and the walk
+           that finds it is unnecessary. This is the case for html, source and
+           anything else a gate reads. */
+        if (k_str_chars(s) == (long long)s->len) {
+            if (from < 1 || from > to || to > (long long)s->len) return k_str_n("", 0);
+            return k_str_n(s->data + (from - 1), to - from + 1);
+        }
         long start = -1, end = -1, at = 0;
         long long seen = 0;
         while (at <= s->len) {
