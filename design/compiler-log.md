@@ -13445,3 +13445,55 @@ agree.
 Swept every .kso in the repository: nothing is refused that was not already
 broken. All four cost goldens unchanged, welfare holds at 65.56, the browser
 differential reads 162/0.
+
+## A loop that carries a heap accumulator reclaims nothing
+
+Measured, not predicted. A tail-recursive loop that allocates a temporary each
+iteration and threads a scalar through runs in constant memory; the same loop
+threading a map or a list retains every temporary for the life of the loop.
+Peak RSS, 1.6M iterations, native release:
+
+    accumulator     per-iteration temporary   peak
+    none            a string                  1.0 MB
+    int             a string                  1.5 MB
+    map             a string, discarded      71.9 MB
+    map             a string, used as key    71.9 MB
+    list            a string (100k only)      8.1 MB
+
+The string in the third row is never stored — it is bound, its length is read,
+and it is dropped — and the cost is identical to the row that keeps it as a
+key. So this is not about maps, or about what the accumulator holds. Both
+accumulators already compile to their in-place mutators (`k_b_put_mut`,
+`k_b_push_mut`), which return the same object, so nothing is being copied
+either.
+
+The emitted IR says what happens. The scalar loop carries a
+`k_beat_push`/`k_beat_iter`/`k_beat_pop` bracket and rewinds every iteration.
+The heap-accumulator loop carries **none of the three**: the bracket is not
+emitted at all, so there is no rewind point anywhere in the loop and the arena
+only grows. `arena_blocks` goes 5 → 18 between 100k and 400k iterations.
+
+`beat.rs` states the rule it is following: a cluster is eligible when at every
+tail edge each argument is "a pure scalar in the callee's slot or a bare
+parameter threaded hand-to-hand", because "a parameter allocated mid-cycle is
+not entry-threaded — rewinding would free it under a live register". The
+accumulator here is not allocated mid-cycle — the mutators hand back the same
+header — but the argument is a call rather than a bare parameter, so the
+fixpoint knocks the slot out and the whole cluster with it.
+
+There is already a precedent for exactly this shape one function down:
+`chain_threaded` licenses a BYTES slot fed by "a mut-append chain rooted at one
+of the caller's own chain-threaded slots", on the grounds that the header sits
+below the entry mark, growth happens outside the arena, and there are **no
+pointers inside**. That last clause is why it stops at bytes: a list's elements
+and a map's keys are KValues that may point at arena memory born this
+iteration, and a rewind would free what they point at. That is the same
+invariant behind all three of this week's defects.
+
+So the widening is real and is not free, and it is not being made here. Proving
+a map or list accumulator's interior never points into the rewound region is
+the cohort question, which is Clay's to open. What this entry adds is that the
+cost of leaving it closed is now measured rather than assumed: any fold that
+builds a temporary per element — a derived key, a formatted field, a parsed
+token — retains the whole input, and every language kanso means to compete with
+runs that in constant memory.
