@@ -13203,3 +13203,50 @@ the test builds its tree under a twenty-four character relative name, which is
 the same on every machine, and the input is now specified in all three of the
 things that matter — the file sizes, the directory shape, and the length of the
 path each record ends up holding.
+
+## A digest, and the import path that broke it
+
+`std/sha256` is FIPS 180-4 written in kanso over `std/bits`. It is not a
+builtin because a hash is arithmetic on thirty-two bit words and the bitwise
+surface already covers those, so a builtin would buy speed on a path that runs
+once per built file and nothing else. It is here because hako will want it for
+lockfile integrity and `scripts/fingerprint.py` is blocked on it.
+
+Nothing new was needed to read bytes. `io/read_file` carries binary content
+intact and `text/bytes` exposes it — reading `docs/kanso.wasm` gives 1,299,484
+bytes whose first four are 0 97 115 109, the wasm magic — and indexing a bytes
+value answers the byte. Digesting that file agrees with python's hashlib and
+the whole `kanso run`, compile included, takes 2.6 seconds.
+
+The module was written twice over, and the second write was because of an
+import path. Under `std/crypto/sha256`, which is Go's spelling, it answered
+correctly when called from inside its own file and failed with an indexing
+error when called across the boundary — on both engines, so not a divergence.
+The same file under `std/sha256` is correct everywhere. So the defect is nested
+paths in the embedded-std table, not the module, and it is recorded as one
+rather than worked around silently: nothing in the tree has a nested std path
+now, and the next one to try will meet the same thing.
+
+That also explains a native-only failure seen while reducing, where a partial
+compression answered on the interpreter and refused on native. Three attempts
+to reduce it produced nothing, and it has not reappeared since the path
+changed. Recorded as probably the same fault seen from inside rather than
+claimed as a second one.
+
+Four things cost an afternoon between them and are worth the next reader
+knowing. `grown` is a `pub type` in std/list and `step` is an export, so local
+functions with those names silently joined std's groups and a list became a
+lazy sequence. A local named for a record field shadows the field read, because
+a field read is an application — `a = bits/and (old.a + new.a) whole` binds `a`
+for the whole body, so the eight working words are a list now and have no field
+names to collide with. `/` answers a float, so integer division is spelled with
+`bits/shr` and the remainder with `bits/and`. And `length` on a lazily built
+list forces the spine without forcing an element, so three probes reported a
+length of eight while proving nothing about whether the values computed.
+
+One more, about watching a test fail. A std module is embedded with
+`include_str!`, so editing `lib/sha256/sha256.kso` changes what `kanso test`
+reads and does not change what `kanso run` executes until the compiler is
+rebuilt. Breaking a round constant and seeing the golden unchanged is that, not
+a test that cannot fail — `cargo build --release` between the edit and the run
+makes it go red, which is where the eight wrong digests came from.

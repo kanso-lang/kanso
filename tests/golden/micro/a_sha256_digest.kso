@@ -1,0 +1,14 @@
+# The digest is written in kanso over std/bits rather than reached for as a
+# builtin: a hash is arithmetic on thirty-two bit words, and the only thing a
+# builtin would buy is speed on a path that runs once per built file. The
+# three vectors are the ones FIPS 180-4 publishes, and the third pads into a
+# second block.
+import "std/sha256"
+import "std/text"
+
+long = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+
+pub play =
+  print (sha256/hex (text/bytes ""))
+  print (sha256/hex (text/bytes "abc"))
+  print (sha256/hex (text/bytes long))
