@@ -842,7 +842,9 @@ impl<'a> WasmBackend<'a> {
             // through the ambient group.
             _ if !self.program.fns.iter().any(|d| d.name == name)
                 && (bare == "print"
-                    || crate::codegen::BUILTIN_CALLS.iter().any(|(b, a)| *b == bare && *a <= 4)) =>
+                    || crate::codegen::BUILTIN_CALLS
+                        .iter()
+                        .any(|(b, a)| *b == bare && *a <= 4)) =>
             {
                 let arity = match bare {
                     "print" => 1,
