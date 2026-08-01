@@ -41,6 +41,12 @@ work_more = ["emitted_calls" "emitted_branches" "emitted_defines"]
 
 work_out = text/concat work_names work_more
 
+compiler_a = ["compile_alloc_bytes" "compile_allocs" "compile_peak_bytes"]
+
+compiler_b = ["compile_passes"]
+
+compiler_watched = text/concat compiler_a compiler_b
+
 fn watched? group name
   list/any? group (g -> g == name)
 
@@ -103,6 +109,21 @@ fn described line
   subject = text/join rest " "
   [["commit" parts[1]!] ["date" parts[2]!] ["subject" subject]]
 
+# What the compiler costs itself, on a real module rather than a sample small
+# enough that the number never moves. env carries the flag because io/run
+# takes a command and arguments, not an environment.
+fn compiler_cost _
+  argv = ["KANSO_COUNTERS=1" "./target/release/kanso" "check" "lib/json"]
+  io/run "/usr/bin/env" argv
+
+fn welfare_score _
+  io/run "./target/release/kanso" ["run" "scripts/welfare.kso"]
+
+# `welfare 65.56   floor 65.56  (...)` — the second field is the score.
+fn score_in text
+  parts = text/split (text/split text "\n")[1]! " "
+  parts[2]!
+
 pub play = asked ["log" "-1" "--format=%h %cI %s"] . stamped
 
 fn stamped r
@@ -118,12 +139,22 @@ fn with_oneshot line d e o
   io/read_file "bench/compile_golden.txt" . (c -> recorded line d e o c)
 
 fn recorded line d e o c
+  compiler_cost 0 . (cc -> with_cost line d e o c cc)
+
+fn with_cost line d e o c cc
+  welfare_score 0 . (w -> assembled line d e o c cc w)
+
+fn assembled line d e o c cc w
   decode = counters d decode_watched ""
   encode = counters e encode_watched "encode_"
   oneshot = counters o oneshot_watched "oneshot_"
   veins = text/concat decode encode
+  own = counters cc.stderr compiler_watched ""
+  scored = [["welfare" (score_in w.stdout)]]
   rest = text/concat oneshot (compile_work c)
-  written (text/concat (described line) (text/concat veins rest))
+  measured = text/concat own scored
+  tail = text/concat rest measured
+  written (text/concat (described line) (text/concat veins tail))
 
 fn written pairs
   io/write "{json/encode (list/to_h pairs)}\n"
