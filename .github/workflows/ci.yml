@@ -307,7 +307,7 @@ jobs:
       # the mechanical half of the writing rules. the families it cannot see —
       # milked metaphors, manufactured triples, epigram endings — still want a
       # read, which is why a clean run is necessary and not sufficient
-      - run: python3 scripts/prose_check.py
+      - run: ./target/release/kanso run scripts/prose_check.kso
 
   browser:
     name: browser differential (three engines, byte-identical, headless chrome)

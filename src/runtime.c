@@ -4671,12 +4671,23 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
            the cursor is never resumed from. */
         long start = -1, end = -1, at = 0;
         long long seen = 0;
-        if (s == k_seek_str && s->cap < 0 && from > k_seek_char) {
+        if (s == k_seek_str && s->cap < 0) {
             at = k_seek_byte;
             /* `seen` counts characters already passed, and the loop increments
                before it compares — so resuming AT the remembered character
                means one fewer has been passed. */
             seen = k_seek_char - 1;
+            /* Behind the cursor, step back to it rather than to the front. A
+               matcher does not read a page in one direction: it backtracks,
+               and a rewind to byte zero on every step back is the whole cost.
+               Walking back is the same walk with the continuation bytes
+               skipped, so the price is the distance moved rather than the
+               position reached. */
+            while (from <= seen && at > 0) {
+                at--;
+                while (at > 0 && ((unsigned char)s->data[at] & 0xC0) == 0x80) at--;
+                seen--;
+            }
         }
         while (at <= s->len) {
             seen++;
