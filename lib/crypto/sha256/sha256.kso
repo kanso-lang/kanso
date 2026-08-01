@@ -1,0 +1,211 @@
+import "std/bits"
+import "std/list"
+import "std/text"
+
+# SHA-256, FIPS 180-4, in kanso rather than as a builtin. A digest is
+# arithmetic on thirty-two bit words and the bitwise surface covers it, so a
+# builtin would only buy speed on a path that runs once per built file.
+#
+# kanso integers do not wrap, so every word operation ends by masking back to
+# thirty-two bits — `whole` is that mask, and it appears wherever a sum or a
+# shift could have carried past the top.
+whole = 4294967295
+
+hexits = "0123456789abcdef"
+
+k0 = [1116352408 1899447441 3049323471 3921009573 961987163 1508970993]
+
+k1 = [2453635748 2870763221 3624381080 310598401 607225278 1426881987]
+
+k2 = [1925078388 2162078206 2614888103 3248222580 3835390401 4022224774]
+
+k3 = [264347078 604807628 770255983 1249150122 1555081692 1996064986]
+
+k4 = [2554220882 2821834349 2952996808 3210313671 3336571891 3584528711]
+
+k5 = [113926993 338241895 666307205 773529912 1294757372 1396182291]
+
+k6 = [1695183700 1986661051 2177026350 2456956037 2730485921 2820302411]
+
+k7 = [3259730800 3345764771 3516065817 3600352804 4094571909 275423344]
+
+k8 = [430227734 506948616 659060556 883997877 958139571 1322822218]
+
+k9 = [1537002063 1747873779 1955562222 2024104815 2227730452 2361852424]
+
+k10 = [2428436474 2756734187 3204031479 3329325298]
+
+front = text/concat (text/concat k0 k1) (text/concat k2 k3)
+
+back = text/concat (text/concat k4 k5) (text/concat k6 k7)
+
+tail = text/concat (text/concat k8 k9) k10
+
+rounds = list/to_list (text/concat (text/concat front back) tail)
+
+# One 512-bit block's sixty-four message words. The first sixteen are the
+# block's own big-endian words; each of the rest folds two earlier ones
+# through the small mixers.
+fn schedule w _ true
+  w
+
+fn schedule w at false
+  s0 = small_sigma0 w[at - 15]!
+  s1 = small_sigma1 w[at - 2]!
+  next = bits/and (w[at - 16]! + s0 + w[at - 7]! + s1) whole
+  rolled (push w next) (at + 1)
+
+fn rolled w at
+  schedule w at (at > 64)
+
+fn small_sigma0 x
+  bits/xor (bits/xor (spun x 7) (spun x 18)) (bits/shr x 3)
+
+fn small_sigma1 x
+  bits/xor (bits/xor (spun x 17) (spun x 19)) (bits/shr x 10)
+
+fn big_sigma0 x
+  bits/xor (bits/xor (spun x 2) (spun x 13)) (spun x 22)
+
+fn big_sigma1 x
+  bits/xor (bits/xor (spun x 6) (spun x 11)) (spun x 25)
+
+# A rotate is the two halves of a shift laid side by side, and the left half
+# is masked because it can carry past the top.
+fn spun x places
+  bits/or (bits/and (bits/shl x (32 - places)) whole) (bits/shr x places)
+
+fn choice x y z
+  bits/xor (bits/and x y) (bits/and (bits/and (bits/not x) whole) z)
+
+fn majority x y z
+  bits/xor (bits/xor (bits/and x y) (bits/and x z)) (bits/and y z)
+
+# The first thirty-two bits of the fractional parts of the square roots of the
+# first eight primes, which is where the standard's starting words come from.
+h0 = 1779033703
+
+h1 = 3144134277
+
+h2 = 1013904242
+
+h3 = 2773480762
+
+h4 = 1359893119
+
+h5 = 2600822924
+
+h6 = 528734635
+
+h7 = 1541459225
+
+start = [h0 h1 h2 h3 h4 h5 h6 h7]
+
+# The eight working words, in the standard's order: a b c d e f g h read as
+# positions one to eight. They are a list rather than a record because the
+# names the standard uses are single letters, and a local named for a field is
+# a collision waiting in a language where a field read is an application.
+fn compress s _ _ true
+  s
+
+fn compress s w at false
+  mixed = big_sigma1 s[5]! + choice s[5]! s[6]! s[7]!
+  fed = rounds[at]! + w[at]!
+  t1 = bits/and (s[8]! + mixed + fed) whole
+  t2 = bits/and (big_sigma0 s[1]! + majority s[1]! s[2]! s[3]!) whole
+  moved = shifted_state s t1 t2
+  turned moved w (at + 1)
+
+fn shifted_state s t1 t2
+  first = bits/and (t1 + t2) whole
+  fifth = bits/and (s[4]! + t1) whole
+  [first s[1]! s[2]! s[3]! fifth s[5]! s[6]! s[7]!]
+
+fn turned s w at
+  compress s w at (at > 64)
+
+fn added old new
+  summed old new 1 []
+
+fn summed old new at acc
+  summing old new at acc (at > 8)
+
+fn summing _ _ _ acc true
+  acc
+
+fn summing old new at acc false
+  word = bits/and (old[at]! + new[at]!) whole
+  summed old new (at + 1) (push acc word)
+
+# The padded message, block by block. `at` is a one-based byte offset into it.
+fn digested _ s _ true
+  s
+
+fn digested padded s at false
+  w = schedule (first_sixteen padded at 0 []) 17 false
+  blocked padded (added s (compress s w 1 false)) (at + 64)
+
+fn blocked padded s at
+  digested padded s at (at > length padded)
+
+fn first_sixteen padded at i w
+  gathered padded at i w (i > 15)
+
+fn gathered _ _ _ w true
+  w
+
+fn gathered padded at i w false
+  base = at + i * 4
+  high = padded[base]! * 16777216 + padded[base + 1]! * 65536
+  low = padded[base + 2]! * 256 + padded[base + 3]!
+  word = high + low
+  first_sixteen padded at (i + 1) (push w word)
+
+# The message with its terminator, its zero fill, and its length in bits as a
+# big-endian sixty-four bit number — the padding the standard names.
+fn padded_bytes b
+  n = length b
+  zeros = 63 - bits/and (n + 8) 63
+  filled (push (list/to_list b) 128) zeros n
+
+fn filled acc 0 n
+  eight_bytes acc (n * 8) 7
+
+fn filled acc zeros n
+  filled (push acc 0) (zeros - 1) n
+
+# The length in bits, most significant byte first. `/` answers a float, so the
+# shift is the one that keeps whole numbers whole.
+fn eight_bytes acc total at
+  laid acc total at (at < 0)
+
+fn laid acc _ _ true
+  acc
+
+fn laid acc total at false
+  byte = bits/and (bits/shr total (at * 8)) 255
+  eight_bytes (push acc byte) total (at - 1)
+
+# The digest, big-endian, as sixty-four lowercase hex characters.
+pub fn hex b
+  final = digested (padded_bytes b) start 1 false
+  spelled final 1 ""
+
+fn spelled words at acc
+  spelling words at acc (at > length words)
+
+fn spelling _ _ acc true
+  acc
+
+fn spelling words at acc false
+  spelled words (at + 1) "{acc}{eight_hexits words[at]! 7 ""}"
+
+fn eight_hexits x at acc
+  hexed x at acc (at < 0)
+
+fn hexed _ _ acc true
+  acc
+
+fn hexed x at acc false
+  place = bits/and (bits/shr x (at * 4)) 15
+  eight_hexits x (at - 1) "{acc}{text/slice hexits (place + 1) (place + 1)}"
