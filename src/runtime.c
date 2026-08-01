@@ -694,7 +694,11 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
             KStr* ns = k_copy_alloc(cp, sizeof(KStr));
             k_copy_map_put(p, ns);
             ns->len = s->len;
-            ns->cap = 0;
+            /* The copy is the same characters, so a count already paid for
+               carries over. Dropping it made every evacuation re-walk the
+               string, which is the quadratic the count exists to remove. A
+               builder's positive cap does not travel: the copy owns no room. */
+            ns->cap = s->cap < 0 ? s->cap : 0;
             if (k_survives(s->data, cp->mark)) {
                 ns->data = s->data;
             } else {
@@ -4352,6 +4356,15 @@ static const char* k_lazy_hint(KValue v) {
    negative so nothing that asks `cap > 0` about a builder is confused. The
    header stays sixteen bytes: widening it would move the survivor ratio the
    cohort guard reads. A builder may still grow, so it counts every time. */
+/* One remembered position, so a forward sweep does not restart at the front.
+   Reset is unnecessary: the guard checks identity and direction, and a string
+   whose bytes changed is a builder, which never qualifies. A single cell is
+   safe because the scheduler is green — every fibre runs on the one thread —
+   and it would need to move into the fibre if that ever stopped being true. */
+static KStr* k_seek_str = NULL;
+static long long k_seek_char = 0;
+static long k_seek_byte = 0;
+
 static long long k_str_chars(KStr* s) {
     if (s->cap < 0) return -(long long)s->cap - 1;
     long long count = 0;
@@ -4645,14 +4658,37 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
             if (from < 1 || from > to || to > (long long)s->len) return k_str_n("", 0);
             return k_str_n(s->data + (from - 1), to - from + 1);
         }
+        /* Multibyte text still needs the walk that turns a character
+           position into a byte offset, and starting it at zero every time is
+           what made reading a page one character at a time quadratic — a page
+           with em-dashes in it is not ascii, so the direct path above never
+           fires for prose.
+
+           Every walk over text goes forward, so one remembered position is
+           enough to make the whole sweep linear: the next slice resumes where
+           the last one stopped rather than from the front. Only a counted
+           ordinary string qualifies, so a builder that may still grow under
+           the cursor is never resumed from. */
         long start = -1, end = -1, at = 0;
         long long seen = 0;
+        if (s == k_seek_str && s->cap < 0 && from > k_seek_char) {
+            at = k_seek_byte;
+            /* `seen` counts characters already passed, and the loop increments
+               before it compares — so resuming AT the remembered character
+               means one fewer has been passed. */
+            seen = k_seek_char - 1;
+        }
         while (at <= s->len) {
             seen++;
             if (seen == from) start = at;
             if (seen == to + 1) { end = at; break; }
             if (at == s->len) break;
             at += k_cp_len((unsigned char)s->data[at]);
+        }
+        if (start >= 0 && from >= 1) {
+            k_seek_str = s;
+            k_seek_char = from;
+            k_seek_byte = start;
         }
         if (from < 1 || from > to || start < 0) return k_str_n("", 0);
         if (end < 0) end = s->len;

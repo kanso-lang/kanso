@@ -1,0 +1,32 @@
+import "std/text"
+
+# Reading forward is what every text loop does, and the cursor that makes it
+# linear must not change what it answers. A page's worth of em-dashes walked
+# one character at a time, then read backwards, then read out of order.
+page = "a—b—c—d—e"
+
+pub play =
+  seventh = text/slice page 7 7
+  third = text/slice page 3 3
+  ninth = text/slice page 9 9
+  print "forward {walked page 1 ""}"
+  >> print "back {backward page (length page) ""}"
+  >> print "jump {seventh}{third}{ninth}"
+
+fn walked s at acc
+  walking s at acc (at > length s)
+
+fn walking _ _ acc true
+  acc
+
+fn walking s at acc false
+  walked s (at + 1) "{acc}{text/slice s at at}"
+
+fn backward s at acc
+  stepping s at acc (at < 1)
+
+fn stepping _ _ acc true
+  acc
+
+fn stepping s at acc false
+  backward s (at - 1) "{acc}{text/slice s at at}"
