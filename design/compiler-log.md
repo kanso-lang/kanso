@@ -13923,3 +13923,37 @@ What kanso already has, and what makes this a door rather than a room: cyclic
 values work end to end. `k_render_path` terminates printing one. Equality
 compares them by bisimulation. The cohort frees them. The only missing piece
 is a second way to make one.
+
+## Why the admitted knot overflows, exactly
+
+The remaining half has two parts rather than one, and the second was not
+visible until the first was tried.
+
+`is_constant_body` freezes a constant into a CAF only when its body is a
+literal: an int, a float, a string of literal parts, or a list or map whose
+elements are themselves literal. A map whose values are constructor calls is
+not literal, so `graph` compiles to an ordinary function that recomputes its
+body on every call. `graph()` inside `graph_build()` is therefore a call to
+`graph()`, and that is the stack overflow — not a strictness question at all,
+just unbounded recursion through a function that was never frozen.
+
+So the recipe is:
+
+- A self-referential constant must be emitted as a frozen CAF, so a mention of
+  it compiles to a load from a cell rather than a recomputation. The cell is
+  filled by `k_caf_init` before main.
+- Each maximal storing subexpression containing a self-reference becomes a
+  thunk with no captures, because the only free name in it is a global. Forced
+  later, it loads a cell that by then has a value.
+
+Both changes have the same zero-regression property as the check: they apply
+only to constants that mention themselves, and no such constant compiles
+today. Widening `is_constant_body` in general would change when every constant
+runs, which is a real semantics and performance question; widening it for
+self-referential constants alone asks nothing of any program that exists.
+
+Still to do after that, and not yet looked at: the interpreter needs the same
+two moves, and the browser backend needs whichever of them it does not inherit
+from the interpreter. The differential law wants all three saying the same
+thing about the same program, and a cyclic value is exactly the shape where an
+engine can quietly differ.
