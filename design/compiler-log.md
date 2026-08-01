@@ -12979,3 +12979,36 @@ next step overwrites. That is the same shape of error one layer over, and
 setting the capacity to the length closes it. No program could be made to fail
 on it: with the guard in place the constructed cases all pass, so the change
 would be a defence with nothing behind it. Written down rather than shipped.
+
+## The diagnostic that sent people to add a `pub` that was already there
+
+A module that declares a name one of its own imports also exports had that
+name read as private from outside, and the refusal said so in as many words:
+"`join` is private to module `dep` — only pub names cross an import." The
+declaration reads `pub fn join`. Nothing a reader can do with that sentence is
+right.
+
+Underneath, two things claim one qualified spelling. The module's own
+declaration is one. The other is the bare-enrollment clone of the import —
+every pub name of an imported module also exists under its short name, so bare
+calls dispatch over the union — and when the module is later qualified under
+its own short name, the clone takes the qualified spelling too. The exports map
+was first-writer-wins, and the writer that arrived first was whichever the
+loader reached first.
+
+Letting the module's own declaration win the flag was the first thing tried and
+it is worse: `check` passes and the call then dispatches to the import's arm at
+runtime, so a loud refusal becomes a quiet wrong answer. Which claim should own
+a qualified spelling is the question task #51 holds a gavel over — a transitive
+module being addressable and forked at once — and it is not settled by picking
+one here.
+
+So the refusal stays and the sentence changes: "`dep` declares `join` pub, but
+an import of `dep` exports `join` too and took the name — rename that import
+inside `dep`." The rename is `import { join:tjoin } "std/text"`, which was
+already the way out and was already documented; nothing pointed at it from the
+place a reader actually stands.
+
+The module sweep's known-defect entry moves from task #53 to task #51 with it,
+which is the honest filing: the diagnosis half is done and the semantics half
+is a design question.
