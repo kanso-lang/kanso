@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/configure-pages@v5
       - uses: actions/jekyll-build-pages@v1
         with:
@@ -32,8 +33,12 @@ jobs:
           destination: ./_site
       - name: the jekyll container owns _site, so take it back
         run: sudo chown -R "$USER" ./_site
+      # The fingerprinter is a kanso program, so the site cannot be built
+      # without a compiler to run it.
+      - name: build the compiler the fingerprinter runs on
+        run: cargo build --release
       - name: content-digest the assets
-        run: python3 scripts/fingerprint.py ./_site
+        run: ./target/release/kanso run scripts/fingerprint.kso -- ./_site
       - name: every reference names a digested file
         run: |
           if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then
