@@ -1,0 +1,8 @@
+import "std/regexp"
+
+pub play =
+  found = regexp/matches "[0-9]+" "a12 b345 c6"
+  one = found[1]!
+  two = found[2]!
+  print "{length found} matches"
+  >> print "first {one.from}-{one.to} second {two.from}-{two.to}"
