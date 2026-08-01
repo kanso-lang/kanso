@@ -1,0 +1,9 @@
+import "std/regexp"
+
+pub play =
+  print "whole:   {regexp/find "(ch[0-9]+)\\.html" "see ch12.html now"}"
+  >> print "one:     {regexp/groups "(ch[0-9]+)\\.html" "see ch12.html"}"
+  >> print "several: {regexp/groups "([a-z]+)-([0-9]+)" "id abc-42 x"}"
+  >> print "nested:  {regexp/groups "((a)(b))" "zab"}"
+  >> print "none:    {regexp/groups "[a-z]+" "abc"}"
+  >> print "miss:    {regexp/groups "(zz)" "abc"}"

@@ -58,6 +58,23 @@ type hit
   to
   groups
 
+# A capturing group's slot is its position in the pattern, counted left to
+# right at its opening parenthesis — the order every regex dialect promises.
+# The walk hands back the rewritten node and the next free slot together.
+# The end of a match travels with the captures that were live when it was
+# reached, because a branch the walk abandoned took its captures with it.
+type arrival
+  to
+  caught
+
+type grabbed
+  slot
+  text
+
+type slotted
+  node
+  next
+
 # Parsing hands back a node and the position after it, so the two travel
 # together rather than being threaded as two returns.
 type parsed
@@ -187,25 +204,89 @@ fn scanning _ _ _ true
   no_hit
 
 fn scanning prog s at false
-  end = walked prog s at [] (at -> at)
-  landed prog s at end
+  landed prog s at (walked prog s at [] (to caught -> arrival to caught))
 
 fn landed prog s at none
   scanned prog s (at + 1)
 
-fn landed _ s at end
-  hit at end (captured_at s at end)
+fn landed _ _ at end
+  hit at end.to (caught_in_order end.caught 1 [])
 
-# Slice 1 keeps no capture text; groups arrive with lookahead in slice 2.
-fn captured_at _ _ _
-  []
+# A group can be entered more than once — `(ab)+` captures its last pass — so
+# the latest record for a slot is the one that stands.
+fn caught_in_order caught at acc
+  seen = latest caught 1 none at
+  gathering_slots caught at acc seen (seen == none)
 
-fn count_groups _
-  0
+fn gathering_slots _ _ acc _ true
+  acc
+
+fn gathering_slots caught at acc seen false
+  caught_in_order caught (at + 1) (push acc seen)
+
+fn latest caught i best at
+  seeking caught i best at (i > length caught)
+
+fn seeking _ _ best _ true
+  best
+
+fn seeking caught i best at false
+  one = caught[i]!
+  latest caught (i + 1) (kept_slot best one at) at
+
+fn kept_slot best (grabbed slot text) at
+  chosen best text (slot == at)
+
+fn chosen best _ false
+  best
+
+fn chosen _ text true
+  text
 
 fn compiled pattern
   chars = text/chars pattern
-  read_alt chars 1 . (p -> p.node)
+  read_alt chars 1 . (p -> numbered p.node 1) . (n -> n.node)
+
+fn numbered (group node _) at
+  inner = numbered node (at + 1)
+  slotted (group inner.node at) inner.next
+
+fn numbered (seq parts) at
+  walk_parts parts 1 [] at
+
+fn walk_parts parts i acc at
+  walking_parts parts i acc at (i > length parts)
+
+fn walking_parts _ _ acc at true
+  slotted (seq acc) at
+
+fn walking_parts parts i acc at false
+  one = numbered parts[i]! at
+  walk_parts parts (i + 1) (push acc one.node) one.next
+
+fn numbered (alt branches) at
+  walk_branches branches 1 [] at
+
+fn walk_branches branches i acc at
+  walking_branches branches i acc at (i > length branches)
+
+fn walking_branches _ _ acc at true
+  slotted (alt acc) at
+
+fn walking_branches branches i acc at false
+  one = numbered branches[i]! at
+  walk_branches branches (i + 1) (push acc one.node) one.next
+
+fn numbered (rep node least most greedy) at
+  inner = numbered node at
+  slotted (rep inner.node least most greedy) inner.next
+
+fn numbered (ahead node wanted pad) at
+  inner = numbered node at
+  slotted (ahead inner.node wanted pad) inner.next
+
+fn numbered node at
+  slotted node at
 
 fn read_alt chars at
   first = read_seq chars at
@@ -465,11 +546,12 @@ fn walked (seq parts) s at slots k
 fn through parts i s at slots k
   stepping parts i s at slots k (i > length parts)
 
-fn stepping _ _ _ at _ k true
-  k at
+fn stepping _ _ _ at slots k true
+  k at slots
 
 fn stepping parts i s at slots k false
-  walked parts[i]! s at slots (next -> through parts (i + 1) s next slots k)
+  on = (next caught -> through parts (i + 1) s next caught k)
+  walked parts[i]! s at slots on
 
 fn walked (alt branches) s at slots k
   branching branches 1 s at slots k
@@ -490,15 +572,18 @@ fn or_else branches i s at slots k none
 fn or_else _ _ _ _ _ _ won
   won
 
-fn walked (group node _) s at slots k
-  walked node s at slots k
+fn walked (group node slot) s at slots k
+  walked node s at slots (to caught -> capturing s at slot to caught k)
+
+fn capturing s at slot to caught k
+  k to (push caught (grabbed slot (text/slice s at (to - 1))))
 
 # Lookahead consumes nothing: the inner pattern is asked whether it can match
 # here, the answer is compared with what the sigil wanted, and the walk carries
 # on from where it started either way.
 fn walked (ahead node wanted _) s at slots k
-  saw = walked node s at slots (to -> to)
-  matched_here at k (peeked? saw == wanted)
+  saw = walked node s at slots (to caught -> arrival to caught)
+  matched_here at slots k (peeked? saw == wanted)
 
 fn peeked? none
   false
@@ -506,21 +591,21 @@ fn peeked? none
 fn peeked? _
   true
 
-fn walked (lit c) s at _ k
-  matched_one s at k (at <= length s && text/slice s at at == c)
+fn walked (lit c) s at slots k
+  matched_one s at slots k (at <= length s && text/slice s at at == c)
 
-fn matched_one _ at k true
-  k (at + 1)
+fn matched_one _ at slots k true
+  k (at + 1) slots
 
-fn matched_one _ _ _ false
+fn matched_one _ _ _ _ false
   none
 
-fn walked (dot _) s at _ k
-  matched_one s at k (at <= length s && text/slice s at at != "\n")
+fn walked (dot _) s at slots k
+  matched_one s at slots k (at <= length s && text/slice s at at != "\n")
 
-fn walked (cls set negated) s at _ k
+fn walked (cls set negated) s at slots k
   here = at <= length s
-  matched_one s at k (here && in_class? set negated (sliced s at here))
+  matched_one s at slots k (here && in_class? set negated (sliced s at here))
 
 fn sliced s at true
   text/slice s at at
@@ -537,19 +622,19 @@ fn flipped? held false
 fn flipped? held true
   held == false
 
-fn walked (edge "start") _ at _ k
-  matched_here at k (at == 1)
+fn walked (edge "start") _ at slots k
+  matched_here at slots k (at == 1)
 
-fn walked (edge "end") s at _ k
-  matched_here at k (at == length s + 1)
+fn walked (edge "end") s at slots k
+  matched_here at slots k (at == length s + 1)
 
-fn walked (edge "word") s at _ k
-  matched_here at k (boundary? s at)
+fn walked (edge "word") s at slots k
+  matched_here at slots k (boundary? s at)
 
-fn matched_here at k true
-  k at
+fn matched_here at slots k true
+  k at slots
 
-fn matched_here _ _ false
+fn matched_here _ _ _ false
   none
 
 fn boundary? s at
@@ -575,35 +660,35 @@ fn repeat node least most greedy s at done slots k
   capped = most >= 0 && done >= most
   ordered node least most greedy s at done slots k capped
 
-fn ordered _ least _ _ _ at done _ k true
-  enough at done least k
+fn ordered _ least _ _ _ at done slots k true
+  enough at done least slots k
 
 fn ordered node least most greedy s at done slots k false
   first node least most greedy s at done slots k greedy
 
-fn enough at done least k
-  reached at k (done >= least)
+fn enough at done least slots k
+  reached at slots k (done >= least)
 
-fn reached at k true
-  k at
+fn reached at slots k true
+  k at slots
 
-fn reached _ _ false
+fn reached _ _ _ false
   none
 
 # Greedy: take another, and only fall back to stopping if that fails.
 fn first node least most greedy s at done slots k true
   more = another node least most greedy s at done slots k
-  or_stop more at done least k
+  or_stop more at done least slots k
 
-fn or_stop none at done least k
-  enough at done least k
+fn or_stop none at done least slots k
+  enough at done least slots k
 
-fn or_stop won _ _ _ _
+fn or_stop won _ _ _ _ _
   won
 
 # Lazy: stop if the rest accepts it, and only then take another.
 fn first node least most greedy s at done slots k false
-  stopped = enough at done least k
+  stopped = enough at done least slots k
   or_more stopped node least most greedy s at done slots k
 
 fn or_more none node least most greedy s at done slots k
@@ -613,7 +698,7 @@ fn or_more won _ _ _ _ _ _ _ _ _
   won
 
 fn another node least most greedy s at done slots k
-  on = (next -> again node least most greedy s at next done slots k)
+  on = (next caught -> again node least most greedy s at next done caught k)
   walked node s at slots on
 
 # A body that consumed nothing would repeat for ever, so a rep only continues
