@@ -195,6 +195,7 @@ declare i64 @k_check_str(%KValue, ptr, i64)
 declare %KValue @k_concat(%KValue, %KValue)
 declare %KValue @k_concat_arr(i64, ptr)
 declare %KValue @k_render(%KValue, i64)
+declare i64 @k_render_dispatchable(%KValue)
 declare %KValue @k_add(%KValue, %KValue)
 declare %KValue @k_sub(%KValue, %KValue)
 declare %KValue @k_mul(%KValue, %KValue)
@@ -454,6 +455,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
         builtin_value_wrappers: Vec::new(),
+        print_value_wrapper: false,
         caf_cells: Vec::new(),
         caf_fills: Vec::new(),
         demand: crate::demand::analyze(program),
@@ -487,6 +489,7 @@ struct Backend<'a> {
     /// (builtin, arity) pairs a program hands out as values, each needing a
     /// wrapper a dynamic call can reach.
     builtin_value_wrappers: Vec<(String, usize)>,
+    print_value_wrapper: bool,
     /// One cache cell per frozen constant, emitted as globals at the end.
     caf_cells: Vec<String>,
     /// (cell, builder) pairs filled by @k_caf_init before main runs.
@@ -1130,6 +1133,43 @@ impl<'a> Backend<'a> {
                  {{ ptr @{}, i64 {arity}, ptr @{label}, i64 1 }}",
                 rsym(&held, arity),
                 wsym(&held, arity)
+            );
+        }
+        if self.print_value_wrapper {
+            let group = "render/to_string";
+            let render = match self.program.fns.iter().any(|d| d.name == group) {
+                true => format!(
+                    "  %s1 = call tailcc %KValue @{}(%KValue %v)\n  br label %join",
+                    dsym(group, 1)
+                ),
+                false => "  %s1 = call %KValue @k_render(%KValue %v, i64 0)\n  br label %join"
+                    .to_string(),
+            };
+            let held = "builtin.print";
+            let _ = writeln!(
+                self.body,
+                "define %KValue @{}(%KValue %a0) {{\nentry:\n  \
+                 %v = call %KValue @k_force(%KValue %a0)\n  \
+                 %d = call i64 @k_render_dispatchable(%KValue %v)\n  \
+                 %c = icmp ne i64 %d, 0\n  \
+                 br i1 %c, label %arm, label %plain\n\
+                 arm:\n{render}\n\
+                 plain:\n  \
+                 %s2 = call %KValue @k_render(%KValue %v, i64 0)\n  \
+                 br label %join\n\
+                 join:\n  \
+                 %s = phi %KValue [ %s1, %arm ], [ %s2, %plain ]\n  \
+                 %r = call %KValue @k_desc_print(%KValue %s)\n  \
+                 ret %KValue %r\n}}\n",
+                wsym(held, 1)
+            );
+            let (label, _) = self.intern("print\0");
+            let _ = writeln!(
+                self.body,
+                "@{} = private constant {{ ptr, i64, ptr, i64 }} \
+                 {{ ptr @{}, i64 1, ptr @{label}, i64 1 }}",
+                rsym(held, 1),
+                wsym(held, 1)
             );
         }
         // Lazy v1: the thunk-site dispatcher the runtime's k_force calls.
@@ -2475,6 +2515,17 @@ impl<'a> Backend<'a> {
                         f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
                         return Ok(t);
                     }
+                }
+                // `print` is not one of them: its argument reaches a user's
+                // `render/to_string` arm, and a call site picks that path from
+                // the argument's set. Handed over, there is no set to read, so
+                // its wrapper carries the choice into the run.
+                if bare == "print" {
+                    self.print_value_wrapper = true;
+                    let t = f.tmp();
+                    let sym = rsym("builtin.print", 1);
+                    f.line(&format!("{t} = call %KValue @k_fnref(ptr @{sym})"));
+                    return Ok(t);
                 }
                 match bare {
                     "true" => Ok("{ i64 2, i64 0 }".to_string()),

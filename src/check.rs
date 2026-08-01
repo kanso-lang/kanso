@@ -100,6 +100,124 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// position, so there is no reading of the program where the effect happens.
 /// A group where one arm reads the parameter and another does not is a real
 /// question and a different one.
+/// `err` names a raise, and a raise records where it happened. Handed over as
+/// a value the record has nowhere to come from: the interpreter attributes it
+/// to whatever line applies it, deep inside a callee the author never wrote,
+/// and a compiled wrapper has only its own definition to point at. A lambda
+/// puts the mention back in the program — `(reason -> err reason)` reads the
+/// same and carries a line a reader can open.
+fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    err_value_walk(expr, diags)
+                }
+            }
+        }
+    }
+}
+
+fn err_value_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    let mut found = Vec::new();
+    err_value_scan(expr, &mut found);
+    for span in found {
+        diags.push(Diagnostic::new(
+            "name",
+            "`err` raises, so it is a call and not a value — an err records the line it \
+             was raised on, and a bare mention has no line to record. Write \
+             `(reason -> err reason)`"
+                .to_string(),
+            span,
+        ));
+    }
+}
+
+/// Every mention of `err` outside call position, collected rather than
+/// reported so the walk stays a plain traversal.
+fn err_value_scan(expr: &Expr, found: &mut Vec<Span>) {
+    match expr {
+        Expr::Int(..) | Expr::Float(..) => {}
+        Expr::Ident(name, span) => {
+            if name == "err" {
+                found.push(*span);
+            }
+        }
+        Expr::Partial(name, span) => {
+            if name == "err" {
+                found.push(*span);
+            }
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for stmt in stmts {
+                match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        err_value_scan(expr, found)
+                    }
+                }
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (key, value) in pairs {
+                err_value_scan(key, found);
+                err_value_scan(value, found);
+            }
+        }
+        Expr::Str(parts, _) => {
+            for part in parts {
+                if let TemplatePart::Interp(inner) = part {
+                    err_value_scan(inner, found);
+                }
+            }
+        }
+        Expr::List(items, _) => {
+            for item in items {
+                err_value_scan(item, found);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            // the head of a call with arguments IS the raise, which is the one
+            // place the mention names a line of its own
+            match (&**head, args.is_empty()) {
+                (Expr::Ident(name, _), false) if name == "err" => {}
+                _ => err_value_scan(head, found),
+            }
+            for arg in args {
+                err_value_scan(arg, found);
+            }
+        }
+        Expr::Field { base, .. } => err_value_scan(base, found),
+        Expr::Upcast { expr, .. } => err_value_scan(expr, found),
+        Expr::Index { base, index, .. } => {
+            err_value_scan(base, found);
+            err_value_scan(index, found);
+        }
+        Expr::Seq(lhs, rhs, _) => {
+            err_value_scan(lhs, found);
+            err_value_scan(rhs, found);
+        }
+        Expr::Lambda { body, .. } => err_value_scan(body, found),
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } => {
+            err_value_scan(lhs, found);
+            err_value_scan(rhs, found);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            err_value_scan(cond, found);
+            err_value_scan(early, found);
+            for stmt in rest {
+                match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                        err_value_scan(expr, found)
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn check_effect_discarded(program: &Program, diags: &mut Vec<Diagnostic>) {
     use crate::infer::DESC;
     let inference = crate::infer::infer(program);
@@ -945,6 +1063,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &mut diags);
+    check_err_as_value(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &mut diags);
     }

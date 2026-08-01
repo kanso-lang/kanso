@@ -13410,3 +13410,38 @@ Swept over every .kso in the repository: 634 files, one hit, and that one is
 the fixture that recorded the defect. It moves from tests/known_wrong to the
 error corpus, which empties known_wrong entirely — task #57 took the other
 entry when the arena fix landed, so the file and its directory are gone.
+
+## `print` travels; `err` does not
+
+The last two names #78 left behind, and they went opposite ways, because what
+a bare mention has to carry differs between them.
+
+`print` renders a non-string argument through the ambient `render/to_string`
+group so a user's arm wins. A call site decides that from the argument's
+static set — dispatch when the set holds a record, a none or a description,
+the direct renderer otherwise, on the coherence licence that no arm can exist
+for a primitive. Handed over there is no set to read, so the decision moves
+into the run: the wrapper asks `k_render_dispatchable` of the value it was
+given and takes one of the two paths. The golden carries both halves on
+purpose. A wrapper that always dispatched would fail on the int; one that
+never did would ignore the arm; and the seven-line program says which is
+which by printing an int, a float, a bool, a none, a list, a string and a
+record through one handed-over `print`. The browser engine needed one word of
+its own: it reaches every builtin through the interpreter, which already does
+this, so `print` only had to be let past the table lookup.
+
+`err` cannot travel, and refusing it is the honest answer rather than the
+cheap one. An err records where it was raised. Through a value the raise
+happens wherever the callee applies its parameter — the interpreter says
+`born in apply at file:2`, naming a line in somebody else's function — and a
+compiled wrapper has nothing to name but its own definition, which is not in
+the program at all. Threading a caller's span into a dynamic call would buy
+agreement on a fiction. So `kanso check` refuses a bare `err` on every engine,
+in the same phase, with the same words, and points at `(reason -> err reason)`:
+the lambda puts the mention back where an author wrote it, and the origin it
+carries is a line a reader can open. Both engines then say `born in play` and
+agree.
+
+Swept every .kso in the repository: nothing is refused that was not already
+broken. All four cost goldens unchanged, welfare holds at 65.56, the browser
+differential reads 162/0.

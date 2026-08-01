@@ -1,0 +1,7 @@
+# An err records where it was raised. Handed over, the raise happens inside
+# `apply`, on a line the author of the failure never wrote, so the record
+# names somewhere nobody can act on. The lambda puts the mention back.
+fn apply f x
+  f x
+
+pub play = print "{apply err "ab"}"
