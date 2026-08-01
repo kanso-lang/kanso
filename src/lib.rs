@@ -333,6 +333,16 @@ fn declares_play(source: &str) -> Option<bool> {
     Some(program.fns.iter().any(|d| d.is_pub && d.name == "play"))
 }
 
+/// Whether the file holds tests, by the same rule `kanso test` collects them:
+/// a zero-argument constant named `test_*`. A file of those has an entry
+/// point already — it is just spelled for a different verb, and saying so
+/// beats describing what the file is not.
+fn declares_tests(source: &str) -> bool {
+    let Ok(lexed) = lexer::lex(source) else { return false };
+    let Ok(program) = parser::parse(&lexed) else { return false };
+    program.fns.iter().any(|d| d.name.starts_with("test_") && d.params.is_empty())
+}
+
 /// The CLI and the browser share this so the engines never diverge on which
 /// compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
@@ -356,6 +366,9 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     match (command, has_play, has_defs) {
         (_, true, _) if !library_verb => compile_play(file, source),
         ("check", false, true) => compile_library(file, source),
+        (_, false, true) if !library_verb && declares_tests(source) => {
+            Err(format!("error: `{file}` holds tests — `kanso test {file}` runs them\n"))
+        }
         (_, false, true) if !library_verb => Err(format!(
             "error: `{file}` is a library — nothing to run. give the \
              module a main.kso entry, or define a `pub play` for `run` to \

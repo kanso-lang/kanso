@@ -1,0 +1,7 @@
+# A file of tests has an entry point already — it is spelled for a different
+# verb. Describing what the file is not, and asking for an entry it does not
+# want, sends the reader to write one instead of typing `kanso test`.
+fn count_lines text
+  length text
+
+test_counts = count_lines "ab" == 2
