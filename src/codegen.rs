@@ -633,18 +633,11 @@ fn wsym(name: &str, arity: usize) -> String {
 /// The static a `k_fnref` value points at: the wrapper, its arity, and the
 /// name the diagnostic says when a call brings the wrong number of arguments.
 fn rsym(name: &str, arity: usize) -> String {
-    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
-        true => format!("\"r_{name}_{arity}\""),
-        false => format!("r_{name}_{arity}"),
-    }
+    quoted(&format!("r_{name}_{arity}"))
 }
 
 fn dsym(name: &str, arity: usize) -> String {
-    // qualified names and the naming sigils need LLVM's quoted-identifier form
-    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
-        true => format!("\"d_{name}_{arity}\""),
-        false => format!("d_{name}_{arity}"),
-    }
+    quoted(&format!("d_{name}_{arity}"))
 }
 
 fn inline_tag(f: &mut FnEmit, value: &str) -> String {
@@ -3972,8 +3965,11 @@ fn symbol_of(line: &str) -> Option<String> {
     }
 }
 
+/// A qualified name, or one carrying a naming sigil, needs LLVM's quoted-
+/// identifier form. One list, because a second copy drifts and what it costs
+/// is a module clang refuses to read.
 fn quoted(name: &str) -> String {
-    match name.contains('/') {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
         true => format!("\"{name}\""),
         false => name.to_string(),
     }

@@ -12,7 +12,7 @@
 # harness cannot replay — repl transcripts, wall-clock timings, IR greps.
 set -e
 # panels render their samples; drift fails the build
-python3 scripts/book_panels.py --check
+./target/release/kanso run scripts/book_panels.kso
 # the sample .outs pin the dice; a bare run seeds from entropy
 export KANSO_SEED=2685821657736338717
 KANSO=$(pwd)/target/release/kanso

@@ -12880,3 +12880,47 @@ reads the field, and a file asked about itself alone cannot see that. Baseline
 0 wrong, the attempt 1 wrong, and the union across files fixed it. Only
 `scripts/module_differential.py` catches that shape; nothing in `cargo test`
 does, which is worth knowing independently of whether this idea ever returns.
+
+## Two defects the last python script found on its way out
+
+`book_panels` is the program that keeps the book's code panels equal to the
+sample files they quote. It was the last python script that needed nothing new
+from the language, and porting it turned up two things.
+
+The first is a native backend defect and it is fixed. A function whose name
+carries `?` — or `!`, `+`, `-`, `*`, `%` — and which both spills its arguments
+past the eight argument registers and holds a musttail is reached through a
+trampoline. The trampoline's name was built by `quoted`, which knew only about
+`/`, so the symbol was emitted as a bare llvm identifier and clang refused the
+module. `dsym` and `rsym` had the right list; `quoted` had a shorter one, which
+is the drift a second copy always eventually produces. All three read one list
+now. The reduced program is a five parameter tail loop called `stepping?`, and
+it goes red with clang refusing to parse the define line.
+
+The second is open and larger. The first port read every sample under
+`docs/book/samples` up front, so that deciding a panel could be pure. On the
+real tree that crashes: EXC_BAD_ACCESS inside `k_deep_copy`, which the runtime
+reports as stack exhaustion because it only sees SIGSEGV. It is not stack
+exhaustion. A bounds check added to `k_copy_alloc` fires with a request for
+588 GB against a KRec whose field count is garbage, so the value handed to the
+carry already pointed at reclaimed arena; the size pass and the copy pass
+agree with each other, and both are reading the same corruption. Raising the
+cohort threshold to 1<<60 does not help, which puts the fault on the loop carry
+rather than `k_cohort_pop`. Accumulating an interpolated string instead of a
+record makes it go away, as does a record whose second field is a literal
+rather than the bind's result.
+
+Delta-debugging the input took 442 files down to 11 — one of about 408 kb, the
+rest 16 bytes, over four sibling directories and one nested one. Uniform file
+sizes never reproduce it and neither do synthetic trees of the same shape,
+which says the trigger is a particular sequence of allocation sizes rather than
+a count or a depth. That is an arena block boundary, and it is why the smallest
+reproduction is still a directory tree rather than a program.
+
+The port does not depend on the answer, because the program it forced is the
+better one. Python opened only the files a panel names; the first kanso version
+listed and read the whole directory, which is how it met a 408 kb file that no
+panel quotes. Reading only what the panels name is both correct and small.
+Matching each panel pattern once per chapter rather than once per pass took it
+from 47 s to 2.8 s — the second match was not merely twice the work, which is
+its own thread to pull.
