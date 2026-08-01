@@ -1,5 +1,56 @@
 use kanso::{ast, diag, eval};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// What the compiler itself costs, counted rather than timed. Peak resident
+/// bytes is stable enough to compare between runs on one machine, but it is
+/// the operating system's number and it moves with page granularity and with
+/// whatever the allocator decided to keep; this is the compiler's own demand,
+/// which is the same on every machine and every run.
+///
+/// Relaxed ordering throughout: these are a tally, not a synchronisation
+/// point, and no reader depends on seeing them in any particular order.
+struct Counting;
+
+static ALLOC_BYTES: AtomicU64 = AtomicU64::new(0);
+static ALLOC_CALLS: AtomicU64 = AtomicU64::new(0);
+static LIVE_BYTES: AtomicU64 = AtomicU64::new(0);
+static PEAK_BYTES: AtomicU64 = AtomicU64::new(0);
+
+unsafe impl std::alloc::GlobalAlloc for Counting {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        let n = layout.size() as u64;
+        ALLOC_BYTES.fetch_add(n, Ordering::Relaxed);
+        ALLOC_CALLS.fetch_add(1, Ordering::Relaxed);
+        let live = LIVE_BYTES.fetch_add(n, Ordering::Relaxed) + n;
+        PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
+        unsafe { std::alloc::System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
+        LIVE_BYTES.fetch_sub(layout.size() as u64, Ordering::Relaxed);
+        unsafe { std::alloc::System.dealloc(ptr, layout) }
+    }
+}
+
+#[global_allocator]
+static COMPILER_ALLOCATOR: Counting = Counting;
+
+/// The compiler's own cost, in the same shape the runtime prints its own:
+/// `KANSO_COUNTERS=1 kanso check <program>` writes them to stderr so a
+/// recorder can read one and a reader can read the other.
+fn compiler_counters() -> String {
+    let (rounds, visits) = kanso::infer::work::taken();
+    format!(
+        "compile_alloc_bytes={}\ncompile_allocs={}\ncompile_peak_bytes={}\n\
+         compile_passes={}\ncompile_rounds={}\ncompile_visits={}\n",
+        ALLOC_BYTES.load(Ordering::Relaxed),
+        ALLOC_CALLS.load(Ordering::Relaxed),
+        PEAK_BYTES.load(Ordering::Relaxed),
+        kanso::infer::work::passes(),
+        rounds,
+        visits,
+    )
+}
 
 const VERBS: [&str; 8] = ["run", "check", "test", "build", "install", "list", "update", "repl"];
 
@@ -105,6 +156,9 @@ fn main() -> ExitCode {
             for advisory in kanso::provenance::violations(&program, &prov, &inference.returns) {
                 eprintln!("{advisory}");
             }
+        }
+        if std::env::var_os("KANSO_COUNTERS").is_some() {
+            eprint!("{}", compiler_counters());
         }
         println!("{file}: ok");
         return ExitCode::SUCCESS;
