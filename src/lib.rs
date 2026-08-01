@@ -1332,6 +1332,12 @@ fn try_fuse(
     Some(call(ident(fold_name), vec![source, init, reducer]))
 }
 
+/// Everything a module's imports resolve to: the merged program, whether each
+/// qualified name is exported, and the names whose export flag an import took
+/// from the module's own declaration.
+type Loaded =
+    (ast::Program, std::collections::HashMap<String, bool>, std::collections::HashSet<String>);
+
 fn qualify(
     dep: &mut ast::Program,
     qual: &str,
@@ -1718,10 +1724,7 @@ fn load_dependencies(
     base: &std::path::Path,
     imports: &[ast::Import],
     visited: &mut std::collections::HashSet<std::path::PathBuf>,
-) -> Result<
-    (ast::Program, std::collections::HashMap<String, bool>, std::collections::HashSet<String>),
-    String,
-> {
+) -> Result<Loaded, String> {
     let mut dep_program = ast::Program {
         fns: Vec::new(),
         types: Vec::new(),
