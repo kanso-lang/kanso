@@ -243,9 +243,128 @@ fn chosen best _ false
 fn chosen _ text true
   text
 
+# `(?i)` and `(?s)` lead a pattern, the way go writes them. They are applied
+# as a rewrite of the parsed tree rather than carried into the matcher: a
+# case-blind literal is a two-member class, and a dot that crosses lines is a
+# dot that stops excluding one character. Nothing downstream learns a mode.
 fn compiled pattern
-  chars = text/chars pattern
-  read_alt chars 1 . (p -> numbered p.node 1) . (n -> n.node)
+  flags = leading_flags pattern 1 ""
+  body = text/slice pattern flags.pos (length pattern)
+  chars = text/chars body
+  parsed_body = read_alt chars 1
+  marked_body = flagged parsed_body.node flags.node
+  numbered marked_body 1 . (n -> n.node)
+
+fn leading_flags pattern at seen
+  more_flags pattern at seen (flag_group? pattern at)
+
+fn flag_group? pattern at
+  three = at + 2 <= length pattern
+  opens = three && text/slice pattern at (at + 1) == "(?"
+  opens && in? "is" (letter_at pattern at)
+
+fn letter_at pattern at
+  text/slice pattern (at + 2) (at + 2)
+
+fn more_flags _ at seen false
+  parsed seen at
+
+fn more_flags pattern at seen true
+  closing = flag_end pattern (at + 2)
+  letters = text/slice pattern (at + 2) (closing - 1)
+  leading_flags pattern (closing + 1) "{seen}{letters}"
+
+fn flag_end pattern at
+  ending_flag pattern at (text/slice pattern at at == ")")
+
+fn ending_flag _ at true
+  at
+
+fn ending_flag pattern at false
+  flag_end pattern (at + 1)
+
+fn flagged node flags
+  blind = in? flags "i"
+  crossing = in? flags "s"
+  untouched node blind crossing (blind == false && crossing == false)
+
+fn untouched node _ _ true
+  node
+
+fn untouched node blind crossing false
+  rewritten node blind crossing
+
+fn rewritten (dot _) _ crossing
+  crossed crossing
+
+fn crossed true
+  cls "" true
+
+fn crossed false
+  dot 0
+
+fn rewritten (lit c) blind _
+  lettered c blind
+
+fn lettered c true
+  cls (both_cases c) false
+
+fn lettered c false
+  lit c
+
+fn rewritten (cls set negated) blind _
+  classed set negated blind
+
+fn classed set negated true
+  cls (both_cases set) negated
+
+fn classed set negated false
+  cls set negated
+
+fn rewritten (seq parts) blind crossing
+  seq (list/to_list (list/map parts (one -> rewritten one blind crossing)))
+
+fn rewritten (alt branches) blind crossing
+  alt (list/to_list (list/map branches (one -> rewritten one blind crossing)))
+
+fn rewritten (group node slot) blind crossing
+  group (rewritten node blind crossing) slot
+
+fn rewritten (ahead node wanted pad) blind crossing
+  ahead (rewritten node blind crossing) wanted pad
+
+fn rewritten (rep node least most greedy) blind crossing
+  rep (rewritten node blind crossing) least most greedy
+
+fn rewritten node _ _
+  node
+
+# The same characters in both cases, so a class holds each spelling once.
+fn both_cases s
+  folding s 1 ""
+
+fn folding s at acc
+  folded s at acc (at > length s)
+
+fn folded _ _ acc true
+  acc
+
+fn folded s at acc false
+  c = text/slice s at at
+  folding s (at + 1) "{acc}{c}{swapped c}"
+
+fn swapped c
+  code = text/char_code c
+  other code (code >= 97 && code <= 122) (code >= 65 && code <= 90)
+
+fn other code true _
+  text/from_code (code - 32)
+
+fn other code _ true
+  text/from_code (code + 32)
+
+fn other _ _ _
+  ""
 
 fn numbered (group node _) at
   inner = numbered node (at + 1)
