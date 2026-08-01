@@ -1,0 +1,16 @@
+import "std/regexp"
+
+pub play =
+  print "literal:     {regexp/match? "cat" "a cat sat"}"
+  >> print "miss:        {regexp/match? "dog" "a cat sat"}"
+  >> print "dot star:    {regexp/find "c.t" "a cat sat"}"
+  >> print "class:       {regexp/find "[0-9]+" "abc 4711 xyz"}"
+  >> print "negated:     {regexp/find "<[^>]+>" "hi <b>there</b>"}"
+  >> print "alternation: {regexp/find "cat|dog" "a dog sat"}"
+  >> print "anchor:      {regexp/match? "^a" "a cat"}"
+  >> print "boundary:    {regexp/find "\\bsat\\b" "a cat sat"}"
+  >> print "lazy:        {regexp/find "<.*?>" "<b>x</b>"}"
+  >> print "greedy:      {regexp/find "<.*>" "<b>x</b>"}"
+  >> print "all:         {regexp/find_all "[a-z]+" "one two three"}"
+  >> print "replace:     {regexp/replace_all "[0-9]" "a1b2c3" "#"}"
+  >> print "split:       {regexp/split "\\s+" "one  two   three"}"

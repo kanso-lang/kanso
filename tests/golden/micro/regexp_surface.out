@@ -1,0 +1,13 @@
+literal:     true
+miss:        false
+dot star:    cat
+class:       4711
+negated:     <b>
+alternation: dog
+anchor:      true
+boundary:    sat
+lazy:        <b>
+greedy:      <b>x</b>
+all:         ["one" "two" "three"]
+replace:     a#b#c#
+split:       ["one" "two" "three"]

@@ -1,0 +1,554 @@
+import { find:list_find } "std/list"
+import { split:text_split } "std/text"
+
+# Patterns, matched by backtracking.
+#
+# A regex is parsed once into a tree and then walked against the subject with
+# a continuation: every node is asked "match here, and if you do, can the rest
+# of the pattern match what is left?" A node that can match several ways tries
+# them in order and hands each to the continuation, so the answer the whole
+# pattern gives is the first one the rest of it accepts. That is what makes
+# greedy and lazy quantifiers a matter of which order a node offers its
+# choices, and it is why lookahead is one line rather than a rewrite.
+#
+# Written in kanso rather than as a builtin on purpose. Three engines run this
+# library, and one source cannot disagree with itself; three implementations of
+# a matcher across runtime.c, wasm_rt.rs and eval.rs would be three chances to
+# drift and a differential to carry forever.
+#
+# A parsed pattern. `seq` and `alt` hold lists so a long pattern is flat.
+type lit
+  ch
+
+type dot
+  marker
+
+type cls
+  set
+  negated
+
+type seq
+  parts
+
+type alt
+  branches
+
+type rep
+  node
+  least
+  most
+  greedy
+
+type group
+  node
+  slot
+
+type ahead
+  node
+  wanted
+
+type edge
+  kind
+
+# The leftmost match, as a record: `at` is 1 when nothing matched, `to` is one
+# past the end, and `groups` holds each capture's text in declaration order.
+type hit
+  from
+  to
+  groups
+
+# Parsing hands back a node and the position after it, so the two travel
+# together rather than being threaded as two returns.
+type parsed
+  node
+  pos
+
+pub fn match? pattern s
+  found pattern s . (m -> m.from > 0)
+
+no_hit = hit 0 0 []
+
+pub fn find pattern s
+  taken s (found pattern s)
+
+fn taken _ (hit 0 _ _)
+  none
+
+fn taken s m
+  text/slice s m.from (m.to - 1)
+
+pub fn groups pattern s
+  named (found pattern s)
+
+fn named (hit 0 _ _)
+  none
+
+fn named m
+  m.groups
+
+# Every match, left to right, never overlapping. A match that consumed nothing
+# still advances one character, or the walk would not end.
+pub fn find_all pattern s
+  gathering (compiled pattern) s 1 []
+
+fn gathering prog s at acc
+  walking prog s at acc (at > length s + 1)
+
+fn walking _ _ _ acc true
+  acc
+
+fn walking prog s at acc false
+  m = scanned prog s at
+  stepped prog s at acc m (m.from == 0)
+
+fn stepped _ _ _ acc _ true
+  acc
+
+fn stepped prog s _ acc m false
+  text = text/slice s m.from (m.to - 1)
+  next = onward m
+  gathering prog s next (push acc text)
+
+fn onward m
+  moved m (m.to == m.from)
+
+fn moved m true
+  m.from + 1
+
+fn moved m false
+  m.to
+
+pub fn replace_all pattern s repl
+  rebuilt (compiled pattern) s 1 "" repl
+
+fn rebuilt prog s at acc repl
+  rebuilding prog s at acc repl (at > length s + 1)
+
+fn rebuilding _ s at acc _ true
+  "{acc}{rest_of s at}"
+
+fn rebuilding prog s at acc repl false
+  m = scanned prog s at
+  swapped prog s at acc repl m (m.from == 0)
+
+fn swapped _ s at acc _ _ true
+  "{acc}{rest_of s at}"
+
+fn swapped prog s at acc repl m false
+  before = text/slice s at (m.from - 1)
+  kept = "{acc}{before}{repl}"
+  stepped_over prog s acc repl m kept (m.to == m.from)
+
+fn stepped_over prog s _ repl m kept true
+  one = text/slice s m.from m.from
+  rebuilt prog s (m.from + 1) "{kept}{one}" repl
+
+fn stepped_over prog s _ repl m kept false
+  rebuilt prog s m.to kept repl
+
+fn rest_of s at
+  remaining s at (at > length s)
+
+fn remaining _ _ true
+  ""
+
+fn remaining s at false
+  text/slice s at (length s)
+
+pub fn split pattern s
+  cut (compiled pattern) s 1 1 []
+
+fn cut prog s from at acc
+  cutting prog s from at acc (at > length s + 1)
+
+fn cutting _ s from _ acc true
+  push acc (rest_of s from)
+
+fn cutting prog s from at acc false
+  m = scanned prog s at
+  divided prog s from at acc m (m.from == 0 || m.to == m.from)
+
+fn divided prog s from at acc _ true
+  cut prog s from (at + 1) acc
+
+fn divided prog s from _ acc m false
+  piece = text/slice s from (m.from - 1)
+  cut prog s m.to m.to (push acc piece)
+
+# The leftmost match of the whole pattern, tried at each start in turn.
+fn found pattern s
+  scanned (compiled pattern) s 1
+
+fn scanned prog s at
+  scanning prog s at (at > length s + 1)
+
+fn scanning _ _ _ true
+  no_hit
+
+fn scanning prog s at false
+  end = walked prog s at [] (at -> at)
+  landed prog s at end
+
+fn landed prog s at none
+  scanned prog s (at + 1)
+
+fn landed _ s at end
+  hit at end (captured_at s at end)
+
+# Slice 1 keeps no capture text; groups arrive with lookahead in slice 2.
+fn captured_at _ _ _
+  []
+
+fn count_groups _
+  0
+
+fn compiled pattern
+  chars = text/chars pattern
+  read_alt chars 1 . (p -> p.node)
+
+fn read_alt chars at
+  first = read_seq chars at
+  more_alt chars first []
+
+fn more_alt chars p acc
+  branches = push acc p.node
+  splitting chars p branches (bar? chars p.pos)
+
+fn bar? chars at
+  at <= length chars && chars[at]! == "|"
+
+fn splitting _ p branches false
+  parsed (one_or_alt branches) p.pos
+
+fn splitting chars p branches true
+  next = read_seq chars (p.pos + 1)
+  more_alt chars next branches
+
+fn one_or_alt branches
+  sole branches (length branches == 1)
+
+fn sole branches true
+  branches[1]!
+
+fn sole branches false
+  alt branches
+
+fn read_seq chars at
+  gather_seq chars at []
+
+fn gather_seq chars at acc
+  gathering_seq chars at acc (done_seq? chars at)
+
+fn done_seq? chars at
+  at > length chars || chars[at]! == "|" || chars[at]! == ")"
+
+fn gathering_seq _ at acc true
+  parsed (seq acc) at
+
+fn gathering_seq chars at acc false
+  piece = read_repeat chars at
+  gather_seq chars piece.pos (push acc piece.node)
+
+fn read_repeat chars at
+  base = read_atom chars at
+  suffixed chars base (at_quantifier? chars base.pos)
+
+fn at_quantifier? chars at
+  at <= length chars && in? "*+?" chars[at]!
+
+fn in? set c
+  length (text/split set c) > 1
+
+fn suffixed _ base false
+  base
+
+fn suffixed chars base true
+  mark = chars[base.pos]!
+  after = base.pos + 1
+  lazy = after <= length chars && chars[after]! == "?"
+  bounds = spans mark
+  parsed (rep base.node bounds[1]! bounds[2]! (lazy == false)) (past after lazy)
+
+fn past after true
+  after + 1
+
+fn past after false
+  after
+
+no_ceiling = 0 - 1
+
+fn spans "*"
+  [0 no_ceiling]
+
+fn spans "+"
+  [1 no_ceiling]
+
+fn spans _
+  [0 1]
+
+fn read_atom chars at
+  opened chars at chars[at]!
+
+fn opened chars at "("
+  inner = read_alt chars (at + 1)
+  parsed (group inner.node 0) (inner.pos + 1)
+
+fn opened chars at "["
+  read_class chars (at + 1)
+
+fn opened _ at "."
+  parsed (dot 0) (at + 1)
+
+fn opened _ at "^"
+  parsed (edge "start") (at + 1)
+
+fn opened _ at "$"
+  parsed (edge "end") (at + 1)
+
+fn opened chars at "\\"
+  escaped chars (at + 1) chars[at + 1]!
+
+fn opened _ at c
+  parsed (lit c) (at + 1)
+
+fn escaped _ at "d"
+  parsed (cls "0123456789" false) (at + 1)
+
+fn escaped _ at "w"
+  parsed (cls "{word_chars}" false) (at + 1)
+
+fn escaped _ at "s"
+  parsed (cls " \t\n\r" false) (at + 1)
+
+fn escaped _ at "b"
+  parsed (edge "word") (at + 1)
+
+fn escaped _ at "n"
+  parsed (lit "\n") (at + 1)
+
+fn escaped _ at "t"
+  parsed (lit "\t") (at + 1)
+
+fn escaped _ at c
+  parsed (lit c) (at + 1)
+
+word_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"
+
+fn read_class chars at
+  negated = chars[at]! == "^"
+  start = shifted at negated
+  members chars start "" negated
+
+fn shifted at true
+  at + 1
+
+fn shifted at false
+  at
+
+fn members chars at set negated
+  collecting chars at set negated (chars[at]! == "]")
+
+fn collecting _ at set negated true
+  parsed (cls set negated) (at + 1)
+
+fn collecting chars at set negated false
+  ranged chars at set negated (range? chars at)
+
+fn range? chars at
+  at + 2 <= length chars && chars[at + 1]! == "-" && chars[at + 2]! != "]"
+
+fn ranged chars at set negated true
+  span = spread chars[at]! chars[at + 2]!
+  members chars (at + 3) "{set}{span}" negated
+
+fn ranged chars at set negated false
+  one = literal_member chars at
+  members chars one.pos "{set}{one.node}" negated
+
+fn literal_member chars at
+  member_of chars at (chars[at]! == "\\")
+
+fn member_of chars at true
+  esc = escaped chars (at + 1) chars[at + 1]!
+  parsed (class_text esc.node) esc.pos
+
+fn member_of chars at false
+  parsed chars[at]! (at + 1)
+
+fn class_text (lit c)
+  c
+
+fn class_text (cls set _)
+  set
+
+fn class_text _
+  ""
+
+fn spread from to
+  filling (text/char_code from) (text/char_code to) ""
+
+fn filling at stop acc
+  fill at stop acc (at > stop)
+
+fn fill _ _ acc true
+  acc
+
+fn fill at stop acc false
+  filling (at + 1) stop "{acc}{text/from_code at}"
+
+# Every node answers the same question: starting at `at`, can you match, and
+# can `k` accept what is left? The answer is a position or none.
+fn walked (seq parts) s at slots k
+  through parts 1 s at slots k
+
+fn through parts i s at slots k
+  stepping parts i s at slots k (i > length parts)
+
+fn stepping _ _ _ at _ k true
+  k at
+
+fn stepping parts i s at slots k false
+  walked parts[i]! s at slots (next -> through parts (i + 1) s next slots k)
+
+fn walked (alt branches) s at slots k
+  branching branches 1 s at slots k
+
+fn branching branches i s at slots k
+  trying branches i s at slots k (i > length branches)
+
+fn trying _ _ _ _ _ _ true
+  none
+
+fn trying branches i s at slots k false
+  won = walked branches[i]! s at slots k
+  or_else branches i s at slots k won
+
+fn or_else branches i s at slots k none
+  branching branches (i + 1) s at slots k
+
+fn or_else _ _ _ _ _ _ won
+  won
+
+fn walked (group node _) s at slots k
+  walked node s at slots k
+
+fn walked (lit c) s at _ k
+  matched_one s at k (at <= length s && text/slice s at at == c)
+
+fn matched_one _ at k true
+  k (at + 1)
+
+fn matched_one _ _ _ false
+  none
+
+fn walked (dot _) s at _ k
+  matched_one s at k (at <= length s && text/slice s at at != "\n")
+
+fn walked (cls set negated) s at _ k
+  here = at <= length s
+  matched_one s at k (here && in_class? set negated (sliced s at here))
+
+fn sliced s at true
+  text/slice s at at
+
+fn sliced _ _ false
+  ""
+
+fn in_class? set negated c
+  flipped? (in? set c) negated
+
+fn flipped? held false
+  held
+
+fn flipped? held true
+  held == false
+
+fn walked (edge "start") _ at _ k
+  matched_here at k (at == 1)
+
+fn walked (edge "end") s at _ k
+  matched_here at k (at == length s + 1)
+
+fn walked (edge "word") s at _ k
+  matched_here at k (boundary? s at)
+
+fn matched_here at k true
+  k at
+
+fn matched_here _ _ false
+  none
+
+fn boundary? s at
+  before = word_at? s (at - 1)
+  after = word_at? s at
+  before != after
+
+fn word_at? s at
+  reads? s at (at >= 1 && at <= length s)
+
+fn reads? s at true
+  in? word_chars (text/slice s at at)
+
+fn reads? _ _ false
+  false
+
+# A repetition offers its choices in the order its greed asks for, and the
+# continuation decides which one survives. `most` of -1 means no ceiling.
+fn walked (rep node least most greedy) s at slots k
+  repeat node least most greedy s at 0 slots k
+
+fn repeat node least most greedy s at done slots k
+  capped = most >= 0 && done >= most
+  ordered node least most greedy s at done slots k capped
+
+fn ordered _ least _ _ _ at done _ k true
+  enough at done least k
+
+fn ordered node least most greedy s at done slots k false
+  first node least most greedy s at done slots k greedy
+
+fn enough at done least k
+  reached at k (done >= least)
+
+fn reached at k true
+  k at
+
+fn reached _ _ false
+  none
+
+# Greedy: take another, and only fall back to stopping if that fails.
+fn first node least most greedy s at done slots k true
+  more = another node least most greedy s at done slots k
+  or_stop more at done least k
+
+fn or_stop none at done least k
+  enough at done least k
+
+fn or_stop won _ _ _ _
+  won
+
+# Lazy: stop if the rest accepts it, and only then take another.
+fn first node least most greedy s at done slots k false
+  stopped = enough at done least k
+  or_more stopped node least most greedy s at done slots k
+
+fn or_more none node least most greedy s at done slots k
+  another node least most greedy s at done slots k
+
+fn or_more won _ _ _ _ _ _ _ _ _
+  won
+
+fn another node least most greedy s at done slots k
+  on = (next -> again node least most greedy s at next done slots k)
+  walked node s at slots on
+
+# A body that consumed nothing would repeat for ever, so a rep only continues
+# when the position actually moved.
+fn again node least most greedy s at next done slots k
+  moved_on node least most greedy s next done slots k (next == at)
+
+fn moved_on _ _ _ _ _ _ _ _ _ true
+  none
+
+fn moved_on node least most greedy s next done slots k false
+  repeat node least most greedy s next (done + 1) slots k
