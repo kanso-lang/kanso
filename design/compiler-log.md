@@ -13835,3 +13835,45 @@ literal is space-separated, so `[plotted "a" "b" "c"]` is a four-element list
 holding the function and three strings rather than a list holding one call.
 The type error names the field read that failed rather than the list, which is
 correct and still took a minute to place.
+
+## Knot-tying is not one diagnostic away, measured
+
+The proposal was that `check_constant_cycles` is the only thing standing
+between kanso and Haskell-style knot-tying: kanso is lazy by gavel, a
+self-reference under a lazy field is a fixpoint rather than a value defined in
+terms of itself, so allowing it would be a diagnostic consulting the
+strictness analyser rather than new machinery. That is wrong, and the way to
+find out was to remove the check and run the program.
+
+With both callers of `check_constant_cycles` disabled, this
+
+    graph = { "a":(node "a" [graph["b"]!]) "b":(node "b" [graph["a"]!]) }
+
+answers `the program ran out of stack: recursion went deeper than the stack
+holds`. It does not tie a knot; it diverges. The diagnostic was telling the
+truth about the language as built.
+
+The reason is in `src/demand.rs`, which states its own scope: "a binding is
+conditionally demanded — and compiles to a thunk — when every use passes it,
+unscrutinized, into a dispatch argument position where at least one arm of the
+callee group discards that parameter... Every other binding stays strict." So
+laziness today is a property of a *binding* in one narrow shape, not of
+constructor positions. A record field, a list element and a map value are all
+strict, and a self-reference inside one is evaluated during construction.
+
+Knot-tying wants the opposite: laziness in constructor positions, so a field
+can hold an unevaluated reference to a structure still being built. That is
+the full laziness gavel, which is ratified and unbuilt, and it is a much
+larger piece of work than a diagnostic.
+
+What this changes about the build-block design. The two-shapes framing —
+a named set written as create-create-point, and a data-driven set written as a
+map over ids with self-reference — has only its first shape available. The
+second one cannot be written today at any size. So build blocks are not one
+option among two for cyclic construction; until constructor positions are
+lazy, they are the only one, and the hole-filling design has to carry the
+data-driven case rather than hand it off.
+
+Recorded rather than acted on: nothing in the language changed here. The check
+is back, the corpus is green, and what moved is what is known about why the
+check exists.
