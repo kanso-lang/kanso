@@ -4274,15 +4274,16 @@ KValue k_index(KValue container, KValue key, const char* origin) {
    born inside this beat may be mutated; every other one takes the copying
    path, which is what the in-place form is an optimisation of.
 
-   The test is conservative on purpose: a header in an older block answers no
-   and pays a copy, where walking the block list to be sure would cost more
-   than the copy saves on the path this guards. */
+   The head block answers without a walk, which is where a hot loop's own
+   allocations are; anything else falls back to the walk that settles it
+   exactly, because guessing wrong there costs a copy on every push. */
 static int k_born_this_beat(const void* p) {
     if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX || !k_blocks) return 1;
     KMark* m = &k_beat_stack[k_beat_depth - 1];
     const char* q = (const char*)p;
-    if (q < (const char*)(k_blocks + 1) || q >= k_arena) return 0;
-    return k_blocks != m->block || q >= (const char*)m->ptr;
+    if (q >= (const char*)(k_blocks + 1) && q < k_arena)
+        return k_blocks != m->block || q >= (const char*)m->ptr;
+    return !k_survives(p, m);
 }
 
 static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
