@@ -317,6 +317,64 @@ user identifiers may use it freely).
 Small, but it is a semantics hole in the map surface and should be one
 sentence in the spec once ruled.
 
+## 12. What `==` answers on — PROPOSED RULING (tasks #54 and #76 together)
+
+Two open tasks are one question, and measuring the current behaviour changed
+what the question is. Both engines, 2026-08-01:
+
+    1 < 1.0      false        1 <= 1.0     true
+    1.0 < 1      false        1.0 >= 1     true
+    1 == 1.0     false        1.5 < 2      true
+    w == w       false        w < w        refuses
+    point 1 == point 1  true  point 1 < point 2   refuses
+    [1] == [1]   true         [1] < [2]    refuses
+
+**#76 is not the coin flip the task recorded.** It offered two settlements —
+numbers are one domain (`1 == 1.0` true), or `<` refuses across int and float
+— and called them equally consistent. They are not. `1 <= 1.0` answers **true**
+and `1.0 >= 1` answers **true**, which is the assertion that the two are equal,
+made by two operators that already shipped. `<` and `>` answer false for that
+pair for the same reason: neither is strictly less. Three of the four ordering
+operators have already ruled that int and float are one numeric domain in
+which 1 and 1.0 are the same number. Settlement (b) would mean withdrawing
+that and breaking `1.5 < 2`. So the proposal is settlement (a), and it is a
+repair rather than a choice: `==` is the one operator dissenting from a rule
+the others implement.
+
+**The tempting unification is wrong, and the table above is why.** "Equality
+answers exactly where ordering answers" reads well and would settle both tasks
+at once, and it would also delete record and list equality: `<` refuses on both
+while `==` compares them structurally, which is plainly wanted. Ordering asks
+for a total order and answers only where one exists. Equality asks whether two
+values are the same and answers wherever there is structure to walk. They are
+different questions over different domains, and the disagreement between them
+is not itself evidence of a bug.
+
+**#54 stays a real choice, narrowed.** A description and a closure have no
+structure to walk, so `==` has nothing to answer with, and `false` for `w == w`
+is an invented fact rather than a computed one. Two settlements survive:
+
+- **(a) refuse**, the way `<` already does on the same values. It matches what
+  the language does with every other meaningless question — `1 + "a"`, `p < 2`,
+  an `if` on a non-bool — and it costs a program nothing that works today,
+  since nothing can be relying on a self-comparison answering false.
+- **(b) identity**, so `w == w` is true. Useful for "have I already got this
+  effect", but it exposes a fact purity should hide: two descriptions built by
+  the same expression at two places describe the same effect and would still
+  compare false, so the answer tracks allocation rather than meaning.
+
+Recommended: (a). Refusing says what is true — that the question has no
+answer — where identity answers a different question than the one asked.
+
+**Sizing, measured rather than guessed.** Both engines hold the defect in one
+place. `src/eval.rs:2800` ends `values_equal_seen` with `_ => false`, so an
+int-against-float pair and a description-against-description pair fall into
+the same catch-all; `src/runtime.c:2659` has `if (a.tag != b.tag) return 0;`
+and lets K_DESC and K_CLOSURE reach the default. Settling both means a mixed
+numeric arm and an opaque-value refusal in each, plus the wasm path, which
+reaches the interpreter's own comparison. `1 == "a"` stays false either way:
+different structural types is a well-formed question with a real answer.
+
 ## RULED 2026-07-28: accessors are functions
 
 Clay: "so we should make that change." Field access becomes ordinary
