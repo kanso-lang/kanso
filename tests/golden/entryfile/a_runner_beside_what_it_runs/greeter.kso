@@ -1,0 +1,7 @@
+# An ordinary library. Nothing here is special to the compiler — `play` is a
+# constant holding a description, and it is only an entry because the file
+# next door says so.
+fn shout name
+  "hello, {name}!"
+
+pub play = print (shout "kanso")

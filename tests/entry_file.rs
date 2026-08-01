@@ -42,3 +42,31 @@ fn a_definition_in_the_entry_file_is_refused_by_both_engines() {
     assert_eq!(native_code, Some(2));
     assert_eq!(interp_code, Some(2));
 }
+
+/// A runner beside the file it runs, which is the shape that lets a sample be
+/// an ordinary library and still be one command away. `play` here is a
+/// constant like any other: the compiler is told nothing, the runner names it.
+#[test]
+fn a_bare_import_reads_the_kso_file_beside_it() {
+    let fixture = "tests/golden/entryfile/a_runner_beside_what_it_runs";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native refused the sibling import");
+    assert_eq!(native, "hello, kanso!\n");
+    assert_eq!(interp, native, "the engines disagree on a sibling import");
+}

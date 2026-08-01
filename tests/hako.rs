@@ -56,7 +56,7 @@ fn every_import_shape_names_its_own_rule() {
 
     for (import, phrase) in [
         ("./nope", "a directory beside the importing module"),
-        ("sibling", "a sibling subdirectory module"),
+        ("sibling", "a bare name is a sibling module"),
         ("corp.dev/team/thing", "names a hako by domain"),
         ("owner/missing", "names a hako, and it is not in the cache"),
     ] {
