@@ -13746,3 +13746,49 @@ per value, per growth, at the moment it matters. The same test in
 rewind cannot reach, which is the missing half; the other half is a regime
 marker so a malloc'd buffer is freed rather than shelved or double-freed, and
 `beat.rs` admitting the cluster only after that lands.
+
+## GAVEL: equality answers about values, and a function is not one
+
+Clay, ruling: "i think checking equality on functions defeats the purpose of
+polymorphism. if you care about what something is, you want polymorphism."
+
+That is a better reason than the one this log had recorded. The earlier
+argument was that `w == w` answering false invents a fact — true, but thin.
+The real objection is that the question is a design error. Asking whether two
+functions are the same function is asking which one you were handed, and
+dispatch is how this language answers that. An effect is the same: if the
+answer would change what happens next, an arm names it. So `==` refuses on a
+function value, a closure and a description, the way `<` already refuses on
+exactly those values, with one sentence both engines print.
+
+And the numeric half, which was never a choice. `1 <= 1.0` and `1.0 >= 1` both
+answer true, so two shipped operators already assert those are the same
+number, and `<` answers false either way round because neither is strictly
+less. Equality was the sole dissenter, and trichotomy failed for that pair:
+none of the three relations held. It holds now.
+
+The key-identity objection dissolved on measurement rather than argument. A
+float cannot be a map key at all — `put m 1.5 "a"` answers "1.5 is not usable
+as a map key" on both engines — so there is no reachable program where 1 and
+1.0 need telling apart for identity. The one place `==` doubles as identity is
+a place floats cannot enter.
+
+A `===` was considered and declined. The motivating case is the one above, and
+it does not arise; the question it would answer — same value and same type —
+is a type question, and this language asks those with an arm. Clay noted Ruby's
+`==`/`eql?` distinction is meaningful and it is: `1.eql?(1.0)` is false and
+`{1 => :a}[1.0]` misses. What that design costs is a contract between `eql?`
+and `hash` kept by hand, which is the same footgun as Java's equals/hashCode.
+Keeping map-key equality internal and non-overridable makes that class of bug
+unrepresentable instead of merely documented.
+
+Two implementations, three engines: `eval.rs` serves the interpreter and the
+browser, since `wasm_rt`'s `rt_binop` calls `eval_binop` directly; `runtime.c`
+is the separate hand-written one native uses. Both edited, both printing the
+same sentence. Browser differential 164/0, behaviour differential 0 disagree,
+numeric differential 2,163 programs and 0 disagreements, four cost goldens
+unchanged, welfare 65.56.
+
+Watched red both ways: the refusal disabled answers `false` again, and the
+native cross-type arm removed answers `eq false` while every other relation
+stays put.

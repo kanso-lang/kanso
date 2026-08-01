@@ -2646,7 +2646,19 @@ static long long k_eq(KValue a, KValue b) {
     return k_eq_rec(a, b);
 }
 
+/* Asking whether two functions are the same function is asking which one you
+   were handed, and dispatch answers that. The same goes for an effect: if the
+   answer would change what happens next, an arm names it. So the question is
+   refused rather than answered falsely, the way `<` already refuses it. */
+static int k_opaque_to_equality(KValue v) {
+    if (v.tag == K_SUB) v = k_sub_base(v);
+    return v.tag == K_CLOSURE || v.tag == K_FNREF || v.tag == K_DESC;
+}
+
 static long long k_eq_rec(KValue a, KValue b) {
+    if (k_opaque_to_equality(a) || k_opaque_to_equality(b))
+        k_die("equality is not defined on a function or an effect — write an arm "
+              "for the case you mean");
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
     if (a.tag == K_BYTES && b.tag == K_LIST) return k_bytes_eq_list(k_as_bytes(a), k_as_list(b));
@@ -2655,6 +2667,12 @@ static long long k_eq_rec(KValue a, KValue b) {
         KBytes* x = k_as_bytes(a); KBytes* y = k_as_bytes(b);
         return x->len == y->len && memcmp(x->data, y->data, x->len) == 0;
     }
+    /* One numeric domain, which `<=` and `>=` already assert: both answer
+       true for 1 and 1.0, and `<` answers false either way round because
+       neither is strictly less. Equality was the one operator dissenting. A
+       float cannot be a map key, so nothing needs them told apart. */
+    if (a.tag == K_INT && b.tag == K_FLOAT) return (double)a.payload == k_as_f(b);
+    if (a.tag == K_FLOAT && b.tag == K_INT) return k_as_f(a) == (double)b.payload;
     if (a.tag != b.tag) return 0;
     switch (a.tag) {
         case K_INT: return a.payload == b.payload;
