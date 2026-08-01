@@ -442,9 +442,18 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             '.' => {
                 // a dot pressed tight against both neighbors reads a field
                 // (u.name); with air around it, it is the pipe
+                // `!` ends a value the way `]` and `)` do — it is the strict
+                // index asking for the element rather than the option — so a
+                // dot after it reads a field. Without it `xs[i]!.name` lexed
+                // as a pipe and `name` was applied to the element, which is
+                // an unknown name rather than a field read.
                 let tight_left = s.pos > 0
                     && s.chars.get(s.pos - 1).is_some_and(|p| {
-                        p.is_ascii_alphanumeric() || *p == '_' || *p == ')' || *p == ']'
+                        p.is_ascii_alphanumeric()
+                            || *p == '_'
+                            || *p == ')'
+                            || *p == ']'
+                            || *p == '!'
                     });
                 let tight_right =
                     s.chars.get(s.pos + 1).is_some_and(|n| n.is_ascii_lowercase() || *n == '_');

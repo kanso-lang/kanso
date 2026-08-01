@@ -1,0 +1,14 @@
+type spot
+  from
+  to
+
+# `!` ends a value the way `]` and `)` do, so a dot after it reads a field
+# rather than piping the element into a function named after the field.
+pub play =
+  xs = [(spot 1 2) (spot 3 4)]
+  print "field {xs[1]!.from} {xs[2]!.to}"
+  >> print "still a pipe {xs[1]! . shown}"
+  >> print "chained {xs[2]!.from + xs[1]!.to}"
+
+fn shown s
+  "({s.from},{s.to})"
