@@ -87,6 +87,25 @@ fn analyze_inner(program: &Program) -> EscapeInfo {
             }
         }
     }
+    // A position carries a type only when every arm of the group agrees on it.
+    // The loop above writes one entry per (group, arity, position) and a second
+    // arm naming a different record simply overwrote the first, so the whole
+    // group was passed unboxed as one type and the dispatcher assumed that type
+    // instead of testing it — every call answered from whichever arm was
+    // written last. This is the reason a getter is skipped above, generalized:
+    // a parameter reachable with more than one record has to be looked at.
+    carries.retain(|(name, arity, at), _| {
+        let mut named = program
+            .fns
+            .iter()
+            .filter(|f| f.name == *name && f.params.len() == *arity && !f.is_getter())
+            .filter_map(|f| match f.params.get(*at) {
+                Some(Pattern::Ctor { ty, .. }) if ty != "err" => Some(ty.as_str()),
+                _ => None,
+            });
+        let first = named.next();
+        named.all(|ty| Some(ty) == first)
+    });
     EscapeInfo { field_count, returns, carries }
 }
 
