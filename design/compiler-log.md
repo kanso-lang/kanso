@@ -13536,3 +13536,42 @@ the win, which is task #23 and wants a quiet machine rather than a louder
 claim; and four passes is not obviously the floor either — codegen, escape
 analysis and the two in main.rs each infer again, and whether those can share
 is a separate question with a separate answer.
+
+## GAVEL: the compiler does not know the name `play`
+
+Clay, ruling and repeating it: "it's just a regular exported lambda. the
+language doesn't know anything about it. you just set up the playground
+examples so that what you're actually running is a file that imports that play
+function and runs it. very simple. you could even just have those be local
+simple runner files in the directory locally, so you can easily run them on
+the command line by just running that entrypoint file."
+
+The compiler knows the name today, in five places. `compile_source` decides
+which compile a file gets by looking for a `pub` binding literally called
+`play`, and then synthesizes the entry itself with a body that calls it;
+`check.rs` exempts the name from a naming rule and `demand.rs` names it
+outright. That is the same magic-name problem already ruled out for `main`,
+one word over, and the ruling here is the same: the language has no reserved
+entry name, and a program may use the word `play` for whatever it likes.
+
+**The target already works, for directories.** A `main.kso` of bare statements
+importing a sibling module runs today with no `play` and no compiler
+knowledge — checked directly, `kanso run` over a two-file tree prints its
+answer. What is missing is the single-file case, and it is one capability: a
+bare import names a sibling *sub-directory* module, so a runner file cannot
+import the `.kso` file sitting beside it. Clay's "local simple runner files in
+the directory" wants exactly that, so a bare import should name a sibling file
+as well as a sibling directory. That is an implementation choice inside the
+ruling rather than a second question.
+
+**Order matters, because the compiler has to keep understanding `play` until
+the last fixture stops relying on it.** 452 files carry `pub play`: 124 error
+goldens, 73 micro goldens, 40 examples, 39 memory goldens, 29 runtime goldens,
+19 scripts, and the book samples. So: teach imports to name a sibling file;
+give the harness and the playground the wrap they will own (each generates the
+entry that imports the sample and calls its exported lambda, which is where
+the convention belongs once the language is out of it); migrate by area with
+CI green at every step; and delete the five compiler sites last. A migration
+that starts at the compiler turns the whole corpus red in one commit.
+
+Recorded before any of it is built.
