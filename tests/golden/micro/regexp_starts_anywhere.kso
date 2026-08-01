@@ -1,0 +1,9 @@
+import "std/regexp"
+
+pub play =
+  print "negated:  {regexp/find "[^a]+" "aaabc"}"
+  >> print "optional: {regexp/find "x?y" "zzy"}"
+  >> print "star:     {regexp/find "a*b" "zzb"}"
+  >> print "anchor:   {regexp/match? "^ab" "ab"}"
+  >> print "alt any:  {regexp/find "(a|.)b" "zb"}"
+  >> print "blind:    {regexp/find "(?i)cat" "a CAT"}"

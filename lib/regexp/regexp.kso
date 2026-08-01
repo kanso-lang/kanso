@@ -72,6 +72,14 @@ type grabbed
   slot
   text
 
+# A pattern and the characters a match can begin with. Trying every position
+# in a page is what makes a scan expensive, and most positions cannot start a
+# match at all — `\b(is|are|was|were|does|do)` can only begin at four letters.
+# An empty set means anything may start it, and every position is tried.
+type program
+  node
+  starters
+
 type slotted
   node
   next
@@ -226,7 +234,25 @@ fn scanning _ _ _ true
   no_hit
 
 fn scanning prog s at false
-  landed prog s at (walked prog s at [] (to caught -> arrival to caught))
+  skipping prog s at (worth_trying? prog s at)
+
+fn skipping prog s at false
+  scanned prog s (at + 1)
+
+fn skipping prog s at true
+  landed prog s at (walked prog.node s at [] (to caught -> arrival to caught))
+
+fn worth_trying? prog s at
+  open_start? prog.starters (at > length s) (text/slice s at at)
+
+fn open_start? "" _ _
+  true
+
+fn open_start? _ true _
+  true
+
+fn open_start? set _ c
+  in? set c
 
 fn landed prog s at none
   scanned prog s (at + 1)
@@ -275,7 +301,81 @@ fn compiled pattern
   chars = text/chars body
   parsed_body = read_alt chars 1
   marked_body = flagged parsed_body.node flags.node
-  numbered marked_body 1 . (n -> n.node)
+  numbered marked_body 1 . (n -> program n.node (starters n.node))
+
+# Which characters a match can begin with, or "" for anything. A zero-width
+# node at the front decides nothing, so the answer comes from what follows it;
+# a repetition that may match nothing likewise cannot speak for the start.
+fn starters (lit c)
+  c
+
+fn starters (cls set false)
+  set
+
+fn starters (group node _)
+  starters node
+
+fn starters (alt branches)
+  joined branches 1 ""
+
+fn joined branches at acc
+  joining branches at acc (at > length branches)
+
+fn joining _ _ acc true
+  acc
+
+fn joining branches at acc false
+  one = starters branches[at]!
+  widened branches at acc one (one == "")
+
+fn widened _ _ _ _ true
+  ""
+
+fn widened branches at acc one false
+  joined branches (at + 1) "{acc}{one}"
+
+fn starters (seq parts)
+  leading parts 1
+
+fn leading parts at
+  ahead_of parts at (at > length parts)
+
+fn ahead_of _ _ true
+  ""
+
+fn ahead_of parts at false
+  one = starters parts[at]!
+  past_empty parts at one (zero_width? parts[at]!)
+
+fn past_empty parts at _ true
+  leading parts (at + 1)
+
+fn past_empty _ _ one false
+  one
+
+fn zero_width? (edge _)
+  true
+
+fn zero_width? (ahead _ _ _)
+  true
+
+fn zero_width? (rep _ least _ _)
+  least == 0
+
+fn zero_width? _
+  false
+
+fn starters (rep node least _ _)
+  needed node (least == 0)
+
+fn needed _ true
+  ""
+
+fn needed node false
+  starters node
+
+fn starters _
+  ""
 
 fn leading_flags pattern at seen
   more_flags pattern at seen (flag_group? pattern at)
