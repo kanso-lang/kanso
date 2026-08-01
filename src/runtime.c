@@ -150,17 +150,27 @@ KValue k_b_render_value(KValue v) {
     return k_render(v, 0);
 }
 
+/* A cell whose value was built inside the innermost beat cannot keep it: the
+   loop rewinds between iterations and the memo would point at reclaimed
+   arena while the cell still says it was forced. The call site that opens a
+   beat promises its arguments are already evaluated — a thunk is the one
+   argument that is not — so the memo is declined and the captures are kept
+   for the next force. Recomputing is what that broken promise costs;
+   answering out of freed memory is not a price worth paying instead. */
+static int k_memo_outlives(KValue result);
+
 KValue k_force(KValue v) {
     if (v.tag != K_THUNK) return v;
     KThunk* t = (KThunk*)v.payload;
     k_stat_thunk_forces++;
-    if (!t->forced) {
-        k_stat_thunk_evals++;
-        t->result = d_thunk_eval(t->site, t->args);
-        t->forced = 1;
-        /* the computation ran; its captures are done */
-        k_thunk_drop_args(t);
-    }
+    if (t->forced) return t->result;
+    k_stat_thunk_evals++;
+    KValue answer = d_thunk_eval(t->site, t->args);
+    if (!k_memo_outlives(answer)) return answer;
+    t->result = answer;
+    t->forced = 1;
+    /* the computation ran; its captures are done */
+    k_thunk_drop_args(t);
     return t->result;
 }
 
@@ -893,6 +903,13 @@ void k_carry_clear(int depth) {
    keeps the region alive — and if the loop carried, the result may live in
    a carry buffer, so it is copied out into the caller's arena before the
    buffers go idle. */
+static int k_memo_outlives(KValue result) {
+    if (!k_is_heap(result.tag)) return 1;
+    if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 1;
+    KMark* inner = &k_beat_stack[k_beat_depth - 1];
+    return k_survives((const void*)(intptr_t)result.payload, inner);
+}
+
 KValue k_beat_pop(KValue r) {
     if (k_beat_depth > 0) {
         k_beat_depth--;

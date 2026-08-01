@@ -13320,3 +13320,46 @@ It does not reach the shipped digest: every vector passes on both engines,
 because `hex` enters the loop at round one through `turned` rather than being
 handed a starting round. That is luck rather than safety, and the entry is
 filed as what it is — a native engine that refuses where the oracle answers.
+
+## The memo a beat loop's rewind frees
+
+The `<io>` in a number's place, found and fixed. It predates both of this
+week's beat fixes — it reproduces on the compiler at 0940f52 — and codegen has
+been describing it in its own comment the whole time.
+
+A call whose callee is a beat loop is bracketed with a mark and a rewind, on
+the promise written beside it: "args are already evaluated, so they live below
+the mark". A thunk is the one argument that is not. It is forced inside the
+loop, its value is built above the mark, the cell memoises a pointer to it, and
+the first rewind reclaims the arena underneath while the cell still says it was
+forced. The next read answers out of freed memory. The cohort path fifteen
+lines below already refuses container arguments for exactly this reason,
+quoting "they can carry thunks whose forced values would die under a cell the
+caller still holds"; the loop path made no such check.
+
+So `k_force` declines a memo it cannot keep. When the value it just computed
+does not survive the innermost mark, the cell stays unforced and keeps its
+captures, and the next force recomputes. Every cost golden is unchanged, which
+says what the shape costs in practice: a thunk forced inside a beat, whose
+result lands above the mark, is rare enough that none of the four benchmark
+veins contains one.
+
+Two other fixes were tried first and are worth recording as declined. Refusing
+the beat bracket when an argument may be a thunk fixes the reproduction and
+breaks `regexp_slice_two` with "`regexp/list/mapped` has no field `node`" —
+removing the bracket surfaces something else, which is its own thread. Forcing
+thunk arguments before the push honours the promise directly, but it evaluates
+an argument the callee may never demand, and kanso is lazy by gavel.
+
+Finding it took patching the emitted IR and relinking by hand, which is worth
+naming as a technique: build with `kanso build`, edit the .ll, and link it
+against the runtime object the compiler left in `$TMPDIR`. Adding one
+`k_force` to a parameter, or removing one `k_beat_push`, answers in one run a
+question that a week of reductions had not. Six attempts at a small
+self-contained program all produced something both engines agreed on, because
+the shape needs three things at once — a beat-loop callee, a thunked argument,
+and a body that reads it across a rewind — and the strictness analyser decides
+the second one for reasons a small program does not reproduce. The golden is
+therefore a trimmed copy of std/sha256 rather than something shorter, and its
+header says so: it exists to fail rather than to hash, and the two are not kept
+in step.
