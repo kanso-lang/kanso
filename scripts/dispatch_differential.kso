@@ -276,7 +276,11 @@ fn shaped a true
   "{a.decls}\npub play = print \"\{{a.shown}}\"\n"
 
 fn shaped a false
-  "{a.decls}\npub play =\n  {a.shown}\n"
+  """
+    {a.decls}
+    pub play =
+      {a.shown}
+  """
 
 fn source_for a
   shaped a (length (text/split a.shown "\n") == 1)

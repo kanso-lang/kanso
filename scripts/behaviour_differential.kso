@@ -179,7 +179,11 @@ math_all0 = text/concat math_5a math_5b
 math_probes = text/concat math_all0 math_5c
 
 fn shaped module expr
-  "import \"std/{module}\"\n\npub play = print \"\{{expr}}\"\n"
+  """
+    import "std/{module}"
+
+    pub play = print "\{{expr}}"
+  """
 
 fn asked argv
   io/run "timeout" (text/concat [limit kanso] argv)
@@ -248,7 +252,11 @@ fn reported module rest count expr v
 # A probe that lost its interpolation prints a plain string, which both engines
 # render identically — so the sweep agrees with itself about nothing and
 # reports every call green. That is what a first draft of the render sweep did.
-sample = "import \"std/text\"\n\npub play = print \"\{1}\"\n"
+sample = """
+  import "std/text"
+
+  pub play = print "\{1}"
+"""
 
 complaint = "the probe shape changed: probes must interpolate\n"
 

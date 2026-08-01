@@ -13117,3 +13117,31 @@ Checking the rewrite by comparing lengths, twelve of thirteen matched and
 comparison counted `\{` as two characters where the value holds one. Resolving
 the literal by hand gave 73 both ways. A verification that disagrees with the
 thing it verifies is not evidence until you know which one is lying.
+
+## The sweeps stop spelling programs as escape sequences
+
+Every differential gate now writes its probe programs as text blocks. Seventy-
+one lines in `scripts/` carried two or more newline escapes; nineteen do, and
+those are message strings that begin with a newline rather than programs.
+
+Six constants existed only because an 80-column rule was applied to data:
+`decls9a`/`decls9b`, `langj_src_head`/`_tail`, `langm_src_head`/`_tail`,
+`c16head`, `dep_head`, and the three-way `head_a`/`head_b`/`head_c` that held
+a C preprocessor block for the utf-8 harness. All are gone, and with them the
+seams they introduced — `decls9a` ended mid-token at `\n\nfn` while its partner
+picked up at ` which`, which is the shape a typo hides in and the reason a
+reader could not check the probe by eye.
+
+Every sweep reports exactly what it reported before: 22 dispatch cases, 68
+rendered values, 16 modules, 100 diagnostic probes, 36,843,009 utf-8 cases, and
+0 wrong in each. No golden was regenerated, which is the only way this migration
+can be told apart from a bug.
+
+Two of the sweeps guard their own probe shape — a probe that lost its
+interpolation prints a plain string, both engines render it identically, and the
+sweep reports green having compared nothing. In `behaviour_differential` the
+rewrite touched both the builder and the sample it is checked against, which is
+exactly where such a guard could have been cancelled out. It was not, and that
+was verified rather than assumed: breaking the builder's interpolation makes the
+guard say "the probe shape changed: probes must interpolate" and exit 2. The
+same check was run against `effects_differential`.

@@ -305,7 +305,11 @@ fn onward exprs count false
 # nothing.
 complaint = "the probe shape changed: probes must interpolate\n"
 
-sample = "import \"std/io\"\n\npub play = io/write \"\{1}\"\n"
+sample = """
+  import "std/io"
+
+  pub play = io/write "\{1}"
+"""
 
 pub play = begun (shaped "io/write \"\{1}\"" == sample)
 
