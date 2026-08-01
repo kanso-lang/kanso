@@ -13877,3 +13877,49 @@ data-driven case rather than hand it off.
 Recorded rather than acted on: nothing in the language changed here. The check
 is back, the corpus is green, and what moved is what is known about why the
 check exists.
+
+## The cycle rule asks what a definition demands, not what it mentions
+
+A constructor stores its arguments; it never looks at them. So a mention
+inside one is not a demand — the value goes into a field and is read later, by
+which time the constant it names has a value. A call that scrutinizes, an
+operator, a guard: those force what they are handed, and a mention there is a
+demand.
+
+That difference is the whole of the rule, and it is syntactic. `x = x` asks
+for its own answer to compute its own answer, and is refused. This
+
+    graph = { "a":(node "a" [graph["b"]!]) "b":(node "b" [graph["a"]!]) }
+
+asks for a place to put a name, which is a question the definition can
+answer, and `kanso check` now passes it. `demanded_refs` walks the expression
+the way `constant_refs` does and stops at a list literal, a map literal, or an
+application whose head is a declared type. No strictness analysis is
+consulted: a constructor's behaviour is known from its being a constructor.
+
+Every program in the corpus is unchanged, on all three engines, which the
+relaxed direction makes structural rather than lucky — the rule only ever
+admits more, so nothing that compiled can stop compiling.
+
+**This half does not ship alone, and that is the point of writing it down.**
+Admitted and run, the knot still diverges: the constructor's arguments are
+evaluated strictly, so `graph["b"]!` asks for `graph` while `graph` is being
+built. Native reports "the program ran out of stack"; the interpreter
+overflows and aborts without a diagnostic at all. So relaxing the check by
+itself trades a clean compile error for a hard crash, which is a worse
+language than the one that started.
+
+The other half is a thunk in the storing position, and for a constant it is
+smaller than the general case. A self-reference from a constant names a CAF —
+a global cell filled by `k_caf_init` before main — so the thunk needs no
+captures at all. It stores site and nothing else, and by the time anything
+forces it, the cell it reads has a value. The machinery to emit one already
+exists: `k_thunk_new`, a site table, `emit_thunk_site`, and `maybe_force` at
+21 sites in codegen, gated on inference's THUNK bit. Inference already tracks
+`type_fields`, so a field holding a thunk marks its type's field set and every
+read of it forces.
+
+What kanso already has, and what makes this a door rather than a room: cyclic
+values work end to end. `k_render_path` terminates printing one. Equality
+compares them by bisimulation. The cohort frees them. The only missing piece
+is a second way to make one.
