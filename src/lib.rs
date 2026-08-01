@@ -490,12 +490,25 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
     }
     if !path.contains('/') {
         let sibling = base.join(path);
+        let file = base.join(format!("{path}.kso"));
+        // one name, two spellings on disk, and both at once is a question the
+        // spelling cannot answer
+        if sibling.is_dir() && file.is_file() {
+            return Err(format!(
+                "error: import \"{path}\" names both `{path}/` and `{path}.kso` \
+                 beside this module — rename one\n"
+            ));
+        }
         if sibling.is_dir() {
             return Ok(sibling);
         }
+        if file.is_file() {
+            return Ok(file);
+        }
         return Err(format!(
             "error: cannot resolve import \"{path}\" — a bare name is a sibling \
-             subdirectory module, and this module has no `{path}` directory\n"
+             module, and this module has no `{path}` directory or `{path}.kso` \
+             file\n"
         ));
     }
     let first = path.split('/').next().unwrap_or_default();
@@ -2366,6 +2379,16 @@ fn compile_module_loaded(
 ) -> Result<ast::Program, String> {
     let mut sources: Vec<(String, String)> = match embedded {
         Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
+        // A module is a directory of files sharing one namespace, and one file
+        // is the smallest of those. `import "core"` beside `core.kso` reads
+        // it the way it reads `core/`, so a runner can sit next to what it
+        // runs without either of them becoming a directory first.
+        None if dir.is_file() => {
+            let file = dir.to_string_lossy().to_string();
+            let source = std::fs::read_to_string(dir)
+                .map_err(|io| format!("error: cannot read {file}: {io}\n"))?;
+            vec![(file, source)]
+        }
         None => {
             let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
                 .map_err(|io| format!("error: cannot read {}: {io}\n", dir.display()))?
