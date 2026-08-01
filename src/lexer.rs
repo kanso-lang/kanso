@@ -204,7 +204,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             lines.last().is_some_and(|p: &Line| is_block_header(p) && indent == p.indent + 2);
         let sibling_or_dedent = lines
             .last()
-            .is_some_and(|p: &Line| indent > 2 && indent % 2 == 0 && indent <= p.indent);
+            .is_some_and(|p: &Line| indent > 2 && indent.is_multiple_of(2) && indent <= p.indent);
         if block_child || sibling_or_dedent {
             match lex_line(content, number, indent + 1) {
                 Ok(lexed_line) => {
