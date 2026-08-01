@@ -13575,3 +13575,78 @@ CI green at every step; and delete the five compiler sites last. A migration
 that starts at the compiler turns the whole corpus red in one commit.
 
 Recorded before any of it is built.
+
+## The last two python scripts need no browser automation after all
+
+Clay cleared building whatever it took to get off python, including browser
+automation. Measured first, and the answer is that none is needed.
+
+`browser_differential.py` looks like it wants three capabilities kanso does not
+have: a process started without waiting for it (chrome runs while the harness
+serves), a local http server (the page POSTs its report back), and a process
+kill. Building those is a real surface. But all three exist to work around two
+properties of the page rather than of the browser: it fetches the engine over
+http, and it reports over http.
+
+Take both away and the whole thing collapses into one `io/run`. The engine
+inlines into the page as base64 and instantiates through
+`new WebAssembly.Instance(new WebAssembly.Module(bytes))`, which is
+synchronous, so no fetch and no await. The page writes its payload into a
+`<pre>` it already has. Chrome runs once with `--headless=new --dump-dom` over
+a `file://` url and prints the finished dom to stdout, which is a captured
+process output like any other.
+
+Proved on the real harness rather than a toy: the actual PAGE from the python,
+with `fetch` deleted, both `await`s replaced by synchronous instantiation, and
+the POST replaced by a dom write. Two programs through the full path —
+compile to wasm, instantiate, execute, read output — answering
+`sync harness works` and `14` for `{2 + 3 * 4}`. Chrome returns promptly.
+
+Two dead ends worth recording so nobody re-walks them. `--virtual-time-budget`
+is the usual way to make `--dump-dom` wait for async work, and it hangs here:
+virtual time advances only while the page is idle, and a cpu-bound wasm run
+never yields, so a 600-second budget waited the full 600 seconds of wall clock
+and timed out. Fetching the engine from `file://` does work with
+`--allow-file-access-from-files` — the first probe that appeared to fail was a
+missing import object in the probe itself, not a CORS refusal — but inlining
+removes the question along with the flag.
+
+So the port is ordinary kanso: `io/write_file` builds the page, `io/run` calls
+chrome once, `std/json` reads the payload back. No new builtin, no new engine
+surface, nothing to keep byte-identical across three engines.
+
+## The last two python scripts need no browser automation after all
+
+Clay cleared building whatever it took to get off python, including browser
+automation. Measured first, and the answer is that none is needed.
+
+`browser_differential.py` looks like it wants three capabilities kanso does not
+have: a process started without waiting for it, a local http server for the
+page to POST its report to, and a process kill. All three exist to work around
+two properties of the page rather than of the browser: it fetches the engine
+over http, and it reports over http.
+
+Take both away and it collapses into one `io/run`. The engine inlines as base64
+and instantiates through `new WebAssembly.Instance(new WebAssembly.Module(b))`,
+which is synchronous, so there is no fetch and no await anywhere. The page
+writes its payload into a `<pre>` it already has. Chrome runs once with
+`--headless=new --dump-dom` over a `file://` url and prints the finished dom to
+stdout, which is captured process output like any other.
+
+Proved on the real harness rather than a toy: the actual PAGE from the python,
+with the fetch deleted, both awaits replaced by synchronous instantiation, and
+the POST replaced by a dom write. Two programs through the whole path — compile
+to wasm, instantiate, execute, read output — answering `sync harness works` and
+`14` for `{2 + 3 * 4}`. Chrome returns promptly.
+
+Two dead ends, recorded so nobody re-walks them. `--virtual-time-budget` is the
+usual way to make `--dump-dom` wait for async work and it hangs here: virtual
+time advances only while the page is idle, and a cpu-bound wasm run never
+yields, so a 600-second budget waited 600 seconds of wall clock and timed out.
+Fetching the engine from `file://` does work with `--allow-file-access-from-files`
+— the probe that appeared to refuse it was missing an import object of its own,
+not hitting CORS — but inlining removes the question along with the flag.
+
+So the port is ordinary kanso: `io/write_file` builds the page, `io/run` calls
+chrome once, `std/json` reads the payload back. No new builtin, no new engine
+surface, nothing to hold byte-identical across three engines.
