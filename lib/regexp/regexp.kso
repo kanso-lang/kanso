@@ -51,9 +51,10 @@ type ahead
 type edge
   kind
 
-# The leftmost match, as a record: `at` is 1 when nothing matched, `to` is one
-# past the end, and `groups` holds each capture's text in declaration order.
-type hit
+# The leftmost match, as a record: `from` is 0 when nothing matched, `to` is
+# one past the end, and `groups` holds each capture's text in slot order. It
+# is pub because a caller reporting a finding needs to say where it was.
+pub type hit
   from
   to
   groups
@@ -108,6 +109,27 @@ fn named m
 # still advances one character, or the walk would not end.
 pub fn find_all pattern s
   gathering (compiled pattern) s 1 []
+
+# The same walk, keeping where each match sat. A caller reporting a finding
+# needs the position to name a line, which the text alone cannot give back.
+pub fn matches pattern s
+  spotting (compiled pattern) s 1 []
+
+fn spotting prog s at acc
+  spotted prog s at acc (at > length s + 1)
+
+fn spotted _ _ _ acc true
+  acc
+
+fn spotted prog s at acc false
+  m = scanned prog s at
+  noted prog s acc m (m.from == 0)
+
+fn noted _ _ acc _ true
+  acc
+
+fn noted prog s acc m false
+  spotting prog s (onward m) (push acc m)
 
 fn gathering prog s at acc
   walking prog s at acc (at > length s + 1)
