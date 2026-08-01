@@ -1,0 +1,190 @@
+import "std/io"
+import "std/list"
+import { matches:hits } "std/regexp"
+import "std/text"
+
+# The mechanical half of the writing rules, run over every page we publish.
+#
+# Three families are mechanically detectable and are checked here. The rest —
+# the milked metaphor, manufactured rhythm, the epigram bolted to the end of a
+# paragraph — are not, and the rules say so: a clean run is necessary and never
+# sufficient. Read the draft aloud.
+#
+# Code samples are excluded. A `<pre>` block is what a program said, and a
+# program is allowed to say anything.
+type finding
+  page
+  line
+  family
+  quote
+
+# The span may not carry a clause-joining conjunction: without that, the first
+# pattern reaches across a sentence boundary and calls "does not compile, and
+# either way she stays asleep. it is said" a flip.
+span = "(?:(?!\\band\\b|\\bor\\b)[^.;<])"
+
+f1a = "(?i)\\b(is|are|was|were|does|do)\\s+not\\s+{span}\{3,70}\\."
+
+f1 = "{f1a}\\s*(it|they|that)('s|\\s+(is|are|does))\\b"
+
+f2a = "(?i)\\b(is|are|was|were)\\s+not\\s+{span}\{3,70}[;,]"
+
+f2 = "{f2a}\\s+(it|they|that)\\s+(is|are)\\b"
+
+f3 = "(?i)\\bnot\\s+{span}\{3,60}—\\s*(it|they|that)\\s+(is|are|does)\\b"
+
+f4 = "(?i)\\bnot\\s+(a|an|the)\\s+{span}\{3,50},\\s+but\\b"
+
+f5a = "(?i)\\b(doesn't|isn't|aren't|wasn't|weren't|don't)\\s+"
+
+f5 = "{f5a}{span}\{3,60}[.;,]\\s*(it|they|that)\\s+\\w+"
+
+flips = [f1 f2 f3 f4 f5]
+
+a1 = "(?i)\\bthe interesting (part|thing|question) (is|here)\\b"
+
+a2 = "(?i)\\bhere's the thing\\b"
+
+a3 = "(?i)\\bworth slowing down\\b"
+
+a4 = "(?i)\\btake this slowly\\b"
+
+a5 = "(?i)\\bthe trick under the trick\\b"
+
+a6 = "(?i)\\bwhat follows is\\b"
+
+a7 = "(?i)\\bhere is the part (that|where)\\b"
+
+a8 = "(?i)\\bdeserves a (slow|careful) read\\b"
+
+a9 = "(?i)\\bstep back and (look|consider)\\b"
+
+a10 = "(?i)\\bhiding in (here|plain sight)\\b"
+
+a11 = "(?i)\\bthis sounds \\w+ until\\b"
+
+a12 = "(?i)\\bthe interesting move\\b"
+
+a13 = "(?i)\\btime to confess\\b"
+
+a14 = "(?i)\\bhere is (what|the question)\\b"
+
+a15 = "(?i)\\bit is worth (naming|saying) (what|why)\\b"
+
+a16 = "(?i)\\btake that sentence literally\\b"
+
+said = [a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 a13 a14 a15 a16]
+
+t1 = "(?i)<p>\\s*(it is|it's) worth noting\\b"
+
+t2 = "(?i)<p>\\s*let's be honest\\b"
+
+t3 = "(?i)<p>\\s*the interesting\\b"
+
+t4 = "(?i)<p>\\s*of course,\\b"
+
+throat = [t1 t2 t3 t4]
+
+pub play = io/list_dir "docs" . (top -> with_book top)
+
+fn with_book top
+  io/list_dir "docs/book" . (inner -> over_pages top inner)
+
+fn over_pages top inner
+  both = text/concat (under "docs" top) (under "docs/book" inner)
+  pages = list/sort (list/to_list both)
+  read_pages pages 1 [] (found -> reported pages found)
+
+fn under dir names
+  html = list/select names (n -> ends_html? n)
+  list/to_list (list/map html (n -> "{dir}/{n}"))
+
+fn ends_html? n
+  length n > 5 && text/slice n (length n - 4) (length n) == ".html"
+
+fn read_pages pages at acc after
+  reading pages at acc after (at > length pages)
+
+fn reading _ _ acc after true
+  after acc
+
+fn reading pages at acc after false
+  page = pages[at]!
+  io/read_file page . (raw -> scanned_page pages at acc after page raw)
+
+fn scanned_page pages at acc after page raw
+  text = prose raw
+  found = text/concat acc (in_page page text)
+  read_pages pages (at + 1) (list/to_list found) after
+
+# The page with its code stripped, so a sample is never a finding.
+fn prose raw
+  bare = regexp/replace_all "(?s)<pre.*?</pre>" raw " "
+  regexp/replace_all "(?s)<code>.*?</code>" bare " "
+
+fn in_page page text
+  first = from_family page text "antithesis flip" flips 1 []
+  second = from_family page text "self-announcing" said 1 first
+  from_family page text "throat-clearing" throat 1 second
+
+fn from_family page text family patterns at acc
+  walking page text family patterns at acc (at > length patterns)
+
+fn walking _ _ _ _ _ acc true
+  acc
+
+fn walking page text family patterns at acc false
+  found = hits patterns[at]! text
+  here = list/to_list (list/map found (m -> told page text family m))
+  grown = list/to_list (text/concat acc here)
+  from_family page text family patterns (at + 1) grown
+
+fn told page text family m
+  whole = text/slice text m.from (m.to - 1)
+  quote = text/trim (regexp/replace_all "\\s+" whole " ")
+  finding page (line_of text m.from) family quote
+
+fn line_of text at
+  before = text/slice text 1 (at - 1)
+  length (text/split before "\n")
+
+fn reported pages found
+  head = "{length pages} pages read, {length found} machine-detectable tells\n"
+  io/write "{head}{spelled found 1 ""}" . (_ -> closed found)
+
+fn spelled found at acc
+  telling found at acc (at > length found)
+
+fn telling _ _ acc true
+  acc
+
+fn telling found at acc false
+  f = found[at]!
+  where = "  {f.page}:{f.line}  {f.family}\n"
+  spelled found (at + 1) "{acc}{where}    {clipped f.quote}\n"
+
+fn clipped q
+  shortened q (length q > 150)
+
+fn shortened q false
+  q
+
+fn shortened q true
+  text/slice q 1 150
+
+fn closed found
+  io/write (advice (length found == 0)) . (_ -> ending (length found == 0))
+
+fn advice true
+  ""
+
+fn advice false
+  one = "\nsay it once, in the positive. the families this cannot see —\n"
+  two = "milked metaphors, manufactured triples, epigram endings — still\n"
+  "{one}{two}want a read.\n"
+
+fn ending true
+  io/write ""
+
+fn ending false
+  io/exit 1
