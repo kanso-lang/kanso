@@ -1,0 +1,8 @@
+# Nothing may follow the three quotes: the block is the statement, and text
+# left on the opening line would silently vanish into neither.
+x = """ oops
+  one
+  two
+"""
+
+pub play = print x

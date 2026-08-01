@@ -1,0 +1,7 @@
+# The closing quotes hold the line by themselves.
+x = """
+  one
+  two
+""" tail
+
+pub play = print x

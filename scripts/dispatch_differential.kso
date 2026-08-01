@@ -34,51 +34,135 @@ probe = "target/dispatch_probe.kso"
 # than the sweep quietly losing the property.
 limit = "20"
 
-decls0 = "fn which 0\n  \"zero\"\n\nfn which _\n  \"any\"\n"
+decls0 = """
+  fn which 0
+    "zero"
 
-decls1 = "fn which \"a\"\n  \"the a\"\n\nfn which _\n  \"any\"\n"
+  fn which _
+    "any"
+"""
 
-decls2 = "fn which true\n  \"yes\"\n\nfn which false\n  \"no\"\n"
+decls1 = """
+  fn which "a"
+    "the a"
 
-decls3 = "fn which none\n  \"nothing\"\n\nfn which _\n  \"something\"\n"
+  fn which _
+    "any"
+"""
 
-decls4 = "fn which _\n  \"one\"\n\nfn which _ _\n  \"two\"\n"
+decls2 = """
+  fn which true
+    "yes"
 
-decls5a = "type point\n  x\n  y\n\nfn which (point a b)\n  \"\{a}-\{b}\"\n"
+  fn which false
+    "no"
+"""
 
-decls5b = "\nfn which _\n  \"any\"\n"
+decls3 = """
+  fn which none
+    "nothing"
 
-decls5 = "{decls5a}{decls5b}"
+  fn which _
+    "something"
+"""
 
-decls6a = "type point\n  x\n  y\n\ntype label\n  text\n\nfn which (point _ "
+decls4 = """
+  fn which _
+    "one"
 
-decls6b = "_)\n  \"point\"\n\nfn which _\n  \"any\"\n"
+  fn which _ _
+    "two"
+"""
 
-decls6 = "{decls6a}{decls6b}"
+decls5 = """
+  type point
+    x
+    y
 
-decls7a = "type point\n  x\n  y\n\nfn which (point (point _ _) _)\n  \"nest"
+  fn which (point a b)
+    "\{a}-\{b}"
 
-decls7b = "ed\"\n\nfn which _\n  \"any\"\n"
+  fn which _
+    "any"
+"""
 
-decls7 = "{decls7a}{decls7b}"
+decls6 = """
+  type point
+    x
+    y
 
-decls8a = "type point\n  x\n  y\n\nfn which (point 0 _)\n  \"on the axis\""
+  type label
+    text
 
-decls8b = "\n\nfn which _\n  \"any\"\n"
+  fn which (point _ _)
+    "point"
 
-decls8 = "{decls8a}{decls8b}"
+  fn which _
+    "any"
+"""
 
-decls9a = "type point\n  x\n  y\n\nfn which (point 0 0)\n  \"origin\"\n\nfn"
+decls7 = """
+  type point
+    x
+    y
 
-decls9b = " which (point 0 _)\n  \"axis\"\n\nfn which _\n  \"any\"\n"
+  fn which (point (point _ _) _)
+    "nested"
 
-decls9 = "{decls9a}{decls9b}"
+  fn which _
+    "any"
+"""
 
-decls10 = "fn which (err _)\n  \"failed\"\n\nfn which _\n  \"fine\"\n"
+decls8 = """
+  type point
+    x
+    y
 
-decls11 = "fn which 1\n  \"one\"\n\nfn which _\n  \"any\"\n"
+  fn which (point 0 _)
+    "on the axis"
 
-decls12 = "fn which \"\"\n  \"empty\"\n\nfn which _\n  \"any\"\n"
+  fn which _
+    "any"
+"""
+
+decls9 = """
+  type point
+    x
+    y
+
+  fn which (point 0 0)
+    "origin"
+
+  fn which (point 0 _)
+    "axis"
+
+  fn which _
+    "any"
+"""
+
+decls10 = """
+  fn which (err _)
+    "failed"
+
+  fn which _
+    "fine"
+"""
+
+decls11 = """
+  fn which 1
+    "one"
+
+  fn which _
+    "any"
+"""
+
+decls12 = """
+  fn which ""
+    "empty"
+
+  fn which _
+    "any"
+"""
 
 pa = arm decls0 "a literal beats a later wildcard" "which 0" "zero"
 

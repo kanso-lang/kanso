@@ -74,8 +74,12 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             Span { line: source.lines().count(), col: 1 },
         ));
     }
-    for (idx, raw) in source.lines().enumerate() {
+    let raws: Vec<&str> = source.lines().collect();
+    let mut idx = 0;
+    while idx < raws.len() {
+        let raw = raws[idx];
         let number = idx + 1;
+        idx += 1;
         if let Some(col) = raw.find('\t') {
             diags.push(Diagnostic::new(
                 "formatting",
@@ -106,6 +110,37 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
         }
         let indent = trimmed.len() - trimmed.trim_start().len();
         let content = &trimmed[indent..];
+        // A text block opens at the end of a statement's line and its content
+        // sits two spaces deeper, so the lines it holds are consumed here
+        // rather than reaching the per-line rules: a blank line inside a block
+        // is a newline in a value, not a statement break, and a content line
+        // is data the width cap has no way to re-render.
+        if let Some(at) = block_opener(content) {
+            if content[at..].chars().count() != 3 {
+                diags.push(Diagnostic::new(
+                    "syntax",
+                    "a text block opens at the end of its line — nothing follows `\"\"\"`"
+                        .to_string(),
+                    Span { line: number, col: indent + at + 4 },
+                ));
+                continue;
+            }
+            let (body, consumed) = gather_block(&raws, idx, indent, number, &mut diags);
+            idx = consumed;
+            match lex_line_with_block(&content[..at], number, indent + 1, indent + 1 + at, &body) {
+                Ok(lexed_line) => {
+                    validate_spacing(&lexed_line, number, &mut diags);
+                    lines.push(Line {
+                        number,
+                        indent,
+                        tokens: lexed_line.tokens,
+                        end_cols: lexed_line.end_cols,
+                    });
+                }
+                Err(d) => diags.push(d),
+            }
+            continue;
+        }
         // A continuation line starts with a chain operator (`.` or `>>`) at
         // the parent statement's indent plus two; its tokens splice into the
         // parent so the parser sees one wrapped statement. Spans keep the
@@ -169,7 +204,7 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
             lines.last().is_some_and(|p: &Line| is_block_header(p) && indent == p.indent + 2);
         let sibling_or_dedent = lines
             .last()
-            .is_some_and(|p: &Line| indent > 2 && indent % 2 == 0 && indent <= p.indent);
+            .is_some_and(|p: &Line| indent > 2 && indent.is_multiple_of(2) && indent <= p.indent);
         if block_child || sibling_or_dedent {
             match lex_line(content, number, indent + 1) {
                 Ok(lexed_line) => {
@@ -245,6 +280,107 @@ pub fn lex(source: &str) -> Result<Lexed, Vec<Diagnostic>> {
     } else {
         Err(diags)
     }
+}
+
+/// The column a text block opens at, when its line ends with one. A `"""`
+/// inside a string is not an opener, so the scan tracks quoting the way the
+/// lexer does; anything after the three quotes is refused where the block is
+/// read, with a message about the shape rather than about an unclosed string.
+fn block_opener(content: &str) -> Option<usize> {
+    let chars: Vec<char> = content.chars().collect();
+    let mut i = 0;
+    let mut in_str = false;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' if in_str => i += 2,
+            '"' if in_str => {
+                in_str = false;
+                i += 1;
+            }
+            '"' if chars[i..].starts_with(&['"', '"', '"']) => return Some(i),
+            '"' => {
+                in_str = true;
+                i += 1;
+            }
+            '#' if !in_str => return None,
+            _ => i += 1,
+        }
+    }
+    None
+}
+
+/// The lines a text block holds, and the index of the first line after it.
+/// Content sits at the opening indent plus two and is stripped of exactly
+/// that; a line shallower than it ends the block, and if that line is not the
+/// fence, saying so where it happens beats saying "unterminated" at the end.
+fn gather_block(
+    raws: &[&str],
+    from: usize,
+    indent: usize,
+    open_line: usize,
+    diags: &mut Vec<Diagnostic>,
+) -> (Vec<(usize, String)>, usize) {
+    let inner = indent + 2;
+    let fence = format!("{}\"\"\"", " ".repeat(indent));
+    let mut body = Vec::new();
+    let mut at = from;
+    while at < raws.len() {
+        let raw = raws[at];
+        let number = at + 1;
+        at += 1;
+        let trimmed = raw.trim_end();
+        if trimmed == fence {
+            return (body, at);
+        }
+        if trimmed.trim_start() == fence.trim_start() || trimmed.starts_with(&fence) {
+            let said = match trimmed.starts_with(&fence) {
+                true => "the closing `\"\"\"` sits alone on its line",
+                false => "the closing `\"\"\"` sits at the column its opening line starts in",
+            };
+            diags.push(Diagnostic::new(
+                "syntax",
+                said.to_string(),
+                Span { line: number, col: trimmed.len() - trimmed.trim_start().len() + 1 },
+            ));
+            return (body, at);
+        }
+        if raw.trim_end() != raw {
+            diags.push(Diagnostic::new(
+                "formatting",
+                "trailing whitespace is not part of the canonical grammar".to_string(),
+                Span { line: number, col: raw.trim_end().len() + 1 },
+            ));
+        }
+        if let Some(col) = trimmed.find('\t') {
+            diags.push(Diagnostic::new(
+                "formatting",
+                "tabs are not part of the canonical grammar; indent with spaces".to_string(),
+                Span { line: number, col: col + 1 },
+            ));
+            continue;
+        }
+        if trimmed.is_empty() {
+            body.push((number, String::new()));
+            continue;
+        }
+        let found = trimmed.len() - trimmed.trim_start().len();
+        if found < inner {
+            let said = format!(
+                "a text block's lines sit {inner} spaces in, under the `\"\"\"` that opened \
+                 it — this one is at column {}",
+                found + 1
+            );
+            diags.push(Diagnostic::new("syntax", said, Span { line: number, col: found + 1 }));
+            return (body, at - 1);
+        }
+        body.push((number, trimmed[inner..].to_string()));
+    }
+    let said = format!(
+        "unterminated text block — the closing `\"\"\"` sits alone at column {}",
+        indent + 1
+    );
+    diags.push(Diagnostic::new("syntax", said, Span { line: open_line, col: indent + 1 }));
+    (body, at)
 }
 
 /// A statement wrapped across `>>` continuation lines gives every step its
@@ -351,6 +487,41 @@ struct Scanner {
     pos: usize,
     line: usize,
     col_offset: usize,
+}
+
+/// A statement whose last token is a text block: the part before the `"""`
+/// lexes as an ordinary line, and the block's lines become one string token
+/// spanning them. The token's own span stays on the opening line, where the
+/// reader's eye is, while an interpolation inside the block reports against
+/// the line it was written on.
+fn lex_line_with_block(
+    prefix: &str,
+    line: usize,
+    col_offset: usize,
+    open_col: usize,
+    body: &[(usize, String)],
+) -> Result<LexedLine, Diagnostic> {
+    let mut lexed = lex_line(prefix, line, col_offset)?;
+    let mut parts = Vec::new();
+    let mut lit = String::new();
+    for (number, text) in body {
+        let mut s = Scanner { chars: text.chars().collect(), pos: 0, line: *number, col_offset: 1 };
+        s.block_text(&mut parts, &mut lit)?;
+        lit.push('\n');
+    }
+    if !lit.is_empty() {
+        parts.push(StrPart::Lit(lit));
+    }
+    if body.len() < 2 {
+        return Err(Diagnostic::new(
+            "formatting",
+            "a text block holds two or more lines; one line is written `\"...\"`".to_string(),
+            Span { line, col: open_col },
+        ));
+    }
+    lexed.tokens.push((Tok::Str(parts), Span { line, col: open_col }));
+    lexed.end_cols.push(open_col + 3);
+    Ok(lexed)
 }
 
 fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, Diagnostic> {
@@ -571,6 +742,91 @@ impl Scanner {
         })
     }
 
+    /// `{expr}` in either string form: the braces wrap the expression exactly
+    /// and it is lexed as a line of its own, so what it reports points at the
+    /// column it was written in.
+    fn interpolation(&mut self) -> Result<StrPart, Diagnostic> {
+        let interp_span = self.span();
+        self.pos += 1;
+        let start = self.pos;
+        let mut depth = 1;
+        while depth > 0 {
+            match self.peek(0) {
+                Some('{') => depth += 1,
+                Some('}') => depth -= 1,
+                Some(_) => {}
+                None => {
+                    let msg = "unterminated interpolation".to_string();
+                    return Err(Diagnostic::new("syntax", msg, interp_span));
+                }
+            }
+            self.pos += 1;
+        }
+        let inner: String = self.chars[start..self.pos - 1].iter().collect();
+        if inner != inner.trim() || inner.is_empty() {
+            let msg = "interpolation braces wrap the expression exactly, with no padding";
+            return Err(Diagnostic::new("formatting", msg.to_string(), interp_span));
+        }
+        let col = self.col_offset + start;
+        let lexed = lex_line(&inner, self.line, col)?;
+        Ok(StrPart::Interp(lexed.tokens, lexed.end_cols))
+    }
+
+    /// One line of a text block. The quoting a one-line literal needs is
+    /// gone — a quote is a quote and the line ends where it ends — so the
+    /// escapes that spell those two things are refused rather than merely
+    /// unnecessary: one value, one spelling, and no formatter to choose.
+    fn block_text(&mut self, parts: &mut Vec<StrPart>, lit: &mut String) -> Result<(), Diagnostic> {
+        while let Some(c) = self.peek(0) {
+            match c {
+                '\\' => {
+                    let escaped = self.peek(1).ok_or_else(|| {
+                        Diagnostic::new("syntax", "unterminated escape".to_string(), self.span())
+                    })?;
+                    let resolved = match escaped {
+                        '\\' => '\\',
+                        '{' => '{',
+                        'r' => '\r',
+                        't' => '\t',
+                        'n' => {
+                            let said = "a newline inside a text block is a line break, not `\\n`";
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                said.to_string(),
+                                self.span(),
+                            ));
+                        }
+                        '"' => {
+                            let said = "a quote inside a text block is written plainly";
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                said.to_string(),
+                                self.span(),
+                            ));
+                        }
+                        other => {
+                            let msg = format!("unknown escape `\\{other}`");
+                            return Err(Diagnostic::new("syntax", msg, self.span()));
+                        }
+                    };
+                    lit.push(resolved);
+                    self.pos += 2;
+                }
+                '{' => {
+                    if !lit.is_empty() {
+                        parts.push(StrPart::Lit(std::mem::take(lit)));
+                    }
+                    parts.push(self.interpolation()?);
+                }
+                other => {
+                    lit.push(other);
+                    self.pos += 1;
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn lex_string(&mut self) -> Result<Tok, Diagnostic> {
         let open_span = self.span();
         self.pos += 1;
@@ -615,32 +871,7 @@ impl Scanner {
                     if !lit.is_empty() {
                         parts.push(StrPart::Lit(std::mem::take(&mut lit)));
                     }
-                    let interp_span = self.span();
-                    self.pos += 1;
-                    let start = self.pos;
-                    let mut depth = 1;
-                    while depth > 0 {
-                        match self.peek(0) {
-                            Some('{') => depth += 1,
-                            Some('}') => depth -= 1,
-                            Some(_) => {}
-                            None => {
-                                let msg = "unterminated interpolation".to_string();
-                                return Err(Diagnostic::new("syntax", msg, interp_span));
-                            }
-                        }
-                        self.pos += 1;
-                    }
-                    let inner: String = self.chars[start..self.pos - 1].iter().collect();
-                    if inner != inner.trim() || inner.is_empty() {
-                        let msg = "interpolation braces wrap the expression exactly, \
-                                   with no padding"
-                            .to_string();
-                        return Err(Diagnostic::new("formatting", msg, interp_span));
-                    }
-                    let col = self.col_offset + start;
-                    let lexed = lex_line(&inner, self.line, col)?;
-                    parts.push(StrPart::Interp(lexed.tokens, lexed.end_cols));
+                    parts.push(self.interpolation()?);
                 }
                 other => {
                     lit.push(other);

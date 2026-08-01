@@ -1,0 +1,8 @@
+# A line shallower than the content column ends the block, and saying so
+# where it happens beats saying "unterminated" at the end of the file.
+x = """
+  one
+ two
+"""
+
+pub play = print x

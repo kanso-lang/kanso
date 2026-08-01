@@ -1,0 +1,8 @@
+# A block does not end at a quote, so a quote needs no escape — and the
+# escape that would have been necessary is refused rather than tolerated.
+x = """
+  say \"hush\"
+  again
+"""
+
+pub play = print x

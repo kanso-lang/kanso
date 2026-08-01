@@ -1,0 +1,20 @@
+error[syntax]: a text block's lines sit 2 spaces in, under the `"""` that opened it — this one is at column 2
+  --> a_text_block_line_sits_two_spaces_in.kso:5:2
+   5 |  two
+        ^
+error[formatting]: a text block holds two or more lines; one line is written `"..."`
+  --> a_text_block_line_sits_two_spaces_in.kso:3:5
+   3 | x = """
+           ^
+error[formatting]: indentation must be 0 or 2 spaces, found 1
+  --> a_text_block_line_sits_two_spaces_in.kso:5:1
+   5 |  two
+       ^
+error[syntax]: a text block's lines sit 2 spaces in, under the `"""` that opened it — this one is at column 1
+  --> a_text_block_line_sits_two_spaces_in.kso:8:1
+   8 | pub play = print x
+       ^
+error[formatting]: a text block holds two or more lines; one line is written `"..."`
+  --> a_text_block_line_sits_two_spaces_in.kso:6:1
+   6 | """
+       ^
