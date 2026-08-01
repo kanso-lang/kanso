@@ -1032,6 +1032,33 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
 
 <p>the digest that finishes the story is <code>std/sha256</code>: FIPS 180-4 in ordinary kanso over <code>std/bits</code>, no builtin, because a hash is arithmetic on thirty-two bit words and the bitwise operations were already there. it is what the asset fingerprinter needed, and with the fingerprinter ported the only python left in this repository is the two gates that drive a headless browser.</p>
 
+<h2 id="entry"><span class="sec-num">13</span>the language reserves no name</h2>
+
+<p>kanso has no <code>main</code>. a directory is run through the file called <code>main.kso</code>, and that is a filename rather than an identifier — a program may use the word <code>main</code> for whatever it likes. the same rule now covers <code>play</code>, which the compiler used to know: it looked for a <code>pub</code> binding by that exact spelling and synthesised the entry from it. one magic name is a rule; two is a habit.</p>
+
+<p><code>play</code> is an ordinary exported constant. what makes something runnable is a file of statements, and the way a sample stays one command away is a runner beside it:</p>
+
+<pre><code># greeter.kso — an ordinary library
+fn shout name
+  "hello, {name}!"
+
+pub play = print (shout "kanso")
+
+# main.kso — the runner
+import "greeter"
+
+greeter/play</code></pre>
+
+<p>the compiler is told nothing about either file. the runner names what it wants, and the convention lives where a convention belongs — in the harness that runs the samples, and in the playground, each of which generates the entry it needs. what this cost was one capability rather than a mechanism: a bare import used to name a sibling <em>subdirectory</em>, so a runner could not import the file sitting next to it. a module is a directory of files sharing one namespace, and one file is the smallest of those, so <code>import "greeter"</code> now reads <code>greeter.kso</code> the way it reads <code>greeter/</code>. both spellings present at once is refused: one name cannot answer two ways.</p>
+
+<h2 id="counted"><span class="sec-num">14</span>what the counters could not see</h2>
+
+<p>every performance claim on this page is pinned to a count rather than a stopwatch, because a count cannot drift between machines. that works until the thing you should have counted is not in the file.</p>
+
+<p>a diagnostic shipped that opened by inferring the whole program — which the check three lines above it had just done. every check ran whole-program inference twice, and the compile golden did not move, because the test that produces those numbers resets the counter and then runs exactly one pass of its own. it measures what a pass costs and is structurally blind to how many the front end asks for. a doubling passed every gate in the repository. inference is computed once now and handed round: <code>kanso check</code> over kq falls from 12.50 ms to 11.00 ms, interleaved and alternating binaries, and the pass count is pinned with the same standing as the compile golden.</p>
+
+<p>the second one is not fixed, only measured, and it is the larger number. a tail-recursive loop that allocates a temporary each time round runs in constant memory when it threads a scalar and retains everything when it threads a map or a list — 1.5 mb against 71.9 mb over 1.6 million iterations. the temporary need not even be kept: a string that is bound, measured, and dropped costs exactly what a string stored as a map key costs. the emitted code says why. the scalar loop carries an arena bracket and rewinds every iteration; the heap-accumulator loop carries none of it, so the loop has no rewind point at all. the rule that declines it is sound as written — rewinding would free an accumulator allocated mid-cycle — but the accumulator here is not allocated mid-cycle, since the in-place mutators hand back the same object. widening that needs a proof about what an accumulator's interior points at, which is the same invariant behind three defects fixed this week, so it waits for that question rather than for a hunch.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
