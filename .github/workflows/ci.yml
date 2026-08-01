@@ -258,6 +258,20 @@ jobs:
           git clone --depth 1 https://github.com/kanso-lang/kq /tmp/kq
           cd /tmp/kq
           KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
+      # kq is the only sibling anything runs, so the other two are kept in
+      # step by whoever remembers to open them. vse needed the superfluous-
+      # parentheses rule applied by hand after it shipped here, which is the
+      # shape of the problem: a rule lands in this repo and the repos that
+      # consume it find out later. A check is not a spec suite, but it turns
+      # "somebody noticed" into "the build said so".
+      - name: vse still compiles against this compiler
+        run: |
+          git clone --depth 1 https://github.com/kanso-lang/vse /tmp/vse
+          ./target/release/kanso check /tmp/vse
+      - name: kanso-json still passes its own tests
+        run: |
+          git clone --depth 1 https://github.com/kanso-lang/kanso-json /tmp/kanso-json
+          ./target/release/kanso test /tmp/kanso-json
 
   diagnostics:
     name: diagnostics differential (both engines say the same thing)
