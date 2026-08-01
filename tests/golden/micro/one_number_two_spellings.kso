@@ -1,0 +1,14 @@
+# `<=` and `>=` already answer true for 1 and 1.0, and `<` answers false
+# either way round because neither is strictly less. Equality was the one
+# operator dissenting, so trichotomy failed for that pair: none of the three
+# relations held. A float cannot be a map key, so nothing needs them told
+# apart for identity.
+le = "le {1 <= 1.0} ge {1.0 >= 1}"
+
+lt = "lt {1 < 1.0} gt {1.0 > 1}"
+
+eq = "eq {1 == 1.0} ne {1 != 1.0}"
+
+near = "near {1 == 2.0} sorted {1.5 < 2}"
+
+pub play = print "{le} {lt} {eq} {near}"

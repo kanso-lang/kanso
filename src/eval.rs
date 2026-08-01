@@ -2657,6 +2657,19 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
         return Ok(right);
     }
     if op == "==" || op == "!=" {
+        // Asking whether two functions are the same function is asking which
+        // one you were handed, and that is what dispatch answers. The same
+        // goes for an effect: if the answer would change what you do next,
+        // an arm names it. So the question is refused rather than answered
+        // falsely — the way `<` already refuses it on the same values.
+        if opaque_to_equality(&left) || opaque_to_equality(&right) {
+            return Err(RuntimeError {
+                message: "equality is not defined on a function or an effect — \
+                          write an arm for the case you mean"
+                    .to_string(),
+                span,
+            });
+        }
         let equal = values_equal(&left, &right);
         return Ok(bool_value(match op {
             "==" => equal,
@@ -2747,6 +2760,19 @@ fn bool_value(b: bool) -> Value {
     }
 }
 
+/// Values equality declines to answer about. A function and an effect are
+/// both things you dispatch on rather than compare: asking which one you hold
+/// is a question an arm answers, and answering it with a comparison is the
+/// shape kanso refuses everywhere else. A subtype is transparent, so the
+/// question is really about what it wraps.
+fn opaque_to_equality(v: &Value) -> bool {
+    match v {
+        Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) => true,
+        Value::Sub { inner, .. } => opaque_to_equality(inner),
+        _ => false,
+    }
+}
+
 fn values_equal(a: &Value, b: &Value) -> bool {
     values_equal_seen(a, b, &mut std::collections::HashSet::new())
 }
@@ -2767,6 +2793,13 @@ fn values_equal_seen(
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
         (Value::Float(x), Value::Float(y)) => x.total_cmp(y).is_eq(),
+        // One numeric domain, which `<=` and `>=` already assert: both answer
+        // true for 1 and 1.0, and `<` answers false either way round because
+        // neither is strictly less. Equality was the one operator dissenting.
+        // A float cannot be a map key, so nothing needs them told apart.
+        (Value::Int(x), Value::Float(y)) | (Value::Float(y), Value::Int(x)) => {
+            int_f(x).total_cmp(y).is_eq()
+        }
         (Value::Map(x), Value::Map(y)) => {
             x.len() == y.len()
                 && x.iter()

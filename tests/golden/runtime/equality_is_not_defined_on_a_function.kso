@@ -1,0 +1,9 @@
+# Asking whether two functions are the same function is asking which one you
+# were handed, and that is the question dispatch answers. An effect is the
+# same: if the answer would change what happens next, an arm names it. So the
+# comparison is refused rather than answered — `<` already refuses it here.
+import "std/io"
+
+w = io/write "x"
+
+pub play = print "{w == w}"
