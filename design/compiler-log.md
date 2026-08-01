@@ -13673,3 +13673,37 @@ is a bisect over the corpus, not an argument.
 
 The python gate is untouched and green at 162/0. Nothing shipped against the
 claim, which is the one thing that went right here.
+
+## Why a heap accumulator is not carried, corrected
+
+I told Clay the widening was blocked on proving "no pointers inside" a list or
+map accumulator. Reading `k_beat_iter_carry` says otherwise, and the real
+reason is better.
+
+The carry machinery does not require pointer-free values. It deep-copies every
+carried slot into a malloc'd buffer before it rewinds — `k_copy_size` then
+`k_deep_copy` into `c->to`, then `k_beat_rewind`, then the buffers swap. That
+is the general mechanism, and it is the same code that carried the interior
+bug fixed this week. Arbitrary values already cross a rewind this way.
+
+So the bytes-only license in `chain_threaded` is not about safety. A byte
+builder's storage is malloc'd, so it crosses a rewind without being carried at
+all — nothing is copied. A list or map accumulator would have to be carried,
+and a carry costs a deep copy of the whole accumulator every iteration. The
+code already says this a few lines up, about the case it refuses: "a byte
+builder rebuilt each iteration would deep-copy its whole buffer at every
+rewind: growth wearing a carry". Licensing lists and maps into the carry would
+turn a linear fold into a quadratic one.
+
+That reframes the fix. It is not an analysis widening and no amount of
+inference will unlock it: the answer is to put a proven accumulator's storage
+outside the rewound region, the way a byte builder's already is, so it needs
+neither carrying nor copying. Then the bracket can be emitted, the iteration's
+garbage dies with the iteration, and the accumulator is untouched because the
+rewind cannot reach it.
+
+The cost of leaving it is still what was measured — 71.9 MB against 1.5 MB
+over 1.6M iterations, and the temporary retained even when it is never stored.
+What changed is the shape of the work: a runtime change to where a growing
+container allocates when it is the thing being threaded, not a rule relaxed in
+beat.rs.
