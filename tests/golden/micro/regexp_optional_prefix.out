@@ -1,0 +1,5 @@
+starred:  aab
+optional: ab
+both:     ["a" "b"]
+skipped:  ["" "b"]
+anchored: fn x

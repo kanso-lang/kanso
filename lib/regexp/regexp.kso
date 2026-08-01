@@ -88,6 +88,7 @@ type grabbed
 type program
   node
   starters
+  wanted
 
 type slotted
   node
@@ -140,13 +141,13 @@ fn fitting _ _ _ true
   none
 
 fn fitting prog s at false
-  reached_at s at (walked prog.node s at [] (to caught -> arrival to caught))
+  reached_at prog at (walked prog.node s at [] (to caught -> arrival to caught))
 
 fn reached_at _ _ none
   none
 
-fn reached_at _ at end
-  hit at end.to (caught_in_order end.caught 1 [])
+fn reached_at prog at end
+  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
 
 # The same walk, keeping where each match sat. A caller reporting a finding
 # needs the position to name a line, which the text alone cannot give back.
@@ -287,20 +288,29 @@ fn open_start? set _ c
 fn landed prog s at none
   scanned prog s (at + 1)
 
-fn landed _ _ at end
-  hit at end.to (caught_in_order end.caught 1 [])
+fn landed prog _ at end
+  hit at end.to (caught_in_order end.caught 1 [] prog.wanted)
 
 # A group can be entered more than once — `(ab)+` captures its last pass — so
 # the latest record for a slot is the one that stands.
-fn caught_in_order caught at acc
-  seen = latest caught 1 none at
-  gathering_slots caught at acc seen (seen == none)
+# Every slot the pattern declares, in order, with "" where a group did not
+# take part — an optional group that skipped is a group with no text, not the
+# end of the list. Stopping at the first gap dropped every capture after it.
+fn caught_in_order caught at acc wanted
+  gathering_slots caught at acc wanted (at > wanted)
 
 fn gathering_slots _ _ acc _ true
   acc
 
-fn gathering_slots caught at acc seen false
-  caught_in_order caught (at + 1) (push acc seen)
+fn gathering_slots caught at acc wanted false
+  seen = latest caught 1 none at
+  caught_in_order caught (at + 1) (push acc (or_blank seen)) wanted
+
+fn or_blank none
+  ""
+
+fn or_blank text
+  text
 
 fn latest caught i best at
   seeking caught i best at (i > length caught)
@@ -331,19 +341,19 @@ fn compiled pattern
   chars = text/chars body
   parsed_body = read_alt chars 1
   marked_body = flagged parsed_body.node flags.node
-  numbered marked_body 1 . (n -> settled n.node)
+  numbered marked_body 1 . (n -> settled n.node (n.next - 1))
 
 # A lookbehind has to know how far back to stand, so one whose width varies is
 # refused rather than quietly never matching. Answering an err here reaches
 # whoever called find or match?, which is where a broken pattern belongs.
-fn settled node
-  refused node (loose_behind? node)
+fn settled node wanted
+  refused node wanted (loose_behind? node)
 
-fn refused _ true
+fn refused _ _ true
   err "a lookbehind matches one fixed width"
 
-fn refused node false
-  program node (starters node)
+fn refused node wanted false
+  program node (starters node) wanted
 
 fn loose_behind? (behind _ _ wide)
   wide < 0
@@ -413,37 +423,49 @@ fn widened branches at acc one false
   joined branches (at + 1) "{acc}{one}"
 
 fn starters (seq parts)
-  leading parts 1
+  leading parts 1 ""
 
-fn leading parts at
-  ahead_of parts at (at > length parts)
+fn leading parts at acc
+  ahead_of parts at acc (at > length parts)
 
-fn ahead_of _ _ true
+# Every part ran out without one that must match, so the sequence can match
+# nothing and anything may start it.
+fn ahead_of _ _ _ true
   ""
 
-fn ahead_of parts at false
+fn ahead_of parts at acc false
   one = starters parts[at]!
-  past_empty parts at one (zero_width? parts[at]!)
+  widened_seq parts at acc one (one == "")
 
-fn past_empty parts at _ true
-  leading parts (at + 1)
+fn widened_seq _ _ _ _ true
+  ""
 
-fn past_empty _ _ one false
-  one
+# A part that may match nothing does not decide the start on its own: what
+# follows can begin the match instead, so both sets count. Skipping it was
+# wrong — `a*b` never tried a position holding an `a`, and answered with the
+# `b` alone.
+fn widened_seq parts at acc one false
+  moved_past parts at "{acc}{one}" (may_skip? parts[at]!)
 
-fn zero_width? (edge _)
+fn moved_past _ _ acc false
+  acc
+
+fn moved_past parts at acc true
+  leading parts (at + 1) acc
+
+fn may_skip? (edge _)
   true
 
-fn zero_width? (ahead _ _ _)
+fn may_skip? (ahead _ _ _)
   true
 
-fn zero_width? (behind _ _ _)
+fn may_skip? (behind _ _ _)
   true
 
-fn zero_width? (rep _ least _ _)
+fn may_skip? (rep _ least _ _)
   least == 0
 
-fn zero_width? _
+fn may_skip? _
   false
 
 fn starters (rep node least _ _)
