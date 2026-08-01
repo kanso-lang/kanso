@@ -13012,3 +13012,67 @@ place a reader actually stands.
 The module sweep's known-defect entry moves from task #53 to task #51 with it,
 which is the honest filing: the diagnosis half is done and the semantics half
 is a design question.
+
+## GAVEL: text blocks, `"""`, indentation-delimited
+
+Clay, 2026-08-01: "we never added HEREDOCs… the language committee can decide
+for now. i've always enjoyed ruby heredocs but i'll bet there's a more concise
+way. swift `"""` look reasonable honestly." The committee decided; this is the
+ruling and the reasoning, and the settled form belongs on the pages, not here.
+
+A newline inside `"…"` and a bare `"""` are both `unterminated string` today, so
+text that spans lines is written as one escaped line. Ninety-seven lines across
+twenty files do that, and eighty-four of them carry no interpolation at all —
+they are constant embedded programs, because feeding the compiler source is how
+you test a compiler. Three of the differential gates are almost entirely made of
+them.
+
+Beck opened against, on fewest elements: `\n` is not broken and YAGNI says wait
+for a second case. He withdrew on the count — twenty files is a corpus, not a
+case — and his second rule carried the yes instead. `decls9a`, `decls9b`,
+`c16head` reveal nothing; they exist because an 80-column rule was applied to
+bytes it cannot re-render.
+
+Hickey's objection was sharper and is conceded rather than defeated: the thing
+that is actually complected may be `MAX_WIDTH`, a rule about how a statement is
+rendered, reaching into data. Wrapping a statement is free; "wrapping" text
+changes the value, so the cap there can only be evaded. What he grants beyond
+that is that the escaped form braids three things into one construct — the
+text's line structure, the host line's, and the escaping that keeps them apart.
+
+Bernhardt supplied the decisive argument and it is a testing one. A probe that
+must be spelled `"print \"\{{expr}}\""` — literal brace, interpolation, literal
+brace — and that, spelled wrong, compares nothing and reports green is the worst
+thing a suite can hold. Notation that makes the common program hard to read is a
+correctness problem here, not an ergonomic one.
+
+The ruling. `"""` opens a text block as the last token of a statement's line;
+content sits at the opening line's indent plus two; a `"""` alone at the opening
+indent closes it. Content is stripped of exactly that indent, so anything deeper
+is content. Every content line contributes its text and a newline, the last one
+included. Interpolation and `\{` work as they do anywhere. Content lines are
+exempt from the width cap and nothing else is.
+
+Ruby's `<<~NAME` was refused for the name: a name invented to satisfy the
+grammar, carrying no meaning, is the `c16head` disease in a new costume. A
+per-line sigil (`| text`, Scala-shaped) was refused for paste fidelity — the
+whole point is that a program pastes in as a program. A raw, non-interpolating
+variant was refused because eighty-four of the ninety-seven lines need no
+escapes under an interpolating block anyway, so it would buy twenty-six deleted
+`\{` and cost a second string construct forever.
+
+The fence is redundancy that buys a local error rather than the sole terminator,
+which is the one thing this does that Swift and Java cannot. There, a forgotten
+closer re-pairs with the next opener and the program compiles with wrong strings
+— silent green again. Here the first line that dedents below the content column
+ends the block, so a missing fence is a diagnostic one line after the mistake.
+
+What it costs, recorded before it is built: `lex` stops being a pure per-line
+loop; a blank line inside a block must not reach the parser's statement
+grouping, which is where the first bug will be; the needless-continuation
+heuristic sums end columns and has to skip a statement carrying a block; and
+eight diagnostics each want a golden. The migration of the ninety-seven sites is
+the real risk, and its mitigation is that the three heaviest files are
+differential gates with pinned output — the rewrite lands with those goldens
+untouched, because a regenerated golden during this migration would be
+indistinguishable from a bug.
