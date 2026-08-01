@@ -11,20 +11,24 @@
 //! reason is fine; saying which one and why in design/compiler-log.md is the
 //! price of moving the number.
 
-/// Compiling the json decoder — a directory of six files, so the module
-/// loader is on the path being counted.
-fn passes_for_the_decoder() -> u64 {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bench/jsonbench");
+/// The same committed directory the compile golden measures, so the module
+/// loader is on the path being counted and the sample cannot go missing —
+/// bench/jsonbench is generated rather than checked in, and a test that
+/// reaches for it passes on the machine that just built it and nowhere else.
+fn passes_for_the_sample() -> u64 {
+    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/compile")
+        .join("module");
     kanso::infer::work::reset();
-    let _ = kanso::compile_module(&dir, true).expect("the decoder compiles");
+    let _ = kanso::compile_module(&dir, true).expect("the sample compiles");
     kanso::infer::work::passes()
 }
 
 #[test]
-fn the_front_end_infers_the_whole_program_five_times() {
+fn the_front_end_infers_the_whole_program_four_times() {
     assert_eq!(
-        passes_for_the_decoder(),
-        5,
+        passes_for_the_sample(),
+        4,
         "the whole-program inference pass count moved; if that is intended, \
          name the pass and the reason in design/compiler-log.md and update \
          this number"
