@@ -101,3 +101,45 @@ thunks. The design survives the move cleanly — better than cleanly:
   write or a depth rule — to be settled at implementation time (the
   book chapter's examples will force the answer).
 - The book chapter ships **with** the feature — panels must execute.
+
+## AMENDMENT 2026-08-01: a build block does not return a value
+
+Clay, overriding the surface gaveled above: "build blocks don't return
+anything. their result is just present in the outer scope."
+
+So the `graph = build` form goes. `build` is a statement, not an expression,
+and the names bound inside it are in scope after it:
+
+```
+build
+  a = node "a" []
+  b = node "b" [a]
+  a.peers = [b]
+# a and b are ordinary immutable values here
+```
+
+Everything else in this document stands. Field writes are still legal only
+inside `build`, so the mutable universe is still delimited by one greppable
+word. The birthday theorem is untouched: it is about where a cycle can exist,
+not about how the cohort leaves. The legality rule is untouched.
+
+What changes is the boundary. The old surface froze one value and let the rest
+of the cohort die with the block; the new one freezes every binding the block
+made. That is a larger escaping set and a smaller reclamation, and the two
+questions it opens are worth naming rather than discovering:
+
+- **Which names escape.** All of them, including scratch a reader thought was
+  local to the construction. A block that binds `tmp` now puts `tmp` in the
+  enclosing scope. Either that is accepted, or the block needs a way to say
+  which bindings are its product — and adding one would be adding back the
+  result expression under another name.
+- **What is still freed.** Under the old surface the cohort's non-result
+  values were garbage at the boundary. Under this one they are live by name,
+  so the block reclaims only what it allocated and did not bind. That is
+  strictly less, and whether it is enough to keep the cohort worth having is a
+  measurement rather than an argument.
+
+Implementation is staged the way the `play` migration is: the statement form
+lands first and the expression form keeps working, then the corpus moves —
+48 files mention `build` — then the expression form is removed. Starting at
+the parser would turn every one of them red in a single commit.
