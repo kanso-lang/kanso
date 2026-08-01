@@ -4809,6 +4809,71 @@ KValue k_b_sqrt(KValue v) {
     return k_none();
 }
 
+/* Bitwise, over signed 64-bit ints. A shift count outside 0..63 is undefined
+   in C and answers differently by host, so it is refused rather than left to
+   the machine — the same call the overflow checks make. Right shift is
+   arithmetic, which is what go, rust and java all spell `>>`. */
+static long long k_bits_of(KValue v, const char* what) {
+    if (v.tag == K_INT) return v.payload;
+    char said[64];
+    snprintf(said, sizeof said, "%s takes whole numbers", what);
+    k_die_got(said, v);
+    return 0;
+}
+
+static long long k_shift_of(KValue v, const char* what) {
+    long long by = k_bits_of(v, what);
+    if (by < 0 || by > 63) {
+        char said[96];
+        snprintf(said, sizeof said, "%s shifts by 0 to 63 places", what);
+        k_die_got(said, v);
+    }
+    return by;
+}
+
+KValue k_b_bit_and(KValue a, KValue b) {
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    return k_int(k_bits_of(a, "and") & k_bits_of(b, "and"));
+}
+
+KValue k_b_bit_or(KValue a, KValue b) {
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    return k_int(k_bits_of(a, "or") | k_bits_of(b, "or"));
+}
+
+KValue k_b_bit_xor(KValue a, KValue b) {
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    return k_int(k_bits_of(a, "xor") ^ k_bits_of(b, "xor"));
+}
+
+KValue k_b_bit_not(KValue a) {
+    if (!k_not_failure(a)) return a;
+    return k_int(~k_bits_of(a, "not"));
+}
+
+KValue k_b_bit_shl(KValue a, KValue b) {
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    /* shifting a signed value left is undefined once it reaches the sign bit,
+       so the shift is done on the unsigned twin and cast back */
+    unsigned long long bits = (unsigned long long)k_bits_of(a, "shl");
+    return k_int((long long)(bits << k_shift_of(b, "shl")));
+}
+
+KValue k_b_bit_shr(KValue a, KValue b) {
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
+    long long bits = k_bits_of(a, "shr");
+    long long by = k_shift_of(b, "shr");
+    /* arithmetic, spelled without relying on the implementation-defined sign
+       behaviour of >> on a negative operand */
+    if (bits >= 0) return k_int((long long)((unsigned long long)bits >> by));
+    return k_int(~(long long)((unsigned long long)(~bits) >> by));
+}
+
 KValue k_b_round(KValue v) {
     if (!k_not_failure(v)) return v;
     if (v.tag == K_INT) return v;

@@ -271,6 +271,12 @@ declare %KValue @k_b_append(%KValue, %KValue)
 declare %KValue @k_b_sort(%KValue)
 declare %KValue @k_b_sum(%KValue)
 declare %KValue @k_b_to_float(%KValue, ptr)
+declare %KValue @k_b_bit_and(%KValue, %KValue)
+declare %KValue @k_b_bit_or(%KValue, %KValue)
+declare %KValue @k_b_bit_xor(%KValue, %KValue)
+declare %KValue @k_b_bit_not(%KValue)
+declare %KValue @k_b_bit_shl(%KValue, %KValue)
+declare %KValue @k_b_bit_shr(%KValue, %KValue)
 declare %KValue @k_b_sqrt(%KValue)
 declare %KValue @k_b_round(%KValue)
 declare %KValue @k_b_to_int(%KValue, ptr)
@@ -288,7 +294,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 37] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 43] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -322,6 +328,12 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 37] = [
     ("sort", 1),
     ("render_value", 1),
     ("sqrt", 1),
+    ("bit_and", 2),
+    ("bit_or", 2),
+    ("bit_xor", 2),
+    ("bit_not", 1),
+    ("bit_shl", 2),
+    ("bit_shr", 2),
     ("round", 1),
     ("sum", 1),
     ("to_float", 1),

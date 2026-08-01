@@ -1,0 +1,3 @@
+import "std/bits"
+
+pub play = print "{bits/shl 1 64}"
