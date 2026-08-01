@@ -836,14 +836,24 @@ impl<'a> WasmBackend<'a> {
             // A builtin is handed over the same way a group is: `apply length
             // "ab"` reaches it through a dynamic call, which needs something
             // in the table to land on.
+            // `print` joins them here rather than in the table the native
+            // backend reads: this engine reaches every builtin through the
+            // interpreter, which already renders a non-string argument
+            // through the ambient group.
             _ if !self.program.fns.iter().any(|d| d.name == name)
-                && crate::codegen::BUILTIN_CALLS.iter().any(|(b, a)| *b == bare && *a <= 4) =>
+                && (bare == "print"
+                    || crate::codegen::BUILTIN_CALLS.iter().any(|(b, a)| *b == bare && *a <= 4)) =>
             {
-                let arity = crate::codegen::BUILTIN_CALLS
-                    .iter()
-                    .find(|(b, _)| *b == bare)
-                    .expect("found")
-                    .1;
+                let arity = match bare {
+                    "print" => 1,
+                    _ => {
+                        crate::codegen::BUILTIN_CALLS
+                            .iter()
+                            .find(|(b, _)| *b == bare)
+                            .expect("found")
+                            .1
+                    }
+                };
                 let widx = self.builtin_wrapper(bare, arity)?;
                 ctx.body.i32_const(widx as i64);
                 ctx.body.i32_const(0);

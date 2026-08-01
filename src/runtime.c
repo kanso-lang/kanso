@@ -2475,6 +2475,14 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
 static const KRec* k_render_path[K_RENDER_PATH_MAX];
 static int k_render_depth = 0;
 
+/* Which values can reach a user's `render/to_string` arm. A compiled call
+   site knows its argument's set and decides this at compile time; `print`
+   handed over as a value does not, so the decision moves here. Coherence
+   licenses the rest: no arm can exist for a primitive. */
+long long k_render_dispatchable(KValue v) {
+    return v.tag == K_REC || v.tag == K_NONE || v.tag == K_DESC || v.tag == K_SUB;
+}
+
 KValue k_render(KValue v, long long quote) {
     // an err propagates through rendering (it is an exception); a none is a
     // value and renders its sentinel below

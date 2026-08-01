@@ -1,0 +1,26 @@
+# A call site reads its argument's set and picks the rendering path from it.
+# Handed over, `print` has no set to read, so its wrapper carries the choice
+# into the run: a record reaches the user's arm, everything else renders
+# directly. Both halves are here because a wrapper that always dispatched
+# would fail on the int, and one that never did would ignore the arm.
+type point
+  x
+  y
+
+fn render/to_string p:point
+  "({p.x},{p.y})"
+
+fn apply f x
+  f x
+
+fn shown x
+  apply print x
+
+pub play =
+  shown 7
+  >> shown 1.5
+  >> shown true
+  >> shown none
+  >> shown [7 8]
+  >> shown "ab"
+  >> shown (point 1 2)
