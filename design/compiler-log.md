@@ -13957,3 +13957,38 @@ two moves, and the browser backend needs whichever of them it does not inherit
 from the interpreter. The differential law wants all three saying the same
 thing about the same program, and a cyclic value is exactly the shape where an
 engine can quietly differ.
+
+## The cyclic constant, three steps in
+
+Native now gets three errors deep into the knot, and each one names the next
+piece rather than the same piece again.
+
+Freezing a self-referential constant into a CAF removed the stack overflow.
+`is_constant_body` answers yes for any constant that mentions itself, so the
+real symbol becomes a load from a cell rather than a recomputation of the
+body, and the mention inside the body stops being a call to itself. What is
+left of the old failure is nothing: the recursion had no floor because the
+function was never frozen, and frozen it has one.
+
+Deferring the self-referential list element into a thunk removed the second
+error, which was `indexing takes a list or string with a 1-based position` —
+the cell being read during its own fill. `deferred_or_emitted` puts a thunk in
+the storing position instead, with no captures, because the only free name in
+such an expression is the global the site loads for itself.
+
+The third error is `\`.\` reads a field of a record, not <value>`, and it is
+the piece that is left. The thunk reaches the field read unforced. `maybe_force`
+is gated on inference's THUNK bit, and inference does not know about the
+deferral: it sees a list literal holding `graph["b"]!` and records the element
+type as whatever that expression yields. Codegen made a thunk without telling
+it.
+
+So the remaining move is to teach inference the same rule the emitter follows.
+A storing position inside a constant that names itself yields THUNK on top of
+whatever it would otherwise yield, which flows into `type_fields` and out
+through every read, and `maybe_force` then fires where it already knows how.
+The rule wants to be stated once and consulted by both, rather than written
+twice and drifting.
+
+Still unmerged, and the reason has not changed: this admits programs that do
+not yet run correctly, which is worse than refusing them.
