@@ -1734,6 +1734,9 @@ fn load_dependencies(
             "std/text" => Some(("text", &[("text.kso", include_str!("../lib/text/text.kso"))])),
             "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
             "std/path" => Some(("path", &[("path.kso", include_str!("../lib/path/path.kso"))])),
+            "std/regexp" => {
+                Some(("regexp", &[("regexp.kso", include_str!("../lib/regexp/regexp.kso"))]))
+            }
             "std/json" => Some((
                 "json",
                 &[
