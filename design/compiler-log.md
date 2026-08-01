@@ -13385,3 +13385,28 @@ So the option is not "declined because it exposes another bug" but "declined
 because it is half a change". Anyone returning to it has to un-classify the
 loop as well, which is a much larger move and buys nothing over the memo rule
 that shipped.
+## An effect handed to a parameter nobody reads
+
+`kanso check` refuses it now. An effect is a description and a description
+nobody forces never happens, so `ignored (io/write "…")` where `ignored` reads
+none of what it is handed wrote nothing, printed its answer, and said not a
+word — on both engines. The language's stated position was always the opposite:
+a body that does io must hand the io back, or it "would abandon the effects
+above it". That check reads a function's own body, so an effect abandoned
+inside somebody else's parameter walked past it.
+
+The rule refuses only the unambiguous case: every arm of the group discards the
+position, so there is no reading of the program in which the effect happens. A
+group where one arm reads the parameter and another does not is a real question
+and a different one, and it stays legal.
+
+It cost nothing to know that, because inference already computes both halves.
+`Inference.returns` per group says whether an argument expression describes an
+effect, and the arms' own patterns say whether every one of them throws the
+position away — the same two ingredients `check_none_exhaustive` uses, in the
+same shape, reporting at the argument because that is the line an author edits.
+
+Swept over every .kso in the repository: 634 files, one hit, and that one is
+the fixture that recorded the defect. It moves from tests/known_wrong to the
+error corpus, which empties known_wrong entirely — task #57 took the other
+entry when the arena fix landed, so the file and its directory are gone.
