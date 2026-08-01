@@ -58,8 +58,8 @@ pub struct Lexed {
     pub blank_lines: Vec<usize>,
 }
 
-const OPS: [&str; 14] =
-    ["&&", "||", ">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&"];
+const OPS: [&str; 16] =
+    ["&&", "||", ">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "^"];
 
 pub const MAX_WIDTH: usize = 80;
 
@@ -709,7 +709,29 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
                 continue;
             }
         }
-        let required = required_gap(prev, next);
+        // `&` hugs its name as the partial sigil and takes a space as the
+        // bitwise operator, and the pair alone cannot tell them apart: what
+        // decides is whether something precedes it that a value can end with.
+        // `x & y` is an operator; `apply &y` is a sigil.
+        let infix_amp = matches!((prev, next), (Tok::Op("&"), Tok::Ident(_)))
+            && at > 0
+            && matches!(
+                lexed_line.tokens.get(at - 1).map(|(t, _)| t),
+                Some(
+                    Tok::Ident(_)
+                        | Tok::Int(_)
+                        | Tok::Float(_)
+                        | Tok::Str(_)
+                        | Tok::RParen
+                        | Tok::RGroup
+                        | Tok::RBracket
+                        | Tok::Bang
+                )
+            );
+        let required = match infix_amp {
+            true => 1,
+            false => required_gap(prev, next),
+        };
         if gap != required {
             let wanted = match required {
                 0 => "no space".to_string(),

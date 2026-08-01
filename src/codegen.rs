@@ -2982,8 +2982,22 @@ impl<'a> Backend<'a> {
             "<" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 2)"),
             "<=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 3)"),
             ">" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 4)"),
-            _ => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
+            ">=" => format!("call %KValue @k_cmp(%KValue {a}, %KValue {b}, i64 5)"),
+            "&" => format!("call %KValue @k_b_bit_and(%KValue {a}, %KValue {b})"),
+            "|" => format!("call %KValue @k_b_bit_or(%KValue {a}, %KValue {b})"),
+            "^" => format!("call %KValue @k_b_bit_xor(%KValue {a}, %KValue {b})"),
+            // An operator the parser accepts and this does not know used to
+            // land on the last arm and compare, which is a wrong answer with
+            // nothing said. Naming every operator means a new one refuses to
+            // build instead.
+            other => return Err(format!("native backend: no lowering for `{other}`")),
         };
+        if matches!(op, "&" | "|" | "^") {
+            let t = f.tmp();
+            f.line(&format!("{t} = {slow_call}"));
+            f.record(&t, (f.set_of(a) & FAIL) | (f.set_of(b) & FAIL) | INT);
+            return Ok(t);
+        }
         if op == "/" || op == "%" {
             let t = f.tmp();
             f.line(&format!("{t} = {slow_call}"));
