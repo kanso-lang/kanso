@@ -1761,10 +1761,9 @@ fn load_dependencies(
             "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
             "std/bits" => Some(("bits", &[("bits.kso", include_str!("../lib/bits/bits.kso"))])),
             "std/path" => Some(("path", &[("path.kso", include_str!("../lib/path/path.kso"))])),
-            "std/crypto/sha256" => Some((
-                "sha256",
-                &[("sha256.kso", include_str!("../lib/crypto/sha256/sha256.kso"))],
-            )),
+            "std/sha256" => {
+                Some(("sha256", &[("sha256.kso", include_str!("../lib/sha256/sha256.kso"))]))
+            }
             "std/regexp" => {
                 Some(("regexp", &[("regexp.kso", include_str!("../lib/regexp/regexp.kso"))]))
             }

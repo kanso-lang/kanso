@@ -1,0 +1,31 @@
+# The vectors FIPS 180-4 publishes, and the two lengths on either side of the
+# padding boundary. Fifty-five bytes is the last message whose terminator and
+# length still fit its own block; fifty-six is the first that needs another
+# one, and that is where a hand-written padding rule goes wrong.
+import "std/text"
+
+empty_sum = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+abc_sum = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+
+long_sum = "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
+
+fits_sum = "f34d5a0f80c0cbf84c8c0b90218c22637abd199965249da736a20143c8c9c9d9"
+
+over_sum = "83aa034bda83e458a0dc9cbce0d4e354716aa0ff770ed37ac0ed2b292052e4af"
+
+long = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"
+
+fits = "0123456789012345678901234567890123456789012345678901234"
+
+over = "01234567890123456789012345678901234567890123456789012345"
+
+test_empty = hex (text/bytes "") == empty_sum
+
+test_abc = hex (text/bytes "abc") == abc_sum
+
+test_two_blocks = hex (text/bytes long) == long_sum
+
+test_padding_fits = hex (text/bytes fits) == fits_sum
+
+test_padding_overflows = hex (text/bytes over) == over_sum
