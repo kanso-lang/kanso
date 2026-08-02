@@ -14230,3 +14230,25 @@ while it more than doubled. The regrouping needs the compile side pointed at
 real work as well: bench/compile_golden.txt is five fixtures of about three
 hundred lines, whose rounds and visits have held one value each across every
 commit recorded. lib/json is the workload the long view already uses.
+
+## 2026-08-01 — escape analysis stops inferring the program a second time
+
+`emit_ir` computes whole-program inference and, eighteen lines later, calls
+`escape::analyze`, which computed it again from the same immutable program.
+Nothing between the two touches it. The second pass now arrives as a parameter.
+
+Worth 18 million instructions on `kanso build lib/json --release`, 2,308 down
+to 2,290, which is 0.8%. Small because a build is mostly LLVM: the front end is
+a tenth of it.
+
+WHAT THIS IS NOT. The chart's compile line measures `kanso check`, and check
+reaches neither `emit_ir` nor `escape::analyze` — it runs inference exactly
+once, and 149 million instructions is what that one pass plus parsing and the
+checks cost on lib/json today. The duplication was on the build path only. The
+question of where check's 149 million goes is open and wants a profile rather
+than more commit archaeology.
+
+Two inferences remain on the build path, check's and codegen's. Those are
+separated by `canonicalize_types` and `canonicalize_bare_aliases`, so they do
+not see the same program and collapsing them means moving the canonicalisation
+earlier rather than threading a parameter.
