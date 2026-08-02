@@ -1,0 +1,4 @@
+fn plotted a b c
+  "{a}{b}{c}"
+
+pub play = print "{length [plotted "x" "y" "z"]}"

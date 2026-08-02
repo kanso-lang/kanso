@@ -1,0 +1,4 @@
+error[syntax]: `plotted` takes 3 argument(s), and a list element is one atom — this reads as 4 separate elements. Write `(plotted …)` to call it, or `&plotted` to hold it
+  --> a_call_that_reads_as_elements.kso:4:28
+   4 | pub play = print "{length [plotted "x" "y" "z"]}"
+                                  ^

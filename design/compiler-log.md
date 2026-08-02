@@ -14535,3 +14535,31 @@ readings are of the same compiler on the same day; only the subject changed.
 bench/compile_golden.txt keeps its job. It pins what the compiler EMITS, which
 is a different question from what deciding cost, and emitted_lines still reads
 from it because `check` never reaches the emitter.
+
+## 2026-08-02 — a list element is one atom, and application now says so
+
+`[plotted "x" "y" "z"]` was four elements: the function and three strings. It
+has cost three debugging detours, always the same way — the list is built, the
+mistake surfaces later as a type complaint about whatever consumed it, and the
+literal is never mentioned.
+
+What settled it was measuring what the parser already does:
+
+    [1 + 2]        syntax error — an operator may not appear in a bare element
+    [twice 5]      two elements — application silently splits instead
+    [(twice 5)]    one element
+
+The language already requires parentheses for a compound element. It enforces
+that for operators and stays quiet for application. So this is not a new rule,
+it is the existing rule reaching the case it was skipping.
+
+And there is no guessing, because both readings have a spelling. `(f x)` calls.
+`&f` holds — `[&twice 5]` is two elements and `[&twice]` is one, today. So
+refusing the bare form takes away a shape whose two meanings looked identical
+and costs a sigil to say which was meant.
+
+WHAT THE FIRST VERSION GOT WRONG, and why the corpus caught it: the rule fired
+on lib/sha256, which binds a local called `first`. `list/first` takes one
+argument, so a list of eight locals read as a call. A name bound in this scope
+is this scope's, whatever a function elsewhere is called — the rule now
+collects the enclosing arm's parameters and binds and skips them.
