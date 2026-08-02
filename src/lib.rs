@@ -170,7 +170,7 @@ pub mod phase {
             return;
         }
         let mut spent = SPENT.lock().unwrap_or_else(|e| e.into_inner()).clone();
-        spent.sort_by(|a, b| b.1.cmp(&a.1));
+        spent.sort_by_key(|(_, d)| std::cmp::Reverse(*d));
         let total: Duration = spent.iter().map(|(_, d)| *d).sum();
         for (name, d) in spent.iter() {
             let share = 100.0 * d.as_secs_f64() / total.as_secs_f64().max(1e-9);

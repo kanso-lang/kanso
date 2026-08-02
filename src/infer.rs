@@ -142,8 +142,7 @@ pub fn infer(program: &Program) -> Inference {
         ctx.changed = false;
         rounds += 1;
         work::round();
-        for i in 0..fns.len() {
-            let decl = &fns[i];
+        for (i, decl) in fns.iter().enumerate() {
             ctx.current = (decl.name.as_str(), decl.params.len());
             ctx.yields.clear();
             env.clear();
@@ -221,7 +220,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
         match stmt {
             Stmt::Bind { pattern, expr } => {
                 let mut value = eval_expr(ctx, expr, env);
-                if ctx.demand.is_lazy_bind(&ctx.current.0, ctx.current.1, index) {
+                if ctx.demand.is_lazy_bind(ctx.current.0, ctx.current.1, index) {
                     // The binding holds a thunk; forcing yields the expr's set.
                     value |= THUNK;
                 }
