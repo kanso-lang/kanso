@@ -14713,3 +14713,33 @@ collects `Answer::Declined` into a list it prints and never asserts on. So a
 backend that refuses a program is invisible to the corpus, where a backend that
 answers wrongly is caught. That is why the gap could sit unlisted. Confirmed by
 disabling the force and watching the test name the sample.
+
+## 2026-08-02 — a refusal is a gap, and both harnesses now say so
+
+Found while closing the browser's deferred value: the two engine harnesses
+watched a wrong answer closely and let a refusal through quietly, which is the
+wrong way round. A wrong answer is caught by the corpus. A refusal was counted
+and printed and never asserted on.
+
+In tests/wasm_engine.rs the `Answer::Declined` arm pushed onto a list that got
+printed at the end. In scripts/browser_differential.py a `fallback` — the page
+dropping to the interpreter because the backend refused — printed SKIP and
+moved on, never consulting the gap list. Both now require the refusal to be
+written down in tests/golden/wasm_gaps.txt, and fail naming the program when it
+is not.
+
+THE COST OF THE HOLE, measured: `a_constant_that_names_itself.kso` was refused
+by the wasm backend for as long as that gap existed and was never listed,
+because nothing made it be. The gaps file's own header says a gap is stated
+once and that a listed program which starts passing is an error in both
+harnesses — the Declined and fallback arms routed around exactly that.
+
+Nothing is refused today, so the guard changes no counts: 154 agree, 5 known
+gaps, 1 needs a filesystem, 0 declined. Watched red by making the backend
+refuse unconditionally, which produced
+
+    examples/build_blocks.kso is refused by the wasm backend with
+    `browser backend: a temporary refusal, to watch the guard`, and no gap
+    says so.
+
+Welfare unchanged at 75.64.

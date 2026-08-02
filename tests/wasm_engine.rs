@@ -284,7 +284,7 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
     let gaps = known_gaps();
     let mut toolchain = Toolchain::load();
     let (mut ran, mut met) = (0, 0);
-    let (mut declined, mut skipped) = (Vec::new(), Vec::new());
+    let mut skipped = Vec::new();
     for path in corpus() {
         let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
         let listed = path.strip_prefix(root()).unwrap_or(&path).to_string_lossy().to_string();
@@ -316,20 +316,32 @@ fn the_wasm_engine_agrees_with_the_golden_corpus() {
                 assert_eq!(code, native_code, "wasm and native exit differently on {name}");
                 ran += 1;
             }
-            (Answer::Declined(reason), _) => declined.push(format!("{name}: {}", reason.trim())),
+            // A refusal is the weaker outcome and needs the same watching as a
+            // wrong answer: the differential law allows an engine to speak
+            // fewer features only where it rejects them plainly, which makes
+            // the rejection the thing that has to be written down.
+            (Answer::Declined(reason), Some((_, answer))) => {
+                assert!(
+                    reason.contains(answer),
+                    "{listed} is a known gap answering `{answer}`, and the backend now \
+                     declines with `{}` — close it or restate it in \
+                     tests/golden/wasm_gaps.txt",
+                    reason.trim()
+                );
+                met += 1;
+            }
+            (Answer::Declined(reason), None) => panic!(
+                "{listed} is refused by the wasm backend with `{}`, and no gap says so. \
+                 Add it to tests/golden/wasm_gaps.txt or close it — a refusal nothing \
+                 records is a gap the corpus cannot see.",
+                reason.trim()
+            ),
             (Answer::CompileError(text), _) => panic!("{name} fails to compile on wasm: {text}"),
         }
     }
     assert!(ran > 0, "nothing in the corpus ran on wasm");
     assert_eq!(met, gaps.len(), "a program in tests/golden/wasm_gaps.txt was never reached");
-    println!(
-        "wasm: {ran} agree, {met} known gaps, {} declined, {} need a filesystem",
-        declined.len(),
-        skipped.len()
-    );
-    for gap in &declined {
-        println!("  declined {gap}");
-    }
+    println!("wasm: {ran} agree, {met} known gaps, {} need a filesystem", skipped.len());
     for name in &skipped {
         println!("  skipped {name} (relative import — neither host has a filesystem)");
     }
