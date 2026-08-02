@@ -1,5 +1,5 @@
 fn brewable? temp
-  60 < temp && temp < 85
+  60 < temp and temp < 85
 
 pub play =
   cold = &brewable? 30

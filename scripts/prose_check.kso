@@ -100,7 +100,7 @@ fn under dir names
   list/to_list (list/map html (n -> "{dir}/{n}"))
 
 fn ends_html? n
-  length n > 5 && text/slice n (length n - 4) (length n) == ".html"
+  length n > 5 and text/slice n (length n - 4) (length n) == ".html"
 
 fn read_pages pages at acc after
   reading pages at acc after (at > length pages)

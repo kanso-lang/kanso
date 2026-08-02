@@ -24,11 +24,11 @@ test_argmin_keys = argmin [31 17 58 42] (x -> 0 - x) == 58
 test_group_by_buckets =
   parity = (x -> if (x / 2 * 2 == x) "even" "odd")
   buckets = group_by [1 2 3 4 5 6] parity
-  buckets["even"]! == [2 4 6] && buckets["odd"]! == [1 3 5]
+  buckets["even"]! == [2 4 6] and buckets["odd"]! == [1 3 5]
 
 test_transform_values_keys_untouched =
   doubled = transform_values (put (put {:} "a" 2) "b" 3) (v -> v * 2)
-  doubled["a"]! == 4 && doubled["b"]! == 6
+  doubled["a"]! == 4 and doubled["b"]! == 6
 
 test_zip_pulls_lazily = to_list (zip naturals ["x" "y"]) == [[1 "x"] [2 "y"]]
 
@@ -37,7 +37,7 @@ test_zip_stops_short = to_list (zip [1 2 3] ["a" "b"]) == [[1 "a"] [2 "b"]]
 test_index_by_last_wins =
   tags = index_by ["ash" "oak" "ivy"] (w -> w[1]!)
   words = index_by ["ash" "oak" "elm"] (w -> length w)
-  tags["a"]! == "ash" && words[3]! == "elm"
+  tags["a"]! == "ash" and words[3]! == "elm"
 
 test_range_empty = range [] == none
 
@@ -49,7 +49,7 @@ test_to_h_last_wins =
 
 test_transform_keys_collide =
   folded = transform_keys (put (put {:} "Ash" 1) "ash" 2) (_ -> "ash")
-  folded["ash"]! == 2 && length folded == 1
+  folded["ash"]! == 2 and length folded == 1
 
 test_find_bounds_naturals = (find naturals (n -> n * n > 50)) == 8
 

@@ -68,7 +68,7 @@ fn counters text group prefix
   list/to_list (list/map mine (l -> kept prefix l))
 
 fn body? l
-  text/slice l 1 1 != "#" && length l > 0
+  text/slice l 1 1 != "#" and length l > 0
 
 fn fields_of l
   list/to_list (list/select (text/split l " ") pair?)

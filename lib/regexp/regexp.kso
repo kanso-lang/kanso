@@ -245,7 +245,7 @@ fn cutting _ s from _ acc true
 
 fn cutting prog s from at acc false
   m = scanned prog s at
-  divided prog s from at acc m (m.from == 0 || m.to == m.from)
+  divided prog s from at acc m (m.from == 0 or m.to == m.from)
 
 fn divided prog s from at acc _ true
   cut prog s from (at + 1) acc
@@ -485,8 +485,8 @@ fn leading_flags pattern at seen
 
 fn flag_group? pattern at
   three = at + 2 <= length pattern
-  opens = three && text/slice pattern at (at + 1) == "(?"
-  opens && in? "is" (letter_at pattern at)
+  opens = three and text/slice pattern at (at + 1) == "(?"
+  opens and in? "is" (letter_at pattern at)
 
 fn letter_at pattern at
   text/slice pattern (at + 2) (at + 2)
@@ -511,7 +511,7 @@ fn ending_flag pattern at false
 fn flagged node flags
   blind = in? flags "i"
   crossing = in? flags "s"
-  untouched node blind crossing (blind == false && crossing == false)
+  untouched node blind crossing (blind == false and crossing == false)
 
 fn untouched node _ _ true
   node
@@ -583,7 +583,7 @@ fn folded s at acc false
 
 fn swapped c
   code = text/char_code c
-  other code (code >= 97 && code <= 122) (code >= 65 && code <= 90)
+  other code (code >= 97 and code <= 122) (code >= 65 and code <= 90)
 
 fn other code true _
   text/from_code (code - 32)
@@ -648,7 +648,7 @@ fn more_alt chars p acc
   splitting chars p branches (bar? chars p.pos)
 
 fn bar? chars at
-  at <= length chars && chars[at]! == "|"
+  at <= length chars and chars[at]! == "|"
 
 fn splitting _ p branches false
   parsed (one_or_alt branches) p.pos
@@ -673,7 +673,7 @@ fn gather_seq chars at acc
   gathering_seq chars at acc (done_seq? chars at)
 
 fn done_seq? chars at
-  at > length chars || chars[at]! == "|" || chars[at]! == ")"
+  at > length chars or chars[at]! == "|" or chars[at]! == ")"
 
 fn gathering_seq _ at acc true
   parsed (seq acc) at
@@ -687,7 +687,7 @@ fn read_repeat chars at
   suffixed chars base (at_quantifier? chars base.pos)
 
 fn at_quantifier? chars at
-  at <= length chars && in? "*+?\{" chars[at]!
+  at <= length chars and in? "*+?\{" chars[at]!
 
 fn in? set c
   length (text/split set c) > 1
@@ -701,7 +701,7 @@ fn suffixed chars base true
 fn braced chars base false
   mark = chars[base.pos]!
   after = base.pos + 1
-  lazy = after <= length chars && chars[after]! == "?"
+  lazy = after <= length chars and chars[after]! == "?"
   bounds = spans mark
   parsed (rep base.node bounds[1]! bounds[2]! (lazy == false)) (past after lazy)
 
@@ -725,11 +725,11 @@ fn unbounded chars base low false
   closed chars base low.node high.node (high.pos + 1)
 
 fn closed chars base least most after
-  lazy = after <= length chars && chars[after]! == "?"
+  lazy = after <= length chars and chars[after]! == "?"
   parsed (rep base.node least most (lazy == false)) (past after lazy)
 
 fn digits chars at acc
-  taking chars at acc (at <= length chars && in? "0123456789" chars[at]!)
+  taking chars at acc (at <= length chars and in? "0123456789" chars[at]!)
 
 fn taking _ at acc false
   parsed acc at
@@ -760,7 +760,7 @@ fn read_atom chars at
   opened chars at chars[at]!
 
 fn opened chars at "("
-  special chars at (at + 1 <= length chars && chars[at + 1]! == "?")
+  special chars at (at + 1 <= length chars and chars[at + 1]! == "?")
 
 fn special chars at false
   inner = read_alt chars (at + 1)
@@ -805,7 +805,7 @@ fn wide_as (seq parts)
   summed parts 1 0
 
 fn summed parts at acc
-  summing parts at acc (at > length parts || acc < 0)
+  summing parts at acc (at > length parts or acc < 0)
 
 fn summing _ _ acc true
   acc
@@ -824,7 +824,7 @@ fn wide_as (alt branches)
   agreed branches 2 (wide_as branches[1]!)
 
 fn agreed branches at so_far
-  agreeing branches at so_far (at > length branches || so_far < 0)
+  agreeing branches at so_far (at > length branches or so_far < 0)
 
 fn agreeing _ _ so_far true
   so_far
@@ -920,7 +920,7 @@ fn collecting chars at set negated false
   ranged chars at set negated (range? chars at)
 
 fn range? chars at
-  at + 2 <= length chars && chars[at + 1]! == "-" && chars[at + 2]! != "]"
+  at + 2 <= length chars and chars[at + 1]! == "-" and chars[at + 2]! != "]"
 
 fn ranged chars at set negated true
   span = spread chars[at]! chars[at + 2]!
@@ -1010,7 +1010,7 @@ fn walked (behind node wanted wide) s at slots k
   matched_here at slots k (looked_back? node wanted wide s at)
 
 fn looked_back? node wanted wide s at
-  reachable = wide >= 0 && at - wide >= 1
+  reachable = wide >= 0 and at - wide >= 1
   compared? node wanted wide s at reachable
 
 fn compared? _ wanted _ _ _ false
@@ -1038,7 +1038,7 @@ fn peeked? _
   true
 
 fn walked (lit c) s at slots k
-  matched_one s at slots k (at <= length s && text/slice s at at == c)
+  matched_one s at slots k (at <= length s and text/slice s at at == c)
 
 fn matched_one _ at slots k true
   k (at + 1) slots
@@ -1047,11 +1047,11 @@ fn matched_one _ _ _ _ false
   none
 
 fn walked (dot _) s at slots k
-  matched_one s at slots k (at <= length s && text/slice s at at != "\n")
+  matched_one s at slots k (at <= length s and text/slice s at at != "\n")
 
 fn walked (cls set negated) s at slots k
   here = at <= length s
-  matched_one s at slots k (here && in_class? set negated (sliced s at here))
+  matched_one s at slots k (here and in_class? set negated (sliced s at here))
 
 fn sliced s at true
   text/slice s at at
@@ -1089,7 +1089,7 @@ fn boundary? s at
   before != after
 
 fn word_at? s at
-  reads? s at (at >= 1 && at <= length s)
+  reads? s at (at >= 1 and at <= length s)
 
 fn reads? s at true
   in? word_chars (text/slice s at at)
@@ -1103,7 +1103,7 @@ fn walked (rep node least most greedy) s at slots k
   repeat node least most greedy s at 0 slots k
 
 fn repeat node least most greedy s at done slots k
-  capped = most >= 0 && done >= most
+  capped = most >= 0 and done >= most
   ordered node least most greedy s at done slots k capped
 
 fn ordered _ least _ _ _ at done slots k true

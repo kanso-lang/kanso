@@ -164,7 +164,7 @@ fn claimed _ "" _ _
   ""
 
 fn claimed r shown where what
-  agreed r shown where what (mine r what == shown || mine r what == "")
+  agreed r shown where what (mine r what == shown or mine r what == "")
 
 fn mine r "ms"
   r.ms

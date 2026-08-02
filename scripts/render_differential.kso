@@ -107,14 +107,14 @@ fn matched native
   asked ["run" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
-  stalled n i (hung? n.status || hung? i.status)
+  stalled n i (hung? n.status or hung? i.status)
 
 fn stalled n i true
   "  never returned: native {n.status} interp {i.status}\n"
 
 fn stalled n i false
-  same = n.status == i.status && n.stdout == i.stdout
-  agreed n i (same && n.stderr == i.stderr)
+  same = n.status == i.status and n.stdout == i.stdout
+  agreed n i (same and n.stderr == i.stderr)
 
 fn agreed _ _ true
   ""

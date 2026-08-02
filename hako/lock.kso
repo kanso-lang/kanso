@@ -28,14 +28,14 @@ fn protocol_of fields
 # something nobody published.
 pub fn release? tag
   parts = text/split (text/slice tag 2 (length tag)) "."
-  text/slice tag 1 1 == "v" && triple? parts
+  text/slice tag 1 1 == "v" and triple? parts
 
 fn digit? c
   code = text/char_code c
-  code >= 48 && code <= 57
+  code >= 48 and code <= 57
 
 fn number? s
-  s != "" && list/all? (text/chars s) digit?
+  s != "" and list/all? (text/chars s) digit?
 
 fn triple? parts
-  length parts == 3 && list/all? parts number?
+  length parts == 3 and list/all? parts number?

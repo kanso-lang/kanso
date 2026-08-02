@@ -83,7 +83,7 @@ fn upto parts n sep
 # between a second and never.
 fn starts_word? seg
   c = leading_char seg 1 (length seg)
-  in? lower c || c == "_"
+  in? lower c or c == "_"
 
 fn leading_char s i n
   looked s i n (i > n)
@@ -102,7 +102,7 @@ fn stepped _ _ _ c false
   c
 
 fn cut segs i
-  stop segs i (i > length segs || starts_word? segs[i]!)
+  stop segs i (i > length segs or starts_word? segs[i]!)
 
 fn stop segs i true
   upto segs (i - 1) ","
@@ -170,7 +170,7 @@ fn shaped _ _ true
   ""
 
 fn shaped chunk q false
-  kinded chunk q[2]! (length (squeezed q[1]!) == 0 && all_in? lower q[2]!)
+  kinded chunk q[2]! (length (squeezed q[1]!) == 0 and all_in? lower q[2]!)
 
 fn kinded _ _ false
   ""
@@ -211,7 +211,7 @@ fn deduped sorted
   list/to_list (list/fold sorted [] once)
 
 fn once acc e
-  fresh acc e (length acc == 0 || acc[length acc]! != e)
+  fresh acc e (length acc == 0 or acc[length acc]! != e)
 
 fn fresh acc e true
   push acc e
@@ -318,7 +318,7 @@ fn with_corpus every corpus
 
 fn allowances t
   lines = list/to_list (list/map (text/split t "\n") squeezed)
-  kept = list/to_list (list/reject lines (l -> l == "" || first_char l == "#"))
+  kept = list/to_list (list/reject lines (l -> l == "" or first_char l == "#"))
   list/to_list kept
 
 fn in_corpus? corpus msg

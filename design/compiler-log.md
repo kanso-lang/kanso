@@ -14033,3 +14033,37 @@ and is now the one thing standing between this feature and all three engines.
 
 Pinned by tests/golden/micro/a_constant_that_names_itself.kso, watched red on
 both engines first: before the change each refused the program outright.
+
+## 2026-08-01 — `and` and `or` are words
+
+GAVEL (Clay): the boolean connectives are spelled. `a and b`, `a or b`. `&&`
+and `||` are gone, `&` `|` `^` stay with the bits, and there is no `!`.
+
+The front end owns all of it. The parser already desugared both connectives
+into `if` at parse time, so no engine has ever seen an `and` node and none
+needed touching: the lexer stops treating `&&` and `||` as operators and starts
+answering `and` and `or` as ones, and the two parse loops read the new
+spelling. 120 call sites across 37 files moved with them.
+
+Two things fell out of it.
+
+`std/bits` exported functions called `and` and `or`, which a keyword cannot be.
+They were already duplicates — the module's own comment said they were named
+because the operators did not exist, and #86 shipped `&` `|` `^`. The named
+pair is gone and their twenty-five call sites read as operators, which is one
+spelling instead of two. `bits/not`, `bits/shl`, `bits/shr` and `bits/xor` stay
+because no operator says them.
+
+Moving those call sites turned up a defect nothing had exercised: inference
+typed `&`, `|` and `^` as boolean. Its BinOp arm named the arithmetic operators
+and let a catch-all answer BOOL for everything else, which is right for the
+comparisons and wrong for the bitwise three, and it went unnoticed because the
+only kanso using them called the named functions instead. sha256's helpers were
+the first bodies to return an operator result directly, and the naming rule
+caught it immediately: `spun`, `choice` and `majority` were told to end in `?`
+because the compiler thought they answered true or false. They answer a whole
+number, and the arm now says so.
+
+Still to come on this gavel: `not` as a prefix, and `flag == true` refused.
+`not` wants a real node in all three engines, and `bits/not` will have to be
+renamed when it lands.

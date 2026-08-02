@@ -303,14 +303,14 @@ fn against native
   asked ["run" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
-  stalled n i (hung? n.status || hung? i.status)
+  stalled n i (hung? n.status or hung? i.status)
 
 fn stalled _ _ true
   "never returned"
 
 fn stalled n i false
-  same = n.status == i.status && n.stdout == i.stdout
-  agreed n i (same && n.stderr == i.stderr)
+  same = n.status == i.status and n.stdout == i.stdout
+  agreed n i (same and n.stderr == i.stderr)
 
 fn agreed _ _ false
   "disagree"

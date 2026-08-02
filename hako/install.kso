@@ -74,7 +74,7 @@ fn spec_of row
   after[2]!
 
 fn local? spec
-  text/slice spec 1 4 == "std/" || text/slice spec 1 1 == "."
+  text/slice spec 1 4 == "std/" or text/slice spec 1 1 == "."
 
 fn hako_name spec
   parts = text/split spec "/"
@@ -149,7 +149,7 @@ fn dotted? owner
 
 fn chosen n wanted held root origin
   pinned = list/find wanted (a -> a[1]! == n)
-  standing = list/find held (p -> p.name == n && release? p.tag == false)
+  standing = list/find held (p -> p.name == n and release? p.tag == false)
   plain = unasked n standing root origin
   if (pinned == none) plain (by_branch n pinned root origin)
 

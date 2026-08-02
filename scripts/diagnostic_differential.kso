@@ -65,7 +65,7 @@ fn tokens l
 fn plain? parts
   well_named = all_in? name_chars parts[1]!
   args = list/to_list (list/drop parts 1)
-  well_named && list/all? args (p -> all_in? param_chars p) && not_shaped? args
+  well_named and list/all? args (p -> all_in? param_chars p) and not_shaped? args
 
 fn not_shaped? args
   list/all? args (p -> length (text/split p "(") == 1)
@@ -87,14 +87,14 @@ fn entries_in module src
 
 fn source? name
   ext = text/slice name (length name - 3) (length name)
-  ext == ".kso" && length (text/split name "_test.kso") == 1
+  ext == ".kso" and length (text/split name "_test.kso") == 1
 
 # One entry per name and arity: an overload group answers once.
 fn deduped sorted
   list/to_list (list/fold sorted [] once)
 
 fn once acc e
-  fresh acc e (length acc == 0 || acc[length acc]! != e)
+  fresh acc e (length acc == 0 or acc[length acc]! != e)
 
 fn fresh acc e true
   push acc e
@@ -359,7 +359,7 @@ language = text/concat lang_all12 [lango]
 sound_src = "pub play = print \"ok\"\n"
 
 fn sound? r
-  r.status == 0 && r.stdout == "ok\n"
+  r.status == 0 and r.stdout == "ok\n"
 
 fn asked argv
   io/run kanso argv
@@ -373,8 +373,8 @@ fn against native
   asked ["run" probe "--interp"] . (i -> verdict native i)
 
 fn verdict n i
-  same = n.status == i.status && n.stdout == i.stdout
-  report (agreed n i (same && n.stderr == i.stderr)) (sound? n) (sound? i)
+  same = n.status == i.status and n.stdout == i.stdout
+  report (agreed n i (same and n.stderr == i.stderr)) (sound? n) (sound? i)
 
 fn agreed _ _ true
   ""
@@ -452,7 +452,7 @@ fn worth? p
 pub play = ran sound_src . (v -> sound_enough v)
 
 fn sound_enough v
-  ok = v.native_ok && v.interp_ok
+  ok = v.native_ok and v.interp_ok
   proceed ok
 
 fn proceed true

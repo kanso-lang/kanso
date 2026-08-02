@@ -111,7 +111,7 @@ fn counted l
   [(named l) (amount l)]
 
 fn body? l
-  text/slice l 1 1 != "#" && length l > 0
+  text/slice l 1 1 != "#" and length l > 0
 
 fn fields_of l
   list/to_list (list/select (text/split l " ") pair?)
@@ -303,7 +303,7 @@ fn against now held
   io/args . (a -> either now base held value a)
 
 fn either now base held value args
-  asked_to_set = length args > 0 && args[1]! == "--set"
+  asked_to_set = length args > 0 and args[1]! == "--set"
   chosen now base held value args asked_to_set
 
 fn chosen _ base held value args true

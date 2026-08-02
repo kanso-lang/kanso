@@ -39,7 +39,7 @@ fn number_char? none
   false
 
 fn number_char? c
-  47 < c && c < 58
+  47 < c and c < 58
 
 fn number_end cs p
   if (number_char? cs[p]) (number_end cs (p + 1)) p
@@ -57,7 +57,7 @@ fn number_start? none
   false
 
 fn number_start? c
-  47 < c && c < 58
+  47 < c and c < 58
 
 fn number_value cs p q
   digits = text/slice cs p q

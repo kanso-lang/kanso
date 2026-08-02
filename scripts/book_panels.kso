@@ -211,7 +211,7 @@ fn next_chapter names at drift write name raw said
     . (_ -> chapter_loop names (at + 1) (drift + said.drift) write)
 
 fn saved path raw text write
-  keeping path text (write == false || text == raw)
+  keeping path text (write == false or text == raw)
 
 fn keeping _ _ true
   io/write ""
@@ -241,7 +241,7 @@ fn stitching raw found at from acc drift log name dir files write shape false
   stitched raw found (at + 1) m.to grown moved more name dir files write shape
 
 fn span_of raw from to
-  empty_span raw from to (from > to || from > length raw)
+  empty_span raw from to (from > to or from > length raw)
 
 fn empty_span _ _ _ true
   ""
@@ -303,7 +303,7 @@ fn deep? _ _ _ _ _ false
   false
 
 fn deep? parts path dir name _ true
-  parts[length parts]! == name && starts? path "{dir}/"
+  parts[length parts]! == name and starts? path "{dir}/"
 
 fn starts? s pre
   text/slice s 1 (length pre) == pre
@@ -319,7 +319,7 @@ fn out_at paths dir base
   sole (list/to_list hits)
 
 fn under? path dir want
-  starts? path "{dir}/" && ends? path want
+  starts? path "{dir}/" and ends? path want
 
 fn sole hits
   only hits (length hits == 1)
@@ -514,7 +514,7 @@ fn opens body at acc false
   interpolated body stop "{acc}{escaped (text/slice body at (stop - 1))}"
 
 fn closing body at depth
-  shutting body at depth (at > length body || depth == 0)
+  shutting body at depth (at > length body or depth == 0)
 
 fn shutting _ at _ true
   at
@@ -555,7 +555,7 @@ fn mark_ident toks at t
   decided t before after (nth_text toks (at + 1))
 
 fn near toks at step
-  stepping toks at step (at < 1 || at > length toks)
+  stepping toks at step (at < 1 or at > length toks)
 
 fn stepping _ _ _ true
   ""
@@ -583,7 +583,7 @@ fn trimmed_blank s
   regexp/replace_all "[ \t]" s ""
 
 fn decided t before after next
-  declared t before after next (before == "fn" || before == "pub")
+  declared t before after next (before == "fn" or before == "pub")
 
 fn declared t _ _ _ true
   "<span class=\"f\">{t}</span>"
@@ -619,13 +619,13 @@ fn argumentish? ""
   true
 
 fn argumentish? a
-  starts_arg? a (regexp/match? whole_ident a || regexp/match? whole_num a)
+  starts_arg? a (regexp/match? whole_ident a or regexp/match? whole_num a)
 
 fn starts_arg? _ true
   true
 
 fn starts_arg? a false
-  word? ["(" "["] a || text/slice a 1 1 == "\""
+  word? ["(" "["] a or text/slice a 1 1 == "\""
 
 fn applied? t _ true
   "<span class=\"f\">{t}</span>"
@@ -676,7 +676,7 @@ fn pointed line false
 
 fn caret_only? line
   bare = regexp/replace_all "[ \t^]" line ""
-  bare == "" && in? line "^"
+  bare == "" and in? line "^"
 
 fn carets line true
   at = (regexp/matches "\\^" line)[1]!.from
@@ -688,7 +688,7 @@ fn carets line false
   escaped line
 
 fn reported drift write
-  quiet = write || drift == 0
+  quiet = write or drift == 0
   io/write "{drift} panel(s) {done_word write}\n" . (_ -> ending quiet)
 
 fn done_word true

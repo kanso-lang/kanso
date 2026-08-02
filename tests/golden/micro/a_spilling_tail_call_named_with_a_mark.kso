@@ -7,7 +7,7 @@ fn reached? a b c d e
   stepping? a b c d e (a > 3)
 
 fn stepping? _ b c d e true
-  b && c && d && e
+  b and c and d and e
 
 fn stepping? a b c d e false
   reached? (a + 1) b c d e

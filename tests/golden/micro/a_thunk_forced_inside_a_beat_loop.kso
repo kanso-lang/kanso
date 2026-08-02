@@ -59,7 +59,7 @@ fn schedule w _ true
 fn schedule w at false
   s0 = small_sigma0 w[at - 15]!
   s1 = small_sigma1 w[at - 2]!
-  next = bits/and (w[at - 16]! + s0 + w[at - 7]! + s1) whole
+  next = w[at - 16]! + s0 + w[at - 7]! + s1 & whole
   rolled (push w next) (at + 1)
 
 fn rolled w at
@@ -80,13 +80,13 @@ fn big_sigma1 x
 # A rotate is the two halves of a shift laid side by side, and the left half
 # is masked because it can carry past the top.
 fn spun x places
-  bits/or (bits/and (bits/shl x (32 - places)) whole) (bits/shr x places)
+  bits/shl x (32 - places) & whole | bits/shr x places
 
 fn choice x y z
-  bits/xor (bits/and x y) (bits/and (bits/and (bits/not x) whole) z)
+  x & y ^ (bits/not x & whole & z)
 
 fn majority x y z
-  bits/xor (bits/xor (bits/and x y) (bits/and x z)) (bits/and y z)
+  x & y ^ (x & z) ^ (y & z)
 
 # The first thirty-two bits of the fractional parts of the square roots of the
 # first eight primes, which is where the standard's starting words come from.
@@ -118,14 +118,14 @@ fn compress s _ _ true
 fn compress s w at false
   mixed = big_sigma1 s[5]! + choice s[5]! s[6]! s[7]!
   fed = rounds[at]! + w[at]!
-  t1 = bits/and (s[8]! + mixed + fed) whole
-  t2 = bits/and (big_sigma0 s[1]! + majority s[1]! s[2]! s[3]!) whole
+  t1 = s[8]! + mixed + fed & whole
+  t2 = big_sigma0 s[1]! + majority s[1]! s[2]! s[3]! & whole
   moved = shifted_state s t1 t2
   turned moved w (at + 1)
 
 fn shifted_state s t1 t2
-  first = bits/and (t1 + t2) whole
-  fifth = bits/and (s[4]! + t1) whole
+  first = t1 + t2 & whole
+  fifth = s[4]! + t1 & whole
   [first s[1]! s[2]! s[3]! fifth s[5]! s[6]! s[7]!]
 
 fn turned s w at
@@ -149,7 +149,7 @@ fn gathered padded at i w false
 # big-endian sixty-four bit number — the padding the standard names.
 fn padded_bytes b
   n = length b
-  zeros = 63 - bits/and (n + 8) 63
+  zeros = 63 - (n + 8 & 63)
   filled (push (list/to_list b) 128) zeros n
 
 fn filled acc 0 n
@@ -167,7 +167,7 @@ fn laid acc _ _ true
   acc
 
 fn laid acc total at false
-  byte = bits/and (bits/shr total (at * 8)) 255
+  byte = bits/shr total (at * 8) & 255
   eight_bytes (push acc byte) total (at - 1)
 
 pub play =
