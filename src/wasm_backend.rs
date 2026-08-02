@@ -69,6 +69,7 @@ const RT_FIELD_BY_NAME: u32 = 32;
 const RT_IS_REC: u32 = 33;
 const RT_JOIN: u32 = 34;
 const RT_NO_FIELD: u32 = 35;
+const RT_DEFER: u32 = 36;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -108,6 +109,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_is_rec", params: 1, returns: true },
         Import { name: "rt_join", params: 2, returns: true },
         Import { name: "rt_no_field", params: 2, returns: true },
+        Import { name: "rt_defer", params: 1, returns: true },
     ]
 }
 
@@ -116,6 +118,10 @@ struct Ctx {
     scope: HashMap<String, u32>,
     /// Err-origin prefix "{fn} at {file}" for the declaration being emitted.
     prefix: String,
+    /// The constant this body computes, where it is a constant. A list
+    /// element mentioning it has to wait rather than read a cell that is
+    /// still being filled.
+    group: String,
 }
 
 pub struct WasmBackend<'a> {
@@ -173,33 +179,7 @@ fn partial_lambda(
     Ok(Expr::Lambda { params, body: Box::new(body), span })
 }
 
-fn names_itself(decl: &crate::ast::FnDecl) -> bool {
-    fn mentions(expr: &Expr, name: &str) -> bool {
-        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
-            if n == name {
-                return true;
-            }
-        }
-        crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
-    }
-    decl.body.iter().any(|stmt| match stmt {
-        crate::ast::Stmt::Bind { expr, .. } | crate::ast::Stmt::Expr(expr) => {
-            mentions(expr, &decl.name)
-        }
-        crate::ast::Stmt::Set { value, .. } => mentions(value, &decl.name),
-    })
-}
-
 pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
-    // A constant naming itself needs a cell to wait in, and this backend has
-    // no deferred value to put there. Refusing says so, where compiling it
-    // would recurse until the stack ran out.
-    if let Some(knot) = program.fns.iter().find(|d| d.params.is_empty() && names_itself(d)) {
-        return Err(format!(
-            "browser backend: `{}` names itself, and the browser has no way to wait for a value",
-            knot.name
-        ));
-    }
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {
@@ -346,8 +326,15 @@ impl<'a> WasmBackend<'a> {
         arity: usize,
         decls: &[&'a FnDecl],
     ) -> Result<Body, String> {
-        let mut ctx =
-            Ctx { body: Body::new(arity as u32), scope: HashMap::new(), prefix: String::new() };
+        let mut ctx = Ctx {
+            body: Body::new(arity as u32),
+            scope: HashMap::new(),
+            prefix: String::new(),
+            group: match arity {
+                0 => name.to_string(),
+                _ => String::new(),
+            },
+        };
         for decl in decls {
             ctx.scope.clear();
             ctx.prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
@@ -641,7 +628,7 @@ impl<'a> WasmBackend<'a> {
             Expr::Ident(name, _) => self.emit_ident(ctx, name, tail)?,
             Expr::List(items, _) => {
                 for item in items {
-                    self.emit_expr(ctx, item, false)?;
+                    self.emit_element(ctx, item)?;
                     ctx.body.call(RT_ARG);
                 }
                 ctx.body.i32_const(items.len() as i64);
@@ -1004,6 +991,44 @@ impl<'a> WasmBackend<'a> {
 
     /// Lambda lifting: the closure body becomes a table function taking
     /// (env, args); captures ride in env, both read via rt_envget.
+    /// A list element inside a constant that names itself waits: the cell it
+    /// would read is still being filled, so the element holds the work and a
+    /// later read runs it. Everything else is emitted where it stands.
+    fn emit_element(&mut self, ctx: &mut Ctx, item: &Expr) -> Result<(), String> {
+        if !self.defers_self(ctx, item) {
+            return self.emit_expr(ctx, item, false);
+        }
+        let fn_idx = self.module.declare(2);
+        self.module.table.push(fn_idx);
+        let tidx = (self.module.table.len() - 1) as u32;
+        let mut inner = Ctx {
+            body: Body::new(2),
+            scope: HashMap::new(),
+            prefix: ctx.prefix.clone(),
+            group: String::new(),
+        };
+        self.emit_expr(&mut inner, item, true)?;
+        self.module.define(fn_idx, inner.body);
+        ctx.body.i32_const(tidx as i64);
+        ctx.body.call(RT_DEFER);
+        Ok(())
+    }
+
+    /// Whether this expression names the constant being built. The only free
+    /// name such an element can carry is that constant, which the deferred
+    /// body loads for itself, so nothing is captured.
+    fn defers_self(&self, ctx: &Ctx, expr: &Expr) -> bool {
+        fn mentions(expr: &Expr, name: &str) -> bool {
+            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                if n == name {
+                    return true;
+                }
+            }
+            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+        }
+        !ctx.group.is_empty() && mentions(expr, &ctx.group)
+    }
+
     fn emit_lambda(&mut self, ctx: &mut Ctx, expr: &Expr) -> Result<(), String> {
         let Expr::Lambda { params, body, .. } = expr else {
             return Err("not a lambda".to_string());
@@ -1021,8 +1046,12 @@ impl<'a> WasmBackend<'a> {
         let fn_idx = self.module.declare(2);
         self.module.table.push(fn_idx);
         let tidx = (self.module.table.len() - 1) as u32;
-        let mut inner =
-            Ctx { body: Body::new(2), scope: HashMap::new(), prefix: ctx.prefix.clone() };
+        let mut inner = Ctx {
+            body: Body::new(2),
+            scope: HashMap::new(),
+            prefix: ctx.prefix.clone(),
+            group: String::new(),
+        };
         for (i, p) in param_names.iter().enumerate() {
             let local = inner.body.local();
             inner.body.local_get(1);
