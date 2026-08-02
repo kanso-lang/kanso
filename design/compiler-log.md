@@ -14673,3 +14673,43 @@ set, `armable` in codegen and in the wasm backend, and the predicate-naming
 rule. The fifth site is new — `desugar_inequality` rides the hook
 `desugar_field_reads` already runs at, because it has to see every module the
 merge produced.
+
+## 2026-08-02 — the browser gets a deferred value, and the last engine gap closes
+
+`tests/golden/micro/a_constant_that_names_itself.kso` now runs on all three
+engines and answers `b a` on each. The wasm backend's refusal is gone. Welfare
+unchanged at 75.64.
+
+Two readings had to be corrected before this was buildable, and both were
+corrected by reading what native actually does rather than by reasoning about
+what it must do.
+
+FIRST, A CELL IS NOT ENOUGH. The obvious shape is a knot: a cell created empty,
+read by the self-mention, filled once the container exists. It cannot express
+this fixture. What native's `deferred_or_emitted` defers is the whole
+expression `graph["b"]!` — a computation over the constant, not the constant —
+so what waits has to be work, not a box.
+
+SECOND, THE FORCING IS BOUNDED. This looked like native's twenty-one thunk
+sites, which is what made it look like a multi-sitting job. It is four. A
+deferral is created at exactly one storing position — a list element inside a
+zero-arity constant that names itself, which is the only place native defers
+either — so the only way to observe one is to read the container it went into.
+`rt_index`, `rt_at`, `rt_field` and `rt_field_by_name` cover every path.
+
+THE REPRESENTATION WAS THE ACTUAL BLOCKER. A deferral has to survive
+`rt_mklist`, which stores through `val()`, so it has to be an eval.rs `Value`.
+It cannot be `Value::Thunk`, whose `Pending` state carries an `Expr` a compiled
+deferral does not have, and adding a `Value` variant would touch every
+exhaustive match in the interpreter. The way through was already in the
+runtime: `Slot::C` is a table closure and `val()` maps one to
+`Value::TableFn(h)`, an ordinary handle a list can hold. So a deferral is a
+zero-capture closure carrying an arity no call site can ask for, `-2`, with
+`-3` marking one whose own body is running. Nothing in eval.rs changed.
+
+A HOLE IN THE HARNESS, found on the way. The sample was never listed in
+tests/golden/wasm_gaps.txt, and it did not need to be: `tests/wasm_engine.rs`
+collects `Answer::Declined` into a list it prints and never asserts on. So a
+backend that refuses a program is invisible to the corpus, where a backend that
+answers wrongly is caught. That is why the gap could sit unlisted. Confirmed by
+disabling the force and watching the test name the sample.

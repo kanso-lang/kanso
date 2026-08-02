@@ -111,6 +111,37 @@ fn val(h: u32) -> Value {
     }
 }
 
+/// A storing position inside a constant that names itself holds one of these
+/// rather than a value: the constant's cell is still empty while its own body
+/// runs, so the read has to happen later. Marked by an arity no call site can
+/// ask for, which is what keeps an ordinary function value from being mistaken
+/// for one.
+const DEFERRED: i32 = -2;
+
+/// The same closure while its own body is running. Reaching it means the value
+/// depends on itself with nothing in between.
+const RUNNING: i32 = -3;
+
+/// A container read reaches through a deferral. The answer is written back
+/// over the closure, so a cycle read twice costs one call.
+fn forced(v: Value) -> Value {
+    let Value::TableFn(h) = v else {
+        return v;
+    };
+    let Slot::C { tidx, env, arity } = slot(h) else {
+        return v;
+    };
+    match arity {
+        RUNNING => die("a constant that names itself has no value yet".to_string()),
+        DEFERRED => {}
+        _ => return v,
+    }
+    REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
+    let answered = val(call_closure(h, Vec::new()));
+    REG.with(|r| r.borrow_mut()[h as usize] = Slot::V(answered.clone()));
+    answered
+}
+
 fn pop_args(n: u32) -> Vec<u32> {
     ARGS.with(|a| {
         let mut args = a.borrow_mut();
@@ -263,7 +294,7 @@ pub extern "C" fn rt_field(h: u32, i: u32) -> u32 {
         die("not a record".to_string());
     };
     let field = fields.borrow()[i as usize].clone();
-    push(Slot::V(field))
+    push(Slot::V(forced(field)))
 }
 
 #[no_mangle]
@@ -356,7 +387,7 @@ pub extern "C" fn rt_field_by_name(base: u32, name_lit: u32) -> u32 {
             match position {
                 Some(i) => {
                     let field = fields.borrow()[i].clone();
-                    push(Slot::V(field))
+                    push(Slot::V(forced(field)))
                 }
                 None => die(format!("`{ty}` has no field `{name}`")),
             }
@@ -604,7 +635,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
             let msg = format!("missing index {}", render(&idx, true));
             push(Slot::V(err_value(Value::Str(msg), None)))
         }
-        Ok(v) => push(Slot::V(v)),
+        Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),
     }
 }
@@ -613,7 +644,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn rt_at(base: u32, index: u32) -> u32 {
     match index_value(val(base), val(index), SPAN0) {
-        Ok(v) => push(Slot::V(v)),
+        Ok(v) => push(Slot::V(forced(v))),
         Err(rt) => die(rt.message),
     }
 }
@@ -757,6 +788,12 @@ pub extern "C" fn rt_maybe_bind(piped: u32, closure: u32) -> u32 {
         }
         _ => call_closure(closure, vec![piped]),
     }
+}
+
+#[no_mangle]
+pub extern "C" fn rt_defer(tidx: u32) -> u32 {
+    let env = push(Slot::E(Rc::new(Vec::new())));
+    push(Slot::C { tidx, env, arity: DEFERRED })
 }
 
 #[no_mangle]
