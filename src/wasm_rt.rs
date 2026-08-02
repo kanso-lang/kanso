@@ -894,6 +894,10 @@ impl Executor for RtExecutor {
         Err(format!("the playground has no filesystem: cannot read {path}"))
     }
 
+    fn make_dir(&mut self, path: &str) -> Result<(), String> {
+        Err(format!("the playground has no filesystem: cannot make {path}"))
+    }
+
     fn write_file(&mut self, path: &str, _content: &str) -> Result<(), String> {
         Err(format!("the playground has no filesystem: cannot write {path}"))
     }

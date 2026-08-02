@@ -175,6 +175,7 @@ pub enum Desc {
     IsDir(String),
     ListDir(String),
     Now,
+    MakeDir(String),
     WriteFile(String, String),
     Run(String, Vec<String>),
     Bind(Rc<Desc>, Value),
@@ -341,6 +342,9 @@ pub trait Executor {
     /// Names within a directory, sorted, so what a program prints does not
     /// depend on the order a filesystem happens to hand them back.
     fn list_dir(&mut self, path: &str) -> Result<Vec<String>, String>;
+    /// Makes a directory and every missing parent, and succeeds where it
+    /// already exists — a generator run twice is the ordinary case.
+    fn make_dir(&mut self, path: &str) -> Result<(), String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
     /// Pause wall-clock time. The scheduler decides output *order*; sleep only
     /// makes a concurrent program take real time, so a viewer feels the
@@ -453,6 +457,10 @@ impl Executor for RealExecutor {
         Ok((status, out, errs))
     }
 
+    fn make_dir(&mut self, path: &str) -> Result<(), String> {
+        std::fs::create_dir_all(path).map_err(|_| format!("cannot make {path}"))
+    }
+
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
         std::fs::write(path, content).map_err(|_| format!("cannot write {path}"))
     }
@@ -537,6 +545,11 @@ impl Executor for ScriptedExecutor {
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String> {
         self.transcript.push(format!("run {cmd:?} {args:?}"));
         Ok((0, String::new(), String::new()))
+    }
+
+    fn make_dir(&mut self, path: &str) -> Result<(), String> {
+        self.transcript.push(format!("make_dir {path:?}"));
+        Ok(())
     }
 
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String> {
@@ -1665,6 +1678,16 @@ impl<'a> Interp<'a> {
                     });
                 };
                 Ok(Value::Desc(Rc::new(Desc::WriteErr(content))))
+            }
+            "make_dir" => {
+                let [path] = arity(args, name, span)?;
+                let Value::Str(path) = &path else {
+                    return Err(RuntimeError {
+                        message: "make_dir takes a path string".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::MakeDir(path.clone()))))
             }
             "write_file" => {
                 let [path, content] = arity(args, name, span)?;
@@ -3100,6 +3123,10 @@ impl<'a> Interp<'a> {
                 Ok(names) => Value::List(Rc::new(names.into_iter().map(Value::Str).collect())),
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
+            Desc::MakeDir(path) => Ok(match executor.make_dir(path) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
@@ -3257,6 +3284,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::IsDir(path) => out.push_str(&format!("  is_dir {path:?}\n")),
         Desc::Now => out.push_str("  now\n"),
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
+        Desc::MakeDir(path) => out.push_str(&format!("  make_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out);

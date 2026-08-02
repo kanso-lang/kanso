@@ -14970,3 +14970,38 @@ text blocks were ruled but unbuilt. They have been built and pinned for a day �
 tests/golden/micro/a_text_block.kso and a_text_block_interpolates.kso, plus two
 error goldens for the fence rules. A note saying a feature does not exist is
 more expensive than no note, because it stops anybody looking.
+
+## 2026-08-02 — io/make_dir, and the shell-out it retires
+
+A program that writes a file has to be able to make the directory it goes in.
+`io/write_file` refuses a path whose parent is missing, so every generator
+script had to spawn `mkdir -p` — which bench/make_jsonbench.kso did until now,
+one process to create one directory.
+
+`io/make_dir path` makes the directory and every missing parent, and succeeds
+where it already exists. A generator run twice is the ordinary case, not an
+error, so EEXIST stops nothing.
+
+Ten sites, the shape the standing rules describe: the builtin list and its
+arity table in check.rs, the effect position and return set in infer.rs, the
+declaration and call table in codegen.rs, the `Desc` variant with its executor
+arm and the trait method in eval.rs, three Executor impls (native host,
+scripted, browser), dtag 19 in runtime.c, the browser refusal in wasm.rs and
+wasm_rt.rs, and the std wrapper. The compiler named every missing one in turn
+once the trait method existed, which is what made a ten-site change safe to do
+in one pass.
+
+Native walks the path making each component, treating EEXIST as success, which
+is `mkdir -p` written out. The browser refuses by name — "the playground has no
+filesystem: cannot make {path}" — and that refusal is listed in
+tests/golden/wasm_gaps.txt, which #688 now requires.
+
+WHAT WAS FOUND ON THE WAY: task #63 recorded an `os` package with MkdirAll as
+complete. There is no lib/os and there was no mkdir. This adds the capability
+to io, where exists, is_dir, list_dir, read_file and write_file already live;
+whether that filesystem surface should move out to its own module is the design
+question #63 actually poses, and it stays open.
+
+The corpus golden makes `.`, which is always there, so it exercises the
+idempotent path without leaving anything behind. Real creation with parents is
+covered by tests/make_dir.rs against a temp directory.

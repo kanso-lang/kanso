@@ -63,5 +63,8 @@ pub fn write content
 pub fn write_err content
   builtin_write_err content
 
+pub fn make_dir path
+  builtin_make_dir path
+
 pub fn write_file path content
   builtin_write_file path content

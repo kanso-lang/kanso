@@ -2957,6 +2957,12 @@ KValue k_b_list_dir(KValue path) {
     return k_mkdesc(15, path, k_none());
 }
 
+KValue k_b_make_dir(KValue path) {
+    if (!k_not_failure(path)) return path;
+    if (path.tag != K_STR) k_die("make_dir takes a path string");
+    return k_mkdesc(19, path, k_none());
+}
+
 KValue k_b_write_file(KValue path, KValue content) {
     if (!k_not_failure(path)) return path;
     if (!k_not_failure(content)) return content;
@@ -3108,6 +3114,27 @@ static KValue k_exec(KDesc* d) {
             KValue out = k_str_n(data, (long long)got);
             free(data);
             return out;
+        }
+        case 19: {
+            KStr* p = k_as_str(d->x);
+            char* work = malloc(p->len + 1);
+            if (!work) { fputs("out of memory\n", stderr); exit(1); }
+            memcpy(work, p->data, p->len);
+            work[p->len] = 0;
+            /* Make each parent in turn. EEXIST is the ordinary case for a
+               generator run twice, so only a real failure stops the walk. */
+            for (size_t i = 1; i <= p->len; i++) {
+                if (work[i] != '/' && work[i] != 0) continue;
+                char held = work[i];
+                work[i] = 0;
+                if (mkdir(work, 0777) != 0 && errno != EEXIST) {
+                    free(work);
+                    return k_err(k_concat(k_str("cannot make "), d->x), NULL);
+                }
+                work[i] = held;
+            }
+            free(work);
+            return k_none();
         }
         case 5: {
             KStr* p = k_as_str(d->x);
