@@ -39,8 +39,8 @@ impl EscapeInfo {
 
 /// Full analysis result for codegen: the returnable types plus the groups that
 /// return them and the parameter positions that carry them.
-pub fn analyze(program: &Program) -> EscapeInfo {
-    let mut info = analyze_inner(program);
+pub fn analyze(program: &Program, inference: &crate::infer::Inference) -> EscapeInfo {
+    let mut info = analyze_inner(program, inference);
     // union groups (any synthetic member — the bare overload space) stay
     // boxed: their arms come from different modules with independently
     // computed conventions, and mixing %parsed with %KValue in one
@@ -56,9 +56,8 @@ pub fn analyze(program: &Program) -> EscapeInfo {
     info
 }
 
-fn analyze_inner(program: &Program) -> EscapeInfo {
-    let inference = crate::infer::infer(program);
-    let returnable = register_returnable(program, &inference);
+fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> EscapeInfo {
+    let returnable = register_returnable(program, inference);
     let mut field_count = HashMap::new();
     let mut returns = HashMap::new();
     let mut carries = HashMap::new();

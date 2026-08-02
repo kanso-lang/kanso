@@ -398,7 +398,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     for (name, id) in clone_ids {
         type_ids.insert(name, id);
     }
-    let mut escape = crate::escape::analyze(program);
+    let mut escape = crate::escape::analyze(program, &inference);
     // The by-value `%parsed` is two i64s, so it only fits a record shaped like
     // the scanner's `_parsed`: exactly two fields, a small int position packed
     // into the tag word and a non-failure value in the payload word. Any other
