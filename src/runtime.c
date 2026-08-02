@@ -2655,6 +2655,22 @@ static int k_opaque_to_equality(KValue v) {
     return v.tag == K_CLOSURE || v.tag == K_FNREF || v.tag == K_DESC;
 }
 
+/* A whole number against a fractional one, decided exactly. Widening the
+   integer first rounds it onto the nearest value a double can hold and
+   reports two different numbers as equal — 9007199254740993 is the smallest
+   integer where that happens. Comparing against the double's floor keeps the
+   integer whole, and the fraction breaks the tie. Answers -1, 0 or 1 with the
+   integer on the left. */
+static int k_order_int_float(long long i, double d) {
+    if (d != d) return 1;                       /* nothing orders against NaN */
+    if (d >= 9223372036854775808.0) return -1;  /* past every int64 */
+    if (d < -9223372036854775808.0) return 1;
+    double fl = floor(d);
+    long long whole = (long long)fl;
+    if (i != whole) return (i > whole) - (i < whole);
+    return d > fl ? -1 : 0;
+}
+
 static long long k_eq_rec(KValue a, KValue b) {
     if (k_opaque_to_equality(a) || k_opaque_to_equality(b))
         k_die("equality is not defined on a function or an effect — write an arm "
@@ -2671,8 +2687,8 @@ static long long k_eq_rec(KValue a, KValue b) {
        true for 1 and 1.0, and `<` answers false either way round because
        neither is strictly less. Equality was the one operator dissenting. A
        float cannot be a map key, so nothing needs them told apart. */
-    if (a.tag == K_INT && b.tag == K_FLOAT) return (double)a.payload == k_as_f(b);
-    if (a.tag == K_FLOAT && b.tag == K_INT) return k_as_f(a) == (double)b.payload;
+    if (a.tag == K_INT && b.tag == K_FLOAT) return k_order_int_float(a.payload, k_as_f(b)) == 0;
+    if (a.tag == K_FLOAT && b.tag == K_INT) return k_order_int_float(b.payload, k_as_f(a)) == 0;
     if (a.tag != b.tag) return 0;
     switch (a.tag) {
         case K_INT: return a.payload == b.payload;
@@ -2830,11 +2846,8 @@ static int k_order(KValue a, KValue b) {
         double y = k_as_f(b);
         return (x > y) - (x < y);
     }
-    if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
-        double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
-        double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
-        return (x > y) - (x < y);
-    }
+    if (a.tag == K_INT && b.tag == K_FLOAT) return k_order_int_float(a.payload, k_as_f(b));
+    if (a.tag == K_FLOAT && b.tag == K_INT) return -k_order_int_float(b.payload, k_as_f(a));
     if (a.tag == K_STR && b.tag == K_STR) {
         KStr* sa = k_as_str(a);
         KStr* sb = k_as_str(b);

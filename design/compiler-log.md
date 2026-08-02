@@ -14743,3 +14743,32 @@ refuse unconditionally, which produced
     says so.
 
 Welfare unchanged at 75.64.
+
+## 2026-08-02 — a whole number and a fractional one compare exactly
+
+`9007199254740993 == 9007199254740992.0` answered true on both engines, and
+`>` answered false. Those are different numbers: 9007199254740993 is the
+smallest integer f64 cannot hold, so widening it to compare rounded it onto its
+neighbour and the two collapsed. Python, comparing exactly, says they are
+unequal and orders the integer above the float.
+
+Both engines widened. `int_f` in src/eval.rs took a BigInt to f64; `k_order`
+and `k_eq` in src/runtime.c cast an int64 to double. Comparison now runs
+against the float's FLOOR, which keeps the integer whole and lets the fraction
+break the tie — the same three lines in Rust and in C, so the two cannot drift.
+
+EQUALITY IS A SECOND SITE, and this is what the fix taught. Ordering goes
+through `compare`, equality through `values_equal`, and fixing only the first
+left the interpreter answering `>` true and `==` true for the same pair — an
+inconsistency sharper than the one it replaced. The two relations are
+deliberately separate (the gavel behind #686 wanted the structural one
+unreachable from a user arm), which means a change to numeric comparison has to
+land in both or neither.
+
+Pinned by tests/golden/micro/an_int_beyond_a_float_compares_exactly.kso on all
+three engines, watched red against Python as the reference. Welfare unchanged
+at 75.64, and no cost golden moved.
+
+WHAT THIS DOES NOT CHANGE: `1 == 1.0` is still true, which is the repair the
+original complaint asked for and #661 shipped. One numeric domain, and now an
+exact one.
