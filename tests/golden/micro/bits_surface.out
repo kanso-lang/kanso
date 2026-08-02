@@ -1,5 +1,5 @@
 xor:  6
-not:  -13
+comp: -13
 shl:  1024
 shr:  128
 sign: -4

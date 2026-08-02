@@ -511,7 +511,7 @@ fn ending_flag pattern at false
 fn flagged node flags
   blind = in? flags "i"
   crossing = in? flags "s"
-  untouched node blind crossing (blind == false and crossing == false)
+  untouched node blind crossing (not blind and not crossing)
 
 fn untouched node _ _ true
   node
@@ -703,7 +703,7 @@ fn braced chars base false
   after = base.pos + 1
   lazy = after <= length chars and chars[after]! == "?"
   bounds = spans mark
-  parsed (rep base.node bounds[1]! bounds[2]! (lazy == false)) (past after lazy)
+  parsed (rep base.node bounds[1]! bounds[2]! (not lazy)) (past after lazy)
 
 # `{3,60}`, `{3,}` and `{3}`. The comma decides whether there is a ceiling and
 # the digit after it decides what the ceiling is.
@@ -726,7 +726,7 @@ fn unbounded chars base low false
 
 fn closed chars base least most after
   lazy = after <= length chars and chars[after]! == "?"
-  parsed (rep base.node least most (lazy == false)) (past after lazy)
+  parsed (rep base.node least most (not lazy)) (past after lazy)
 
 fn digits chars at acc
   taking chars at acc (at <= length chars and in? "0123456789" chars[at]!)
@@ -1014,7 +1014,7 @@ fn looked_back? node wanted wide s at
   compared? node wanted wide s at reachable
 
 fn compared? _ wanted _ _ _ false
-  wanted == false
+  not wanted
 
 fn compared? node wanted wide s at true
   from = at - wide
@@ -1022,7 +1022,7 @@ fn compared? node wanted wide s at true
   landed_back? saw at wanted
 
 fn landed_back? none _ wanted
-  wanted == false
+  not wanted
 
 fn landed_back? saw at wanted
   (saw.to == at) == wanted
@@ -1066,7 +1066,7 @@ fn flipped? held false
   held
 
 fn flipped? held true
-  held == false
+  not held
 
 fn walked (edge "start") _ at slots k
   matched_here at slots k (at == 1)

@@ -1257,15 +1257,19 @@ fn parse_stmt(line: &Line) -> Result<Stmt, Diagnostic> {
 const LOOSEST: u8 = 0;
 const OR: u8 = 1;
 const AND: u8 = 2;
-const CMP: u8 = 3;
+/// `not` claims one operand and binds tighter than the connectives, so the
+/// parentheses in `not (a and b)` are load-bearing and the ones in
+/// `(not a) and b` are not.
+const NOT: u8 = 3;
+const CMP: u8 = 4;
 /// Bitwise binds tighter than comparison, which is the fix for C's famous
 /// mistake — `a & b == c` there means `a & (b == c)`, and nobody has ever
 /// wanted that. Looser than arithmetic, so `a & b + 1` adds first.
-const BITS: u8 = 4;
-const ADD: u8 = 5;
-const MUL: u8 = 6;
-const APP: u8 = 7;
-const ATOM: u8 = 8;
+const BITS: u8 = 5;
+const ADD: u8 = 6;
+const MUL: u8 = 7;
+const APP: u8 = 8;
+const ATOM: u8 = 9;
 
 /// What a pair is worth is decided by the two tokens beside it. On the right,
 /// an operator claims the parenthesised expression as its left operand, so the
@@ -1339,6 +1343,7 @@ fn level(op: &str) -> u8 {
     match op {
         "or" => OR,
         "and" => AND,
+        "not" => NOT,
         "<" | "<=" | ">" | ">=" | "==" | "!=" => CMP,
         "&" | "|" | "^" => BITS,
         "+" | "-" => ADD,
@@ -1705,15 +1710,32 @@ impl<'a> P<'a> {
     }
 
     fn parse_and(&mut self) -> Result<Expr, Diagnostic> {
-        let mut lhs = self.parse_cmp()?;
+        let mut lhs = self.parse_not()?;
         while let Some(Tok::Op("and")) = self.peek() {
             let span = self.span_here();
             self.pos += 1;
             self.consumed(AND);
-            let rhs = self.parse_cmp()?;
+            let rhs = self.parse_not()?;
             lhs = logical_if(lhs, rhs, Expr::Ident("false".to_string(), span), span);
         }
         Ok(lhs)
+    }
+
+    /// `not` binds tighter than `and` and `or` and looser than a comparison,
+    /// so `not a and b` denies only `a` and `not a == b` denies the whole
+    /// comparison. It answers the other branch of the same question `and` and
+    /// `or` ask, so it is written the same way and no engine sees a new node.
+    fn parse_not(&mut self) -> Result<Expr, Diagnostic> {
+        let Some(Tok::Op("not")) = self.peek() else {
+            return self.parse_cmp();
+        };
+        let span = self.span_here();
+        self.pos += 1;
+        self.consumed(NOT);
+        let inner = self.parse_not()?;
+        let yes = Expr::Ident("false".to_string(), span);
+        let no = Expr::Ident("true".to_string(), span);
+        Ok(logical_if(inner, yes, no, span))
     }
 
     fn parse_cmp(&mut self) -> Result<Expr, Diagnostic> {

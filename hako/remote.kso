@@ -43,7 +43,7 @@ fn highest tags
   list/fold releases none later
 
 fn unreleased? pair
-  release? pair[1]! == false
+  not release? pair[1]!
 
 fn later seen pair
   if (seen == none) pair (further seen pair)

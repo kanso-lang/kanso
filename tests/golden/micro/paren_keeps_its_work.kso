@@ -1,7 +1,7 @@
-# A comparison does not chain, so its left operand may not be one: these
-# parentheses are the only thing that makes the line parse.
+# `not` binds tighter than `or`, so without these parentheses the line would
+# deny only `a` and mean something else entirely.
 fn settled? a b
-  (a < b) == true
+  not (a or b)
 
 # The indented-argument form is spelled by wrapping each continuation line in
 # a grouping the lexer inserts, and what the lexer wraps is not what an author
@@ -14,5 +14,5 @@ pub play =
     "a name long enough that this call will not fit on any one line"
     "a second name that is also long enough to force the wrap"
     "and a third"
-  print "{settled? 1 2}"
+  print "{settled? false false}"
   >> print line

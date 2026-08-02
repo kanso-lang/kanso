@@ -1072,7 +1072,17 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>the browser is the exception. that backend has no waiting value of any kind, so it refuses the program with <code>browser backend: `graph` names itself, and the browser has no way to wait for a value</code>. the differential law allows a feature on fewer engines as long as the others refuse clearly. what it forbids is two engines quietly disagreeing about what a program means. closing it means giving that backend a deferred value of its own.</p>
 
-<h2 id="counted"><span class="sec-num">15</span>what a count can and cannot see</h2>
+<h2 id="words"><span class="sec-num">15</span>the connectives are words</h2>
+
+<p><code>a and b</code>, <code>a or b</code>, <code>not a</code>. <code>&amp;</code> <code>|</code> <code>^</code> stay with the bits, where they read as bit patterns rather than as questions, and there is no <code>!</code> at all — a language that says <code>and</code> out loud and then punctuates its negation is mixing two metaphors in one expression.</p>
+
+<p>none of the three costs an engine anything. the parser writes them as <code>if</code> at parse time, so no backend has ever seen an <code>and</code> node and none needed teaching. <code>not</code> sits on its own rung between the connectives and comparison: <code>not a and b</code> denies only <code>a</code>, and <code>not a == b</code> denies the whole comparison. that rung is what keeps the parentheses in <code>not (a or b)</code> load-bearing while calling the ones in <code>(not a) or b</code> superfluous.</p>
+
+<p><code>flag == true</code> is a compile error, and so are its three siblings. the comparison asks a question the value has already answered, and comparing two booleans to each other is exclusive-nor wearing a comparison's clothes — a spelling the language declines to offer. elsewhere this is what a linter warns about; kanso has no linter layer, and a language with one way to write a thing has nowhere to put a warning, so what a linter would flag is refused instead. the error names the replacement: the value itself, or <code>not</code> the value.</p>
+
+<p>there is no <code>nand</code> and no <code>nor</code>. <code>not (a and b)</code> already says it, with the denial on the outside where it reads.</p>
+
+<h2 id="counted"><span class="sec-num">16</span>what a count can and cannot see</h2>
 
 <p>every performance claim on this page is pinned to a count rather than a stopwatch, because a count cannot drift between machines. that choice has an edge, and knowing where it sits is part of reading the numbers.</p>
 
@@ -1082,7 +1092,7 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>the rule that declines the bracket is sound as written — rewinding would free an accumulator allocated mid-cycle. the accumulator in that shape is not allocated mid-cycle, because the in-place mutators hand back the same object, and the fix is to give a threaded container storage outside the rewound region the way a byte builder already has. that is the open item, and the retention is a pinned counter in the memory vein until it closes, so the day it moves the diff is the evidence.</p>
 
-<h2 id="trend"><span class="sec-num">16</span>the long view</h2>
+<h2 id="trend"><span class="sec-num">17</span>the long view</h2>
 
 <p>the boards above are a snapshot: what the compiler costs today, against the alternatives, on one sitting. this is the other question — which way the numbers have been going. every merge to main appends a row of counters to a history branch, and four hundred of them had piled up with nothing drawing them.</p>
 

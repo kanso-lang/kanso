@@ -66,7 +66,7 @@ fn speakable p
 fn resolved p only root origin
   mine = only == none or only == p.name
   a_release = release? p.tag
-  interim = mine and a_release == false
+  interim = mine and not a_release
   if (mine and a_release) (forward p root origin) (kept p interim)
 
 fn kept p interim

@@ -1,0 +1,4 @@
+error[name]: comparing to `true` asks a question the value already answers — write the value itself
+  --> comparing_to_a_boolean_literal.kso:4:29
+   4 | pub play = print "{ready? 1 == true}"
+                                   ^

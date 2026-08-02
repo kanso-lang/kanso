@@ -1,0 +1,9 @@
+a? = not false
+
+b? = not true and true
+
+c? = not (false and false)
+
+d? = not 1 == 2
+
+pub play = print "{a?} {b?} {c?} {d?}"

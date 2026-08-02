@@ -92,7 +92,7 @@ fn begun dir wanted names
   if (length names == 0) none_wanted (verified dir wanted names)
 
 fn verified dir wanted names
-  unknown = list/find wanted (a -> list/any? names (n -> n == a[1]!) == false)
+  unknown = list/find wanted (a -> not list/any? names (n -> n == a[1]!))
   if (unknown == none) (locked_at dir wanted names) (unimported unknown)
 
 # A binding is forced where it is written, so the message an unknown pin
@@ -149,7 +149,7 @@ fn dotted? owner
 
 fn chosen n wanted held root origin
   pinned = list/find wanted (a -> a[1]! == n)
-  standing = list/find held (p -> p.name == n and release? p.tag == false)
+  standing = list/find held (p -> p.name == n and not release? p.tag)
   plain = unasked n standing root origin
   if (pinned == none) plain (by_branch n pinned root origin)
 

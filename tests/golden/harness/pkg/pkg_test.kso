@@ -1,3 +1,3 @@
 test_parse_rejects_junk = failed? (parse "junk")
 
-test_a_plain_value_has_not_failed = failed? "fine" == false
+test_a_plain_value_has_not_failed = not failed? "fine"
