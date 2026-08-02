@@ -15668,3 +15668,39 @@ Three things follow, none of them about beats:
 Which of those wins is a measurement, and it belongs in the techniques ledger
 with the figure that decided it. What is settled is that the current answer is
 the worst of the three at any scale where maps are transient.
+
+## the view is built once and read exactly twice (2026-08-02)
+
+The second of the three candidates for the map view trade, measured rather than
+argued. Counting first reads against subsequent ones on kq's print path:
+
+    fixture      view_build   view_hit
+    188 KB            2,761      2,761
+    2.1 MB           27,610     27,610
+
+Exactly equal at both sizes, and the ratio holds through a tenfold change in
+document size. Every map that gets a view is read twice: once to build it, once
+to hit it. Never three times, never once.
+
+SO THE CACHE PAYS EXACTLY ONE SORT PER MAP, and costs exactly one leaked
+forty-eight-byte allocation per map. That is the whole trade, in one line, and
+it was previously carried as "a transient map's view leaks with the map"
+without either half being counted. On the 2.1 MB fixture it is 27,610 sorts
+saved against 3,117,280 bytes leaked.
+
+WHICH REFRAMES THE THIRD CANDIDATE. "A map read once should not cache a view"
+turns out to describe no map at all — there are no maps read once on this path.
+The right shape is narrower and better: there are exactly two reads and the
+second always follows, so a caller that takes the sorted view ONCE and carries
+it removes the cache, the malloc and the leak together, and pays nothing. The
+render arm at the K_MAP case already takes it once; the second read comes from
+elsewhere in the walk, and finding it is a read of the encode path rather than
+a design question.
+
+The path-query workload, which prints a subtree rather than a document, reads
+17 builds against 16 hits — one map's view built and never reused, the only
+such map in the run. Even there the cache is nearly free.
+
+Recorded so the next attempt starts from the numbers: the cache is not wrong,
+the leak is not small, and the fix is to remove the second read rather than to
+argue about where the view should live.
