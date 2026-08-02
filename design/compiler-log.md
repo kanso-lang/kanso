@@ -14957,3 +14957,16 @@ had to route around what it claims exists.
 The recipe published on compiler.html quoted `bash bench/make_jsonbench.sh` and
 now quotes the kanso command, because a reader following it would otherwise run
 a file that is not there.
+
+## 2026-08-02 — the generated programs say themselves
+
+bench/make_jsonbench.kso built the two files it generates by joining lists of
+single-line strings, each carrying its own escapes. They are text blocks now,
+and the generated programs read as the programs they are. Output is unchanged,
+checked by hashing all seven files before and after.
+
+Worth recording why the first version was written the wrong way: I believed
+text blocks were ruled but unbuilt. They have been built and pinned for a day —
+tests/golden/micro/a_text_block.kso and a_text_block_interpolates.kso, plus two
+error goldens for the fence rules. A note saying a feature does not exist is
+more expensive than no note, because it stops anybody looking.
