@@ -15184,7 +15184,7 @@ unchanged and welfare held at 65.56. All of it true. The change is linear in
 every shape the corpus holds and quadratic only in kq's, so a hand-built basket
 could only have caught it if somebody had thought to write kq's shape into it.
 
-Two things follow, and both shipped.
+Three things follow. Two shipped today; the third is the real one.
 
 A ratio gate, kq#42: every counter measured at two document sizes, the ten
 times fixture derived from bench/large.json at gate time, and the ratio bounded
@@ -15199,6 +15199,14 @@ worsening of even the debted counter still fails.
 And kanso's CI now builds kq and runs that suite against every compiler change.
 kq's CI already cloned kanso main, so the dependency was gated in one direction
 only, and #639 ran in a repository where nothing executed the program it broke.
+
+That second one is the cheap half and it does not generalise: gating on one real
+program covers one shape, and the next consumer arrives uncovered. Clay's
+correction, and it is the right one — the answer is not to run the flagship, it
+is to make the corpus out of many flagship-shaped programs. The count that makes
+this concrete rather than aspirational: 300 real .kso programs live in this
+repo, every one of them already run for correctness, and the cost vein measures
+four synthetic ones. The corpus should be those programs.
 
 Still open: the fix itself. `k_interior_survives` already exempts a builder
 (`cap > 0` on K_STR/K_BYTES), and extending that exemption to a builder held as
