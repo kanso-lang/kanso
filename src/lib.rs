@@ -127,17 +127,6 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     }
 }
 
-/// `kanso play`: the playground's convention at the terminal. The file is a
-/// library defining `pub play`; the synthesized entry runs it.
-/// A `play` file: one source with its imports, and a `pub play` to run.
-pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
-    compile_one(file, source, true, false)
-}
-
-/// The repl's session: the same thing without an entry point, so a prompt can
-/// import a module and reach it. An unused binding at a prompt is exploration
-/// rather than a mistake, so those are dropped here and nowhere else.
-
 /// Where a compile spends itself. Off unless `KANSO_PHASES` is set, and then
 /// one line per phase on stderr at exit — enough to say which phase to attack
 /// without a profiler, which this machine does not have.
@@ -175,6 +164,16 @@ pub mod phase {
     }
 }
 
+/// `kanso play`: the playground's convention at the terminal. The file is a
+/// library defining `pub play`; the synthesized entry runs it.
+/// A `play` file: one source with its imports, and a `pub play` to run.
+pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
+    compile_one(file, source, true, false)
+}
+
+/// The repl's session: the same thing without an entry point, so a prompt can
+/// import a module and reach it. An unused binding at a prompt is exploration
+/// rather than a mistake, so those are dropped here and nowhere else.
 pub fn compile_repl(file: &str, source: &str) -> Result<ast::Program, String> {
     compile_one(file, source, false, true)
 }
