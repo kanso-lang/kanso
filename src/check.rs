@@ -1129,7 +1129,7 @@ fn check_predicates(
             || short.starts_with("test_")
             // an arm extending an operator is named for the operator, and
             // `<` cannot take a `?` — this rule is about identifiers
-            || matches!(short, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=")
+            || matches!(short, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
         {
             continue;
         }

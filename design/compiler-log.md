@@ -14642,3 +14642,34 @@ relation is already separate and already safe: map lookup compares keys through
 `values_equal` (eval.rs:2849), a structural function no arm can reach, which is
 the Go-style data equivalence the gavel asked for. So the reconciliation holds
 by construction rather than by rule, and equality can land on top of it.
+
+## 2026-08-02 — equality takes an arm, and inequality follows from it
+
+`fn == a:money b:money` extends `==` for a type the module owns, completing the
+comparison gavel that #685 started. Pinned across three engines by
+tests/golden/micro/an_equality_arm_also_answers_not_equal.kso. Welfare
+unchanged at 75.64.
+
+`!=` is NOT separately armable, and that is the point. Where a module arms
+`==`, every `a != b` in the program is rewritten to the denial of that arm, so
+a type cannot call two values equal and unequal at once — there is no second
+thing to keep in step. The rewrite copies what `not` already does: the parser
+lowers `not x` into `if x false true` so no engine sees a new node, and
+`desugar_inequality` does the same for `!=` over the `==` arm. It is gated on
+the arm existing, so a program without one emits exactly what it did before,
+which is why the cost goldens do not move.
+
+WHAT THE RECONCILIATION TURNED OUT TO BE. The gavel asked for map-key equality
+to stay a separate, non-overridable structural relation, and the worry was two
+relations drifting apart the way Ruby's eql?/hash and Java's equals/hashCode
+do. Measuring found something stronger than a rule: a record cannot be a map
+key at all. Both engines answer `money 500 is not usable as a map key`. So the
+arm and the key relation cannot meet, and the footgun is unrepresentable rather
+than merely forbidden. `values_equal` remains the structural relation behind
+key lookup, and no arm can reach it.
+
+Four gates again, the same shape as the ordering arms: the parser's operator
+set, `armable` in codegen and in the wasm backend, and the predicate-naming
+rule. The fifth site is new — `desugar_inequality` rides the hook
+`desugar_field_reads` already runs at, because it has to see every module the
+merge produced.
