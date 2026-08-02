@@ -1507,6 +1507,9 @@ fn qualify(
 /// that read field syntax to say something about the field — a type conflict
 /// names the read site, and an application would have nothing to point at.
 pub fn desugar_field_reads(program: &mut ast::Program) {
+    // Inequality rides the same hook: it has to see every module the merge
+    // produced, which is exactly what this pass already runs after.
+    desugar_inequality(program);
     for decl in &mut program.fns {
         for stmt in &mut decl.body {
             desugar_stmt(stmt);
@@ -1519,6 +1522,50 @@ fn desugar_stmt(stmt: &mut ast::Stmt) {
         ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => desugar_expr(expr),
         ast::Stmt::Set { value, .. } => desugar_expr(value),
     }
+}
+
+/// A type says equality once. Where a module arms `==`, `a != b` becomes the
+/// denial of that arm rather than a second builtin, so no type can call two
+/// values equal and unequal at the same time. Gated on the arm existing,
+/// because a program with no arm should keep paying nothing for the question.
+pub fn desugar_inequality(program: &mut ast::Program) {
+    let armed = program.fns.iter().any(|d| d.name == "==" && d.params.len() == 2);
+    if !armed {
+        return;
+    }
+    for decl in &mut program.fns {
+        for stmt in &mut decl.body {
+            deny_stmt(stmt);
+        }
+    }
+}
+
+fn deny_stmt(stmt: &mut ast::Stmt) {
+    match stmt {
+        ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => deny_expr(expr),
+        ast::Stmt::Set { value, .. } => deny_expr(value),
+    }
+}
+
+fn deny_expr(e: &mut ast::Expr) {
+    walk_children_mut(e, &mut deny_expr);
+    let ast::Expr::BinOp { op: "!=", lhs, rhs, span } = e else {
+        return;
+    };
+    let (span, zero) = (*span, ast::Expr::Int(0.into(), *span));
+    let lhs = Box::new(std::mem::replace(lhs.as_mut(), zero.clone()));
+    let rhs = Box::new(std::mem::replace(rhs.as_mut(), zero));
+    let same = ast::Expr::BinOp { op: "==", lhs, rhs, span };
+    *e = ast::Expr::App {
+        head: Box::new(ast::Expr::Ident("if".to_string(), span)),
+        args: vec![
+            same,
+            ast::Expr::Ident("false".to_string(), span),
+            ast::Expr::Ident("true".to_string(), span),
+        ],
+        span,
+        piped: false,
+    };
 }
 
 fn desugar_expr(e: &mut ast::Expr) {

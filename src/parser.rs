@@ -416,7 +416,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let (name, span) = match p.peek() {
         // an operator arm: `fn + a:user b:user` extends the operator's
         // dispatch group for a type you own
-        Some(Tok::Op(op @ ("+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">="))) => {
+        Some(Tok::Op(op @ ("+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "=="))) => {
             let op = op.to_string();
             let span = p.span_here();
             p.pos += 1;

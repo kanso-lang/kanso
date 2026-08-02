@@ -1,0 +1,20 @@
+# a type says equality once: arming `==` decides `!=` too, so nothing can call
+# two values equal and unequal at the same time. primitives keep the builtin,
+# so an arm never reaches 1 == 1.
+type money
+  cents
+
+fn == a:money b:money
+  a.cents == b.cents
+
+same = money 500
+
+alike = money 500
+
+different = money 700
+
+pub play = said
+
+said = print "{same == alike} {same != alike}"
+  >> print "{same == different} {same != different}"
+  >> print "{1 == 1} {1 != 1} {"a" != "b"}"

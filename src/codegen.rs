@@ -3050,7 +3050,7 @@ impl<'a> Backend<'a> {
         let (a, b) = (a_owned.as_str(), b_owned.as_str());
         // a record on the left dispatches to the operator's user arms; the
         // numeric fast paths below stay untouched for everything else
-        let armable = matches!(op, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=")
+        let armable = matches!(op, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
             && self.program.fns.iter().any(|d| d.name == op && d.params.len() == 2);
         if armable && f.set_of(a) & REC != 0 {
             let tag = f.tmp();
