@@ -14186,3 +14186,47 @@ The two charts this replaces asked a smaller question — one plotted a single
 series, the other four counters over the week CI has been recording. Availability
 of already-recorded data shaped that design, which was the wrong constraint to
 accept once replaying history had been shown to recover any measurement wanted.
+
+## 2026-08-01 — the four weights, decided from evidence
+
+The utility line weighs four dimensions. What each is worth was settled by
+asking what teams shipping software actually pay for, not by taste.
+
+  run speed       0.30   satiation 2.0
+  run memory      0.30   satiation 2.0
+  compile speed   0.28   satiation 0.5
+  compile memory  0.12   satiation 0.5
+
+RUNTIME 0.60 AGAINST COMPILE 0.40. Runtime cost recurs per request forever and
+is the claim on the front page, so it keeps the majority. Compile gets well
+over a third because the evidence makes it an adoption question rather than a
+comfort one: the 2025 rust compiler performance survey found 45% of people who
+had STOPPED using the language named long compile times among their reasons. A
+language nobody stays with has no runtime.
+
+COMPILE SPEED 0.28 AGAINST COMPILE MEMORY 0.12. The complaint that dominates
+every survey of compiler performance is waiting for an incremental rebuild
+after a small edit — latency, not footprint. Memory and disk pressure appear
+around 20-22%: real, and second.
+
+RUNTIME SPLIT EVENLY. Warehouse-scale research puts memory at the centre of
+what a fleet costs — it is the capacity constraint that decides instance count,
+and far-memory tiering exists because memory TCO is the pressure. That argues
+memory over speed; the front page argues speed over memory. Even.
+
+SATIATION UNCHANGED, and it is a different question from weight. Runtime 2.0: a
+decoder eight times faster is eight times faster, and the tenth halving still
+buys something. Compile 0.5: a front end that already answers in six
+milliseconds gains almost nothing from three, which is the same threshold that
+makes a second feel instant to a person rather than a wait.
+
+Sources: blog.rust-lang.org/2025/09/10/rust-compiler-performance-survey-2025-results,
+dl.acm.org/doi/10.1145/3620666.3651350 (Characterizing a Memory Allocator at
+Warehouse Scale), homepages.inf.ed.ac.uk/bgrot/pubs/SOP-TCO_IEEEMicro_preprint.pdf.
+
+WHAT THIS UNBLOCKS. scripts/welfare.kso is twelve counters where it should be
+these four dimensions, which is how compile memory came to be weighted at zero
+while it more than doubled. The regrouping needs the compile side pointed at
+real work as well: bench/compile_golden.txt is five fixtures of about three
+hundred lines, whose rounds and visits have held one value each across every
+commit recorded. lib/json is the workload the long view already uses.
