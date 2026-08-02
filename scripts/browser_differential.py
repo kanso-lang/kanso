@@ -303,14 +303,24 @@ def main():
     if [r["name"] for r in results] != [e["name"] for e in entries]:
         sys.exit("harness failure: result names do not match the corpus")
 
-    passed, fallbacks, failures, gaps = 0, 0, 0, 0
+    passed, failures, gaps = 0, 0, 0
     for path, result in zip(paths, results):
         name = result["name"]
         kind = result["kind"]
         if kind == "fallback":
-            fallbacks += 1
+            # The page fell back to the interpreter, which means the backend
+            # refused the program. A refusal is a gap and has to be written
+            # down: the differential law lets an engine speak fewer features
+            # only where it says so plainly, and a fallback nothing records
+            # is a gap no harness can see.
             reason = result["reason"].strip()
-            print(f"SKIP  {name} (fallback: {reason})")
+            if KNOWN_GAPS.get(name, "\0") in reason:
+                gaps += 1
+                print(f"GAP   {name} (fallback: {reason})")
+                continue
+            failures += 1
+            print(f"FAIL  {name} (fallback, and no gap says so: {reason})")
+            print("      add it to tests/golden/wasm_gaps.txt or close it")
             continue
         if kind != "wasm":
             reason = result.get("reason", result.get("text", "")).strip()
@@ -337,7 +347,7 @@ def main():
             print(f"      native: code={native_code} text={show(native_text)}")
             print(f"      wasm:   code={result['code']} text={show(result['text'])}")
 
-    print(f"\n{passed} passed, {gaps} known gaps, {fallbacks} fallback, {failures} failed")
+    print(f"\n{passed} passed, {gaps} known gaps, {failures} failed")
     sys.exit(1 if failures else 0)
 
 
