@@ -14394,3 +14394,35 @@ subtype fix, now six. Two of those six are not bugs — a sample that lists its
 own directory, and one whose subject is the word `play` in a comment. The other
 four are two classes still open: err types across an import, and a blank-line
 complaint from `import_diamond` and `not_equal` that has not been read yet.
+
+## 2026-08-02 — a typeset keeps its members across an import, and the family closes
+
+`TypeDecl` carries three names besides its own: `parent`, the member lists
+inside `fields`, and `members`. Qualification moved the second, and now moves
+all three. `type lane_err quota_torn slow_lane` in a module called `quota` had
+members reading `quota_torn` and `slow_lane` after both types had become
+`quota/quota_torn` and `quota/slow_lane`, so the set was empty.
+
+    native        error: native backend: unknown type `quota_torn`
+    interpreter   error[endpoint]: unhandled err reached the entry: quota/slow_lane 7
+    run directly  quota: limit 99 / lane trouble: slow_lane 7 / ok: plain 3
+
+The interpreter's symptom is the more informative one: the err walked past the
+arm written to catch it, because `e:lane_err` matched nothing.
+
+THE FAMILY IS CLOSED. Running the micro corpus through a generated entry file
+failed eleven of seventy-eight; it now fails four, and none of the four is a
+compiler bug. Two are files that are already entries — bare statements and no
+exported lambda, so there is nothing for a runner to name. One lists its own
+directory and cannot survive being copied out of it. One has the word `play`
+in a comment as its whole subject.
+
+Three real bugs came out of it, each a field or a reference site qualification
+missed, each broken differently on the two engines, each invisible to a corpus
+that reaches every one of these constructs only by running its file directly:
+a subtype's parent, the currying sigil's name, and a typeset's membership.
+
+Running a directory merges its files into one module, so nothing is qualified
+and none of the three can appear. That is why the fixtures here run the entry
+FILE, and why the runner fixture that shipped with sibling imports — which runs
+the directory — never took the path it was written for.
