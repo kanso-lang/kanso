@@ -1,0 +1,4 @@
+# Ordering across two types has no answer to give: whether 1 comes before "a"
+# is a question about a convention nobody chose. Equality answers it — they are
+# not the same value — so only the ordering refuses.
+pub play = print "{1 < "a"}"
