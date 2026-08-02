@@ -15624,3 +15624,47 @@ about beats.
 The wrapper is four small functions and a line-tagged table, and it found in one
 run what four entries of arena counters could not. It should probably be a
 build flag rather than something rebuilt each time somebody needs it.
+
+## the view leak is a recorded trade, and its number is much larger than it sounds (2026-08-02)
+
+Correcting the entry above within the hour. It closed by saying the views "never
+reach the sweep" and that where they are owned was the next thing to establish.
+The answer was already in the source, three lines above `k_view_alloc`:
+
+    "with nothing arena-backed to dangle, nothing registers and the sweep walks
+     an empty table. A transient map's view leaks with the map; the trade is
+     recorded in the log beside the numbers."
+
+`k_cache_reg_add` has no callers. The registry is dead, `k_cache_reg_sweep`
+walks an empty table on every rewind, and the leak is deliberate: the view is
+malloc'd precisely so a below-mark map header can never hold a pointer a rewind
+frees, and the price of that is one orphaned view per transient map. Both
+"fixes" tried in the previous entry were edits to code that never runs.
+
+WHAT IS ACTUALLY NEW IS THE SIZE OF THE TRADE. "A transient map's view leaks
+with the map" reads like a rounding error. Measured on a loop that builds one
+map per iteration and reads it:
+
+    1,600,000 transient maps    76,800,048 bytes leaked    48 bytes each
+
+It is unbounded in the iteration count, and it is the entire difference between
+the arena counter and the resident set that four entries went looking for. kq
+pays the linear version today: 311,728 bytes on the 188 KB fixture, 3,117,280 on
+ten times it, growing with document size because the decoder builds a map per
+object and the printer reads each one.
+
+SO THE TRADE WANTS REVISITING, with the number attached. The choice was between
+an arena-backed view needing a registry sweep, and a malloc'd view needing no
+sweep but leaking per transient map. The second was taken when the leak was
+assumed small. At one map per loop iteration it is not small, and the sweep it
+bought away costs nothing today because it walks an empty table.
+
+Three things follow, none of them about beats:
+  - the registry and its sweep are dead code and can go, or
+  - the view goes back in the arena and the registry comes back to life, or
+  - the view is not cached at all for a map read once, which is the common case
+    the decoder produces.
+
+Which of those wins is a measurement, and it belongs in the techniques ledger
+with the figure that decided it. What is settled is that the current answer is
+the worst of the three at any scale where maps are transient.
