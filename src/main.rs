@@ -72,6 +72,12 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
 ";
 
 fn main() -> ExitCode {
+    let code = driven();
+    kanso::phase::report();
+    code
+}
+
+fn driven() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("repl") {
         return repl();
