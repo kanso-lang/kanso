@@ -65,7 +65,8 @@ fn tokens l
 fn plain? parts
   well_named = all_in? name_chars parts[1]!
   args = list/to_list (list/drop parts 1)
-  well_named and list/all? args (p -> all_in? param_chars p) and not_shaped? args
+  plain_args? = list/all? args (p -> all_in? param_chars p)
+  well_named and plain_args? and not_shaped? args
 
 fn not_shaped? args
   list/all? args (p -> length (text/split p "(") == 1)
