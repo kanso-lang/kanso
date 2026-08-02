@@ -15113,3 +15113,50 @@ true when written and the split in #675 has since moved it.
 So the remaining compile-speed work is not in removing a duplicate. It is in
 check_merged itself, which is now the largest phase, and in lex and parse at
 11.2% and 8.8% together.
+
+## 2026-08-02 — the accumulator guard is correct, and the contradiction is resolved
+
+The previous entry left a contradiction: with `put` exempted from
+`accumulator_grows`, a map grown to 3,000 keys inside a loop and read afterwards
+was CORRECT on both engines, with linear allocation counts — which the model
+said was impossible. Instrumenting the growth path settled it.
+
+Printing the pairs buffer against the innermost beat mark at every growth:
+
+    grow len=1 pairs=0x102c2d9b0 new=0x9c94000b0 mark=0x9c9400060 above=1 survives_new=0
+    grow len=2 pairs=0x102c2da20 new=0x9c94000b0 mark=0x9c9400060 above=1 survives_new=0
+    grow len=3 pairs=0x102c2e010 new=0x9c94000b0 mark=0x9c9400060 above=1 survives_new=0
+
+Three facts in those lines. The new buffer is the SAME arena address every
+iteration, just above the mark, because the rewind returns the arena and the
+next bump reuses it. `k_survives` says it does not survive. And the pairs
+pointer at the START of each growth is in a different range entirely — the
+malloc'd carry buffer.
+
+So the map IS carried. Every iteration the carry deep-copies it out to malloc
+before the rewind, exactly as the header at runtime.c:443 describes, and the
+arena copy dies. Nothing dangles, which is why the program is correct. The
+allocation counter stays linear because the carry buffer is one malloc'd block
+that bytes are copied into rather than a run of k_alloc calls, so the copy is
+invisible to `allocs`.
+
+IT IS QUADRATIC, and wall time says so where the counter could not:
+
+    n=4000    0.42 s
+    n=8000    1.82 s
+    n=16000   7.62 s
+
+Each doubling of the accumulator quadruples the run. The carry copies the whole
+map every iteration.
+
+SO THE GUARD IS CORRECT AND STAYS. `accumulator_grows` is not protecting memory
+safety — the carry already does that. It is protecting against precisely this
+quadratic, which is what the comment beside the carried-slot check has said all
+along: growth in a carried slot disqualifies the cluster. Exempting `put` trades
+a leak for a quadratic and the leak is the better bargain.
+
+WHAT WOULD ACTUALLY FIX IT is to make a growing accumulator THREADED rather
+than carried, so it is shared across the rewind instead of copied. That needs
+its storage to survive, which means `k_buf` growth for a threaded slot
+allocating outside the arena. That is the piece this task first named, and the
+reason for it is now known: not safety, but escaping the carry copy.
