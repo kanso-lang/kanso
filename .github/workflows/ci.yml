@@ -225,6 +225,18 @@ jobs:
             exit 1
           }
 
+      - name: compile memory
+        run: |
+          KANSO_COUNTERS=1 ./target/release/kanso check lib/json 2>counters_compile.txt >/dev/null
+          grep '^compile_' counters_compile.txt > got_compile.txt
+          grep -v '^#' bench/compile_memory_golden.txt > want_compile.txt
+          diff want_compile.txt got_compile.txt || {
+            echo "::error::what the front end holds while checking lib/json moved."
+            echo "::error::that is a welfare term now. if intentional, regenerate"
+            echo "::error::bench/compile_memory_golden.txt in this PR and say which"
+            echo "::error::way it went in design/compiler-log.md."
+            exit 1
+          }
       - name: encode counters
         run: |
           KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null

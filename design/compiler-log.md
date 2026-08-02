@@ -14463,3 +14463,43 @@ regime marker on the buffer so `k_buf_donate` and the arena's wholesale free
 can tell the two apart; and only then beat.rs admitting these clusters. Doing
 the third without the first two is precisely the corruption the three bugs
 above were.
+
+## 2026-08-02 — the score is four terms
+
+`scripts/welfare.kso` weighed twelve counters. It now weighs four dimensions —
+memory and performance, for compiling and for running — and a counter is an
+input to one of them rather than a term in its own right.
+
+    run speed       0.30  satiation 2.0   decode/encode/basket allocations
+    run memory      0.30  satiation 2.0   decode/encode/oneshot/basket peaks
+                                          and arena blocks
+    compile speed   0.28  satiation 0.5   fixpoint rounds, expression visits,
+                                          emitted lines
+    compile memory  0.12  satiation 0.5   what the front end holds checking
+                                          lib/json
+
+A dimension's ratio is the mean of its counters', so one counter halving while
+another doubles is a wash. That is the point: the counters are how a dimension
+is observed, not four separate things to defend.
+
+WHAT THIS FIXES. Compile memory was represented by nothing. The specification
+asked for compile speed and memory against run speed and memory; what shipped
+was the counters that existed on the day, and no counter measured what the
+front end holds. A missing dimension inside a list of counters looks like
+nothing; inside four named terms it is an empty slot. It stayed empty while the
+figure it would have watched more than doubled.
+
+bench/compile_memory_golden.txt is the new input, and CI diffs it beside the
+others. The counter is deterministic: four runs of `kanso check lib/json` give
+compile_peak_bytes=819217 every time.
+
+THE SCORE MOVED 65.69 TO 75.78 AND THE FLOOR MOVED WITH IT. That is the model
+changing, not the compiler improving, and the ratchet records it in those
+words. A restructure that quietly banked ten points as progress would be worse
+than leaving the model wrong.
+
+The weights are the ones decided from evidence and recorded above: runtime 0.60
+because it recurs per request forever, compile 0.40 because 45% of people who
+stopped using rust named compile times among their reasons, and compile speed
+over compile memory better than two to one because the complaint that dominates
+every survey is waiting for an incremental rebuild.

@@ -1,0 +1,13 @@
+# What the front end costs to hold, checking the json library. The other
+# compile counters say how much work it decided to do; this says how much it
+# had to keep while deciding, which is the term the score was missing.
+#
+# Measured by the compiler's own allocator, so it is a property of this
+# binary on this input and moves only when the compiler does. Regenerate
+# deliberately and say which way it went in design/compiler-log.md.
+compile_alloc_bytes=6244382
+compile_allocs=115787
+compile_peak_bytes=819217
+compile_passes=5
+compile_rounds=31
+compile_visits=25874
