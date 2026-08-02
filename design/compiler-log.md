@@ -14135,3 +14135,25 @@ measures a five-line sample. A fifth of the objective has been a constant.
 Both are arguments about the weights rather than about any change, so both wait
 for a ruling: whether compile_peak_bytes becomes a term, and what the compile
 counters should measure instead of five lines.
+
+## 2026-08-01 — the long view is drawn, from measurements taken backwards
+
+bench/compile_memory_history.tsv holds one row per commit for all 751 that have
+a json library: peak resident bytes while that commit's compiler checks that
+commit's lib/json, and the size of that library. scripts/memory_trend.kso draws
+the ratio into the compiler page.
+
+The ratio rather than the raw figure, because both numbers move. 1.70 MB to
+5.44 MB is the memory; 7.7 KB to 10.6 KB is the library; 227 to 524 bytes of
+resident memory per byte of source is the part that says the front end got
+hungrier rather than the input getting bigger.
+
+Two charts rather than one, because the spans differ by three. This one covers
+every commit since 11 July. The counter chart beside it covers the week since
+CI began recording, and drawing a three-week series and a one-week series
+against a shared commit index would put them on an axis neither of them has.
+Time is the axis here for the same reason: commits are not evenly spaced.
+
+The file is checked in rather than derived. Nothing recorded compile memory
+before 31 July, and recovering it costs a build per commit, so the measurement
+is data now.

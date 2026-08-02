@@ -1,0 +1,120 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# The long view: what it costs the front end to check a library, across every
+# commit this project has. bench/compile_memory_history.tsv holds one row per
+# commit — peak resident bytes while that commit's compiler checks that
+# commit's lib/json, and the size of that library.
+#
+# Both numbers move, so neither alone says anything. The library roughly
+# doubled over the span and the memory more than tripled, and it is the ratio
+# that separates a compiler getting hungrier from a library getting bigger.
+# So the line drawn is bytes of resident memory per byte of source.
+#
+# The x axis is time rather than commit index, because commits are not evenly
+# spaced and a busy day would otherwise stretch across the page.
+width = 1200
+
+height = 300
+
+pad = 56
+
+pub play = io/read_file "bench/compile_memory_history.tsv" . drawn
+
+fn drawn text
+  rows = list/to_list (list/select (text/split text "\n") measured?)
+  charted rows (length rows)
+
+fn measured? line
+  length line > 20 and (text/split line "#")[1]! == line
+
+fn charted _ 0
+  io/write_err "no rows — bench/compile_memory_history.tsv is empty\n"
+    . (_ -> io/exit 1)
+
+fn charted rows n
+  io/read_file "docs/compiler.html" . (page -> spliced page rows n)
+
+fn spliced page rows n
+  body = svg rows n
+  before = (text/split page "<!--memory-trend-->")[1]!
+  rest = (text/split page "<!--/memory-trend-->")[2]!
+  open = "{before}<!--memory-trend-->"
+  close = "<!--/memory-trend-->{rest}"
+  io/write_file "docs/compiler.html" "{open}\n{body}\n{close}"
+    >> io/write "memory trend: {n} commits\n"
+
+fn svg rows n
+  ratios = list/to_list (list/map rows ratio_of)
+  times = list/to_list (list/map rows time_of)
+  low = list/min ratios
+  high = list/max ratios
+  first = list/min times
+  last = list/max times
+  line = plotted ratios times low high first last
+  frame line low high n
+
+# Integer division would round every ratio to the same handful of values, so
+# the numerator is scaled first and the line is drawn in hundredths.
+fn ratio_of row
+  parts = text/split row "\t"
+  peak = text/to_int parts[3]!
+  source = text/to_int parts[4]!
+  100 * peak / source
+
+fn time_of row
+  text/to_int (text/split row "\t")[1]!
+
+fn plotted ratios times low high first last
+  coords = stepped ratios times low high first last 1 (length ratios) ""
+  open = "<polyline fill=\"none\" stroke=\"#4fd1ff\""
+  "{open} stroke-width=\"2\" points=\"{coords}\"/>"
+
+fn stepped ratios times low high first last at n acc
+  walking ratios times low high first last at n acc (at > n)
+
+fn walking _ _ _ _ _ _ _ _ acc true
+  acc
+
+fn walking ratios times low high first last at n acc false
+  x = across times[at]! first last
+  y = up ratios[at]! low high
+  stepped ratios times low high first last (at + 1) n "{acc} {x},{y}"
+
+fn across t first last
+  pad + (t - first) * (width - 2 * pad) / span_of first last
+
+# One commit, or several in the same second, would divide by zero.
+fn span_of first last
+  widened (last - first)
+
+fn widened 0
+  1
+
+fn widened n
+  n
+
+fn up v low high
+  placed v low (high - low)
+
+fn placed _ _ 0
+  height / 2
+
+fn placed v low span
+  top = pad / 2
+  usable = height - pad - top
+  top + usable - (v - low) * usable / span
+
+fn frame line low high n
+  open = "<svg class=\"trend\" viewBox=\"0 0 {width} {height}\" role=\"img\""
+  said = "resident bytes per source byte across {n} commits"
+  titled = "{open} aria-label=\"{said}\">"
+  "{titled}\n{line}\n{labels low high}\n</svg>"
+
+fn labels low high
+  y = height - 14
+  key = "class=\"trend-key\""
+  top = "<text x=\"8\" y=\"22\" {key}>{high / 100} bytes/byte</text>"
+  bottom = "<text x=\"8\" y=\"{y}\" {key}>{low / 100}</text>"
+  "{top}{bottom}"
