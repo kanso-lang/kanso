@@ -622,7 +622,10 @@ fn desc_yield(e: &Expr) -> Set {
             // an unset variable yields none, which is a value the consumer
             // dispatches on rather than a failure it has to trap
             Expr::Ident(n, _)
-                if matches!(base(n), "print" | "write" | "write_err" | "write_file" | "sleep") =>
+                if matches!(
+                    base(n),
+                    "print" | "write" | "write_err" | "write_file" | "make_dir" | "sleep"
+                ) =>
             {
                 0
             }
@@ -681,8 +684,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "bit_and" | "bit_or" | "bit_xor" | "bit_not" | "bit_shl" | "bit_shr" => INT | fails,
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
-        "read_file" | "write" | "write_err" | "write_file" | "sleep" | "random" | "env"
-        | "exists" | "is_dir" | "list_dir" | "now" | "run" => DESC | fails,
+        "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
+        | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" => DESC | fails,
         _ => TOP,
     }
 }

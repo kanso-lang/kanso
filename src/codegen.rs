@@ -234,6 +234,7 @@ declare %KValue @k_b_exists(%KValue)
 declare %KValue @k_b_is_dir(%KValue)
 declare %KValue @k_b_list_dir(%KValue)
 declare %KValue @k_desc_now()
+declare %KValue @k_b_make_dir(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_b_run(%KValue, %KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
@@ -295,7 +296,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 43] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 44] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -310,6 +311,7 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 43] = [
     ("exists", 1),
     ("is_dir", 1),
     ("list_dir", 1),
+    ("make_dir", 1),
     ("write_file", 2),
     ("run", 2),
     ("concat", 2),

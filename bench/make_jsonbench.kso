@@ -35,7 +35,7 @@ ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
 
 pub play = built
 
-built = io/run "mkdir" ["-p" out] . (_ -> copied)
+built = io/make_dir out . (_ -> copied)
 
 copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
   . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
