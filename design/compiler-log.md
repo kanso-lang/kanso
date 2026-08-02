@@ -15704,3 +15704,41 @@ such map in the run. Even there the cache is nearly free.
 Recorded so the next attempt starts from the numbers: the cache is not wrong,
 the leak is not small, and the fix is to remove the second read rather than to
 argue about where the view should live.
+
+## the second reader is `length`, and it is not removable (2026-08-02)
+
+Correcting the entry above. It concluded that with exactly two reads per view
+"a caller that takes the sorted view once and carries it removes the cache, the
+malloc and the leak together, and pays nothing." Tagging the five call sites
+says otherwise:
+
+    render=0  equal=0  entries=2761  index=0  length=2761
+
+The two readers are `entries` and `length`, in equal number, and nothing else
+touches a view on this path. `entries` needs the sorted, deduped pairs. `length`
+needs the deduped COUNT — `m->len` is the raw appended count with duplicates
+still in it, so answering `length` on a map means deduping, and deduping means
+the sort. Both reads are load-bearing. There is no redundant one to delete.
+
+SO THE CACHE IS CORRECT AND IS EARNING ITS KEEP: two genuine readers served by
+one sort. That is what a cache is for, and the previous entry proposed removing
+a mechanism that is doing its job.
+
+WHICH ISOLATES THE ACTUAL DEFECT, and it is narrower than three entries have
+been treating it. The problem is not that the view is built, nor that it is
+read twice, nor where it lives. It is that a malloc'd view has no owner: nothing
+frees it when the map it belongs to becomes garbage, because the arena has no
+notion of an object dying. Bounded by document size the cost is small — 132 KB
+on kq's 188 KB fixture, 1.3 MB on ten times it, all of it released at exit.
+Unbounded where maps are made in a loop, which is the 76.8 MB measured earlier.
+
+So the fix is an ownership question about one malloc'd side-buffer, not a
+question about caching policy or about beats. The candidates the log named
+reduce to two real ones: give the view back to the arena and re-invalidate it
+correctly, or give the map header a destructor hook that the only allocator
+which frees anything — the cohort path — can call. Both are measurable and
+neither needs a decision from anybody.
+
+Recorded because two consecutive entries got the shape wrong in opposite
+directions: the first said the sweep was the leak when the sweep was dead, the
+second said a reader was redundant when both are load-bearing.
