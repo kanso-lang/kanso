@@ -109,6 +109,10 @@ impl Executor for CollectExecutor {
         ))
     }
 
+    fn make_dir(&mut self, path: &str) -> Result<(), String> {
+        Err(format!("the oracle does not touch the filesystem: cannot make {path}"))
+    }
+
     fn write_file(&mut self, path: &str, _content: &str) -> Result<(), String> {
         Err(format!("the oracle does not write files: cannot write {path}"))
     }

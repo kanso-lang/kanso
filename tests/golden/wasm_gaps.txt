@@ -24,4 +24,4 @@ tests/golden/runtime/read_missing_file.kso	the playground has no filesystem
 # `is_dir` reads false in a page for the same reason `exists` does — there is
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false
-tests/golden/runtime/make_dir_is_idempotent.kso	the playground has no filesystem
+tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
