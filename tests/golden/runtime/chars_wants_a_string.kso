@@ -1,0 +1,5 @@
+# The same shape one function over: the argument is a value of the wrong kind
+# and the check pass lets it through, so the refusal is the builtin's own.
+import "std/text"
+
+pub play = print "{text/chars 5}"

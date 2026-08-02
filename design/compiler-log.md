@@ -14798,3 +14798,43 @@ The two refusals read differently on purpose. Ordering has no answer to give,
 because whether 1 comes before "a" is a question about a convention nobody
 chose. Equality does have an answer for that pair — they are not the same value
 — and refuses only where the question is which one you were handed.
+
+## 2026-08-02 — sweeping the runtime messages, and what the sweep actually found
+
+Every literal runtime message in runtime.c, eval.rs and wasm_rt.rs, checked
+against what the golden tree and the Rust tests watch: 66 messages, most
+watched by nothing.
+
+The count is not the finding, and the first two versions of the sweep were
+wrong in a way worth recording. Matching only golden files reported "integer
+overflow" as unwatched when tests/numeric_parity.rs pins it thoroughly — the
+oracle stays exact, native refuses, and the reason is checked. Widening the
+search to the Rust tests still reported it, because an 18-character window over
+`integer overflow (int64 native build...` always straddled the parenthesis the
+test does not quote. A string sweep answers a string question, and the question
+here was reachability.
+
+PROBING IS WHAT ANSWERED IT. Of eight messages driven from ordinary kanso
+source, six never fire because something better gets there first:
+
+    print 5           error[type]: `print` takes a string here, not an int
+    entries [1 2]     error[type]: `entries` takes a map here, not a list
+    put [1] "k" 2     error[type]: `put` takes a map here, not a list
+    list/sum 5        error[runtime]: length takes a list, string, or map, not 5
+    list/map 5 f      the same, from the same place
+    list/concat 1 2   error[name]: unknown name `list/concat`
+
+Two reached their own message, and both are now pinned:
+tests/golden/runtime/join_wants_strings_to_join and chars_wants_a_string.
+
+WHAT THIS SAYS ABOUT THE DIAGNOSTICS. The check pass covers some builtins and
+not others, and which ones is not a decision anybody made. `print`, `entries`
+and `put` answer with a typed message naming the argument and its actual type.
+`text/join` and `text/chars` fall through to a runtime string naming neither
+the call site nor the value. A person meeting the second kind gets a worse
+error than a person meeting the first, for no reason they could predict.
+
+Closing that is a decision rather than a sweep, so it is recorded rather than
+started. Eight probes are not a proof about fifty-six messages, and deleting a
+message on the strength of one is exactly the reasoning this log has been
+burned by before.

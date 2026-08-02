@@ -1,0 +1,6 @@
+# `join` reaches its own refusal, where most builtins are caught earlier by the
+# type check with a better message. The list is a list, so nothing upstream
+# objects; only the join itself knows its elements have to be strings.
+import "std/text"
+
+pub play = print "{text/join [1 2] ","}"
