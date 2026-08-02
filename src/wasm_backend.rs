@@ -707,7 +707,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.end();
             }
             Expr::BinOp { op, lhs, rhs, span } => {
-                let armable = matches!(*op, "+" | "-" | "*" | "/" | "%")
+                let armable = matches!(*op, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=")
                     && self.program.fns.iter().any(|d| d.name == *op && d.params.len() == 2);
                 if let Some(idx) =
                     armable.then(|| self.dispatchers.get(&(op.to_string(), 2)).copied()).flatten()
