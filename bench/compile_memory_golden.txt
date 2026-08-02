@@ -1,0 +1,12 @@
+# What the front end holds while checking the json library. The other compile
+# counters say how much work it decided to do; this says how much it had to
+# keep while deciding, which is the term the score was missing.
+#
+# This is the one counter here that is a property of the host as well as of the
+# program — it is measured by the compiler's own allocator, and linux and macos
+# disagree by 56 bytes on the same input. So the score reads this number, which
+# keeps it deterministic everywhere, and CI asserts only that reality has not
+# drifted more than two per cent from it. Two per cent is a hundred times the
+# disagreement between hosts and far below anything worth noticing, so the
+# gate catches a real move without ever firing on which machine ran it.
+compile_peak_bytes=819217
