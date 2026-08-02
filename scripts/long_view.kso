@@ -31,16 +31,28 @@ height = 560
 
 pad = 64
 
-# Weight and satiation per dimension, as the welfare score states them:
-# runtime carries two thirds against compile's one third, and runtime keeps
-# paying for improvement long after compile has stopped.
-s_run_speed = series "#4fd1ff" 333 "run speed" run_speed
+# Weight and satiation per dimension. Runtime carries 0.60 against compile's
+# 0.40 — compile is more than the third it looks like from inside, because
+# 45% of people who stopped using rust named long compile times as a reason,
+# which makes it an adoption question rather than a comfort one. Runtime keeps
+# the majority because it recurs per request forever.
+#
+# Inside compile, speed carries 0.28 against memory's 0.12: the complaint that
+# dominates every survey is waiting for an incremental rebuild, not footprint.
+# Inside runtime the two split evenly — warehouse-scale work puts memory at the
+# centre of what a fleet costs, and speed is the claim on the front page.
+#
+# Satiation says how long a dimension keeps paying. Runtime is 2.0: a decoder
+# eight times faster is eight times faster. Compile is 0.5: a front end that
+# already answers in six milliseconds gains almost nothing from three, which is
+# the same threshold that makes a second feel instant to a person.
+s_run_speed = series "#4fd1ff" 300 "run speed" run_speed
 
-s_run_memory = series "#a78bfa" 333 "run memory" run_memory
+s_run_memory = series "#a78bfa" 300 "run memory" run_memory
 
-s_comp_speed = series "#ffd166" 167 "compile speed" compile_speed
+s_comp_speed = series "#ffd166" 280 "compile speed" compile_speed
 
-s_comp_memory = series "#f472b6" 167 "compile memory" compile_memory
+s_comp_memory = series "#f472b6" 120 "compile memory" compile_memory
 
 s_utility = series "#4ade80" 0 "utility" utility
 
@@ -102,10 +114,10 @@ fn utility row
   utility_against row row
 
 fn utility_against row base
-  a = worth (compile_memory base) (compile_memory row) 167 50
-  b = worth (compile_speed base) (compile_speed row) 167 50
-  c = worth (run_memory base) (run_memory row) 333 200
-  d = worth (run_speed base) (run_speed row) 333 200
+  a = worth (compile_memory base) (compile_memory row) 120 50
+  b = worth (compile_speed base) (compile_speed row) 280 50
+  c = worth (run_memory base) (run_memory row) 300 200
+  d = worth (run_speed base) (run_speed row) 300 200
   a + b + c + d
 
 # All of it in hundredths, so integer division never rounds a ratio to one.
