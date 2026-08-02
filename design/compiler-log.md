@@ -15250,8 +15250,41 @@ count that makes this concrete rather than aspirational: 300 real .kso programs
 live in this repo, every one already run for correctness, and the cost vein
 measures four synthetic ones. The corpus should be those programs.
 
-Still open: the fix itself. `k_interior_survives` already exempts a builder
-(`cap > 0` on K_STR/K_BYTES), and extending that exemption to a builder held as
-a slot inside a container — the obvious first hypothesis — changes nothing:
-carry_dedup stays at 286,401. So kq's accumulator is not reaching the walk as a
-container-of-builder, and which case it does take is the next question.
+Still open: the fix itself. Two hypotheses died and the probe answered what
+neither could.
+
+`k_interior_survives` already exempts a builder (`cap > 0` on K_STR/K_BYTES),
+and extending that exemption to a builder held as a slot inside a container —
+the obvious first move, since `k_slots_survive` asks plain arena membership and
+so answers no for malloc'd storage — changes nothing. carry_dedup stays at
+286,401.
+
+So the walk was instrumented rather than reasoned about again: a counter per tag
+on each of the two ways `k_shareable` can refuse. On kq's 188 KB fixture,
+
+    tag  6 K_STR      interior 0    outer 3264
+    tag  7 K_REC      interior 0    outer 9190
+    tag  8 K_DESC     interior 0    outer 971
+    tag  9 K_LIST     interior 30   outer 5473
+    tag 10 K_MAP      interior 15   outer 3105
+    tag 11 K_CLOSURE  interior 0    outer 484
+
+The check #639 added refuses FORTY-FIVE nodes. Every one of the other 22,487
+refusals comes from `k_survives`, which #639 never touched. And note K_REC's
+interior column is zero — the record case #639 was written for does not arise
+here at all.
+
+Those forty-five are amplifiers. A node refused near the root is copied instead
+of shared, so the walk cannot prune there and descends the whole subtree
+beneath it; in #638 the accumulator was shareable and the walk stopped at one.
+Forty-five refusals become twenty-two thousand visits, and the count itself is
+about the number of carries — which names the shape: the fold carry deep-copies
+the accumulated document once per iteration. An O(n) copy n times is the
+quadratic, and it is why the counter scales with the square of the document
+while `allocs` beside it stays honestly linear at 10.3.
+
+The fix has to make the accumulator shareable again without giving back what
+#639 bought. A builder's exemption is that its storage is malloc'd and a rewind
+cannot reach it; whether a grown K_LIST or K_MAP backing store carries the same
+proof is the next thing to establish — against the real allocator rather than
+against what the struct would tolerate.
