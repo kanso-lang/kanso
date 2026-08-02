@@ -15078,3 +15078,38 @@ WHAT WOULD SETTLE IT is a reading rather than a test: whether every path out of
 a rewound region passes through the carry copy. If it does, the guard is dead
 code and the two-word change is correct. If there is one path that does not,
 the change is a memory bug that no fixture in this repo would report.
+
+## 2026-08-02 — the duplicated inference run, measured and declined
+
+Collapsing the compiler's repeated whole-program inference was queued as the
+next large compile-speed win, on the strength of the 179M -> 151M cut that came
+from removing one duplicated pair. Measured, and it is not there.
+
+FIRST, THE COUNT WAS WRONG. There are two production call sites, not three:
+check.rs:1220 inside `check_merged`, and codegen.rs:385 inside `emit_ir`.
+Everything else `grep infer::infer` finds is test code — five in beat.rs, two in
+dispatch.rs, each inside a `#[test]` or a test helper like `compiled()`.
+
+SECOND, THE TWO CANNOT SHARE A RESULT. `check_merged` runs at lib.rs:106,
+before ten mutating passes: synthesize_getters, desugar_field_reads,
+prune_unused_getters, trmc::rewrite, inline_builtin_wrappers,
+canonicalize_types, canonicalize_bare_aliases, hoist_repeated_strings,
+fuse_enumerable, then a second round of getters, desugar and trmc. `emit_ir`
+runs after all of them. desugar_field_reads turns a Field into an App and
+prune_unused_getters deletes declarations, so the program codegen infers over
+does not exist yet when checking infers. There is nothing to reuse.
+
+THIRD, THE SECOND RUN IS NOT WORTH FINDING A WAY TO REUSE. `kanso check
+lib/json` is 131.9M instructions and runs inference once. `kanso build
+bench/jsonbench --release` is 2,467M — nineteen times a check, dominated by
+LLVM rather than by the front end. A second inference over the same module is a
+rounding error against that.
+
+AND THE PREMISE WAS OVERSTATED. Inference is 20.9% of a check by the phase
+profiler's exclusive time, second to check_merged's own 26.9%, not the phase
+that dominates. An earlier entry called it the largest single phase; that was
+true when written and the split in #675 has since moved it.
+
+So the remaining compile-speed work is not in removing a duplicate. It is in
+check_merged itself, which is now the largest phase, and in lex and parse at
+11.2% and 8.8% together.
