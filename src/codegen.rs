@@ -989,9 +989,7 @@ impl<'a> Backend<'a> {
         self.thunk_sites.push((sym.clone(), 0));
         self.emit_thunk_site(&sym, &[], expr, f)?;
         let t = f.tmp();
-        f.line(&format!(
-            "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 0)"
-        ));
+        f.line(&format!("{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 0)"));
         f.record(&t, crate::infer::TOP);
         Ok(t)
     }

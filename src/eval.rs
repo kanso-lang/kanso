@@ -2351,11 +2351,9 @@ impl<'a> Interp<'a> {
         let mut mentioned = Vec::new();
         names(expr, &mut mentioned);
         let knots = self.knots.borrow();
-        mentioned.iter().any(|n| {
-            knots
-                .get(*n)
-                .is_some_and(|c| matches!(&*c.borrow(), ThunkState::Blackhole))
-        })
+        mentioned
+            .iter()
+            .any(|n| knots.get(*n).is_some_and(|c| matches!(&*c.borrow(), ThunkState::Blackhole)))
     }
 
     fn knotted(&self, name: &str, constant: &FnDecl) -> EvalResult {
@@ -2367,9 +2365,7 @@ impl<'a> Interp<'a> {
             return Ok(forced.unwrap_or_else(|| Value::Thunk(Rc::clone(cell))));
         }
         let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
-        self.knots
-            .borrow_mut()
-            .insert(name.to_string(), Rc::clone(&cell));
+        self.knots.borrow_mut().insert(name.to_string(), Rc::clone(&cell));
         let value = self.eval_body_of(constant, None)?;
         *cell.borrow_mut() = ThunkState::Forced(value.clone());
         Ok(value)

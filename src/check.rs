@@ -1673,18 +1673,6 @@ fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
     check_overload_ranks(program, diags);
 }
 
-/// Every constant this expression mentions by name.
-fn constant_refs<'a>(expr: &'a Expr, known: &HashSet<&str>, out: &mut Vec<&'a str>) {
-    if let Expr::Ident(name, _) | Expr::Partial(name, _) = expr {
-        if known.contains(name.as_str()) {
-            out.push(name);
-        }
-    }
-    for child in crate::expr_children(expr) {
-        constant_refs(child, known, out);
-    }
-}
-
 /// The constants this expression demands *while computing itself*, which is a
 /// smaller set than the ones it mentions.
 ///
