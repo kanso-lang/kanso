@@ -15392,3 +15392,63 @@ The spec in tests/accumulator_temporaries.rs stays ignored and stays honest: at
 n=200,000 the temporaries really do cost 7.3 MB of arena, and that is a real
 7.3 MB of work the loop does and drops. What is now known is that reclaiming it
 does not show up in RSS at that size, because the accumulator dwarfs it.
+
+## the rewind works, and the pages do not come back (2026-08-02)
+
+Third run at item 4, and it got further than either before it: the beat brackets,
+the arena goes flat, the long-failing acceptance spec passes, and peak RSS gets
+slightly worse. Recorded because the last step is now a named mechanism rather
+than a guess.
+
+WHY THE FIRST TWO ATTEMPTS EACH MOVED NOTHING. There are two shapes and two
+gates, and each attempt relaxed the gate the other shape uses.
+
+    pub play = print (length (go 200000 []))   go/2: verdict ArgCrosses pos1
+    pub built = go 1600000 { "k1":0 }          go/2: outside tails
+
+A group called from an expression is refused inside `classify_all`; a group
+tail-called from a top-level binding gets `OutsideTailCall`, which is the ONLY
+verdict cluster selection processes, and is refused by that function's own copy
+of the disqualifier. The same three-clause test lives in both places. Attempt one
+relaxed cluster selection and measured the ArgCrosses shape; attempt two relaxed
+`classify_all` and measured it again. Neither ever met the gate that was refusing
+the program in front of it.
+
+WITH BOTH RELAXED, on the constant-live-set shape — a loop threading a one-key
+map through n iterations, building and dropping a string each time:
+
+    n            arena before   arena after   beat_iters
+    1,600,000    69 MB          1 MB          1,600,000
+
+`arena_blocks` is 1 at every size, and tests/accumulator_growth.rs — ignored and
+failing since it was written — passes. The rewind is real and it reclaims.
+
+AND PEAK RSS DOES NOT FOLLOW:
+
+    n            RSS before   RSS after
+    200,000      10.3 MB      10.8 MB
+    1,600,000    71.8 MB      75.2 MB
+    6,400,000    283.0 MB     296.0 MB
+
+Slightly worse at every size. The 74 MB that left the arena did not leave the
+process. `k_beat_rewind` retires newer blocks to a SPARE POOL for reuse, and
+`arena_peak_bytes` counts live blocks only — so a counter that reads the live
+chain goes flat the moment the memory changes lists. The pages stay mapped and
+the resident set never falls.
+
+This is the entry above with its mechanism named. There the counter fell 3.76x
+against zero RSS movement and the cause was a relocation into malloc; here it
+falls 69x against slightly negative RSS movement and the cause is a relocation
+into spare. Both times the arena term reported a win that the process did not
+have.
+
+REVERTED. A counter improving while real memory gets worse is exactly the trade
+this log spent the day learning to refuse, and the guard being relaxed has no
+other justification.
+
+THE LAST MILE, for whoever takes it next: the reclaim is working, so the question
+is no longer whether a growing accumulator can be bracketed. It is whether the
+spare pool returns pages to the operating system. `k_spare_release` exists and is
+called from the cohort path; the loop path calls `k_beat_rewind` and does not.
+Make spare release pages under a loop, re-run the three RSS rows above, and the
+arena number and the resident number should finally say the same thing.
