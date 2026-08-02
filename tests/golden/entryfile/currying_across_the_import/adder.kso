@@ -1,0 +1,13 @@
+# `&add` names a function of this module and supplies one of its arguments.
+# Qualification renames the declaration, so the sigil's name has to move with
+# it or it holds a name nothing answers to.
+fn add a b
+  a + b
+
+fn twice f
+  f 5 + f 5
+
+pub play =
+  inc = &add 1
+  print "{inc 5}"
+  >> print "{twice (&add 10)}"

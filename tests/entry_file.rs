@@ -98,3 +98,34 @@ fn a_subtype_keeps_its_parent_across_an_import() {
     assert_eq!(native, "woof\nsome animal\n");
     assert_eq!(interp, native, "the engines disagree on an imported subtype");
 }
+
+/// `&f` supplies some of a function's arguments and holds the rest. The name
+/// it holds is a declaration of the module it sits in, so qualifying that
+/// module has to move it the way it moves an ordinary mention.
+#[test]
+fn currying_survives_qualification() {
+    // The FILE, not the directory: running the directory merges both files
+    // into one module, which is the shape where no qualification happens and
+    // the bug this pins cannot appear.
+    let fixture = "tests/golden/entryfile/currying_across_the_import/main.kso";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native refused a curried arm reached through an import");
+    assert_eq!(native, "6\n30\n");
+    assert_eq!(interp, native, "the engines disagree on currying across an import");
+}
