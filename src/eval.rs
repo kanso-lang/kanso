@@ -3022,18 +3022,13 @@ fn render_seen(
 
 impl<'a> Interp<'a> {
     pub fn execute(&self, desc: &Desc, executor: &mut dyn Executor) -> EvalResult {
-        let origin = Span { line: 0, col: 0 };
         match desc {
             Desc::Print(text, _) => {
                 executor.print(text);
                 Ok(Value::NoneV)
             }
-            Desc::Seq(a, b) => {
-                let left = self.execute(a, executor)?;
-                if is_failure(&left) && matches!(left, Value::ErrV(_)) {
-                    return Ok(left);
-                }
-                self.execute(b, executor)
+            Desc::Seq(..) | Desc::Bind(..) => {
+                self.execute_chain(Rc::new(desc.clone()), executor)
             }
             Desc::Join(_, _) => self.schedule(desc, executor),
             Desc::Sleep(ms) => {
@@ -3093,14 +3088,36 @@ impl<'a> Interp<'a> {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
-            Desc::Bind(inner, callee) => {
-                let yielded = self.execute(inner, executor)?;
-                let next = self.call(callee.clone(), vec![yielded], origin, &None)?;
-                match next {
-                    Value::Desc(d) => self.execute(&d, executor),
-                    other => Ok(other),
+        }
+    }
+
+    /// Sequencing runs as a loop. Each link answers the description to run
+    /// next, which becomes the next iteration rather than a nested call, so a
+    /// program that sequences a million effects holds one frame. Only the
+    /// continuation is flattened: a link's own left side is a step to run
+    /// before the chain advances, and nests as deep as it is written.
+    fn execute_chain(&self, start: Rc<Desc>, executor: &mut dyn Executor) -> EvalResult {
+        let origin = Span { line: 0, col: 0 };
+        let mut current = start;
+        loop {
+            let next = match &*current {
+                Desc::Seq(a, b) => {
+                    let left = self.execute(a, executor)?;
+                    if is_failure(&left) && matches!(left, Value::ErrV(_)) {
+                        return Ok(left);
+                    }
+                    b.clone()
                 }
-            }
+                Desc::Bind(inner, callee) => {
+                    let yielded = self.execute(inner, executor)?;
+                    match self.call(callee.clone(), vec![yielded], origin, &None)? {
+                        Value::Desc(d) => d,
+                        other => return Ok(other),
+                    }
+                }
+                leaf => return self.execute(leaf, executor),
+            };
+            current = next;
         }
     }
 

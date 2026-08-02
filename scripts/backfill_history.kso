@@ -3,10 +3,7 @@ import "std/list"
 import "std/text"
 
 # One commit's four numbers, for the long view on the compiler page. Measures
-# ONE commit per invocation, because a chain of binds is not a tail call —
-# each `>>` holds the rest of the work in a closure, so a walk over seven
-# hundred commits nests seven hundred deep and the stack runs out around sixty.
-# The loop belongs outside until that is fixed.
+# one commit per invocation; the walk across the history lives in the caller.
 #
 # WHAT IS MEASURED, and why these four:
 #
