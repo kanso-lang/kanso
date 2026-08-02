@@ -14447,7 +14447,7 @@ loop over the same live set does not need more memory — and it is ignored
 because it fails. It is the acceptance criterion, not a regression guard, and
 the attribute goes when the rewind lands.
 
-WHY THE PROPERTY AND NOT A COUNTER. Every counter this could asserthas been
+WHY THE PROPERTY AND NOT A COUNTER. Every counter this could assert has been
 green while memory was corrupt: the bind chain rewinding an arena a live frame
 pointed into, the record held across an io walk, the thunk memoising a result
 the loop's rewind freed. All three passed. Peak memory that does not grow with
