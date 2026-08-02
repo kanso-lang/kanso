@@ -1,0 +1,3 @@
+import "std/text"
+
+pub play = print "{text/slice 5 1 2}"

@@ -14838,3 +14838,43 @@ Closing that is a decision rather than a sweep, so it is recorded rather than
 started. Eight probes are not a proof about fifty-six messages, and deleting a
 message on the strength of one is exactly the reasoning this log has been
 burned by before.
+
+## 2026-08-02 — nine more reachable refusals, and a divergence the probe found
+
+Probing the rest of the runtime messages from ordinary source, sixteen more
+tried. Nine reach their own refusal and are now pinned: slice on a non-list,
+split on a non-string, from_code, char_code, bytes, utf8, env, read_file and
+write. Four are shadowed the way the first batch was — `list/sort` and
+`list/select` on a non-list both hit `length` first, a non-boolean predicate
+answers the `if` condition message, and reading a field of a non-record is a
+name error before it is a runtime one.
+
+So the shadowed rate is nothing like the six-in-eight the first batch suggested.
+Roughly half of these messages are live, which is the opposite of what one
+sample implied, and is why #107 says eight probes are not a proof about
+fifty-six messages.
+
+THE PROBE FOUND A REAL DIVERGENCE, which is the part that matters.
+
+    text/to_float [1]
+    native:  to_float takes a string or int
+    interp:  """ is not a number"
+
+Two engines, two answers, silently — which the differential law forbids
+outright. The cause is structural rather than a stray arm: the interpreter has
+no distinct bytes value, so bytes are a list of ints and `to_float` runs a list
+through `bytes_to_str`; native has a `K_BYTES` tag and refuses anything that is
+not a string or bytes. `[1]` is bytes to one and a type error to the other.
+Genuine bytes already agree — `to_float (text/bytes "ab")` answers the same on
+both — so the gap needs a list that was never bytes.
+
+It is recorded rather than fixed, because the fix is a decision: whether a bare
+list of small ints IS bytes. Widening native says a list and bytes are
+interchangeable, which is what the native representation exists to deny; giving
+the interpreter a real bytes value removes the ambiguity but touches every
+place it builds or reads them. Either answer settles `append`, `find2`,
+`find2_below` and `utf8` at the same time, since all four name bytes in
+refusals nothing pins.
+
+No golden pins to_float for the same reason: a golden would have to record one
+engine's answer as the correct one, and which is correct is the open question.

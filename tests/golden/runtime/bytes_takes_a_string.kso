@@ -1,0 +1,3 @@
+import "std/text"
+
+pub play = print "{text/bytes 5}"
