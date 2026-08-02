@@ -14878,3 +14878,28 @@ refusals nothing pins.
 
 No golden pins to_float for the same reason: a golden would have to record one
 engine's answer as the correct one, and which is correct is the open question.
+
+## 2026-08-02 — the io and description refusals, and where the probe stopped finding things
+
+Sixteen more messages driven from source, all agreeing across engines. Ten
+reach their own refusal and are pinned: `>>` on a non-description, write_err,
+is_dir, exists, list_dir, run's command and its argument list, write_file,
+wrap_err, and a plain value in call position.
+
+Six are shadowed, and two of those say something. `list/sum ["a"]` answers "`+`
+is not defined for these values" rather than "sum takes a list of int", because
+the sum reaches the addition before it reaches its own check — the message
+describes a guard that the fold has already made unreachable. And
+`text/slice "abcd" 3 1` does not refuse at all: it answers the empty string,
+so "slice takes 1-based inclusive positions" is unreachable by the route a
+person would take to hit it. Whether reversed bounds SHOULD refuse is a
+question the message implies an answer to and the code does not.
+
+That closes the sweep at twenty-one reachable refusals pinned across three
+changes. The messages still unpinned are the ones the probes could not reach:
+the string-builder pair, the fiber cap, the closure-escape guard, the arena
+and environment failures, and the bytes family that #108 is about. Reaching
+those needs a program that provokes the runtime rather than mistypes a call,
+which is a different exercise from this one.
+
+Welfare unchanged at 75.64.
