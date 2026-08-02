@@ -1,0 +1,27 @@
+# an arm on an ordering operator extends it for a type this module owns, so
+# records compare by whatever the type says order means; primitives keep the
+# builtin, which is what stops anyone redefining 1 < 2
+type book
+  pages
+
+fn < a:book b:book
+  a.pages < b.pages
+
+fn > a:book b:book
+  a.pages > b.pages
+
+fn <= a:book b:book
+  a.pages <= b.pages
+
+fn >= a:book b:book
+  a.pages >= b.pages
+
+short = book 100
+
+long = book 300
+
+pub play = said
+
+said = print "{short < long} {short > long} {short <= long} {short >= long}"
+  >> print "{long < short} {short <= short} {short >= short}"
+  >> print "{1 < 2} {2 < 1}"

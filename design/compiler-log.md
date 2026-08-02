@@ -14612,3 +14612,33 @@ of it and trips the interpreter's 10,000-frame call guard — an evaluation-time
 limit, not an execution-time one. It fails at 20,000 today exactly as it did
 before. Whether `>>` should defer its right side is a language question, not a
 bug in the executor.
+
+## 2026-08-02 — ordering operators take arms, on the path arithmetic already had
+
+`fn < a:book b:book` now extends `<` for a type the module owns, and the same
+for `>`, `<=` and `>=`. Records dispatch to the arm; primitives keep the
+builtin, so `1 < 2` still means one thing.
+
+This was smaller than the gavel implied, because the mechanism already existed:
+`fn + a:user b:user` has extended arithmetic for some time, and the interpreter's
+operator dispatch at eval.rs:1110 was already generic — it asks whether any
+declaration carries the operator's name, not whether the operator is arithmetic.
+Four gates stood in the way and each was one line:
+
+- the parser accepted `+ - * / %` after `fn` and nothing else
+- codegen's `armable` and the wasm backend's named the same five
+- `quoted` decided which LLVM symbols need quoting from a punctuation set that
+  had no `<`, `>` or `=`, so the arm emitted `@d_<_2` and clang refused it
+- the predicate-naming rule read `<` as a function answering only true or
+  false and asked for `<?`, which an operator cannot take
+
+Pinned by tests/golden/micro/ordering_arms_for_a_type_you_own.kso across all
+three engines. Welfare unchanged at 75.64.
+
+WHAT THIS DELIBERATELY LEAVES: `==` and `!=`. They have to move together —
+arming `==` while `!=` stays builtin would let a type say two values are equal
+and unequal at once — and `==` also sits next to the internal relation. That
+relation is already separate and already safe: map lookup compares keys through
+`values_equal` (eval.rs:2849), a structural function no arm can reach, which is
+the Go-style data equivalence the gavel asked for. So the reconciliation holds
+by construction rather than by rule, and equality can land on top of it.

@@ -643,7 +643,7 @@ impl FnEmit {
 /// module qualifier's slash.
 fn wsym(name: &str, arity: usize) -> String {
     // fn-value wrapper symbols share dsym's quoted-identifier rule
-    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=']) {
         true => format!("\"w_{name}_{arity}\""),
         false => format!("w_{name}_{arity}"),
     }
@@ -3050,7 +3050,7 @@ impl<'a> Backend<'a> {
         let (a, b) = (a_owned.as_str(), b_owned.as_str());
         // a record on the left dispatches to the operator's user arms; the
         // numeric fast paths below stay untouched for everything else
-        let armable = matches!(op, "+" | "-" | "*" | "/" | "%")
+        let armable = matches!(op, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=")
             && self.program.fns.iter().any(|d| d.name == op && d.params.len() == 2);
         if armable && f.set_of(a) & REC != 0 {
             let tag = f.tmp();
@@ -4101,7 +4101,7 @@ fn symbol_of(line: &str) -> Option<String> {
 /// identifier form. One list, because a second copy drifts and what it costs
 /// is a module clang refuses to read.
 fn quoted(name: &str) -> String {
-    match name.contains(['/', '!', '?', '+', '-', '*', '%']) {
+    match name.contains(['/', '!', '?', '+', '-', '*', '%', '<', '>', '=']) {
         true => format!("\"{name}\""),
         false => name.to_string(),
     }
