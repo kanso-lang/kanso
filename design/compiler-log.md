@@ -15495,3 +15495,37 @@ reclaim them. Answer that before touching a gate. The probe used here is four
 lines — a counter beside `k_stat_blocks` incremented where `k_arena_push` mallocs
 and where `k_spare_release` frees — and it should probably become a real counter
 rather than a thing rebuilt each time somebody needs it.
+
+## it is never the container's own storage (2026-08-02)
+
+kq's quadratic, narrowed. `k_interior_survives` asks two things of a K_LIST or
+K_MAP: does its backing array survive the rewind, and does every slot inside it.
+Counting the two refusals separately on kq's print path:
+
+    fixture      store_no   slots_no   slot_len_total   carry_dedup
+    188 KB              0         45              630         2,721
+    2.1 MB              0        423            6,300       286,401
+
+The backing array NEVER fails. Not once, at either size. Every refusal is a slot
+— an element that was built this iteration and so sits above the mark, which the
+rewind would free. That kills the whole family of fixes aimed at the container's
+storage: the malloc-regime work in the entries above was addressing a condition
+that does not occur here.
+
+The second thing the table says is that the refusals are LINEAR. 45 to 423 for
+ten times the document is 9.4x, and slot_len_total is exactly 10x. What is
+quadratic is not how often the walk refuses but what each refusal costs: a
+container the walk will not share is copied, and copying it descends into every
+child. A linear count of refusals times a walk whose size grows with the document
+is the 105x.
+
+So the shape of a fix is not "make more things shareable" — the refusals are
+correct, those elements really would be freed. It is that one new element deep in
+a structure should not force a walk of everything around it. Whether that is
+memoising the walk across carries (the dedup map is rebuilt every iteration
+today, which is why `carry_dedup` counts what it does), or rewriting the single
+offending slot in place rather than copying its ancestors, is the open question.
+
+Measured with three counters beside `k_stat_carry_dedup`, incremented in the two
+early returns of `k_interior_survives`. Worth making permanent if the next
+attempt needs them again.
