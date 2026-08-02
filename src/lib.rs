@@ -1451,6 +1451,14 @@ fn qualify(
                 *parent = format!("{qual}/{parent}");
             }
         }
+        // A typeset's membership is a list of type names, and a member this
+        // module declares is being renamed under it. A member that is not —
+        // `float64`, or a type from somewhere else — keeps its spelling.
+        for member in &mut ty.members {
+            if own_types.contains(member.as_str()) {
+                *member = format!("{qual}/{member}");
+            }
+        }
         for (_, members, _) in &mut ty.fields {
             for member in members {
                 if owned.contains(member.as_str()) {

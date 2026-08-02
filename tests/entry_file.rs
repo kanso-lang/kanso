@@ -129,3 +129,31 @@ fn currying_survives_qualification() {
     assert_eq!(native, "6\n30\n");
     assert_eq!(interp, native, "the engines disagree on currying across an import");
 }
+
+/// A typeset's membership is a list of type names this module declares, and
+/// qualification renames those. The list has to move with them or the set
+/// matches nothing and an err walks past the arm written to catch it.
+#[test]
+fn a_typeset_keeps_its_members_across_an_import() {
+    let fixture = "tests/golden/entryfile/a_typeset_across_the_import/main.kso";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native refused a typeset reached through an import");
+    assert_eq!(native, "quota: limit 99\nlane trouble: quota/slow_lane 7\nok: plain 3\n");
+    assert_eq!(interp, native, "the engines disagree on an imported typeset");
+}
