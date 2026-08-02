@@ -347,6 +347,9 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                 // so the result is float
                 "+" | "-" | "*" => fails | numeric_result(a, b),
                 "/" | "%" => fails | ERR | numeric_result(a, b),
+                // the bitwise three answer a whole number; every remaining
+                // operator compares, and a comparison answers true or false
+                "&" | "|" | "^" => fails | INT,
                 _ => BOOL | fails,
             }
         }

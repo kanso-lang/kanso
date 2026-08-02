@@ -1337,8 +1337,8 @@ fn ends_an_atom(tok: &Tok) -> bool {
 
 fn level(op: &str) -> u8 {
     match op {
-        "||" => OR,
-        "&&" => AND,
+        "or" => OR,
+        "and" => AND,
         "<" | "<=" | ">" | ">=" | "==" | "!=" => CMP,
         "&" | "|" | "^" => BITS,
         "+" | "-" => ADD,
@@ -1694,7 +1694,7 @@ impl<'a> P<'a> {
 
     fn parse_or(&mut self) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_and()?;
-        while let Some(Tok::Op("||")) = self.peek() {
+        while let Some(Tok::Op("or")) = self.peek() {
             let span = self.span_here();
             self.pos += 1;
             self.consumed(OR);
@@ -1706,7 +1706,7 @@ impl<'a> P<'a> {
 
     fn parse_and(&mut self) -> Result<Expr, Diagnostic> {
         let mut lhs = self.parse_cmp()?;
-        while let Some(Tok::Op("&&")) = self.peek() {
+        while let Some(Tok::Op("and")) = self.peek() {
             let span = self.span_here();
             self.pos += 1;
             self.consumed(AND);

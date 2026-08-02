@@ -64,10 +64,10 @@ fn speakable p
   if (p.protocol == "git") (io/write "") bad
 
 fn resolved p only root origin
-  mine = only == none || only == p.name
+  mine = only == none or only == p.name
   a_release = release? p.tag
-  interim = mine && a_release == false
-  if (mine && a_release) (forward p root origin) (kept p interim)
+  interim = mine and a_release == false
+  if (mine and a_release) (forward p root origin) (kept p interim)
 
 fn kept p interim
   row = "{p.name} {p.tag} {p.sha} {p.protocol}\n"

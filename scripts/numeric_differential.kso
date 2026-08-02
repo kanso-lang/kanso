@@ -148,14 +148,14 @@ fn both n i
   [n i]
 
 fn agree? n i
-  n.code == i.code && n.out == i.out && n.err == i.err
+  n.code == i.code and n.out == i.out and n.err == i.err
 
 fn holds? hay needle
   length (text/split hay needle) > 1
 
 fn at_ceiling? n i
   said = "{n.err}{i.err}"
-  holds? said ceiling_a || holds? said ceiling_b
+  holds? said ceiling_a or holds? said ceiling_b
 
 fn chunked cases at acc
   more_chunks cases at acc (at > length cases)

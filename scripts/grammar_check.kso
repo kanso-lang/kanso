@@ -169,7 +169,7 @@ fn capturing acc _ _ _ true
 fn capturing acc caps groups at false
   text = groups[at]!
   found = caps["{at}"]
-  named_capture acc caps groups at text found (text == "" || found == none)
+  named_capture acc caps groups at text found (text == "" or found == none)
 
 fn named_capture acc caps groups at _ _ true
   each_capture acc caps groups (at + 1)

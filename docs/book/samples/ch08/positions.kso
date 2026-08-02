@@ -21,7 +21,7 @@ fn digit? none
   false
 
 fn digit? c
-  47 < c && c < 58
+  47 < c and c < 58
 
 fn is_ws? 9
   true

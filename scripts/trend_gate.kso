@@ -76,7 +76,7 @@ fn field? f
   length (text/split f "=") == 2
 
 fn digit? c
-  c >= "0" && c <= "9"
+  c >= "0" and c <= "9"
 
 fn unsigned v
   minus? v (text/slice v 1 1 == "-")
@@ -89,14 +89,14 @@ fn minus? v false
 
 fn numeric? v
   body = unsigned v
-  length body > 0 && list/all? (text/chars body) digit?
+  length body > 0 and list/all? (text/chars body) digit?
 
 fn pair_of prefix f
   parts = text/split f "="
   ["{prefix}{parts[1]!}" parts[2]!]
 
 fn body? l
-  text/slice l 1 1 != "#" && length l > 0
+  text/slice l 1 1 != "#" and length l > 0
 
 fn on_line prefix line
   fields = list/select (text/split line " ") field?
@@ -128,7 +128,7 @@ fn first_of p
   p[1]!
 
 fn once acc name
-  fresh acc name (length acc == 0 || acc[length acc]! != name)
+  fresh acc name (length acc == 0 or acc[length acc]! != name)
 
 fn fresh acc name true
   push acc name
@@ -361,7 +361,7 @@ fn key_line m
   "  {m.key}\n"
 
 fn ruling worse better
-  settled (length worse > 0 && length better == 0)
+  settled (length worse > 0 and length better == 0)
 
 fn settled true
   refused 0 . (_ -> io/exit 1)

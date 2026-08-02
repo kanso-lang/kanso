@@ -176,7 +176,7 @@ fn kept acc kid true
   push acc kid
 
 fn rewritable? kid
-  ends? kid ".html" || ends? kid ".js"
+  ends? kid ".html" or ends? kid ".js"
 
 fn ends? s suffix
   text/slice s (length s - length suffix + 1) (length s) == suffix

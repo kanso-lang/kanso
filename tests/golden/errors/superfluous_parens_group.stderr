@@ -1,4 +1,4 @@
 error[formatting]: these parentheses group nothing — the expression parses the same without them
   --> superfluous_parens_group.kso:1:9
-   1 | ready = (2 < 1) && (1 < 9)
+   1 | ready = (2 < 1) and (1 < 9)
                ^

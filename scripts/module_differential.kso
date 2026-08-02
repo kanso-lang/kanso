@@ -380,7 +380,7 @@ fn crossed target k n after
   asked ["run" target "--interp"] . (i -> after (agreed k n i (same? n i)))
 
 fn same? n i
-  n.status == i.status && n.stdout == i.stdout && n.stderr == i.stderr
+  n.status == i.status and n.stdout == i.stdout and n.stderr == i.stderr
 
 fn agreed _ n i false
   mine = "the engines disagree — native {n.status} {shown n.stdout}"
@@ -466,7 +466,7 @@ fn closed wrong healed
   first = "\na known defect is recorded as it behaves, never as it"
   second = "should.\nif one is settled, delete its entry — do not update it.\n"
   advice = "{first} {second}"
-  clean = length wrong == 0 && length healed == 0
+  clean = length wrong == 0 and length healed == 0
   io/write (spoken advice (length healed == 0)) . (_ -> ending clean)
 
 fn spoken _ true

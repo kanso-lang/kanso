@@ -14033,3 +14033,57 @@ and is now the one thing standing between this feature and all three engines.
 
 Pinned by tests/golden/micro/a_constant_that_names_itself.kso, watched red on
 both engines first: before the change each refused the program outright.
+
+## 2026-08-01 — `and` and `or` are words
+
+GAVEL (Clay): the boolean connectives are spelled. `a and b`, `a or b`. `&&`
+and `||` are gone, `&` `|` `^` stay with the bits, and there is no `!`.
+
+The front end owns all of it. The parser already desugared both connectives
+into `if` at parse time, so no engine has ever seen an `and` node and none
+needed touching: the lexer stops treating `&&` and `||` as operators and starts
+answering `and` and `or` as ones, and the two parse loops read the new
+spelling. 120 call sites across 37 files moved with them.
+
+Two things fell out of it.
+
+`std/bits` exported functions called `and` and `or`, which a keyword cannot be.
+They were already duplicates — the module's own comment said they were named
+because the operators did not exist, and #86 shipped `&` `|` `^`. The named
+pair is gone and their twenty-five call sites read as operators, which is one
+spelling instead of two. `bits/not`, `bits/shl`, `bits/shr` and `bits/xor` stay
+because no operator says them.
+
+Moving those call sites turned up a defect nothing had exercised: inference
+typed `&`, `|` and `^` as boolean. Its BinOp arm named the arithmetic operators
+and let a catch-all answer BOOL for everything else, which is right for the
+comparisons and wrong for the bitwise three, and it went unnoticed because the
+only kanso using them called the named functions instead. sha256's helpers were
+the first bodies to return an operator result directly, and the naming rule
+caught it immediately: `spun`, `choice` and `majority` were told to end in `?`
+because the compiler thought they answered true or false. They answer a whole
+number, and the arm now says so.
+
+Still to come on this gavel: `not` as a prefix, and `flag == true` refused.
+`not` wants a real node in all three engines, and `bits/not` will have to be
+renamed when it lands.
+
+## 2026-08-01 — a language change is one change across four repositories
+
+`and` and `or` could not go green. The compiler's CI runs kq, vse and
+kanso-json against the branch under test and cloned each from main, so a branch
+that changes the language fails on siblings still speaking the old one, while
+the siblings' own CI builds this compiler from main and fails on the new one.
+Each side red until the other merges.
+
+The first attempt was to accept `&&` and `||` as transitional synonyms, which
+does not work and should not: `&` hugs as the currying sigil, so `&&` lexes as
+two sigils and the spacing rule refuses it before the parser sees anything.
+That rule is #86 and it is right.
+
+So the siblings are cloned by `.github/clone-sibling.sh`, which prefers a
+branch of the pull request's own name and falls back to main. A language change
+and the sweeps it forces are one change; naming the branch the same in each
+repository is how they are checked together. This is not transitional — it is
+the mechanism the cross-repository gap has wanted since the workflow first
+noted that a rule lands here and the repos that consume it find out later.

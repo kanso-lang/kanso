@@ -26,7 +26,7 @@ fn is_number_char none
   false
 
 fn is_number_char c
-  47 < c && c < 58
+  47 < c and c < 58
 
 fn mark_from cs p q
   if (p > q) false (mark_step cs cs[p] p q)

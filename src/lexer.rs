@@ -58,8 +58,7 @@ pub struct Lexed {
     pub blank_lines: Vec<usize>,
 }
 
-const OPS: [&str; 16] =
-    ["&&", "||", ">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "^"];
+const OPS: [&str; 14] = [">=", "<=", "==", "!=", "+", "-", "*", "/", "%", "<", ">", "&", "|", "^"];
 
 pub const MAX_WIDTH: usize = 80;
 
@@ -733,6 +732,10 @@ impl Scanner {
         }
         Ok(match word.as_str() {
             "_" => Tok::Underscore,
+            // `and` and `or` are spelled, not punctuated: a reader says them
+            // aloud the way they mean them, and `&` `|` stay with the bits
+            "and" => Tok::Op("and"),
+            "or" => Tok::Op("or"),
             "fn" => Tok::KwFn,
             "return" => Tok::KwReturn,
             "type" => Tok::KwType,
