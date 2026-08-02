@@ -1,0 +1,13 @@
+# comparing a whole number to a fractional one is exact, so two numbers a
+# float cannot tell apart are still ordered by what they are. 9007199254740993
+# is the first integer f64 cannot hold: widening it to compare would round it
+# onto its neighbour and call them equal.
+big = 9007199254740993
+
+near = 9007199254740992.0
+
+pub play = said
+
+said = print "{big == near} {big != near} {big < near} {big > near}"
+  >> print "{near < big} {near > big} {big <= near} {big >= near}"
+  >> print "{9007199254740992 == near} {1 == 1.0} {1 < 1.5}"

@@ -2644,8 +2644,8 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
     match (a, b) {
         (Value::Int(x), Value::Int(y)) => Some(x.cmp(y)),
         (Value::Float(x), Value::Float(y)) => Some(x.total_cmp(y)),
-        (Value::Int(x), Value::Float(y)) => Some(int_f(x).total_cmp(y)),
-        (Value::Float(x), Value::Int(y)) => Some(x.total_cmp(&int_f(y))),
+        (Value::Int(x), Value::Float(y)) => Some(cmp_int_float(x, *y)),
+        (Value::Float(x), Value::Int(y)) => Some(cmp_int_float(y, *x).reverse()),
         (Value::Str(x), Value::Str(y)) => Some(x.cmp(y)),
         _ => None,
     }
@@ -2654,6 +2654,24 @@ fn compare(a: &Value, b: &Value) -> Option<std::cmp::Ordering> {
 /// A BigInt widened to f64 — the `x:float` cast at the value level.
 fn int_f(n: &BigInt) -> f64 {
     n.to_f64().unwrap_or(f64::INFINITY)
+}
+
+/// A whole number against a fractional one, decided exactly. Widening the
+/// integer first would round it onto the nearest value a float can hold and
+/// report two different numbers as equal — 9007199254740993 is the smallest
+/// integer where that happens. Comparing against the float's floor keeps the
+/// integer whole, and the fraction breaks the tie.
+fn cmp_int_float(x: &BigInt, y: f64) -> std::cmp::Ordering {
+    let floor = y.floor();
+    // Only a NaN or an infinity has no floor to compare against, and the
+    // total order over the widened value is what ranks those.
+    let Some(whole) = <BigInt as num_traits::FromPrimitive>::from_f64(floor) else {
+        return int_f(x).total_cmp(&y);
+    };
+    match x.cmp(&whole) {
+        std::cmp::Ordering::Equal if y > floor => std::cmp::Ordering::Less,
+        settled => settled,
+    }
 }
 
 fn div_float(a: f64, b: f64, frame: &Frame, span: Span) -> EvalResult {
@@ -2871,7 +2889,7 @@ fn values_equal_seen(
         // neither is strictly less. Equality was the one operator dissenting.
         // A float cannot be a map key, so nothing needs them told apart.
         (Value::Int(x), Value::Float(y)) | (Value::Float(y), Value::Int(x)) => {
-            int_f(x).total_cmp(y).is_eq()
+            cmp_int_float(x, *y).is_eq()
         }
         (Value::Map(x), Value::Map(y)) => {
             x.len() == y.len()
