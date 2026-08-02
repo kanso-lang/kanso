@@ -45,7 +45,7 @@ struct Ctx<'a> {
     program: &'a Program,
     demand: crate::demand::DemandInfo,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
-    current: (String, usize),
+    current: (&'a str, usize),
     groups: HashMap<(&'a str, usize), Vec<usize>>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = io/read_file p` then `x . f` gives f the STR.
@@ -118,8 +118,8 @@ pub fn infer(program: &Program) -> Inference {
     let mut ctx = Ctx {
         defers_into_containers,
         program,
-        demand: crate::demand::analyze(program),
-        current: (String::new(), 0),
+        demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
+        current: ("", 0),
         groups,
         yields: HashMap::new(),
         type_names,
@@ -131,16 +131,23 @@ pub fn infer(program: &Program) -> Inference {
     // seed: entry points (main, constants, tests) run with no arguments;
     // anything used as a function value gets TOP params.
     let mut rounds = 0;
+    // The program outlives the context, so an arm's name is borrowed rather
+    // than cloned: this loop runs once per function per round, and a round
+    // count in the twenties turns a clone here into thousands of allocations
+    // that only ever serve as a lookup key.
+    let fns = &program.fns;
+    let mut env: HashMap<&str, Set> = HashMap::new();
+    let mut param_sets: Vec<Set> = Vec::new();
     while ctx.changed && rounds < 200 {
         ctx.changed = false;
         rounds += 1;
         work::round();
-        for i in 0..ctx.program.fns.len() {
-            let decl = &ctx.program.fns[i];
-            ctx.current = (decl.name.clone(), decl.params.len());
+        for (i, decl) in fns.iter().enumerate() {
+            ctx.current = (decl.name.as_str(), decl.params.len());
             ctx.yields.clear();
-            let mut env: HashMap<&str, Set> = HashMap::new();
-            let param_sets = ctx.params[i].clone();
+            env.clear();
+            param_sets.clear();
+            param_sets.extend_from_slice(&ctx.params[i]);
             for (pattern, joined) in decl.params.iter().zip(&param_sets) {
                 bind_pattern(pattern, *joined, &ctx.type_fields, &ctx.type_names, &mut env);
             }
@@ -213,7 +220,7 @@ fn eval_body<'a>(ctx: &mut Ctx<'a>, body: &'a [Stmt], env: &mut HashMap<&'a str,
         match stmt {
             Stmt::Bind { pattern, expr } => {
                 let mut value = eval_expr(ctx, expr, env);
-                if ctx.demand.is_lazy_bind(&ctx.current.0, ctx.current.1, index) {
+                if ctx.demand.is_lazy_bind(ctx.current.0, ctx.current.1, index) {
                     // The binding holds a thunk; forcing yields the expr's set.
                     value |= THUNK;
                 }

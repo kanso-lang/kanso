@@ -131,30 +131,46 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
 /// one line per phase on stderr at exit — enough to say which phase to attack
 /// without a profiler, which this machine does not have.
 pub mod phase {
+    use std::cell::Cell;
     use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
     static SPENT: Mutex<Vec<(&'static str, Duration)>> = Mutex::new(Vec::new());
 
+    thread_local! {
+        /// Time the phase currently running has already handed to phases
+        /// nested inside it. `load_dependencies` calls the whole compiler
+        /// again, so without this its bucket would swallow the lexing,
+        /// parsing and checking of every module it loads, and the report
+        /// would add up to several times the compile it describes.
+        static IN_CHILDREN: Cell<Duration> = const { Cell::new(Duration::ZERO) };
+    }
+
     pub fn watched<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
         if std::env::var_os("KANSO_PHASES").is_none() {
             return f();
         }
+        let outer = IN_CHILDREN.with(|c| c.replace(Duration::ZERO));
         let started = Instant::now();
         let out = f();
+        let whole = started.elapsed();
+        let mine = whole - IN_CHILDREN.with(|c| c.get());
+        IN_CHILDREN.with(|c| c.set(outer + whole));
         let mut spent = SPENT.lock().unwrap_or_else(|e| e.into_inner());
         match spent.iter_mut().find(|(n, _)| *n == name) {
-            Some(slot) => slot.1 += started.elapsed(),
-            None => spent.push((name, started.elapsed())),
+            Some(slot) => slot.1 += mine,
+            None => spent.push((name, mine)),
         }
         out
     }
 
+    /// Longest first, because the question a profile answers is what to attack.
     pub fn report() {
         if std::env::var_os("KANSO_PHASES").is_none() {
             return;
         }
-        let spent = SPENT.lock().unwrap_or_else(|e| e.into_inner());
+        let mut spent = SPENT.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        spent.sort_by_key(|(_, d)| std::cmp::Reverse(*d));
         let total: Duration = spent.iter().map(|(_, d)| *d).sum();
         for (name, d) in spent.iter() {
             let share = 100.0 * d.as_secs_f64() / total.as_secs_f64().max(1e-9);
