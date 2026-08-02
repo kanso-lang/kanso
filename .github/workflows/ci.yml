@@ -255,22 +255,25 @@ jobs:
       - name: kq's own spec suite against this compiler
         run: |
           sudo apt-get install -y jq >/dev/null
-          git clone --depth 1 https://github.com/kanso-lang/kq /tmp/kq
+          sh .github/clone-sibling.sh kq /tmp/kq
           cd /tmp/kq
           KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
       # kq is the only sibling anything runs, so the other two are kept in
-      # step by whoever remembers to open them. vse needed the superfluous-
-      # parentheses rule applied by hand after it shipped here, which is the
-      # shape of the problem: a rule lands in this repo and the repos that
-      # consume it find out later. A check is not a spec suite, but it turns
-      # "somebody noticed" into "the build said so".
+      # step by whoever remembers to open them. A check is not a spec suite,
+      # but it turns "somebody noticed" into "the build said so".
+      #
+      # Each sibling is cloned by .github/clone-sibling.sh, which prefers a
+      # branch of this pull request's name. A language change and the sweep it
+      # forces are one change across four repositories, and without that a
+      # branch cannot be green until its siblings merge and its siblings
+      # cannot be green until it does.
       - name: vse still compiles against this compiler
         run: |
-          git clone --depth 1 https://github.com/kanso-lang/vse /tmp/vse
+          sh .github/clone-sibling.sh vse /tmp/vse
           ./target/release/kanso check /tmp/vse
       - name: kanso-json still passes its own tests
         run: |
-          git clone --depth 1 https://github.com/kanso-lang/kanso-json /tmp/kanso-json
+          sh .github/clone-sibling.sh kanso-json /tmp/kanso-json
           ./target/release/kanso test /tmp/kanso-json
 
   diagnostics:

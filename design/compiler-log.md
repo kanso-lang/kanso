@@ -14067,3 +14067,23 @@ number, and the arm now says so.
 Still to come on this gavel: `not` as a prefix, and `flag == true` refused.
 `not` wants a real node in all three engines, and `bits/not` will have to be
 renamed when it lands.
+
+## 2026-08-01 — a language change is one change across four repositories
+
+`and` and `or` could not go green. The compiler's CI runs kq, vse and
+kanso-json against the branch under test and cloned each from main, so a branch
+that changes the language fails on siblings still speaking the old one, while
+the siblings' own CI builds this compiler from main and fails on the new one.
+Each side red until the other merges.
+
+The first attempt was to accept `&&` and `||` as transitional synonyms, which
+does not work and should not: `&` hugs as the currying sigil, so `&&` lexes as
+two sigils and the spacing rule refuses it before the parser sees anything.
+That rule is #86 and it is right.
+
+So the siblings are cloned by `.github/clone-sibling.sh`, which prefers a
+branch of the pull request's own name and falls back to main. A language change
+and the sweeps it forces are one change; naming the branch the same in each
+repository is how they are checked together. This is not transitional — it is
+the mechanism the cross-repository gap has wanted since the workflow first
+noted that a rule lands here and the repos that consume it find out later.
