@@ -14284,3 +14284,31 @@ WHICH MAKES THE LEVER CLEAR. The standard library is identical on every compile
 and is embedded in the binary at build time, yet it is re-lexed and re-parsed by
 every invocation. A third of a compile is spent reading files that cannot have
 changed since the compiler was built.
+
+## 2026-08-02 — the phase report counts exclusive time, and inference stops allocating per round
+
+The first report was nested and therefore wrong. `load_dependencies` calls the
+whole compiler again, so its bucket swallowed the lexing, parsing and checking
+of every module it loaded, and the ranking it produced put loading first and
+inference third. Each phase now subtracts the time it handed to phases inside
+it, and the picture inverts:
+
+    infer                        3.86 ms   33%
+    check_merged                 2.48 ms   21%
+    load_dependencies            1.75 ms   15%
+    lex                          1.16 ms   10%
+    parse                        0.94 ms    8%
+
+Inference is the largest single phase, which is what the first two guesses had
+said and what the nested report talked them out of.
+
+WHAT IT WAS SPENDING IT ON. The fixpoint runs 29 rounds on lib/json, over every
+function each round, and each visit cloned the function's name into a `String`
+and built a fresh `HashMap` — for a lookup key and a scratch environment. The
+name is now borrowed from the program, which outlives the context, and the
+environment and parameter buffer are cleared and reused.
+
+`kanso check lib/json` goes from 144.4 million instructions to 134.4 million,
+7.0% of the whole compile, and inference's exclusive share falls from 33% to
+22%. `compile_rounds` stays 29 and `compile_visits` stays 42,198: the algorithm
+did not move, only what it allocated while running.
