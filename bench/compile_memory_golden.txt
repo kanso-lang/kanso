@@ -1,12 +1,17 @@
-# What the front end holds while checking the json library. The other compile
-# counters say how much work it decided to do; this says how much it had to
-# keep while deciding, which is the term the score was missing.
+# What the front end costs on a real library — checking lib/json, which is a
+# thousand lines of kanso rather than the few hundred the emitted-code golden
+# samples. Rounds and visits say how much work it decided to do; peak bytes
+# says how much it had to keep while deciding.
 #
-# This is the one counter here that is a property of the host as well as of the
-# program — it is measured by the compiler's own allocator, and linux and macos
-# disagree by 56 bytes on the same input. So the score reads this number, which
-# keeps it deterministic everywhere, and CI asserts only that reality has not
-# drifted more than two per cent from it. Two per cent is a hundred times the
-# disagreement between hosts and far below anything worth noticing, so the
-# gate catches a real move without ever firing on which machine ran it.
+# The five samples in compile_golden.txt hold 126 visits between them, and
+# nothing a compiler change does moves that number. This one moves.
+#
+# Rounds and visits are counts of the compiler's own algorithm, so they are the
+# same everywhere and CI diffs them exactly. Peak bytes is measured by the
+# compiler's allocator and is a property of the host too — linux and macos
+# disagree by 56 bytes on the same input — so the score reads this number and
+# CI asserts only that reality has not drifted two per cent from it. Bucketing
+# to kibibytes was tried and does not work: the two values straddle a boundary.
+front_end_rounds=31
+front_end_visits=25874
 compile_peak_bytes=819217

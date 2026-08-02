@@ -14512,3 +14512,26 @@ because it recurs per request forever, compile 0.40 because 45% of people who
 stopped using rust named compile times among their reasons, and compile speed
 over compile memory better than two to one because the complaint that dominates
 every survey is waiting for an incremental rebuild.
+
+## 2026-08-02 — compile speed reads a real library
+
+The compile-speed term read bench/compile_golden.txt: five samples of a few
+hundred lines, 126 expression visits between them. Nothing a compiler change
+does moves that number, which is why a fifth of the score sat still while the
+front end changed underneath it. It reads lib/json now — 25,874 visits, two
+hundred times the sensitivity.
+
+The counters are renamed rather than repointed, `front_end_rounds` and
+`front_end_visits`, because they measure a different thing and a baseline
+carried over from the old source would have read as a two-hundred-fold
+regression on the first run. Renaming lets them enter at their own baseline,
+which is what a new measurement should do.
+
+The score fell 75.78 to 75.64 and the floor moved with it. That fall is the
+term giving up an improvement it had banked on a sample too small to mean
+anything — 135 visits to 126 — rather than the front end getting slower. Both
+readings are of the same compiler on the same day; only the subject changed.
+
+bench/compile_golden.txt keeps its job. It pins what the compiler EMITS, which
+is a different question from what deciding cost, and emitted_lines still reads
+from it because `check` never reaches the emitter.
