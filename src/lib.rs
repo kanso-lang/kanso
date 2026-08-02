@@ -23,9 +23,11 @@ pub mod wasm_encode;
 pub mod wasm_rt;
 
 pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Program, String> {
-    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
-    let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
-    synthesize_getters(&mut program);
+    let lexed =
+        phase::watched("lex", || lexer::lex(source)).map_err(|d| diag::render(&d, file, source))?;
+    let mut program = phase::watched("parse", || parser::parse(&lexed))
+        .map_err(|d| diag::render(&d, file, source))?;
+    phase::watched("synthesize_getters", || synthesize_getters(&mut program));
     stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_entry);
     desugar_field_reads(&mut program);
@@ -45,7 +47,7 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     synthesize_getters(&mut program);
     stamp_file(&mut program, file);
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
-    let ownership_diags = merge_ambient_arms(&mut program);
+    let ownership_diags = phase::watched("merge_ambient_arms", || merge_ambient_arms(&mut program));
     if !ownership_diags.is_empty() {
         return Err(diag::render(&ownership_diags, file, source));
     }
@@ -104,24 +106,61 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     let mut merged_diags = check::check_merged(&merged, true);
     check::check_unused_private(&merged, &used, &mut merged_diags);
     synthesize_getters(&mut merged);
-    desugar_field_reads(&mut merged);
-    prune_unused_getters(&mut merged);
+    phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+    phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     let merged_diags: Vec<_> = merged_diags.into_iter().filter(|d| d.kind != "unused").collect();
     match merged_diags.is_empty() {
         true => {
-            canonicalize_types(&mut merged);
-            canonicalize_bare_aliases(&mut merged);
-            hoist_repeated_strings(&mut merged);
-            fuse_enumerable(&mut merged);
+            phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
+            phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+            phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
+            phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
             synthesize_getters(&mut merged);
-            desugar_field_reads(&mut merged);
-            prune_unused_getters(&mut merged);
+            phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+            phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
             trmc::rewrite(&mut merged);
             Ok(merged)
         }
         false => Err(diag::render(&merged_diags, file, source)),
+    }
+}
+
+/// Where a compile spends itself. Off unless `KANSO_PHASES` is set, and then
+/// one line per phase on stderr at exit — enough to say which phase to attack
+/// without a profiler, which this machine does not have.
+pub mod phase {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    static SPENT: Mutex<Vec<(&'static str, Duration)>> = Mutex::new(Vec::new());
+
+    pub fn watched<T>(name: &'static str, f: impl FnOnce() -> T) -> T {
+        if std::env::var_os("KANSO_PHASES").is_none() {
+            return f();
+        }
+        let started = Instant::now();
+        let out = f();
+        let mut spent = SPENT.lock().unwrap_or_else(|e| e.into_inner());
+        match spent.iter_mut().find(|(n, _)| *n == name) {
+            Some(slot) => slot.1 += started.elapsed(),
+            None => spent.push((name, started.elapsed())),
+        }
+        out
+    }
+
+    pub fn report() {
+        if std::env::var_os("KANSO_PHASES").is_none() {
+            return;
+        }
+        let spent = SPENT.lock().unwrap_or_else(|e| e.into_inner());
+        let total: Duration = spent.iter().map(|(_, d)| *d).sum();
+        for (name, d) in spent.iter() {
+            let share = 100.0 * d.as_secs_f64() / total.as_secs_f64().max(1e-9);
+            eprintln!("{name:24} {:>8.2} ms  {share:5.1}%", d.as_secs_f64() * 1000.0);
+        }
+        eprintln!("{:24} {:>8.2} ms", "watched total", total.as_secs_f64() * 1000.0);
     }
 }
 
@@ -158,8 +197,9 @@ fn compile_one(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (mut dep_program, exports, shadowed) =
-        load_dependencies(&base, &import_list, &mut visited)?;
+    let (mut dep_program, exports, shadowed) = phase::watched("load_dependencies", || {
+        load_dependencies(&base, &import_list, &mut visited)
+    })?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
@@ -2366,6 +2406,9 @@ fn compile_module_inner(
     if !visited.insert(canon.clone()) {
         return Err(format!("error: import cycle through {}\n", dir.display()));
     }
+    if std::env::var_os("KANSO_PHASES").is_some() {
+        eprintln!("load {}", dir.display());
+    }
     let loaded = compile_module_loaded(dir, require_entry, visited, embedded);
     visited.remove(&canon);
     loaded
@@ -2414,13 +2457,15 @@ fn compile_module_loaded(
     let mut parsed = Vec::new();
     for (file, source) in sources.drain(..) {
         let path = std::path::PathBuf::from(&file);
-        let lexed = lexer::lex(&source).map_err(|d| diag::render(&d, &file, &source))?;
+        let lexed = phase::watched("lex", || lexer::lex(&source))
+            .map_err(|d| diag::render(&d, &file, &source))?;
         let is_entry = path.file_name().is_some_and(|n| n == "main.kso");
-        let mut program = match is_entry {
-            true => parser::parse_entry(&lexed).map_err(|d| diag::render(&d, &file, &source))?,
-            false => parser::parse(&lexed).map_err(|d| diag::render(&d, &file, &source))?,
-        };
-        synthesize_getters(&mut program);
+        let mut program = phase::watched("parse", || match is_entry {
+            true => parser::parse_entry(&lexed),
+            false => parser::parse(&lexed),
+        })
+        .map_err(|d| diag::render(&d, &file, &source))?;
+        phase::watched("synthesize_getters", || synthesize_getters(&mut program));
         stamp_file(&mut program, &file);
         parsed.push((file, source, program));
     }
@@ -2446,7 +2491,8 @@ fn compile_module_loaded(
             }
         }
     }
-    let (mut dep_program, exports, shadowed) = load_dependencies(dir, &import_list, visited)?;
+    let (mut dep_program, exports, shadowed) =
+        phase::watched("load_dependencies", || load_dependencies(dir, &import_list, visited))?;
     // A module's surface is its own. Dependency pubs demote at this
     // boundary — importers of this module see none of them — and only an
     // explicit re-export puts an imported name back on the surface, as a
@@ -2555,11 +2601,11 @@ fn compile_module_loaded(
         merged.types.extend(program.types);
         merged.fns.extend(program.fns);
     }
-    let mut diags = check::check_merged(&merged, require_entry);
+    let mut diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
     check::check_unused_private(&merged, &used, &mut diags);
     synthesize_getters(&mut merged);
-    desugar_field_reads(&mut merged);
-    prune_unused_getters(&mut merged);
+    phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+    phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
     if !diags.is_empty() {
@@ -2570,13 +2616,13 @@ fn compile_module_loaded(
             .collect();
         return Err(rendered.join(""));
     }
-    canonicalize_types(&mut merged);
-    canonicalize_bare_aliases(&mut merged);
-    hoist_repeated_strings(&mut merged);
-    fuse_enumerable(&mut merged);
+    phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
+    phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
+    phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
+    phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
     synthesize_getters(&mut merged);
-    desugar_field_reads(&mut merged);
-    prune_unused_getters(&mut merged);
+    phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
+    phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
     Ok(merged)
 }

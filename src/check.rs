@@ -1117,7 +1117,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
-    let inference = crate::infer::infer(program);
+    let inference = crate::phase::watched("infer", || crate::infer::infer(program));
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
     check_predicates(program, &inference, &mut diags);

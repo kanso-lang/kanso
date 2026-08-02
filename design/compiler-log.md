@@ -14252,3 +14252,35 @@ Two inferences remain on the build path, check's and codegen's. Those are
 separated by `canonicalize_types` and `canonicalize_bare_aliases`, so they do
 not see the same program and collapsing them means moving the canonicalisation
 earlier rather than threading a parameter.
+
+## 2026-08-02 — where a compile actually goes
+
+`KANSO_PHASES=1` prints one line per phase to stderr, and nothing at all when
+it is unset. It exists because this machine has no profiler and because guessing
+was wrong twice in a row: inference was the suspect both times and inference is
+not the answer.
+
+Checking lib/json, 20.2 ms watched of a 20 ms compile:
+
+    load_dependencies            6.17 ms   31%
+    check_merged                 6.32 ms   31%   (infer is 3.39 of it)
+    lex                          1.42 ms    7%
+    parse                        1.26 ms    6%
+    prune_unused_getters         0.78 ms    4%
+    everything else            under 0.4 ms each
+
+`check_merged` contains `infer`, so the ranking is load_dependencies first at
+31%, the checks proper second at about 15%, then inference at 17%, then lexing
+and parsing together at 13%. kq has the same shape: 26% loading, 33% checking,
+18% of it inference.
+
+WHAT IS NOT WRONG. `compile_module_inner` removes each directory from `visited`
+after loading it, which is a cycle guard rather than a memo, so a diamond could
+load a module twice. It does not: lib/json loads std/text, std/render and
+std/list once each, kq loads those three plus std/io once each. The loading
+cost is the standard library being lexed, parsed and checked, not repeated.
+
+WHICH MAKES THE LEVER CLEAR. The standard library is identical on every compile
+and is embedded in the binary at build time, yet it is re-lexed and re-parsed by
+every invocation. A third of a compile is spent reading files that cannot have
+changed since the compiler was built.
