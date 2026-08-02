@@ -159,6 +159,102 @@ fn said_plainly(op: &str, word: &str) -> String {
     format!("comparing to `{word}` asks a question the value already answers — write {plain}")
 }
 
+/// `[plotted "x" "y" "z"]` is four elements: the function and three strings.
+/// A list element is one atom — the language already says so for operators,
+/// where `[1 + 2]` is a syntax error rather than three elements — and this
+/// says it for application, where the parser was silently obliging instead.
+///
+/// There is no guessing involved, because both readings have a spelling: `(f
+/// x)` calls, and `&f` holds. Refusing the bare form costs a sigil and takes
+/// away a shape whose two meanings looked identical.
+fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let mut arities: std::collections::HashMap<&str, usize> = Default::default();
+    for decl in &program.fns {
+        let widest = arities.entry(decl.name.as_str()).or_insert(0);
+        *widest = (*widest).max(decl.params.len());
+    }
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        // A name bound here is this scope's, whatever a function elsewhere is
+        // called: sha256 binds `first` and `list/first` is not what it means.
+        let mut bound: std::collections::HashSet<&str> = Default::default();
+        for p in &decl.params {
+            collect_pattern_names(p, &mut bound);
+        }
+        for stmt in &decl.body {
+            if let Stmt::Bind { pattern, .. } = stmt {
+                collect_pattern_names(pattern, &mut bound);
+            }
+        }
+        for stmt in &decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            call_shaped_walk(expr, &arities, &bound, diags);
+        }
+    }
+}
+
+fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut std::collections::HashSet<&'a str>) {
+    match p {
+        Pattern::Var(name, _) => {
+            out.insert(name.as_str());
+        }
+        Pattern::Annotated { name, .. } => {
+            out.insert(name.as_str());
+        }
+        Pattern::Ctor { fields, .. } => {
+            for f in fields {
+                collect_pattern_names(f, out);
+            }
+        }
+        Pattern::Keyed { entries, .. } => {
+            for e in entries {
+                out.insert(e.bind_name.as_str());
+            }
+        }
+        _ => {}
+    }
+}
+
+fn call_shaped_walk(
+    expr: &Expr,
+    arities: &std::collections::HashMap<&str, usize>,
+    bound: &std::collections::HashSet<&str>,
+    diags: &mut Vec<Diagnostic>,
+) {
+    if let Expr::List(items, _) = expr {
+        for (at, item) in items.iter().enumerate() {
+            let Expr::Ident(name, span) = item else {
+                continue;
+            };
+            let following = items.len() - at - 1;
+            if bound.contains(name.as_str()) {
+                continue;
+            }
+            let takes = arities.get(name.as_str()).copied().unwrap_or(0);
+            if takes > 0 && following > 0 {
+                diags.push(Diagnostic::new(
+                    "syntax",
+                    format!(
+                        "`{name}` takes {takes} argument(s), and a list element is one \
+                         atom — this reads as {} separate elements. Write `({name} …)` \
+                         to call it, or `&{name}` to hold it",
+                        items.len()
+                    ),
+                    *span,
+                ));
+            }
+        }
+    }
+    for child in crate::expr_children(expr) {
+        call_shaped_walk(child, arities, bound, diags);
+    }
+}
+
 fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
     for decl in &program.fns {
         if decl.synthetic {
@@ -1133,6 +1229,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
+    check_call_shaped_list(program, &mut diags);
     check_boolean_equality(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
