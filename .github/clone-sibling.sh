@@ -18,9 +18,15 @@
 # A change that genuinely moves a sibling's counters — a syntax change that
 # alters what the sweep allocates — would otherwise deadlock, because main's
 # golden can never match it. The escape is a file named sibling-goldens-move
-# in THIS repository, on the branch under test, saying which counters move and
-# why. That keeps the loosening inside the change being reviewed, where #639's
-# was a side effect of naming a branch.
+# in THIS repository, on the branch under test. It keeps the loosening inside
+# the change being reviewed, where #639's was a side effect of naming a branch.
+#
+# It states a TRADE, not a permission: which counters move, and what got better
+# in exchange. The welfare index is the arbiter of whether the trade is worth
+# taking and these per-counter checks are the safety net under it — so a
+# worsening still has to be evaluated even when welfare rises, and a Pareto
+# failure, something worse with nothing better, is never allowed. A file that
+# names no compensating gain is refused, because that is the shape #639 had.
 set -e
 repo="$1"
 into="$2"
@@ -30,7 +36,13 @@ url="https://github.com/kanso-lang/$repo"
 if [ -n "$branch" ] && git ls-remote --exit-code --heads "$url" "$branch" >/dev/null 2>&1; then
   git clone --depth 1 --branch "$branch" "$url" "$into"
   if [ -f sibling-goldens-move ]; then
-    echo "$repo: $branch (goldens from the branch — sibling-goldens-move says:)"
+    if ! grep -qi "better\|gain\|buys\|in exchange" sibling-goldens-move; then
+      echo "sibling-goldens-move names no compensating gain."
+      echo "A moved golden is a trade: say which counters move AND what got"
+      echo "better for it. Nothing worse with nothing better, ever."
+      exit 1
+    fi
+    echo "$repo: $branch (goldens from the branch — the trade claimed:)"
     sed 's/^/  | /' sibling-goldens-move
     exit 0
   fi
