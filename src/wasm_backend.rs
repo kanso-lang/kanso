@@ -173,7 +173,33 @@ fn partial_lambda(
     Ok(Expr::Lambda { params, body: Box::new(body), span })
 }
 
+fn names_itself(decl: &crate::ast::FnDecl) -> bool {
+    fn mentions(expr: &Expr, name: &str) -> bool {
+        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            if n == name {
+                return true;
+            }
+        }
+        crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+    }
+    decl.body.iter().any(|stmt| match stmt {
+        crate::ast::Stmt::Bind { expr, .. } | crate::ast::Stmt::Expr(expr) => {
+            mentions(expr, &decl.name)
+        }
+        crate::ast::Stmt::Set { value, .. } => mentions(value, &decl.name),
+    })
+}
+
 pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
+    // A constant naming itself needs a cell to wait in, and this backend has
+    // no deferred value to put there. Refusing says so, where compiling it
+    // would recurse until the stack ran out.
+    if let Some(knot) = program.fns.iter().find(|d| d.params.is_empty() && names_itself(d)) {
+        return Err(format!(
+            "browser backend: `{}` names itself, and the browser has no way to wait for a value",
+            knot.name
+        ));
+    }
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
     for (i, ty) in program.types.iter().enumerate() {

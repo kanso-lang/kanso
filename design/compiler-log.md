@@ -13877,3 +13877,159 @@ data-driven case rather than hand it off.
 Recorded rather than acted on: nothing in the language changed here. The check
 is back, the corpus is green, and what moved is what is known about why the
 check exists.
+
+## The cycle rule asks what a definition demands, not what it mentions
+
+A constructor stores its arguments; it never looks at them. So a mention
+inside one is not a demand — the value goes into a field and is read later, by
+which time the constant it names has a value. A call that scrutinizes, an
+operator, a guard: those force what they are handed, and a mention there is a
+demand.
+
+That difference is the whole of the rule, and it is syntactic. `x = x` asks
+for its own answer to compute its own answer, and is refused. This
+
+    graph = { "a":(node "a" [graph["b"]!]) "b":(node "b" [graph["a"]!]) }
+
+asks for a place to put a name, which is a question the definition can
+answer, and `kanso check` now passes it. `demanded_refs` walks the expression
+the way `constant_refs` does and stops at a list literal, a map literal, or an
+application whose head is a declared type. No strictness analysis is
+consulted: a constructor's behaviour is known from its being a constructor.
+
+Every program in the corpus is unchanged, on all three engines, which the
+relaxed direction makes structural rather than lucky — the rule only ever
+admits more, so nothing that compiled can stop compiling.
+
+**This half does not ship alone, and that is the point of writing it down.**
+Admitted and run, the knot still diverges: the constructor's arguments are
+evaluated strictly, so `graph["b"]!` asks for `graph` while `graph` is being
+built. Native reports "the program ran out of stack"; the interpreter
+overflows and aborts without a diagnostic at all. So relaxing the check by
+itself trades a clean compile error for a hard crash, which is a worse
+language than the one that started.
+
+The other half is a thunk in the storing position, and for a constant it is
+smaller than the general case. A self-reference from a constant names a CAF —
+a global cell filled by `k_caf_init` before main — so the thunk needs no
+captures at all. It stores site and nothing else, and by the time anything
+forces it, the cell it reads has a value. The machinery to emit one already
+exists: `k_thunk_new`, a site table, `emit_thunk_site`, and `maybe_force` at
+21 sites in codegen, gated on inference's THUNK bit. Inference already tracks
+`type_fields`, so a field holding a thunk marks its type's field set and every
+read of it forces.
+
+What kanso already has, and what makes this a door rather than a room: cyclic
+values work end to end. `k_render_path` terminates printing one. Equality
+compares them by bisimulation. The cohort frees them. The only missing piece
+is a second way to make one.
+
+## Why the admitted knot overflows, exactly
+
+The remaining half has two parts rather than one, and the second was not
+visible until the first was tried.
+
+`is_constant_body` freezes a constant into a CAF only when its body is a
+literal: an int, a float, a string of literal parts, or a list or map whose
+elements are themselves literal. A map whose values are constructor calls is
+not literal, so `graph` compiles to an ordinary function that recomputes its
+body on every call. `graph()` inside `graph_build()` is therefore a call to
+`graph()`, and that is the stack overflow — not a strictness question at all,
+just unbounded recursion through a function that was never frozen.
+
+So the recipe is:
+
+- A self-referential constant must be emitted as a frozen CAF, so a mention of
+  it compiles to a load from a cell rather than a recomputation. The cell is
+  filled by `k_caf_init` before main.
+- Each maximal storing subexpression containing a self-reference becomes a
+  thunk with no captures, because the only free name in it is a global. Forced
+  later, it loads a cell that by then has a value.
+
+Both changes have the same zero-regression property as the check: they apply
+only to constants that mention themselves, and no such constant compiles
+today. Widening `is_constant_body` in general would change when every constant
+runs, which is a real semantics and performance question; widening it for
+self-referential constants alone asks nothing of any program that exists.
+
+Still to do after that, and not yet looked at: the interpreter needs the same
+two moves, and the browser backend needs whichever of them it does not inherit
+from the interpreter. The differential law wants all three saying the same
+thing about the same program, and a cyclic value is exactly the shape where an
+engine can quietly differ.
+
+## The cyclic constant, three steps in
+
+Native now gets three errors deep into the knot, and each one names the next
+piece rather than the same piece again.
+
+Freezing a self-referential constant into a CAF removed the stack overflow.
+`is_constant_body` answers yes for any constant that mentions itself, so the
+real symbol becomes a load from a cell rather than a recomputation of the
+body, and the mention inside the body stops being a call to itself. What is
+left of the old failure is nothing: the recursion had no floor because the
+function was never frozen, and frozen it has one.
+
+Deferring the self-referential list element into a thunk removed the second
+error, which was `indexing takes a list or string with a 1-based position` —
+the cell being read during its own fill. `deferred_or_emitted` puts a thunk in
+the storing position instead, with no captures, because the only free name in
+such an expression is the global the site loads for itself.
+
+The third error is `\`.\` reads a field of a record, not <value>`, and it is
+the piece that is left. The thunk reaches the field read unforced. `maybe_force`
+is gated on inference's THUNK bit, and inference does not know about the
+deferral: it sees a list literal holding `graph["b"]!` and records the element
+type as whatever that expression yields. Codegen made a thunk without telling
+it.
+
+So the remaining move is to teach inference the same rule the emitter follows.
+A storing position inside a constant that names itself yields THUNK on top of
+whatever it would otherwise yield, which flows into `type_fields` and out
+through every read, and `maybe_force` then fires where it already knows how.
+The rule wants to be stated once and consulted by both, rather than written
+twice and drifting.
+
+Still unmerged, and the reason has not changed: this admits programs that do
+not yet run correctly, which is worse than refusing them.
+
+## 2026-08-01 — a constant may name itself
+
+`graph = { "a":(node "a" [graph["b"]!]) ... }` now runs. It prints `b a` on
+native and on the interpreter, and the browser refuses it in a sentence.
+
+The rule that admits it is demand, not mention. `check_constant_cycles` used to
+walk every name a constant's body contains; it now walks only the names the body
+demands *while computing itself*, which is a smaller set. A constructor stores
+its arguments and never looks at them, and a list or map literal stores every
+element, so a mention inside one is not a demand — the value goes into a field
+and is read later, by which time the constant it names has a value. A mention
+anywhere else still refuses, so `x = x + 1` is the same error it always was.
+
+Admitting the program is only the first of three moves, and each of the others
+announced itself as a different error.
+
+1. `is_constant_body` now answers true for a constant that mentions itself, so
+   it freezes into a CAF filled once before main rather than recomputing on
+   every read. Without it the program overflowed the stack.
+2. A storing position inside such a constant emits a zero-capture thunk instead
+   of a value. Without it the mention evaluated to nothing indexable.
+3. Inference and `maybe_force` both learn the same fact. A container read may
+   yield a thunk, and the cheap exit in `maybe_force` admits a deferred
+   self-reference, which no lazy-bind count knows about. Both are gated on the
+   program holding such a constant at all, so nothing else pays a force.
+
+The interpreter needed the same shape in its own terms: one memoised cell per
+self-naming constant, and a stored position that waits when it names a constant
+still being computed. A mention arriving mid-computation reads Blackhole and
+takes the cell unforced, which is what gives the value something to point at.
+
+The browser backend has no deferred value at all — no thunk, nothing to put in
+a cell — so it declines with `browser backend: \`graph\` names itself, and the
+browser has no way to wait for a value`. That is the differential law's own
+provision: fewer engines is allowed, silent divergence is not. Closing it means
+giving the wasm backend a thunk representation, which is a real piece of work
+and is now the one thing standing between this feature and all three engines.
+
+Pinned by tests/golden/micro/a_constant_that_names_itself.kso, watched red on
+both engines first: before the change each refused the program outright.

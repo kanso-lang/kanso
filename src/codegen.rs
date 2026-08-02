@@ -455,6 +455,21 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
         builtin_value_wrappers: Vec::new(),
+        defers_self_reference: program.fns.iter().any(|d| {
+            fn mentions(expr: &Expr, name: &str) -> bool {
+                if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                    if n == name {
+                        return true;
+                    }
+                }
+                crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+            }
+            d.params.is_empty()
+                && d.body.iter().any(|stmt| match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &d.name),
+                    Stmt::Set { value, .. } => mentions(value, &d.name),
+                })
+        }),
         print_value_wrapper: false,
         caf_cells: Vec::new(),
         caf_fills: Vec::new(),
@@ -489,6 +504,7 @@ struct Backend<'a> {
     /// (builtin, arity) pairs a program hands out as values, each needing a
     /// wrapper a dynamic call can reach.
     builtin_value_wrappers: Vec<(String, usize)>,
+    defers_self_reference: bool,
     print_value_wrapper: bool,
     /// One cache cell per frozen constant, emitted as globals at the end.
     caf_cells: Vec<String>,
@@ -940,7 +956,9 @@ impl<'a> Backend<'a> {
     /// vanishes, not just the set-proven ones (conservative TOP widenings
     /// carry the THUNK bit into code no thunk can reach).
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
-        if self.demand.lazy_bind_count() == 0 {
+        // A deferred self-reference is a thunk that no lazy-bind count knows
+        // about, so the cheap exit has to admit it too.
+        if self.demand.lazy_bind_count() == 0 && !self.defers_self_reference {
             return value;
         }
         if f.set_of(&value) & crate::infer::THUNK == 0 {
@@ -953,6 +971,42 @@ impl<'a> Backend<'a> {
         // recorded TOP, so widen conservatively past the removed bit.
         f.record(&t, if post == 0 { crate::infer::TOP & !crate::infer::THUNK } else { post });
         t
+    }
+
+    /// A storing position inside a constant that names itself holds a thunk
+    /// rather than a value. The constant's cell is empty while its own body
+    /// runs, so reading it there would read nothing; deferred, the read
+    /// happens after `k_caf_init` has filled the cell, and the cycle closes.
+    ///
+    /// No captures: the only free name in such an expression is the global
+    /// itself, which the site loads for itself.
+    fn deferred_or_emitted(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
+        if !self.defers_self(f, expr) {
+            return self.emit_expr(f, expr);
+        }
+        let site = self.thunk_sites.len();
+        let sym = format!("tsite{site}");
+        self.thunk_sites.push((sym.clone(), 0));
+        self.emit_thunk_site(&sym, &[], expr, f)?;
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 0)"));
+        f.record(&t, crate::infer::TOP);
+        Ok(t)
+    }
+
+    /// Whether this expression, in this frame, mentions the constant being
+    /// built. `arity == 0` keeps it to constants: a function that mentions
+    /// itself is ordinary recursion and has a base case.
+    fn defers_self(&self, f: &FnEmit, expr: &Expr) -> bool {
+        fn mentions(expr: &Expr, name: &str) -> bool {
+            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                if n == name {
+                    return true;
+                }
+            }
+            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+        }
+        f.arity == 0 && !f.group.is_empty() && mentions(expr, &f.group)
     }
 
     fn emit_thunk_site(
@@ -1597,7 +1651,34 @@ impl<'a> Backend<'a> {
     /// A zero-argument definition whose body is a literal is a constant, so it
     /// is worth building once. The body emits unchanged under a build symbol
     /// and the real symbol becomes a cache in front of it.
+    /// A constant that mentions itself must be frozen whether or not its body
+    /// is a literal: unfrozen, the real symbol recomputes its body, so the
+    /// mention inside that body calls it again and the recursion has no floor.
+    /// Frozen, the mention is a load from a cell that `k_caf_init` fills once
+    /// before main, which is what makes the cycle finite.
+    ///
+    /// Only self-referential constants get this, and none of them compiled
+    /// before the cycle rule learned to ask what a definition demands, so no
+    /// existing program changes when it runs.
+    fn mentions_itself(decl: &FnDecl) -> bool {
+        fn mentions(expr: &Expr, name: &str) -> bool {
+            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                if n == name {
+                    return true;
+                }
+            }
+            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+        }
+        decl.body.iter().any(|stmt| match stmt {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &decl.name),
+            Stmt::Set { value, .. } => mentions(value, &decl.name),
+        })
+    }
+
     fn is_constant_body(decl: &FnDecl) -> bool {
+        if Self::mentions_itself(decl) {
+            return true;
+        }
         fn literal(expr: &Expr) -> bool {
             match expr {
                 Expr::Int(..) | Expr::Float(..) => true,
@@ -2663,7 +2744,7 @@ impl<'a> Backend<'a> {
             Expr::List(items, _) => {
                 let mut emitted = Vec::new();
                 for item in items {
-                    let e = self.emit_expr(f, item)?;
+                    let e = self.deferred_or_emitted(f, item)?;
                     emitted.push(self.as_value(f, &e));
                 }
                 let n = emitted.len().max(1);

@@ -1673,15 +1673,45 @@ fn check_fn_order(program: &Program, diags: &mut Vec<Diagnostic>) {
     check_overload_ranks(program, diags);
 }
 
-/// Every constant this expression mentions by name.
-fn constant_refs<'a>(expr: &'a Expr, known: &HashSet<&str>, out: &mut Vec<&'a str>) {
+/// The constants this expression demands *while computing itself*, which is a
+/// smaller set than the ones it mentions.
+///
+/// A constructor stores its arguments; it never looks at them. So a mention
+/// inside one is not a demand — the value is put in a field and read later,
+/// by which time the constant it names has a value. A call that scrutinizes,
+/// an operator, a guard: those force what they are handed, and a mention
+/// there is a demand.
+///
+/// That difference is the whole of the cycle rule. `x = x` asks for its own
+/// answer to compute its own answer. `x = { "a":(node x) }` asks for a place
+/// to put a name, which is a question the definition can answer.
+fn demanded_refs<'a>(
+    expr: &'a Expr,
+    known: &HashSet<&str>,
+    types: &HashSet<&str>,
+    out: &mut Vec<&'a str>,
+) {
     if let Expr::Ident(name, _) | Expr::Partial(name, _) = expr {
         if known.contains(name.as_str()) {
             out.push(name);
         }
     }
+    // a list or map literal stores every element, so nothing inside is demanded
+    if matches!(expr, Expr::List(..) | Expr::MapLit(..)) {
+        return;
+    }
+    if let Expr::App { head, args, .. } = expr {
+        if let Expr::Ident(name, _) = head.as_ref() {
+            if types.contains(name.as_str()) {
+                // a constructor's arguments are stored, so only the head is a
+                // demand, and the head is a type rather than a constant
+                let _ = args;
+                return;
+            }
+        }
+    }
     for child in crate::expr_children(expr) {
-        constant_refs(child, known, out);
+        demanded_refs(child, known, types, out);
     }
 }
 
@@ -1745,6 +1775,7 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
 fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
     let constants: Vec<&FnDecl> = program.fns.iter().filter(|d| d.params.is_empty()).collect();
     let names: HashSet<&str> = constants.iter().map(|d| d.name.as_str()).collect();
+    let types: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
     let mut refs: HashMap<&str, Vec<&str>> = HashMap::new();
     for decl in &constants {
         let out = refs.entry(decl.name.as_str()).or_default();
@@ -1753,7 +1784,7 @@ fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
                 Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
                 Stmt::Set { value, .. } => value,
             };
-            constant_refs(expr, &names, out);
+            demanded_refs(expr, &names, &types, out);
         }
     }
     for decl in &constants {

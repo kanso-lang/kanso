@@ -1054,7 +1054,25 @@ greeter/play</code></pre>
 
 <p>the compiler is told nothing about either file. the runner names what it wants, and the convention lives where a convention belongs — in the harness that runs the samples, and in the playground, each of which generates the entry it needs. what this cost was one capability rather than a mechanism: a bare import used to name a sibling <em>subdirectory</em>, so a runner could not import the file sitting next to it. a module is a directory of files sharing one namespace, and one file is the smallest of those, so <code>import "greeter"</code> now reads <code>greeter.kso</code> the way it reads <code>greeter/</code>. both spellings present at once is refused: one name cannot answer two ways.</p>
 
-<h2 id="counted"><span class="sec-num">14</span>what a count can and cannot see</h2>
+<h2 id="knot"><span class="sec-num">14</span>a constant may name itself</h2>
+
+<p>read a data file describing relationships and you have to build the graph it describes, which means a node holding a node that holds the first one back. kanso used to refuse that outright. any constant whose body contained its own name got <code>`graph` is defined in terms of itself, so it has no value</code>, and the only way through was to build the shape at runtime out of ids and look each one up on every hop.</p>
+
+<pre><code>type node
+  name
+  peers
+
+graph = { "a":(node "a" [graph["b"]!]) "b":(node "b" [graph["a"]!]) }
+
+pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
+
+<p>that prints <code>b</code>. the rule that admits it is about demand rather than mention. a constructor stores its arguments and never looks at them, and a list or map literal stores every element, so a name appearing inside one goes into a field and is read later, by which time the constant it names has an answer. a name appearing anywhere that scrutinises it, an operator or a guard or a call that forces what it is handed, is still a demand, and <code>x = x + 1</code> gets exactly the error it always got.</p>
+
+<p>admitting the program is the smaller half. the constant freezes into a cell filled once before the program starts, rather than recomputing on every read, which is what stops the definition chasing itself down the stack. a storing position inside it emits a value that waits instead of a value, and both the type inference and the code that decides where to force learn that a container read may hand back one of those. all of it is gated on the program holding such a constant at all, so a program without one emits and pays exactly what it did before.</p>
+
+<p>the browser is the exception. that backend has no waiting value of any kind, so it refuses the program with <code>browser backend: `graph` names itself, and the browser has no way to wait for a value</code>. the differential law allows a feature on fewer engines as long as the others refuse clearly. what it forbids is two engines quietly disagreeing about what a program means. closing it means giving that backend a deferred value of its own.</p>
+
+<h2 id="counted"><span class="sec-num">15</span>what a count can and cannot see</h2>
 
 <p>every performance claim on this page is pinned to a count rather than a stopwatch, because a count cannot drift between machines. that choice has an edge, and knowing where it sits is part of reading the numbers.</p>
 
@@ -1064,7 +1082,7 @@ greeter/play</code></pre>
 
 <p>the rule that declines the bracket is sound as written — rewinding would free an accumulator allocated mid-cycle. the accumulator in that shape is not allocated mid-cycle, because the in-place mutators hand back the same object, and the fix is to give a threaded container storage outside the rewound region the way a byte builder already has. that is the open item, and the retention is a pinned counter in the memory vein until it closes, so the day it moves the diff is the evidence.</p>
 
-<h2 id="trend"><span class="sec-num">15</span>the long view</h2>
+<h2 id="trend"><span class="sec-num">16</span>the long view</h2>
 
 <p>the boards above are a snapshot: what the compiler costs today, against the alternatives, on one sitting. this is the other question — which way the numbers have been going. every merge to main appends a row of counters to a history branch, and four hundred of them had piled up with nothing drawing them.</p>
 

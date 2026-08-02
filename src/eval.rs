@@ -545,6 +545,21 @@ impl Executor for ScriptedExecutor {
     }
 }
 
+fn mentions_itself(decl: &FnDecl) -> bool {
+    fn mentions(expr: &Expr, name: &str) -> bool {
+        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            if n == name {
+                return true;
+            }
+        }
+        crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+    }
+    decl.body.iter().any(|stmt| match stmt {
+        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &decl.name),
+        Stmt::Set { value, .. } => mentions(value, &decl.name),
+    })
+}
+
 pub struct Interp<'a> {
     fns: HashMap<&'a str, Vec<&'a FnDecl>>,
     types: HashMap<&'a str, &'a TypeDecl>,
@@ -552,6 +567,10 @@ pub struct Interp<'a> {
     demand: crate::demand::DemandInfo,
     pub thunk_stats: ThunkStats,
     depth: Cell<usize>,
+    /// One cell per self-referential constant. A mention that arrives while
+    /// the constant is still being computed gets the unforced cell, which is
+    /// how a value that names itself gets a value at all.
+    knots: RefCell<HashMap<String, Rc<RefCell<ThunkState>>>>,
 }
 
 /// Engine-shared semantic counters: evaluation counts are semantics, so
@@ -612,6 +631,7 @@ impl<'a> Interp<'a> {
             demand,
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
+            knots: RefCell::new(HashMap::new()),
         }
     }
 
@@ -962,7 +982,7 @@ impl<'a> Interp<'a> {
             Expr::List(items, _) => {
                 let values = items
                     .iter()
-                    .map(|e| self.eval(e, env, frame))
+                    .map(|e| self.stored(e, env, frame))
                     .collect::<Result<Vec<_>, _>>()?;
                 Ok(Value::List(Rc::new(values)))
             }
@@ -1130,7 +1150,10 @@ impl<'a> Interp<'a> {
         }
         if let Some(decls) = self.fns.get(name) {
             if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
-                return self.eval_body_of(constant, None);
+                if !mentions_itself(constant) {
+                    return self.eval_body_of(constant, None);
+                }
+                return self.knotted(name, constant);
             }
         }
         match name.strip_prefix("builtin_").unwrap_or(name) {
@@ -2298,6 +2321,56 @@ impl<'a> Interp<'a> {
     /// Scrutiny reaches through a thunk: run the pending computation once,
     /// overwrite the cell, drop the captures. Never touches nullary closures
     /// — those are `if`'s deferred branches, forced only by `if` itself.
+    /// A constant that names itself is computed once, behind a cell. The
+    /// mention that arrives mid-computation reads Blackhole and hands back the
+    /// cell unforced, so a storing position keeps a reference the later read
+    /// resolves.
+    /// A list only stores what it is given, so an element naming a constant
+    /// still being computed waits rather than demanding a value that does not
+    /// exist yet.
+    fn stored(&self, expr: &Expr, env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
+        if !self.awaits_a_knot(expr) {
+            return self.eval(expr, env, frame);
+        }
+        Ok(Value::Thunk(Rc::new(RefCell::new(ThunkState::Pending {
+            expr: expr.clone(),
+            env: env.clone(),
+            frame: frame.clone(),
+        }))))
+    }
+
+    fn awaits_a_knot(&self, expr: &Expr) -> bool {
+        fn names<'e>(expr: &'e Expr, out: &mut Vec<&'e str>) {
+            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                out.push(n);
+            }
+            for child in crate::expr_children(expr) {
+                names(child, out);
+            }
+        }
+        let mut mentioned = Vec::new();
+        names(expr, &mut mentioned);
+        let knots = self.knots.borrow();
+        mentioned
+            .iter()
+            .any(|n| knots.get(*n).is_some_and(|c| matches!(&*c.borrow(), ThunkState::Blackhole)))
+    }
+
+    fn knotted(&self, name: &str, constant: &FnDecl) -> EvalResult {
+        if let Some(cell) = self.knots.borrow().get(name) {
+            let forced = match &*cell.borrow() {
+                ThunkState::Forced(v) => Some(v.clone()),
+                _ => None,
+            };
+            return Ok(forced.unwrap_or_else(|| Value::Thunk(Rc::clone(cell))));
+        }
+        let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
+        self.knots.borrow_mut().insert(name.to_string(), Rc::clone(&cell));
+        let value = self.eval_body_of(constant, None)?;
+        *cell.borrow_mut() = ThunkState::Forced(value.clone());
+        Ok(value)
+    }
+
     fn force_thunk(&self, value: Value) -> EvalResult {
         let mut value = value;
         loop {
