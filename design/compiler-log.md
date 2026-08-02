@@ -14312,3 +14312,34 @@ environment and parameter buffer are cleared and reused.
 7.0% of the whole compile, and inference's exclusive share falls from 33% to
 22%. `compile_rounds` stays 29 and `compile_visits` stays 42,198: the algorithm
 did not move, only what it allocated while running.
+
+## 2026-08-02 — inference visits only what a change can reach
+
+The fixpoint visited every function every round. Counting what those visits
+achieved on lib/json: of 3,192 function-visits in the largest module, 546
+changed anything, and the last four rounds spent 1,596 visits finding 9. Four
+fifths of the work was re-deriving answers that could not have moved.
+
+A function's answer can only change when something it depends on does, and
+there are three such things. Its own parameter sets: `widen_param` knows which
+function it widened, so that one marks itself. The return set of a function it
+calls: every read of `ctx.returns[i]` now records who asked, so a return that
+widens marks exactly its readers. A field of a declared type: that reaches any
+function through pattern binding, so it blankets everything for one round.
+Rare and early, and correctness is worth more than the visits it costs.
+
+    compile_visits   42,198 -> 25,874    on lib/json
+    module sample     6,223 ->  4,448
+    check lib/json    134.4M ->  126.7M instructions
+
+Cumulative on `kanso check lib/json`, with the allocation fix before it:
+144.4M to 126.7M, 12.3%.
+
+Rounds move the other way, 29 to 31, and that is the shape of the trade rather
+than a regression: a round that visits one function still counts as a round, so
+work that used to hide inside a full sweep now shows up as its own. Welfare
+rose 65.56 to 65.69 and the floor moved with it.
+
+WHAT SAYS IT IS THE SAME COMPILER. The module sample emits `lines=6349
+calls=1222 branches=551 defines=137` before and after, and rounds stays 7. Every
+differential, every golden and every engine agrees. Only visits moved.
