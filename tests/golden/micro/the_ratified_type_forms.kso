@@ -1,0 +1,14 @@
+import "std/list"
+
+# design/type-syntax.md ratifies Go's prefix slice and a map spelled as an
+# application: `[]T` reads left to right, and `map[K V]` needs one rule where
+# Go's `map[K]V` needs two. Both dispatch, so an annotation picks the arm.
+fn total xs:[]int
+  list/sum xs
+
+fn total m:map[string int]
+  length m
+
+pub play = said
+
+said = print "{total [1 2 3]} {total { "a":1 "b":2 }}"
