@@ -1471,13 +1471,13 @@ impl<'a> P<'a> {
     }
 
     /* design/type-syntax.md ratifies Go's prefix slice — `[]T` reads left to
-       right and composes without backtracking, where postfix `T[]` reads
-       inside-out. A map is an application, `map[K V]`, which needs one rule
-       where Go's `map[K]V` needs a second that only `map` can use.
+    right and composes without backtracking, where postfix `T[]` reads
+    inside-out. A map is an application, `map[K V]`, which needs one rule
+    where Go's `map[K]V` needs a second that only `map` can use.
 
-       Both spellings fold into the same internal name the postfix forms
-       already produce, so nothing downstream learns a new shape: `[]int`
-       becomes `int[]`, and `map[string int]` keeps its brackets. */
+    Both spellings fold into the same internal name the postfix forms
+    already produce, so nothing downstream learns a new shape: `[]int`
+    becomes `int[]`, and `map[string int]` keeps its brackets. */
     fn parse_type_expr(&mut self) -> Result<String, Diagnostic> {
         if matches!(self.peek(), Some(Tok::LBracket)) {
             self.pos += 1;

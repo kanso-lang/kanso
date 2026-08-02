@@ -977,18 +977,16 @@ fn validate_spacing(lexed_line: &LexedLine, line: usize, diags: &mut Vec<Diagnos
         // `merge [] left right` passes an empty list and then an argument.
         // What decides is the colon, because only an annotation follows one.
         // Walking back over a run of empty pairs also admits `[][]int`.
-        let slice_marker = matches!((prev, next), (Tok::RBracket, Tok::Ident(_)))
-            && at > 0
-            && {
-                let mut k = at;
-                while k >= 1
-                    && matches!(lexed_line.tokens.get(k - 1).map(|(t, _)| t), Some(Tok::LBracket))
-                    && matches!(lexed_line.tokens.get(k).map(|(t, _)| t), Some(Tok::RBracket))
-                {
-                    k = k.saturating_sub(2);
-                }
-                matches!(lexed_line.tokens.get(k).map(|(t, _)| t), Some(Tok::Colon))
-            };
+        let slice_marker = matches!((prev, next), (Tok::RBracket, Tok::Ident(_))) && at > 0 && {
+            let mut k = at;
+            while k >= 1
+                && matches!(lexed_line.tokens.get(k - 1).map(|(t, _)| t), Some(Tok::LBracket))
+                && matches!(lexed_line.tokens.get(k).map(|(t, _)| t), Some(Tok::RBracket))
+            {
+                k = k.saturating_sub(2);
+            }
+            matches!(lexed_line.tokens.get(k).map(|(t, _)| t), Some(Tok::Colon))
+        };
         let required = match (infix_amp, slice_marker) {
             (_, true) => 0,
             (true, _) => 1,
