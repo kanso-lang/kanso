@@ -1,0 +1,4 @@
+error[syntax]: string patterns may not interpolate
+  --> a_string_pattern_may_not_interpolate.kso:1:6
+   1 | fn f "{1}"
+            ^

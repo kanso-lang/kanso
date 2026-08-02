@@ -1,0 +1,4 @@
+fn f "{1}"
+  1
+
+pub play = print "{f "x"}"

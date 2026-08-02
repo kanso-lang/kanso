@@ -1,0 +1,4 @@
+error[syntax]: expected `)`
+  --> an_unclosed_call_wants_its_paren.kso:1:23
+   1 | pub play = print (1 + 2
+                             ^

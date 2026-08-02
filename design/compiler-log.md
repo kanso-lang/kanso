@@ -14903,3 +14903,28 @@ those needs a program that provokes the runtime rather than mistypes a call,
 which is a different exercise from this one.
 
 Welfare unchanged at 75.64.
+
+## 2026-08-02 — the same probe, turned on the front end
+
+Sixty-three literal compile-time messages in check.rs, parser.rs and lib.rs;
+twenty-six appeared in no errors golden. Driving them from source, nine reach
+their own diagnostic and are now pinned: trailing tokens, an unclosed call, a
+map written with brackets in both its forms, a bare `&`, an interpolating
+string pattern, a top-level line that is not a declaration, a map key without
+its colon, and unsorted map keys.
+
+The rest are shadowed, and the shadowing is layered in a way worth naming: the
+formatting rules run first and are strict, so a probe aimed at a syntax
+diagnostic usually lands on a spacing or continuation rule instead. `{"a" 1}`
+answers "canonical form requires exactly one space here" and only says
+"expected `:` after a map key" once written `{ "a" 1 }`. A malformed map
+literal has to be well-formatted before the parser will complain about it
+being a malformed map.
+
+That is not a defect — the layers are ordered by how cheap they are to check —
+but it means a diagnostic's reachability depends on every rule upstream of it,
+and a probe that stops at the first message understates what is live. Both
+sweeps found the same shape: what looks unreachable is often only shadowed,
+and what looks shadowed is sometimes reachable by a better-formed program.
+
+Welfare unchanged at 75.64.

@@ -1,0 +1,4 @@
+error[syntax]: `&` marks a partial application: `&name arg`
+  --> an_ampersand_with_nothing_to_hold.kso:1:20
+   1 | pub play = print "{&}"
+                          ^

@@ -1,0 +1,4 @@
+error[syntax]: unexpected trailing tokens
+  --> trailing_tokens_after_a_statement.kso:1:27
+   1 | pub play = print "a" extra)
+                                 ^

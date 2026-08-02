@@ -1,0 +1,4 @@
+error[formatting]: map literal keys appear in sorted order, without duplicates
+  --> map_keys_are_sorted_and_unique.kso:1:13
+   1 | m = { "b":1 "a":2 }
+                   ^

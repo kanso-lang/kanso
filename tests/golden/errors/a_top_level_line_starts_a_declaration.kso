@@ -1,0 +1,3 @@
+pub 1 = 2
+
+pub play = print "a"
