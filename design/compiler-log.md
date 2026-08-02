@@ -15160,3 +15160,131 @@ than carried, so it is shared across the rewind instead of copied. That needs
 its storage to survive, which means `k_buf` growth for a threaded slot
 allocating outside the arena. That is the piece this task first named, and the
 reason for it is now known: not safety, but escaping the carry copy.
+
+## the sibling gate let the change supply its own expected values (2026-08-02)
+
+kq's headline row went from three times faster than jq to ten times slower, and
+every gate stayed green through it. The bisect is unambiguous: kanso #638
+answers `carry_dedup=1` on kq's 188 KB fixture, kanso #639 answers 2721, and on
+ten times the document 286,401 — a hundred and five times the work for ten times
+the data.
+
+THE FIRST DIAGNOSIS WAS WRONG AND IS RECORDED HERE BECAUSE IT WAS PLAUSIBLE.
+It read: kq's CI cloned kanso main, so the dependency was gated in one direction
+only and #639 ran where nothing executed the program it broke. Every clause of
+that is false. `.github/workflows/ci.yml` has carried a gating "kq specs (a real
+program, gating)" job for some time, with a comment recording that kq once
+caught a compiler bug nineteen suites missed. The gate existed and it ran.
+
+WHAT ACTUALLY HAPPENED is worse. `.github/clone-sibling.sh` prefers a sibling
+branch named after the kanso branch under test, which is correct and load-bearing
+for a coordinated language change: a syntax change and the sweep it forces in kq
+are one change, and naming the branch alike in both is how they are checked
+together. #639's own second commit says what it did with that — "gate against the
+kq branch that carries its regenerated golden." The kq branch it pointed at had
+already moved carry_dedup from 1 to 2721. The gate compared 2721 against 2721 and
+passed.
+
+So the escape hatch is not a missing gate. It is that a compiler change may ship
+the expected values it will be judged against, in a sibling branch, in the same
+breath. For a syntax sweep that is exactly right — the sibling must change. For a
+performance golden it dissolves the gate entirely, because the number IS the
+claim about the compiler, and letting the compiler restate it is letting it mark
+its own paper.
+
+THE SPLIT THAT FIXES IT: a coordinated branch may supply the sibling's SOURCE,
+never its performance goldens. Those are compared against the sibling's main
+copy, so a counter that moves has to be argued in front of the number it moved
+from rather than the number the change brought with it.
+
+Also measured on the way, and it overturns the obvious remedy of widening the
+synthetic corpus: in encodebench the same compiler change is carry_dedup 0 ->
+6800, and 71,600 at ten times the input — a ratio of 10.5, exactly linear. #639
+priced that honestly as `encode_allocs +0.025%` and said decode, one-shot and
+basket were unchanged with welfare holding at 65.56, all of it true. The change
+is linear in every shape the corpus holds and quadratic only in kq's. A
+hand-built basket can only hold shapes somebody thought to write.
+
+## the flagship is the corpus (2026-08-02)
+
+kq's headline row went from three times faster than jq to ten times slower, and
+every gate stayed green through it. The bisect is unambiguous: kanso #638
+answers `carry_dedup=1` on kq's 188 KB fixture, kanso #639 answers 2721, and
+kq#39 recorded that rise as costing nothing three minutes after #639 landed.
+
+The rise is not the interesting number. On ten times the document the same
+counter reads 286,401 — a hundred and five times the work for ten times the
+data. A cost golden compares one workload against one stored number, so the
+only thing it can report is that a counter moved; the shape of the move is
+outside what it can express. The word "ratcheted" was in the failure message
+and the mechanism underneath was `diff`, which has no direction and no scale.
+
+The part that overturned the obvious remedy: WIDENING THE SYNTHETIC CORPUS
+WOULD NOT HAVE CAUGHT IT. Measured, not assumed. In encodebench the same
+compiler change takes carry_dedup from 0 to 6800, and at ten times the input to
+71,600 — a ratio of 10.5, exactly linear. #639's own commit message priced that
+honestly as `encode_allocs +0.025%` and said decode, one-shot and basket were
+unchanged and welfare held at 65.56. All of it true. The change is linear in
+every shape the corpus holds and quadratic only in kq's, so a hand-built basket
+could only have caught it if somebody had thought to write kq's shape into it.
+
+Three things follow. Two shipped today; the third is the real one.
+
+A ratio gate, kq#42: every counter measured at two document sizes, the ten
+times fixture derived from bench/large.json at gate time, and the ratio bounded
+at 12x. Linear work lands near ten — `allocs`, the healthy neighbour, reads
+10.3. Proven in both directions rather than only watched red: green with a kq
+built by #638, red with one built by #639, same fixture and same gate. The one
+line in bench/scale_exceptions.txt is this live regression written down as a
+debt with its measured ratio, so the gate can protect the other twenty-nine
+counters while the fix is hunted; it returns to 12x when the fix lands, and a
+worsening of even the debted counter still fails.
+
+And the sibling gate stops accepting performance goldens from a coordinated
+branch, which is the entry above.
+
+Gating on one real program covers one shape, and the next consumer arrives
+uncovered. Clay's correction, and it is the right one — the answer is not to run
+the flagship, it is to make the corpus out of many flagship-shaped programs. The
+count that makes this concrete rather than aspirational: 300 real .kso programs
+live in this repo, every one already run for correctness, and the cost vein
+measures four synthetic ones. The corpus should be those programs.
+
+Still open: the fix itself. Two hypotheses died and the probe answered what
+neither could.
+
+`k_interior_survives` already exempts a builder (`cap > 0` on K_STR/K_BYTES),
+and extending that exemption to a builder held as a slot inside a container —
+the obvious first move, since `k_slots_survive` asks plain arena membership and
+so answers no for malloc'd storage — changes nothing. carry_dedup stays at
+286,401.
+
+So the walk was instrumented rather than reasoned about again: a counter per tag
+on each of the two ways `k_shareable` can refuse. On kq's 188 KB fixture,
+
+    tag  6 K_STR      interior 0    outer 3264
+    tag  7 K_REC      interior 0    outer 9190
+    tag  8 K_DESC     interior 0    outer 971
+    tag  9 K_LIST     interior 30   outer 5473
+    tag 10 K_MAP      interior 15   outer 3105
+    tag 11 K_CLOSURE  interior 0    outer 484
+
+The check #639 added refuses FORTY-FIVE nodes. Every one of the other 22,487
+refusals comes from `k_survives`, which #639 never touched. And note K_REC's
+interior column is zero — the record case #639 was written for does not arise
+here at all.
+
+Those forty-five are amplifiers. A node refused near the root is copied instead
+of shared, so the walk cannot prune there and descends the whole subtree
+beneath it; in #638 the accumulator was shareable and the walk stopped at one.
+Forty-five refusals become twenty-two thousand visits, and the count itself is
+about the number of carries — which names the shape: the fold carry deep-copies
+the accumulated document once per iteration. An O(n) copy n times is the
+quadratic, and it is why the counter scales with the square of the document
+while `allocs` beside it stays honestly linear at 10.3.
+
+The fix has to make the accumulator shareable again without giving back what
+#639 bought. A builder's exemption is that its storage is malloc'd and a rewind
+cannot reach it; whether a grown K_LIST or K_MAP backing store carries the same
+proof is the next thing to establish — against the real allocator rather than
+against what the struct would tolerate.
