@@ -15041,3 +15041,40 @@ cross — a map and a list whose values are built per iteration, read after the
 loop. Their power is unproven: both widenings I tried were no-ops, so I could
 not make them fail. They cover a shape nothing else did, and that is the claim,
 not that they will catch the corruption they were written for.
+
+## 2026-08-02 — the accumulator rewind, built and measured and not shipped
+
+Exempting `put` from `accumulator_grows`'s EXTENDING list is a two-word change
+and it does what the task asked for. Measured, then declined, and the reasons
+are worth keeping because the next person will reach for the same two words.
+
+WHAT IT DOES. The acceptance criterion in tests/accumulator_growth.rs passes:
+sixteen times the iterations no longer takes more arena. The bracket is emitted
+— beat_iters goes 0 -> 20,000 on the leak fixture — and arena_peak_bytes stays
+at 1,048,576 either way.
+
+WHAT IT COSTS. On that same fixture, allocs go 28,241 -> 68,244 and alloc_bytes
+903,760 -> 2,183,840, both 2.4x. That is the shape of reuse: a rewind hands the
+region back and the next iteration allocates into it again, where before the
+arena bumped once and never looked back. More allocation events, same peak.
+
+WELFARE CANNOT SEE THE TRADE. It reads 75.64 with the change and 75.64 without,
+because its workloads are json decode, json encode, the basket and the oneshot,
+and none of them threads a map through a tail loop. A change that trades 2.4x
+allocations for flat memory is invisible to the function that exists to weigh
+exactly that. Recorded against #90, which asks what workload the index is
+missing: this is a concrete answer.
+
+WHY IT IS NOT SHIPPED. Nothing I could write catches a soundness violation. The
+boundary fixtures pass; a map grown to 3,000 distinct keys and read afterwards
+answers correctly on both engines. That is not evidence of safety — it is
+evidence that the carry boundary already copies out what will not survive,
+which is what carry_dedup counts in k_deep_copy. So the guard may well be
+unnecessary, and "my tests cannot disprove it" is not "it is safe". Removing a
+defensive guard on that basis is the exact move this log has been burned by:
+#57, #92 and #95 all passed their counters.
+
+WHAT WOULD SETTLE IT is a reading rather than a test: whether every path out of
+a rewound region passes through the carry copy. If it does, the guard is dead
+code and the two-word change is correct. If there is one path that does not,
+the change is a memory bug that no fixture in this repo would report.
