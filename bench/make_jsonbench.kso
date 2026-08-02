@@ -1,0 +1,58 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Rebuild bench/jsonbench: the json module plus a main that reads
+# bench/large.json AT RUNTIME and decodes it 150 times, accumulating a
+# checksum so the loop provably runs (no hoisting / dead-code elimination).
+# Runtime read keeps the input opaque to the optimizer — an embedded
+# compile-time fixture would let LLVM fold the decode and flatter the number.
+# Run the built ./jsonbench from the repo root; divide its wall time by 150.
+out = "bench/jsonbench"
+
+# `failure_position` rescues an err this program raises, and a benchmark that
+# only decodes has no use for it.
+dropped = "fn failure_position"
+
+say = "  print \"decoded 150 times, checksum \{loop cs 150 0}\""
+
+step = "  loop cs (n - 1) (acc + length (decode cs))"
+
+bench_head = ["fn go cs" say "" "fn loop _ 0 acc" "  acc" ""]
+
+bench_tail = ["fn loop cs n acc" step ""]
+
+main_body = ["import \"std/io\"" "" "io/read_file \"bench/large.json\" . go" ""]
+
+ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
+
+bench_text = "{text/join bench_head "\n"}\n{text/join bench_tail "\n"}"
+
+pub play = built
+
+built = io/run "mkdir" ["-p" out] . (_ -> copied)
+
+copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
+  . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
+
+fn plain name
+  io/read_file "lib/json/{name}.kso" . (s -> io/write_file "{out}/{name}.kso" s)
+
+trimmed = io/read_file "lib/json/json.kso" . stripped
+
+fn stripped source
+  io/write_file "{out}/json.kso" (kept source)
+
+# Blocks are separated by a blank line, which is what makes the one function
+# this benchmark does not want addressable without parsing the file.
+fn kept source
+  blocks = text/split (text/trim source) "\n\n"
+  staying = list/to_list (list/reject blocks starts_dropped?)
+  "{text/join staying "\n\n"}\n"
+
+fn starts_dropped? block
+  text/slice block 1 (length dropped) == dropped
+
+written = io/write_file "{out}/bench.kso" bench_text
+  . (_ -> io/write_file "{out}/main.kso" (text/join main_body "\n"))
+  . (_ -> io/write ready)

@@ -766,7 +766,7 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 <span class="c"># go encoding/json          ~2.00 ms   10.5 mb rss</span>
 
 cargo build --release
-bash bench/make_jsonbench.sh
+./target/release/kanso run bench/make_jsonbench.kso
 ./target/release/kanso build bench/jsonbench --release
 time ./jsonbench                                  <span class="c"># less ~3 ms startup, over 150</span>
 (cd bench/serde_bench && cargo build --release)
