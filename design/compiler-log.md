@@ -14489,9 +14489,18 @@ front end holds. A missing dimension inside a list of counters looks like
 nothing; inside four named terms it is an empty slot. It stayed empty while the
 figure it would have watched more than doubled.
 
-bench/compile_memory_golden.txt is the new input, and CI diffs it beside the
-others. The counter is deterministic: four runs of `kanso check lib/json` give
-compile_peak_bytes=819217 every time.
+bench/compile_memory_golden.txt is the new input. It is deterministic per host
+— four runs give the same number — but it is the one counter here that is a
+property of the host as well as of the program, because it is measured by the
+compiler's own allocator rather than by the generated program. Linux and macos
+disagree by 56 bytes on the same input, and by four allocations.
+
+So the gate is a band rather than a diff: the score reads the golden, which
+keeps it deterministic everywhere, and CI asserts only that reality has not
+drifted more than two per cent from it. Two per cent is a hundred times the
+disagreement between hosts and far below anything worth noticing. Bucketing to
+kibibytes was tried first and does not work — 819217 and 819161 straddle a
+kibibyte boundary and round to 800 and 799.
 
 THE SCORE MOVED 65.69 TO 75.78 AND THE FLOOR MOVED WITH IT. That is the model
 changing, not the compiler improving, and the ratchet records it in those
