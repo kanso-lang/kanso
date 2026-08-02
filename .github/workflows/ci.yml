@@ -133,31 +133,6 @@ jobs:
             echo "::error::the engine still fetches the undigested module"; exit 1
           fi
 
-  flagship:
-    # #639 shipped green here while making kq's pretty-print path ten times
-    # slower than jq, because the same change is linear in every shape the
-    # corpus holds (encodebench: carry_dedup 6800 -> 71600 on ten times the
-    # input) and quadratic only in kq's (2721 -> 286,401).
-    #
-    # This is the cheap half of the answer, not the whole one: one real
-    # program covers one shape, and the next consumer's shape is uncovered
-    # again. The other half is a corpus of many program-shaped workloads,
-    # which is task #111 — 300 real .kso programs live in this repo and the
-    # cost vein measures four synthetic ones.
-    name: the flagship program still holds
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release
-      - name: jq (kq's oracle)
-        run: sudo apt-get install -y jq
-      - name: kq specs, goldens and scale gate against this compiler
-        run: |
-          git clone --depth 1 https://github.com/kanso-lang/kq /tmp/kq
-          cd /tmp/kq
-          KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
-
   welfare:
     name: welfare (one number over runtime and compile cost, ratcheted)
     runs-on: ubuntu-latest

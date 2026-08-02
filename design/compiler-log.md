@@ -15161,6 +15161,50 @@ its storage to survive, which means `k_buf` growth for a threaded slot
 allocating outside the arena. That is the piece this task first named, and the
 reason for it is now known: not safety, but escaping the carry copy.
 
+## the sibling gate let the change supply its own expected values (2026-08-02)
+
+kq's headline row went from three times faster than jq to ten times slower, and
+every gate stayed green through it. The bisect is unambiguous: kanso #638
+answers `carry_dedup=1` on kq's 188 KB fixture, kanso #639 answers 2721, and on
+ten times the document 286,401 — a hundred and five times the work for ten times
+the data.
+
+THE FIRST DIAGNOSIS WAS WRONG AND IS RECORDED HERE BECAUSE IT WAS PLAUSIBLE.
+It read: kq's CI cloned kanso main, so the dependency was gated in one direction
+only and #639 ran where nothing executed the program it broke. Every clause of
+that is false. `.github/workflows/ci.yml` has carried a gating "kq specs (a real
+program, gating)" job for some time, with a comment recording that kq once
+caught a compiler bug nineteen suites missed. The gate existed and it ran.
+
+WHAT ACTUALLY HAPPENED is worse. `.github/clone-sibling.sh` prefers a sibling
+branch named after the kanso branch under test, which is correct and load-bearing
+for a coordinated language change: a syntax change and the sweep it forces in kq
+are one change, and naming the branch alike in both is how they are checked
+together. #639's own second commit says what it did with that — "gate against the
+kq branch that carries its regenerated golden." The kq branch it pointed at had
+already moved carry_dedup from 1 to 2721. The gate compared 2721 against 2721 and
+passed.
+
+So the escape hatch is not a missing gate. It is that a compiler change may ship
+the expected values it will be judged against, in a sibling branch, in the same
+breath. For a syntax sweep that is exactly right — the sibling must change. For a
+performance golden it dissolves the gate entirely, because the number IS the
+claim about the compiler, and letting the compiler restate it is letting it mark
+its own paper.
+
+THE SPLIT THAT FIXES IT: a coordinated branch may supply the sibling's SOURCE,
+never its performance goldens. Those are compared against the sibling's main
+copy, so a counter that moves has to be argued in front of the number it moved
+from rather than the number the change brought with it.
+
+Also measured on the way, and it overturns the obvious remedy of widening the
+synthetic corpus: in encodebench the same compiler change is carry_dedup 0 ->
+6800, and 71,600 at ten times the input — a ratio of 10.5, exactly linear. #639
+priced that honestly as `encode_allocs +0.025%` and said decode, one-shot and
+basket were unchanged with welfare holding at 65.56, all of it true. The change
+is linear in every shape the corpus holds and quadratic only in kq's. A
+hand-built basket can only hold shapes somebody thought to write.
+
 ## the flagship is the corpus (2026-08-02)
 
 kq's headline row went from three times faster than jq to ten times slower, and
@@ -15196,17 +15240,15 @@ debt with its measured ratio, so the gate can protect the other twenty-nine
 counters while the fix is hunted; it returns to 12x when the fix lands, and a
 worsening of even the debted counter still fails.
 
-And kanso's CI now builds kq and runs that suite against every compiler change.
-kq's CI already cloned kanso main, so the dependency was gated in one direction
-only, and #639 ran in a repository where nothing executed the program it broke.
+And the sibling gate stops accepting performance goldens from a coordinated
+branch, which is the entry above.
 
-That second one is the cheap half and it does not generalise: gating on one real
-program covers one shape, and the next consumer arrives uncovered. Clay's
-correction, and it is the right one — the answer is not to run the flagship, it
-is to make the corpus out of many flagship-shaped programs. The count that makes
-this concrete rather than aspirational: 300 real .kso programs live in this
-repo, every one of them already run for correctness, and the cost vein measures
-four synthetic ones. The corpus should be those programs.
+Gating on one real program covers one shape, and the next consumer arrives
+uncovered. Clay's correction, and it is the right one — the answer is not to run
+the flagship, it is to make the corpus out of many flagship-shaped programs. The
+count that makes this concrete rather than aspirational: 300 real .kso programs
+live in this repo, every one already run for correctness, and the cost vein
+measures four synthetic ones. The corpus should be those programs.
 
 Still open: the fix itself. `k_interior_survives` already exempts a builder
 (`cap > 0` on K_STR/K_BYTES), and extending that exemption to a builder held as
