@@ -14928,3 +14928,32 @@ sweeps found the same shape: what looks unreachable is often only shadowed,
 and what looks shadowed is sometimes reachable by a better-formed program.
 
 Welfare unchanged at 75.64.
+
+## 2026-08-02 — make_jsonbench is kanso, and it was python all along
+
+bench/make_jsonbench.sh is gone; bench/make_jsonbench.kso replaces it and
+writes byte-identical output, checked by hashing all seven generated files
+before and after.
+
+THE SCRIPT WAS NOT A SHELL SCRIPT. Nine of its twenty-six lines were a python3
+heredoc doing the real work — reading json.kso, splitting it on blank lines,
+dropping the block that starts `fn failure_position`, and writing bench.kso and
+main.kso. The python migration was recorded as finished except for
+browser_differential and site_smoke; this was a third python program, wearing a
+`.sh` extension, and no count of `*.py` would ever have found it.
+
+WHAT THE PORT NEEDED, and what it says about the surface. text/split, text/trim,
+text/join, text/slice and list/reject cover the transformation exactly. Two
+gaps showed up. There is no `starts_with`, so "block begins with the dropped
+name" is `text/slice block 1 (length dropped) == dropped` — correct, and plainer
+than a predicate would have been. And io/write_file does not create parent
+directories, so the one line that still shells out is
+`io/run "mkdir" ["-p" out]`, which is what the shell did too.
+
+Also found: task #63 records an `os` package with MkdirAll as complete. There is
+no lib/os and no mkdir anywhere in the language. The task is wrong, and the port
+had to route around what it claims exists.
+
+The recipe published on compiler.html quoted `bash bench/make_jsonbench.sh` and
+now quotes the kanso command, because a reader following it would otherwise run
+a file that is not there.
