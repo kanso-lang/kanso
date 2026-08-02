@@ -455,6 +455,21 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
         builtin_value_wrappers: Vec::new(),
+        defers_self_reference: program.fns.iter().any(|d| {
+            fn mentions(expr: &Expr, name: &str) -> bool {
+                if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                    if n == name {
+                        return true;
+                    }
+                }
+                crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+            }
+            d.params.is_empty()
+                && d.body.iter().any(|stmt| match stmt {
+                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &d.name),
+                    Stmt::Set { value, .. } => mentions(value, &d.name),
+                })
+        }),
         print_value_wrapper: false,
         caf_cells: Vec::new(),
         caf_fills: Vec::new(),
@@ -489,6 +504,7 @@ struct Backend<'a> {
     /// (builtin, arity) pairs a program hands out as values, each needing a
     /// wrapper a dynamic call can reach.
     builtin_value_wrappers: Vec<(String, usize)>,
+    defers_self_reference: bool,
     print_value_wrapper: bool,
     /// One cache cell per frozen constant, emitted as globals at the end.
     caf_cells: Vec<String>,
@@ -940,7 +956,9 @@ impl<'a> Backend<'a> {
     /// vanishes, not just the set-proven ones (conservative TOP widenings
     /// carry the THUNK bit into code no thunk can reach).
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
-        if self.demand.lazy_bind_count() == 0 {
+        // A deferred self-reference is a thunk that no lazy-bind count knows
+        // about, so the cheap exit has to admit it too.
+        if self.demand.lazy_bind_count() == 0 && !self.defers_self_reference {
             return value;
         }
         if f.set_of(&value) & crate::infer::THUNK == 0 {

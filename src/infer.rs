@@ -38,6 +38,10 @@ pub struct Inference {
 }
 
 struct Ctx<'a> {
+    /// Whether any constant in this program mentions itself. Such a mention
+    /// is emitted as a thunk in a storing position, so every container read
+    /// has to admit one; no other program does, and none pays for it.
+    defers_into_containers: bool,
     program: &'a Program,
     demand: crate::demand::DemandInfo,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
@@ -96,7 +100,23 @@ pub fn infer(program: &Program) -> Inference {
         groups.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
     }
     let type_names = program.types.iter().enumerate().map(|(i, t)| (t.name.as_str(), i)).collect();
+    let defers_into_containers = program.fns.iter().any(|d| {
+        fn mentions(expr: &Expr, name: &str) -> bool {
+            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+                if n == name {
+                    return true;
+                }
+            }
+            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+        }
+        d.params.is_empty()
+            && d.body.iter().any(|stmt| match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &d.name),
+                Stmt::Set { value, .. } => mentions(value, &d.name),
+            })
+    });
     let mut ctx = Ctx {
+        defers_into_containers,
         program,
         demand: crate::demand::analyze(program),
         current: (String::new(), 0),
@@ -294,7 +314,14 @@ fn eval_expr<'a>(ctx: &mut Ctx<'a>, expr: &'a Expr, env: &mut HashMap<&'a str, S
                 out |= INT;
             }
             if b & (LIST | MAP | STR) != 0 {
-                out |= TOP & !FAIL & !THUNK;
+                // A container holds a thunk only where a constant defers a
+                // mention of itself into one, so a program with no such
+                // constant keeps the mask and pays no force at any read.
+                let deferred = match ctx.defers_into_containers {
+                    true => THUNK,
+                    false => 0,
+                };
+                out |= (TOP & !FAIL & !THUNK) | deferred;
             }
             out
         }

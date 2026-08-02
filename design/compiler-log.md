@@ -13992,3 +13992,44 @@ twice and drifting.
 
 Still unmerged, and the reason has not changed: this admits programs that do
 not yet run correctly, which is worse than refusing them.
+
+## 2026-08-01 — a constant may name itself
+
+`graph = { "a":(node "a" [graph["b"]!]) ... }` now runs. It prints `b a` on
+native and on the interpreter, and the browser refuses it in a sentence.
+
+The rule that admits it is demand, not mention. `check_constant_cycles` used to
+walk every name a constant's body contains; it now walks only the names the body
+demands *while computing itself*, which is a smaller set. A constructor stores
+its arguments and never looks at them, and a list or map literal stores every
+element, so a mention inside one is not a demand — the value goes into a field
+and is read later, by which time the constant it names has a value. A mention
+anywhere else still refuses, so `x = x + 1` is the same error it always was.
+
+Admitting the program is only the first of three moves, and each of the others
+announced itself as a different error.
+
+1. `is_constant_body` now answers true for a constant that mentions itself, so
+   it freezes into a CAF filled once before main rather than recomputing on
+   every read. Without it the program overflowed the stack.
+2. A storing position inside such a constant emits a zero-capture thunk instead
+   of a value. Without it the mention evaluated to nothing indexable.
+3. Inference and `maybe_force` both learn the same fact. A container read may
+   yield a thunk, and the cheap exit in `maybe_force` admits a deferred
+   self-reference, which no lazy-bind count knows about. Both are gated on the
+   program holding such a constant at all, so nothing else pays a force.
+
+The interpreter needed the same shape in its own terms: one memoised cell per
+self-naming constant, and a stored position that waits when it names a constant
+still being computed. A mention arriving mid-computation reads Blackhole and
+takes the cell unforced, which is what gives the value something to point at.
+
+The browser backend has no deferred value at all — no thunk, nothing to put in
+a cell — so it declines with `browser backend: \`graph\` names itself, and the
+browser has no way to wait for a value`. That is the differential law's own
+provision: fewer engines is allowed, silent divergence is not. Closing it means
+giving the wasm backend a thunk representation, which is a real piece of work
+and is now the one thing standing between this feature and all three engines.
+
+Pinned by tests/golden/micro/a_constant_that_names_itself.kso, watched red on
+both engines first: before the change each refused the program outright.
