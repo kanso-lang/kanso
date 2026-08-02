@@ -46,6 +46,17 @@ struct Ctx<'a> {
     demand: crate::demand::DemandInfo,
     /// (name, arity) of the decl currently being walked, for lazy-bind lookup.
     current: (&'a str, usize),
+    /// Which function is being evaluated, so a read of somebody's return set
+    /// can record who wanted it.
+    current_index: usize,
+    /// For each function, the functions that have read its return set. A
+    /// return that widens only ever changes the answer of a function that
+    /// asked for it.
+    readers: Vec<std::collections::HashSet<usize>>,
+    /// Functions to visit next round. A field of a declared type widening can
+    /// reach any function through pattern binding, so that one blankets.
+    dirty_next: Vec<bool>,
+    all_dirty: bool,
     groups: HashMap<(&'a str, usize), Vec<usize>>,
     /// What a desc-valued local would yield to a bind, tracked through one
     /// binding level so `x = io/read_file p` then `x . f` gives f the STR.
@@ -120,6 +131,10 @@ pub fn infer(program: &Program) -> Inference {
         program,
         demand: crate::phase::watched("infer/demand", || crate::demand::analyze(program)),
         current: ("", 0),
+        current_index: 0,
+        readers: vec![std::collections::HashSet::new(); program.fns.len()],
+        dirty_next: vec![false; program.fns.len()],
+        all_dirty: false,
         groups,
         yields: HashMap::new(),
         type_names,
@@ -138,11 +153,22 @@ pub fn infer(program: &Program) -> Inference {
     let fns = &program.fns;
     let mut env: HashMap<&str, Set> = HashMap::new();
     let mut param_sets: Vec<Set> = Vec::new();
+    // Every function is visited the first round; after that only the ones a
+    // change can reach. Four fifths of the visits in a settled fixpoint find
+    // nothing, and a visit costs a walk of the whole body.
+    let mut dirty = vec![true; fns.len()];
     while ctx.changed && rounds < 200 {
         ctx.changed = false;
         rounds += 1;
         work::round();
+        let mut moved = 0usize;
+        ctx.dirty_next = vec![false; fns.len()];
+        ctx.all_dirty = false;
         for (i, decl) in fns.iter().enumerate() {
+            if !dirty[i] {
+                continue;
+            }
+            ctx.current_index = i;
             ctx.current = (decl.name.as_str(), decl.params.len());
             ctx.yields.clear();
             env.clear();
@@ -155,8 +181,21 @@ pub fn infer(program: &Program) -> Inference {
             if ret | ctx.returns[i] != ctx.returns[i] {
                 ctx.returns[i] |= ret;
                 ctx.changed = true;
+                moved += 1;
+                let readers = ctx.readers[i].clone();
+                for r in readers {
+                    ctx.dirty_next[r] = true;
+                }
             }
         }
+        let visited = dirty.iter().filter(|d| **d).count();
+        if std::env::var_os("KANSO_PHASES").is_some() {
+            eprintln!("round {rounds}: {moved} moved of {visited} visited");
+        }
+        dirty = match ctx.all_dirty {
+            true => vec![true; fns.len()],
+            false => std::mem::take(&mut ctx.dirty_next),
+        };
     }
     Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
 }
@@ -412,6 +451,7 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
             // constant mention evaluates; fn mention is a value (params go TOP)
             if let Some(decls) = ctx.groups.get(&(name, 0)) {
                 let i = decls[0];
+                ctx.readers[i].insert(ctx.current_index);
                 return ctx.returns[i];
             }
             let arities: Vec<usize> =
@@ -433,6 +473,7 @@ fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
     if ctx.params[decl][param] | set != ctx.params[decl][param] {
         ctx.params[decl][param] |= set;
         ctx.changed = true;
+        ctx.dirty_next[decl] = true;
     }
 }
 
@@ -498,6 +539,7 @@ fn eval_call<'a>(
                 if refined != *slot {
                     *slot = refined;
                     ctx.changed = true;
+                    ctx.all_dirty = true;
                 }
             }
         }
@@ -525,6 +567,7 @@ fn eval_call<'a>(
             for (p, set) in arg_sets.iter().enumerate() {
                 widen_param(ctx, i, p, *set);
             }
+            ctx.readers[i].insert(ctx.current_index);
             out |= ctx.returns[i];
         }
         return out | piped_bits;
