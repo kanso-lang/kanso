@@ -89,7 +89,7 @@ codec_memory = text/concat decode_memory encode_memory
 
 run_memory_counters = text/concat codec_memory held_memory
 
-compile_speed_counters = ["compile_rounds" "compile_visits" "emitted_lines"]
+compile_speed_counters = ["front_end_rounds" "front_end_visits" "emitted_lines"]
 
 compile_memory_counters = ["compile_peak_bytes"]
 
@@ -166,8 +166,8 @@ fn measured decode encode oneshot basket comp held
   o = [["oneshot_peak_bytes" (peak_of oneshot)]]
   b = [["basket_allocs" basket["allocs"]!]]
   bp = [["basket_peak_bytes" (peak_of basket)]]
-  c = [["compile_rounds" comp["rounds"]!]]
-  v = [["compile_visits" comp["visits"]!]]
+  c = [["front_end_rounds" held["front_end_rounds"]!]]
+  v = [["front_end_visits" held["front_end_visits"]!]]
   l = [["emitted_lines" comp["lines"]!]]
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]!]]
   gathered d db dp e eb ep o b bp c v (text/concat l cm)
