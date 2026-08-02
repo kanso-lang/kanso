@@ -1,0 +1,199 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# The long view: every commit this project has, on one chart, five lines.
+#
+# bench/long_view.tsv holds a row per commit — the time, the commit, and four
+# deterministic numbers measured by replaying that commit: what its compiler
+# spent checking its own json library, and what its seven example programs
+# spent being run. Instructions retired for speed and peak footprint for
+# memory, because both are the same whoever else is on the machine.
+#
+# The fifth line is utility, computed here from the other four rather than
+# recorded, so the chart says whether the project came out ahead as well as
+# where the movement was.
+#
+# Each line is scaled to its own range, because the units have nothing to do
+# with each other — a hundred million instructions and a megabyte cannot share
+# an axis and stay readable. What the chart shows is shape: which way each
+# number went, and when it stepped. The x axis is time rather than commit
+# count, because commits are not evenly spaced.
+type series
+  colour
+  hue
+  label
+  reading
+
+width = 1200
+
+height = 560
+
+pad = 64
+
+# Weight and satiation per dimension, as the welfare score states them:
+# runtime carries two thirds against compile's one third, and runtime keeps
+# paying for improvement long after compile has stopped.
+s_run_speed = series "#4fd1ff" 333 "run speed" run_speed
+
+s_run_memory = series "#a78bfa" 333 "run memory" run_memory
+
+s_comp_speed = series "#ffd166" 167 "compile speed" compile_speed
+
+s_comp_memory = series "#f472b6" 167 "compile memory" compile_memory
+
+s_utility = series "#4ade80" 0 "utility" utility
+
+lines = [s_run_speed s_run_memory s_comp_speed s_comp_memory s_utility]
+
+pub play = io/read_file "bench/long_view.tsv" . drawn
+
+fn drawn text
+  rows = list/to_list (list/select (text/split text "\n") measured?)
+  charted rows (length rows)
+
+fn measured? line
+  length line > 20 and (text/split line "#")[1]! == line
+
+fn charted _ 0
+  io/write_err "no rows — bench/long_view.tsv is empty\n" . (_ -> io/exit 1)
+
+fn charted rows n
+  io/read_file "docs/compiler.html" . (page -> spliced page rows n)
+
+fn spliced page rows n
+  body = svg rows n
+  before = (text/split page "<!--long-view-->")[1]!
+  rest = (text/split page "<!--/long-view-->")[2]!
+  open = "{before}<!--long-view-->"
+  close = "<!--/long-view-->{rest}"
+  io/write_file "docs/compiler.html" "{open}\n{body}\n{close}"
+    >> io/write "long view: {n} commits, {length lines} lines\n"
+
+fn svg rows n
+  times = list/to_list (list/map rows at_of)
+  first = list/min times
+  last = list/max times
+  base = rows[1]!
+  drawn_lines = list/map lines (s -> path s rows base times first last)
+  body = text/join (list/to_list drawn_lines) "\n"
+  keys = text/join (list/to_list (list/map lines legend)) "\n"
+  frame body keys n
+
+fn at_of row
+  text/to_int (text/split row "\t")[1]!
+
+fn compile_memory row
+  text/to_int (text/split row "\t")[3]!
+
+fn compile_speed row
+  text/to_int (text/split row "\t")[4]!
+
+fn run_memory row
+  text/to_int (text/split row "\t")[5]!
+
+fn run_speed row
+  text/to_int (text/split row "\t")[6]!
+
+# Utility in hundredths: each dimension contributes its weight times a
+# saturating function of baseline-over-current, so a dimension that is already
+# far better than it was keeps paying less for the next improvement.
+fn utility row
+  utility_against row row
+
+fn utility_against row base
+  a = worth (compile_memory base) (compile_memory row) 167 50
+  b = worth (compile_speed base) (compile_speed row) 167 50
+  c = worth (run_memory base) (run_memory row) 333 200
+  d = worth (run_speed base) (run_speed row) 333 200
+  a + b + c + d
+
+# All of it in hundredths, so integer division never rounds a ratio to one.
+fn worth was now weight satiation
+  ratio = 100 * live was / live now
+  weight * ratio / (ratio + satiation)
+
+fn live 0
+  1
+
+fn live n
+  n
+
+fn path s rows base times first last
+  readings = list/to_list (list/map rows (r -> reading_of s r base))
+  low = list/min readings
+  high = list/max readings
+  coords = stepped readings times low high first last 1 (length readings) ""
+  open = "<polyline fill=\"none\" stroke=\"{s.colour}\""
+  "{open} stroke-width=\"2\" points=\"{coords}\"/>"
+
+# Utility is the one line that means nothing without a baseline, so it is read
+# against the first row while the other four read themselves.
+fn reading_of s row base
+  against s row base (s.hue == 0)
+
+fn against _ row base true
+  utility_against row base
+
+fn against s row _ false
+  s.reading row
+
+fn stepped readings times low high first last at n acc
+  walking readings times low high first last at n acc (at > n)
+
+fn walking _ _ _ _ _ _ _ _ acc true
+  acc
+
+fn walking readings times low high first last at n acc false
+  x = across times[at]! first last
+  y = up readings[at]! low high
+  stepped readings times low high first last (at + 1) n "{acc} {x},{y}"
+
+fn across t first last
+  pad + (t - first) * (width - 2 * pad) / span_of first last
+
+fn span_of first last
+  widened (last - first)
+
+fn widened 0
+  1
+
+fn widened n
+  n
+
+fn up v low high
+  placed v low (high - low)
+
+# A flat line draws along the middle rather than dividing by zero.
+fn placed _ _ 0
+  height / 2
+
+fn placed v low span
+  top = pad / 2
+  usable = height - pad - top
+  top + usable - (v - low) * usable / span
+
+fn legend s
+  at = index_of s 1
+  x = pad + (at - 1) * 210
+  y = height - 16
+  swatch = "<rect x=\"{x}\" y=\"{y - 9}\" width=\"22\" height=\"3\""
+  dot = "{swatch} fill=\"{s.colour}\"/>"
+  key = "class=\"trend-key\""
+  said = "<text x=\"{x + 30}\" y=\"{y}\" {key}>{s.label}</text>"
+  "{dot}{said}"
+
+fn index_of s at
+  placing s at (lines[at]!.label == s.label)
+
+fn placing _ at true
+  at
+
+fn placing s at false
+  index_of s (at + 1)
+
+fn frame body keys n
+  open = "<svg class=\"trend\" viewBox=\"0 0 {width} {height}\" role=\"img\""
+  said = "five measures across {n} commits"
+  titled = "{open} aria-label=\"{said}\">"
+  "{titled}\n{body}\n{keys}\n</svg>"

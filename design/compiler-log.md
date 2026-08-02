@@ -14157,3 +14157,32 @@ Time is the axis here for the same reason: commits are not evenly spaced.
 The file is checked in rather than derived. Nothing recorded compile memory
 before 31 July, and recovering it costs a build per commit, so the measurement
 is data now.
+
+## 2026-08-01 — one chart, five lines, every commit
+
+The long view is one figure now. bench/long_view.tsv holds four numbers per
+commit for all 763: instructions retired and peak footprint, for this commit's
+compiler checking this commit's json library, and for its seven example
+programs being run. scripts/long_view.kso draws those four plus the utility
+they sum to.
+
+Instructions retired is the speed measure because it is deterministic — the
+kernel counts per process and the same binary on the same input retires the
+same number whoever else is on the machine. That is what makes 763 rows
+comparable without an idle box, repeated runs, or an averaged figure, and it
+resolves every commit: 763 distinct values across 763 commits, where peak
+footprint resolves 125.
+
+The examples are the workload because they are the only kanso spanning the
+whole history. The oldest compiler in the span has two verbs, so run means
+compile-and-execute.
+
+All four rose. Checking the json library: 16 million instructions and 1.06 MB
+to 151 million and 3.73 MB. Running the examples: 106 million and 1.09 MB to
+695 million and 3.95 MB. The workload grew too, so these are the cost of the
+work as it stands each day rather than of a frozen file.
+
+The two charts this replaces asked a smaller question — one plotted a single
+series, the other four counters over the week CI has been recording. Availability
+of already-recorded data shaped that design, which was the wrong constraint to
+accept once replaying history had been shown to recover any measurement wanted.

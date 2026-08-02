@@ -2,28 +2,39 @@ import "std/io"
 import "std/list"
 import "std/text"
 
-# The long view needs measurements from before anything was measuring. CI began
-# appending a counter row per merge on 2026-07-25, which leaves the commits
-# before it with nothing, and three of the five metrics the chart wants were
-# added later still. Replaying history fills both gaps: check out a commit,
-# build its compiler, and ask that compiler to check that commit's own json
-# library while the operating system watches how much memory it takes.
+# One commit's four numbers, for the long view on the compiler page. Measures
+# ONE commit per invocation, because a chain of binds is not a tail call —
+# each `>>` holds the rest of the work in a closure, so a walk over seven
+# hundred commits nests seven hundred deep and the stack runs out around sixty.
+# The loop belongs outside until that is fixed.
 #
-# The compiler and the library move together, so a row says what it cost to
-# check the json library as it stood that day. That is the question the chart
-# asks — whether the front end got cheaper on real work — rather than what a
-# frozen file costs, which no compiler that old would still accept anyway.
+# WHAT IS MEASURED, and why these four:
 #
-# Peak resident size is the measure because it is the one figure a shared
-# machine cannot distort: a competing process changes when this one runs, not
-# how much memory it needs. Wall time is absent for exactly that reason.
+#   compile memory  peak resident bytes while this commit's compiler checks
+#                   this commit's json library
+#   compile speed   instructions retired for the same
+#   run memory      peak footprint running the seven example programs
+#   run speed       instructions retired for the same
 #
-# Measures ONE commit and writes its row to stdout, because a chain of binds is
-# not a tail call: each `>>` holds the rest of the work in a closure, so a walk
-# over seven hundred commits nests seven hundred deep and the stack runs out at
-# about sixty. Driving the loop from outside keeps every invocation one frame.
+# The examples are the workload because they are the only body of kanso that
+# spans the whole history — dispatch, effects, errors, lists, pipes, records
+# and hello, present at the first commit and at the last. The oldest compiler
+# has only `run` and `check`, so `run` is what run-side means here: compile and
+# execute, which is the job a person actually waits for.
 #
-# Takes a worktree and a commit sha.
+# Peak resident size and cpu seconds rather than wall time: a competing process
+# changes when a run happens, not how much memory it needs nor how many cycles
+# it burns.
+type cost
+  cpu
+  peak
+
+rounds = 5
+
+examples = ["dispatch" "effects" "errors" "hello" "lists" "pipes" "records"]
+
+zero = cost 0 0
+
 pub play = io/args . started
 
 fn started argv
@@ -36,27 +47,68 @@ fn begun argv false
   measured argv[1]! argv[2]!
 
 fn measured tree sha
-  built tree sha . (_ -> timed tree sha)
+  built tree sha . (_ -> checked tree sha)
 
 fn built tree sha
   manifest = "{tree}/Cargo.toml"
   io/run "git" ["-C" tree "checkout" "-q" "--detach" sha]
     >> io/run "cargo" ["build" "--release" "--manifest-path" manifest]
 
-fn timed tree sha
+fn checked tree sha
+  timed tree "check" "{tree}/lib/json" . (front -> ran tree sha front)
+
+fn ran tree sha front
+  timed_examples tree 1 zero . (back -> reported sha front back)
+
+fn reported sha front back
+  said = "{sha}\t{front.peak}\t{front.cpu}\t{back.peak}\t{back.cpu}\n"
+  io/write said
+
+# Each example is its own process, so the peak is the worst of them and the
+# cost is the sum — one big program and seven small ones are not the same
+# shape, and the worst is what a machine has to hold.
+fn timed_examples tree at acc
+  walking tree at acc (at > length examples)
+
+fn walking _ _ acc true
+  acc
+
+fn walking tree at acc false
+  file = "{tree}/examples/{examples[at]!}.kso"
+  timed tree "run" file . (c -> merged tree at acc c)
+
+fn merged tree at acc c
+  timed_examples tree (at + 1) (cost (acc.cpu + c.cpu) (bigger acc.peak c.peak))
+
+fn bigger a b
+  larger a b (a > b)
+
+fn larger a _ true
+  a
+
+fn larger _ b false
+  b
+
+# `rounds` runs under one `time`, so the reported cpu covers all of them and
+# the clock's coarse resolution is divided down rather than rounding to zero.
+fn timed tree verb file
   kanso = "{tree}/target/release/kanso"
-  io/run "/usr/bin/time" ["-l" kanso "check" "{tree}/lib/json"]
-    . (r -> io/write "{sha}\t{peak r.stderr}\n")
+  io/run "/usr/bin/time" ["-l" kanso verb file] . (r -> read_cost r.stderr)
 
-# `/usr/bin/time -l` writes its report to stderr, one figure per line, the
-# number first. A build too old to have a json library answers nothing, and a
-# zero says so rather than guessing.
-fn peak report
-  lines = list/to_list (list/select (text/split report "\n") resident?)
-  first_of lines (length lines)
+# Every figure in the report is one line with the number first, so a term is
+# found by the words beside it.
+fn read_cost report
+  lines = text/split report "\n"
+  work = figure lines "instructions retired"
+  held = figure lines "peak memory footprint"
+  cost work held
 
-fn resident? line
-  length (text/split line "maximum resident") == 2
+fn figure lines words
+  found = list/to_list (list/select lines (l -> names? l words))
+  first_of found (length found)
+
+fn names? line words
+  length (text/split line words) == 2
 
 fn first_of _ 0
   0
