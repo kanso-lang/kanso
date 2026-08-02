@@ -133,6 +133,27 @@ jobs:
             echo "::error::the engine still fetches the undigested module"; exit 1
           fi
 
+  flagship:
+    # kq is the largest kanso program anybody runs, and #639 shipped green
+    # here while making its pretty-print path ten times slower than jq. The
+    # goldens could not see it: the same change is linear in encodebench
+    # (carry_dedup 6800 -> 71600 on ten times the input) and quadratic in kq
+    # (2721 -> 286,401). A synthetic corpus only holds shapes somebody thought
+    # to write, so the real program runs against every compiler change.
+    name: the flagship program still holds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      - name: jq (kq's oracle)
+        run: sudo apt-get install -y jq
+      - name: kq specs, goldens and scale gate against this compiler
+        run: |
+          git clone --depth 1 https://github.com/kanso-lang/kq /tmp/kq
+          cd /tmp/kq
+          KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
+
   welfare:
     name: welfare (one number over runtime and compile cost, ratcheted)
     runs-on: ubuntu-latest

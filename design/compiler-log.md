@@ -15160,3 +15160,48 @@ than carried, so it is shared across the rewind instead of copied. That needs
 its storage to survive, which means `k_buf` growth for a threaded slot
 allocating outside the arena. That is the piece this task first named, and the
 reason for it is now known: not safety, but escaping the carry copy.
+
+## the flagship is the corpus (2026-08-02)
+
+kq's headline row went from three times faster than jq to ten times slower, and
+every gate stayed green through it. The bisect is unambiguous: kanso #638
+answers `carry_dedup=1` on kq's 188 KB fixture, kanso #639 answers 2721, and
+kq#39 recorded that rise as costing nothing three minutes after #639 landed.
+
+The rise is not the interesting number. On ten times the document the same
+counter reads 286,401 — a hundred and five times the work for ten times the
+data. A cost golden compares one workload against one stored number, so the
+only thing it can report is that a counter moved; the shape of the move is
+outside what it can express. The word "ratcheted" was in the failure message
+and the mechanism underneath was `diff`, which has no direction and no scale.
+
+The part that overturned the obvious remedy: WIDENING THE SYNTHETIC CORPUS
+WOULD NOT HAVE CAUGHT IT. Measured, not assumed. In encodebench the same
+compiler change takes carry_dedup from 0 to 6800, and at ten times the input to
+71,600 — a ratio of 10.5, exactly linear. #639's own commit message priced that
+honestly as `encode_allocs +0.025%` and said decode, one-shot and basket were
+unchanged and welfare held at 65.56. All of it true. The change is linear in
+every shape the corpus holds and quadratic only in kq's, so a hand-built basket
+could only have caught it if somebody had thought to write kq's shape into it.
+
+Two things follow, and both shipped.
+
+A ratio gate, kq#42: every counter measured at two document sizes, the ten
+times fixture derived from bench/large.json at gate time, and the ratio bounded
+at 12x. Linear work lands near ten — `allocs`, the healthy neighbour, reads
+10.3. Proven in both directions rather than only watched red: green with a kq
+built by #638, red with one built by #639, same fixture and same gate. The one
+line in bench/scale_exceptions.txt is this live regression written down as a
+debt with its measured ratio, so the gate can protect the other twenty-nine
+counters while the fix is hunted; it returns to 12x when the fix lands, and a
+worsening of even the debted counter still fails.
+
+And kanso's CI now builds kq and runs that suite against every compiler change.
+kq's CI already cloned kanso main, so the dependency was gated in one direction
+only, and #639 ran in a repository where nothing executed the program it broke.
+
+Still open: the fix itself. `k_interior_survives` already exempts a builder
+(`cap > 0` on K_STR/K_BYTES), and extending that exemption to a builder held as
+a slot inside a container — the obvious first hypothesis — changes nothing:
+carry_dedup stays at 286,401. So kq's accumulator is not reaching the walk as a
+container-of-builder, and which case it does take is the next question.
