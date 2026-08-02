@@ -14426,3 +14426,40 @@ Running a directory merges its files into one module, so nothing is qualified
 and none of the three can appear. That is why the fixtures here run the entry
 FILE, and why the runner fixture that shipped with sibling imports — which runs
 the directory — never took the path it was written for.
+
+## 2026-08-02 — what the accumulator rewind has to prove, written down as a test
+
+The measurement, at three sizes, for a loop whose live set is one map with one
+key:
+
+    iterations   allocations   arena peak
+         5,000         7,067      1.0 MB
+        20,000        28,241      1.0 MB
+        80,000       112,950      4.0 MB
+
+Sixteen times the work needs four times the arena and sixteen times the
+allocations, for a live set that never changes size. `beat_iters` is 0 at every
+size, which is the whole of it: the cluster carries no beat bracket, so there
+is no rewind point anywhere in it.
+
+tests/accumulator_growth.rs states the property a fix must satisfy — a longer
+loop over the same live set does not need more memory — and it is ignored
+because it fails. It is the acceptance criterion, not a regression guard, and
+the attribute goes when the rewind lands.
+
+WHY THE PROPERTY AND NOT A COUNTER. Every counter this could asserthas been
+green while memory was corrupt: the bind chain rewinding an arena a live frame
+pointed into, the record held across an io walk, the thunk memoising a result
+the loop's rewind freed. All three passed. Peak memory that does not grow with
+the input is the claim a person would make, and it is the one that cannot be
+satisfied by a rewind that frees something still reachable — that shows up as a
+crash or a wrong answer rather than a smaller number.
+
+WHAT THE FIX HAS TO DO, in order, because the middle step is what makes the
+first safe: a threaded container's storage must come from somewhere the beat
+does not rewind, which means `k_b_push_mut` and `k_b_put_mut` choosing malloc
+over arena when `k_survives` says the container outlives the region; then a
+regime marker on the buffer so `k_buf_donate` and the arena's wholesale free
+can tell the two apart; and only then beat.rs admitting these clusters. Doing
+the third without the first two is precisely the corruption the three bugs
+above were.
