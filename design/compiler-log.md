@@ -14343,3 +14343,30 @@ rose 65.56 to 65.69 and the floor moved with it.
 WHAT SAYS IT IS THE SAME COMPILER. The module sample emits `lines=6349
 calls=1222 branches=551 defines=137` before and after, and rounds stays 7. Every
 differential, every golden and every engine agrees. Only visits moved.
+
+## 2026-08-02 — a subtype forgot its parent when the module was imported
+
+Qualifying a module renames its types: `animal` declared in `beast` becomes
+`beast/animal`, and `qualify` moved the name, the origin and every typeset
+member. It did not move `parent`, which is the field a subtype names its parent
+with. So `beast/dog` went on looking for a type called `animal`, and nothing had
+that name any more.
+
+Both engines broke, differently, which is the shape that says nothing was
+watching:
+
+    native        error: native backend: unknown type `animal`
+    interpreter   error[runtime]: `beast/dog` wraps a animal
+    run directly  woof
+
+Running the module directly works because neither spelling is qualified, so the
+mismatch cannot appear. It needs an importer, and the corpus reaches subtypes
+only by running their file.
+
+Found by wrapping the micro corpus in a generated entry file — the shape the
+harness will own once the compiler stops knowing a reserved name. That wrap
+turned up eleven failures across four classes; this is the first, and it is the
+only one that is a compiler bug rather than a property of copying a sample into
+a directory of its own. The rest are recorded as the next slices: currying a
+function across an import, err types across an import, a sample that lists its
+own directory, and a sample whose subject is the word `play` in a comment.

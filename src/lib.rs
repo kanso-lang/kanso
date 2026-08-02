@@ -1435,11 +1435,21 @@ fn qualify(
         dep.fns.iter().filter(|f| f.is_getter()).map(|f| f.name.clone()).collect();
     let owned: std::collections::HashSet<String> =
         check::declared_names(dep).into_iter().filter(|n| !getters.contains(n)).collect();
+    // A subtype names its parent, and that name is a type this module owns —
+    // so it moves with the rest of them. Gathered before the loop renames
+    // anything, because after the first rename the set would not match.
+    let own_types: std::collections::HashSet<String> =
+        dep.types.iter().map(|t| t.name.clone()).collect();
     for ty in &mut dep.types {
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
         ty.name = format!("{qual}/{}", ty.name);
         if let Some(o) = &mut ty.origin {
             *o = format!("{qual}/{o}");
+        }
+        if let Some(parent) = &mut ty.parent {
+            if own_types.contains(parent.as_str()) {
+                *parent = format!("{qual}/{parent}");
+            }
         }
         for (_, members, _) in &mut ty.fields {
             for member in members {

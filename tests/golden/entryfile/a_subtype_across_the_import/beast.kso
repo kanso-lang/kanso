@@ -1,0 +1,17 @@
+# A subtype declared in a module, dispatched on from inside it. The importer
+# never names either type — what is being asked is whether a module's own
+# subtype still knows its parent once the module is qualified.
+type animal
+  name
+
+type dog animal
+
+fn speak _:dog
+  "woof"
+
+fn speak _:animal
+  "some animal"
+
+pub play =
+  print (speak (dog (animal "rex")))
+  >> print (speak (animal "stray"))
