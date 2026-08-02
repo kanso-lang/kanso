@@ -15452,3 +15452,46 @@ spare pool returns pages to the operating system. `k_spare_release` exists and i
 called from the cohort path; the loop path calls `k_beat_rewind` and does not.
 Make spare release pages under a loop, re-run the three RSS rows above, and the
 arena number and the resident number should finally say the same thing.
+
+## it is not the spare pool, and the arena is not where the memory is (2026-08-02)
+
+The entry above named the spare pool as the last mile: the rewind retires blocks
+there, `arena_peak_bytes` counts live blocks only, so the counter goes flat while
+the pages stay mapped. That was a hypothesis stated as a mechanism, and measuring
+it kills it.
+
+Counting every byte the block allocator ever hands out against every byte it
+frees, on the same one-key-map loop at 1.6 million iterations:
+
+    baseline (no beat)     mapped 72,351,744   unmapped 0   held 72,351,744
+    both gates relaxed     mapped  1,048,576   unmapped 0   held  1,048,576
+
+The baseline's held figure matches `arena_peak_bytes` and the 71.8 MB resident
+set to within rounding, so the probe is honest. With the beat running the arena
+maps ONE MEGABYTE for the whole program and never retires a block at all. There
+is no growing spare chain. The arena is not hiding the memory; it genuinely is
+not using it.
+
+Peak RSS on that same build is 78.8 MB. So the seventy-odd megabytes were never
+arena bytes in either case — the baseline merely happened to route them through
+the arena, where the counter could see them.
+
+WHERE THEY ARE INSTEAD, on the evidence to hand: `sh_str=72,282,272` against
+`sh_rec=64`, `sh_buf=80`, `sh_map=0`, `sh_bytes=0`, `perm_allocs=12`,
+`bytes_malloc=0`. The loop builds one interpolated string per iteration —
+`junk = "k{n % 17}"` — and 1.6 million of them at forty-odd bytes is the
+seventy-two megabytes exactly. The rewind reclaims the arena around them and
+the strings survive it.
+
+WHAT THIS CHANGES. Three entries today have chased the accumulator through
+`beat.rs`, and the accumulator was never the expensive thing in this program.
+The garbage is the per-iteration temporary, its storage is not arena storage,
+and no amount of bracketing the loop reaches it. That is why the arena went 69x
+flatter for nothing.
+
+THE QUESTION FOR THE NEXT ATTEMPT is therefore not about beats at all: which
+allocator do interpolated strings come from, and why does an arena rewind not
+reclaim them. Answer that before touching a gate. The probe used here is four
+lines — a counter beside `k_stat_blocks` incremented where `k_arena_push` mallocs
+and where `k_spare_release` frees — and it should probably become a real counter
+rather than a thing rebuilt each time somebody needs it.
