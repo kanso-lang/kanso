@@ -1,0 +1,9 @@
+# Ordering asks which of two things comes first, and an effect has no place in
+# a sequence until it runs. Equality refuses the same pair for its own reason —
+# asking whether two effects are the same effect is asking which one you were
+# handed — so the two refusals read differently on purpose.
+import "std/io"
+
+w = io/write "x"
+
+pub play = print "{w < w}"

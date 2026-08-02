@@ -14772,3 +14772,29 @@ at 75.64, and no cost golden moved.
 WHAT THIS DOES NOT CHANGE: `1 == 1.0` is still true, which is the repair the
 original complaint asked for and #661 shipped. One numeric domain, and now an
 exact one.
+
+## 2026-08-02 — the ordering refusal had no golden
+
+Two items on the list turned out already fixed, and checking them found a gap
+in the corpus rather than in the compiler.
+
+`==` on a description or a function value refuses on both engines — "equality
+is not defined on a function or an effect" — which is what #54 asked for, and
+tests/golden/runtime/equality_is_not_defined_on_a_function pins it. `1 == 1.0`
+is true and all six operators agree, which is what #76 asked for.
+
+What nothing pinned was the other half. `<` answers "comparison requires two
+values of one comparable type" for three distinct cases — an effect, two types
+that have no shared order, and two lists — and a grep of the whole golden tree
+found the message nowhere. A behaviour with no golden is the thing the corpus
+exists to prevent, and this one had been relied on in the *comment* of the
+equality golden ("`<` already refuses it here") without anything checking it.
+
+Two runtime goldens now pin it: the effect case and the mixed-type case. Both
+were watched red by breaking the expected text and confirming the harness names
+the file. Welfare unchanged at 75.64.
+
+The two refusals read differently on purpose. Ordering has no answer to give,
+because whether 1 comes before "a" is a question about a convention nobody
+chose. Equality does have an answer for that pair — they are not the same value
+— and refuses only where the question is which one you were handed.
