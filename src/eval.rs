@@ -3027,9 +3027,7 @@ impl<'a> Interp<'a> {
                 executor.print(text);
                 Ok(Value::NoneV)
             }
-            Desc::Seq(..) | Desc::Bind(..) => {
-                self.execute_chain(Rc::new(desc.clone()), executor)
-            }
+            Desc::Seq(..) | Desc::Bind(..) => self.execute_chain(Rc::new(desc.clone()), executor),
             Desc::Join(_, _) => self.schedule(desc, executor),
             Desc::Sleep(ms) => {
                 executor.sleep(*ms);
