@@ -15005,3 +15005,39 @@ question #63 actually poses, and it stays open.
 The corpus golden makes `.`, which is always there, so it exercises the
 idempotent path without leaving anything behind. Real creation with parents is
 covered by tests/make_dir.rs against a temp directory.
+
+## 2026-08-02 — the accumulator rewind is gated somewhere else entirely
+
+The recorded diagnosis for the heap-accumulator leak named `cluster_edges_ok`
+and its bare-parameter rule: `put m k v` is a call, so the slot is knocked out.
+Three experiments disproved it.
+
+Adding LIST|MAP to the `chain_threaded` eligibility set changes nothing —
+byte-identical arena and allocation numbers. Also teaching `is_chain` to accept
+`put` and `push` as chain steps changes nothing. Both together are a no-op, so
+the cluster analysis is not the gate and never was.
+
+THE GATE IS `accumulator_grows` (src/beat.rs:257), upstream of the cluster
+analysis. Its EXTENDING list holds "concat", "push", "put", and a crossing
+argument shaped `put m k v` rooted at the parameter skips the whole group
+before a cluster is formed.
+
+That makes the real question easier than the recorded one. It is not "no
+pointers inside" — it is that `accumulator_grows` is a syntactic
+over-approximation. `put m "k1" v` with a constant key never grows the map, and
+the measured loop writes one key forever. A `push` genuinely grows, so list and
+map are different cases and must not be widened together.
+
+The pointer question is still real but sits behind this one, and both routes to
+it are closed today: `k_survives`/`k_slots_survive` already walk a list's items
+and a map's pairs, so the runtime CAN decide it — but the beat header states
+every operation is O(1) and a per-iteration walk is O(accumulator), quadratic
+over the loop. Inference cannot decide it either: `Set` is a flat bitmask with
+no element types. What is left is a syntactic check at the store site, which is
+how `is_chain` already works.
+
+tests/accumulator_elements_survive.rs pins the boundary a license must not
+cross — a map and a list whose values are built per iteration, read after the
+loop. Their power is unproven: both widenings I tried were no-ops, so I could
+not make them fail. They cover a shape nothing else did, and that is the claim,
+not that they will catch the corruption they were written for.
