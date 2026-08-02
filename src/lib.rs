@@ -1652,7 +1652,6 @@ fn rewrite_expr(
     bound: &[String],
 ) {
     match e {
-        ast::Expr::Partial(..) => {}
         ast::Expr::Guard { cond, early, rest, .. } => {
             rewrite_expr(cond, qual, owned, bound);
             rewrite_expr(early, qual, owned, bound);
@@ -1661,7 +1660,10 @@ fn rewrite_expr(
         ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => {
             rewrite_scope(stmts, qual, owned, bound)
         }
-        ast::Expr::Ident(name, _) => {
+        // `&f` names a function the way a mention does, so it moves with the
+        // module the way a mention does. Left behind, the sigil holds a bare
+        // name after every declaration has been qualified away from it.
+        ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
             if owned.contains(name.as_str()) && !bound.iter().any(|b| b == name) {
                 *name = format!("{qual}/{name}");
             }

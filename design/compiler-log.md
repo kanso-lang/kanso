@@ -14370,3 +14370,27 @@ only one that is a compiler bug rather than a property of copying a sample into
 a directory of its own. The rest are recorded as the next slices: currying a
 function across an import, err types across an import, a sample that lists its
 own directory, and a sample whose subject is the word `play` in a comment.
+
+## 2026-08-02 — `&f` follows the module it lives in
+
+`rewrite_expr` qualified an `Ident` that names something the module owns and
+did nothing at all for a `Partial`. So `&add` inside a module kept the bare
+name while `fn add` became `adder/add`, and the sigil held a name that no
+longer existed.
+
+    &add holds 1 argument(s), and no `add` takes more
+
+The two arms are now one, which is what they always meant: a sigil names a
+function the way a mention does.
+
+The fixture runs the entry FILE rather than its directory, and that distinction
+is the reason this survived. Running a directory makes every file in it one
+module, so nothing is qualified and the mismatch cannot arise. The runner
+fixture that came in with sibling imports runs the directory, so the sibling
+path it was written for was never the path it took.
+
+Micro samples that fail through a generated entry: eleven, then nine after the
+subtype fix, now six. Two of those six are not bugs — a sample that lists its
+own directory, and one whose subject is the word `play` in a comment. The other
+four are two classes still open: err types across an import, and a blank-line
+complaint from `import_diamond` and `not_equal` that has not been read yet.
