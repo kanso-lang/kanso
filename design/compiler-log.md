@@ -15288,3 +15288,53 @@ The fix has to make the accumulator shareable again without giving back what
 cannot reach it; whether a grown K_LIST or K_MAP backing store carries the same
 proof is the next thing to establish — against the real allocator rather than
 against what the struct would tolerate.
+
+## the accumulator's beat is refused before the accumulator rule is reached (2026-08-02)
+
+Item 4's plan was: make `k_buf` growth allocate outside the arena for a slot a
+loop is extending, so the carry shares the accumulator instead of copying it,
+then let `beat.rs` admit the cluster. Both halves were built and neither moved
+a byte, and the reason is worth recording before anybody plans from that shape
+again.
+
+The spec first, because it is the part that survived: two loops build a
+byte-identical list of 200,000 ints, and one of them also names a string,
+measures it and drops it. The dead string costs
+
+    without the temporary   12,582,944 bytes    4 arena blocks     13 allocs
+    with it                 19,922,976 bytes   11 arena blocks  246,165 allocs
+
+7.3 MB, which is the 200,000 temporaries themselves — every one retained. The
+first version of that spec PASSED at exactly the 2.0x boundary and was tightened
+rather than shipped, because a spec never seen red proves nothing.
+
+WHAT WAS BUILT AND REVERTED. `k_buf_outside` allocates a buffer through malloc,
+marks the regime in the sign of its own cap the way KBytes already does, and
+registers it in the chunk registry at the ENCLOSING beat depth so the loop's own
+rewinds cannot free what the loop is building. `k_store_survives` gave K_LIST
+and K_MAP the licence a builder's positive cap already carries. The grow path in
+`k_b_push_into` routed a mutating grow inside a beat to it. Then `beat.rs`
+dropped `accumulator_grows` from the disqualifying clause.
+
+MEASURED: no change at all. Not a smaller win, not a regression — the same
+19,922,976 bytes to the byte, because
+
+    beat_iters=0
+
+for both loops, before and after. The cluster is refused for some reason other
+than the accumulator rule, so the accumulator rule was never what stood in the
+way, and the runtime work it was paired with is unreachable. Seeding the list
+(`[7]` rather than `[]`) to rule out the bare-list-reads-as-bytes divergence
+changes nothing either.
+
+Both reverted. The runtime half is dead code until something reaches it, and
+dropping `accumulator_grows` removes a guard whose stated purpose is preventing
+a quadratic — with no measured benefit to weigh against it, that is a guard
+removed on a hunch, which this log has already recorded going badly once.
+
+WHAT TO ESTABLISH FIRST, next time: which clause of the disqualifier actually
+refuses this cluster. The candidates are all in the same expression — the
+verdict not being `OutsideTailCall`, `set == 0`, `set & BYTES != 0`,
+`used_as_value`, `allocating` not containing the name, or the caller set being
+empty or cyclic. Instrument that decision and read it, rather than relaxing
+clauses one at a time and measuring the whole program each round.
