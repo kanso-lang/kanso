@@ -14568,8 +14568,7 @@ collects the enclosing arm's parameters and binds and skips them.
 
 The interpreter held a Rust frame per link in a chain of effects. A program
 sequencing 9,000 of them peaked at 16.3 MB; the same program sequencing 1,000
-peaked at 3.3 MB. Linear, about 1.6 KB a link, ending in a host stack overflow
-rather than a diagnostic.
+peaked at 3.3 MB. Linear, about 1.6 KB a link.
 
 `Desc::Seq` and `Desc::Bind` both ended in `self.execute(...)` in tail position,
 which Rust does not flatten. `execute_chain` consumes a chain in a loop: each
@@ -14577,10 +14576,20 @@ link answers the description to run next, and that becomes the next iteration.
 Only the continuation is flattened — a link's own left side is a step to run
 before the chain advances, and still nests as deep as it is written.
 
-    links      before        after
-    1,000      3.31 MB       1.90 MB
-    9,000     16.27 MB       2.11 MB
-    100,000    overflow      2.18 MB
+    links        before        after
+    1,000        3.31 MB       1.90 MB
+    9,000       16.27 MB       2.11 MB
+    1,000,000  1575.99 MB      2.18 MB
+
+WHAT THE FIRST SPEC GOT WRONG, twice, and both times measuring caught it.
+It asserted that a long chain FINISHES, on the assumption that a frame per link
+exhausts the stack. It does not: the old executor ran a million links to
+completion, at 1.576 GB. The assertion passed against the very code it was
+meant to reject, which is the failure mode a spec exists to prevent. Peak
+memory is the only thing that separates a loop from a recursion here.
+Then the measurement itself was BSD-only — `/usr/bin/time -l` is not a flag GNU
+time takes, so the spec could only ever have run on macOS. It now asks for both
+dialects and reads whichever answered.
 
 Native was already flat and stays flat: a million links peak at 2.2 MB against
 2.0 MB at a hundred thousand. This closes the gap between the oracle and the
