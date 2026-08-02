@@ -14563,3 +14563,52 @@ on lib/sha256, which binds a local called `first`. `list/first` takes one
 argument, so a list of eight locals read as a call. A name bound in this scope
 is this scope's, whatever a function elsewhere is called — the rule now
 collects the enclosing arm's parameters and binds and skips them.
+
+## 2026-08-02 — sequencing runs as a loop, and the "sixty frames" number was wrong
+
+The interpreter held a Rust frame per link in a chain of effects. A program
+sequencing 9,000 of them peaked at 16.3 MB; the same program sequencing 1,000
+peaked at 3.3 MB. Linear, about 1.6 KB a link.
+
+`Desc::Seq` and `Desc::Bind` both ended in `self.execute(...)` in tail position,
+which Rust does not flatten. `execute_chain` consumes a chain in a loop: each
+link answers the description to run next, and that becomes the next iteration.
+Only the continuation is flattened — a link's own left side is a step to run
+before the chain advances, and still nests as deep as it is written.
+
+    links        before        after
+    1,000        3.31 MB       1.90 MB
+    9,000       16.27 MB       2.11 MB
+    1,000,000  1575.99 MB      2.18 MB
+
+WHAT THE FIRST SPEC GOT WRONG, twice, and both times measuring caught it.
+It asserted that a long chain FINISHES, on the assumption that a frame per link
+exhausts the stack. It does not: the old executor ran a million links to
+completion, at 1.576 GB. The assertion passed against the very code it was
+meant to reject, which is the failure mode a spec exists to prevent. Peak
+memory is the only thing that separates a loop from a recursion here.
+Then the measurement itself was BSD-only — `/usr/bin/time -l` is not a flag GNU
+time takes, so the spec could only ever have run on macOS. It now asks for both
+dialects and reads whichever answered.
+
+Native was already flat and stays flat: a million links peak at 2.2 MB against
+2.0 MB at a hundred thousand. This closes the gap between the oracle and the
+compiled engine rather than opening one.
+
+Welfare is unchanged at 75.64. Its counters measure native decode, native
+encode and the front end, so interpreter footprint is outside them — a real
+improvement the index cannot see, which is the model being provisional exactly
+as the function's own note says.
+
+TWO CLAIMS IN THE REPOSITORY WERE FALSE, and measuring is what caught them.
+scripts/backfill_history.kso said a bind chain "runs out around sixty". It does
+not, and did not: 120 chained `io/run` calls passed before this change, and the
+`.` shape the script actually uses cleared 40,000. The comment is corrected to
+say what the script does rather than to explain a limit that was not there.
+
+The `>>` shape is a SEPARATE problem and is untouched. `a >> b` evaluates `b`
+eagerly, so a loop written with `>>` builds its whole chain before running any
+of it and trips the interpreter's 10,000-frame call guard — an evaluation-time
+limit, not an execution-time one. It fails at 20,000 today exactly as it did
+before. Whether `>>` should defer its right side is a language question, not a
+bug in the executor.
