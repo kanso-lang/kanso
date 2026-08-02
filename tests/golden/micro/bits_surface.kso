@@ -2,7 +2,7 @@ import "std/bits"
 
 pub play =
   print "xor:  {bits/xor 12 10}"
-  >> print "not:  {bits/not 12}"
+  >> print "comp: {bits/complement 12}"
   >> print "shl:  {bits/shl 1 10}"
   >> print "shr:  {bits/shr 1024 3}"
   >> print "sign: {bits/shr (0 - 16) 2}"

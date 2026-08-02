@@ -1,0 +1,4 @@
+fn ready? n
+  n > 0
+
+pub play = print "{ready? 1 == true}"

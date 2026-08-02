@@ -7,7 +7,7 @@
 # and answers differently by host, so it is refused rather than guessed at.
 # Shifting right keeps the sign, which is what go, rust and java all spell
 # `>>`.
-pub fn not a
+pub fn complement a
   builtin_bit_not a
 
 pub fn shl a places

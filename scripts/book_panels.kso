@@ -211,7 +211,7 @@ fn next_chapter names at drift write name raw said
     . (_ -> chapter_loop names (at + 1) (drift + said.drift) write)
 
 fn saved path raw text write
-  keeping path text (write == false or text == raw)
+  keeping path text (not write or text == raw)
 
 fn keeping _ _ true
   io/write ""

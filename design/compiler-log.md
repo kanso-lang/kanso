@@ -14087,3 +14087,51 @@ and the sweeps it forces are one change; naming the branch the same in each
 repository is how they are checked together. This is not transitional — it is
 the mechanism the cross-repository gap has wanted since the workflow first
 noted that a rule lands here and the repos that consume it find out later.
+
+## 2026-08-01 — `not`, and comparing to a boolean is refused
+
+The other half of the boolean gavel. `not a` denies a, `flag == true` and its
+three siblings are compile errors, and `bits/not` is now `bits/complement`
+because a keyword cannot be a function name.
+
+`not` costs no engine work, for the same reason `and` and `or` cost none: the
+parser writes it as an `if`. It sits on its own rung between the connectives
+and comparison, so `not a and b` denies only a, and `not a == b` denies the
+whole comparison — the second is forced, since `(not a) == b` would compare two
+booleans and that is now refused. The rung matters to the parenthesis rule as
+well: it keeps the parentheses in `not (a or b)` and calls the ones in
+`(not a) or b` superfluous, which is right both ways.
+
+Refusing `== true` cost one golden its subject. paren_keeps_its_work existed to
+show a comparison whose left operand is a parenthesised comparison, and that
+construct only ever type-checked because the outer comparison was against a
+boolean. It has none now, which is the point. Its replacement is `not (a or b)`
+— a different pair of load-bearing parentheses, exercising the new rung.
+
+Seventeen call sites moved. Every one was `X == false` becoming `not X`, and
+`not` binding tighter than `and` meant none of them needed parentheses.
+
+## 2026-08-01 — three weeks of compile memory, replayed
+
+Nothing recorded compile memory before 2026-07-30, so it was measured
+backwards: 763 commits, each checked out and built, each compiler asked to
+check its own json library while the operating system watched. Peak resident
+size, because that is the figure a shared machine cannot distort — a competing
+process changes when a run happens, not how much memory it needs.
+
+Checking lib/json cost 1.70 MB on 11 July and 5.44 MB on 1 August. The library
+grew too, from 7.7 KB to 10.6 KB, so the honest figure is per source byte: 227
+bytes of resident memory per byte of kanso, rising to 524. The front end is
+2.3 times hungrier per byte than it was three weeks ago, in one step on 12 July
+and a steady climb after.
+
+Welfare did not catch it and could not have. Compile memory is not one of its
+twelve terms — it was not recorded when they were chosen, and an absent term is
+a zero weight. The two compile terms that do exist, compile_rounds and
+compile_visits, carry 0.195 of the weight between them and have one distinct
+value each across all 419 recorded rows, because the golden that feeds them
+measures a five-line sample. A fifth of the objective has been a constant.
+
+Both are arguments about the weights rather than about any change, so both wait
+for a ruling: whether compile_peak_bytes becomes a term, and what the compile
+counters should measure instead of five lines.

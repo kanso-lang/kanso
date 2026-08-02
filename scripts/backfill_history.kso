@@ -1,0 +1,65 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# The long view needs measurements from before anything was measuring. CI began
+# appending a counter row per merge on 2026-07-25, which leaves the commits
+# before it with nothing, and three of the five metrics the chart wants were
+# added later still. Replaying history fills both gaps: check out a commit,
+# build its compiler, and ask that compiler to check that commit's own json
+# library while the operating system watches how much memory it takes.
+#
+# The compiler and the library move together, so a row says what it cost to
+# check the json library as it stood that day. That is the question the chart
+# asks — whether the front end got cheaper on real work — rather than what a
+# frozen file costs, which no compiler that old would still accept anyway.
+#
+# Peak resident size is the measure because it is the one figure a shared
+# machine cannot distort: a competing process changes when this one runs, not
+# how much memory it needs. Wall time is absent for exactly that reason.
+#
+# Measures ONE commit and writes its row to stdout, because a chain of binds is
+# not a tail call: each `>>` holds the rest of the work in a closure, so a walk
+# over seven hundred commits nests seven hundred deep and the stack runs out at
+# about sixty. Driving the loop from outside keeps every invocation one frame.
+#
+# Takes a worktree and a commit sha.
+pub play = io/args . started
+
+fn started argv
+  begun argv (length argv < 2)
+
+fn begun _ true
+  io/write_err "backfill: <worktree> <sha>\n" >> (_ -> io/exit 1)
+
+fn begun argv false
+  measured argv[1]! argv[2]!
+
+fn measured tree sha
+  built tree sha . (_ -> timed tree sha)
+
+fn built tree sha
+  manifest = "{tree}/Cargo.toml"
+  io/run "git" ["-C" tree "checkout" "-q" "--detach" sha]
+    >> io/run "cargo" ["build" "--release" "--manifest-path" manifest]
+
+fn timed tree sha
+  kanso = "{tree}/target/release/kanso"
+  io/run "/usr/bin/time" ["-l" kanso "check" "{tree}/lib/json"]
+    . (r -> io/write "{sha}\t{peak r.stderr}\n")
+
+# `/usr/bin/time -l` writes its report to stderr, one figure per line, the
+# number first. A build too old to have a json library answers nothing, and a
+# zero says so rather than guessing.
+fn peak report
+  lines = list/to_list (list/select (text/split report "\n") resident?)
+  first_of lines (length lines)
+
+fn resident? line
+  length (text/split line "maximum resident") == 2
+
+fn first_of _ 0
+  0
+
+fn first_of lines _
+  text/to_int (text/split (text/trim lines[1]!) " ")[1]!

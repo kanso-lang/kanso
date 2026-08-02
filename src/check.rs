@@ -106,6 +106,59 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// and a compiled wrapper has only its own definition to point at. A lambda
 /// puts the mention back in the program — `(reason -> err reason)` reads the
 /// same and carries a line a reader can open.
+/// `flag == true` asks a question that already has its answer in `flag`, and
+/// `flag == false` is `not flag` written the long way. Neither can be anything
+/// but noise, and kanso has no linter layer for noise to live in, so what a
+/// linter elsewhere would warn about is refused here.
+fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        for stmt in &decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            boolean_equality_walk(expr, diags);
+        }
+    }
+}
+
+fn boolean_equality_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    if let Expr::BinOp { op, lhs, rhs, span } = expr {
+        if matches!(*op, "==" | "!=") {
+            if let Some(word) = boolean_literal(lhs).or_else(|| boolean_literal(rhs)) {
+                diags.push(Diagnostic::new("name", said_plainly(op, word), *span));
+            }
+        }
+    }
+    for child in crate::expr_children(expr) {
+        boolean_equality_walk(child, diags);
+    }
+}
+
+fn boolean_literal(expr: &Expr) -> Option<&'static str> {
+    let Expr::Ident(name, _) = expr else {
+        return None;
+    };
+    match name.as_str() {
+        "true" => Some("true"),
+        "false" => Some("false"),
+        _ => None,
+    }
+}
+
+/// Which of the four spellings this is decides what to say instead, and all
+/// four have a shorter answer.
+fn said_plainly(op: &str, word: &str) -> String {
+    let plain = match (op, word) {
+        ("==", "true") | ("!=", "false") => "the value itself",
+        _ => "`not` the value",
+    };
+    format!("comparing to `{word}` asks a question the value already answers — write {plain}")
+}
+
 fn check_err_as_value(program: &Program, diags: &mut Vec<Diagnostic>) {
     for decl in &program.fns {
         if decl.synthetic {
@@ -1080,6 +1133,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
+    check_boolean_equality(program, &mut diags);
     if std::env::var("KANSO_EXHAUSTIVE").is_ok() {
         check_none_exhaustive(program, &inference, &mut diags);
     }

@@ -53,8 +53,8 @@ test_transform_keys_collide =
 
 test_find_bounds_naturals = (find naturals (n -> n * n > 50)) == 8
 
-test_all_bounds_naturals = (all? naturals (n -> n < 4)) == false
+test_all_bounds_naturals = not all? naturals (n -> n < 4)
 
-test_any_bounds_naturals = (any? naturals (n -> n > 3)) == true
+test_any_bounds_naturals = any? naturals (n -> n > 3)
 
 test_find_miss = (find [2 4 6] (n -> n > 9)) == none

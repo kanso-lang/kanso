@@ -736,6 +736,7 @@ impl Scanner {
             // aloud the way they mean them, and `&` `|` stay with the bits
             "and" => Tok::Op("and"),
             "or" => Tok::Op("or"),
+            "not" => Tok::Op("not"),
             "fn" => Tok::KwFn,
             "return" => Tok::KwReturn,
             "type" => Tok::KwType,

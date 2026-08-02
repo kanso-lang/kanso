@@ -76,7 +76,7 @@ fn spun x places
   bits/shl x (32 - places) & whole | bits/shr x places
 
 fn choice x y z
-  x & y ^ (bits/not x & whole & z)
+  x & y ^ (bits/complement x & whole & z)
 
 fn majority x y z
   x & y ^ (x & z) ^ (y & z)
