@@ -1,0 +1,4 @@
+error[syntax]: maps use curly braces: `{key: value}`
+  --> a_map_written_with_brackets.kso:1:22
+   1 | pub play = print "{[1: 2]}"
+                            ^

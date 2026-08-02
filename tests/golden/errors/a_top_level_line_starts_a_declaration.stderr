@@ -1,0 +1,4 @@
+error[syntax]: a top-level line must begin with `fn`, `type`, or a constant binding
+  --> a_top_level_line_starts_a_declaration.kso:1:1
+   1 | pub 1 = 2
+       ^

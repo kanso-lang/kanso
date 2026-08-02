@@ -1,0 +1,4 @@
+error[syntax]: expected `:` after a map key
+  --> a_map_key_wants_a_colon.kso:1:11
+   1 | m = { "a" 1 }
+                 ^

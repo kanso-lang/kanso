@@ -1,0 +1,1 @@
+pub play = print "{[1: 2]}"
