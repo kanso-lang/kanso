@@ -15338,3 +15338,57 @@ verdict not being `OutsideTailCall`, `set == 0`, `set & BYTES != 0`,
 `used_as_value`, `allocating` not containing the name, or the caller set being
 empty or cyclic. Instrument that decision and read it, rather than relaxing
 clauses one at a time and measuring the whole program each round.
+
+## the arena counter and real memory disagree by 3.76x (2026-08-02)
+
+A second run at item 4, and it went further than the first: the beat appeared,
+the arena counter fell hard, and peak RSS did not move at all. The number that
+would have been banked as a win is not one.
+
+FIRST, THE CLAUSE THAT REFUSES THE CLUSTER, which the previous entry said to
+instrument rather than guess at. The disqualifier exists in TWO places, and the
+earlier attempt relaxed the wrong copy. Cluster selection has one; `classify_all`
+has its own, deciding `ArgCrosses` against `CarryBeat`. The probe reads
+
+    beatprobe go/2: verdict ArgCrosses pos1
+
+so the group never reaches the accumulator rule in cluster selection at all — it
+is already refused upstream. Relaxing the copy in `classify_all` instead, with
+the runtime's outside-the-arena storage alongside it:
+
+    beatprobe go/2: verdict CarryBeat [1]
+    beat_iters      0 -> 200,000
+    arena_blocks    11 -> 3
+    arena_peak      19,922,976 -> 5,297,168
+
+A 3.76x fall, and the accumulator loop now brackets. Then peak RSS, measured on
+the compiled binary rather than through `kanso run`, whose own compile dominates:
+
+    n           without      with
+    200,000     14.9 MB      14.9 MB
+    800,000     55.2 MB      55.1 MB
+    2,000,000   119.5 MB     119.5 MB
+
+Identical at every size. The memory did not go away; it moved from the arena to
+malloc, where `arena_peak_bytes` cannot see it. Freeing each outgrown malloc'd
+buffer at the growth point — uniqueness is proven at a mut site, so it has no
+other holder — changed nothing either, which rules out the intermediate buffers
+as the retained bytes. At two million elements the 119.5 MB is the accumulator
+itself: 2M sixteen-byte slots doubling into a four-million-slot buffer, live by
+construction and reachable by no rewind.
+
+REVERTED, all of it. There is no measured win to weigh against a relaxed guard.
+
+WHAT THIS SAYS ABOUT THE OBJECTIVE, which is the part that outlives the attempt.
+Welfare's run-memory term reads these arena counters. On this program they just
+reported a 3.76x improvement across a change that moved real memory by zero.
+A term that can be improved by relocating an allocation is measuring where bytes
+live rather than how many there are, and "run memory .30" is a large weight to
+rest on that. Whether the term should read RSS, or an allocator total that spans
+both regimes, is a question about the weights and belongs with the feature-value
+term rather than beside a compiler change.
+
+The spec in tests/accumulator_temporaries.rs stays ignored and stays honest: at
+n=200,000 the temporaries really do cost 7.3 MB of arena, and that is a real
+7.3 MB of work the loop does and drops. What is now known is that reclaiming it
+does not show up in RSS at that size, because the accumulator dwarfs it.
