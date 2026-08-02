@@ -70,3 +70,31 @@ fn a_bare_import_reads_the_kso_file_beside_it() {
     assert_eq!(native, "hello, kanso!\n");
     assert_eq!(interp, native, "the engines disagree on a sibling import");
 }
+
+/// Qualifying a module renames its types, and a subtype names its parent by
+/// that name. Run the module directly and the two spellings agree because
+/// neither is qualified; import it and they must still agree.
+#[test]
+fn a_subtype_keeps_its_parent_across_an_import() {
+    let fixture = "tests/golden/entryfile/a_subtype_across_the_import";
+    let answer = |engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(fixture)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (native, complaint) = answer(&[]);
+    let (interp, _) = answer(&["--interp"]);
+
+    assert_eq!(complaint, "", "native refused a subtype reached through an import");
+    assert_eq!(native, "woof\nsome animal\n");
+    assert_eq!(interp, native, "the engines disagree on an imported subtype");
+}
