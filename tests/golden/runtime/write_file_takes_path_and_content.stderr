@@ -1,0 +1,1 @@
+error[runtime]: write_file takes a path and content strings

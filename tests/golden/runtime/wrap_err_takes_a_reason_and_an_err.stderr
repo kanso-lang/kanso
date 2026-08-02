@@ -1,0 +1,1 @@
+error[runtime]: wrap_err takes a reason and the err it wraps
