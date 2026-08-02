@@ -15570,3 +15570,57 @@ that will be trusted. The step before this becomes a gate is to prove the
 DETECTOR separately from the BUG — hand it a pointer into a known-freed region
 directly and confirm it reports — rather than hoping a compiler fault will
 oblige. That is a unit test on the walk, and it is the next thing to write.
+
+## the seventy-six megabytes are map view caches, one per rewind (2026-08-02)
+
+Four entries have now chased this and each measured one allocator. Wrapping
+EVERY malloc, realloc and free in the runtime and totalling live bytes settles
+it, because that figure is the only one comparable with RSS.
+
+The instrument first agreed with the old ones, which is what makes it usable:
+on the one-key-map loop at 1.6 million iterations with no beat, arena peak
+72,351,744, total malloc peak 72,353,113, RSS 71.8 MB. Three measures, one
+number.
+
+With both disqualifier clauses relaxed so the loop brackets:
+
+    arena_peak_bytes        1,048,576
+    total malloc peak      77,849,081
+    RSS                          99.7 MB
+
+The arena counter falls 69x while TOTAL heap allocation RISES. Tagging every
+allocation by source line names the holder outright:
+
+    site                              no beat        beat running
+    k_view_alloc (map sorted view)     48 bytes      76,800,048
+    arena blocks                   72,352,848         1,048,592
+
+Forty-eight bytes is ONE view for the whole run. 76,800,048 is 48 x 1,600,000 —
+one per iteration. Reading `m["k1"]!` builds the map's cached sorted view; with
+no beat that view is built once and reused a million times, and with a beat the
+pre-rewind cache sweep discards it every iteration, so it is rebuilt every
+iteration and every discarded one is never freed.
+
+SO THE REWIND IS NOT SAVING MEMORY ON THIS SHAPE AT ALL. It converts an O(1)
+cached read into a per-iteration rebuild and leaks the rebuild. That is the
+mathematical assessment the accumulator question wanted: on a map-carrying loop
+the current design is a straight loss, and no widening of the beat gate changes
+that until the view interaction is fixed.
+
+kq pays a linear version of the same thing today, without any beat:
+`k_view_alloc` totals 311,728 bytes on the 188 KB fixture and 3,117,280 on ten
+times it.
+
+WHAT WAS TRIED AND DID NOT WORK. Both exits of `k_cache_reg_sweep` drop a
+view without freeing it — the one where the map header itself is being
+reclaimed, and the one where the view is judged not to survive. A malloc'd
+view is never reclaimed by a rewind, so both looked like the leak. Freeing at
+both changed the total by nothing, which means these views never reach the
+sweep: they are not in `k_cache_reg` at the moment it runs, or they are owned
+somewhere else entirely. Reverted; the ownership path is the next thing to
+establish, and it is a question about `k_cache_reg` registration rather than
+about beats.
+
+The wrapper is four small functions and a line-tagged table, and it found in one
+run what four entries of arena counters could not. It should probably be a
+build flag rather than something rebuilt each time somebody needs it.
