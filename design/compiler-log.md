@@ -15529,3 +15529,44 @@ offending slot in place rather than copying its ancestors, is the open question.
 Measured with three counters beside `k_stat_carry_dedup`, incremented in the two
 early returns of `k_interior_survives`. Worth making permanent if the next
 attempt needs them again.
+
+## a validator for the carry, built and not shipped (2026-08-02)
+
+Clay, on the four corruption bugs in this seam having shipped with every counter
+green: "if there's corruption that passes every counter then you have missing
+counters." That is the right diagnosis, and #639's own commit says as much
+without naming it — it describes a validator written by hand to find the bad
+node, used once, and thrown away.
+
+So one was built. The invariant is exact and needs no root set: after
+`k_beat_iter_carry` copies the loop-varying values and rewinds, nothing
+reachable from `k_carry_slots` may point into what the rewind freed. It walks
+lists, maps, records, strings, closure captures and description pairs — the last
+two because #639's bad node sat at `next` → the continuation closure → capture 3
+→ element 8 → field 0, and a walk that stops at data reaches none of that.
+
+IT HAS NEVER FIRED, AND SO IT IS NOT SHIPPED. What was tried:
+
+  - the pre-#639 sharing rule restored, against the mem corpus, the micro
+    corpus, and kq at both fixture sizes: silent
+  - a program in the exact shape #639 describes, a value taken out of a carry
+    buffer and rebuilt into a fresh record: silent
+  - the carry's deep copy skipped outright: SIGSEGV before the validator runs,
+    so the break is too violent to observe
+  - one slot put back to its uncopied value after the copy: silent
+
+ONE REAL FINDING CAME OUT OF IT, and it is the reason a naive version of this
+check is worthless. The first `k_in_retired` asked only whether a pointer sat in
+a block the rewind had retired to the spare pool. But the usual rewind retires
+no block at all — it moves the bump pointer back inside the block it started in,
+so everything between the mark and the old frontier is freed while the block
+stays live and never appears in the spare chain. A check that knows only about
+retired blocks therefore sees almost none of what a rewind frees. The region
+that matters is `[m->ptr, k_arena)` in `m->block`, plus the retired chain, plus
+the carry buffer about to be written over.
+
+A detector that has never detected anything is not a safety net; it is a thing
+that will be trusted. The step before this becomes a gate is to prove the
+DETECTOR separately from the BUG — hand it a pointer into a known-freed region
+directly and confirm it reports — rather than hoping a compiler fault will
+oblige. That is a unit test on the walk, and it is the next thing to write.
