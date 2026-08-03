@@ -342,10 +342,56 @@ fn chosen now base held value _ false
 # of the code.
 unsaid = "--set records why the objective moved: welfare --set \"reason\"\n"
 
+# A fall is a trade, and a trade has two sides. Refusing the floor while
+# accepting any sentence at all let a drop be banked with the word "whatever" —
+# the gate said "argue the weights" and nothing made the argument happen.
+#
+# The words are the ones .github/goldens-move-licenses.sh asks for, so the
+# habit that satisfies one gate satisfies the other.
+unbought = """
+  --set is lowering the objective, and the reason names nothing it buys.
+
+  A fall means the change is worse by the weights as written. Either it goes,
+  or the claim is that the weights are wrong — and that is an argument about
+  the weights, made in the reason, not a number quietly moved past.
+
+  Say what got better, in those words: better, buys, gain, in exchange.
+"""
+
+gain_words = ["better" "buys" "gain" "in exchange"]
+
+fn names_a_gain? reason
+  said = lowered reason
+  list/any? gain_words (w -> length (text/split said w) > 1)
+
+fn lowered s
+  parts = list/map (text/chars s) lower_char
+  text/join (list/to_list parts) ""
+
+fn lower_char c
+  shifted (text/char_code c)
+
+fn shifted code
+  text/from_code (dropped code (code >= 65 and code <= 90))
+
+fn dropped code true
+  code + 32
+
+fn dropped code false
+  code
+
 fn banked _ _ _ ""
   io/write_err unsaid . (_ -> io/exit 2)
 
 fn banked base held value reason
+  fall = held["floor"]! - value
+  bought = names_a_gain? reason
+  paid base held value reason (fall > 0.01 and not bought)
+
+fn paid _ _ _ _ true
+  io/write_err unbought . (_ -> io/exit 2)
+
+fn paid base held value reason false
   units = math/round (value * 100)
   rounded = 1.0 * units / 100.0
   note = list/to_h [["floor" rounded] ["why" reason]]
