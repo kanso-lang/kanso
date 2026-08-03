@@ -201,3 +201,43 @@ fn an_err_reason_renders_unqualified_across_an_import() {
     assert_eq!(imported, direct, "the import changed how the reason renders");
     assert_eq!(interp, imported, "the engines disagree on an imported err reason");
 }
+
+/// A module may claim rendering for a type it owns, and importing that module
+/// must not silently take the claim away. `fn to_string _:money` joins the
+/// ambient render group, which belongs to nobody — so the group's name is not
+/// the importing module's to qualify, the same way a getter's is not.
+///
+/// The failure this pins had no diagnostic at all: the arm was renamed to a
+/// group nothing declares, dispatch found only the builtin arms, and the value
+/// rendered as the integer underneath. A user reads `350` where they wrote
+/// `$3.50` and nothing anywhere says why.
+///
+/// The second line is the other half of the rule. `plain_tag` has no arm, so
+/// it must still render as the integer underneath — a fix that made every
+/// imported value find some arm would pass the first assertion and be wrong.
+#[test]
+fn a_modules_render_arm_survives_being_imported() {
+    let dir = "tests/golden/entryfile/a_render_arm_across_the_import";
+    let answer = |target: &str, engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(target)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (direct, _) = answer(&format!("{dir}/coin.kso"), &[]);
+    let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
+    let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
+
+    assert_eq!(complaint, "", "native refused a render arm reached through an import");
+    assert_eq!(direct, "custom: $3.50\ndefault: 7\n");
+    assert_eq!(imported, direct, "the import took the module's own render arm away");
+    assert_eq!(interp, imported, "the engines disagree on an imported render arm");
+}
