@@ -17227,3 +17227,44 @@ several runs.
 The foundational ask behind all three, in Clay's words: "i can always go to the
 latest main and see whatever performance run output came from the most recently
 merged PR, full stop. no ambiguity."
+
+## the chart draws itself from counters, and the hardware path retires
+
+The foundational ask, in Clay's words: "i can always go to the latest main and
+see whatever performance run output came from the most recently merged PR,
+full stop. no ambiguity." The chart was the surface furthest from that. It was
+drawn from bench/long_view.tsv, whose rows need instructions-retired — a
+counter GitHub's runners do not expose — so CI redrew a chart whose data it
+could never extend, and the series only grew when a capable machine remembered
+to run the replay.
+
+NOW: long_view reads the perf-history series (deterministic counters, extended
+by CI on every merge since #724's era), CI stages it plus the commit under
+test's own row, redraws on every pull request, and commits the redraw to the
+branch under test. Any runner extends it; none can smear it; a PR's chart ends
+at the PR. perf_row.kso, backfill_history.kso and long_view.tsv are deleted in
+the same change, per the porting rule: the replacement lands and the replaced
+thing goes, so nothing compares the two.
+
+THE FIVE LINES, per the ruling: run speed (the codec's two allocation counts),
+run memory (the one-shot arena peak), compile speed (rounds + visits + emitted
+lines), compile memory (the front end's peak), and the recorded welfare score.
+Recorded, not recomputed — the score a commit shipped with is a fact about
+that commit, and replaying history against today's baseline would rewrite it.
+
+TWO EXCLUSIONS, both to keep every line meaning one thing for its whole life.
+The basket is absent from the run-speed line because no history row recorded
+it until today — perf_record simply never gained a basket group, found when
+the line drew empty — and adding it mid-line would draw a step no change made.
+The held-malloc peak is absent from run memory for the renamed-counter version
+of the same reason. The welfare line carries both, because the recorded score
+always did. perf_record now records the basket group, so the row is complete
+even where the chart declines to draw it.
+
+A series starts where its counters start: run speed reaches back 451 rows,
+compile speed all 500, welfare 87. Lines with honest starting points beat a
+complete-looking chart whose early half was reconstructed.
+
+The long-view prose on the page is rewritten to describe this chart rather
+than the replay it replaces, and the section on the gates now states the two
+severities the gavel fixed: welfare hard, everything per-counter soft.

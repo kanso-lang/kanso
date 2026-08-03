@@ -32,6 +32,15 @@ encode_watched = text/concat encode_a encode_b
 # One shot: decode, hold, print — the peak the rewinds cannot hide.
 oneshot_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "held_peak_bytes"]
 
+# The basket: the wide workload welfare's run terms read. Recorded so the
+# history row carries every counter the objective consults — its absence is
+# why no chart line could ever include the basket without a step.
+basket_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "held_peak_bytes"]
+
+basket_more = ["beat_iters" "utf8_bytes"]
+
+basket_all = text/concat basket_watched basket_more
+
 unwatched = """
   perf_record watches a counter the compiler no longer emits, so the row it
   writes would quietly lose a dimension and the chart would plot a shorter
@@ -89,11 +98,12 @@ fn absent_in text group
   found = list/to_list (list/map (list/to_list lines) named)
   list/to_list (list/select group (g -> missing? found g))
 
-fn every_watched d e o
+fn every_watched d e o bk
   a = absent_in d decode_watched
   b = absent_in e encode_watched
   c = absent_in o oneshot_watched
-  gone = text/concat a (text/concat b c)
+  d2 = absent_in bk basket_all
+  gone = text/concat (text/concat a d2) (text/concat b c)
   all_there gone (length gone == 0)
 
 fn all_there _ true
@@ -172,25 +182,30 @@ fn with_encode line d e
   io/read_file "bench/cost_golden_oneshot.txt" . (o -> with_oneshot line d e o)
 
 fn with_oneshot line d e o
-  io/read_file "bench/compile_golden.txt" . (c -> recorded line d e o c)
+  io/read_file "bench/cost_golden_basket.txt"
+    . (bk -> with_basket line d e o bk)
 
-fn recorded line d e o c
-  every_watched d e o . (_ -> costed line d e o c)
+fn with_basket line d e o bk
+  io/read_file "bench/compile_golden.txt" . (c -> recorded line d e o bk c)
 
-fn costed line d e o c
-  compiler_cost 0 . (cc -> with_cost line d e o c cc)
+fn recorded line d e o bk c
+  every_watched d e o bk . (_ -> costed line d e o bk c)
 
-fn with_cost line d e o c cc
-  welfare_score 0 . (w -> assembled line d e o c cc w)
+fn costed line d e o bk c
+  compiler_cost 0 . (cc -> with_cost line d e o bk c cc)
 
-fn assembled line d e o c cc w
+fn with_cost line d e o bk c cc
+  welfare_score 0 . (w -> assembled line d e o bk c cc w)
+
+fn assembled line d e o bk c cc w
   decode = counters d decode_watched ""
   encode = counters e encode_watched "encode_"
   oneshot = counters o oneshot_watched "oneshot_"
+  basket = counters bk basket_all "basket_"
   veins = text/concat decode encode
   own = counters cc.stderr compiler_watched ""
   scored = [["welfare" (score_in w.stdout)]]
-  rest = text/concat oneshot (compile_work c)
+  rest = text/concat (text/concat oneshot basket) (compile_work c)
   measured = text/concat own scored
   tail = text/concat rest measured
   written (text/concat (described line) (text/concat veins tail))

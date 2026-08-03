@@ -450,7 +450,7 @@ jobs:
   # instructions, and half a row would draw a cliff no change made.
   perf-history:
     name: perf history (published to the compiler page)
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
@@ -459,34 +459,28 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      # The row and the redraw are separate because only one of them can run
-      # here. `/usr/bin/time -l` on a GitHub macOS runner reports the peak
-      # footprint and NOT instructions retired — the hardware counter is not
-      # exposed inside their VM — so perf_row refuses rather than writing a
-      # zero, and the series is extended from a machine that can read it. The
-      # redraw needs no counters at all and runs every time, which is the half
-      # that was missing: the rows were being collected and never drawn.
-      - name: measure this commit, if this runner can
+      # Every number on the chart is deterministic, so ANY runner extends the
+      # series and none can smear it — that is the ruling the chart implements
+      # (four core metrics plus welfare, wall clock nowhere). The series is the
+      # perf-history branch; a pull request's own row is appended last, so a
+      # PR's chart ends at the PR, and the redraw is committed back to the
+      # branch under test where a reviewer sees it in the diff.
+      - name: stage the series and this commit's row
         run: |
-          if ./target/release/kanso run scripts/perf_row.kso -- \
-               "$(git rev-parse HEAD)" "$(date +%s)" > /tmp/row.tsv; then
-            cat /tmp/row.tsv >> bench/long_view.tsv
-          else
-            echo "::notice::this runner cannot read instructions retired, so the"
-            echo "::notice::series is not extended here. The chart is still redrawn"
-            echo "::notice::from the rows that exist."
-          fi
+          git fetch origin perf-history
+          git show origin/perf-history:history.jsonl > bench/history_series.jsonl
+          ./target/release/kanso run scripts/perf_record.kso >> bench/history_series.jsonl
       - name: redraw the chart
         run: ./target/release/kanso run scripts/long_view.kso
       - name: commit the chart if it moved
         run: |
           git config user.name "kanso-ci"
           git config user.email "ci@kanso-lang.dev"
-          if git diff --quiet -- docs/compiler.html bench/long_view.tsv; then
+          if git diff --quiet -- docs/compiler.html; then
             echo "the chart is unchanged"
             exit 0
           fi
-          git add docs/compiler.html bench/long_view.tsv
+          git add docs/compiler.html
           git commit -m "the long view, redrawn"
           git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
       - name: record this commit

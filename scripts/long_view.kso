@@ -1,27 +1,33 @@
 import "std/io"
+import "std/json"
 import "std/list"
+import "std/math"
 import "std/text"
 
-# The long view: every commit this project has, on one chart, five lines.
+# The long view: every merged commit, on one chart, five lines — and every
+# number on it deterministic, so any runner can extend it and none can smear
+# it. RULED (Clay, 2026-08-03): the graph is the four core metrics plus the
+# welfare aggregate, nothing else. Wall clock appears nowhere here; the one
+# wall-clock surface left anywhere is the cross-language board, which is
+# published as a relative metric because a competitor's cost cannot be
+# counted by kanso's counters.
 #
-# bench/long_view.tsv holds a row per commit — the time, the commit, and four
-# deterministic numbers measured by replaying that commit: what its compiler
-# spent checking its own json library, and what its seven example programs
-# spent being run. Instructions retired for speed and peak footprint for
-# memory, because both are the same whoever else is on the machine.
-#
-# The fifth line is utility, computed here from the other four rather than
-# recorded, so the chart says whether the project came out ahead as well as
-# where the movement was.
+# The data is bench/history_series.jsonl — a copy of the perf-history
+# branch's history.jsonl, one JSON row per merged commit, staged by CI (or a
+# person) before this runs. CI appends the commit under test as the last row,
+# so a pull request's chart ends at the pull request.
 #
 # Each line is scaled to its own range, because the units have nothing to do
-# with each other — a hundred million instructions and a megabyte cannot share
-# an axis and stay readable. What the chart shows is shape: which way each
-# number went, and when it stepped. The x axis is time rather than commit
-# count, because commits are not evenly spaced.
+# with each other. What the chart shows is shape: which way each number went,
+# and when it stepped. The x axis is row order rather than time — commits are
+# what the ratchet acts on, and evenly spacing them keeps every step visible.
+#
+# A series starts where its counters start. The schema grew over the
+# project's life, so the compile lines reach back to the first row while the
+# welfare line begins where the score was first recorded; a row missing any
+# counter a series needs is skipped for that series and no other.
 type series
   colour
-  hue
   label
   reading
 
@@ -31,44 +37,78 @@ height = 560
 
 pad = 64
 
-# Weight and satiation per dimension. Runtime carries 0.60 against compile's
-# 0.40 — compile is more than the third it looks like from inside, because
-# 45% of people who stopped using rust named long compile times as a reason,
-# which makes it an adoption question rather than a comfort one. Runtime keeps
-# the majority because it recurs per request forever.
-#
-# Inside compile, speed carries 0.28 against memory's 0.12: the complaint that
-# dominates every survey is waiting for an incremental rebuild, not footprint.
-# Inside runtime the two split evenly — warehouse-scale work puts memory at the
-# centre of what a fleet costs, and speed is the claim on the front page.
-#
-# Satiation says how long a dimension keeps paying. Runtime is 2.0: a decoder
-# eight times faster is eight times faster. Compile is 0.5: a front end that
-# already answers in six milliseconds gains almost nothing from three, which is
-# the same threshold that makes a second feel instant to a person.
-s_run_speed = series "#4fd1ff" 300 "run speed" run_speed
+s_run_speed = series "#4fd1ff" "run speed" run_speed
 
-s_run_memory = series "#a78bfa" 300 "run memory" run_memory
+s_run_memory = series "#a78bfa" "run memory" run_memory
 
-s_comp_speed = series "#ffd166" 280 "compile speed" compile_speed
+s_comp_speed = series "#ffd166" "compile speed" compile_speed
 
-s_comp_memory = series "#f472b6" 120 "compile memory" compile_memory
+s_comp_memory = series "#f472b6" "compile memory" compile_memory
 
-s_utility = series "#4ade80" 0 "utility" utility
+s_welfare = series "#4ade80" "welfare" welfare_of
 
-lines = [s_run_speed s_run_memory s_comp_speed s_comp_memory s_utility]
+lines = [s_run_speed s_run_memory s_comp_speed s_comp_memory s_welfare]
 
-pub play = io/read_file "bench/long_view.tsv" . drawn
+series_path = "bench/history_series.jsonl"
 
-fn drawn text
-  rows = list/to_list (list/select (text/split text "\n") measured?)
+# Run speed is the codec's two allocation counts. The basket is deliberately
+# absent even though welfare's run-speed dimension reads it: no history row
+# recorded it until now, and adding it mid-line would draw a step no change
+# made — the same reason the renamed held-malloc peak is absent from run
+# memory. The welfare line carries the basket's effects, because the recorded
+# score always included them.
+fn run_speed r
+  a = r["allocs"]
+  b = r["encode_allocs"]
+  sum2 a b (a == none or b == none)
+
+fn sum2 _ _ true
+  none
+
+fn sum2 a b false
+  a + b
+
+# The one-shot peak represents run memory because it has meant one thing for
+# its whole life: decode, hold, print — the peak the rewinds cannot hide. The
+# held-malloc peak is deliberately absent; it was renamed when its meaning
+# widened, and a line that changes meaning mid-chart would draw a step no
+# change made.
+fn run_memory r
+  r["oneshot_arena_peak_bytes"]
+
+fn compile_speed r
+  a = r["compile_rounds"]
+  b = r["compile_visits"]
+  c = r["emitted_lines"]
+  two = sum2 a b (a == none or b == none)
+  sum2 two c (two == none or c == none)
+
+fn compile_memory r
+  r["compile_peak_bytes"]
+
+# The recorded score, in hundredths so integer scaling never rounds a real
+# move away. Recorded rather than recomputed: the score a commit shipped with
+# is a fact about that commit, and recomputing history against today's
+# baseline would rewrite it.
+fn welfare_of r
+  w = r["welfare"]
+  scored w (w == none)
+
+fn scored _ true
+  none
+
+fn scored w false
+  math/round (text/to_float w * 100.0)
+
+pub play = io/read_file series_path . decoded
+
+fn decoded text
+  raw = list/select (text/split text "\n") (l -> length l > 2)
+  rows = list/to_list (list/map raw json/decode)
   charted rows (length rows)
 
-fn measured? line
-  length line > 20 and (text/split line "#")[1]! == line
-
 fn charted _ 0
-  io/write_err "no rows — bench/long_view.tsv is empty\n" . (_ -> io/exit 1)
+  io/write_err "no rows — {series_path} is empty\n" . (_ -> io/exit 1)
 
 fn charted rows n
   io/read_file "docs/compiler.html" . (page -> spliced page rows n)
@@ -83,104 +123,74 @@ fn spliced page rows n
     >> io/write "long view: {n} commits, {length lines} lines\n"
 
 fn svg rows n
-  times = list/to_list (list/map rows at_of)
-  first = list/min times
-  last = list/max times
-  base = rows[1]!
-  drawn_lines = list/map lines (s -> path s rows base times first last)
+  drawn_lines = list/map lines (s -> path s rows n)
   body = text/join (list/to_list drawn_lines) "\n"
   keys = text/join (list/to_list (list/map lines legend)) "\n"
   frame body keys n
 
-fn at_of row
-  text/to_int (text/split row "\t")[1]!
+# One series: keep the (index, value) pairs where the value exists, scale to
+# this series' own range, emit one polyline.
+fn path s rows n
+  pairs = kept s rows 1 n []
+  drawn s pairs (length pairs) n
 
-fn compile_memory row
-  text/to_int (text/split row "\t")[3]!
+fn kept s rows at n acc
+  walking s rows at n acc (at > n)
 
-fn compile_speed row
-  text/to_int (text/split row "\t")[4]!
+fn walking _ _ _ _ acc true
+  acc
 
-fn run_memory row
-  text/to_int (text/split row "\t")[5]!
+fn walking s rows at n acc false
+  v = s.reading rows[at]!
+  grown = extended acc at v (v == none)
+  kept s rows (at + 1) n grown
 
-fn run_speed row
-  text/to_int (text/split row "\t")[6]!
+fn extended acc _ _ true
+  acc
 
-# Utility in hundredths: each dimension contributes its weight times a
-# saturating function of baseline-over-current, so a dimension that is already
-# far better than it was keeps paying less for the next improvement.
-fn utility row
-  utility_against row row
+fn extended acc at v false
+  push acc [at v]
 
-fn utility_against row base
-  a = worth (compile_memory base) (compile_memory row) 120 50
-  b = worth (compile_speed base) (compile_speed row) 280 50
-  c = worth (run_memory base) (run_memory row) 300 200
-  d = worth (run_speed base) (run_speed row) 300 200
-  a + b + c + d
+fn drawn _ _ 0 _
+  ""
 
-# All of it in hundredths, so integer division never rounds a ratio to one.
-fn worth was now weight satiation
-  ratio = 100 * live was / live now
-  weight * ratio / (ratio + satiation)
-
-fn live 0
-  1
-
-fn live n
-  n
-
-fn path s rows base times first last
-  readings = list/to_list (list/map rows (r -> reading_of s r base))
-  low = list/min readings
-  high = list/max readings
-  coords = stepped readings times low high first last 1 (length readings) ""
+fn drawn s pairs n total
+  values = list/to_list (list/map pairs (p -> p[2]!))
+  low = list/min values
+  high = list/max values
+  coords = stepped pairs low high total 1 n ""
   open = "<polyline fill=\"none\" stroke=\"{s.colour}\""
   "{open} stroke-width=\"2\" points=\"{coords}\"/>"
 
-# Utility is the one line that means nothing without a baseline, so it is read
-# against the first row while the other four read themselves.
-fn reading_of s row base
-  against s row base (s.hue == 0)
+fn stepped pairs low high total at n acc
+  placing pairs low high total at n acc (at > n)
 
-fn against _ row base true
-  utility_against row base
-
-fn against s row _ false
-  s.reading row
-
-fn stepped readings times low high first last at n acc
-  walking readings times low high first last at n acc (at > n)
-
-fn walking _ _ _ _ _ _ _ _ acc true
+fn placing _ _ _ _ _ _ acc true
   acc
 
-fn walking readings times low high first last at n acc false
-  x = across times[at]! first last
-  y = up readings[at]! low high
-  stepped readings times low high first last (at + 1) n "{acc} {x},{y}"
+fn placing pairs low high total at n acc false
+  pair = pairs[at]!
+  x = across pair[1]! total
+  y = up pair[2]! low high
+  stepped pairs low high total (at + 1) n "{acc} {x},{y}"
 
-fn across t first last
-  pad + (t - first) * (width - 2 * pad) / span_of first last
+fn across at total
+  pad + (at - 1) * (width - 2 * pad) / span_of (total - 1)
 
-fn span_of first last
-  widened (last - first)
-
-fn widened 0
+fn span_of 0
   1
 
-fn widened n
+fn span_of n
   n
 
 fn up v low high
-  placed v low (high - low)
+  scaled v low (high - low)
 
 # A flat line draws along the middle rather than dividing by zero.
-fn placed _ _ 0
+fn scaled _ _ 0
   height / 2
 
-fn placed v low span
+fn scaled v low span
   top = pad / 2
   usable = height - pad - top
   top + usable - (v - low) * usable / span
@@ -196,12 +206,12 @@ fn legend s
   "{dot}{said}"
 
 fn index_of s at
-  placing s at (lines[at]!.label == s.label)
+  placed s at (lines[at]!.label == s.label)
 
-fn placing _ at true
+fn placed _ at true
   at
 
-fn placing s at false
+fn placed s at false
   index_of s (at + 1)
 
 fn frame body keys n
