@@ -15970,3 +15970,54 @@ that is worth recording: the carry only fires on cohorts above half a megabyte,
 and every synthetic loop reaching that size is quadratic for an unrelated reason
 (the string accumulator), so the ratio it would assert is not the one under
 test. The corpus gap is real and belongs to the breadth work.
+
+## the accumulator rewind: built, corrupted, reverted, and the reason named (2026-08-02)
+
+Third attempt, and the first one to fail for a reason worth writing down rather
+than a mystery. Both halves were built and measured; the pair corrupts, and the
+guard that corrupts is not the one anybody had been looking at.
+
+WHAT WAS BUILT. The runtime half mirrors what the bytes builder has done since
+the string accumulator landed: `dies = k_survives(a, NULL) && !k_survives(a,
+inner)` sends a transient's growth to the arena and an accumulator's to malloc,
+and the sign of `cap` records which. `k_buf_cap` already normalises it and
+`k_buf_donate` already refuses a negative cap to the arena's shelf, so the
+groundwork was in place; what was added is `k_buf_perm` and the choice at the
+grow site in `k_b_push_into`.
+
+The beat half licenses a list accumulator to cross an iteration boundary when
+every in-place push on the chain pushes a scalar. That is the same rule as the
+existing BYTES license reached a different way — raw bytes hold no pointers,
+and neither does a list of integers — rather than a widening of it. It has to
+read the parameter at the position under test, not the first: a fold written
+`go n xs` carries its counter first and the list it is building second.
+
+The license fires. `KANSO_BEAT_REPORT=1` reports `go/2: beat: rewinds every
+iteration` where it used to report nothing.
+
+AND NATIVE CORRUPTS. The program answers 2000 under the interpreter and dies
+under native with "the program ran out of stack", which is what any SIGSEGV
+prints. Reverting the license alone, with the runtime change kept, answers 2000
+again — so the runtime half is sound on its own and the license is what breaks.
+
+THE REASON, which is the useful part. `k_b_push_into` opens with
+
+    if (mutate && !k_born_this_beat(l)) mutate = 0;
+
+and an accumulator that arrived at the loop's entry is by definition not born
+this beat. So the in-place push the linearity analysis proved silently stops
+being in-place: every iteration allocates a fresh KList header in the arena,
+the loop threads it, and the rewind frees it underneath. The guard is right for
+what it was written for — mutating a header somebody else holds is visible —
+and wrong for a header uniqueness already proved unique. The proof crossed the
+beat boundary and the guard did not.
+
+So the third piece, which no attempt has had, is a way for `k_b_push_mut` to
+say "uniqueness was proven for this call, so a pre-beat header may still be
+mutated" — the same standing the bytes path already has, where `mutate` reaching
+the append is itself the proof and no born-this-beat test stands in front of it.
+Until that exists the license cannot be turned on, and turning it on without it
+produces a segfault that reads as a stack overflow.
+
+Both halves reverted. The spec stays red at 19,922,976 bytes against 12,582,944,
+a factor of 1.6 where it allows 1.25.
