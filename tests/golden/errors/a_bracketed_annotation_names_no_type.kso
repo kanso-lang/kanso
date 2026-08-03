@@ -1,0 +1,12 @@
+# A bare annotation naming no type is refused, and a bracketed one was not:
+# `[]banana` and `map[string banana]` both compiled and ran, because the
+# checker read the shape and skipped the name inside it. The shape is all
+# inference reads, so the name was decoration that nothing ever verified —
+# which makes a typo in it silent rather than loud.
+fn take xs:[]banana
+  length xs
+
+fn seen m:map[string mango]
+  length (entries m)
+
+pub play = print "{take [1 2 3]} {seen { "a":1 }}"
