@@ -1,0 +1,23 @@
+# A fold that allocates a temporary each time round and threads a map. The
+# temporary is never stored: it is bound, its length is read, and it is
+# dropped. Threading an int instead, the same loop reclaims every one of them.
+#
+# Threading a map it reclaims too. This fixture was called
+# an_accumulator_loop_keeps_its_garbage for as long as that was true, and it
+# is renamed because it stopped being: beat_iters below is the bracket being
+# emitted, where it read zero while a map's pairs lived in the arena.
+#
+# It runs two hundred thousand iterations rather than twenty because that is
+# where the reclaim becomes visible: below about a hundred thousand a one-key
+# map fits in a single arena block whichever way its storage goes, and one
+# block is the floor. The counters below are the whole trade — beat_iters up
+# because the bracket is emitted at all, arena blocks and peak down because
+# the pairs no longer sit where the rewind can reach them.
+fn go 0 m
+  print (length (entries m))
+
+fn go n m
+  junk = "k{n % 17}"
+  go (n - 1) (put m "k1" (m["k1"]! + length junk))
+
+pub play = go 200000 { "k1":0 }

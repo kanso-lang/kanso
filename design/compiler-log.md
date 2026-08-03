@@ -16358,8 +16358,30 @@ So three entries of diagnosis produced: one wrong (the chain's rooting), one
 half-right (the view, real but already handled), and one correct (a missing
 `put` requirement). The measurement was the same in all three.
 
-Every vein holds: four cost goldens byte-identical, welfare at 75.68, kq green
-with twelve fixture goldens matching jq and its scale gate linear. The reclaim
-is invisible to the mem golden at twenty thousand iterations because one block
-is the floor, so tests/map_accumulator_peak.rs runs the same program at ten
-times the count and asserts the ratio.
+THE FIXTURE IS RENAMED, AND THAT RESETS A GATE, SO SAY IT PLAINLY.
+`an_accumulator_loop_keeps_its_garbage` no longer keeps it, and a fixture whose
+name asserts something false has to be renamed whatever else is true. It also
+moves from twenty thousand iterations to two hundred thousand, because below
+about a hundred thousand a one-key map fits in one arena block whichever way its
+storage goes, and one block is the floor — the same reason the welfare basket
+needed a bigger accumulator one corpus over.
+
+Both together make it a new file to the trend gate, which exempts a fixture it
+has no baseline for. That is the honest reading — the old numbers describe a
+different program at a different size, and comparing them would be arithmetic
+about nothing — but it does mean the gate cannot price this trade, so the trade
+is written out here instead:
+
+    at 200,000 iterations, against main
+    beat_iters          0 -> 200,000   the bracket emitted at all
+    arena blocks        9 -> 1
+    arena peak  9,437,184 -> 1,048,576
+    allocs        282,360 -> 282,360   unchanged
+
+A reader who suspects the rename of hiding something can check it in one
+command: build main, set the fixture to 200,000, and read the two counters.
+
+Every other vein holds unrenamed: four cost goldens byte-identical, welfare at
+75.68, kq green with twelve fixture goldens matching jq and its scale gate
+linear. tests/map_accumulator_peak.rs asserts the ratio between two sizes rather
+than any constant, so it keeps meaning something when the constants move.

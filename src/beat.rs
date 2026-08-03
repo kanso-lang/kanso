@@ -1229,9 +1229,7 @@ fn map_chain_rest(
             {
                 literal_key(&args[1])
                     && scalar_elem(&args[2], own, decl, inference, decl_index)
-                    && map_chain_rest(
-                        &args[0], own, decl, inference, decl_index, locals, mut_sites,
-                    )
+                    && map_chain_rest(&args[0], own, decl, inference, decl_index, locals, mut_sites)
             }
             _ => false,
         },
