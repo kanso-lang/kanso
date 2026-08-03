@@ -6,6 +6,19 @@ type point
   x
   y
 
+# An accumulator at a scale where the arena can feel it. Every other shape
+# here works at four thousand elements, which is sixty-four kilobytes against
+# a megabyte block — so a change that moves an accumulator's storage out of
+# the arena entirely leaves this basket's peak exactly where it was, and the
+# index reads a real win as nothing. The gate-widening measurement of
+# 2026-08-02 is that failure with numbers on it: byte-identical here, a
+# quarter of the arena at a hundred thousand.
+fn bulk_build 0 xs
+  xs
+
+fn bulk_build n xs
+  bulk_build (n - 1) (push xs n)
+
 # Building a string, one append at a time.
 fn text_build 0 s
   s
@@ -81,10 +94,12 @@ pub fn run _
   moved = shift 4000 (point 0 0)
   tail = list/drop xs 3990
   joined = text/join (list/to_list (list/map tail (v -> "s{v}"))) ","
+  bulk = bulk_build 100000 []
   head500 = list/to_list (list/take xs 500)
   sorted = list/sum (list/sort (list/map head500 (v -> 4000 - v)))
   sliced = length (text/slice built 1 128)
   a = "{length built} {length repeated} {length grown} {summed}"
   b = "{length kept} {folded} {length grouped} {length counted}"
   c = "{ints} {floats} {moved.x} {length joined} {sliced} {sorted}"
-  print "basket {a} {b} {c}"
+  d = "{length bulk} {bulk[100000]!}"
+  print "basket {a} {b} {c} {d}"
