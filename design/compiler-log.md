@@ -17046,3 +17046,28 @@ So the completeness check is now separate from the extraction and refuses:
 Watched by pointing it back at the retired name: exit 2, three groups named.
 With the current name the row carries 34 fields and the memory dimension is
 back — `oneshot_held_peak_bytes` 311,728, which is the figure #747 surfaced.
+
+## a sibling change is not done when it merges, and forcing a rerun proved it
+
+Three CI runs were forced by hand this sitting — an empty commit on one branch,
+a rebase and another empty commit on a second. Clay's read is right: needing to
+force one means the process was wrong, not the runner.
+
+WHAT ACTUALLY HAPPENED. Kanso's gating `kq specs` check clones kq's MAIN. A
+kanso change that moves a kq counter therefore runs a five-step loop: the kanso
+PR opens and the kq gate fails, a coordinated kq branch and a licence make it
+pass, kanso merges, kq's pin advances, kq merges. Between step three and step
+five the two mains disagree about the counter's name, and every PR opened in
+that window fails a gate for a reason that has nothing to do with it. Two were
+opened in that window and both needed forcing.
+
+SO THE RULE, which is the existing no-fire-and-forget rule with its endpoint
+moved: a change that moves a sibling's counters is finished when the SIBLING's
+pin bump merges, not when kanso's PR does. Nothing unrelated opens in between.
+
+The sharper version of the same mistake: the branch that retired the spent
+licence carries an entry saying the tidy-up "is now part of the change rather
+than a thing to notice afterwards", and it was opened as a separate PR
+regardless — in the window, needing a forced rerun. The lesson was written and
+broken in one sitting, which is the strongest argument for writing it here
+rather than remembering it.
