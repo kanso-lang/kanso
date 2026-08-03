@@ -33,7 +33,20 @@ fn told argv false
   io/read_file "docs/compiler.html"
     . (page -> spliced page k s kkb skb argv[5]!)
 
+# A fresh run of a wall-clock race never reproduces exactly, so an
+# unconditional write would commit a slightly different board every run and
+# the pull request's head would churn forever, each push orphaning the checks
+# before it. Within tolerance, the board already on the page IS this
+# measurement, and writing it again would record noise.
 fn spliced page k s kkb skb rounds
+  held = between page
+  same = within? held k s
+  settled page k s kkb skb rounds same
+
+fn settled _ _ _ _ _ _ true
+  io/write "decode board unchanged within tolerance\n"
+
+fn settled page k s kkb skb rounds false
   board = table k s kkb skb rounds
   before = (text/split page "<!--relative-->")[1]!
   rest = (text/split page "<!--/relative-->")[2]!
@@ -41,6 +54,53 @@ fn spliced page k s kkb skb rounds
   close = "<!--/relative-->{rest}"
   io/write_file "docs/compiler.html" "{open}\n{board}\n{close}"
     >> io/write "decode board rewritten: {verdict k s (k < s)}\n"
+
+fn between page
+  inner = (text/split page "<!--relative-->")[2]!
+  (text/split inner "<!--/relative-->")[1]!
+
+# Both lanes within five percent of what the page already says. The ratio is
+# the claim, and five percent absorbs the wobble two runs on one runner class
+# show; a real compiler change moves the lanes more than that or moves the
+# counters, which gate elsewhere.
+fn within? held k s
+  hk = number_after held "kanso + arenas"
+  hs = number_after held "serde_json"
+  both? hk hs k s (hk == none or hs == none)
+
+fn both? _ _ _ _ true
+  false
+
+fn both? hk hs k s false
+  close? hk k and close? hs s
+
+fn close? was now
+  gap = grown (was - now) (was < now)
+  gap * 100.0 < was * 5.0
+
+fn grown d true
+  0.0 - d
+
+fn grown d false
+  d
+
+# The ms cell that follows a lane's name: first "num" cell after the marker.
+fn number_after held name
+  parts = text/split held name
+  tail_of parts (length parts < 2)
+
+fn tail_of _ true
+  none
+
+fn tail_of parts false
+  cells = text/split parts[2]! "class=\"num\">"
+  celled cells (length cells < 2)
+
+fn celled _ true
+  none
+
+fn celled cells false
+  text/to_float (text/split cells[2]! "<")[1]!
 
 fn table k s kkb skb rounds
   first = lane "kanso + arenas" k kkb (k < s) (bar k s k)

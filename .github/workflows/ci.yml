@@ -506,19 +506,23 @@ jobs:
           echo "savg=$savg" >> "$GITHUB_OUTPUT"
           echo "kkb=$kkb" >> "$GITHUB_OUTPUT"
           echo "skb=$skb" >> "$GITHUB_OUTPUT"
-      # The board is the one wall-clock artifact, so its splice can never be
-      # idempotent — a rerun differs slightly, and committing it on a PR
-      # churns the head forever, with each push orphaning the checks that ran
-      # before it. Deterministic artifacts commit on the PR; this one commits
-      # on main, post-merge, where there is one author and no head to churn.
-      # On a PR the race above still reports to the run page.
-      - name: splice the board (main only)
-        if: github.ref == 'refs/heads/main'
+      # The board is the one wall-clock artifact, so a bare splice can never
+      # be idempotent — and main's branch protection refuses any direct push,
+      # so nothing can be committed after the merge either. Both constraints
+      # meet in the splicer itself: it skips the write when the fresh
+      # measurement is within tolerance of what the page already says. A
+      # pull request's first run writes the board; every rerun converges
+      # instead of churning the head.
+      - name: splice the board
         run: |
           ./target/release/kanso run scripts/relative_board.kso -- \
             "${{ steps.race.outputs.kavg }}" "${{ steps.race.outputs.savg }}" \
             "${{ steps.race.outputs.kkb }}" "${{ steps.race.outputs.skb }}" 5
+      # Commit on the pull request only. Main is protected — a direct push
+      # is refused, by design — and what a PR wrote IS the measurement of
+      # the code that merges, so main needs no second write.
       - name: commit the published surfaces if they moved
+        if: github.head_ref != ''
         run: |
           git config user.name "kanso-ci"
           git config user.email "ci@kanso-lang.dev"
@@ -528,7 +532,7 @@ jobs:
           fi
           git add docs/compiler.html
           git commit -m "the chart and the board, remeasured"
-          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
+          git push origin "HEAD:${{ github.head_ref }}"
       - name: record this commit
         if: github.ref == 'refs/heads/main'
         run: ./target/release/kanso run scripts/perf_record.kso > /tmp/record.json
