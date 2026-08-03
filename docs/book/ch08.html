@@ -667,13 +667,13 @@ hex_byte_table <span class="o">=</span> <span class="f">text/bytes</span> <span 
 <span class="k">fn</span> <span class="f">pretty</span> s:string _
   <span class="s">"\"<span class="i">{s}</span>\""</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> xs:[]json d
+<span class="k">fn</span> <span class="f">pretty</span> xs:[]some d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
   lines <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> xs (v <span class="o">-&gt;</span> <span class="s">"<span class="i">{pad d2}</span><span class="i">{pretty v d2}</span>"</span>))
   inner <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">",\n"</span>
   <span class="s">"[\n<span class="i">{inner}</span>\n<span class="i">{pad d}</span>]"</span>
 
-<span class="k">fn</span> <span class="f">pretty</span> m:map[string json] d
+<span class="k">fn</span> <span class="f">pretty</span> m:map[string some] d
   d2 <span class="o">=</span> d <span class="o">+</span> <span class="n">1</span>
   lines <span class="o">=</span> <span class="f">list/to_list</span> (<span class="f">list/map</span> (<span class="f">entries</span> m) (e <span class="o">-&gt;</span> <span class="f">entry_block</span> e d2))
   inner <span class="o">=</span> <span class="f">text/join</span> lines <span class="s">",\n"</span>

@@ -16399,11 +16399,22 @@ where the same typo one character to the left was loud.
 one place that knows the parser's spelling (`[]T` folds to `T[]`, `map[K V]`
 stays). Both names in a map are checked, not just the value.
 
-WHAT IT CAUGHT, which is the point of turning it on. lib/json annotated
-`[]json` and `map[string json]`; kq annotated `json[]` and `json[string]` in
-five places — the POSTFIX form design/type-syntax.md explicitly rejects, still
-in the tree because nothing read it. Both now say `[]some` and
-`map[string some]`.
+WHAT IT CAUGHT, which is the point of turning it on. Nine annotations across
+two repositories, in three separate copies of the same json library:
+
+    lib/json            []json, map[string json]
+    bench/encodebench   the same two, its own copy
+    tests/golden/runtime/reencode   json[], json[string] — the POSTFIX form
+    docs/book/samples/ch08/pretty   []json, map[string json]
+    kq (cli, pretty, json)          five, all postfix
+
+The postfix spelling is the one design/type-syntax.md explicitly rejects, and
+it was still in the tree in two places because nothing read it. All nine now
+say `[]some` and `map[string some]`.
+
+That spread is the finding under the finding: the json library exists in three
+forked copies, and a rule turned on in one place had to be answered in all of
+them by hand. Nothing tells them apart or keeps them in step.
 
 `some` is honest where `json` was not. A json value is anything but none, which
 is exactly what `some` means. A real `json` typeset would be better and is not

@@ -1947,10 +1947,7 @@ fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
             let Pattern::Annotated { ty, span, .. } = param else { continue };
             for name in annotation_names(ty) {
                 // a qualified name is the import resolver's to answer for
-                if name.contains('/')
-                    || BUILT_IN.contains(&name)
-                    || declared.contains(name)
-                {
+                if name.contains('/') || BUILT_IN.contains(&name) || declared.contains(name) {
                     continue;
                 }
                 diags.push(Diagnostic::new(
