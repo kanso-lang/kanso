@@ -17362,3 +17362,27 @@ refused on the first iteration and the counters measured a corpse — five
 allocations, beautifully flat, meaning nothing. A measurement is not the
 counters alone; it is the counters of a program whose OUTPUT was checked.
 Flat-at-five was too good, which is the only reason it was caught.
+## RULED: an imported record prints its qualified type name
+
+Recorded here after Clay had to say it a fourth time, which is its own
+finding: the ruling was given, survived nowhere durable, and the question kept
+being re-derived from the raw divergence as if it were open. The gavel now
+lives in the gavels file, the memory system, and this log, and the corpus
+enforces it — the strongest of the three, because a golden cannot forget.
+
+The rule: a record prints its type's QUALIFIED name. Where the type is
+declared in the entry module there is no qualifier, so `point 3 4`; where it
+arrived through an import, `sample/point 3 4`. The two runs differing is the
+design. Err reasons follow the same rule.
+
+The three micro samples excluded from the imported-corpus test now carry
+`.imported.out` goldens with the qualified spelling, and the exclusion list is
+deleted — all eighty exportable samples run both ways. The goldens were
+generated with each sample imported under its own name, because the qualifier
+IS the import name; the first generation used a staging alias and produced
+`sample/slow_lane` where the harness sees `err_trap_named/slow_lane`, which
+the test caught immediately.
+
+This unblocks the chain that has been reported blocked for two days: the
+harness rework, the corpus migration by area, and the compiler's five `play`
+sites last.

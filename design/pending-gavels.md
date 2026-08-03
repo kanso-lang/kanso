@@ -605,39 +605,20 @@ every call in a language whose name means plain.
   instruction to alphabetize everything was conditional on order losing
   its meaning, and order keeps it.
 
-## 13. What an imported record prints as
+## 13. RULED: an imported record prints its qualified type name
 
-The same program prints one thing run directly and another through an
-import:
+Clay, several times over, the last with justified irritation. `record
+sample/point 3 4` through an import is CORRECT; `record point 3 4` run
+directly is also correct, because the type lives in the entry module and has
+no qualifier. The outputs differing between the two runs is the design: a
+record prints its type's qualified name, and qualification depends on where
+the type is declared. One rule, err reasons included — the bare-vs-qualified
+asymmetry floated here earlier was noise.
 
-    run directly:      record point 3 4, absent <none>
-    through an import: record sample/point 3 4, absent <none>
-
-The defect is not which is right — it is that both happen, so moving a
-type declaration into a library changes what a program prints. Three
-micro samples show it: `render_record_none`, `subtype_chain` (`animal`
-against `sample/animal`) and `err_trap_named` (`slow_lane` against
-`sample/slow_lane`).
-
-RECOMMENDATION: the bare form. Printing is for a human reading output
-and a module path is a fact about source organisation, not about the
-value; `<none>`, `true` and `1.5` carry no provenance either. Two
-modules owning a `point` and needing to be told apart is what a
-`to_string` arm is for, and that already works.
-
-ONE ASYMMETRY, and it is the part wanting a view rather than a rubber
-stamp: an err's REASON is not an ordinary value. For a crash, which
-package raised it is worth more than reading cleanly —
-`sample/quota_torn` says where to look and `quota_torn` does not. So a
-defensible answer is that values render bare and err reasons render
-qualified. That is two rules where one would do, which is normally the
-argument against, except that failures and values are already different
-things here.
-
-UNBLOCKS: the harness rework (running the micro corpus through a
-generated entry, which is step one of migrating `play` out of the
-compiler) and the three samples above. Everything else in the
-import-path bug family is closed.
+Enforced in the corpus: the three record-printing micro samples carry
+`.imported.out` goldens with the qualified spelling, the harness prefers them
+on the imported path, and the exclusion list is gone. The harness rework and
+the `play` migration are unblocked.
 
 ## 14. Are kanso's bytes a type or a convention
 

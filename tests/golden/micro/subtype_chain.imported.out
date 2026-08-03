@@ -1,0 +1,3 @@
+woof: subtype_chain/animal "rex"
+generic: subtype_chain/animal "generic"
+an animal: subtype_chain/animal "rex"
