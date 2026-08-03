@@ -1423,8 +1423,17 @@ type Loaded =
 /// The groups syntax names, spelled the same in every module. An arm carries
 /// this name because the compiler put it there, not because anybody wrote it,
 /// so it is not the module's to rename — the same reason a getter is exempt.
+/// An operator is the other shape of that: `<` is not an identifier a module
+/// could have declared, and the call site is written by syntax rather than by
+/// a name, so prefixing the arm leaves it matching nothing while `a < b` goes
+/// on asking for the bare group.
 fn is_ambient_group(name: &str) -> bool {
-    name == "render/to_string"
+    name == "render/to_string" || is_operator(name)
+}
+
+/// The operators an arm may extend, as src/parser.rs accepts them.
+fn is_operator(name: &str) -> bool {
+    matches!(name, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
 }
 
 fn qualify(
@@ -1839,25 +1848,36 @@ fn merge_ambient_arms_with(
 ) -> Vec<diag::Diagnostic> {
     let mut diags = Vec::new();
     for decl in &mut program.fns {
-        if decl.name == "to_string" {
-            // The ownership rule, enforced at the definition site: an arm
-            // joining a group this module doesn't own must involve a type it
-            // does own. Re-arming a primitive or the sentinels is reserved
-            // to the stdlib; wrap the value in your own type instead.
-            let owns_a_type = decl.params.iter().any(|p| match p {
-                ast::Pattern::Ctor { ty, .. } => local_types.contains(ty),
-                ast::Pattern::Annotated { ty, .. } => local_types.contains(ty),
-                _ => false,
+        let renders = decl.name == "to_string";
+        if !renders && !is_operator(&decl.name) {
+            continue;
+        }
+        // The ownership rule, enforced at the definition site: an arm joining
+        // a group this module doesn't own must involve a type it does own.
+        // Re-arming a primitive or the sentinels is reserved to the stdlib;
+        // wrap the value in your own type instead.
+        let owns_a_type = decl.params.iter().any(|p| match p {
+            ast::Pattern::Ctor { ty, .. } => local_types.contains(ty),
+            ast::Pattern::Annotated { ty, .. } => local_types.contains(ty),
+            _ => false,
+        });
+        if !owns_a_type {
+            let what = if renders {
+                "rendering of primitives and sentinels is fixed".to_string()
+            } else {
+                format!("what `{}` means for a primitive is fixed", decl.name)
+            };
+            diags.push(diag::Diagnostic {
+                kind: "ownership",
+                message: format!(
+                    "an arm of `{}` must match on a type this module defines — {what}; wrap the value in your own type",
+                    decl.name
+                ),
+                span: decl.span,
             });
-            if !owns_a_type {
-                diags.push(diag::Diagnostic {
-                    kind: "ownership",
-                    message: "an arm of `to_string` must match on a type this module defines — rendering of primitives and sentinels is fixed; wrap the value in your own type"
-                        .to_string(),
-                    span: decl.span,
-                });
-                continue;
-            }
+            continue;
+        }
+        if renders {
             decl.name = "render/to_string".to_string();
         }
     }

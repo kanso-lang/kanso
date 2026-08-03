@@ -1,0 +1,8 @@
+# `int` is not this module's to order. An arm on a group that belongs to
+# nobody reaches every module in the program, so a module may only join one
+# through a type it defines — the rule `to_string` has already.
+pub fn go _
+  print "{2 < 1}"
+
+fn < a:int b:int
+  a + b > 0

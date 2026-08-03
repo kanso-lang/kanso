@@ -16661,3 +16661,48 @@ move — the document is small beside the hundred-thousand-element accumulator
 that already sets it.
 
 Widening a corpus has to bank nothing, or the widening becomes the argument.
+## An ordering arm did not survive an import, and one line said which group did
+
+The generated-entry probe over the micro corpus turned up
+`ordering_arms_for_a_type_you_own`: correct as an entry file, refused through an
+import, on both engines.
+
+    error[runtime]: comparison requires two values of one comparable type
+
+This is the bug #723 fixed for rendering, unfixed for the groups that landed
+after it. The fix #723 shipped was a single predicate:
+
+    fn is_ambient_group(name: &str) -> bool { name == "render/to_string" }
+
+`render/to_string` survives qualification because that line names it. `<` `>`
+`<=` `>=` `==` do not, so qualifying a module renamed its `fn <` to `shelf/<`
+while `a < b` went on asking for the bare group. Dispatch found only the builtin
+arms and two books had no order.
+
+The imported case is the ONLY case the gavel was about — Clay's example was
+sorting book records, and a book record's owner is a module you import. So the
+feature worked in the shape nobody needed and refused in the shape it was for.
+
+WIDER THAN THE GAVEL, deliberately. The parser accepts ten operator names, and
+`+` arms dispatch today the same way `<` does. All ten break identically across
+an import, so the predicate covers the set the parser accepts rather than the
+five the gavel named; fixing `<` and leaving `+` broken would be arbitrary.
+
+THE SECOND DEFECT, found while checking the first: there was no ownership rule
+for operator arms. `merge_ambient_arms_with` enforces one for `to_string` — an
+arm must match a type the module defines — and nothing guarded `<`. A module
+could write `fn < a:int b:int` and it compiled without a word. It did nothing,
+because the builtin won dispatch, which is why it was harmless while arms stayed
+module-local. Making them ambient is exactly what would have given it teeth: a
+dependency saying what `<` means for everyone's ints. The two halves ship
+together or the fix hands every importer that.
+
+std arms no operator at all, so the rule refuses nothing that exists.
+
+GOLDENS: tests/golden/entryfile/an_ordering_arm_across_the_import, built as the
+sibling of the fixture #723 left, and asserting the same two halves — the owned
+type takes the arm, and ints keep the builtin, because a fix that let an
+imported arm answer for every value would pass the first assertion and be wrong.
+Plus the orphan, watched accepted-in-silence first and refused after.
+
+Welfare 75.68 either side, no golden moved.
