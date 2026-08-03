@@ -160,8 +160,6 @@ jobs:
           exit $verdict
       - name: prose numbers match the golden they quote
         run: ./target/release/kanso run scripts/golden_prose.kso
-      - name: one sitting, published once
-        run: ./target/release/kanso run scripts/cross_surface_numbers.kso
 
   grammar:
     name: editor grammar (types, strings and comments still painted)
@@ -472,16 +470,44 @@ jobs:
           ./target/release/kanso run scripts/perf_record.kso >> bench/history_series.jsonl
       - name: redraw the chart
         run: ./target/release/kanso run scripts/long_view.kso
-      - name: commit the chart if it moved
+      # The decode board: wall-clock because a competitor's cost cannot be
+      # counted by kanso's counters, RELATIVE because a shared runner's
+      # absolute milliseconds wobble. Five interleaved rounds, both lanes
+      # under the same contention, averaged. CI is the board's only author —
+      # there is no hand-sat number left to age.
+      - name: race the decoders, interleaved
+        run: |
+          ./target/release/kanso run bench/make_jsonbench.kso
+          ./target/release/kanso build bench/jsonbench --release
+          (cd bench/serde_bench && cargo build --release)
+          rounds=5
+          ktot=0; stot=0; kkb=0; skb=0
+          for i in $(seq $rounds); do
+            /usr/bin/time -v ./jsonbench >/dev/null 2>/tmp/kt.txt
+            kms=$(awk '/Elapsed .wall clock/{split($8,a,":");print (a[1]*60+a[2])/150*1000}' /tmp/kt.txt)
+            kb=$(awk '/Maximum resident/{print $6}' /tmp/kt.txt)
+            /usr/bin/time -v ./bench/serde_bench/target/release/serde_bench bench/large.json >/dev/null 2>/tmp/st.txt
+            sms=$(awk '/Elapsed .wall clock/{split($8,a,":");print (a[1]*60+a[2])/150*1000}' /tmp/st.txt)
+            sb=$(awk '/Maximum resident/{print $6}' /tmp/st.txt)
+            ktot=$(awk -v t=$ktot -v x=$kms 'BEGIN{print t+x}')
+            stot=$(awk -v t=$stot -v x=$sms 'BEGIN{print t+x}')
+            [ "$kb" -gt "$kkb" ] && kkb=$kb
+            [ "$sb" -gt "$skb" ] && skb=$sb
+          done
+          kavg=$(awk -v t=$ktot -v n=$rounds 'BEGIN{printf "%.3f", t/n}')
+          savg=$(awk -v t=$stot -v n=$rounds 'BEGIN{printf "%.3f", t/n}')
+          ./target/release/kanso run scripts/relative_board.kso -- \
+            "$kavg" "$savg" "$kkb" "$skb" "$rounds"
+      - name: commit the published surfaces if they moved
         run: |
           git config user.name "kanso-ci"
           git config user.email "ci@kanso-lang.dev"
           if git diff --quiet -- docs/compiler.html; then
-            echo "the chart is unchanged"
+            echo "the published surfaces are unchanged"
             exit 0
           fi
           git add docs/compiler.html
-          git commit -m "the long view, redrawn"
+          git commit -m "the chart and the board, remeasured"
           git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
       - name: record this commit
         if: github.ref == 'refs/heads/main'
@@ -509,41 +535,3 @@ jobs:
           git push origin perf-history
 
   # Non-blocking: reports the kanso-vs-serde decode ratio to the run summary.
-  # CI runners are noisy, so this tracks the number for visibility rather than
-  # gating on it; the gating perf specs are the cost goldens above.
-  benchmark:
-    name: benchmark (reported, not gated)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: build engines
-        run: |
-          cargo build --release
-          ./target/release/kanso run bench/make_jsonbench.kso
-          ./target/release/kanso build bench/jsonbench --release
-          (cd bench/serde_bench && cargo build --release)
-      - name: race (best of 3)
-        run: |
-          best() {
-            b=99999
-            for i in 1 2 3; do
-              t=$( { /usr/bin/time -f '%e' "$@" >/dev/null; } 2>&1 )
-              awk -v a="$t" -v b="$b" 'BEGIN{exit !(a<b)}' && b=$t
-            done
-            echo "$b"
-          }
-          kanso_wall=$(best ./jsonbench)
-          kanso_ms=$(awk -v w="$kanso_wall" 'BEGIN{printf "%.2f", w/150*1000}')
-          serde_line=$(./bench/serde_bench/target/release/serde_bench bench/large.json | tail -1)
-          {
-            echo "## json decode benchmark (188 KB, 150 decodes)"
-            echo ""
-            echo "| engine | per decode |"
-            echo "| --- | --- |"
-            echo "| kanso (native) | ${kanso_ms} ms |"
-            echo "| serde_json | ${serde_line#serde mean over 150 decodes: } |"
-            echo ""
-            echo "Runners are noisy, so this table informs rather than gates. Under slope timing on a quiet-enough box the two are a dead heat; the gating perf specs are the cost goldens."
-          } >> "$GITHUB_STEP_SUMMARY"

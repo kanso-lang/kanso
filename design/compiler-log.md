@@ -17268,3 +17268,34 @@ complete-looking chart whose early half was reconstructed.
 The long-view prose on the page is rewritten to describe this chart rather
 than the replay it replaces, and the section on the gates now states the two
 severities the gavel fixed: welfare hard, everything per-counter soft.
+
+## the hand-sat board is ripped out, and ci is the only author left
+
+Clay, on the quiet-box rows the previous entry proposed guarding: "sounds like
+that old legacy stuff should just be ripped out?" And on the guard itself: "i
+don't know what you mean 'stale'. nothing can go 'stale' anymore." Both right,
+and the second sentence is the design: once every published number is written
+by the run that measured it, on the pull request that merged it, there is no
+number left that CAN age, and the stamp gate this entry was going to introduce
+has no subject. It was not built.
+
+WHAT WENT: the decode board's four hand-measured rows on the compiler page,
+the same figures quoted in the landing panel, the landing prose and the about
+page, and scripts/cross_surface_numbers.kso — the checker whose entire job was
+keeping those hand copies agreeing with each other. With one CI-written
+surface and no hand copies, the drift it guarded is unrepresentable, which
+retires the checker the way the modules rework retired KNOWN_WRONG entries:
+by construction rather than by vigilance.
+
+WHAT THE BOARD IS NOW: two lanes, kanso and serde_json, because those are the
+two CI runs on every merge. Five interleaved rounds — both lanes under the
+same contention, so the ratio holds while the absolute milliseconds wobble —
+averaged, spliced into the page by scripts/relative_board.kso, and committed
+by the same job that commits the chart, so the two published surfaces move in
+one commit by one author. The go and plain-rust comparisons move to the
+recipe, where a reader runs them on their own machine; a number we cannot
+remeasure is a number we no longer publish.
+
+The prose on all three pages drops its absolute milliseconds for the relative
+claim. What survives of the old framing is the part that was always true: no
+lifetimes, no garbage collector, no annotations, and a recipe you can run.
