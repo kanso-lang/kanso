@@ -15913,3 +15913,60 @@ asserts both halves: `money` renders through its own arm after the import, and
 that made every imported value find some arm would pass the first assertion.
 Watched red at `custom: 350` against `custom: $3.50`, green on all three
 engines. Welfare unchanged at 75.64, no golden moved.
+
+## the survivor region absorbs the repair (2026-08-02)
+
+kq's headline pretty-print row was ten times slower than jq's, and #639 is where
+it came from. That change was right: a node is shareable only when its interior
+survives too, because a record left in the arena with a field aimed at a retired
+carry buffer is a real crash and tests/carry_escape.rs pins it. What it did on
+failing the check is where the cost was — it copied the node.
+
+A copy lands in the carry buffer, and the buffer is not the arena. So the node
+never survives again, and every later carry re-copies the whole of it. Linear
+carries, each walking a structure that grows with the input.
+
+MEASURED, A/B on one binary with the check behind an environment switch, so the
+two numbers come from the same compiler and the same fixture:
+
+                       188 KB      2.1 MB     ratio
+    check off             813        8,013     9.9x
+    check on           31,053    3,032,013    97.6x
+
+The failing node was named rather than guessed at. Probing the walk showed the
+document's 160-element root list failing on three slots — indices 100, 138 and
+144, all records — and after the first eviction the whole list was outside the
+arena, so `k_survives` refused it outright and no interior question was even
+asked. That is why only 45 interior failures produced 5,933 copies.
+
+THE FIX IS IN TWO HALVES AND ONLY THE PAIR WORKS. Repairing in place —
+evacuating the slots that left, writing them back, leaving the node where it is
+— is a copying collector's forwarding pointer, sound for the same reason: anyone
+else holding this node held the same doomed pointer and now holds a live one.
+Alone it moves the quadratic without removing it, because the evacuated slot
+lands in the buffer and fails the same check at the next carry. Measured:
+copies fall to linear (812 -> 8,012) and repairs take their place
+(2,400 -> 225,600), which is the same curve wearing a different name.
+
+The half that makes it stick runs after the rewind. The evacuees are copied from
+the buffer into the arena and the mark is raised over them. They are reachable
+from a node that already survives, so they are live by definition, and being
+below the mark is what lets the node be shared at the next carry instead of
+repaired again. Repairs 2,400 -> 29 and 225,600 -> 281.
+
+    carry_dedup   2,721 -> 69      286,401 -> 717      105.2x -> 10.4x
+    wall, 2.1 MB  1.11 s -> 0.15 s (jq 0.11 s, same sitting)
+
+Two counters rise and both are the mechanism: allocs 98,304 -> 98,310, and
+arena_peak_bytes 26,004,240 -> 27,344,528 at 2.1 MB, about five percent. That is
+the survivor region holding what a survivor points at. Welfare holds at 75.64.
+Output byte-identical to jq on all twelve fixture goldens; carry_escape still
+passes; the mem vein falls 90 -> 88 allocations.
+
+THE SPEC IS kq's SCALE GATE with its written-down carry_dedup debt removed —
+red at 105.2x on the old compiler, green on the new, and it runs on every kanso
+PR through the gating kq job. A reduced kanso fixture could not be produced and
+that is worth recording: the carry only fires on cohorts above half a megabyte,
+and every synthetic loop reaching that size is quadratic for an unrelated reason
+(the string accumulator), so the ratio it would assert is not the one under
+test. The corpus gap is real and belongs to the breadth work.
