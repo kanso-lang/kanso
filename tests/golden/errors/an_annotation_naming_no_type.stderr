@@ -1,0 +1,4 @@
+error[type]: no type is called `banana`, so this arm can never match
+  --> an_annotation_naming_no_type.kso:5:6
+   5 | fn f x:banana
+            ^
