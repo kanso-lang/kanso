@@ -16743,3 +16743,55 @@ That is also what still blocks the harness change in full. The import-path bug
 family is otherwise closed: currying, subtypes, err reason types and now
 comparison arms all survive an import, and the two remaining probe
 divergences turned out to be the probe.
+
+## What a change buys cannot be a term, so it has to be a claim
+
+The ask was a fifth welfare term for language feature value, so a syntax change
+that costs allocations could pay for itself inside the model rather than
+deadlocking. The obvious deterministic proxy is how much kanso it takes to say
+the same thing: a feature that makes programs shorter shows up, and one that
+does not is invisible — which is the same honesty the corpus already has.
+
+MEASURED FIRST, and it died in one command. Non-comment lines of lib/ across
+the last forty commits that touched it:
+
+    675  the enumerable fills in
+    ...
+    870  std/text learns to trim
+    850  split becomes a builtin
+    ...
+   1767  lib/json speaks the ratified type forms
+
+It grows monotonically, because almost every commit ADDS a library. Source size
+measures how much stdlib exists, not what the language buys, and as a
+baseline-over-current term it would penalise every stdlib addition.
+
+The two places it fell are worse than the trend. 870 to 850 is `split` becoming
+a builtin — the corpus shrank because work moved OUT of kanso and into Rust,
+which would have scored as expressiveness while meaning its opposite. And the
+one genuine syntax change in the window, `and` and `or` becoming words, moved
+four lines out of 1765. So the signal for the thing the term is FOR is 0.2%,
+against 160% of noise from ordinary growth. Three orders of magnitude apart.
+
+Restricting it to a fixed set of programs fixes the growth problem and not the
+other one: most features let you write programs you could not write before, and
+a set that never grows cannot contain them. Expressiveness is not measurable by
+the machinery that measures cost, and pretending otherwise would put a number
+on a judgement and then defer to it.
+
+SO THE GATE MOVES INSTEAD OF THE MODEL. The rule was already stated — nothing
+worse with nothing better, ever — and `--set` did not enforce it. A fall was
+refused by the verdict, which told you to argue the weights, and then `--set`
+took any sentence at all. A twenty-three point drop banked with the word
+"whatever", measured before the fix:
+
+    floor moved to 75.68: whatever
+
+Now a `--set` that LOWERS the floor must name what the drop buys, in the words
+.github/goldens-move-licenses.sh already asks for, so one habit serves both
+gates. A rise is not a trade and stays free to bank — requiring a justification
+for an improvement is how a rule stops being read.
+
+This does not adjudicate the claim, and it is not meant to. It makes the trade
+appear in the diff, next to the number, where a reviewer can disagree with it.
+An unstated trade is the only kind nobody can argue with.
