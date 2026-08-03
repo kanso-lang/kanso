@@ -154,7 +154,7 @@ fn compile_totals text
   list/to_h [["rounds" rounds] ["visits" visits] ["lines" emitted]]
 
 fn peak_of m
-  m["arena_peak_bytes"]! + m["bytes_peak"]!
+  m["arena_peak_bytes"]! + m["held_peak_bytes"]!
 
 fn measured decode encode oneshot basket comp held
   d = [["decode_allocs" decode["allocs"]!]]

@@ -16910,3 +16910,77 @@ It is deleted anyway. A rule that fails safe is not a reason to leave litter,
 and a reader who finds a licence on main has to go and check which of the two
 it is before they can trust the gate. The self-expiry is the floor, not the
 standard.
+
+## the memory counter measured less than its own comment claimed
+
+#745 removed a leak unbounded in a loop's iteration count and welfare did not
+move a hundredth of a point. That is the finding, not the fix: the objective
+claims to weigh run memory and could not see a whole class of it.
+
+The counter's own documentation was already right —
+
+    Malloc-backed builder storage currently live, and its high-water mark.
+    Arena storage rewinds away; these bytes only leave through free(), so a
+    peak that scales with iteration count is a leak by definition.
+
+— and a map's sorted view is malloc-backed storage that only leaves through
+`free()`. It was simply never counted. So the definition covered views and the
+implementation did not, which is the worst way for a measurement to be wrong:
+the gap reads as a zero rather than as a gap.
+
+HOW WIDE, measured across the corpus. Eleven fixtures reported exactly zero
+held bytes while holding some:
+
+    oneshot        0 ->  311,728     growing_map    0 ->  49,120
+    encode   407,788 ->  719,516     fused_tally    0 ->   7,744
+    basket         0 ->   71,136     repeated_key   0 ->   6,112
+
+The oneshot figure is the one three earlier entries chased by hand. It was
+sitting in a counter reading zero the whole time.
+
+THE COUNTER IS RENAMED, and that is the substance rather than a tidy-up.
+`bytes_peak` meant builder bytes; `held_peak_bytes` means every malloc the
+runtime holds. Keeping the old name would leave a number in the golden history
+that means one thing before this commit and another after, which is precisely
+the silent drift the cost goldens exist to catch — and every consumer
+(welfare's `peak_of`, the trend gate's direction table, two book panels) now
+has to opt in by name rather than inherit a wider meaning without noticing.
+It also makes the trend gate's reading truthful rather than lucky: one counter
+retires, another arrives, and the gate sees both sides instead of a phantom
+regression.
+
+RE-BASELINED SO IT BANKS NOTHING, the same method as #729 and #741. Each
+affected baseline is scaled by exactly the factor its measurement grew —
+oneshot x1.042470, basket x1.033920, encode x1.067736 — so every ratio is
+restored to the digit (encode +2357.0%, oneshot -4.9%, basket +8150.0%) and
+welfare reads 75.68 either side. A wider measurement judged against a narrower
+baseline would penalise every future change for a reference that measured less.
+The assumption is stated: the baseline runs held view memory in the same
+proportion, which is reasonable for the same programs and is not verifiable.
+
+EVERY COUNTER THAT MOVED, by name, because the gate asks which fixture and not
+only which counter. Each is the same move: a name retiring at its old value and
+a wider name arriving at the value that was always true.
+
+    a_transient_maps_view_is_freed_held_peak_bytes
+    an_accumulator_loop_reclaims_its_garbage_held_peak_bytes
+    append_in_place_held_peak_bytes
+    basket_held_peak_bytes
+    beat_builder_held_peak_bytes
+    beat_cycle_held_peak_bytes
+    builder_reclaim_held_peak_bytes
+    builder_transient_held_peak_bytes
+    encode_held_peak_bytes
+    fresh_builder_held_peak_bytes
+    fresh_cycle_held_peak_bytes
+    fused_tally_held_peak_bytes
+    growing_map_held_peak_bytes
+    map_put_held_peak_bytes
+    oneshot_held_peak_bytes
+    readwrite_map_held_peak_bytes
+    repeated_key_shape_held_peak_bytes
+    stream_write_held_peak_bytes
+    tally_shape_held_peak_bytes
+
+The fixture from #745 now says it best in one number. Twenty thousand views
+allocated, `held_peak_bytes=80` — one view ever held at a time.

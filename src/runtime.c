@@ -81,11 +81,17 @@ static long long k_stat_buf_reuse = 0;
    without bound before anything could see it. */
 static long long k_stat_view_allocs = 0;
 static long long k_stat_view_frees = 0;
-/* Malloc-backed builder storage currently live, and its high-water mark.
-   Arena storage rewinds away; these bytes only leave through free(), so a
-   peak that scales with iteration count is a leak by definition. */
-static long long k_stat_bytes_live = 0;
-static long long k_stat_bytes_peak = 0;
+/* Malloc-backed storage currently live, and its high-water mark. Arena
+   storage rewinds away; these bytes only leave through free(), so a peak that
+   scales with iteration count is a leak by definition.
+
+   Builder buffers and map views both. The definition above always covered
+   views — they are malloc'd and only free() releases them — and for a while
+   the implementation counted only builders, which left the objective weighing
+   memory it could not see. A term that measures less than it claims is worse
+   than a missing one, because the gap reads as a zero. */
+static long long k_stat_held_live = 0;
+static long long k_stat_held_peak = 0;
 
 extern KValue d_thunk_eval(long long site, KValue* args);
 
@@ -273,7 +279,7 @@ static void k_stats_dump(void) {
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
-    fprintf(stderr, "buf_reuse=%lld\nbytes_peak=%lld\n", k_stat_buf_reuse, k_stat_bytes_peak);
+    fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
     fprintf(stderr,
@@ -446,7 +452,7 @@ static void k_chunkreg_flush(int d) {
     for (int i = 0; i < k_chunkreg_n[d]; i++) {
         if (__builtin_expect(k_stats_on > 0, 0)) {
             k_stat_bytes_freed++;
-            k_stat_bytes_live -= (long long)sizeof(KBuf) + k_chunkreg[d][i]->cap;
+            k_stat_held_live -= (long long)sizeof(KBuf) + k_chunkreg[d][i]->cap;
         }
         free(k_chunkreg[d][i]);
     }
@@ -4022,6 +4028,10 @@ static KValue* k_view_alloc(long long cap) {
         k_stat_alloc_bytes += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     }
     *(long long*)raw = cap;
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_held_live += (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
+        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
+    }
     return (KValue*)(raw + sizeof(KValue));
 }
 
@@ -4030,7 +4040,11 @@ static long long k_view_cap(KValue* view) {
 }
 
 static void k_view_free(KValue* view) {
-    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_view_frees++;
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_view_frees++;
+        long long cap = k_view_cap(view);
+        k_stat_held_live -= (long long)(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
+    }
     free((char*)view - sizeof(KValue));
 }
 
@@ -5018,7 +5032,7 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
                 KBuf* old = ((KBuf*)a->data) - 1;
                 if (__builtin_expect(k_stats_on > 0, 0)) {
                     k_stat_bytes_freed++;
-                    k_stat_bytes_live -= (long long)sizeof(KBuf) + old->cap;
+                    k_stat_held_live -= (long long)sizeof(KBuf) + old->cap;
                 }
                 free(old);
             }
@@ -5042,8 +5056,8 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
         k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + (size_t)cap);
         k_stat_bytes_malloc++;
-        k_stat_bytes_live += (long long)(sizeof(KBuf) + (size_t)cap);
-        if (k_stat_bytes_live > k_stat_bytes_peak) k_stat_bytes_peak = k_stat_bytes_live;
+        k_stat_held_live += (long long)(sizeof(KBuf) + (size_t)cap);
+        if (k_stat_held_live > k_stat_held_peak) k_stat_held_peak = k_stat_held_live;
     }
     buf->cap = cap;
     buf->used = a->len + n;
@@ -5055,7 +5069,7 @@ static KValue k_b_append_into(KValue acc, KValue x, int mutate) {
             KBuf* old = ((KBuf*)a->data) - 1;
             if (__builtin_expect(k_stats_on > 0, 0)) {
                 k_stat_bytes_freed++;
-                k_stat_bytes_live -= (long long)sizeof(KBuf) + old->cap;
+                k_stat_held_live -= (long long)sizeof(KBuf) + old->cap;
             }
             free(old);
         }
