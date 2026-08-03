@@ -280,12 +280,25 @@ jobs:
       # cost half a minute.
       - name: build the compiler
         run: cargo build --release
+      # Gating on kq's CORRECTNESS and reporting its stored numbers, because
+      # the two go stale differently. kq's unit tests, its twelve fixture
+      # goldens against jq, and its scale gate all compute their reference
+      # inside the same run: they cannot be stale and a break in any of them
+      # is this compiler's fault. Its cost goldens and its published-numbers
+      # stamp compare against files committed in kq, which are only true for
+      # the compiler kq pins — so between a kanso merge and kq's pin bump they
+      # disagree, and an unrelated PR opened in that window failed on a number
+      # that had nothing to do with it. Three did.
+      #
+      # Those numbers are not unwatched: kq's own CI gates them, at the moment
+      # kq chooses to absorb a compiler, where the compiler that produced them
+      # is the compiler being judged.
       - name: kq's own spec suite against this compiler
         run: |
           sudo apt-get install -y jq >/dev/null
           sh .github/clone-sibling.sh kq /tmp/kq
           cd /tmp/kq
-          KANSO=$GITHUB_WORKSPACE/target/release/kanso sh spec.sh
+          KANSO=$GITHUB_WORKSPACE/target/release/kanso KQ_STORED=report sh spec.sh
       # kq is the only sibling anything runs, so the other two are kept in
       # step by whoever remembers to open them. A check is not a spec suite,
       # but it turns "somebody noticed" into "the build said so".
