@@ -63,12 +63,7 @@ fn peak_bytes(n: u64, temporary: bool) -> u64 {
 /// 200,000 dead strings themselves, and the arena grows from four blocks to
 /// eleven to hold them.
 ///
-/// Ignored because it fails, the same way tests/accumulator_growth.rs is: it is
-/// the acceptance criterion for a rewind that does not exist, not a guard on
-/// one that does. `cargo test -- --ignored` shows the current gap, and the
-/// attribute goes in the change that makes a loop's accumulator reclaimable.
 #[test]
-#[ignore = "the rewind this asserts is not built; see design/compiler-log.md"]
 fn a_discarded_temporary_does_not_ride_along_with_the_accumulator() {
     let bare = peak_bytes(200_000, false);
     let temp = peak_bytes(200_000, true);

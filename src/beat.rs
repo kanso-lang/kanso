@@ -1325,9 +1325,15 @@ mod tests {
     /// loop can decline for more than one reason at once. Reporting only the
     /// first sends the next optimisation after a blocker that was never the
     /// whole story.
+    ///
+    /// The element pushed is a string on purpose. A list of scalars is
+    /// licensed to cross a boundary now, so pushing `1` here would leave one
+    /// blocker and the example could not say what it exists to say. A string
+    /// element is a pointer into the arena, which is the boundary of that
+    /// license and still a reason to decline.
     #[test]
     fn a_second_blocker_is_reported_not_masked() {
-        let src = "fn feed acc\n  step acc\n\nfn step acc\n  step (push acc 1)\n\nmain = print \"{feed []}\"\n";
+        let src = "fn feed acc\n  step acc\n\nfn step acc\n  step (push acc \"x\")\n\nmain = print \"{feed []}\"\n";
         let (program, inference) = compiled(src);
         let lines = super::report(&program, &inference, &crate::linear::in_place_pushes(&program));
         let step = lines.iter().find(|l| l.starts_with("step/1")).expect("step is reported");
@@ -1335,6 +1341,24 @@ mod tests {
         assert!(
             step.contains("unbracketed entry") && step.contains("also carries heap"),
             "the report named one blocker and hid the other: {step}"
+        );
+    }
+
+    /// A list accumulator holds KValues, so licensing one to cross a rewind
+    /// turns on what those values are. Integers point at nothing and are as
+    /// safe to carry as the raw bytes of a string builder; a string element
+    /// is a pointer into the arena the rewind is about to reclaim. Both
+    /// halves are asserted here because a license that admitted either would
+    /// pass an example that only tested the first.
+    #[test]
+    fn a_list_of_scalars_may_cross_a_boundary_and_a_list_of_strings_may_not() {
+        let ints = "fn go 0 xs\n  xs\n\nfn go n xs\n  go (n - 1) (push xs 2)\n\nmain = print \"{length (go 3 [])}\"\n";
+        assert!(loops_of(ints).contains(&("go".to_string(), 2)), "a list of integers is refused");
+
+        let strs = "fn go 0 xs\n  xs\n\nfn go n xs\n  go (n - 1) (push xs \"a\")\n\nmain = print \"{length (go 3 [])}\"\n";
+        assert!(
+            !loops_of(strs).contains(&("go".to_string(), 2)),
+            "a list of strings was licensed, and its elements can dangle"
         );
     }
 
