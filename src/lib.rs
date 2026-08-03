@@ -1420,6 +1420,13 @@ fn try_fuse(
 type Loaded =
     (ast::Program, std::collections::HashMap<String, bool>, std::collections::HashSet<String>);
 
+/// The groups syntax names, spelled the same in every module. An arm carries
+/// this name because the compiler put it there, not because anybody wrote it,
+/// so it is not the module's to rename — the same reason a getter is exempt.
+fn is_ambient_group(name: &str) -> bool {
+    name == "render/to_string"
+}
+
 fn qualify(
     dep: &mut ast::Program,
     qual: &str,
@@ -1472,7 +1479,7 @@ fn qualify(
         // every module, reachable without an import. Only its NAME is exempt —
         // the type it matches on belongs to this module and is being renamed
         // under it, so the arm has to follow or it matches nothing.
-        if !f.is_getter() {
+        if !f.is_getter() && !is_ambient_group(&f.name) {
             // A module that declares a name one of its imports also exports
             // has two claims on one qualified spelling: its own declaration
             // and the bare-enrollment clone of the import. First writer wins,
@@ -2563,8 +2570,15 @@ fn compile_module_loaded(
         }
     }
     let root = AMBIENT_ROOT.with(|c| c.replace(false));
-    if root && !dir.ends_with("render") {
+    if root {
         ambient_imports(&mut import_list);
+    }
+    // Arming your own type needs no import, and that holds wherever the type
+    // is declared — the merge is per-module, and the ownership rule inside it
+    // is what keeps a module out of groups it has no claim on. std/render is
+    // the exception because its arms match primitives, which that same rule
+    // reserves to the stdlib.
+    if !dir.ends_with("render") {
         let module_types: std::collections::HashSet<String> =
             parsed.iter().flat_map(|(_, _, p)| p.types.iter().map(|t| t.name.clone())).collect();
         for (file, source, program) in &mut parsed {

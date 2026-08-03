@@ -15875,3 +15875,41 @@ All three reverted; the tree is back to baseline. The order to attack them is
 the reverse of the order they were found: find why the arm is tripled, then the
 qualification exemption, then the root gate. The first two fixes are each two
 lines and are written above.
+
+## the unselected arm was two faults, and the third was my probe (2026-08-02)
+
+FIXED. Two lines of compiler, and the third fault recorded in the entry above
+does not exist. `render/to_string` was not appearing three times in the merged
+program; it was appearing three times because the probe that lifted the root
+gate lifted `ambient_imports` with it, so every module in the build pulled
+std/render and it loaded once per module. Splitting the two — imports still
+gated on root, the merge run per module — and the count is what it should be.
+
+That is the second time this week a trace concluded something about the
+compiler that was really about the instrument. Both times the tell was the same
+shape: a number that did not match anything the code could plausibly do.
+
+The two real faults, as written up before:
+
+    if root { ambient_imports(&mut import_list); }
+    if !dir.ends_with("render") { ...merge... }        was: if root && !render
+
+    if !f.is_getter() && !is_ambient_group(&f.name) {  was: if !f.is_getter()
+
+Arming your own type needs no import, and that holds wherever the type is
+declared. The ownership check inside the merge is what keeps a module out of
+groups it has no claim on; the root gate was a second, cruder answer to the
+same question, and it was answering it wrong. std/render stays excluded because
+its arms match primitives, which the ownership rule reserves to the stdlib.
+
+The qualification exemption follows the getter's, four lines above it: a name
+carrying a `/` was written by the compiler, and one group answers to it across
+every module, so it is not the importing module's to rename.
+
+The golden is tests/entry_file.rs, driving a fixture that had sat in the tree
+since #680 with nothing running it — an orphan, which is its own finding. It
+asserts both halves: `money` renders through its own arm after the import, and
+`plain_tag`, which has no arm, still renders as the integer underneath. A fix
+that made every imported value find some arm would pass the first assertion.
+Watched red at `custom: 350` against `custom: $3.50`, green on all three
+engines. Welfare unchanged at 75.64, no golden moved.
