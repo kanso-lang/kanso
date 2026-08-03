@@ -29,7 +29,7 @@
 //!    position) — a value call would be an unbracketed entry.
 
 use crate::ast::{Expr, Pattern, Program, Stmt, TemplatePart};
-use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, REC, STR};
+use crate::infer::{self, Set, BOOL, BYTES, DESC, FAIL, FLOAT, FN, INT, LIST, MAP, REC, STR};
 use std::collections::{HashMap, HashSet};
 
 /// A function group: its name and arity.
@@ -1176,6 +1176,78 @@ fn scalar_elem(
     }
 }
 
+/// A map accumulator threaded through in-place puts, every one of which writes
+/// a pointer-free value under a key that holds no arena pointer.
+///
+/// The map's sorted view is what makes this different from a list, and the
+/// difference is smaller than it looks. The view's own storage is malloc'd, so
+/// a rewind cannot free it — what a rewind CAN invalidate is the values inside
+/// it, and those are exactly what this rule already constrains. A literal key
+/// is built once into permanent storage; an interpolated one is assembled in
+/// the arena each time round and is refused for that reason.
+///
+/// The entry point insists on seeing a put. A bare name is a chain in the
+/// recursion, because that is where the accumulator arrived from — but on its
+/// own it means a map merely passed through and read, which is the case the
+/// carry exists to evacuate and must not be licensed out of it.
+fn is_scalar_map_chain(
+    e: &Expr,
+    own: &str,
+    decl: &crate::ast::FnDecl,
+    inference: &infer::Inference,
+    decl_index: usize,
+    locals: &HashMap<&str, &Expr>,
+    mut_sites: &MutSites,
+) -> bool {
+    let Expr::App { head, .. } = e else { return false };
+    let Expr::Ident(n, _) = head.as_ref() else { return false };
+    matches!(n.as_str(), "put" | "builtin_put")
+        && map_chain_rest(e, own, decl, inference, decl_index, locals, mut_sites)
+}
+
+fn map_chain_rest(
+    e: &Expr,
+    own: &str,
+    decl: &crate::ast::FnDecl,
+    inference: &infer::Inference,
+    decl_index: usize,
+    locals: &HashMap<&str, &Expr>,
+    mut_sites: &MutSites,
+) -> bool {
+    match e {
+        Expr::Ident(p, _) => {
+            p == own
+                || locals.get(p.as_str()).is_some_and(|e2| {
+                    map_chain_rest(e2, own, decl, inference, decl_index, locals, mut_sites)
+                })
+        }
+        Expr::App { head, args, span, .. } => match head.as_ref() {
+            Expr::Ident(n, _)
+                if matches!(n.as_str(), "put" | "builtin_put")
+                    && args.len() == 3
+                    && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
+            {
+                literal_key(&args[1])
+                    && scalar_elem(&args[2], own, decl, inference, decl_index)
+                    && map_chain_rest(&args[0], own, decl, inference, decl_index, locals, mut_sites)
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// A key whose storage outlives any rewind: a number, or a string with nothing
+/// interpolated into it, which the emitter builds once into a permanent slot
+/// rather than in the arena.
+fn literal_key(e: &Expr) -> bool {
+    match e {
+        Expr::Int(_, _) => true,
+        Expr::Str(parts, _) => parts.iter().all(|p| matches!(p, TemplatePart::Lit(_))),
+        _ => false,
+    }
+}
+
 /// A list accumulator threaded through in-place pushes, every one of which
 /// pushes a scalar. The bytes license below rests on raw bytes holding no
 /// pointers; this rests on the same fact reached a different way, so the two
@@ -1263,6 +1335,12 @@ fn arg_ok(
         if set != 0
             && set & !FAIL & !LIST == 0
             && is_scalar_list_chain(arg, own, decl, inference, decl_index, &locals, mut_sites)
+        {
+            return true;
+        }
+        if set != 0
+            && set & !FAIL & !MAP == 0
+            && is_scalar_map_chain(arg, own, decl, inference, decl_index, &locals, mut_sites)
         {
             return true;
         }
@@ -1449,7 +1527,7 @@ mod tests {
     /// growing map, a growing byte builder, a list whose elements are
     /// pointers — which is what the second half here insists on.
     #[test]
-    fn a_growing_list_of_scalars_carries_and_a_growing_map_does_not() {
+    fn a_growing_collection_of_scalars_carries_unless_its_key_lives_in_the_arena() {
         let ints = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
         let (program, inference) = compiled(ints);
         let beats =
@@ -1459,12 +1537,26 @@ mod tests {
             "a growing list of scalars is still refused the carry"
         );
 
+        // A growing map carries too now, under a literal key: its pairs moved
+        // out of the arena the same way a list's items did, and its sorted
+        // view was always malloc'd, so the rewind can reach neither.
         let maps = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k\" n)\n\nmain = print \"{collect 3 {:}}\"\n";
         let (mp, mi) = compiled(maps);
         let mbeats = super::beat_loops(&mp, &mi, &crate::linear::in_place_pushes(&mp));
         assert!(
-            !mbeats.ids.contains_key(&("collect".to_string(), 2)),
-            "a growing map was licensed, and its storage is still in the arena"
+            mbeats.ids.contains_key(&("collect".to_string(), 2)),
+            "a growing map under a literal key is still refused"
+        );
+
+        // And an interpolated key is not, because that string is assembled in
+        // the arena each time round and the view would hold it after the
+        // rewind freed it. This is the boundary the licence stops at.
+        let keyed = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k{n}\" n)\n\nmain = print \"{collect 3 {:}}\"\n";
+        let (kp, ki) = compiled(keyed);
+        let kbeats = super::beat_loops(&kp, &ki, &crate::linear::in_place_pushes(&kp));
+        assert!(
+            !kbeats.ids.contains_key(&("collect".to_string(), 2)),
+            "a map keyed by an interpolation was licensed, and that key lives in the arena"
         );
     }
 
