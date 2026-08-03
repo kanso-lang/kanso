@@ -20,14 +20,10 @@ fn verdict(body: &str, branch: &str) -> i32 {
     let file = dir.join("sibling-goldens-move");
     std::fs::write(&file, body).expect("the file writes");
 
-    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join(".github/goldens-move-licenses.sh");
-    let done = Command::new("sh")
-        .arg(&script)
-        .arg(&file)
-        .arg(branch)
-        .output()
-        .expect("the check runs");
+    let script =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(".github/goldens-move-licenses.sh");
+    let done =
+        Command::new("sh").arg(&script).arg(&file).arg(branch).output().expect("the check runs");
     let _ = std::fs::remove_dir_all(&dir);
     done.status.code().unwrap_or(-1)
 }
@@ -41,7 +37,8 @@ fn a_file_licenses_the_branch_it_names() {
 /// The one that matters: this is the shape #724 left on main.
 #[test]
 fn a_file_left_behind_licenses_nobody() {
-    let body = "branch: the-branch-that-merged\nkq's carry_dedup moves, and it buys a linear walk.\n";
+    let body =
+        "branch: the-branch-that-merged\nkq's carry_dedup moves, and it buys a linear walk.\n";
     assert_eq!(
         verdict(body, "some-later-branch"),
         1,
