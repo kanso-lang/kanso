@@ -15742,3 +15742,33 @@ neither needs a decision from anybody.
 Recorded because two consecutive entries got the shape wrong in opposite
 directions: the first said the sweep was the leak when the sweep was dead, the
 second said a reader was redundant when both are load-bearing.
+
+## an err's reason renders with the compiler's spelling, not the program's (2026-08-02)
+
+Priority item 1 named two remaining import-path bugs. One of them is already
+fixed and the list is stale: `currying_across_the_import` runs and answers 6 and
+30, and `currying_survives_qualification` has been green. The other is real, and
+it is narrower than "err types across an import" suggested.
+
+Qualification renames a module's declarations to keep them unique across a
+merge, and that spelling reaches render:
+
+    run the file directly     trouble: slow_lane 7
+    import it                 trouble: lane/slow_lane 7
+
+Same program, same value, two answers. A reader never wrote `lane/slow_lane` —
+it is the module graph's bookkeeping — so the direct spelling is the right one
+and the import is what changed.
+
+Pinned in tests/golden/entryfile/an_err_reason_across_the_import, beside the
+subtype, typeset and currying fixtures that pin the same family. The spec is
+ignored because it fails, the way tests/accumulator_growth.rs is.
+
+THE FIX HAS TO LAND IN THREE PLACES AT ONCE or the differential law breaks it,
+and finding the third is the work: the interpreter renders from
+`Value::Record`'s `ty` in `render_seen`, the browser from `wasm_rt::type_name`,
+and native from a `k_type_name` switch that appears in the emitted IR but whose
+emitter I did not locate — `k_type_name` appears nowhere in src/ except as an
+`extern` declaration in runtime.c, while the generated .ll defines it. Whatever
+builds that switch is where the bare name has to come from, and doing it there
+fixes all three at once instead of stripping a prefix at three render sites.
