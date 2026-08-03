@@ -16518,3 +16518,41 @@ program fails, not only what they say. The interpreter refuses past its
 ten-thousand-frame guard; native gets to somewhere between twenty and a hundred
 thousand on a real stack. Both refuse, so the differential law holds, but the
 threshold is an engine property rather than a language one and nothing pins it.
+
+## a bare list is bytes to one engine, and four builtins show it (2026-08-03)
+
+The divergence recorded against `to_float` is four builtins wide, and three of
+them are worse than a disagreement about a diagnostic. Swept 2026-08-03:
+
+    text/to_float [1]                native refuses     interp: err "" is not a number
+    text/find2 [97] 0 97 98          native refuses     interp: 1
+    text/find2_below [97] 0 97 98 1  native refuses     interp: 1
+    text/append [97] "x"             native refuses     interp: [97 120]
+    text/utf8 [97]                   both answer "a"
+
+`to_float` at least fails on both. The other three SUCCEED under the interpreter
+and are refused by native, which means a program can work on one engine and be
+rejected by the other — not two answers to one question, but a question one
+engine will not hear.
+
+`utf8` agrees because it takes a list of codepoints by design, which is the
+thing that makes the rest ambiguous: a list of small ints already means
+something, and bytes are represented as one in the interpreter.
+
+GENUINE BYTES AGREE ON ALL FOUR — `text/bytes "ab"` through each of them reads
+identically. So the divergence needs a list that was never bytes, and a fix has
+to keep that agreement rather than trade one for the other.
+
+WHAT IS PINNED AND WHAT IS NOT. The agreeing half is a plain test that runs.
+The diverging half is an ignored one, and not for the usual reason: it is not an
+acceptance criterion for unfinished work, it is a sentence that cannot be
+written until somebody rules whether kanso's bytes are a type or a convention.
+Recording either engine's answer as correct would settle the question by
+choosing a fixture, which is the thing to avoid.
+
+The two ways out, unchanged and still not equivalent: native widens to accept a
+list of ints wherever it accepts bytes — cheap, and it says a list and bytes are
+interchangeable, which the native representation exists to deny. Or the
+interpreter gains a distinct bytes value — larger, touching every place it
+builds or reads bytes, and it removes the ambiguity at the root. Size is not the
+argument.
