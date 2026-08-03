@@ -16224,3 +16224,46 @@ The sequence is the point and is worth keeping: measure, get declined, fix the
 measurement on its own merits and bank nothing for it, then re-propose and let
 the objective rule. Each step is separately reviewable and none of them is an
 argument about whether the rule should apply this time.
+
+## the map accumulator stops at the chain's root, not the memory model (2026-08-03)
+
+Built the map half of the accumulator rewind, found the blocker is somewhere
+else entirely, reverted. The finding is worth more than the code was.
+
+TWO OF THE THREE PIECES WERE FREE OR EASY. `k_b_put_mut` has no
+`k_born_this_beat` guard in front of it at all, so the "proof crossing the
+boundary" problem that cost three attempts on the list side does not exist
+here. And the pairs buffer takes `k_buf_perm` at its grow site exactly the way
+a list's items do, four lines, mirroring the same `k_outlives_beat` test.
+
+The license reads a map accumulator whose every in-place put writes a scalar
+under a key holding no arena pointer. A string LITERAL qualifies as a key and
+an interpolation does not: the emitter builds a literal once into permanent
+storage, where `"k{n}"` is assembled in the arena each time round and would
+dangle the moment the rewind fired. That distinction is the whole of the map's
+extra difficulty over the list's, and it is expressible.
+
+AND IT NEVER FIRES. `KANSO_CHAIN_REPORT=1` on the fixture says
+
+    chain: dropped go/2
+
+The identity fixpoint is rooted at the FIRST parameter — "groups whose every
+arm returns the very object that arrived as its first parameter" — and the
+fixture is `fn go n m`, carrying its counter first and its accumulator second.
+So `go` does not return its first parameter, the group is dropped, the put is
+never proven unique, and no license downstream can apply to it.
+
+That is a limitation of the linearity analysis's rooting rather than anything
+about maps. `arg_ok` was taught to read the parameter at the position under
+test when the list license landed; `linear::in_place_pushes` was not, and it is
+the one that decides whether a site is a mut site at all.
+
+SO THE NEXT STEP IS NOT MEMORY-MODEL WORK. It is teaching the chain fixpoint
+that a group may thread an object through any parameter position, not only the
+first, and that is a change with a much wider blast radius than a license —
+every existing chain judgement is computed under the first-parameter
+assumption. It wants its own measurement and its own PR, and the map
+accumulator falls out of it rather than the other way round.
+
+tests/golden/mem/an_accumulator_loop_keeps_its_garbage.mem goes on describing a
+real cost, and now names the reason.
