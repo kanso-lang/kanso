@@ -22,7 +22,7 @@ description: "where kanso's taste comes from, how its two engines work, what it 
 
 <p><code>kanso build --release</code> is the shipping artifact. it lowers kanso straight to llvm ir — dispatch becomes branch chains, patterns become field offsets, every call in tail position is a guaranteed tail call, so ten million frames of mutual recursion run in constant stack — and hands the ir to clang.</p>
 
-<p>on a 188kb json benchmark, read at runtime and decoded 150 times, that binary decodes in about 0.78ms of cpu. hand-tuned <code>serde_json</code> takes about 0.87ms, a reasonably written rust parser using the same recursive-descent algorithm about 1.02ms, and go's <code>encoding/json</code> about 1.95ms. peak footprint is about 5.6mb, the smallest and flattest on the board. whole-program inference feeds the emitter, so paths it has proved carry no tag checks and no failure guards.</p>
+<p>on a 188kb json benchmark, read at runtime and decoded 150 times, that binary keeps pace with hand-tuned <code>serde_json</code> — the live board on the compiler page is remeasured by ci on every merge, interleaved so the ratio holds whatever the machine is doing. peak footprint is the smallest and flattest on the board. whole-program inference feeds the emitter, so paths it has proved carry no tag checks and no failure guards.</p>
 
 <p>the wider margin is on demand-driven work, where the clear kanso form runs about fifteen times ahead of rust as naturally written, because work nobody demands is never born. the deterministic scheduler credits wall time: real time a fiber spends computing counts against every pending sleep, so a concurrent program shrinks to its longest branch and the transcript stays byte-identical.</p>
 
