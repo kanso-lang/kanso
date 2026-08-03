@@ -15764,11 +15764,25 @@ Pinned in tests/golden/entryfile/an_err_reason_across_the_import, beside the
 subtype, typeset and currying fixtures that pin the same family. The spec is
 ignored because it fails, the way tests/accumulator_growth.rs is.
 
-THE FIX HAS TO LAND IN THREE PLACES AT ONCE or the differential law breaks it,
-and finding the third is the work: the interpreter renders from
-`Value::Record`'s `ty` in `render_seen`, the browser from `wasm_rt::type_name`,
-and native from a `k_type_name` switch that appears in the emitted IR but whose
-emitter I did not locate — `k_type_name` appears nowhere in src/ except as an
-`extern` declaration in runtime.c, while the generated .ll defines it. Whatever
-builds that switch is where the bare name has to come from, and doing it there
-fixes all three at once instead of stripping a prefix at three render sites.
+THE OBVIOUS FIX IS WRONG, AND THE CORPUS SAID SO. It was built: `k_type_name`
+is emitted by `emit_type_names` in codegen (grep missed it; a python scan found
+it), so a `k_bare_type_name` beside it covers native, and the interpreter's
+`bare_type_name` covers the browser too because wasm_rt imports `render` from
+eval. Two places, not three. Both engines then printed `slow_lane`.
+
+And two existing tests went red, both pinning the qualifier deliberately:
+cross_module_fields asserts the diagnostic `` `geo/label` has no field `x` ``
+and asserts `lib/pair 6 "v"` as RENDERED OUTPUT. Neither is a mistake. For an
+imported type `lib/pair` is exactly what the program wrote, and a diagnostic
+that says `label` where two modules declare one has told the reader nothing.
+
+So the rule is not "render bare". It is "render the name the asking module
+would write" — bare for a module's own type, qualified for an imported one —
+and render has no idea who is asking. Reverted.
+
+That makes this a language-surface question rather than a compiler-internal
+one: what a record prints as is something a user reads, and the two conventions
+genuinely conflict. Either rendering carries the asking module (a wider change
+than it sounds, since render is called from the runtime with no such context),
+or the qualified spelling is simply what a record prints everywhere and the
+fixture here is wrong to expect otherwise. That is a gavel.

@@ -164,14 +164,18 @@ fn a_typeset_keeps_its_members_across_an_import() {
 /// wrote `lane/slow_lane` and should never be shown it. Run the module
 /// directly and the import must not change what the program prints.
 ///
-/// Ignored because it fails, the way tests/accumulator_growth.rs is: it is the
-/// acceptance criterion for a fix not yet built, not a guard on one that is.
-/// `cargo test -- --ignored` shows the gap. The fix has to land in all three
-/// engines at once or the differential law breaks it — the interpreter renders
-/// from `Value::Record`'s `ty`, native from the `k_type_name` switch the
-/// backend emits, the browser from `wasm_rt::type_name`.
+/// Ignored because it fails, and because the obvious fix is wrong. Stripping
+/// the qualifier at render breaks two tests that pin it on purpose:
+/// cross_module_fields asserts a diagnostic naming `geo/label`, and asserts
+/// `lib/pair 6 "v"` as rendered output. Both are right for an IMPORTED type —
+/// `lib/pair` is what that program wrote. The bug is only for a module's OWN
+/// type, which it wrote bare and never qualified.
+///
+/// So render would have to know which module is asking, which it does not, and
+/// "what does a record print as" is a language-surface question rather than a
+/// compiler-internal one. See design/compiler-log.md.
 #[test]
-#[ignore = "the qualified spelling still reaches render; see design/compiler-log.md"]
+#[ignore = "the two conventions collide; the rule is a gavel, not a fix"]
 fn an_err_reason_renders_unqualified_across_an_import() {
     let dir = "tests/golden/entryfile/an_err_reason_across_the_import";
     let answer = |target: &str, engine: &[&str]| {
