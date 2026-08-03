@@ -15828,3 +15828,50 @@ the triage captured them merged. Says nothing about the compiler.
 So item 1 is one bug away from done, not two, and the bug is not either of the
 two the list names — currying across an import already works and has a green
 spec. What blocks item 2 is that bug plus giving three samples a `pub play`.
+
+## the unselected arm is three faults stacked, not one (2026-08-02)
+
+The one real bug the re-triage left. A module's arm for its OWN type is never
+selected once that module is imported, and the value falls through to primitive
+rendering with no error at all:
+
+    fn to_string _:money      run directly   custom: $3.50
+      declared beside          imported       custom: 350
+      `type money int`
+
+Five lines reproduce it. Three separate faults sit on top of each other, and
+each was only visible after the one above it was lifted.
+
+FIRST, THE MERGE NEVER RUNS FOR A DEPENDENCY. `merge_ambient_arms_with` is
+gated on `AMBIENT_ROOT`, a one-shot thread-local true only for the root module,
+so a dependency's `to_string` is never renamed to `render/to_string` and never
+joins the group. The ownership check inside — an arm must match a type its own
+module defines — already states the real rule per module, so the root gate is
+both redundant and stricter than the rule it guards. Lifting it makes the merge
+fire: a probe at the rename site prints for both builds.
+
+SECOND, QUALIFICATION UNDOES THE MERGE. With the arm grouped, the dependency
+loader renames it again, and the merged program ends up holding
+
+    money/render/to_string      (the dependency's arm, out of the group)
+    render/to_string            (the builtin arms)
+
+`render/to_string` is one group across every module, so prefixing it produces a
+name in no group at all. The precedent for the fix is four lines above the
+offending rename: a getter is already exempt, "structural, not owned: one group
+per field name across every module... only its NAME is exempt". An ambient arm
+is exactly that. A name already carrying a `/` was written by the compiler, not
+the module, and is not the module's to rename.
+
+THIRD, AND WHERE THIS STOPS: the dependency's arm appears THREE times in the
+merged program. With the first two faults fixed the three become visible to
+dispatch and it refuses — "overlapping overloads of `render/to_string` are
+illegal", which is the coherence rule doing its job on a duplication that was
+previously hidden by the wrong name. Something in the load path adds the arm
+once per pass or once per bare-name clone, and that duplication has to be
+understood before either of the other two fixes can land.
+
+All three reverted; the tree is back to baseline. The order to attack them is
+the reverse of the order they were found: find why the arm is tripled, then the
+qualification exemption, then the root gate. The first two fixes are each two
+lines and are written above.
