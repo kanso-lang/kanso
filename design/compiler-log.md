@@ -16152,3 +16152,43 @@ gate's premise is measured false for lists, the ch10 numbers above are the
 evidence, and the thing standing between here and the win is corpus breadth
 rather than a memory-model question. When the basket reaches a scale where an
 arena peak can move, this is four lines and a test inversion away.
+
+## the basket gets a scale where the arena can feel it (2026-08-02)
+
+The entry above ended with a change the objective declined and a reason it
+should not have: the corpus was too small to see what the change bought. This
+is that corpus fixed, and it is deliberately a separate change from the one it
+unblocks.
+
+WHAT WAS WRONG. Every accumulator shape in bench/basket worked at four thousand
+elements, which is sixty-four kilobytes against a one-megabyte arena block. A
+change that moves an accumulator's storage out of the arena entirely therefore
+left `basket_peak_bytes` exactly where it was, and the index read a real win as
+nothing. The gate widening is that failure with numbers on it: byte-identical
+on the basket, and a quarter of the arena on the same program at a hundred
+thousand.
+
+WHAT CHANGED. One shape, `bulk_build`, at a hundred thousand elements. The
+basket's arena peak goes 2,097,152 to 5,242,896 and its runtime 25 ms to 29 ms,
+which is what a corpus costs when it is asked to hold something.
+
+THE SENSITIVITY IS THE POINT, and it was measured rather than assumed. With the
+widened gate applied to the new basket, the peak falls 5,242,896 to 2,097,152
+against eighteen more allocations. Before, that same change moved the peak by
+zero. The index can now weigh the trade it was previously blind to.
+
+RE-BASELINED SO THE CORPUS CHANGE BANKS NOTHING. `basket_allocs` and
+`basket_peak_bytes` already carried real banked improvement, so resetting them
+to ratio one — the convention when a term is NEW — would have thrown that away
+and cratered the score for a change that improved no compiler. Instead each
+baseline is scaled by exactly the factor its workload grew:
+
+    basket_allocs       91,864 -> 91,901       (x 20,115 / 20,107)
+    basket_peak_bytes   69,206,016 -> 173,015,568  (x 5,242,896 / 2,097,152)
+
+Every ratio is held fixed by construction, so welfare reads 75.65 before and
+75.65 after. The corpus change is measurement-neutral, which is the only way to
+widen a corpus without the widening itself becoming an argument.
+
+The gate widening is now a change the objective can judge on its merits, and
+judging it is the next thing rather than part of this one.
