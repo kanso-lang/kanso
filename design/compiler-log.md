@@ -16628,3 +16628,36 @@ wrong for a genuinely imported type where `lib/pair` is what the program says.
 
 Keeping the two apart matters because the first being fixed made it tempting to
 call the second fixed too. It is not, and it still decides five micro goldens.
+## the basket does text now, because it did none (2026-08-03)
+
+Four pull requests improving text handling each moved welfare by nothing, and
+the four-dimension gavel already reframed why: not a missing term — text work is
+run speed and run memory like anything else — but a missing workload. The
+counters say how missing:
+
+    utf8_bytes    0
+    find2_calls   0
+    append_fast   0
+
+The basket built strings by interpolation and joined a few, and touched no text
+KERNEL at all. So a text improvement was invisible, and a deleted text kernel
+would have left every presence counter reading zero, which is the same blindness
+wearing its other face.
+
+WHAT WENT IN is what a text tool does: build a fifty-kilobyte document, cut it
+into lines, take every line through bytes and back through utf8, rejoin them,
+read a window out of the middle, and trim it. `utf8_bytes` goes 0 to 48,893 and
+basket allocations 20,133 to 28,192, for two milliseconds.
+
+`find2` and `append_fast` stay at zero here ON PURPOSE. Both are exercised by
+lib/json — `text/append` all through the encoder, `find2` in its escape scan —
+so the encode vein already watches them, and paying for them twice would buy
+nothing. What the basket adds is the coverage nothing had.
+
+RE-BASELINED THE SAME WAY #729 WAS: `basket_allocs` scaled by exactly the factor
+its workload grew, 91,901 to 128,688, so every ratio holds and welfare reads
+75.68 either side. `basket_peak_bytes` is untouched because the peak did not
+move — the document is small beside the hundred-thousand-element accumulator
+that already sets it.
+
+Widening a corpus has to bank nothing, or the widening becomes the argument.
