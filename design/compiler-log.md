@@ -16110,3 +16110,45 @@ motivated `accumulator_grows` and run these same two sizes against it, then put
 kq through the gating job, since kq's print path is full of growing
 accumulators. If it holds, the basket's list accumulator starts being reclaimed
 and welfare gains the ability to see this whole class of change.
+
+## welfare declined the gate widening, and that is the machinery working (2026-08-02)
+
+Built, measured, declined. The follow-up the entry above asked for was done in
+full, the gate's premise turned out to be genuinely retired, and the objective
+refused the change anyway. Recording it so nobody spends the afternoon again.
+
+WHAT WAS CHECKED, in the order the entry named. The gate was written for a real
+program: the ch10 counters sample, `build (n - 1) (push acc n)`, which went
+33 KB to 16 MB of traffic when it was carried. Measured against that exact
+program with the widening applied:
+
+    n =   1,000   allocs=12   alloc_bytes=43,936      arena_peak=1,048,576
+    n =  10,000   allocs=14   alloc_bytes=699,328     arena_peak=1,048,576
+    n = 100,000   allocs=15   alloc_bytes=2,796,496   arena_peak=1,048,576
+
+Byte-identical to the pinned golden at 1,000 and 10,000. At 100,000 the arena
+peak FALLS from 4,194,320 to 1,048,576, a quarter of what it held. The 16 MB
+blowup does not reappear, because `k_buf_perm` moved the storage out of the
+arena and there is nothing left for a rewind to copy. kq is green throughout:
+twelve fixture goldens byte-identical to jq, both cost goldens unchanged, the
+scale gate linear.
+
+AND WELFARE FALLS: 75.64 against a floor of 75.65. The basket gains thirteen
+allocations and eighty-six kilobytes less arena buffer, and its peak does not
+move at all — because the basket builds four thousand elements, and the win
+this change buys does not appear until a hundred thousand. So the model sees
+the cost and none of the benefit, and by the model the change is a small loss.
+
+THE FLOOR DOES NOT MOVE FOR IT. That is the rule and it is the right rule here:
+lowering the floor to admit a change, while leaving the weights alone, is
+declaring the objective wrong without saying so. The argument available is that
+the CORPUS is too small to see this class of win, which is true and is already
+written down — but making the basket bigger inside this change, to flip its own
+verdict, is the same error wearing a different coat. The corpus gets wider on
+its own merits or not at all.
+
+So the widening goes, and what it leaves behind is worth more than it was: the
+gate's premise is measured false for lists, the ch10 numbers above are the
+evidence, and the thing standing between here and the win is corpus breadth
+rather than a memory-model question. When the basket reaches a scale where an
+arena peak can move, this is four lines and a test inversion away.
