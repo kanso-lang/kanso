@@ -4135,12 +4135,19 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         long long need = 2 * (m->len + 1);
         long long cap = 4;
         while (cap < need) cap <<= 1;
-        KValue* np = k_buf(cap);
+        /* An accumulator's pairs go outside the arena for the same reason a
+           list's items do: the loop's rewind reclaims the iteration's garbage
+           without reaching what the iteration was building. */
+        KValue* np = k_outlives_beat(m) ? k_buf_perm(cap) : k_buf(cap);
         memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
         np[m->len * 2] = key;
         np[m->len * 2 + 1] = val;
         k_buf_of(np)->used = m->len * 2 + 2;
-        k_buf_donate(m->pairs);
+        if (k_buf_of(m->pairs)->cap < 0) {
+            free(k_buf_of(m->pairs));
+        } else {
+            k_buf_donate(m->pairs);
+        }
         m->pairs = np;
         m->len++;
         k_map_view_insert(m, key, val);

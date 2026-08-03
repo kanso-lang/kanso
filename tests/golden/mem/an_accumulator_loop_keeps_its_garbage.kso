@@ -2,14 +2,16 @@
 # temporary is never stored: it is bound, its length is read, and it is
 # dropped. Threading an int instead, the same loop reclaims every one of them.
 #
-# Threading a map it reclaims none, because the cluster carries no beat
-# bracket at all and so has no rewind point anywhere in it. The numbers below
-# are that: allocs and arena blocks that grow with the iteration count for a
-# live set of one map with one key.
+# Threading a map it now reclaims too: beat_iters below is the bracket being
+# emitted, where it read zero for as long as a map's pairs lived in the arena.
 #
-# This golden exists to be regenerated. When a threaded container's storage
-# moves out of the rewound region, the bracket can be emitted and these
-# numbers fall — and the diff is the evidence that it worked.
+# The other numbers do not fall here, and that is a property of the size
+# rather than of the fix. Twenty thousand iterations of a one-key map fit in a
+# single arena block whichever way the storage goes, and one block is the
+# floor — so this fixture cannot show the reclaim even now that it happens.
+# tests/map_accumulator_peak.rs runs the same program at ten times the count,
+# where the gap is nine blocks against one, and asserts the ratio rather than
+# a constant.
 fn go 0 m
   print (length (entries m))
 

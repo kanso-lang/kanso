@@ -16318,3 +16318,48 @@ keeps that honest — `"a" + "b"` answers a string, which is a pointer, and its
 operands fail the same test. Both halves are pinned. It moves no counter on any
 of the four veins and welfare holds at 75.68, so it is a completeness fix with
 a test rather than a win with a number, and it is recorded as one.
+
+## the map accumulator lands, and the view was never the danger it looked (2026-08-03)
+
+`tests/golden/mem/an_accumulator_loop_keeps_its_garbage.mem` has carried the
+sentence "this golden exists to be regenerated" since the beat machinery was
+built. It is regenerated: `beat_iters` 0 -> 20,000, the bracket emitted where a
+threaded map never got one.
+
+    map-threading loop, 200,000 iterations
+    arena blocks       9 -> 1
+    arena peak    9,437,184 -> 1,048,576
+    allocs          282,360 -> 282,360   (identical)
+
+Same live set — one map, one key — a ninth of the arena to hold it, and not one
+extra allocation paid for the move.
+
+THE VIEW, WHICH THE ENTRY ABOVE CALLED THE BLOCKER. `map_threaded_loop_carries_
+the_map` says a map "caches an above-mark sorted view into the below-mark
+header", and reading `k_beat_rewind` confirmed it never resets one. Both true,
+and together they do not mean what they look like: `k_view_alloc` MALLOCS. The
+view's own storage was never in the arena and no rewind could ever free it.
+
+What a rewind can invalidate is the values inside the view, and those are what
+the licence already constrains — a pointer-free value under a key that is a
+literal, which the emitter builds once into permanent storage. The condition
+that makes the pairs safe makes the view safe, for the same reason, and nothing
+extra was needed.
+
+THE ACTUAL BUG IN THE FIRST ATTEMPT was smaller and entirely mine: the chain
+test accepted a bare `Expr::Ident` as a whole chain, so a map merely passed
+through and read was licensed — exactly the shape the carry exists to evacuate,
+and exactly what that test caught. The entry point now insists on seeing a
+`put`; a bare name remains a chain inside the recursion, because that is where
+the accumulator arrived from. The read-only fixture goes back to being carried
+and its test is green untouched.
+
+So three entries of diagnosis produced: one wrong (the chain's rooting), one
+half-right (the view, real but already handled), and one correct (a missing
+`put` requirement). The measurement was the same in all three.
+
+Every vein holds: four cost goldens byte-identical, welfare at 75.68, kq green
+with twelve fixture goldens matching jq and its scale gate linear. The reclaim
+is invisible to the mem golden at twenty thousand iterations because one block
+is the floor, so tests/map_accumulator_peak.rs runs the same program at ten
+times the count and asserts the ratio.
