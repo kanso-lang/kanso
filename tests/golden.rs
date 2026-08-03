@@ -273,11 +273,8 @@ fn micro_corpus_agrees_when_it_is_imported() {
 
     let mut covered = 0;
     for program in kso_files(&source) {
-        let name = program
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .expect("kso files have names")
-            .to_string();
+        let name =
+            program.file_stem().and_then(|s| s.to_str()).expect("kso files have names").to_string();
         let text = std::fs::read_to_string(&program).expect("the sample reads");
         if !text.contains("\npub play") || RECORDS_PRINT_THEIR_MODULE.contains(&name.as_str()) {
             continue;
@@ -296,7 +293,11 @@ fn micro_corpus_agrees_when_it_is_imported() {
                 expected(&program, "out"),
                 "{name} answers differently as a library (extra {extra:?})"
             );
-            assert_eq!(output.status.code(), Some(0), "{name} as a library exits 0 (extra {extra:?})");
+            assert_eq!(
+                output.status.code(),
+                Some(0),
+                "{name} as a library exits 0 (extra {extra:?})"
+            );
         }
     }
 
