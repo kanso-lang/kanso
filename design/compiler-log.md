@@ -17119,3 +17119,47 @@ pin bump is the gate.
 Verified in both directions before shipping: a doctored cost golden exits 1 by
 default and 0 under report, and a broken FIXTURE golden exits 1 under report
 too, which is the assertion the whole split rests on.
+
+## the numbers land on the run page, which is the whole of technique three
+
+Clay asked how CI-updated artifacts actually work and then ruled on the answer:
+"#3 and #4 are the only sensible ones to use."
+
+The four, and why two survive:
+
+  1  COMMIT BACK TO THE PR BRANCH — rejected. A GITHUB_TOKEN push does not
+     trigger further workflows, fork PRs get a read-only token, it races the
+     author's own pushes, and every diff carries a regenerated blob.
+  2  upload-artifact — rejected. The URL is authenticated and zipped, so it
+     cannot be hot-linked or embedded. Fine to download, useless to see.
+  3  $GITHUB_STEP_SUMMARY — kept. Markdown on the run page, tables and mermaid
+     rendered natively, no hosting, no commits, no token.
+  4  DATA ON A SIDE BRANCH, SERVED THROUGH PAGES — kept. Appended on push to
+     main rather than on a PR, which sidesteps the fork-token problem
+     entirely; Pages serves correct content types where raw.githubusercontent
+     hands SVG back as text/plain and nothing renders.
+
+I had also proposed a sticky PR comment and it was the weakest of the four:
+identical markdown to the step summary, with `pull-requests: write`, an
+upsert-by-marker loop that is a known source of duplicate-comment bugs, and no
+working token on a fork. Dropped without being built.
+
+THE TWO KEPT ONES DO NOT OVERLAP, which is why both. Three is per-run and
+ephemeral — what did THIS change do. Four is durable and cumulative — what has
+happened over time. That is exactly the existing split between the trend gate
+and the chart, and four was already built: history.jsonl appended on merge, the
+compiler page served by Pages.
+
+SO ONLY THREE WAS MISSING. Welfare's breakdown, the trend gate's per-counter
+listing and kq's suite all printed into a job log where reading them means
+opening the run and scrolling. They now also write to the step summary, which
+costs a redirect per script and no new mechanism.
+
+The shape preserves the verdict, which is the part worth checking rather than
+assuming: run the script with `set +e`, capture the exit code, emit the summary,
+then `exit $verdict`. Verified in both directions before shipping — a non-zero
+status propagates and a zero one does not become a failure.
+
+This is also what stops #750 from meaning "ignored". That change downgraded kq's
+stored numbers from gating to reporting, and a reported number needs somewhere
+it is read.
