@@ -1,5 +1,10 @@
-# The same shape one function over: the argument is a value of the wrong kind
-# and the check pass lets it through, so the refusal is the builtin's own.
+# A literal is refused at compile time now, naming the argument and where
+# it is, so this hands the builtin a value through a binding the check
+# cannot see through. That is the shape a real program has when a value
+# turns out to be the wrong kind at run time, and it is the only route
+# left to the builtin's own refusal.
 import "std/text"
 
-pub play = print "{text/chars 5}"
+pub play =
+  n = 5
+  print "{text/chars n}"

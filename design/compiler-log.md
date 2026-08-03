@@ -16556,3 +16556,41 @@ interchangeable, which the native representation exists to deny. Or the
 interpreter gains a distinct bytes value — larger, touching every place it
 builds or reads bytes, and it removes the ambiguity at the root. Size is not the
 argument.
+
+## a std wrapper stopped hiding the builtin it forwards to (2026-08-03)
+
+`print 5` is refused at compile time, naming the argument, its type and where it
+sits. `text/chars 5` answered a bare runtime string naming neither the call site
+nor the value. The sweep of 2026-08-02 recorded that as "the check pass covers
+some builtins and not others, and which ones is not a decision anybody made".
+It was not a decision — it was one line.
+
+    let shadowed = groups.contains_key(&(name.as_str(), args.len()));
+
+That guard exists so a program declaring its own `run` does not inherit the
+builtin's demands, which is right. A std wrapper is a declaration too, and it
+FORWARDS to the builtin rather than replacing it — so every builtin somebody had
+written a wrapper over went quiet. Which names got a good message came down to
+whether `lib/` happened to wrap them.
+
+`inline::aliases` already knows a wrapper from a redefinition: it is a function
+whose whole body is one `builtin_*` call threading its parameters. Asking it is
+two lines, and `text/split 5`, `text/bytes 5`, `text/chars 5` and the io family
+now refuse at compile time with a position and a type.
+
+WHAT THAT COST, AND WHY IT IS NOT A LOSS. Eleven runtime goldens pinned exactly
+the messages this replaces, and promoting them to compile errors would have
+deleted coverage of guards that are still reachable — a value can be the wrong
+kind at run time without being a literal at the call site. Each fixture now
+binds the value first, which the literal walk cannot see through, so the
+builtin's own refusal is reached by the route a real program takes. Eleven
+runtime refusals still pinned, and eleven better messages for the literal case.
+
+THE BOUNDARY IS IN THE ERROR FIXTURE ON PURPOSE. `chopped 5`, where the literal
+is handed through a function of the reader's own, is not refused and sits beside
+the two that are. The check reads literals at call sites; that is the same limit
+`print` always had, and naming it stops the two refusals reading as a promise of
+more.
+
+Nothing else in the tree newly refuses — every lib and every example still
+checks clean, welfare holds at 75.68 and the trend gate is quiet.
