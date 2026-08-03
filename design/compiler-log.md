@@ -17333,3 +17333,26 @@ Main needs no second write. What the PR committed IS the measurement of the
 code that merges, and the commit-back step now runs only where a head exists
 to push to. The perf-history append is untouched — that branch is unprotected,
 which is precisely why the series lives there.
+## the third stale premise in one week, and the probe that measured a corpse
+
+Read-write map uniqueness sat in pending-gavels as entry 2, waiting on Clay.
+He declined it in a sentence — not his question, a compiler-logistics issue —
+which matches the standing rule that internals are settled by measurement.
+Measuring it closed it: the recorded 2.0 GB quadratic 10k tally is dead linear
+today at ~1.8 allocations per iteration, flat peak, four sizes checked. The
+read-side compaction killed it and nobody updated the entry.
+
+That is the third open thread this week whose premise was stale — the chart
+that "could not be extended by CI", the carry quadratic, and now this. All
+three share the mechanism this log keeps finding in other clothes: an
+append-only record says "open" forever, and repeating a claim is not the same
+as re-measuring it. The task list now holds only startable work; the gavels
+file now holds only gavels; and a thread's next reader should assume its
+numbers describe the day they were written.
+
+THE PROBE TRAP, kept because it nearly shipped a wrong conclusion the other
+way: the first fixture read `m[k] + 1` over unseeded keys, so `none + 1`
+refused on the first iteration and the counters measured a corpse — five
+allocations, beautifully flat, meaning nothing. A measurement is not the
+counters alone; it is the counters of a program whose OUTPUT was checked.
+Flat-at-five was too good, which is the only reason it was caught.

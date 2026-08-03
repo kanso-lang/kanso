@@ -242,17 +242,20 @@ visibility site keeps patterns and dot-reads uniform. Recommendation:
 per-field pub, because it is the existing rule made uniform rather
 than an addition.
 
-## 2. Read-write map uniqueness
+## 2. RECLASSIFIED 2026-08-03: read-write map uniqueness was never a gavel
 
-`linear.rs` kills uniqueness on any second mention, so read-then-write
-shapes (`put m k (bump m[k])` in every spelling) never select `put_mut`,
-and write-only builds never cache the view compaction adopts. Two
-designs on the table: read-before-consume tolerance in linear.rs (the
-FBIP core; needs a demand interlock so a thunked read forced after the
-mutation cannot see the wrong map) or capped view inheritance on plain
-`put` (a policy cliff). This single ruling unblocks three threads: the
-quadratic-maps fix (the 2.0 GB 10k tally), cohort-license widening to
-heap arguments, and the kq import-boundary gap.
+Clay, declining it: "This isn't a question for me... it's a deep technical
+compiler logistics issue." Correct — whether the linearity fixpoint tolerates
+a read before a consume changes nothing a kanso developer observes, and the
+standing rule is that compiler internals are settled by measurement.
+
+Measurement then closed it. The recorded consequence — "the quadratic 10k
+tally at 2.0 GB" — does not reproduce: a seeded 50-key read-write tally is
+dead linear at ~1.8 allocations per iteration with a flat peak (4,653 /
+9,203 / 18,303 / 36,503 allocs across 2,500 to 20,000 iterations). The
+quadratic died when the read-side compaction landed, and this entry was never
+updated. What remains is roughly one avoidable allocation per iteration,
+which is an optimization, not a defect, and is recorded in the log.
 
 ## 3. Dependency to_string arms
 
