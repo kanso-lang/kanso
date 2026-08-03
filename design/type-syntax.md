@@ -58,7 +58,7 @@ A type declares its constraints up front, and uses them in its fields:
 ```
 type <k>foo
   name:k
-  friend_names:k[]
+  friend_names:[]k
 ```
 
 `<k>` says that `k` is a type parameter — a name standing for whatever type

@@ -1502,9 +1502,14 @@ impl<'a> P<'a> {
         while matches!(self.peek(), Some(Tok::LBracket)) {
             self.pos += 1;
             match self.peek() {
+                // The postfix slice, which the design rules out and the parser
+                // accepted anyway — so a slice had two spellings in a language
+                // whose position is that the canonical form is the grammar.
                 Some(Tok::RBracket) => {
-                    self.pos += 1;
-                    ty.push_str("[]");
+                    return Err(self.err(format!(
+                        "a slice is `[]{ty}`, written before the type — `{ty}[]` reads \
+                         inside-out as soon as anything nests"
+                    )));
                 }
                 Some(Tok::Ident(key)) => {
                     let key = key.clone();
