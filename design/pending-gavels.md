@@ -665,6 +665,30 @@ it to a dataflow property is the unblock. It is a language-surface
 question rather than an allocator one, which is why it sits here rather
 than being settled by measurement.
 
+## 17. Does printing a lazy sequence force it
+
+`print "{list/map [1 2 3] (x -> x * 2)}"` shows the adapter chain rather
+than the elements. Rendering the elements means forcing, and `cycled`
+is infinite — so the question is whether print forces, forces a bounded
+prefix, or keeps showing the chain and makes the user ask for
+`to_list`. Route A (an arm in `lib/render`) was unblocked by #723, so
+the mechanism exists whichever way this goes; what is missing is the
+semantics.
+
+## 18. `pure` as a record type (Clay's proposal)
+
+Clay proposed `type answer / value` plus one executor arm per engine.
+Recorded when it was raised and never taken further. It touches how a
+pure value and a description relate, which is the same seam as 19
+below, so the two probably want deciding together.
+
+## 19. Should io infect — auto-lifting operators over descriptions
+
+Whether an operator applied to a description should lift automatically,
+so a description behaves like the value it will produce. The pull is
+ergonomic; the cost is that the type of an expression stops being
+readable from the expression. Raised, not argued.
+
 ## Also open, not blocking any current work
 
 - **TRMC v2**: license operands by inferred set (any provably-int
@@ -682,3 +706,13 @@ than being settled by measurement.
   survivor-ratio guard: the multiplier is a judgment call; the principle
   (the dance's transient must stay at threshold scale) is recorded in
   the log.
+- **An `os` package** (Clay): what moves out of `io` — `MkdirAll` was
+  the example. A surface question, cheap once the shape is agreed.
+- **Sequencing more than two binds prettily** (Clay's
+  `multiplyTwoRandoms`): today the third bind nests. Wants a form, not
+  a mechanism.
+- **Dot chains route around accessor privacy** (Demeter): a chain can
+  reach a field the owning module would not expose directly. Low
+  priority, and a real hole in the privacy story.
+- **A one-line function form**, `fn agreed _ _ true = ""`: sugar for
+  arms whose body is a single expression.
