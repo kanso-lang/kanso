@@ -16898,3 +16898,15 @@ unmoved for the reason above.
 GOLDEN: tests/golden/mem/a_transient_maps_view_is_freed, watched red by
 disabling the registration — `view_frees=0` against `20000` with every other
 counter in the file identical, which is the narrowest a mem golden gets.
+
+## the spent licence, removed on purpose rather than left to be inert
+
+#745's `sibling-goldens-move` is on main, which is the shape #724 left and
+#736 was written to make harmless. It is harmless: it names a merged branch,
+`goldens-move-licenses.sh` returns 1 for anything else, and
+`a_file_left_behind_licenses_nobody` pins exactly that.
+
+It is deleted anyway. A rule that fails safe is not a reason to leave litter,
+and a reader who finds a licence on main has to go and check which of the two
+it is before they can trust the gate. The self-expiry is the floor, not the
+standard.
