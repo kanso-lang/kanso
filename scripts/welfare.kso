@@ -342,51 +342,32 @@ fn chosen now base held value _ false
 # of the code.
 unsaid = "--set records why the objective moved: welfare --set \"reason\"\n"
 
-# A fall is a trade, and a trade has two sides. Refusing the floor while
-# accepting any sentence at all let a drop be banked with the word "whatever" —
-# the gate said "argue the weights" and nothing made the argument happen.
+# RULED (Clay, 2026-08-03): welfare cannot fall, full stop. Not with a
+# reason, not with a named trade. If a change would lower it, the change is
+# optimized until it does not, and if that is genuinely impossible the work
+# stops and the question goes to Clay in conversation. The tool therefore
+# never lowers the floor; the only override is a human editing
+# bench/welfare_floor.json directly, which a reviewer then sees in the diff.
 #
-# The words are the ones .github/goldens-move-licenses.sh asks for, so the
-# habit that satisfies one gate satisfies the other.
+# The earlier version accepted a fall whose reason named a compensating
+# gain. That was already the second version of this gate — the first took
+# any sentence at all, and a twenty-three point drop banked with the word
+# "whatever". Each loosening looked reasonable and each was an escape.
 unbought = """
-  --set is lowering the objective, and the reason names nothing it buys.
+  --set is lowering the objective, and --set cannot do that.
 
-  A fall means the change is worse by the weights as written. Either it goes,
-  or the claim is that the weights are wrong — and that is an argument about
-  the weights, made in the reason, not a number quietly moved past.
-
-  Say what got better, in those words: better, buys, gain, in exchange.
+  A fall means the change is worse by the project's stated preferences.
+  Optimize until the number holds. If that is truly impossible, this is
+  Clay's call to make, in conversation — not a flag's. (The floor file
+  itself can be edited by hand, where a reviewer will see it.)
 """
-
-gain_words = ["better" "buys" "gain" "in exchange"]
-
-fn names_a_gain? reason
-  said = lowered reason
-  list/any? gain_words (w -> length (text/split said w) > 1)
-
-fn lowered s
-  parts = list/map (text/chars s) lower_char
-  text/join (list/to_list parts) ""
-
-fn lower_char c
-  shifted (text/char_code c)
-
-fn shifted code
-  text/from_code (dropped code (code >= 65 and code <= 90))
-
-fn dropped code true
-  code + 32
-
-fn dropped code false
-  code
 
 fn banked _ _ _ ""
   io/write_err unsaid . (_ -> io/exit 2)
 
 fn banked base held value reason
   fall = held["floor"]! - value
-  bought = names_a_gain? reason
-  paid base held value reason (fall > 0.01 and not bought)
+  paid base held value reason (fall > 0.01)
 
 fn paid _ _ _ _ true
   io/write_err unbought . (_ -> io/exit 2)

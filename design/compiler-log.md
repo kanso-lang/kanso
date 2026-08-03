@@ -17192,3 +17192,38 @@ shipped and say so — the `>>` diagnostic names the operator on all three
 engines without making the loop run, and the bytes divergence is pinned by a
 test carrying its unwritable half `#[ignore]`d, which is not an unfinished
 acceptance criterion but an assertion nobody can write down yet.
+
+## GAVEL: welfare cannot fall, and the gates have two severities
+
+Clay, 2026-08-03, three rulings in one sitting, recorded together because they
+are one design.
+
+ONE. The welfare index is a HARD gate. It cannot regress — not with a reason,
+not with a named trade, not for a new language feature. A change that would
+lower it gets optimized until it does not, and if that is genuinely impossible
+the work stops and the question goes to Clay in conversation. No feature-utility
+term is added to the model ("we'd never want to just outright turn down a
+feature, so probably better to just measure welfare and make whatever
+optimizations are necessary"). `--set` therefore refuses every fall; the only
+mechanical override is editing bench/welfare_floor.json by hand, where a
+reviewer sees it in a diff. This closes a gate that had already been loosened
+twice — first any sentence banked a fall, then any sentence naming a gain did.
+
+TWO. Every PER-COUNTER check is the softer pair: no Pareto dis-improvement
+(something worse with nothing better fails outright), and any single regression
+requires investigation to make sure it is justified. That is the trend gate's
+existing shape, now ratified as the intended severity rather than an interim.
+The candidates floated for a harder class — presence counters hitting zero,
+conservation gaps, fast-path abandonment, superlinear scaling — stay in the
+soft class, and are fine to graph and to test at that severity.
+
+THREE. The published graph is five series, all deterministic: the four core
+metrics (run speed, run memory, compile speed, compile memory) plus the welfare
+aggregate. The cross-language board is the one wall-clock surface that remains,
+because a competitor's cost cannot be counted by kanso's counters — it is
+published as a RELATIVE metric with the noise caveat stated, averaged over
+several runs.
+
+The foundational ask behind all three, in Clay's words: "i can always go to the
+latest main and see whatever performance run output came from the most recently
+merged PR, full stop. no ambiguity."

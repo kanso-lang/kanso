@@ -1,17 +1,16 @@
-//! Lowering the objective needs a reason that names what the drop buys.
+//! Lowering the objective is not a thing `--set` can do at all.
 //!
-//! The gate refuses a fall and tells you to argue the weights, but `--set`
-//! took any sentence at all in either direction — so a twenty-three point
-//! drop could be banked with the word "whatever" and the argument the message
-//! asked for never had to happen. That is the Pareto failure the objective
-//! exists to forbid: something worse, nothing better, nobody saying so.
+//! RULED (Clay, 2026-08-03): welfare cannot fall. Not with a reason, not
+//! with a named trade. This gate went through two weaker versions — the
+//! first took any sentence ("whatever" banked a twenty-three point drop),
+//! the second demanded the reason name a compensating gain — and each
+//! loosening was an escape that looked reasonable. Now the tool refuses a
+//! fall unconditionally; if a change genuinely cannot hold the number, that
+//! is a conversation with Clay, and the only mechanical override is editing
+//! bench/welfare_floor.json by hand where a reviewer sees it in the diff.
 //!
-//! A RISE is not a trade and stays free to bank. Requiring a gain word there
-//! would be asking somebody to justify an improvement, and a rule that fires
-//! on both directions is a rule nobody reads.
-//!
-//! The words are the ones .github/goldens-move-licenses.sh asks for, so one
-//! habit serves both gates.
+//! A RISE is not a trade and stays free to bank. Requiring justification for
+//! an improvement is how a rule stops being read.
 
 use std::process::Command;
 
@@ -57,27 +56,23 @@ fn banked(floor: f64, reason: &str) -> bool {
     said.contains("floor moved")
 }
 
-/// The one that matters: this is the shape the hole had.
+/// The shape the first hole had: a junk reason.
 #[test]
-fn a_fall_that_names_no_gain_is_refused() {
+fn a_fall_with_a_junk_reason_is_refused() {
     assert!(
         !banked(99.0, "whatever"),
         "a twenty-three point fall was banked with a reason that names nothing"
     );
 }
 
+/// The shape the second hole had: a reason naming a trade. RULED closed —
+/// no sentence lowers the objective, however good.
 #[test]
-fn a_fall_that_names_what_it_buys_is_banked() {
+fn a_fall_naming_a_compensating_gain_is_refused_too() {
     assert!(
-        banked(99.0, "decode allocations rise, and what it buys is a linear walk"),
-        "a fall stating its compensating gain was refused"
+        !banked(99.0, "decode allocations rise, and what it buys is a linear walk"),
+        "a fall was banked because its reason named a gain — the ruling says no reason suffices"
     );
-}
-
-/// Reasons are written by hand, and a sentence starts with a capital.
-#[test]
-fn a_gain_is_read_whatever_its_case() {
-    assert!(banked(99.0, "Better decode locality"), "a capitalised gain word was not read");
 }
 
 /// Banking an improvement is not a trade, so it answers to nobody.
