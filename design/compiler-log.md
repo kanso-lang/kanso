@@ -16984,3 +16984,14 @@ a wider name arriving at the value that was always true.
 
 The fixture from #745 now says it best in one number. Twenty thousand views
 allocated, `held_peak_bytes=80` — one view ever held at a time.
+
+## the second spent licence, removed the same way
+
+#747's escape file, deleted for the reason #746 states: it names a merged
+branch and licenses nobody, and a reader who finds one on main should not have
+to check which kind it is.
+
+Two of these in two changes says the shape is recurring rather than
+exceptional. A licence is needed whenever a compiler change moves a sibling's
+counters at all, which is common, so the tidy-up is now part of the change
+rather than a thing to notice afterwards.
