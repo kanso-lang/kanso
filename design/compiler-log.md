@@ -16267,3 +16267,54 @@ accumulator falls out of it rather than the other way round.
 
 tests/golden/mem/an_accumulator_loop_keeps_its_garbage.mem goes on describing a
 real cost, and now names the reason.
+
+## two corrections, and the element test learns arithmetic (2026-08-03)
+
+The entry two above is wrong and this says how, because acting on it would have
+sent the next attempt at the map accumulator into the wrong file entirely.
+
+CORRECTION ONE: THE BLOCKER WAS NOT THE CHAIN'S ROOT. That entry concluded the
+map license never fires because the identity fixpoint is rooted at the first
+parameter and the fixture carries its accumulator second. The evidence was
+`chain: dropped go/2`, which is true and irrelevant — the map license never
+consulted `chains` at all. A probe on each clause says:
+
+    put site=true  key=true  val=false  inner=true
+
+The site IS proven unique — the IR emits `k_b_put_mut` twice and `k_b_put`
+never. The key IS a literal. The accumulator IS threaded. Only the VALUE test
+failed, on `m["k1"]! + length junk`, which is an `Expr::BinOp` — a variant
+`scalar_elem` had no arm for, so it fell through to false. A missing match arm,
+diagnosed as a fixpoint's rooting. The lesson is the one this log keeps
+relearning: a trace that lands on a plausible mechanism is not evidence, and
+the probe cost four lines.
+
+CORRECTION TWO: THE MAP LICENSE IS UNSOUND, AND AN EXISTING TEST SAID SO. With
+the value test fixed the license fires, and it measures well — a map-threading
+loop at 200,000 iterations goes from nine arena blocks to one, 9,437,184 bytes
+to 1,048,576, with allocations byte-identical at 282,360. Then
+`map_threaded_loop_carries_the_map` went red, and its comment is the reason:
+
+    a map may never thread (its first read caches an above-mark sorted view
+    into the below-mark header), so the carry evacuates it — the copy resets
+    the cache, which keeps the rewind sound.
+
+`k_beat_rewind` flushes buffers and the chunk registry and moves the arena
+pointer. It does not touch `sorted`. The reset the comment names is
+`nm->sorted = NULL` inside the carry's copy, so a map crossing by IDENTITY
+instead of being carried keeps a view pointing into memory the rewind freed.
+The license as written also admits a bare `Ident`, so a map merely passed
+through and read is licensed — exactly the shape the carry exists for.
+
+So the map half needs the view handled before any license: either drop the
+cache when the map outlives the beat, which is always semantically safe because
+it is a cache, or allocate it where a rewind cannot reach. That is the next
+attempt's first move, and it is in the runtime rather than in beat.rs.
+
+WHAT DOES LAND: the element test learns arithmetic. `push xs (n + 1)` is the
+same loop as `push xs n` with a `+` in it, and arithmetic over pointer-free
+operands is pointer-free. Reading the operands rather than the operator is what
+keeps that honest — `"a" + "b"` answers a string, which is a pointer, and its
+operands fail the same test. Both halves are pinned. It moves no counter on any
+of the four veins and welfare holds at 75.68, so it is a completeness fix with
+a test rather than a win with a number, and it is recorded as one.

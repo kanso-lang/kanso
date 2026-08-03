@@ -1126,12 +1126,30 @@ fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
 /// costs a bracket and never correctness.
 fn scalar_elem(
     e: &Expr,
+    own: &str,
     decl: &crate::ast::FnDecl,
     inference: &infer::Inference,
     decl_index: usize,
 ) -> bool {
     match e {
         Expr::Int(_, _) | Expr::Float(_, _) => true,
+        // Arithmetic and comparison over operands that are themselves
+        // pointer-free: `+` on two numbers is a number, and every comparison
+        // answers a boolean. An operand this cannot see through — a string,
+        // a record — fails below and takes the whole expression with it, so
+        // the recursion is what keeps the rule honest rather than the list of
+        // operators.
+        Expr::BinOp { lhs, rhs, .. } => {
+            scalar_elem(lhs, own, decl, inference, decl_index)
+                && scalar_elem(rhs, own, decl, inference, decl_index)
+        }
+        // Reading the accumulator being licensed. This is the same
+        // co-inductive step the linearity fixpoint already takes: assume the
+        // licence holds, and then every value in there is pointer-free, so
+        // one read back out is too. A put that stores anything else fails its
+        // own clause and denies the licence, which is what makes the
+        // assumption safe to make.
+        Expr::Index { base, .. } => matches!(base.as_ref(), Expr::Ident(b, _) if b == own),
         // The ordinary shape is `push xs n`, where n is the loop's own
         // counter: a name rather than a literal, and a scalar all the same.
         // Reading its parameter set lets the common case through without
@@ -1184,7 +1202,7 @@ fn is_scalar_list_chain(
                     && args.len() == 2
                     && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
             {
-                scalar_elem(&args[1], decl, inference, decl_index)
+                scalar_elem(&args[1], own, decl, inference, decl_index)
                     && is_scalar_list_chain(
                         &args[0], own, decl, inference, decl_index, locals, mut_sites,
                     )
@@ -1382,6 +1400,31 @@ mod tests {
         assert!(
             !loops_of(strs).contains(&("go".to_string(), 2)),
             "a list of strings was licensed, and its elements can dangle"
+        );
+    }
+
+    /// `push xs (n + 1)` is the same loop as `push xs n` with arithmetic in
+    /// it, and arithmetic over pointer-free operands is pointer-free. The
+    /// element test used to see through a literal and a builtin call and stop
+    /// at a binary operator, which is an arbitrary place for a rule about
+    /// what a value can point at to end.
+    ///
+    /// The string case is the boundary and is here for the same reason the
+    /// other examples pair their halves: `+` over two strings answers a
+    /// string, which is a pointer, so the operator alone proves nothing and
+    /// the operands are what the rule reads.
+    #[test]
+    fn arithmetic_in_a_pushed_element_is_still_pointer_free() {
+        let sums = "fn go 0 xs\n  xs\n\nfn go n xs\n  go (n - 1) (push xs (n + 1))\n\nmain = print \"{length (go 3 [])}\"\n";
+        assert!(
+            loops_of(sums).contains(&("go".to_string(), 2)),
+            "a pushed sum of two numbers is refused"
+        );
+
+        let joins = "fn go 0 xs\n  xs\n\nfn go n xs\n  go (n - 1) (push xs (\"a\" + \"b\"))\n\nmain = print \"{length (go 3 [])}\"\n";
+        assert!(
+            !loops_of(joins).contains(&("go".to_string(), 2)),
+            "a pushed join of two strings was licensed, and a string is a pointer"
         );
     }
 
