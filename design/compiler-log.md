@@ -17071,3 +17071,51 @@ than a thing to notice afterwards", and it was opened as a separate PR
 regardless — in the window, needing a forced rerun. The lesson was written and
 broken in one sitting, which is the strongest argument for writing it here
 rather than remembering it.
+
+## kanso gates on kq's correctness, and reports kq's stored numbers
+
+Three forced CI reruns in one sitting, all for the same reason and none of them
+a real failure. Clay named the shape twice: first that forcing a rerun means the
+process is wrong, then that my answer to it was over-complicated —
+
+    why does it matter if anything is "stale". you're not doing a "diff",
+    you're just doing absolute performance metrics.
+
+That is the correction. The counters are absolute facts about the code and
+nothing about them goes stale. What goes stale is kq's stored EXPECTATION, and
+not one of the three failures was "kq got slower" — all three were "a counter
+changed name". A golden diff conflates which counters exist with what they
+measure, and a rename moves the first while saying nothing about the second.
+
+THE SPLIT IS BY WHAT A CHECK COMPARES ITSELF TO, not by what it measures, and
+that distinction does the whole job:
+
+  computed in the same run, cannot be stale, gates everywhere
+    kq's unit tests
+    its twelve fixture goldens against jq
+    its scale gate — every counter linear in the input, which is a
+    PERFORMANCE property with no stored expectation at all
+
+  compared against a committed file, true only for the pinned compiler
+    the two cost goldens
+    the published-numbers stamp
+
+kanso now runs the suite with `KQ_STORED=report`, which prints the second group
+and gates on the first. My earlier proposal — build kq twice per PR and diff
+the two — bought the same property for an extra build, and is dropped.
+
+WHY THE FIRST GROUP IS THE RIGHT GATE, from the incident that created it: #110
+recorded that carry_dedup rose from 1 to 2,721 in kq and nothing caught it
+BECAUSE KQ COULD NOT BUILD. The gate's value was never the stored numbers. It
+was that a real program still compiles and still answers what jq answers.
+
+THE NUMBERS ARE NOT UNWATCHED, which is the failure mode this project has hit
+before under the name "recorded as harmless". kq pins its compiler precisely so
+it controls when it absorbs a change, and its own CI gates those numbers at the
+pin bump — where the compiler that produced them is the compiler being judged,
+so they cannot be stale by construction. The upstream report is a preview; the
+pin bump is the gate.
+
+Verified in both directions before shipping: a doctored cost golden exits 1 by
+default and 0 under report, and a broken FIXTURE golden exits 1 under report
+too, which is the assertion the whole split rests on.
