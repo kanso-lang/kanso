@@ -1118,6 +1118,60 @@ fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
     out.push(e);
 }
 
+/// Does this expression yield a value that holds no pointer? A list carries
+/// KValues, so licensing one to cross a rewind is only sound when nothing in
+/// it can point at storage the rewind frees. Answering syntactically is
+/// deliberately narrow: a literal number, a boolean, or a builtin whose whole
+/// return set is scalar. Anything it cannot see through it refuses, which
+/// costs a bracket and never correctness.
+fn scalar_elem(e: &Expr) -> bool {
+    match e {
+        Expr::Int(_, _) | Expr::Float(_, _) => true,
+        Expr::Ident(n, _) => matches!(n.as_str(), "true" | "false"),
+        Expr::App { head, args, .. } => match head.as_ref() {
+            Expr::Ident(n, _) => {
+                let set = infer::builtin_set(n, &vec![infer::TOP; args.len()]);
+                set != 0 && set & !FAIL & !SCALAR == 0
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// A list accumulator threaded through in-place pushes, every one of which
+/// pushes a scalar. The bytes license below rests on raw bytes holding no
+/// pointers; this rests on the same fact reached a different way, so the two
+/// are the same rule and not a widening of it.
+fn is_scalar_list_chain(
+    e: &Expr,
+    own: &str,
+    decl: &crate::ast::FnDecl,
+    locals: &HashMap<&str, &Expr>,
+    mut_sites: &MutSites,
+) -> bool {
+    match e {
+        Expr::Ident(p, _) => {
+            p == own
+                || locals
+                    .get(p.as_str())
+                    .is_some_and(|e2| is_scalar_list_chain(e2, own, decl, locals, mut_sites))
+        }
+        Expr::App { head, args, span, .. } => match head.as_ref() {
+            Expr::Ident(n, _)
+                if matches!(n.as_str(), "push" | "builtin_push")
+                    && args.len() == 2
+                    && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
+            {
+                scalar_elem(&args[1])
+                    && is_scalar_list_chain(&args[0], own, decl, locals, mut_sites)
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 /// May `arg` cross an iteration boundary? Either an entry-threaded bare
 /// parameter of an immutable-payload set, or a value the callee's parameter
 /// set proves is a non-heap scalar (failures never reach a boundary: the
@@ -1155,6 +1209,19 @@ fn arg_ok(
         if set0 != 0
             && set0 & !FAIL & !BYTES == 0
             && is_chain(arg, own, decl, &locals, mut_sites, chains)
+        {
+            return true;
+        }
+    }
+    // The list accumulator is read at the position under test rather than at
+    // the first parameter: a fold written `go n xs` carries its counter first
+    // and the list it is building second, which is the ordinary shape.
+    if let Some(Pattern::Var(own, _)) = decl.params.get(position) {
+        let set = inference.params[decl_index][position];
+        let locals = local_binds(decl);
+        if set != 0
+            && set & !FAIL & !LIST == 0
+            && is_scalar_list_chain(arg, own, decl, &locals, mut_sites)
         {
             return true;
         }
@@ -1258,9 +1325,15 @@ mod tests {
     /// loop can decline for more than one reason at once. Reporting only the
     /// first sends the next optimisation after a blocker that was never the
     /// whole story.
+    ///
+    /// The element pushed is a string on purpose. A list of scalars is
+    /// licensed to cross a boundary now, so pushing `1` here would leave one
+    /// blocker and the example could not say what it exists to say. A string
+    /// element is a pointer into the arena, which is the boundary of that
+    /// license and still a reason to decline.
     #[test]
     fn a_second_blocker_is_reported_not_masked() {
-        let src = "fn feed acc\n  step acc\n\nfn step acc\n  step (push acc 1)\n\nmain = print \"{feed []}\"\n";
+        let src = "fn feed acc\n  step acc\n\nfn step acc\n  step (push acc \"x\")\n\nmain = print \"{feed []}\"\n";
         let (program, inference) = compiled(src);
         let lines = super::report(&program, &inference, &crate::linear::in_place_pushes(&program));
         let step = lines.iter().find(|l| l.starts_with("step/1")).expect("step is reported");
@@ -1268,6 +1341,24 @@ mod tests {
         assert!(
             step.contains("unbracketed entry") && step.contains("also carries heap"),
             "the report named one blocker and hid the other: {step}"
+        );
+    }
+
+    /// A list accumulator holds KValues, so licensing one to cross a rewind
+    /// turns on what those values are. Integers point at nothing and are as
+    /// safe to carry as the raw bytes of a string builder; a string element
+    /// is a pointer into the arena the rewind is about to reclaim. Both
+    /// halves are asserted here because a license that admitted either would
+    /// pass an example that only tested the first.
+    #[test]
+    fn a_list_of_scalars_may_cross_a_boundary_and_a_list_of_strings_may_not() {
+        let ints = "fn go 0 xs\n  xs\n\nfn go n xs\n  go (n - 1) (push xs 2)\n\nmain = print \"{length (go 3 [])}\"\n";
+        assert!(loops_of(ints).contains(&("go".to_string(), 2)), "a list of integers is refused");
+
+        let strs = "fn go 0 xs\n  xs\n\nfn go n xs\n  go (n - 1) (push xs \"a\")\n\nmain = print \"{length (go 3 [])}\"\n";
+        assert!(
+            !loops_of(strs).contains(&("go".to_string(), 2)),
+            "a list of strings was licensed, and its elements can dangle"
         );
     }
 

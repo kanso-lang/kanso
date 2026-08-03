@@ -3731,6 +3731,33 @@ static void k_die_not_callable(KValue f) {
     k_die(said);
 }
 
+/* A buffer for a list that outlives the beat it is being appended in. The
+   bytes builder has answered this question since the string accumulator
+   landed: a header in the arena but below the current mark arrived before this
+   iteration, so it is the loop's accumulator rather than one of its
+   transients, and its storage must sit where a rewind cannot reach. The sign
+   of `cap` records the regime, which is why k_buf_cap normalises it and
+   k_buf_donate refuses a negative one to the arena's shelf. */
+static KValue* k_buf_perm(long long cap) {
+    KBuf* b = malloc(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+    if (!b) { fputs("out of memory\n", stderr); exit(1); }
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+    }
+    b->cap = -cap;
+    b->used = 0;
+    return (KValue*)(b + 1);
+}
+
+/* Does this header predate the beat it is being appended in? Then it is the
+   loop's accumulator, not one of its transients. */
+static int k_outlives_beat(const void* p) {
+    if (k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 0;
+    KMark* inner = &k_beat_stack[k_beat_depth - 1];
+    return k_survives(p, NULL) && k_survives(p, inner);
+}
+
 static KValue* k_buf(long long cap) {
     int c = k_buf_class(cap);
     if (c >= 0 && k_buf_free[c]) {
@@ -4628,7 +4655,20 @@ static int k_born_this_beat(const void* p) {
     return !k_survives(p, m);
 }
 
+/* `proven` says the call site is one the linearity analysis licensed, so the
+   list has no other holder and a header that predates this beat may still be
+   mutated. Without it a proven in-place push silently stops being in-place the
+   moment the value is a loop's accumulator — a fresh header per iteration, in
+   the arena, threaded by the loop and freed by its rewind. The bytes append
+   has always had this standing: `mutate` reaching it IS the proof, and no
+   born-this-beat test stands in front of it. */
+static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven);
+
 static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
+    return k_b_push_into_proven(lv, item, mutate, 0);
+}
+
+static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int proven) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag != K_LIST) {
         const char* hint = k_lazy_hint(lv);
@@ -4637,7 +4677,7 @@ static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
         k_die(said);
     }
     KList* l = k_as_list(lv);
-    if (mutate && !k_born_this_beat(l)) mutate = 0;
+    if (mutate && !proven && !k_born_this_beat(l)) mutate = 0;
     KBuf* buf = k_buf_of(l->items);
     if (buf->used == l->len && l->len < k_buf_cap(buf)) {
         /* this list is the frontier of its buffer: claim the next slot */
@@ -4655,13 +4695,19 @@ static KValue k_b_push_into(KValue lv, KValue item, int mutate) {
     long long cap = 4;
     while (cap < (l->len + 1)) cap <<= 1;
     cap <<= 1;
-    KValue* items = k_buf(cap);
+    /* An accumulator's storage goes outside the arena, so the loop's rewind
+       reclaims the iteration's garbage without reaching what the iteration
+       was building. A transient's stays in the arena, where the rewind is
+       exactly what should free it. */
+    KValue* items = (mutate && k_outlives_beat(l)) ? k_buf_perm(cap) : k_buf(cap);
     memcpy(items, l->items, sizeof(KValue) * l->len);
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
     if (mutate) {
         /* uniqueness is proven at mut sites, so the outgrown buffer has no
-           other holder and goes to the shelf for the next collection */
+           other holder: an arena buffer goes to the shelf for the next
+           collection, and one of ours is released outright. */
+        if (k_buf_of(l->items)->cap < 0) free(k_buf_of(l->items)); else
         k_buf_donate(l->items);
         l->items = items;
         l->len++;
@@ -4695,7 +4741,7 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         l->len++;
         return lv;
     }
-    return k_b_push_into(lv, item, 1);
+    return k_b_push_into_proven(lv, item, 1, 1);
 }
 
 /* A lazy sequence refused by a structural operation: the reader is one call
