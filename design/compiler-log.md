@@ -16021,3 +16021,57 @@ produces a segfault that reads as a stack overflow.
 
 Both halves reverted. The spec stays red at 19,922,976 bytes against 12,582,944,
 a factor of 1.6 where it allows 1.25.
+
+## the accumulator rewind, on the fourth attempt (2026-08-02)
+
+A loop that builds a list while making and dropping a temporary each iteration
+now costs what it holds. Arena peak is flat at 1,048,576 bytes for 20,000 and
+200,000 elements alike, against 19,922,976 for the discarding loop before, and
+12,582,944 for the same list built without the temporary. The list is real: the
+program indexes element 1 and element 200,000 and gets both.
+
+Three pieces, and the entry above named only two of them. The one that was
+missing is the reason three attempts failed.
+
+FIRST, THE PROOF HAS TO CROSS THE BOUNDARY. `k_b_push_into` opened with
+
+    if (mutate && !k_born_this_beat(l)) mutate = 0;
+
+and a loop's accumulator arrived before the beat, so it is never born in it.
+The in-place push that the linearity analysis had proved silently stopped being
+in-place for exactly the value the optimisation exists for: a fresh KList header
+per iteration, in the arena, threaded by the loop and freed by its rewind. That
+is a segmentation fault, and on this runtime every one of those prints "the
+program ran out of stack". The guard is right for what it was written for —
+mutating a header somebody else holds is visible — and wrong for one already
+proved unique. The bytes append has never had it: `mutate` reaching the call IS
+the proof, and `k_b_push_mut` now says so too.
+
+SECOND, THE STORAGE. `k_buf_perm` mallocs an accumulator's item buffer and
+`k_outlives_beat` chooses it at the grow site, which is the bytes builder's own
+test spelled for lists. The sign of `cap` already recorded the regime, `k_buf_cap`
+already normalised it and `k_buf_donate` already refused a negative cap to the
+arena's shelf, so only the allocation was missing.
+
+THIRD, THE LICENSE. beat.rs admits a list accumulator when every in-place push
+on its chain pushes a scalar. This is not a widening of the BYTES license: it is
+the same rule reached a different way, since a list of integers holds no pointer
+either. It reads the parameter at the position under test rather than the first,
+because a fold written `go n xs` carries its counter first and the list second.
+
+EACH PIECE WAS MEASURED ALONE, which is what made the diagnosis hold rather than
+another guess. The guard relaxation on its own leaves the whole suite green, both
+cost goldens byte-identical and welfare at 75.65. The storage regime on its own
+was proved sound in the previous attempt. Only the three together move memory.
+
+WHAT DOES NOT MOVE, and should not. `tests/golden/mem/an_accumulator_loop_keeps_
+its_garbage.mem` threads a MAP through `put`, and this license reads `push`. That
+golden goes on describing a real cost. The map accumulator is the next piece, and
+it is harder for a reason worth writing down now: a map carries a sorted view
+alongside its pairs, so "the elements are scalars" is not the whole question.
+
+AND WELFARE DID NOT MOVE, which is its own finding. The index holds at 75.65
+because its corpus contains no list-accumulator loop at all. A change that takes
+a program's arena peak from 19.9 MB to flat should not be invisible to the
+objective, and the fact that it is belongs to the breadth work rather than to
+this change.
