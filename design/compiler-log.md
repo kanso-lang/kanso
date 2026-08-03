@@ -16425,3 +16425,25 @@ it is left alone rather than half-answered.
 Every vein holds — four cost goldens byte-identical, welfare 75.68, trend gate
 clean, kq green with its own goldens unmoved. The fixture that proves it prints
 two diagnostics from one file, because a map has two names to get wrong.
+
+## the escape hatch escaped (2026-08-03)
+
+`sibling-goldens-move` is a file a branch writes to say "this change genuinely
+moves a sibling's counters, and here is what it buys". `.github/clone-sibling.sh`
+reads it, takes the sibling's performance goldens from the coordinated branch
+instead of from main, and refuses the file if it names no compensating gain.
+
+It is a PER-CHANGE escape, and #724 merged it to main. So every branch since has
+been taking sibling goldens from its own coordinated branch — which is exactly
+the hole #702 was written to close, reopened by the change that used it. The
+kq job on this branch printed the tell in plain text: "kq: an-annotation-name-
+must-resolve (goldens from the branch — the trade claimed:)" for a change that
+claims no trade at all.
+
+Deleted. The rule the script already states — a coordinated branch supplies
+source and never numbers — is only true while nobody leaves the note behind.
+
+WHAT WOULD CATCH IT NEXT TIME: nothing does today. The file is meant to live for
+one merge, and a check that a merge to main leaves none behind is a four-line
+job. Recorded rather than built, because this branch is already carrying a
+compiler change and a nine-annotation sweep, and a CI rule wants its own red.
