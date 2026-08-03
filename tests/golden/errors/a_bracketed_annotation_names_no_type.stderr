@@ -1,0 +1,8 @@
+error[type]: no type is called `banana`, so this arm can never match
+  --> a_bracketed_annotation_names_no_type.kso:6:9
+   6 | fn take xs:[]banana
+               ^
+error[type]: no type is called `mango`, so this arm can never match
+  --> a_bracketed_annotation_names_no_type.kso:9:9
+   9 | fn seen m:map[string mango]
+               ^

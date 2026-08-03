@@ -16385,3 +16385,65 @@ Every other vein holds unrenamed: four cost goldens byte-identical, welfare at
 75.68, kq green with twelve fixture goldens matching jq and its scale gate
 linear. tests/map_accumulator_peak.rs asserts the ratio between two sizes rather
 than any constant, so it keeps meaning something when the constants move.
+
+## an annotation's name is checked through the brackets, not around them (2026-08-03)
+
+`xs:banana` was refused with a clean diagnostic and `xs:[]banana` compiled and
+ran. The checker skipped anything containing a bracket, and its comment said
+why: inference reads only the shape, `json` is declared nowhere, and demanding a
+real name would refuse lib/json. All true, and the conclusion was the wrong way
+round — the name was decoration nothing verified, so a typo in it was silent
+where the same typo one character to the left was loud.
+
+`annotation_names` reads the names back out of whatever shape holds them, in
+one place that knows the parser's spelling (`[]T` folds to `T[]`, `map[K V]`
+stays). Both names in a map are checked, not just the value.
+
+WHAT IT CAUGHT, which is the point of turning it on. Nine annotations across
+two repositories, in three separate copies of the same json library:
+
+    lib/json            []json, map[string json]
+    bench/encodebench   the same two, its own copy
+    tests/golden/runtime/reencode   json[], json[string] — the POSTFIX form
+    docs/book/samples/ch08/pretty   []json, map[string json]
+    kq (cli, pretty, json)          five, all postfix
+
+The postfix spelling is the one design/type-syntax.md explicitly rejects, and
+it was still in the tree in two places because nothing read it. All nine now
+say `[]some` and `map[string some]`.
+
+That spread is the finding under the finding: the json library exists in three
+forked copies, and a rule turned on in one place had to be answered in all of
+them by hand. Nothing tells them apart or keeps them in step.
+
+`some` is honest where `json` was not. A json value is anything but none, which
+is exactly what `some` means. A real `json` typeset would be better and is not
+expressible: its members include lists and maps of itself, and a typeset's
+members are names. That is a language question rather than a checker one, and
+it is left alone rather than half-answered.
+
+Every vein holds — four cost goldens byte-identical, welfare 75.68, trend gate
+clean, kq green with its own goldens unmoved. The fixture that proves it prints
+two diagnostics from one file, because a map has two names to get wrong.
+
+## the escape hatch escaped (2026-08-03)
+
+`sibling-goldens-move` is a file a branch writes to say "this change genuinely
+moves a sibling's counters, and here is what it buys". `.github/clone-sibling.sh`
+reads it, takes the sibling's performance goldens from the coordinated branch
+instead of from main, and refuses the file if it names no compensating gain.
+
+It is a PER-CHANGE escape, and #724 merged it to main. So every branch since has
+been taking sibling goldens from its own coordinated branch — which is exactly
+the hole #702 was written to close, reopened by the change that used it. The
+kq job on this branch printed the tell in plain text: "kq: an-annotation-name-
+must-resolve (goldens from the branch — the trade claimed:)" for a change that
+claims no trade at all.
+
+Deleted. The rule the script already states — a coordinated branch supplies
+source and never numbers — is only true while nobody leaves the note behind.
+
+WHAT WOULD CATCH IT NEXT TIME: nothing does today. The file is meant to live for
+one merge, and a check that a merge to main leaves none behind is a four-line
+job. Recorded rather than built, because this branch is already carrying a
+compiler change and a nine-annotation sweep, and a CI rule wants its own red.

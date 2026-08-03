@@ -34,13 +34,13 @@ fn pretty x:float64 _
 fn pretty s:string _
   "\"{s}\""
 
-fn pretty xs:[]json d
+fn pretty xs:[]some d
   d2 = d + 1
   lines = list/to_list (list/map xs (v -> "{pad d2}{pretty v d2}"))
   inner = text/join lines ",\n"
   "[\n{inner}\n{pad d}]"
 
-fn pretty m:map[string json] d
+fn pretty m:map[string some] d
   d2 = d + 1
   lines = list/to_list (list/map (entries m) (e -> entry_block e d2))
   inner = text/join lines ",\n"

@@ -56,10 +56,10 @@ fn encode_onto acc s:string
   opened = escape_onto (text/append acc 34) s
   text/append opened 34
 
-fn encode_onto acc xs:json[]
+fn encode_onto acc xs:[]some
   if (length xs == 0) (text/append acc "[]") (encode_list acc xs)
 
-fn encode_onto acc m:json[string]
+fn encode_onto acc m:map[string some]
   es = entries m
   if (length es == 0) (text/append acc "\{}") (encode_map acc es)
 

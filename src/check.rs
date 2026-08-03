@@ -1934,31 +1934,51 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
 /// refuses it, so the program did fail — but at build time, in a message about
 /// a backend, rather than here in a message about the program.
 ///
-/// Bracketed forms are not checked yet. `[]json` resolves no name today because
-/// inference reads only the shape — ends_with("[]") is a list, contains('[') is
-/// a map — and `json` is not a declared type anywhere, so demanding one would
-/// refuse lib/json. That is the same thread, one step further along.
+/// A bracketed form is checked through its shape, not around it. Inference
+/// reads only the shape — `ends_with("[]")` is a list, `contains('[')` is a map
+/// — so the name inside was decoration nothing verified, and `[]banana`
+/// compiled and ran while a bare `banana` was refused. A typo in an element
+/// name should be as loud as a typo anywhere else.
 fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
     const BUILT_IN: [&str; 8] = ["int", "float64", "string", "bool", "none", "err", "some", "any"];
     let declared: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
     for decl in &program.fns {
         for param in &decl.params {
             let Pattern::Annotated { ty, span, .. } = param else { continue };
-            // a bracketed form names no type to resolve, and a qualified one is
-            // the import resolver's to answer for
-            if ty.contains('[') || ty.contains('/') {
-                continue;
+            for name in annotation_names(ty) {
+                // a qualified name is the import resolver's to answer for
+                if name.contains('/') || BUILT_IN.contains(&name) || declared.contains(name) {
+                    continue;
+                }
+                diags.push(Diagnostic::new(
+                    "type",
+                    format!("no type is called `{name}`, so this arm can never match"),
+                    *span,
+                ));
             }
-            if BUILT_IN.contains(&ty.as_str()) || declared.contains(ty.as_str()) {
-                continue;
-            }
-            diags.push(Diagnostic::new(
-                "type",
-                format!("no type is called `{ty}`, so this arm can never match"),
-                *span,
-            ));
         }
     }
+}
+
+/// The names an annotation mentions, whatever shape holds them. The parser
+/// folds `[]T` to `T[]` and `map[K V]` to `map[K V]`, so both are read back
+/// here rather than at each comparison — one place that knows the spelling.
+fn annotation_names(ty: &str) -> Vec<&str> {
+    if let Some(rest) = ty.strip_prefix("map[").and_then(|r| r.strip_suffix(']')) {
+        return rest.split_whitespace().filter(|n| *n != "map").collect();
+    }
+    let inner = ty.trim_end_matches("[]");
+    if inner.is_empty() {
+        return Vec::new();
+    }
+    // `T[K]` is the older map spelling the lexer still folds to; both names
+    // in it are types and both are checked.
+    if let Some(open) = inner.find('[') {
+        let (base, rest) = inner.split_at(open);
+        let key = rest.trim_start_matches('[').trim_end_matches(']');
+        return vec![base, key];
+    }
+    vec![inner]
 }
 
 fn check_constant_cycles(program: &Program, diags: &mut Vec<Diagnostic>) {
