@@ -632,11 +632,17 @@ static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
     return rounded;
 }
 
+static size_t k_repair_size(KValue v, const void* p, KMark* m);
+
 static size_t k_copy_size(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
     if (k_copy_size_budget && k_copy_size_spent > k_copy_size_budget) return 0;
     const void* p = (const void*)(intptr_t)v.payload;
-    if (k_shareable(v, p, m)) return 0;
+    if (k_survives(p, m)) {
+        if (k_interior_survives(v, p, m)) return 0;
+        if (k_copy_seen_check(p)) return 0;
+        return k_repair_size(v, p, m);
+    }
     if (k_copy_seen_check(p)) return 0;
     size_t n = 0;
     switch (v.tag) {
@@ -706,6 +712,74 @@ static size_t k_copy_size(KValue v, KMark* m) {
     return n;
 }
 
+/* A survivor whose interior has left: the node itself outlives the rewind and
+   only some of its slots point at storage that does not. Copying the node
+   would answer that, and it is what a rewind used to do — but a copy lands in
+   the carry buffer, which is not the arena, so the node never survives again
+   and every later carry re-copies the whole of it. That is the quadratic:
+   linear carries, each walking a structure that grows with the input.
+
+   Repairing instead evacuates only the slots that left and writes them back,
+   leaving the node where it is. It is what a copying collector does with a
+   forwarding pointer, and it is sound for the same reason: anybody else
+   holding this node held the same doomed pointer, and now holds a live one. */
+static size_t k_repair_size(KValue v, const void* p, KMark* m) {
+    size_t n = 0;
+    switch (v.tag) {
+        case K_STR: {
+            KStr* st = (KStr*)p;
+            if (!k_survives(st->data, m)) n += k_copy_size_ptr(st->data, (size_t)st->len + 1, m);
+            break;
+        }
+        case K_BYTES: {
+            KBytes* b = (KBytes*)p;
+            if (!k_survives(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
+            break;
+        }
+        case K_LIST: {
+            KList* l = (KList*)p;
+            if (!k_survives(l->items, m))
+                n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
+            for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
+            break;
+        }
+        case K_MAP: {
+            KMap* mp = (KMap*)p;
+            if (!k_survives(mp->pairs, m))
+                n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
+            for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
+            break;
+        }
+        case K_REC: {
+            KRec* r = (KRec*)p;
+            if (!k_survives(r->fields, m))
+                n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
+            for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
+            break;
+        }
+        case K_CLOSURE: {
+            KClosure* cl = (KClosure*)p;
+            if (!k_survives(cl->env, m))
+                n += k_copy_size_ptr(cl->env, sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1), m);
+            for (long long i = 0; i < cl->ncaps; i++) n += k_copy_size(((KValue*)cl->env)[i], m);
+            break;
+        }
+        case K_DESC: {
+            KDesc* d = (KDesc*)p;
+            n += k_copy_size(d->x, m);
+            n += k_copy_size(d->y, m);
+            break;
+        }
+        case K_SUB: {
+            KSub* sb = (KSub*)p;
+            n += k_copy_size(sb->inner, m);
+            break;
+        }
+        default: break;
+    }
+    return n;
+}
+
 static void k_copy_map_put(const void* p, void* copy) {
     KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
     if (slot->gen != k_copy_map.gen) k_copy_map_live++;
@@ -714,10 +788,43 @@ static void k_copy_map_put(const void* p, void* copy) {
     slot->val = copy;
 }
 
+static void k_repair_interior(KValue v, void* p, KCopy* cp);
+static void k_repaired_settle(KMark* m);
+
+/* Containers repaired during one carry, so the pass after the rewind can find
+   them again. A repair leaves the node in the arena and its evacuated slots in
+   the carry buffer, which is malloc'd — so the node would fail the same check
+   at the next carry, and repairing it again is the quadratic in another shape.
+   The second pass moves those slots into the arena and moves the mark up over
+   them, which is what makes the repair stick: the survivor region absorbs what
+   a survivor still points at. */
+static KValue* k_repaired = NULL;
+static long long k_repaired_n = 0, k_repaired_cap = 0;
+
+static void k_repaired_note(KValue v) {
+    if (k_repaired_n == k_repaired_cap) {
+        k_repaired_cap = k_repaired_cap ? k_repaired_cap * 2 : 64;
+        k_repaired = realloc(k_repaired, sizeof(KValue) * (size_t)k_repaired_cap);
+        if (!k_repaired) { fputs("out of memory\n", stderr); exit(1); }
+    }
+    k_repaired[k_repaired_n++] = v;
+}
+
 static KValue k_deep_copy(KValue v, KCopy* cp) {
     if (!k_is_heap(v.tag)) return v;
     void* p = (void*)(intptr_t)v.payload;
-    if (k_shareable(v, p, cp->mark)) return v;
+    if (k_survives(p, cp->mark)) {
+        if (k_interior_survives(v, p, cp->mark)) return v;
+        KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
+        if (slot->gen == k_copy_map.gen && slot->key == p) {
+            k_stat_carry_dedup++;
+            return v;
+        }
+        k_copy_map_put(p, p);
+        k_repaired_note(v);
+        k_repair_interior(v, p, cp);
+        return v;
+    }
     {
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == p) {
@@ -859,6 +966,117 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
         default: break;
     }
     return out;
+}
+
+/* The repair itself. Every slot goes back through k_deep_copy, which answers
+   immediately for one that is already safe — the point is not to skip the
+   scan but to leave the node in the arena, so it is still a survivor at the
+   next carry instead of a malloc'd copy that has to be walked again. */
+static void k_repair_interior(KValue v, void* p, KCopy* cp) {
+    switch (v.tag) {
+        case K_STR: {
+            KStr* st = (KStr*)p;
+            if (k_survives(st->data, cp->mark)) break;
+            char* d = k_copy_alloc(cp, (size_t)st->len + 1);
+            memcpy(d, st->data, (size_t)st->len + 1);
+            st->data = d;
+            st->cap = st->cap < 0 ? st->cap : 0;
+            break;
+        }
+        case K_BYTES: {
+            KBytes* b = (KBytes*)p;
+            if (k_survives(b->data, cp->mark)) break;
+            unsigned char* d = k_copy_alloc(cp, (size_t)b->len);
+            memcpy(d, b->data, (size_t)b->len);
+            b->data = d;
+            b->cap = 0;
+            break;
+        }
+        case K_LIST: {
+            KList* l = (KList*)p;
+            if (!k_survives(l->items, cp->mark)) {
+                long long cap = l->len ? l->len : 1;
+                KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+                nb->cap = cap;
+                nb->used = l->len;
+                memcpy(nb + 1, l->items, sizeof(KValue) * (size_t)l->len);
+                l->items = (KValue*)(nb + 1);
+            }
+            for (long long i = 0; i < l->len; i++) l->items[i] = k_deep_copy(l->items[i], cp);
+            break;
+        }
+        case K_MAP: {
+            KMap* mp = (KMap*)p;
+            if (!k_survives(mp->pairs, cp->mark)) {
+                long long cap = 2 * (mp->len ? mp->len : 1);
+                KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+                nb->cap = cap;
+                nb->used = 2 * mp->len;
+                memcpy(nb + 1, mp->pairs, sizeof(KValue) * (size_t)(2 * mp->len));
+                mp->pairs = (KValue*)(nb + 1);
+                mp->sorted = NULL;
+                mp->sorted_len = 0;
+            }
+            for (long long i = 0; i < 2 * mp->len; i++) mp->pairs[i] = k_deep_copy(mp->pairs[i], cp);
+            break;
+        }
+        case K_REC: {
+            KRec* r = (KRec*)p;
+            if (!k_survives(r->fields, cp->mark)) {
+                size_t n = sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1);
+                KValue* nf = k_copy_alloc(cp, n);
+                memcpy(nf, r->fields, n);
+                r->fields = nf;
+            }
+            for (long long i = 0; i < r->nfields; i++) r->fields[i] = k_deep_copy(r->fields[i], cp);
+            break;
+        }
+        case K_CLOSURE: {
+            KClosure* cl = (KClosure*)p;
+            if (!k_survives(cl->env, cp->mark)) {
+                size_t n = sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1);
+                KValue* ne = k_copy_alloc(cp, n);
+                memcpy(ne, cl->env, n);
+                cl->env = ne;
+            }
+            for (long long i = 0; i < cl->ncaps; i++)
+                ((KValue*)cl->env)[i] = k_deep_copy(((KValue*)cl->env)[i], cp);
+            break;
+        }
+        case K_DESC: {
+            KDesc* d = (KDesc*)p;
+            d->x = k_deep_copy(d->x, cp);
+            d->y = k_deep_copy(d->y, cp);
+            break;
+        }
+        case K_SUB: {
+            KSub* sb = (KSub*)p;
+            sb->inner = k_deep_copy(sb->inner, cp);
+            break;
+        }
+        default: break;
+    }
+}
+
+/* The second half of a repair. The rewind has happened, so the arena frontier
+   is back at the mark and what a repaired node points at is in the carry
+   buffer. Copy it into the arena and raise the mark over it: those bytes are
+   reachable from a node that already survives, so they are live by definition,
+   and being below the mark is what lets the node be shared at the next carry
+   instead of repaired again. */
+static void k_repaired_settle(KMark* m) {
+    if (!k_repaired_n) return;
+    KCopy back = { NULL, m, 1 };
+    k_ptrmap_begin(&k_copy_map);
+    k_copy_map_live = 0;
+    for (long long i = 0; i < k_repaired_n; i++) {
+        KValue v = k_repaired[i];
+        k_repair_interior(v, (void*)(intptr_t)v.payload, &back);
+    }
+    k_repaired_n = 0;
+    m->ptr = k_arena;
+    m->block = k_blocks;
+    m->bytes = k_live_block_bytes;
 }
 
 void k_carry_clear(int depth) {
@@ -1012,9 +1230,11 @@ void k_beat_iter_carry(void) {
     KCopy cp = { &c->to, m, 0 };
     k_ptrmap_begin(&k_copy_map);
     k_copy_map_live = 0;
+    k_repaired_n = 0;
     for (long long i = 0; i < k_carry_n; i++)
         k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
     k_beat_rewind(m);
+    k_repaired_settle(m);
     KCarryBuf swap = c->from;
     c->from = c->to;
     c->to = swap;
