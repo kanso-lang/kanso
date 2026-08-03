@@ -16995,3 +16995,79 @@ Two of these in two changes says the shape is recurring rather than
 exceptional. A licence is needed whenever a compiler change moves a sibling's
 counters at all, which is common, so the tidy-up is now part of the change
 rather than a thing to notice afterwards.
+
+## the chart already extends itself, and the rename nearly took a line off it
+
+Two findings about #116, and the second is a defect I introduced an hour before
+finding it.
+
+THE TASK'S PREMISE IS STALE. It records that CI redraws the chart but "gains no
+new points there", because `/usr/bin/time -l` reports no instructions-retired
+line inside a GitHub macOS runner. The series has since moved to deterministic
+counters and nobody updated the task. Measured on the perf-history branch:
+
+    498 rows
+    allocs                    498/498
+    compile_visits            498/498
+    cpu                         0/498
+    instructions                0/498
+    newest 50 rows: all four dimensions, 50/50
+
+The two rows at the end are this session's own commits. CI extends the chart on
+every merge, on an ordinary runner, and the expensive resolution the task
+preferred — an hour of builds replaying 474 commits — buys nothing that exists
+to be bought.
+
+What no backfill could have delivered anyway: `arena_peak_bytes` first appears
+in the source on 2026-07-27 and `allocs` on 2026-07-18. A replay cannot recover
+a number the compiler never computed, so a complete four-dimension series from
+the first commit was never available by any route. The series starts where the
+counters start, and that is the whole of it.
+
+THE DEFECT, mine. #747 renamed `bytes_peak` to `held_peak_bytes` and
+`scripts/perf_record.kso` still watched the old name, so the row it wrote
+simply had no memory field:
+
+    bytes_peak       360/498
+    held_peak_bytes    0/498
+
+Nothing went red. The watcher selected the lines whose names it recognised and
+a name matching nothing dropped out in silence, which is the same shape as
+every other blindness in this log — a gap that reads as an absence rather than
+as an error.
+
+So the completeness check is now separate from the extraction and refuses:
+
+    perf_record watches a counter the compiler no longer emits, so the row it
+    writes would quietly lose a dimension and the chart would plot a shorter
+    line without anything going red.
+      not emitted: bytes_peak bytes_peak bytes_peak
+
+Watched by pointing it back at the retired name: exit 2, three groups named.
+With the current name the row carries 34 fields and the memory dimension is
+back — `oneshot_held_peak_bytes` 311,728, which is the figure #747 surfaced.
+
+## a sibling change is not done when it merges, and forcing a rerun proved it
+
+Three CI runs were forced by hand this sitting — an empty commit on one branch,
+a rebase and another empty commit on a second. Clay's read is right: needing to
+force one means the process was wrong, not the runner.
+
+WHAT ACTUALLY HAPPENED. Kanso's gating `kq specs` check clones kq's MAIN. A
+kanso change that moves a kq counter therefore runs a five-step loop: the kanso
+PR opens and the kq gate fails, a coordinated kq branch and a licence make it
+pass, kanso merges, kq's pin advances, kq merges. Between step three and step
+five the two mains disagree about the counter's name, and every PR opened in
+that window fails a gate for a reason that has nothing to do with it. Two were
+opened in that window and both needed forcing.
+
+SO THE RULE, which is the existing no-fire-and-forget rule with its endpoint
+moved: a change that moves a sibling's counters is finished when the SIBLING's
+pin bump merges, not when kanso's PR does. Nothing unrelated opens in between.
+
+The sharper version of the same mistake: the branch that retired the spent
+licence carries an entry saying the tidy-up "is now part of the change rather
+than a thing to notice afterwards", and it was opened as a separate PR
+regardless — in the window, needing a forced rerun. The lesson was written and
+broken in one sitting, which is the strongest argument for writing it here
+rather than remembering it.

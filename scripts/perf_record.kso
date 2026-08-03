@@ -18,19 +18,26 @@ import "std/text"
 # presence. A kernel silently dropped in a merge turns one of these to zero.
 decode_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
 
-decode_b = ["el_parses" "utf8_bytes" "find2_calls" "bytes_peak"]
+decode_b = ["el_parses" "utf8_bytes" "find2_calls" "held_peak_bytes"]
 
 decode_watched = text/concat decode_a decode_b
 
 # Encode: the write path, where the builder and the float renderer live.
 encode_a = ["allocs" "arena_blocks" "ryu_renders" "append_fast"]
 
-encode_b = ["append_grow" "utf8_zerocopy" "bytes_peak"]
+encode_b = ["append_grow" "utf8_zerocopy" "held_peak_bytes"]
 
 encode_watched = text/concat encode_a encode_b
 
 # One shot: decode, hold, print — the peak the rewinds cannot hide.
-oneshot_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "bytes_peak"]
+oneshot_watched = ["allocs" "arena_blocks" "arena_peak_bytes" "held_peak_bytes"]
+
+unwatched = """
+  perf_record watches a counter the compiler no longer emits, so the row it
+  writes would quietly lose a dimension and the chart would plot a shorter
+  line without anything going red. Either restore the counter, or rename it
+  here in the same change that renamed it there.
+"""
 
 # What deciding cost, and what got written.
 work_keys = ["rounds" "visits" "lines" "calls" "branches" "defines"]
@@ -62,10 +69,39 @@ fn named l
   (text/split l "=")[1]!
 
 # The cost goldens are one `name=value` to a line, so a line is a pair.
+# A watched name with no line used to drop out of the row in silence, so a
+# counter that was renamed simply stopped being plotted and the chart lost a
+# dimension without anything going red. Renaming `bytes_peak` did exactly that.
 fn counters text group prefix
   lines = list/select (text/split text "\n") pair?
-  mine = list/select lines (l -> watched? group (named l))
+  mine = list/to_list (list/select lines (l -> watched? group (named l)))
   list/to_list (list/map mine (l -> kept prefix l))
+
+fn missing? found g
+  seen = list/any? found (f -> f == g)
+  not seen
+
+# The completeness check is separate from the extraction because extraction is
+# pure and this one refuses. A name here that the compiler stopped emitting
+# would otherwise drop out of the row in silence.
+fn absent_in text group
+  lines = list/select (text/split text "\n") pair?
+  found = list/to_list (list/map (list/to_list lines) named)
+  list/to_list (list/select group (g -> missing? found g))
+
+fn every_watched d e o
+  a = absent_in d decode_watched
+  b = absent_in e encode_watched
+  c = absent_in o oneshot_watched
+  gone = text/concat a (text/concat b c)
+  all_there gone (length gone == 0)
+
+fn all_there _ true
+  io/write ""
+
+fn all_there gone false
+  listed = text/join gone " "
+  io/write_err "{unwatched}  not emitted: {listed}\n" . (_ -> io/exit 2)
 
 fn body? l
   text/slice l 1 1 != "#" and length l > 0
@@ -139,6 +175,9 @@ fn with_oneshot line d e o
   io/read_file "bench/compile_golden.txt" . (c -> recorded line d e o c)
 
 fn recorded line d e o c
+  every_watched d e o . (_ -> costed line d e o c)
+
+fn costed line d e o c
   compiler_cost 0 . (cc -> with_cost line d e o c cc)
 
 fn with_cost line d e o c cc
