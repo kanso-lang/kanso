@@ -17343,12 +17343,18 @@ today at ~1.8 allocations per iteration, flat peak, four sizes checked. The
 read-side compaction killed it and nobody updated the entry.
 
 That is the third open thread this week whose premise was stale — the chart
-that "could not be extended by CI", the carry quadratic, and now this. All
-three share the mechanism this log keeps finding in other clothes: an
-append-only record says "open" forever, and repeating a claim is not the same
-as re-measuring it. The task list now holds only startable work; the gavels
-file now holds only gavels; and a thread's next reader should assume its
-numbers describe the day they were written.
+that "could not be extended by CI", the carry quadratic, and now this. The
+mechanism is not the log's format, and Clay named the correction: every one of
+the three closures WAS in this record — the carry repair, the deterministic-
+series switch, the read-side compaction. An append-only log is event-sourced;
+the current state of a thread is the fold over all its entries, and the
+failure was reading one entry that said "open" and treating a single event as
+the state. The procedure, stated so it binds: an entry claiming a thread is
+open is a claim about its own date, and believing it requires searching
+FORWARD for the entries that superseded it — grep the thread's nouns, not its
+verdicts. The task list now holds only startable work and the gavels file
+only gavels, which shrinks how often the question arises; the log itself
+needed no change.
 
 THE PROBE TRAP, kept because it nearly shipped a wrong conclusion the other
 way: the first fixture read `m[k] + 1` over unseeded keys, so `none + 1`
