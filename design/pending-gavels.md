@@ -602,6 +602,85 @@ every call in a language whose name means plain.
   instruction to alphabetize everything was conditional on order losing
   its meaning, and order keeps it.
 
+## 13. What an imported record prints as
+
+The same program prints one thing run directly and another through an
+import:
+
+    run directly:      record point 3 4, absent <none>
+    through an import: record sample/point 3 4, absent <none>
+
+The defect is not which is right — it is that both happen, so moving a
+type declaration into a library changes what a program prints. Three
+micro samples show it: `render_record_none`, `subtype_chain` (`animal`
+against `sample/animal`) and `err_trap_named` (`slow_lane` against
+`sample/slow_lane`).
+
+RECOMMENDATION: the bare form. Printing is for a human reading output
+and a module path is a fact about source organisation, not about the
+value; `<none>`, `true` and `1.5` carry no provenance either. Two
+modules owning a `point` and needing to be told apart is what a
+`to_string` arm is for, and that already works.
+
+ONE ASYMMETRY, and it is the part wanting a view rather than a rubber
+stamp: an err's REASON is not an ordinary value. For a crash, which
+package raised it is worth more than reading cleanly —
+`sample/quota_torn` says where to look and `quota_torn` does not. So a
+defensible answer is that values render bare and err reasons render
+qualified. That is two rules where one would do, which is normally the
+argument against, except that failures and values are already different
+things here.
+
+UNBLOCKS: the harness rework (running the micro corpus through a
+generated entry, which is step one of migrating `play` out of the
+compiler) and the three samples above. Everything else in the
+import-path bug family is closed.
+
+## 14. Are kanso's bytes a type or a convention
+
+The interpreter has no distinct bytes value — bytes ARE a list of ints
+there — and native has a real `K_BYTES` tag that refuses anything else.
+So `[97]` is bytes to one engine and a type error to the other, and
+`text/find2 [97] 0 97 98` answers `1` under the interpreter while
+native refuses to run it. Four builtins diverge; genuine bytes agree on
+all four, which is what makes it narrow.
+
+Two ways, and they are not equivalent: native widens to accept a list
+of ints wherever it accepts bytes, which says a list and bytes are
+interchangeable — the thing native's representation exists to deny; or
+the interpreter gains a distinct bytes value so it can refuse a list the
+way native does, which removes the ambiguity at the root and touches
+every place the interpreter builds or reads bytes.
+
+INTERIM: `tests/a_bare_list_is_or_is_not_bytes.rs` pins the half that
+already agrees and carries the divergent half `#[ignore]`d — not
+because the work is unfinished but because the assertion cannot be
+written down until somebody rules.
+
+## 15. Should `>>` defer its right side
+
+`a . f` hands the continuation over as a closure, so nothing past the
+current link exists until the link runs. `a >> b` takes `b` as an
+already evaluated description, so building the first link requires
+evaluating the second, which requires the third: the whole chain is
+constructed before any of it runs, and the construction is what
+exhausts the stack. A loop written with `>>` dies where the same loop
+written with `.` does not.
+
+INTERIM SHIPPED: all three engines now name the operator in the
+diagnostic rather than blaming the recursion, since a function calling
+itself in the right operand of `>>` is visible in the source and the
+runtime cannot work the cause out at the moment it reports. That makes
+the failure legible; it does not make the loop run.
+
+## 16. Should block-born widen to a dataflow property
+
+Today `block-born` is a syntactic property, which is why in-place graph
+algorithms inside build blocks stay out of reach (ledger 4.4). Widening
+it to a dataflow property is the unblock. It is a language-surface
+question rather than an allocator one, which is why it sits here rather
+than being settled by measurement.
+
 ## Also open, not blocking any current work
 
 - **TRMC v2**: license operands by inferred set (any provably-int

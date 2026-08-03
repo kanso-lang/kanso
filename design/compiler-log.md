@@ -17163,3 +17163,32 @@ status propagates and a zero one does not become a failure.
 This is also what stops #750 from meaning "ignored". That change downgraded kq's
 stored numbers from gating to reporting, and a reported number needs somewhere
 it is read.
+
+## four questions were only in a chat log
+
+design/pending-gavels.md opens by saying it holds "every decision waiting on
+Clay, in one place". Four were not in it, including the one blocking the most:
+
+  13  what an imported record prints as
+  14  are kanso's bytes a type or a convention
+  15  should `>>` defer its right side
+  16  should block-born widen to a dataflow property
+
+They existed in a task list and in turn-end summaries, which is to say they
+existed wherever somebody happened to be looking. Number 13 gates the harness
+rework and decides three micro samples, and it has been reported as blocking in
+several consecutive summaries without ever reaching the file whose whole purpose
+is to be the place you read when you sit down to rule on something.
+
+The failure is not that they were forgotten — they were repeated constantly.
+It is that repeating them in prose is not the same as recording them, and the
+difference only shows when the person reading is not the person who wrote the
+summary. A question living in a chat log is a question its owner has to be
+reminded of; a question in the file is one they can find.
+
+Each entry carries what the others do: the question, where it came from, the
+interim state, and what it unblocks. Two of them already have interim work
+shipped and say so — the `>>` diagnostic names the operator on all three
+engines without making the loop run, and the bytes divergence is pinned by a
+test carrying its unwritable half `#[ignore]`d, which is not an unfinished
+acceptance criterion but an assertion nobody can write down yet.
