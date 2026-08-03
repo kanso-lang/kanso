@@ -241,3 +241,65 @@ fn a_modules_render_arm_survives_being_imported() {
     assert_eq!(imported, direct, "the import took the module's own render arm away");
     assert_eq!(interp, imported, "the engines disagree on an imported render arm");
 }
+
+/// `render/to_string` survived qualification because one line named it. The
+/// comparison groups that landed after it did not, so a module's `fn <` was
+/// renamed to `shelf/<` while `a < b` went on asking for the bare group,
+/// dispatch found only the builtin arms, and two books had no order at all.
+///
+/// The imported case is the only case the gavel was about — a book record's
+/// owner is a module you import — so this ran correctly as an entry file and
+/// refused the moment anybody used it as a library.
+///
+/// The second line is the other half of the rule, as the render fixture has
+/// it: ints keep the builtin. A fix that let an imported arm answer for every
+/// value would pass the first assertion and be wrong.
+#[test]
+fn a_modules_ordering_arm_survives_being_imported() {
+    let dir = "tests/golden/entryfile/an_ordering_arm_across_the_import";
+    let answer = |target: &str, engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(target)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (direct, _) = answer(&format!("{dir}/shelf.kso"), &[]);
+    let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
+    let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
+
+    assert_eq!(complaint, "", "native refused an ordering arm reached through an import");
+    assert_eq!(direct, "own: true false\nints: true false\n");
+    assert_eq!(imported, direct, "the import took the module's own ordering arm away");
+    assert_eq!(interp, imported, "the engines disagree on an imported ordering arm");
+}
+
+/// The rule that makes the fix above safe to have. An operator group belongs
+/// to nobody and reaches every module, so joining one through a type you did
+/// not define would let a dependency say what `<` means for everyone's ints.
+///
+/// It was accepted in silence before — the arm compiled, and the builtin won
+/// dispatch, so it did nothing and said nothing. Harmless while arms stayed
+/// module-local, and exactly the thing making them ambient would have armed.
+#[test]
+fn an_operator_arm_needs_a_type_the_module_defines() {
+    let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+        .arg("run")
+        .arg("tests/golden/entryfile/an_ordering_arm_for_a_type_you_do_not_own/main.kso")
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("kanso runs");
+    let complaint = String::from_utf8_lossy(&done.stderr);
+
+    assert!(
+        complaint.contains("error[ownership]") && complaint.contains("`<`"),
+        "an arm on `<` for a type the module does not define was accepted: {complaint}"
+    );
+}

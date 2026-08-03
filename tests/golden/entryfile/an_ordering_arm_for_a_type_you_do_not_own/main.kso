@@ -1,0 +1,3 @@
+import "lib"
+
+lib/go 0

@@ -16661,3 +16661,85 @@ move — the document is small beside the hundred-thousand-element accumulator
 that already sets it.
 
 Widening a corpus has to bank nothing, or the widening becomes the argument.
+## An ordering arm did not survive an import, and one line said which group did
+
+The generated-entry probe over the micro corpus turned up
+`ordering_arms_for_a_type_you_own`: correct as an entry file, refused through an
+import, on both engines.
+
+    error[runtime]: comparison requires two values of one comparable type
+
+This is the bug #723 fixed for rendering, unfixed for the groups that landed
+after it. The fix #723 shipped was a single predicate:
+
+    fn is_ambient_group(name: &str) -> bool { name == "render/to_string" }
+
+`render/to_string` survives qualification because that line names it. `<` `>`
+`<=` `>=` `==` do not, so qualifying a module renamed its `fn <` to `shelf/<`
+while `a < b` went on asking for the bare group. Dispatch found only the builtin
+arms and two books had no order.
+
+The imported case is the ONLY case the gavel was about — Clay's example was
+sorting book records, and a book record's owner is a module you import. So the
+feature worked in the shape nobody needed and refused in the shape it was for.
+
+WIDER THAN THE GAVEL, deliberately. The parser accepts ten operator names, and
+`+` arms dispatch today the same way `<` does. All ten break identically across
+an import, so the predicate covers the set the parser accepts rather than the
+five the gavel named; fixing `<` and leaving `+` broken would be arbitrary.
+
+THE SECOND DEFECT, found while checking the first: there was no ownership rule
+for operator arms. `merge_ambient_arms_with` enforces one for `to_string` — an
+arm must match a type the module defines — and nothing guarded `<`. A module
+could write `fn < a:int b:int` and it compiled without a word. It did nothing,
+because the builtin won dispatch, which is why it was harmless while arms stayed
+module-local. Making them ambient is exactly what would have given it teeth: a
+dependency saying what `<` means for everyone's ints. The two halves ship
+together or the fix hands every importer that.
+
+std arms no operator at all, so the rule refuses nothing that exists.
+
+GOLDENS: tests/golden/entryfile/an_ordering_arm_across_the_import, built as the
+sibling of the fixture #723 left, and asserting the same two halves — the owned
+type takes the arm, and ints keep the builtin, because a fix that let an
+imported arm answer for every value would pass the first assertion and be wrong.
+Plus the orphan, watched accepted-in-silence first and refused after.
+
+Welfare 75.68 either side, no golden moved.
+
+## The micro corpus now runs a second way, as a library
+
+The bug above was found by a shell probe, not by the suite, and that is the
+part worth fixing. A sample run directly is one module, so a whole layer of the
+compiler — qualification, export enrollment, ambient groups — never runs. Four
+separate bugs have lived in that layer, each making a construct that works in a
+file stop working the moment somebody put it in a library, and none of them
+could ever fail a corpus that only runs files.
+
+So `micro_corpus_agrees_when_it_is_imported` stages the corpus in a temp
+directory, writes an entry file per sample that imports it and names its
+exported lambda, and demands the same bytes on both engines. 77 of the 83
+samples: three have no `pub play` (they are entry files already, and there is
+nothing to import), and three are excluded by name.
+
+Staging COPIES THE TREE rather than the files, because `dir_listing_is_sorted`
+reads a directory beside it and a flat copy would have it reading a missing
+one — which the probe reported as a divergence for an hour before it was
+understood as the probe's fault.
+
+Watched red with the fix reverted, and it names the sample:
+
+    ordering_arms_for_a_type_you_own answers differently as a library
+
+THE THREE EXCLUSIONS ARE ONE QUESTION, and it is a gavel. `err_trap_named`,
+`render_record_none` and `subtype_chain` each print a record, and an imported
+record prints its module: `point 3 4` direct against `sample/point 3 4` through
+the import. The qualified spelling is honest about where the type came from and
+the bare one is what a reader expects; the harness cannot settle that by
+pinning one. They are listed by name so the question stays visible rather than
+being swallowed by a filter.
+
+That is also what still blocks the harness change in full. The import-path bug
+family is otherwise closed: currying, subtypes, err reason types and now
+comparison arms all survive an import, and the two remaining probe
+divergences turned out to be the probe.
