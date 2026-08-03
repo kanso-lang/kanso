@@ -157,3 +157,43 @@ fn a_typeset_keeps_its_members_across_an_import() {
     assert_eq!(native, "quota: limit 99\nlane trouble: quota/slow_lane 7\nok: plain 3\n");
     assert_eq!(interp, native, "the engines disagree on an imported typeset");
 }
+
+/// An err's reason renders by the name its declaring module gave it.
+/// Qualification renames that declaration to keep it unique across a merge,
+/// and the qualified spelling is the compiler's bookkeeping — a reader never
+/// wrote `lane/slow_lane` and should never be shown it. Run the module
+/// directly and the import must not change what the program prints.
+///
+/// Ignored because it fails, the way tests/accumulator_growth.rs is: it is the
+/// acceptance criterion for a fix not yet built, not a guard on one that is.
+/// `cargo test -- --ignored` shows the gap. The fix has to land in all three
+/// engines at once or the differential law breaks it — the interpreter renders
+/// from `Value::Record`'s `ty`, native from the `k_type_name` switch the
+/// backend emits, the browser from `wasm_rt::type_name`.
+#[test]
+#[ignore = "the qualified spelling still reaches render; see design/compiler-log.md"]
+fn an_err_reason_renders_unqualified_across_an_import() {
+    let dir = "tests/golden/entryfile/an_err_reason_across_the_import";
+    let answer = |target: &str, engine: &[&str]| {
+        let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(target)
+            .args(engine)
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output()
+            .expect("kanso runs");
+        (
+            String::from_utf8_lossy(&done.stdout).into_owned(),
+            String::from_utf8_lossy(&done.stderr).into_owned(),
+        )
+    };
+
+    let (direct, _) = answer(&format!("{dir}/lane.kso"), &[]);
+    let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
+    let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
+
+    assert_eq!(complaint, "", "native refused an err reason reached through an import");
+    assert_eq!(direct, "trouble: slow_lane 7\n");
+    assert_eq!(imported, direct, "the import changed how the reason renders");
+    assert_eq!(interp, imported, "the engines disagree on an imported err reason");
+}

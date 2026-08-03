@@ -1,0 +1,16 @@
+# An err carries a reason, and a reason renders by the name its declaring
+# module gave it. Qualification renames the declaration to keep it unique
+# across a merge, and that spelling is the compiler's bookkeeping — a reader
+# never wrote `lane/slow_lane` and should never be shown it.
+type slow_lane
+  minutes
+
+pub play = told
+
+told = print "{trapped (err (slow_lane 7))}"
+
+fn trapped (err reason)
+  "trouble: {reason}"
+
+fn trapped fine
+  "fine: {fine}"
