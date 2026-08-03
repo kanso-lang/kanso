@@ -1035,6 +1035,7 @@ pub fn check_file_shadow(
     check_retired_any(program, &mut diags);
     check_field_annotations(program, &mut diags);
     check_field_conflicts(program, &mut diags);
+    check_annotation_names(program, &mut diags);
     let mut globals = collect_globals(program, &mut diags);
     globals.extend(extern_globals.iter().cloned());
     let mut fn_arities: std::collections::HashMap<String, Vec<usize>> =
@@ -1924,6 +1925,38 @@ fn check_retired_any(program: &Program, diags: &mut Vec<Diagnostic>) {
             if let Pattern::Annotated { ty, span, .. } = param {
                 retired(ty, *span, diags);
             }
+        }
+    }
+}
+
+/// An annotation names a type, and a name nothing declares is a mistake the
+/// reader cannot see: the arm simply never matches. The native backend already
+/// refuses it, so the program did fail — but at build time, in a message about
+/// a backend, rather than here in a message about the program.
+///
+/// Bracketed forms are not checked yet. `[]json` resolves no name today because
+/// inference reads only the shape — ends_with("[]") is a list, contains('[') is
+/// a map — and `json` is not a declared type anywhere, so demanding one would
+/// refuse lib/json. That is the same thread, one step further along.
+fn check_annotation_names(program: &Program, diags: &mut Vec<Diagnostic>) {
+    const BUILT_IN: [&str; 8] = ["int", "float64", "string", "bool", "none", "err", "some", "any"];
+    let declared: HashSet<&str> = program.types.iter().map(|t| t.name.as_str()).collect();
+    for decl in &program.fns {
+        for param in &decl.params {
+            let Pattern::Annotated { ty, span, .. } = param else { continue };
+            // a bracketed form names no type to resolve, and a qualified one is
+            // the import resolver's to answer for
+            if ty.contains('[') || ty.contains('/') {
+                continue;
+            }
+            if BUILT_IN.contains(&ty.as_str()) || declared.contains(ty.as_str()) {
+                continue;
+            }
+            diags.push(Diagnostic::new(
+                "type",
+                format!("no type is called `{ty}`, so this arm can never match"),
+                *span,
+            ));
         }
     }
 }

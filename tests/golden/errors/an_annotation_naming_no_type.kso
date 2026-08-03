@@ -1,0 +1,8 @@
+# An annotation names a type, and a name nothing declares is a mistake the
+# reader cannot see. The native backend already refuses this one; `kanso check`
+# used to pass it, so the refusal arrived at build time in a message about a
+# backend rather than at check time in a message about the program.
+fn f x:banana
+  x
+
+pub play = print "{f 3}"
