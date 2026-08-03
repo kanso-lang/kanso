@@ -6,6 +6,34 @@ type point
   x
   y
 
+# Text, at a scale and shape that reaches the kernels.
+#
+# The basket measured zero utf8 bytes, zero find2 calls and zero builder
+# appends before this, which is why four pull requests improving text handling
+# each moved the score by nothing. That was never a missing TERM — text work is
+# run speed and run memory like anything else — it was a missing workload. A
+# deleted text kernel would also have left every presence counter at zero,
+# which is the same blindness wearing its other face.
+#
+# What a text tool actually does: take a document, cut it up, change every
+# piece, put it back together, and read a window out of the result.
+fn document 0 acc
+  acc
+
+fn document n acc
+  document (n - 1) "{acc}line {n} of the document\n"
+
+fn shout_all parts at out
+  shouting parts at out (at > length parts)
+
+fn shouting _ _ out true
+  out
+
+fn shouting parts at out false
+  piece = parts[at]!
+  codes = text/bytes piece
+  shout_all parts (at + 1) (push out (text/utf8 codes))
+
 # An accumulator at a scale where the arena can feel it. Every other shape
 # here works at four thousand elements, which is sixty-four kilobytes against
 # a megabyte block — so a change that moves an accumulator's storage out of
@@ -95,6 +123,12 @@ pub fn run _
   tail = list/drop xs 3990
   joined = text/join (list/to_list (list/map tail (v -> "s{v}"))) ","
   bulk = bulk_build 100000 []
+  doc = document 2000 ""
+  lines = list/to_list (text/split doc "\n")
+  shouted = shout_all lines 1 []
+  rejoined = text/join shouted "|"
+  window = text/slice rejoined 100 400
+  trimmed = text/trim "   {window}   "
   head500 = list/to_list (list/take xs 500)
   sorted = list/sum (list/sort (list/map head500 (v -> 4000 - v)))
   sliced = length (text/slice built 1 128)
@@ -102,4 +136,5 @@ pub fn run _
   b = "{length kept} {folded} {length grouped} {length counted}"
   c = "{ints} {floats} {moved.x} {length joined} {sliced} {sorted}"
   d = "{length bulk} {bulk[100000]!}"
-  print "basket {a} {b} {c} {d}"
+  e = "{length doc} {length lines} {length rejoined} {length trimmed}"
+  print "basket {a} {b} {c} {d} {e}"
