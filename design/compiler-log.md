@@ -16594,3 +16594,37 @@ more.
 
 Nothing else in the tree newly refuses — every lib and every example still
 checks clean, welfare holds at 75.68 and the trend gate is quiet.
+
+## the render question was two questions, and one of them is answered (2026-08-03)
+
+Three open items each said they were blocked on "the ambient render question":
+printing a lazy sequence, the harness change, and the entry-name migration.
+Probing them separately says that was one question too few.
+
+QUESTION ONE — DOES A MODULE'S OWN ARM REACH THE ROOT — IS ANSWERED, by #723.
+The lazy-sequence task recorded that appending `pub fn to_string (mapped ...)`
+to lib/list changes nothing and `list/to_string` answers `unknown name`, because
+only the root module's arms merge. That is no longer true. The same arm today is
+checked (it complains about an unused binding, which the old absorption hid) and
+once written properly it fires on both engines:
+
+    print "{list/map [1 2 3] (x -> x * 2)}"   ->  a mapped sequence
+
+So the adapter arms may live in lib/list, and the route through lib/render that
+task proposed to sidestep the block is not needed. What is left of that item is
+only the semantic question — whether printing a lazy sequence FORCES it, when
+`cycled` and `repeated` are infinite and the shape does not say which is which.
+
+QUESTION TWO — WHAT A RECORD PRINTS AS — IS UNTOUCHED AND STILL BLOCKS THE
+HARNESS.
+
+    direct    point 3 4
+    imported  sample/point 3 4
+
+That is the default rendering of a record whose type the sample declares, and it
+has nothing to do with arm merging: no arm is involved. Qualification is the
+compiler's bookkeeping and nobody wrote `sample/point`, but stripping it is
+wrong for a genuinely imported type where `lib/pair` is what the program says.
+
+Keeping the two apart matters because the first being fixed made it tempting to
+call the second fixed too. It is not, and it still decides five micro goldens.
