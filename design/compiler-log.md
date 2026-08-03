@@ -16075,3 +16075,38 @@ because its corpus contains no list-accumulator loop at all. A change that takes
 a program's arena peak from 19.9 MB to flat should not be invisible to the
 objective, and the fact that it is belongs to the breadth work rather than to
 this change.
+
+## the growing-accumulator gate, and a measurement that may have retired it (2026-08-02)
+
+A follow-on from the fourth attempt, built and reverted in one sitting, because
+what it turned up is worth more than the four lines were.
+
+The license #726 landed reads literals and builtin calls as scalar elements. The
+commonest shape is neither: `push xs n`, where n is the loop's own counter, is a
+NAME. bench/basket/work.kso's `list_build` is exactly that, which is one reason
+welfare could not see a change that took a program's arena peak from 19.9 MB to
+flat — the basket has a list accumulator and it is not licensed.
+
+Widening `scalar_elem` to read a parameter's inferred set is four lines. It also
+breaks `beat::tests::growing_accumulator_stays_grow_only`, whose comment states
+the rule it guards: "push acc n extends its own previous value: carrying it
+would copy quadratic bytes where grow-only allocates linear."
+
+THE MEASUREMENT SAYS THAT PREMISE IS GONE. With the widening applied to
+`collect (n - 1) (push acc n)`:
+
+    n =  20,000   allocs=11   alloc_bytes=699,248      arena_peak=1,048,576
+    n = 200,000   allocs=13   alloc_bytes=11,185,040   arena_peak=1,048,576
+
+Thirteen allocations for two hundred thousand pushes, and a flat arena peak at
+both sizes. A carry copying the list each iteration would show about n of them.
+The gate was protecting against a copy that `k_buf_perm` removed: once the
+accumulator's storage is outside the arena, the carry has nothing to copy.
+
+REVERTED ANYWAY. Inverting a load-bearing test's assertion on one measurement,
+at the end of a long sitting, is how a guard gets removed for a reason that
+sounds right and is not. The thing to do first is find the program that
+motivated `accumulator_grows` and run these same two sizes against it, then put
+kq through the gating job, since kq's print path is full of growing
+accumulators. If it holds, the basket's list accumulator starts being reclaimed
+and welfare gains the ability to see this whole class of change.
