@@ -192,19 +192,19 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
     <tr><th>decoder</th><th class="bar-cell"></th><th class="num">ms/decode</th><th class="num">peak mem</th></tr>
   </thead>
   <tbody>
-    <tr class="win">
-      <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:88%"></span></span></td>
-      <td class="num">1.93</td><td class="num">4.3 mb</td>
-    </tr>
     <tr>
-      <td>serde_json (rust, hand-tuned)</td>
+      <td>kanso + arenas</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">2.20</td><td class="num">7.3 mb</td>
+      <td class="num">2.13</td><td class="num">4.3 mb</td>
+    </tr>
+    <tr class="win">
+      <td>serde_json (rust, hand-tuned)</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:99%"></span></span></td>
+      <td class="num">2.11</td><td class="num">7.3 mb</td>
     </tr>
   </tbody>
 </table>
-<p class="board-note">measured by ci on the merge that published this page: 5 interleaved rounds on a shared runner, averaged. kanso ahead by 13.8%. the ratio is the claim; the milliseconds wobble.</p>
+<p class="board-note">measured by ci on the merge that published this page: 5 interleaved rounds on a shared runner, averaged. serde_json ahead by 1.2%. the ratio is the claim; the milliseconds wobble.</p>
 <!--/relative-->
 
 <p>the board is two lanes because those are the two ci runs on every merge: kanso against <code>serde_json</code>, the parser a rust team hand-tunes and actually ships. the person who wrote the kanso decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. the two run interleaved in one job and the ratio is the claim — contention leans on both lanes at once, so the comparison holds even when the absolute milliseconds wobble. wider comparisons — a plainly-written rust parser, go's <code>encoding/json</code> — live in the recipe at the bottom of this page, which you can run on your own machine in a few minutes.</p>
