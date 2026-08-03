@@ -386,13 +386,30 @@ static void k_buf_flush(void);
    HEADERS are registered rather than views, which buys two things: a view
    that outgrows its buffer is followed without a fixup, and freeing through
    the header nulls it, so a header registered twice frees once. */
-static KMap* k_viewreg[K_BEAT_MAX][256];
-static int k_viewreg_n[K_BEAT_MAX];
-static long long k_viewreg_spill[K_BEAT_MAX];
+/* The registry grows rather than spilling. A fixed bank with an overflow
+   counter is what k_chunkreg does, and it is wrong here for a reason the
+   corpus showed: a fixture registered more than a bank's worth inside one
+   beat and the excess silently went back to leaking, which is the behaviour
+   this exists to remove. A cap that quietly stops working is worse than no
+   cap, so this one has none. */
+static KMap** k_viewreg[K_BEAT_MAX];
+static long long k_viewreg_n[K_BEAT_MAX];
+static long long k_viewreg_cap[K_BEAT_MAX];
 static void k_view_free(KValue* view);
 
+static void k_viewreg_push(int d, KMap* m) {
+    if (k_viewreg_n[d] == k_viewreg_cap[d]) {
+        long long grown = k_viewreg_cap[d] ? k_viewreg_cap[d] * 2 : 256;
+        KMap** wider = realloc(k_viewreg[d], sizeof(KMap*) * (size_t)grown);
+        if (!wider) { fputs("out of memory\n", stderr); exit(1); }
+        k_viewreg[d] = wider;
+        k_viewreg_cap[d] = grown;
+    }
+    k_viewreg[d][k_viewreg_n[d]++] = m;
+}
+
 static void k_viewreg_flush(int d) {
-    for (int i = 0; i < k_viewreg_n[d]; i++) {
+    for (long long i = 0; i < k_viewreg_n[d]; i++) {
         KMap* m = k_viewreg[d][i];
         if (m->sorted) {
             k_view_free(m->sorted);
@@ -401,7 +418,6 @@ static void k_viewreg_flush(int d) {
         }
     }
     k_viewreg_n[d] = 0;
-    k_viewreg_spill[d] = 0;
 }
 
 /* A pop that keeps its region keeps its maps, so their views hand up with
@@ -409,17 +425,9 @@ static void k_viewreg_flush(int d) {
 static void k_viewreg_migrate(int d) {
     if (d < 0 || d >= K_BEAT_MAX) return;
     if (d > 0) {
-        int up = d - 1;
-        for (int i = 0; i < k_viewreg_n[d]; i++) {
-            if (k_viewreg_n[up] < 256) {
-                k_viewreg[up][k_viewreg_n[up]++] = k_viewreg[d][i];
-            } else {
-                k_viewreg_spill[up]++;
-            }
-        }
+        for (long long i = 0; i < k_viewreg_n[d]; i++) k_viewreg_push(d - 1, k_viewreg[d][i]);
     }
     k_viewreg_n[d] = 0;
-    k_viewreg_spill[d] = 0;
 }
 
 static int k_born_this_beat(const void* p);
@@ -427,11 +435,7 @@ static int k_born_this_beat(const void* p);
 static void k_viewreg_add(KMap* m) {
     int d = k_beat_depth - 1;
     if (d < 0 || d >= K_BEAT_MAX) return;
-    if (k_viewreg_n[d] < 256) {
-        k_viewreg[d][k_viewreg_n[d]++] = m;
-    } else {
-        k_viewreg_spill[d]++;
-    }
+    k_viewreg_push(d, m);
 }
 
 static KBuf* k_chunkreg[K_BEAT_MAX][256];

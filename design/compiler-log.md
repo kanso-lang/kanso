@@ -16846,10 +16846,19 @@ Total. Every view ever built for a map that died was still held at exit.
 
 THE OWNER IS THE REWIND. A map header born inside a beat dies when the beat
 rewinds, and that is the one moment anything knows its view became garbage. So
-`k_viewreg` mirrors `k_chunkreg` exactly — per-depth, 256 slots, a spill
-counter, flushed in `k_beat_rewind`, migrated at a pop that keeps its region.
-The precedent was already there for string chunks and it fits without
-modification, because the two leaks have the same shape.
+`k_viewreg` holds the headers registered at each beat depth, flushed in
+`k_beat_rewind` and migrated at a pop that keeps its region — the shape
+`k_chunkreg` already uses for string chunks, because the two leaks are the
+same leak.
+
+IT DOES NOT COPY THE FIXED BANK, and the corpus is why. The first version
+mirrored `k_chunkreg` down to its 256 slots and overflow counter, and CI came
+back with `view_frees=0 -> 256` on the oneshot benchmark — exactly the cap,
+which is what a cap looks like when it is doing the wrong thing. The excess
+silently went back to leaking, which is the behaviour this change exists to
+remove. Growing the registry instead turned 256 into 2,761: the fixed bank was
+dropping nine of every ten views it was supposed to own. A cap that quietly
+stops working is worse than no cap.
 
 HEADERS ARE REGISTERED, NOT VIEWS, and that choice does two jobs. A view that
 outgrows its buffer is replaced by the grow path, and registering the header
@@ -16880,6 +16889,11 @@ views. The objective is blind to malloc'd memory that is not a string chunk.
 `view_allocs - view_frees` is exactly the live count and the comment at the top
 of runtime.c already says so, so the term is available; wiring it in moves the
 floor and belongs in its own change.
+
+THE ONESHOT GOLDEN MOVES, and it is the number the earlier entries chased:
+`view_frees` 0 -> 2,761 on the 188 KB fixture, which is the 132 KB they
+measured as leaked. The trend gate prices it as an improvement and welfare is
+unmoved for the reason above.
 
 GOLDEN: tests/golden/mem/a_transient_maps_view_is_freed, watched red by
 disabling the registration — `view_frees=0` against `20000` with every other
