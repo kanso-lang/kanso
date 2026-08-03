@@ -4,7 +4,11 @@
 # free — and the price was that nothing owned it: one view allocated per
 # iteration and none freed, unbounded in the iteration count.
 #
-# view_allocs and view_frees below are the whole fixture. They must stay equal.
+# Three counters below say it, and bytes_peak says it best: twenty thousand
+# views are allocated and eighty bytes are ever held at once, which is one.
+# view_allocs and view_frees must stay equal, and the peak must not grow with
+# the iteration count — a peak that does is the definition of the leak.
+#
 # A header born inside the beat dies at the rewind, and that is the only moment
 # anything can know its view became garbage.
 seed = { "a":0 }

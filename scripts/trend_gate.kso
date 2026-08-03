@@ -33,7 +33,7 @@ lower_a = ["allocs" "alloc_bytes" "arena_blocks" "perm_allocs" "beat_iters"]
 
 lower_b = ["bytes_malloc" "thunk_allocs" "thunk_escaped" "thunk_live_exit"]
 
-lower_c = ["arena_peak_bytes" "bytes_peak" "sh_str" "sh_rec" "sh_buf"]
+lower_c = ["arena_peak_bytes" "held_peak_bytes" "sh_str" "sh_rec" "sh_buf"]
 
 lower_d = ["sh_map" "sh_bytes" "lines" "calls" "branches" "defines"]
 
