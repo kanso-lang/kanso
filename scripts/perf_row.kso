@@ -69,12 +69,23 @@ fn timed verb file
     . (r -> read_cost r.stderr)
 
 # Every figure in the report is one line with the number first, so a term is
-# found by the words beside it.
+# found by the words beside it. A figure the report does not carry answers -1
+# and the caller refuses — answering zero would draw a cliff on the chart that
+# no change made, and this whole script runs on macOS because that is where
+# both figures exist.
 fn read_cost report
   lines = text/split report "\n"
   work = figure lines "instructions retired"
   held = figure lines "peak memory footprint"
-  cost work held
+  present (cost work held) report (work < 0 or held < 0)
+
+fn present _ report true
+  io/write_err "{complaint}\n{report}\n" . (_ -> io/exit 1)
+
+fn present c _ false
+  c
+
+complaint = "perf_row: /usr/bin/time named no such figure; the report follows"
 
 fn figure lines words
   found = list/to_list (list/select lines (l -> names? l words))
@@ -84,13 +95,7 @@ fn names? line words
   length (text/split line words) == 2
 
 fn first_of _ 0
-  refused
+  0 - 1
 
 fn first_of found _
   text/to_int (text/split (text/trim found[1]!) " ")[1]!
-
-# A missing figure is the whole point of running this on macOS. Answering zero
-# would draw a cliff on the chart that no change made.
-refused = io/write_err "{complaint}\n" . (_ -> io/exit 1)
-
-complaint = "perf_row: /usr/bin/time reported no such figure; this needs macOS"
