@@ -140,7 +140,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      - run: ./target/release/kanso run scripts/welfare.kso
+      # The score and its per-term breakdown on the run page, not only in a
+      # log somebody has to open and scroll. The script still gates; this is
+      # the same output, rendered where it is read.
+      - name: welfare, and where it came from
+        run: |
+          set +e
+          ./target/release/kanso run scripts/welfare.kso >/tmp/welfare.txt 2>&1
+          verdict=$?
+          set -e
+          {
+            echo "## welfare"
+            echo ""
+            echo '```'
+            cat /tmp/welfare.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/welfare.txt
+          exit $verdict
       - name: prose numbers match the golden they quote
         run: ./target/release/kanso run scripts/golden_prose.kso
       - name: one sitting, published once
@@ -197,7 +214,19 @@ jobs:
       - name: nothing worsens unless something improves
         run: |
           git fetch origin main --depth 1
-          ./target/release/kanso run scripts/trend_gate.kso -- origin/main
+          set +e
+          ./target/release/kanso run scripts/trend_gate.kso -- origin/main >/tmp/trend.txt 2>&1
+          verdict=$?
+          set -e
+          {
+            echo "## every counter this branch moved"
+            echo ""
+            echo '```'
+            cat /tmp/trend.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/trend.txt
+          exit $verdict
       # the log is the chronology and the page is what a reader is shown; the
       # second used to follow the first by memory, and memory let ten shipped
       # optimisations land in a day without the page moving once
@@ -298,7 +327,24 @@ jobs:
           sudo apt-get install -y jq >/dev/null
           sh .github/clone-sibling.sh kq /tmp/kq
           cd /tmp/kq
-          KANSO=$GITHUB_WORKSPACE/target/release/kanso KQ_STORED=report sh spec.sh
+          set +e
+          KANSO=$GITHUB_WORKSPACE/target/release/kanso KQ_STORED=report \
+            sh spec.sh >/tmp/kq.txt 2>&1
+          verdict=$?
+          set -e
+          {
+            echo "## kq against this compiler"
+            echo ""
+            echo "Correctness gates. The cost goldens and the published-numbers"
+            echo "stamp are reported — they belong to the compiler kq pins, and"
+            echo "kq's own CI gates them at the pin bump."
+            echo ""
+            echo '```'
+            cat /tmp/kq.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/kq.txt
+          exit $verdict
       # kq is the only sibling anything runs, so the other two are kept in
       # step by whoever remembers to open them. A check is not a spec suite,
       # but it turns "somebody noticed" into "the build said so".
