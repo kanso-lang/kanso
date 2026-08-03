@@ -1604,7 +1604,16 @@ fn literal_walk_expr(
                 // and the arms below say what those take. Without this, every
                 // function sharing a bare name with a builtin would inherit
                 // the builtin's demands.
-                let shadowed = groups.contains_key(&(name.as_str(), args.len()));
+                //
+                // A std wrapper is a declaration too, and it forwards to the
+                // builtin rather than replacing it — so treating it as a
+                // shadow silenced the demand for every builtin somebody had
+                // written a wrapper over. That is how `print 5` came to be
+                // refused at compile time naming its argument while
+                // `text/chars 5` answered a bare runtime string: not a
+                // decision, an accident of which names have wrappers.
+                let forwards = builtins.contains_key(&(name.clone(), args.len()));
+                let shadowed = !forwards && groups.contains_key(&(name.as_str(), args.len()));
                 for (i, arg) in args.iter().enumerate() {
                     let Some(kind) = literal_kind(arg) else { continue };
                     let Some(allowed) = builtin_demand(&bare, i).filter(|_| !shadowed) else {

@@ -1,3 +1,10 @@
+# The runtime refusal, reached the only way it still can. A literal is caught
+# by the check pass now, naming the argument and where it is, so this hands
+# `bytes` an int the walk cannot see through — which is what a real program
+# does when a value turns out to be the wrong shape at run time.
 import "std/text"
 
-pub play = print "{text/bytes 5}"
+fn wrapped x
+  text/bytes x
+
+pub play = print "{wrapped 5}"

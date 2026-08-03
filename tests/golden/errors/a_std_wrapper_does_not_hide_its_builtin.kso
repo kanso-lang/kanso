@@ -1,0 +1,21 @@
+# `print 5` is refused at compile time, naming the argument, its type and where
+# it is. `text/chars 5` was not, and answered a bare runtime string naming
+# neither the call site nor the value — a worse error for no reason a reader
+# could predict.
+#
+# The cause was the guard that keeps a program's own `run` from inheriting the
+# builtin's demands. A std wrapper is a declaration too, so every one of them
+# shadowed the builtin it forwards to, and which builtins got a good message
+# came down to whether somebody had written a wrapper over them.
+#
+# `chopped 5` is deliberately here and deliberately not refused: the check
+# reads literals at the call site, and a literal handed through a function of
+# the reader's own is past what it can see. That boundary is the same one
+# `print` has always had, and naming it here keeps somebody from reading the
+# two refusals below as a promise of more.
+import "std/text"
+
+fn chopped s
+  text/chars s
+
+pub play = print "{chopped 5} {text/split 5 ","} {text/bytes 5}"
