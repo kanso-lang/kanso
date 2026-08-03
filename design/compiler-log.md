@@ -16830,3 +16830,71 @@ ratified `[]T` and `map[string int]` both work, `map[string]int` is refused,
 and a name inside brackets is checked — `[]banana` and `map[string banana]`
 each report an unknown type, which was the piece the task called the one a
 user feels. Those landed in #715 and the task was never updated.
+
+## a transient map's view has an owner now, and it is the rewind
+
+The oldest open memory thread in this log closes. Three entries diagnosed it and
+the last one got the shape right: the problem was never that the view is built,
+nor that it is read twice, nor where it lives. It is that a malloc'd view had no
+owner, because the arena has no notion of an object dying.
+
+Re-measured before touching anything, because a day-old number is a claim:
+
+    200,000 transient maps    view_allocs=200000    view_frees=0
+
+Total. Every view ever built for a map that died was still held at exit.
+
+THE OWNER IS THE REWIND. A map header born inside a beat dies when the beat
+rewinds, and that is the one moment anything knows its view became garbage. So
+`k_viewreg` holds the headers registered at each beat depth, flushed in
+`k_beat_rewind` and migrated at a pop that keeps its region — the shape
+`k_chunkreg` already uses for string chunks, because the two leaks are the
+same leak.
+
+IT DOES NOT COPY THE FIXED BANK, and the corpus is why. The first version
+mirrored `k_chunkreg` down to its 256 slots and overflow counter, and CI came
+back with `view_frees=0 -> 256` on the oneshot benchmark — exactly the cap,
+which is what a cap looks like when it is doing the wrong thing. The excess
+silently went back to leaking, which is the behaviour this change exists to
+remove. Growing the registry instead turned 256 into 2,761: the fixed bank was
+dropping nine of every ten views it was supposed to own. A cap that quietly
+stops working is worse than no cap.
+
+HEADERS ARE REGISTERED, NOT VIEWS, and that choice does two jobs. A view that
+outgrows its buffer is replaced by the grow path, and registering the header
+follows the replacement with no fixup. And freeing through the header nulls it,
+so a header registered twice — built, invalidated, rebuilt — frees once. No flag
+is needed on `KMap`, which matters: the comment above `k_view_alloc` records
+that a decode allocates 828,000 headers and builds no view, so a field there
+would be paid for by every map to serve the few that are read.
+
+    200,000 transient maps    view_allocs=200000    view_frees=200000
+
+The answer the program prints is unchanged, all 45 test binaries pass, and the
+repair path now frees the view it was dropping on the floor.
+
+WHAT IT DOES NOT TOUCH, said plainly: a map built outside any beat. There is no
+rewind, so there is no moment to free at, and `k_viewreg_add` returns without
+registering when the depth is zero. kq's decode is mostly that shape — its
+views are bounded by document size and released at exit, which is what the
+earlier entries measured as 132 KB on the 188 KB fixture. Four of them do sit
+inside a beat and are now freed; kq's decode golden moves `view_frees` 0 -> 4
+and wants regenerating when its pin advances.
+
+WELFARE CANNOT SEE THIS, and that is a finding rather than a complaint. The
+index reads 75.68 either side and no cost golden moved, because its two memory
+terms are `arena_peak_bytes` and `bytes_peak` and a view is in neither — the
+transient-map fixture reports `bytes_peak=0` while allocating twenty thousand
+views. The objective is blind to malloc'd memory that is not a string chunk.
+`view_allocs - view_frees` is exactly the live count and the comment at the top
+of runtime.c already says so, so the term is available; wiring it in moves the
+floor and belongs in its own change.
+
+THE ONESHOT GOLDEN MOVES, and it is the number the earlier entries chased:
+`view_frees` 0 -> 2,761 on the 188 KB fixture, which is the 132 KB they
+measured as leaked. The trend gate prices it as an improvement and welfare is
+unmoved for the reason above.
+
+GOLDEN: tests/golden/mem/a_transient_maps_view_is_freed, watched red by
+disabling the registration — `view_frees=0` against `20000` with every other
+counter in the file identical, which is the narrowest a mem golden gets.

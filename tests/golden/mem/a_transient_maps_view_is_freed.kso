@@ -1,0 +1,19 @@
+# A map built inside the loop and read there, so it is garbage the moment the
+# iteration ends. Its sorted view is malloc'd rather than arena-allocated —
+# that is what stops a below-mark header ever holding a pointer a rewind can
+# free — and the price was that nothing owned it: one view allocated per
+# iteration and none freed, unbounded in the iteration count.
+#
+# view_allocs and view_frees below are the whole fixture. They must stay equal.
+# A header born inside the beat dies at the rewind, and that is the only moment
+# anything can know its view became garbage.
+seed = { "a":0 }
+
+fn tally 0 acc
+  print acc
+
+fn tally n acc
+  m = put seed "b" n
+  tally (n - 1) (acc + length m)
+
+pub play = tally 20000 0

@@ -376,6 +376,68 @@ static void k_buf_flush(void);
    Registration happens at the handoff, and the rewind frees the frame's
    chunks wholesale: the carry copy-out never shares malloc'd data (it
    fails k_survives and is copied), so nothing can point here afterward. */
+/* The same shape for a map's sorted view, and for the same reason. The view
+   is malloc'd so a below-mark header can never hold a pointer a rewind frees,
+   and the price was that a transient map's view had no owner at all: a loop
+   building one map per iteration allocated 200,000 views and freed none.
+
+   A header born this beat dies at the rewind, and both copy paths null the
+   view rather than share it, so the rewind is exactly where the view can go.
+   HEADERS are registered rather than views, which buys two things: a view
+   that outgrows its buffer is followed without a fixup, and freeing through
+   the header nulls it, so a header registered twice frees once. */
+/* The registry grows rather than spilling. A fixed bank with an overflow
+   counter is what k_chunkreg does, and it is wrong here for a reason the
+   corpus showed: a fixture registered more than a bank's worth inside one
+   beat and the excess silently went back to leaking, which is the behaviour
+   this exists to remove. A cap that quietly stops working is worse than no
+   cap, so this one has none. */
+static KMap** k_viewreg[K_BEAT_MAX];
+static long long k_viewreg_n[K_BEAT_MAX];
+static long long k_viewreg_cap[K_BEAT_MAX];
+static void k_view_free(KValue* view);
+
+static void k_viewreg_push(int d, KMap* m) {
+    if (k_viewreg_n[d] == k_viewreg_cap[d]) {
+        long long grown = k_viewreg_cap[d] ? k_viewreg_cap[d] * 2 : 256;
+        KMap** wider = realloc(k_viewreg[d], sizeof(KMap*) * (size_t)grown);
+        if (!wider) { fputs("out of memory\n", stderr); exit(1); }
+        k_viewreg[d] = wider;
+        k_viewreg_cap[d] = grown;
+    }
+    k_viewreg[d][k_viewreg_n[d]++] = m;
+}
+
+static void k_viewreg_flush(int d) {
+    for (long long i = 0; i < k_viewreg_n[d]; i++) {
+        KMap* m = k_viewreg[d][i];
+        if (m->sorted) {
+            k_view_free(m->sorted);
+            m->sorted = NULL;
+            m->sorted_len = 0;
+        }
+    }
+    k_viewreg_n[d] = 0;
+}
+
+/* A pop that keeps its region keeps its maps, so their views hand up with
+   the frame's chunks rather than being freed under a live header. */
+static void k_viewreg_migrate(int d) {
+    if (d < 0 || d >= K_BEAT_MAX) return;
+    if (d > 0) {
+        for (long long i = 0; i < k_viewreg_n[d]; i++) k_viewreg_push(d - 1, k_viewreg[d][i]);
+    }
+    k_viewreg_n[d] = 0;
+}
+
+static int k_born_this_beat(const void* p);
+
+static void k_viewreg_add(KMap* m) {
+    int d = k_beat_depth - 1;
+    if (d < 0 || d >= K_BEAT_MAX) return;
+    k_viewreg_push(d, m);
+}
+
 static KBuf* k_chunkreg[K_BEAT_MAX][256];
 static int k_chunkreg_n[K_BEAT_MAX];
 static long long k_chunkreg_spill[K_BEAT_MAX];
@@ -414,7 +476,10 @@ static void k_chunkreg_migrate(int d) {
 static void k_beat_rewind(KMark* m) {
     k_buf_flush();
     long long d = m - k_beat_stack;
-    if (d >= 0 && d < K_BEAT_MAX) k_chunkreg_flush((int)d);
+    if (d >= 0 && d < K_BEAT_MAX) {
+        k_chunkreg_flush((int)d);
+        k_viewreg_flush((int)d);
+    }
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
         k_blocks = b->next;
@@ -1014,6 +1079,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
                 nb->used = 2 * mp->len;
                 memcpy(nb + 1, mp->pairs, sizeof(KValue) * (size_t)(2 * mp->len));
                 mp->pairs = (KValue*)(nb + 1);
+                if (mp->sorted) k_view_free(mp->sorted);
                 mp->sorted = NULL;
                 mp->sorted_len = 0;
             }
@@ -1113,6 +1179,7 @@ KValue k_beat_pop(KValue r) {
                     r = k_deep_copy(r, &cp);
                 }
                 k_chunkreg_migrate(k_beat_depth);
+                k_viewreg_migrate(k_beat_depth);
             }
             c->used_flag = 0;
         }
@@ -1144,6 +1211,7 @@ KValue k_cohort_pop(KValue r) {
     if (grown < (long long)(1 << 19)) {
         k_beat_depth--;
         k_chunkreg_migrate(k_beat_depth);
+        k_viewreg_migrate(k_beat_depth);
         return r;
     }
     if (!k_is_heap(r.tag)) {
@@ -1174,6 +1242,7 @@ KValue k_cohort_pop(KValue r) {
         if (__builtin_expect(k_stats_on > 0, 0)) k_stat_cohort_kept++;
         k_beat_depth--;
         k_chunkreg_migrate(k_beat_depth);
+        k_viewreg_migrate(k_beat_depth);
         return r;
     }
     k_carry_reset();
@@ -3529,6 +3598,7 @@ static KValue k_exec(KDesc* d) {
                 if (nsz > (size_t)(1 << 18)) {
                     k_beat_depth--;
                     k_chunkreg_migrate(k_beat_depth);
+                    k_viewreg_migrate(k_beat_depth);
                     k_beat_push();
                     cur = next;
                 } else {
@@ -3997,6 +4067,9 @@ static KValue* k_map_sorted(KMap* m, long long* out_len) {
             m->sorted_len = 0;
         }
         m->sorted = out;
+        /* Born this beat means the header dies at the rewind, which is the
+           only moment anything knows this view has become garbage. */
+        if (k_born_this_beat(m)) k_viewreg_add(m);
     }
     if (out_len) *out_len = m->sorted_len;
     return m->sorted;
