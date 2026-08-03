@@ -16192,3 +16192,35 @@ widen a corpus without the widening itself becoming an argument.
 
 The gate widening is now a change the objective can judge on its merits, and
 judging it is the next thing rather than part of this one.
+
+## the objective accepts what it declined, because the corpus grew (2026-08-02)
+
+The same four lines welfare refused three entries ago now score 75.68 against a
+floor of 75.65. Nothing about the compiler change is different. What changed is
+that the basket holds a hundred thousand elements, so `basket_peak_bytes` can
+move, and the win the model could not see is now a term in it.
+
+    against the old basket   75.64   (floor 75.65)  declined
+    against the new basket   75.68   (floor 75.65)  accepted
+
+The trade is the same one either way: eighteen more allocations against an arena
+peak of 5,242,896 falling to 2,097,152. The first reading priced only the
+allocations because the peak could not respond at four thousand elements. That
+is what a corpus too small to hold the question does to an objective — it does
+not report uncertainty, it reports a confident number that happens to be wrong.
+
+`scalar_elem` now reads a name's inferred parameter set, so `push xs n` — a
+counter rather than a literal, and the shape almost every accumulator actually
+has — is admitted. `growing_accumulator_stays_grow_only` becomes
+`a_growing_list_of_scalars_carries_and_a_growing_map_does_not`, keeping the gate
+for everything it was really written for: a growing map, a growing byte builder,
+a list whose elements are pointers.
+
+Eleven mem goldens move and the encode, decode and one-shot veins do not. kq is
+green throughout — twelve fixture goldens byte-identical to jq, both its cost
+goldens unchanged, its scale gate linear.
+
+The sequence is the point and is worth keeping: measure, get declined, fix the
+measurement on its own merits and bank nothing for it, then re-propose and let
+the objective rule. Each step is separately reviewable and none of them is an
+argument about whether the rule should apply this time.
