@@ -74,6 +74,13 @@ static long long k_stat_sh_map = 0;
 static long long k_stat_sh_bytes = 0;
 static long long k_stat_bytes_freed = 0;
 static long long k_stat_buf_reuse = 0;
+/* A map's cached sorted view is malloc'd, so no rewind reclaims it and only an
+   explicit free ever will. Counting both ends makes the gap a diffed fact
+   rather than a belief: view_allocs minus view_frees is memory the process is
+   still holding, and on a program that builds a map per loop iteration it grew
+   without bound before anything could see it. */
+static long long k_stat_view_allocs = 0;
+static long long k_stat_view_frees = 0;
 /* Malloc-backed builder storage currently live, and its high-water mark.
    Arena storage rewinds away; these bytes only leave through free(), so a
    peak that scales with iteration count is a leak by definition. */
@@ -267,6 +274,8 @@ static void k_stats_dump(void) {
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
     fprintf(stderr, "buf_reuse=%lld\nbytes_peak=%lld\n", k_stat_buf_reuse, k_stat_bytes_peak);
+    fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
+            k_stat_view_allocs, k_stat_view_frees);
     fprintf(stderr,
         "sh_str=%lld\nsh_rec=%lld\nsh_buf=%lld\nsh_map=%lld\nsh_bytes=%lld\n",
         k_stat_sh_str, k_stat_sh_rec, k_stat_sh_buf, k_stat_sh_map, k_stat_sh_bytes);
@@ -3688,6 +3697,7 @@ static int k_msort_cmp(const void* pa, const void* pb) {
    there is paid for by every map to serve the few that are read. One slot
    in front of the buffer is paid only by those few. */
 static KValue* k_view_alloc(long long cap) {
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_view_allocs++;
     char* raw = malloc(sizeof(KValue) + sizeof(KValue) * 2 * (size_t)cap);
     if (!raw) { fputs("out of memory\n", stderr); exit(1); }
     if (__builtin_expect(k_stats_on > 0, 0)) {
@@ -3703,6 +3713,7 @@ static long long k_view_cap(KValue* view) {
 }
 
 static void k_view_free(KValue* view) {
+    if (__builtin_expect(k_stats_on > 0, 0)) k_stat_view_frees++;
     free((char*)view - sizeof(KValue));
 }
 
