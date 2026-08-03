@@ -400,11 +400,25 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      - name: measure this commit and redraw the chart
+      # The row and the redraw are separate because only one of them can run
+      # here. `/usr/bin/time -l` on a GitHub macOS runner reports the peak
+      # footprint and NOT instructions retired — the hardware counter is not
+      # exposed inside their VM — so perf_row refuses rather than writing a
+      # zero, and the series is extended from a machine that can read it. The
+      # redraw needs no counters at all and runs every time, which is the half
+      # that was missing: the rows were being collected and never drawn.
+      - name: measure this commit, if this runner can
         run: |
-          ./target/release/kanso run scripts/perf_row.kso -- \
-            "$(git rev-parse HEAD)" "$(date +%s)" >> bench/long_view.tsv
-          ./target/release/kanso run scripts/long_view.kso
+          if ./target/release/kanso run scripts/perf_row.kso -- \
+               "$(git rev-parse HEAD)" "$(date +%s)" > /tmp/row.tsv; then
+            cat /tmp/row.tsv >> bench/long_view.tsv
+          else
+            echo "::notice::this runner cannot read instructions retired, so the"
+            echo "::notice::series is not extended here. The chart is still redrawn"
+            echo "::notice::from the rows that exist."
+          fi
+      - name: redraw the chart
+        run: ./target/release/kanso run scripts/long_view.kso
       - name: commit the chart if it moved
         run: |
           git config user.name "kanso-ci"
