@@ -16479,3 +16479,42 @@ regression was itself the regression's route. #639 came in through a coordinated
 branch, and the escape written to handle that case came in through being
 forgotten. An escape hatch that lives in the tree outlives its change unless
 something expires it, and the cheapest thing that expires is a name.
+
+## the stack message names the operator that built the chain (2026-08-03)
+
+A loop written with `>>` runs out of stack and is told "recursion went deeper
+than the stack holds", which points at the loop — the one part of the program
+that is fine.
+
+    fn step n
+      io/write "" >> step (n + 1)
+
+`a . f` hands the continuation over as a closure, so nothing past the current
+link exists until the link runs. `a >> b` takes `b` as an already evaluated
+description, so building link one requires evaluating link two, which requires
+link three. The whole chain is constructed before any of it runs, and the
+construction is what exhausts the stack.
+
+WHETHER `>>` SHOULD DEFER ITS RIGHT SIDE IS STILL CLAY'S, and the message is
+wrong whichever way that goes, so it is fixed now.
+
+THE FIX HAD TO BE STATIC, WHICH IS THE PART WORTH RECORDING. Three engines
+report this and none of them can work out the cause where it reports: the
+interpreter has a frame guard and sees only that it is deep; native sees a
+SIGSEGV in a child and translates it in the PARENT; wasm sees a trap nothing
+recorded. Improving one alone would have made the engines disagree, which is
+what the differential law is for. A function that calls itself in the right
+operand of `>>` is plain in the source, so `stack_hint` reads it once and all
+three append the same sentence — the interpreter at construction, wasm at
+compile, native from the program the parent already holds.
+
+MEASURED WHILE CHECKING IT DOES NOT FIRE SPURIOUSLY: `fn deep n / 1 + deep
+(n - 1)` runs to a hundred million and answers, because TRMC turns it into a
+loop. Ordinary deep recursion does not reach this message at all, which is why
+the hint can afford to be specific.
+
+Also worth having in the record: the two engines disagree about WHERE this
+program fails, not only what they say. The interpreter refuses past its
+ten-thousand-frame guard; native gets to somewhere between twenty and a hundred
+thousand on a real stack. Both refuse, so the differential law holds, but the
+threshold is an engine property rather than a language one and nothing pins it.

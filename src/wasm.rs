@@ -146,6 +146,10 @@ pub extern "C" fn kanso_out_len() -> usize {
 #[cfg(target_arch = "wasm32")]
 thread_local! {
     static WASM_BYTES: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    /// Kept from the compile, because the trap that needs it arrives at an
+    /// entry point with no program in scope — the same reason the interpreter
+    /// computes its hint once at construction.
+    static STACK_HINT: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 /// Compile the program to a wasm module for in-browser execution. Returns
@@ -163,6 +167,7 @@ pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32)
             return 2;
         }
     };
+    STACK_HINT.with(|h| *h.borrow_mut() = crate::stack_hint(&program));
     match crate::wasm_backend::compile(&program, tailcalls != 0) {
         Ok(compiled) => {
             crate::wasm_rt::load(program, &compiled.lits, compiled.types);
@@ -207,9 +212,10 @@ pub extern "C" fn kanso_take_rt_error() {
         // a trap nothing recorded: the stack is the one resource compiled
         // code exhausts without a chance to say so — the same translation
         // native's parent makes from the child's SIGSEGV
-        set_out(
-            "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds\n",
-        );
+        let hint = STACK_HINT.with(|h| h.borrow().clone());
+        set_out(&format!(
+            "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds{hint}\n"
+        ));
         return;
     }
     set_out(&format!("error[runtime]: {message}\n"));
