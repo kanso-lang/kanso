@@ -1174,11 +1174,9 @@ fn is_scalar_list_chain(
     match e {
         Expr::Ident(p, _) => {
             p == own
-                || locals
-                    .get(p.as_str())
-                    .is_some_and(|e2| {
-                        is_scalar_list_chain(e2, own, decl, inference, decl_index, locals, mut_sites)
-                    })
+                || locals.get(p.as_str()).is_some_and(|e2| {
+                    is_scalar_list_chain(e2, own, decl, inference, decl_index, locals, mut_sites)
+                })
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
             Expr::Ident(n, _)
