@@ -21,6 +21,12 @@
 # in THIS repository, on the branch under test. It keeps the loosening inside
 # the change being reviewed, where #639's was a side effect of naming a branch.
 #
+# It names the branch it is for on its first line, and licenses no other. #724
+# wrote one and merged it, and every branch afterwards inherited the licence in
+# silence — the hole this script closes, reopened by the change that used the
+# escape. A file left behind now names a branch nobody is on, so it grants
+# nothing and nobody has to remember to delete it.
+#
 # It states a TRADE, not a permission: which counters move, and what got better
 # in exchange. The welfare index is the arbiter of whether the trade is worth
 # taking and these per-counter checks are the safety net under it — so a
@@ -36,15 +42,17 @@ url="https://github.com/kanso-lang/$repo"
 if [ -n "$branch" ] && git ls-remote --exit-code --heads "$url" "$branch" >/dev/null 2>&1; then
   git clone --depth 1 --branch "$branch" "$url" "$into"
   if [ -f sibling-goldens-move ]; then
-    if ! grep -qi "better\|gain\|buys\|in exchange" sibling-goldens-move; then
-      echo "sibling-goldens-move names no compensating gain."
-      echo "A moved golden is a trade: say which counters move AND what got"
-      echo "better for it. Nothing worse with nothing better, ever."
-      exit 1
+    set +e
+    sh .github/goldens-move-licenses.sh sibling-goldens-move "$branch"
+    verdict=$?
+    set -e
+    if [ "$verdict" = 0 ]; then
+      echo "$repo: $branch (goldens from the branch — the trade claimed:)"
+      sed 's/^/  | /' sibling-goldens-move
+      exit 0
     fi
-    echo "$repo: $branch (goldens from the branch — the trade claimed:)"
-    sed 's/^/  | /' sibling-goldens-move
-    exit 0
+    [ "$verdict" = 2 ] && exit 1
+    echo "$repo: the licence names another branch; goldens from main"
   fi
   echo "$repo: $branch (performance goldens from main)"
   git -C "$into" remote set-branches origin main

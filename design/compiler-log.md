@@ -16447,3 +16447,35 @@ WHAT WOULD CATCH IT NEXT TIME: nothing does today. The file is meant to live for
 one merge, and a check that a merge to main leaves none behind is a four-line
 job. Recorded rather than built, because this branch is already carrying a
 compiler change and a nine-annotation sweep, and a CI rule wants its own red.
+
+## the licence names the branch it is for (2026-08-03)
+
+The entry above deleted a `sibling-goldens-move` that had been sitting on main
+since #724, licensing every branch to bring its own sibling goldens. Deleting it
+fixed that instance and nothing else: the next change to write one will merge it
+the same way, because the file had no notion of what it was for.
+
+It names its branch now, on its first line, and licenses no other. A file left
+behind names a branch nobody is on, matches nothing, and grants nothing. That is
+cheaper than a rule somebody has to keep, and it fails in the safe direction —
+which is the difference between a check and a design.
+
+THE TWO WAYS OF NOT LICENSING ARE DIFFERENT and the caller has to tell them
+apart, which is the part worth getting right rather than clever. A file for
+another branch is a leftover: not an error, goldens come from main, the build
+carries on. A file for THIS branch claiming no compensating gain IS an error,
+because somebody is loosening the gate without saying what it buys, and that is
+exactly the shape #639 had. So the check answers 0, 1 and 2 rather than a
+boolean, and `clone-sibling.sh` refuses only on 2.
+
+Four examples pin it: a file licenses the branch it names, a leftover licenses
+nobody, a file claiming no gain refuses the build, and the OLD format — no
+branch line at all — licenses nothing rather than everything. Watched red by
+stripping the branch rule: two of the four fail, and the one that matters says
+"a leftover licensed a branch it was never written for".
+
+The general shape, because this is the second time: a mechanism built to catch a
+regression was itself the regression's route. #639 came in through a coordinated
+branch, and the escape written to handle that case came in through being
+forgotten. An escape hatch that lives in the tree outlives its change unless
+something expires it, and the cheapest thing that expires is a name.
