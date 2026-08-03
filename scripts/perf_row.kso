@@ -1,0 +1,96 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# One row of bench/long_view.tsv, for the tree as it stands.
+#
+# scripts/backfill_history.kso measures an arbitrary commit by checking it out
+# and building it, which is what recovering a history costs. This measures the
+# compiler already built beside it, which is what CI has, and it is the only
+# difference between the two.
+#
+# The figures come from `/usr/bin/time -l`: instructions retired and peak
+# footprint, both from the kernel, so a busy runner moves neither. That is why
+# this runs on macOS in CI — `/usr/bin/time -v` on linux reports the footprint
+# and not the instructions, and half a row is not a row.
+#
+#     kanso run scripts/perf_row.kso -- <sha> <unix-time>
+type cost
+  cpu
+  peak
+
+examples = ["fizzbuzz" "temperature" "wordcount" "fib" "primes" "rot13" "roman"]
+
+zero = cost 0 0
+
+pub play = io/args . (argv -> begun argv (length argv < 2))
+
+fn begun _ true
+  io/write_err "perf_row: <sha> <unix-time>\n" . (_ -> io/exit 1)
+
+fn begun argv false
+  measured argv[1]! argv[2]!
+
+fn measured sha at
+  timed "check" "lib/json" . (front -> ran sha at front)
+
+fn ran sha at front
+  timed_examples 1 zero . (back -> reported sha at front back)
+
+fn reported sha at front back
+  io/write "{at}\t{sha}\t{front.peak}\t{front.cpu}\t{back.peak}\t{back.cpu}\n"
+
+# Each example is its own process, so the peak is the worst of them and the
+# cost is the sum — one big program and seven small ones are not the same
+# shape, and the worst is what a machine has to hold.
+fn timed_examples at acc
+  walking at acc (at > length examples)
+
+fn walking _ acc true
+  acc
+
+fn walking at acc false
+  timed "run" "examples/{examples[at]!}.kso" . (c -> merged at acc c)
+
+fn merged at acc c
+  timed_examples (at + 1) (cost (acc.cpu + c.cpu) (bigger acc.peak c.peak))
+
+fn bigger a b
+  larger a b (a > b)
+
+fn larger a _ true
+  a
+
+fn larger _ b false
+  b
+
+fn timed verb file
+  io/run "/usr/bin/time" ["-l" "target/release/kanso" verb file]
+    . (r -> read_cost r.stderr)
+
+# Every figure in the report is one line with the number first, so a term is
+# found by the words beside it.
+fn read_cost report
+  lines = text/split report "\n"
+  work = figure lines "instructions retired"
+  held = figure lines "peak memory footprint"
+  cost work held
+
+fn figure lines words
+  found = list/to_list (list/select lines (l -> names? l words))
+  first_of found (length found)
+
+fn names? line words
+  length (text/split line words) == 2
+
+fn first_of _ 0
+  refused
+
+fn first_of found _
+  text/to_int (text/split (text/trim found[1]!) " ")[1]!
+
+# A missing figure is the whole point of running this on macOS. Answering zero
+# would draw a cliff on the chart that no change made.
+refused = io/write_err "{complaint}\n" . (_ -> io/exit 1)
+
+complaint = "perf_row: /usr/bin/time reported no such figure; this needs macOS"

@@ -378,19 +378,49 @@ jobs:
   # push to main; the compiler page charts them. Pages serves from main/docs
   # and main requires review, so history cannot live there — it lives on
   # perf-history and the panel fetches it.
+  # The chart on the compiler page is regenerated HERE, on every pull request
+  # and every push, and committed back to the branch under test. It was not,
+  # for a long time: perf_record has appended a row per commit to the history
+  # branch since the panel was built, faithfully, 474 of them — and nothing has
+  # ever run scripts/long_view.kso, so the published chart sat frozen at
+  # whenever somebody last ran it by hand. Collected, gated, never surfaced,
+  # which is the same shape as the regression that made this job worth fixing.
+  #
+  # macOS because the figures are instructions retired and peak footprint from
+  # `/usr/bin/time -l`. Linux `time -v` reports the footprint and not the
+  # instructions, and half a row would draw a cliff no change made.
   perf-history:
     name: perf history (published to the compiler page)
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
+      - name: measure this commit and redraw the chart
+        run: |
+          ./target/release/kanso run scripts/perf_row.kso -- \
+            "$(git rev-parse HEAD)" "$(date +%s)" >> bench/long_view.tsv
+          ./target/release/kanso run scripts/long_view.kso
+      - name: commit the chart if it moved
+        run: |
+          git config user.name "kanso-ci"
+          git config user.email "ci@kanso-lang.dev"
+          if git diff --quiet -- docs/compiler.html bench/long_view.tsv; then
+            echo "the chart is unchanged"
+            exit 0
+          fi
+          git add docs/compiler.html bench/long_view.tsv
+          git commit -m "the long view, redrawn"
+          git push origin "HEAD:${{ github.head_ref || github.ref_name }}"
       - name: record this commit
+        if: github.ref == 'refs/heads/main'
         run: ./target/release/kanso run scripts/perf_record.kso > /tmp/record.json
       - name: append to the history branch
+        if: github.ref == 'refs/heads/main'
         run: |
           git config user.name "kanso-ci"
           git config user.email "ci@kanso-lang.dev"
