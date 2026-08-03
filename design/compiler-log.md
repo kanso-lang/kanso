@@ -15786,3 +15786,45 @@ genuinely conflict. Either rendering carries the asking module (a wider change
 than it sounds, since render is called from the runtime with no such context),
 or the qualified spelling is simply what a record prints everywhere and the
 fixture here is wrong to expect otherwise. That is a gavel.
+
+## the wrapped corpus, re-triaged (2026-08-02)
+
+The priority list carries "11 of 78 failed, 4 classes" and names currying and
+err types as what remains. Both counts and both names are stale. Running every
+micro sample through a generated entry today: 70 pass, 12 fail, and the twelve
+sort into four groups that are nothing like the old four.
+
+ONE REAL BUG, AND IT IS THREE OF THE TWELVE. A user's arm keyed on their own
+type stops being selected once the module is qualified:
+
+    sub_render_arm                    custom: 350        wanted custom: $3.50
+    ordering_arms_for_a_type_you_own  comparison requires two values of one …
+    print_handed_over_as_a_value      stops after 4 of 7 lines
+
+The first is the clearest: the user's render arm did not match, so the value
+fell through to primitive rendering and printed the raw number. This is dispatch
+failing, not cosmetics — the arm is simply never chosen. Qualification renames
+the declaration and something that selects on the type name does not follow.
+
+A GAVEL, THREE MORE: err_trap_named, render_record_none, subtype_chain all
+print the qualified spelling where the sample prints bare. That is the
+collision recorded in the entry above — render has no notion of who is asking,
+and two existing tests pin the qualified form on purpose. Cosmetic, and not
+mine to settle.
+
+SAMPLES THAT CANNOT BE MODULES, three: not_equal, import_diamond,
+play_in_a_comment. Written entry-shaped — a bare trailing statement and no
+`pub play` — and a module may not hold one. That is the constraint already
+recorded against the play migration, and it is work for the corpus rather than
+the compiler: those samples need a `pub play =` before they can be wrapped.
+
+FIXTURES THAT READ THEIR SURROUNDINGS, two: dir_listing_is_sorted lists its own
+directory and is_dir asks about one, and wrapping changes what is there. Not
+bugs, and the old list already knew about the first.
+
+AND ONE THAT IS MY HARNESS: write_err_stream interleaves stdout and stderr, and
+the triage captured them merged. Says nothing about the compiler.
+
+So item 1 is one bug away from done, not two, and the bug is not either of the
+two the list names — currying across an import already works and has a green
+spec. What blocks item 2 is that bug plus giving three samples a `pub play`.
