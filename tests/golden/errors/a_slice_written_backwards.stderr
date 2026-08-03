@@ -1,0 +1,4 @@
+error[syntax]: a slice is `[]int`, written before the type — `int[]` reads inside-out as soon as anything nests
+  --> a_slice_written_backwards.kso:6:16
+   6 | fn take xs:int[]
+                      ^

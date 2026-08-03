@@ -16795,3 +16795,38 @@ for an improvement is how a rule stops being read.
 This does not adjudicate the claim, and it is not meant to. It makes the trade
 appear in the diff, next to the number, where a reviewer can disagree with it.
 An unstated trade is the only kind nobody can argue with.
+
+## A slice had two spellings, and one of them was in the design's own example
+
+design/type-syntax.md rules the postfix out in a sentence: "Postfix `T[]` would
+read inside-out on the same example, and it would keep the postfix bracket
+occupied." The parser accepted it anyway, and had a comment saying so — the
+prefix path folds into the same internal name the postfix path already
+produced, deliberately, so nothing downstream had to learn a new shape. What
+nobody closed afterwards was the old door.
+
+So `xs:[]int` and `xs:int[]` were both live, dispatching identically, in a
+language whose position is that there is no formatter because the canonical
+form IS the grammar. Two spellings for one type is the thing that position
+exists to forbid.
+
+    error[syntax]: a slice is `[]int`, written before the type — `int[]`
+    reads inside-out as soon as anything nests
+
+MEASURED FIRST, because a refusal that breaks working code needs to know what
+it breaks: no .kso in the repo writes the postfix form. #715 had already
+migrated lib/json, and the full suite passes unchanged. The only site was
+design/type-syntax.md ITSELF, whose generics example wrote `friend_names:k[]`
+forty lines under the sentence rejecting it. That is now `[]k`.
+
+`Name[args]` is untouched. The design ratifies it as type application, and
+what it MEANS waits on generics, which are gaveled and unbuilt — `int[string]`
+parses today and applies a type that takes no parameters to one it has no use
+for. That is a real gap and a separate one: the arity of an application cannot
+be checked until something declares an arity.
+
+WHAT #114 ACTUALLY HAD LEFT, having gone looking: less than it recorded. The
+ratified `[]T` and `map[string int]` both work, `map[string]int` is refused,
+and a name inside brackets is checked — `[]banana` and `map[string banana]`
+each report an unknown type, which was the piece the task called the one a
+user feels. Those landed in #715 and the task was never updated.
