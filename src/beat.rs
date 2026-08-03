@@ -1124,10 +1124,29 @@ fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
 /// deliberately narrow: a literal number, a boolean, or a builtin whose whole
 /// return set is scalar. Anything it cannot see through it refuses, which
 /// costs a bracket and never correctness.
-fn scalar_elem(e: &Expr) -> bool {
+fn scalar_elem(
+    e: &Expr,
+    decl: &crate::ast::FnDecl,
+    inference: &infer::Inference,
+    decl_index: usize,
+) -> bool {
     match e {
         Expr::Int(_, _) | Expr::Float(_, _) => true,
-        Expr::Ident(n, _) => matches!(n.as_str(), "true" | "false"),
+        // The ordinary shape is `push xs n`, where n is the loop's own
+        // counter: a name rather than a literal, and a scalar all the same.
+        // Reading its parameter set lets the common case through without
+        // letting a name of unknown type through with it.
+        Expr::Ident(n, _) => {
+            matches!(n.as_str(), "true" | "false")
+                || decl
+                    .params
+                    .iter()
+                    .position(|pat| matches!(pat, Pattern::Var(v, _) if v == n))
+                    .is_some_and(|j| {
+                        let set = inference.params[decl_index][j];
+                        set != 0 && set & !FAIL & !SCALAR == 0
+                    })
+        }
         Expr::App { head, args, .. } => match head.as_ref() {
             Expr::Ident(n, _) => {
                 let set = infer::builtin_set(n, &vec![infer::TOP; args.len()]);
@@ -1147,6 +1166,8 @@ fn is_scalar_list_chain(
     e: &Expr,
     own: &str,
     decl: &crate::ast::FnDecl,
+    inference: &infer::Inference,
+    decl_index: usize,
     locals: &HashMap<&str, &Expr>,
     mut_sites: &MutSites,
 ) -> bool {
@@ -1155,7 +1176,9 @@ fn is_scalar_list_chain(
             p == own
                 || locals
                     .get(p.as_str())
-                    .is_some_and(|e2| is_scalar_list_chain(e2, own, decl, locals, mut_sites))
+                    .is_some_and(|e2| {
+                        is_scalar_list_chain(e2, own, decl, inference, decl_index, locals, mut_sites)
+                    })
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
             Expr::Ident(n, _)
@@ -1163,8 +1186,10 @@ fn is_scalar_list_chain(
                     && args.len() == 2
                     && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
             {
-                scalar_elem(&args[1])
-                    && is_scalar_list_chain(&args[0], own, decl, locals, mut_sites)
+                scalar_elem(&args[1], decl, inference, decl_index)
+                    && is_scalar_list_chain(
+                        &args[0], own, decl, inference, decl_index, locals, mut_sites,
+                    )
             }
             _ => false,
         },
@@ -1221,7 +1246,7 @@ fn arg_ok(
         let locals = local_binds(decl);
         if set != 0
             && set & !FAIL & !LIST == 0
-            && is_scalar_list_chain(arg, own, decl, &locals, mut_sites)
+            && is_scalar_list_chain(arg, own, decl, inference, decl_index, &locals, mut_sites)
         {
             return true;
         }
@@ -1369,17 +1394,37 @@ mod tests {
         assert!(loops_of(src).contains(&("crunch".to_string(), 3)));
     }
 
+    /// `push acc n` extends its own previous value, and this used to keep the
+    /// loop off the carry path: copying a growing accumulator every rewind
+    /// cost quadratic bytes, and the ch10 teaching program went 33 KB to
+    /// 16 MB of traffic when it was carried.
+    ///
+    /// A growing list of scalars carries now, because that copy no longer
+    /// happens: its storage is malloc'd rather than arena, so a rewind has
+    /// nothing to copy. The same ch10 program is byte-identical at 1,000 and
+    /// 10,000 elements and holds a quarter of the arena at 100,000.
+    ///
+    /// The gate still stands for everything else it was written for — a
+    /// growing map, a growing byte builder, a list whose elements are
+    /// pointers — which is what the second half here insists on.
     #[test]
-    fn growing_accumulator_stays_grow_only() {
-        // push acc n extends its own previous value: carrying it would copy
-        // quadratic bytes where grow-only allocates linear. The gate keeps
-        // it off the carry path.
-        let src = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
-        let (program, inference) = compiled(src);
+    fn a_growing_list_of_scalars_carries_and_a_growing_map_does_not() {
+        let ints = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (push acc n)\n\nmain = print \"{collect 3 []}\"\n";
+        let (program, inference) = compiled(ints);
         let beats =
             super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+        assert!(
+            beats.ids.contains_key(&("collect".to_string(), 2)),
+            "a growing list of scalars is still refused the carry"
+        );
 
-        assert!(!beats.ids.contains_key(&("collect".to_string(), 2)));
+        let maps = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k\" n)\n\nmain = print \"{collect 3 {:}}\"\n";
+        let (mp, mi) = compiled(maps);
+        let mbeats = super::beat_loops(&mp, &mi, &crate::linear::in_place_pushes(&mp));
+        assert!(
+            !mbeats.ids.contains_key(&("collect".to_string(), 2)),
+            "a growing map was licensed, and its storage is still in the arena"
+        );
     }
 
     #[test]
