@@ -17299,3 +17299,37 @@ remeasure is a number we no longer publish.
 The prose on all three pages drops its absolute milliseconds for the relative
 claim. What survives of the old framing is the part that was always true: no
 lifetimes, no garbage collector, no annotations, and a recipe you can run.
+
+## the board converges on the pull request, because main refuses every push
+
+The first post-merge run on main failed with the answer to a question nobody
+had asked yet:
+
+    ! [remote rejected] HEAD -> main (protected branch hook declined)
+
+Main's protection requires the status checks and refuses any direct push —
+including CI's own. So "commit the wall-clock board on main, post-merge" was
+never possible, and the churn problem it was dodging had to be solved rather
+than relocated: an unconditional splice of a wall-clock number commits a
+slightly different board every run, and a pull request's head churns forever,
+each push orphaning the checks that ran before it. This branch produced that
+churn live — three "remeasured" commits in twenty minutes, one arriving in the
+middle of the fix for it.
+
+BOTH CONSTRAINTS MEET IN THE SPLICER. relative_board now reads the board the
+page already carries and skips the write when the fresh measurement is within
+five percent per lane. A PR's first run writes the board; every rerun measures
+within tolerance of it and goes quiet; a real compiler change moves the lanes
+past tolerance and rewrites. Verified in all three directions before shipping:
+write, skip, rewrite.
+
+Five percent is chosen against what it must absorb and what it must not: the
+wobble two runs on one runner class show sits inside it, and a change worth a
+board update moves the ratio past it — or moves the counters, which gate
+elsewhere and are exact. The ratio is the claim; the tolerance is the noise
+floor stated as a number.
+
+Main needs no second write. What the PR committed IS the measurement of the
+code that merges, and the commit-back step now runs only where a head exists
+to push to. The perf-history append is untouched — that branch is unprotected,
+which is precisely why the series lives there.
