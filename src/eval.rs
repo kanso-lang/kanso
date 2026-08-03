@@ -580,6 +580,9 @@ pub struct Interp<'a> {
     demand: crate::demand::DemandInfo,
     pub thunk_stats: ThunkStats,
     depth: Cell<usize>,
+    /// Computed once, because a stack exhaustion is reported where the cause
+    /// is no longer visible: the interpreter sees only that it is deep.
+    stack_hint: String,
     /// One cell per self-referential constant. A mention that arrives while
     /// the constant is still being computed gets the unforced cell, which is
     /// how a value that names itself gets a value at all.
@@ -644,6 +647,7 @@ impl<'a> Interp<'a> {
             demand,
             thunk_stats: ThunkStats::default(),
             depth: Cell::new(0),
+            stack_hint: crate::stack_hint(program),
             knots: RefCell::new(HashMap::new()),
         }
     }
@@ -1457,8 +1461,10 @@ impl<'a> Interp<'a> {
         if self.depth.get() > 10_000 {
             self.depth.set(self.depth.get() - 1);
             return Err(RuntimeError {
-                message: "the program ran out of stack: recursion went deeper than the stack holds"
-                    .to_string(),
+                message: format!(
+                    "the program ran out of stack: recursion went deeper than the stack holds{}",
+                    self.stack_hint
+                ),
                 span,
             });
         }

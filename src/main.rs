@@ -617,7 +617,7 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
         Ok(code) => match code.code() {
             Some(n) => ExitCode::from(n.clamp(0, 255) as u8),
             None => {
-                eprintln!("{}", ended_by_signal(&code));
+                eprintln!("{}", ended_by_signal(&code, Some(program)));
                 ExitCode::FAILURE
             }
         },
@@ -631,21 +631,18 @@ fn run(program: &ast::Program, file: &str, source: &str, plan: bool) -> ExitCode
 /// A program the operating system killed has no exit code to report, and
 /// saying nothing leaves the reader with a bare failure and no cause.
 #[cfg(unix)]
-fn ended_by_signal(status: &std::process::ExitStatus) -> String {
+fn ended_by_signal(status: &std::process::ExitStatus, program: Option<&ast::Program>) -> String {
     use std::os::unix::process::ExitStatusExt;
     const SIGSEGV: i32 = 11;
     match status.signal() {
-        Some(SIGSEGV) => {
-            "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds"
-                .to_string()
-        }
+        Some(SIGSEGV) => kanso::stack_exhausted(program),
         Some(other) => format!("error[runtime]: the program was ended by signal {other}"),
         None => "error[runtime]: the program ended without an exit code".to_string(),
     }
 }
 
 #[cfg(not(unix))]
-fn ended_by_signal(_status: &std::process::ExitStatus) -> String {
+fn ended_by_signal(_status: &std::process::ExitStatus, _program: Option<&ast::Program>) -> String {
     "error[runtime]: the program ended without an exit code".to_string()
 }
 

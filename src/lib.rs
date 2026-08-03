@@ -2250,6 +2250,75 @@ fn private_uses(
     }
 }
 
+/// The stack-exhaustion message, with a hint when the program holds the one
+/// shape that reliably causes it.
+///
+/// `a . f` hands the continuation over as a closure, so nothing past the
+/// current link exists until the link runs. `a >> b` takes `b` as an already
+/// evaluated description, so building the first link requires evaluating the
+/// second, which requires the third — the whole chain is constructed before any
+/// of it runs, and the construction is what exhausts the stack. A reader told
+/// only "recursion went deeper than the stack holds" is pointed at the loop,
+/// which is the one part of the program that is fine.
+///
+/// It has to be static to exist at all. The interpreter has a frame guard and
+/// can see the recursion; native only sees a SIGSEGV in a child and translates
+/// it in the parent; wasm sees a trap nothing recorded. None of the three can
+/// work out the cause where it reports, and a function calling itself in the
+/// right operand of `>>` is plain in the source, so all three say one sentence.
+pub fn stack_exhausted(program: Option<&ast::Program>) -> String {
+    let said =
+        "error[runtime]: the program ran out of stack: recursion went deeper than the stack holds";
+    format!("{said}{}", program.map(stack_hint).unwrap_or_default())
+}
+
+/// The hint alone, so the interpreter can append it to the message its own
+/// frame guard raises and the two engines say one sentence.
+pub fn stack_hint(program: &ast::Program) -> String {
+    match seq_recursive_fn(program) {
+        Some(name) => format!(
+            "\n  `{name}` calls itself in the right side of `>>`, which builds \
+             the whole chain before running any of it. `.` hands each step over \
+             as it goes."
+        ),
+        None => String::new(),
+    }
+}
+
+/// The first function that calls itself inside the right operand of a `>>`.
+fn seq_recursive_fn(program: &ast::Program) -> Option<String> {
+    for decl in &program.fns {
+        for stmt in &decl.body {
+            let expr = match stmt {
+                ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => expr,
+                ast::Stmt::Set { value, .. } => value,
+            };
+            if seq_calls_self(expr, &decl.name) {
+                return Some(decl.name.clone());
+            }
+        }
+    }
+    None
+}
+
+fn seq_calls_self(e: &ast::Expr, own: &str) -> bool {
+    if let ast::Expr::Seq(_, rhs, _) = e {
+        if mentions_call(rhs, own) {
+            return true;
+        }
+    }
+    expr_children(e).into_iter().any(|c| seq_calls_self(c, own))
+}
+
+fn mentions_call(e: &ast::Expr, own: &str) -> bool {
+    if let ast::Expr::App { head, .. } = e {
+        if matches!(head.as_ref(), ast::Expr::Ident(n, _) if n == own) {
+            return true;
+        }
+    }
+    expr_children(e).into_iter().any(|c| mentions_call(c, own))
+}
+
 pub fn expr_children(e: &ast::Expr) -> Vec<&ast::Expr> {
     match e {
         ast::Expr::Partial(..) => Vec::new(),
