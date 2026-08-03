@@ -226,3 +226,82 @@ fn a_pinned_clock_reads_the_same_in_both_engines() {
         );
     }
 }
+
+/// Copy a tree, so a sample that reads a directory beside it still finds one.
+fn copy_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the staging directory is made");
+    for entry in std::fs::read_dir(from).expect("the corpus is readable") {
+        let path = entry.expect("directory entry").path();
+        let landing = to.join(path.file_name().expect("entries have names"));
+        if path.is_dir() {
+            copy_tree(&path, &landing);
+        } else {
+            std::fs::copy(&path, &landing).expect("the file copies");
+        }
+    }
+}
+
+/// The samples this cannot cover yet, and the one question all three ask.
+///
+/// Each prints a record, and an imported record prints its module: `point 3 4`
+/// direct against `sample/point 3 4` through the import. Which of those is
+/// right is a language question — the qualified spelling is honest about where
+/// the type came from, and the bare one is what somebody reading the output
+/// expects — and it is not the harness's to settle by pinning one. Listing
+/// them keeps the question visible instead of letting an exclusion swallow it.
+const RECORDS_PRINT_THEIR_MODULE: [&str; 3] =
+    ["err_trap_named", "render_record_none", "subtype_chain"];
+
+/// Every micro sample run a second way: as a LIBRARY, reached through a
+/// generated entry file that imports it and names its exported lambda.
+///
+/// A sample run directly is one module, and a whole layer of the compiler —
+/// qualification, export enrollment, ambient groups — never runs at all. That
+/// layer had four separate bugs in it, each of which made a construct that
+/// works in a file stop working the moment somebody put it in a library, and
+/// none of them could fail a corpus that only ever ran files. This is the
+/// cheapest way to run the same programs through the other path.
+///
+/// Samples with no `pub play` are entry files already — a bare statement is
+/// how they start, so there is nothing to import and nothing to name.
+#[test]
+fn micro_corpus_agrees_when_it_is_imported() {
+    let source = manifest_dir().join("tests/golden/micro");
+    let stage = std::env::temp_dir().join("kanso-micro-imported");
+    let _ = std::fs::remove_dir_all(&stage);
+    copy_tree(&source, &stage);
+
+    let mut covered = 0;
+    for program in kso_files(&source) {
+        let name = program
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .expect("kso files have names")
+            .to_string();
+        let text = std::fs::read_to_string(&program).expect("the sample reads");
+        if !text.contains("\npub play") || RECORDS_PRINT_THEIR_MODULE.contains(&name.as_str()) {
+            continue;
+        }
+
+        let entry = stage.join(format!("run_{name}.kso"));
+        std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+            .expect("the entry file writes");
+        covered += 1;
+
+        for extra in [&[][..], &["--interp"][..]] {
+            let output = run_kanso(&entry, extra);
+
+            assert_eq!(
+                String::from_utf8_lossy(&output.stdout),
+                expected(&program, "out"),
+                "{name} answers differently as a library (extra {extra:?})"
+            );
+            assert_eq!(output.status.code(), Some(0), "{name} as a library exits 0 (extra {extra:?})");
+        }
+    }
+
+    // A staging step that silently copied nothing would make every assertion
+    // above vacuous, and the test would go on passing.
+    assert!(covered > 50, "only {covered} samples were reached through an import");
+    let _ = std::fs::remove_dir_all(&stage);
+}

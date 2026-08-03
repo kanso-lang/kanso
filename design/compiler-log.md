@@ -16706,3 +16706,40 @@ imported arm answer for every value would pass the first assertion and be wrong.
 Plus the orphan, watched accepted-in-silence first and refused after.
 
 Welfare 75.68 either side, no golden moved.
+
+## The micro corpus now runs a second way, as a library
+
+The bug above was found by a shell probe, not by the suite, and that is the
+part worth fixing. A sample run directly is one module, so a whole layer of the
+compiler — qualification, export enrollment, ambient groups — never runs. Four
+separate bugs have lived in that layer, each making a construct that works in a
+file stop working the moment somebody put it in a library, and none of them
+could ever fail a corpus that only runs files.
+
+So `micro_corpus_agrees_when_it_is_imported` stages the corpus in a temp
+directory, writes an entry file per sample that imports it and names its
+exported lambda, and demands the same bytes on both engines. 77 of the 83
+samples: three have no `pub play` (they are entry files already, and there is
+nothing to import), and three are excluded by name.
+
+Staging COPIES THE TREE rather than the files, because `dir_listing_is_sorted`
+reads a directory beside it and a flat copy would have it reading a missing
+one — which the probe reported as a divergence for an hour before it was
+understood as the probe's fault.
+
+Watched red with the fix reverted, and it names the sample:
+
+    ordering_arms_for_a_type_you_own answers differently as a library
+
+THE THREE EXCLUSIONS ARE ONE QUESTION, and it is a gavel. `err_trap_named`,
+`render_record_none` and `subtype_chain` each print a record, and an imported
+record prints its module: `point 3 4` direct against `sample/point 3 4` through
+the import. The qualified spelling is honest about where the type came from and
+the bare one is what a reader expects; the harness cannot settle that by
+pinning one. They are listed by name so the question stays visible rather than
+being swallowed by a filter.
+
+That is also what still blocks the harness change in full. The import-path bug
+family is otherwise closed: currying, subtypes, err reason types and now
+comparison arms all survive an import, and the two remaining probe
+divergences turned out to be the probe.
