@@ -1,0 +1,4 @@
+pub fn helper x
+  x
+
+print (helper 1)

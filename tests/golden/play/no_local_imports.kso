@@ -1,0 +1,3 @@
+import "neighbour"
+
+print neighbour/thing

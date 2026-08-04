@@ -254,6 +254,22 @@ pub extern "C" fn kanso_repl_eval(ptr: *const u8, len: usize) -> i32 {
     }
 }
 
+/// Compile and run a play file — the relaxed form the playground buffer
+/// holds: declarations and statements in one file, stdlib imports only.
+/// Returns 0 on success, 1 on a compile or runtime error.
+#[no_mangle]
+pub extern "C" fn kanso_play(ptr: *const u8, len: usize) -> i32 {
+    let source = take_input(ptr, len);
+    let program = match crate::compile_play_file(&current_file(), &source) {
+        Ok(program) => program,
+        Err(rendered) => {
+            set_out(&rendered);
+            return 1;
+        }
+    };
+    finish_run(&program)
+}
+
 /// Compile and run a whole program (its `main`). Returns 0 on success,
 /// 1 on a compile or runtime error.
 #[no_mangle]
@@ -266,7 +282,12 @@ pub extern "C" fn kanso_run(ptr: *const u8, len: usize) -> i32 {
             return 1;
         }
     };
-    let interp = Interp::new(&program);
+    finish_run(&program)
+}
+
+/// Run a compiled program's `main` and report through the browser executor.
+fn finish_run(program: &crate::ast::Program) -> i32 {
+    let interp = Interp::new(program);
     let value = match interp.run_main() {
         Ok(value) => value,
         Err(runtime) => {

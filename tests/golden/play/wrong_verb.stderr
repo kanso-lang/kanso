@@ -1,0 +1,4 @@
+error[syntax]: `pub play` is a library's export — `kanso run` runs this file; `kanso play` takes bare statements
+  --> tests/golden/play/wrong_verb.kso:1:1
+   1 | pub play = print "hi"
+       ^

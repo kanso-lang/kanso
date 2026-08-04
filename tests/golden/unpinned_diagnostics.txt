@@ -47,5 +47,4 @@ private type `
 # lambda or binary operation with its own message, and consecutive expression
 # statements are folded into one `Seq`, so a body never holds a non-final
 # `Stmt::Expr` for the checker to complain about.
-only `if` and `build` open an indented block; other calls take
 unused expression: every non-final line binds a name (sequence

@@ -58,6 +58,8 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
 
   run <file|dir> [--plan|--interp]   compile and run; --plan shows the effects
                                      it would perform, --interp uses the oracle
+  play <file> [--interp]             run a little program: definitions and
+                                     statements in one file, stdlib imports only
   check <file|dir>                   report what run would refuse, and stop
   test <file|dir>                    evaluate every `test_*` constant
   build <file|dir> [--release]       write a native binary beside the source
@@ -118,6 +120,26 @@ fn driven() -> ExitCode {
         return run_hako(argv);
     }
 
+    if command == "play" {
+        let source = match std::fs::read_to_string(&file) {
+            Ok(source) => source,
+            Err(io) => {
+                eprintln!("error: cannot read {file}: {io}");
+                return ExitCode::from(2);
+            }
+        };
+        let program = match kanso::compile_play_file(&file, &source) {
+            Ok(program) => program,
+            Err(rendered) => {
+                eprint!("{}", diag::paint(&rendered));
+                return ExitCode::from(2);
+            }
+        };
+        if interp {
+            return run_interpreted(&program, program_args());
+        }
+        return run(&program, &file, &source, false);
+    }
     let require_entry = command == "run";
     // Targeting a directory means its entry: `kanso run foo` is
     // `kanso run foo/main.kso` (the module-shape gavel), and checking the
@@ -255,6 +277,7 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
         && command != "install"
         && command != "list"
         && command != "update"
+        && command != "play"
     {
         return None;
     }
@@ -281,7 +304,10 @@ fn parse_args(args: &[String]) -> Option<(String, String, bool, bool, bool)> {
             _ => return None,
         }
     }
-    if (plan || interp) && command != "run" {
+    if plan && command != "run" {
+        return None;
+    }
+    if interp && command != "run" && command != "play" {
         return None;
     }
     if release && command != "build" {

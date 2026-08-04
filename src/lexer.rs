@@ -40,7 +40,7 @@ pub enum StrPart {
     Interp(Vec<(Tok, Span)>, Vec<usize>),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Line {
     pub number: usize,
     pub indent: usize,

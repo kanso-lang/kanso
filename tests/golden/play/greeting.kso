@@ -1,0 +1,10 @@
+import "std/text"
+
+fn shout s
+  "{text/join (text/chars s) "-"}!"
+
+fn greet name
+  shout "hi {name}"
+
+print (greet "kanso")
+print (greet "world")
