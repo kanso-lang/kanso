@@ -20,10 +20,12 @@ const BIRTHS_ERR: [&str; 4] =
     ["builtin_to_int", "builtin_to_float", "builtin_utf8", "builtin_from_code"];
 use std::collections::HashMap;
 
-/// Wrapper name and arity, mapped to the builtin it stands for. A wrapper
-/// qualifies only when its body is exactly one call to a builtin, passing its
-/// own parameters in their own order and nothing else — anything more and
-/// inlining would be a decision rather than a rename.
+/// Wrapper name and arity, mapped to the builtin it stands for. An arm
+/// qualifies when its body is exactly one call to a builtin, passing its own
+/// parameters in their own order and nothing else — anything more and
+/// treating it as the builtin would be a decision rather than a rename. The
+/// type checker reads this map per arm; the call-site rewrite below adds the
+/// stricter only-arm condition on top.
 pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
     let mut found = HashMap::new();
     for decl in &program.fns {
@@ -61,8 +63,17 @@ pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
 }
 
 /// Rewrite every call to a qualifying wrapper into the call it stands for.
+/// Only a group whose forwarder is its ONLY arm is rewritten: a second arm
+/// makes the group a dispatch (text/split's empty-separator err arm), and
+/// sending its calls straight to the builtin would delete the dispatch that
+/// reaches the other arm.
 pub fn inline_builtin_wrappers(program: &mut Program) {
-    let alias = aliases(program);
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::new();
+    for decl in &program.fns {
+        *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
+    }
+    let mut alias = aliases(program);
+    alias.retain(|(name, arity), _| counts.get(&(name.as_str(), *arity)) == Some(&1));
     if alias.is_empty() {
         return;
     }

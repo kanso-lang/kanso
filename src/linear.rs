@@ -38,6 +38,20 @@ fn real_fns(program: &Program) -> impl Iterator<Item = &FnDecl> {
     program.fns.iter().filter(|d| !d.synthetic)
 }
 
+/// Every spelling the module graph gives std/list's `fold`: bare in its own
+/// module, qualified once per import hop, and the enrolled clones of each.
+/// The accumulator dispensation keys on this set because a fixed spelling
+/// list cannot know how deeply an importer's importer qualified the name.
+pub fn fold_spellings(program: &Program) -> HashSet<String> {
+    program
+        .fns
+        .iter()
+        .filter(|d| d.file.starts_with("std/list") && d.params.len() == 3)
+        .filter(|d| d.name.rsplit_once('/').map(|(_, s)| s).unwrap_or(&d.name) == "fold")
+        .map(|d| d.name.clone())
+        .collect()
+}
+
 struct Analysis<'a> {
     program: &'a Program,
     /// Declared type names, so a constructor call can be recognised.
@@ -47,6 +61,8 @@ struct Analysis<'a> {
     linear_params: HashSet<(String, usize, usize)>,
     /// (function name, arity) groups whose result is a freshly-built unique list.
     returns_unique: HashSet<(String, usize)>,
+    /// The spellings that resolve to std/list's `fold` in this program.
+    folds: HashSet<String>,
 }
 
 impl<'a> Analysis<'a> {
@@ -58,11 +74,13 @@ impl<'a> Analysis<'a> {
         // monotone, so it converges, and a value stays "unique" only if nothing
         // ever aliases it — the sound direction for an in-place mutation.
         let types: HashSet<String> = program.types.iter().map(|t| t.name.clone()).collect();
+        let folds = fold_spellings(program);
         let mut a = Analysis {
             program,
             types,
             linear_params: HashSet::new(),
             returns_unique: HashSet::new(),
+            folds,
         };
         for decl in real_fns(program) {
             a.returns_unique.insert((decl.name.clone(), decl.params.len()));
@@ -214,7 +232,7 @@ impl<'a> Analysis<'a> {
             // a fold's own lambda is where an accumulator legitimately arrives
             // as a parameter; check the lambda in that light, and everything
             // else in this expression without it
-            if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
+            if matches!(head.as_ref(), Expr::Ident(n, _) if self.folds.contains(n.as_str()))
                 && args.len() == 3
             {
                 if let (Expr::Lambda { params, body, .. }, true) =
@@ -325,7 +343,7 @@ impl<'a> Analysis<'a> {
             // instead of recursion, and without it the encode path collapses
             // at `escape_able`, where the byte builder passes through one.
             Expr::App { head, args, .. }
-                if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
+                if matches!(head.as_ref(), Expr::Ident(n, _) if self.folds.contains(n.as_str()))
                     && args.len() == 3 =>
             {
                 self.unique_in_with(&args[1], ctx, scoped, exempt)
@@ -516,7 +534,7 @@ fn walk_for_push_in(
         }
         // inside a validated folder the accumulator arrives as the lambda's
         // own parameter, and every push or append there is on a unique value
-        if matches!(head.as_ref(), Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold"))
+        if matches!(head.as_ref(), Expr::Ident(n, _) if a.folds.contains(n.as_str()))
             && args.len() == 3
             && a.folder_is_unique(&args[2], decl, scoped)
         {

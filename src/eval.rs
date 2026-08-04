@@ -3307,7 +3307,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
 /// call from what they wanted, and the message may as well say which.
 fn lazy_hint(v: &Value) -> &'static str {
     match v {
-        Value::Record { ty, .. } if ty.starts_with("list/") => {
+        Value::Record { ty, .. } if ty.starts_with("list/") || ty.contains("/list/") => {
             " — a lazy sequence becomes a list with list/to_list"
         }
         _ => "",

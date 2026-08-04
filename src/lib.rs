@@ -296,6 +296,7 @@ fn compile_one(
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
+    inline::inline_builtin_wrappers(&mut program);
     Ok(program)
 }
 
@@ -369,6 +370,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
+    inline::inline_builtin_wrappers(&mut program);
     Ok(program)
 }
 

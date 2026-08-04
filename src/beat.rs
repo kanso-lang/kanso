@@ -303,6 +303,7 @@ pub type MutSites = std::collections::HashSet<(String, usize, usize)>;
 /// mark either. A fresh value at the same type has none of those properties,
 /// which is why the test is identity and not the type set.
 fn chain_groups(program: &Program, mut_sites: &MutSites) -> HashSet<Group> {
+    let folds = crate::linear::fold_spellings(program);
     let mut chains: HashSet<Group> = program
         .fns
         .iter()
@@ -320,7 +321,7 @@ fn chain_groups(program: &Program, mut_sites: &MutSites) -> HashSet<Group> {
                             let locals = local_binds(d);
                             tail_exprs(d.body.last())
                                 .iter()
-                                .all(|t| is_chain(t, own, d, &locals, mut_sites, &chains))
+                                .all(|t| is_chain(t, own, d, &locals, mut_sites, &chains, &folds))
                         }
                         _ => false,
                     },
@@ -360,13 +361,14 @@ fn is_chain(
     locals: &HashMap<&str, &Expr>,
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
+    folds: &HashSet<String>,
 ) -> bool {
     match e {
         Expr::Ident(p, _) => {
             p == own
                 || locals
                     .get(p.as_str())
-                    .is_some_and(|e2| is_chain(e2, own, decl, locals, mut_sites, chains))
+                    .is_some_and(|e2| is_chain(e2, own, decl, locals, mut_sites, chains, folds))
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
             Expr::Ident(n, _)
@@ -374,29 +376,29 @@ fn is_chain(
                     && args.len() == 2
                     && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
             {
-                is_chain(&args[0], own, decl, locals, mut_sites, chains)
+                is_chain(&args[0], own, decl, locals, mut_sites, chains, folds)
             }
             Expr::Ident(n, _) if n == "if" && args.len() == 3 => {
-                is_chain(&args[1], own, decl, locals, mut_sites, chains)
-                    && is_chain(&args[2], own, decl, locals, mut_sites, chains)
+                is_chain(&args[1], own, decl, locals, mut_sites, chains, folds)
+                    && is_chain(&args[2], own, decl, locals, mut_sites, chains, folds)
             }
-            Expr::Ident(n, _) if matches!(n.as_str(), "fold" | "list/fold") && args.len() == 3 => {
+            Expr::Ident(n, _) if folds.contains(n.as_str()) && args.len() == 3 => {
                 let folder_chains = match &args[2] {
-                    Expr::Lambda { params, body, .. } => params
-                        .first()
-                        .is_some_and(|(p, _)| is_chain(body, p, decl, locals, mut_sites, chains)),
+                    Expr::Lambda { params, body, .. } => params.first().is_some_and(|(p, _)| {
+                        is_chain(body, p, decl, locals, mut_sites, chains, folds)
+                    }),
                     _ => false,
                 };
-                folder_chains && is_chain(&args[1], own, decl, locals, mut_sites, chains)
+                folder_chains && is_chain(&args[1], own, decl, locals, mut_sites, chains, folds)
             }
-            Expr::Ident(f, _) if chains.contains(&(f.clone(), args.len())) => {
-                args.first().is_some_and(|a| is_chain(a, own, decl, locals, mut_sites, chains))
-            }
+            Expr::Ident(f, _) if chains.contains(&(f.clone(), args.len())) => args
+                .first()
+                .is_some_and(|a| is_chain(a, own, decl, locals, mut_sites, chains, folds)),
             _ => false,
         },
         Expr::Guard { early, rest, .. } => {
-            is_chain(early, own, decl, locals, mut_sites, chains)
-                && matches!(rest.last(), Some(Stmt::Expr(t)) if is_chain(t, own, decl, locals, mut_sites, chains))
+            is_chain(early, own, decl, locals, mut_sites, chains, folds)
+                && matches!(rest.last(), Some(Stmt::Expr(t)) if is_chain(t, own, decl, locals, mut_sites, chains, folds))
         }
         _ => false,
     }
@@ -587,6 +589,7 @@ fn cluster_edges_ok(
     // no pointers inside. The same license as a self-tail, read around a
     // cycle: greatest fixpoint, assume every bytes slot qualifies, knock
     // out any an edge disproves.
+    let folds = crate::linear::fold_spellings(program);
     let mut chain_threaded: HashSet<(usize, usize)> = HashSet::new();
     for &g in members {
         for i in 0..groups[g].1 {
@@ -608,7 +611,7 @@ fn cluster_edges_ok(
                 let fed_by_chain = decl.params.iter().enumerate().any(|(j, pat)| {
                     let Pattern::Var(own, _) = pat else { return false };
                     chain_threaded.contains(&(from, j))
-                        && is_chain(arg, own, decl, &locals, mut_sites, chains)
+                        && is_chain(arg, own, decl, &locals, mut_sites, chains, &folds)
                 });
                 if !fed_by_chain && chain_threaded.remove(&(to, i)) {
                     changed = true;
@@ -1319,9 +1322,10 @@ fn arg_ok(
     if let Some(Pattern::Var(own, _)) = decl.params.first() {
         let set0 = inference.params[decl_index][0];
         let locals = local_binds(decl);
+        let folds = crate::linear::fold_spellings(program);
         if set0 != 0
             && set0 & !FAIL & !BYTES == 0
-            && is_chain(arg, own, decl, &locals, mut_sites, chains)
+            && is_chain(arg, own, decl, &locals, mut_sites, chains, &folds)
         {
             return true;
         }

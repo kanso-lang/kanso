@@ -3743,12 +3743,12 @@ impl<'a> Backend<'a> {
             // caller already inside a beat cluster lets its rewind do the
             // reclaiming instead.
             let heapish: Set = BYTES | LIST | MAP | REC | DESC | infer::FN | crate::infer::THUNK;
-            // the caller must be the root module's own code (unqualified
-            // group name — imports arrive qualified), and a caller that is
-            // itself a rewinding loop member keeps its own tier. a group
-            // that appears in the beat ids only as a demoted entry is not a
-            // loop: its bracket never rewinds mid-body, so the cohort wrap
-            // still applies inside it.
+            // the call must cross down into a nested module — the caller's
+            // own code reaching a dependency, at whatever depth the import
+            // graph put the caller. a caller that is itself a rewinding loop
+            // member keeps its own tier. a group that appears in the beat
+            // ids only as a demoted entry is not a loop: its bracket never
+            // rewinds mid-body, so the cohort wrap still applies inside it.
             let caller = (f.group.clone(), f.arity);
             let caller_loops = self.beat.ids.contains_key(&caller)
                 && !self.beat.demoted.iter().any(|(_, callee)| *callee == caller);
@@ -3759,10 +3759,14 @@ impl<'a> Backend<'a> {
             // they can carry thunks whose forced values would die under a
             // cell the caller still holds.
             let arg_heapish = heapish & !BYTES;
+            let caller_mod = f.group.rsplit_once('/').map(|(m, _)| m).unwrap_or("");
+            let callee_mod = name.rsplit_once('/').map(|(m, _)| m).unwrap_or("");
+            let crosses_down = callee_mod.len() > caller_mod.len()
+                && callee_mod.starts_with(caller_mod)
+                && (caller_mod.is_empty() || callee_mod.as_bytes()[caller_mod.len()] == b'/');
             let cohort_entry = !beat_entry
                 && !register_returned
-                && name.contains('/')
-                && !f.group.contains('/')
+                && crosses_down
                 && !f.synthetic
                 && !caller_loops
                 && emitted.iter().all(|e| f.set_of(e) & arg_heapish == 0);
