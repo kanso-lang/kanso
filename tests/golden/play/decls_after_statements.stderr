@@ -1,0 +1,8 @@
+error[syntax]: declarations and imports come before the statements in a play file
+  --> tests/golden/play/decls_after_statements.kso:3:1
+   3 | fn late _
+       ^
+error[syntax]: only `if` and `build` open an indented block; other calls take indented arguments on the line's own indent plus two
+  --> tests/golden/play/decls_after_statements.kso:3:1
+   3 | fn late _
+       ^

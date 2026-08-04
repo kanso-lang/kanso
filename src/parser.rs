@@ -21,20 +21,30 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 if first_stmt.is_some() {
                     diags.push(Diagnostic::new(
                         "syntax",
-                        "declarations and imports come before the statements                          in a play file"
+                        "declarations and imports come before the statements in a play file"
                             .to_string(),
                         head_span(line),
                     ));
                 }
             }
             Some((Tok::KwPub, _)) => {
-                diags.push(Diagnostic::new(
-                    "syntax",
-                    "a play file exports nothing — drop the `pub`; everything \
-                     here is for this run"
-                        .to_string(),
-                    head_span(line),
-                ));
+                // pointing `play` at a pub-play library is a wrong-verb
+                // mistake, not a wrong-file one; say which door to use
+                let says_play = matches!(
+                    line.tokens.get(1),
+                    Some((Tok::Ident(name), _)) if name == "play"
+                );
+                let said = match says_play {
+                    true => {
+                        "`pub play` is a library's export — `kanso run` runs \
+                         this file; `kanso play` takes bare statements"
+                    }
+                    false => {
+                        "a play file exports nothing — drop the `pub`; \
+                         everything here is for this run"
+                    }
+                };
+                diags.push(Diagnostic::new("syntax", said.to_string(), head_span(line)));
             }
             // a top-level binding before any statement is a constant, the
             // library reading; after the first statement it is a statement
@@ -51,7 +61,9 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let split = first_stmt.unwrap_or(lexed.lines.len());
     let decl_lines: Vec<Line> = lexed.lines[..split].to_vec();
     let stmt_lines: &[Line] = &lexed.lines[split..];
-    if stmt_lines.is_empty() {
+    // a shape already refused says everything; a missing statement on top
+    // of it is cascade, not information
+    if stmt_lines.is_empty() && diags.is_empty() {
         diags.push(Diagnostic::new(
             "syntax",
             "a play file needs at least one statement to run".to_string(),
@@ -83,7 +95,8 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         {
             diags.push(Diagnostic::new(
                 "formatting",
-                "a continuation may not follow a blank line — the statement                  it would splice into has closed"
+                "a continuation may not follow a blank line — the statement \
+                 it would splice into has closed"
                     .to_string(),
                 head_span(line),
             ));
