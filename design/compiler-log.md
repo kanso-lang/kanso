@@ -17792,3 +17792,36 @@ two files two ways, checked and compared. Watched red at 531,434 against
 demanding equality, because a module's declarations still merge in file
 order and moving one between files costs ten bytes here; what it refuses
 is a swing of order-scale.
+
+## the compiler forgets the word play
+
+The last clause of the module-shape gavel, built. `pub play` is an
+ordinary exported function now: nothing in the compiler looks for that
+name, and what runs one is the entry file that imports it. The five sites
+that knew the word are gone, and what remains is deliberate — the `kanso
+play` verb, and the diagnostic that redirects a reader who wrote `pub
+play` and reached for `kanso play` instead of `kanso run`.
+
+Every harness that had been running a corpus program directly now writes
+the entry that imports it, which is what `kanso run` is handed. Three of
+them wanted the same staging, so the shape is repeated in golden.rs,
+oracle.rs and wasm_engine.rs; the oracle compiles by absolute path, so
+its traces carry a staging prefix the runtime cases take back off before
+comparing.
+
+The wasm engine was the part that needed a decision. It has no
+filesystem, so it could only ever be handed one file, and a library plus
+its entry is two — the old play path is what had been hiding that.
+`kanso_hand_source` hands the engine a module under the path an import
+will name, and it compiles the entry beside it: the same two files the
+native engine gets, neither of them read from disk. The browser needs
+exactly this to run a book sample, which is what issue #82 asks for.
+
+Three fixtures had to move rather than be rewrapped. make_dir's programs
+became play files whose bindings run bottom-up, because a body binds in
+order and each of those descriptions names the next. The `probe.kso` the
+diagnostics sweep rewrites every iteration caught a staging bug worth
+recording: the corpus directory is copied once, for the fixtures beside
+a program, and the program itself every time — staging it once answered
+every later probe with the first one's output, which read as a wasm
+divergence on bits/shl and was nothing of the sort.
