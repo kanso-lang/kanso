@@ -10,6 +10,5 @@ fn odd? 0
 fn odd? n
   even? (n - 1)
 
-pub play =
-  verdict = even? 10000000
-  print "10000000 even? {verdict}"
+verdict = even? 10000000
+print "10000000 even? {verdict}"

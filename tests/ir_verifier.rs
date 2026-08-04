@@ -125,10 +125,26 @@ fn the_ir_kanso_writes_passes_that_verifier() {
             let name = program.file_stem().expect("kso files have names");
             let source = dir.join(program.file_name().expect("kso files have names"));
             std::fs::copy(program, &source).expect("the program copies");
+            // Most corpus samples export `play` and are libraries, so what
+            // gets built is the entry that imports one — the same wrapper the
+            // runner writes, since the language knows no such name. A sample
+            // that is already an entry file builds as it stands.
+            let stem = name.to_str().expect("kso files have utf-8 names");
+            let text = std::fs::read_to_string(program).expect("the sample reads");
+            let exports_play = text.contains("\npub play") || text.starts_with("pub play");
+            let built_stem = match exports_play {
+                true => format!("built_{stem}"),
+                false => stem.to_string(),
+            };
+            let entry = dir.join(format!("{built_stem}.kso"));
+            if exports_play {
+                std::fs::write(&entry, format!("import \"{stem}\"\n\n{stem}/play\n"))
+                    .expect("the entry file writes");
+            }
 
             let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
                 .arg("build")
-                .arg(source.file_name().expect("kso files have names"))
+                .arg(entry.file_name().expect("kso files have names"))
                 .current_dir(&dir)
                 .output()
                 .expect("kanso runs");
@@ -137,7 +153,7 @@ fn the_ir_kanso_writes_passes_that_verifier() {
                 return Some(format!("{name:?} does not build: {said}"));
             }
 
-            let written = dir.join(name).with_extension("ll");
+            let written = dir.join(&built_stem).with_extension("ll");
             let checked = read_ir(tool, &written).expect("the verifier runs");
             match checked.status.success() {
                 true => None,

@@ -6,7 +6,7 @@ crunch = io/args . (_ -> print "report: {grind 150000000}")
 fn grind n
   spin n 0
 
-pub play = sleep 2000 >> print "delivery: made" >> crunch
+sleep 2000 >> print "delivery: made" >> crunch
 
 fn spin 0 acc
   acc

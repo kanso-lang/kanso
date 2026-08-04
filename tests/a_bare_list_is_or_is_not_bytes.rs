@@ -30,15 +30,12 @@ use std::process::Command;
 fn both(expr: &str) -> (String, String) {
     let dir = std::env::temp_dir().join(format!("kanso-bytes-{}", expr.len()));
     std::fs::create_dir_all(&dir).expect("a directory to run in");
-    std::fs::write(
-        dir.join("run.kso"),
-        format!("import \"std/text\"\n\npub play = print \"{{{expr}}}\"\n"),
-    )
-    .expect("the program writes");
+    std::fs::write(dir.join("run.kso"), format!("import \"std/text\"\n\nprint \"{{{expr}}}\"\n"))
+        .expect("the program writes");
 
     let say = |engine: &[&str]| {
         let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-            .arg("run")
+            .arg("play")
             .arg("run.kso")
             .args(engine)
             .current_dir(&dir)

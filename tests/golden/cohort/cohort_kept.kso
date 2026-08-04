@@ -13,4 +13,4 @@ fn trimmed _
   bulk = grow (text/bytes "") 150000
   text/slice bulk 1 2400000
 
-pub play = print "chars {stamp (trimmed 0)}"
+print "chars {stamp (trimmed 0)}"

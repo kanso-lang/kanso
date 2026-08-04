@@ -1,16 +1,34 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const SLICE_ONE: [&str; 7] =
     ["hello", "pipes", "dispatch", "errors", "records", "effects", "constants"];
 
+/// Most examples export `play` and are libraries, so what gets built is an
+/// entry that imports one — the language knows no such name, and the
+/// convention of running one lives in the harness. An example that is already
+/// an entry file is staged as it stands.
+fn staged_entry(manifest: &Path, work: &Path, name: &str) -> (PathBuf, String) {
+    std::fs::create_dir_all(work).expect("temp work dir");
+    let sample = manifest.join("examples").join(format!("{name}.kso"));
+    let text = std::fs::read_to_string(&sample).expect("the example reads");
+    std::fs::copy(&sample, work.join(format!("{name}.kso"))).expect("the example copies");
+    if !text.contains("\npub play") && !text.starts_with("pub play") {
+        return (work.join(format!("{name}.kso")), name.to_string());
+    }
+    let binary = format!("built_{name}");
+    let entry = work.join(format!("{binary}.kso"));
+    std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+        .expect("the entry file writes");
+    (entry, binary)
+}
+
 #[test]
 fn native_builds_match_interpreter_output() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let work = std::env::temp_dir().join("kanso-native-test");
-    std::fs::create_dir_all(&work).expect("temp work dir");
     for name in SLICE_ONE {
-        let program = manifest.join("examples").join(format!("{name}.kso"));
+        let (program, binary) = staged_entry(&manifest, &work, name);
         // `run` compiles native; the oracle needs --interp, or this compares
         // the native engine against itself and proves nothing.
         let interpreted = Command::new(env!("CARGO_BIN_EXE_kanso"))
@@ -31,7 +49,7 @@ fn native_builds_match_interpreter_output() {
             "build failed on {name}: {}",
             String::from_utf8_lossy(&built.stderr)
         );
-        let native = Command::new(work.join(name)).output().expect("native binary runs");
+        let native = Command::new(work.join(&binary)).output().expect("native binary runs");
         assert_eq!(
             String::from_utf8_lossy(&native.stdout),
             String::from_utf8_lossy(&interpreted.stdout),
@@ -45,11 +63,11 @@ fn native_builds_match_interpreter_output() {
 fn release_build_matches_interpreter_output() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let work = std::env::temp_dir().join("kanso-native-test-release");
-    std::fs::create_dir_all(&work).expect("temp work dir");
-    let program = manifest.join("examples").join("dispatch.kso");
+    let (program, binary) = staged_entry(&manifest, &work, "dispatch");
     let interpreted = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
         .arg(&program)
+        .arg("--interp")
         .output()
         .expect("interpreter runs");
     let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
@@ -64,7 +82,7 @@ fn release_build_matches_interpreter_output() {
         "release build failed: {}",
         String::from_utf8_lossy(&built.stderr)
     );
-    let native = Command::new(work.join("dispatch")).output().expect("native binary runs");
+    let native = Command::new(work.join(&binary)).output().expect("native binary runs");
 
     assert_eq!(
         String::from_utf8_lossy(&native.stdout),
@@ -83,12 +101,12 @@ fn a_program_killed_by_the_operating_system_says_what_ended_it() {
     let program = work.join("out_of_stack.kso");
     std::fs::write(
         &program,
-        "fn total n\n  return 0 if n < 1\n  n + total (n - 1)\n\npub play = print \"{total 2000000}\"\n",
+        "fn total n\n  return 0 if n < 1\n  n + total (n - 1)\n\nprint \"{total 2000000}\"\n",
     )
     .expect("program writes");
 
     let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", program.to_str().expect("utf-8")])
+        .args(["play", program.to_str().expect("utf-8")])
         .output()
         .expect("kanso runs");
 

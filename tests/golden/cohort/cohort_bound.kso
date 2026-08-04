@@ -13,4 +13,4 @@ fn report text
   doc = json/decode text
   print "held {length doc}"
 
-pub play = pick 1
+pick 1
