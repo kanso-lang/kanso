@@ -178,26 +178,6 @@ fn strict_mode_thunks_nothing_with_identical_output() {
     );
 }
 
-/// One construct per program, so a failure names the construct rather than
-/// telling you that something in a fifteen-feature example broke. Both engines
-/// run each one and must agree: these are the differential law at its smallest
-/// useful size.
-#[test]
-fn micro_corpus_agrees_across_engines() {
-    for program in kso_files(&manifest_dir().join("tests/golden/micro")) {
-        for extra in [&[][..], &["--interp"][..]] {
-            let output = run_kanso(&program, extra);
-
-            assert_eq!(
-                String::from_utf8_lossy(&output.stdout),
-                expected(&program, "out"),
-                "stdout mismatch for {program:?} (extra {extra:?})"
-            );
-            assert_eq!(output.status.code(), Some(0), "{program:?} (extra {extra:?}) exits 0");
-        }
-    }
-}
-
 #[test]
 fn runtime_corpus_reports_endpoint_violations() {
     for program in kso_files(&manifest_dir().join("tests/golden/runtime")) {
@@ -273,20 +253,19 @@ fn a_pinned_clock_reads_the_same_in_both_engines() {
     }
 }
 
-/// Every micro sample run a second way: as a LIBRARY, reached through a
-/// generated entry file that imports it and names its exported lambda.
+/// One construct per program, so a failure names the construct rather than
+/// telling you that something in a fifteen-feature example broke. Both engines
+/// run each one and must agree: the differential law at its smallest useful
+/// size.
 ///
-/// A sample run directly is one module, and a whole layer of the compiler —
-/// qualification, export enrollment, ambient groups — never runs at all. That
-/// layer had four separate bugs in it, each of which made a construct that
-/// works in a file stop working the moment somebody put it in a library, and
-/// none of them could fail a corpus that only ever ran files. This is the
-/// cheapest way to run the same programs through the other path.
-///
-/// Samples with no `pub play` are entry files already — a bare statement is
-/// how they start, so there is nothing to import and nothing to name.
+/// Every sample runs as a LIBRARY, through the harness-generated entry that
+/// imports it and names its exported lambda — this corpus no longer touches
+/// the compiler's entry synthesis, which is the migration's point. The
+/// library path is also where four separate qualification bugs lived, none of
+/// which could fail a corpus that only ran files. A sample with no `pub play`
+/// is an entry file already and runs directly through the runner's fallback.
 #[test]
-fn micro_corpus_agrees_when_it_is_imported() {
+fn micro_corpus_agrees_across_engines() {
     let source = manifest_dir().join("tests/golden/micro");
 
     let mut covered = 0;
