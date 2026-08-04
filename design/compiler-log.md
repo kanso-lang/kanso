@@ -17419,3 +17419,46 @@ entry synthesis at all, which is what migrating an area means.
 Synthesis keeps its coverage from the areas not yet migrated — mem, runtime,
 examples, errors — and loses a suite's worth each slice until the five
 compiler sites have nothing left relying on them. Nine golden suites green.
+## the queue held nothing anybody could start
+
+Clay, looking at the visible task list: "it has been stuck on 108 tasks with the
+top one being 're-sit the published compile-speed...' — so if you're actively
+working on performance, then it should be 'performance'. you work off the
+visible list."
+
+He is right, and the diagnosis is worse than staleness. The five visible items
+were, in order: a CONDITION (re-sit the numbers — needs an idle box, and load
+was 4.77, 5.88, 4.00 and 3.97 on every check this sitting), a DEFERRAL (its own
+title said QUEUED FOR LATER), and three RULINGS. Not one of them could be picked
+up by anybody. They sat above roughly a hundred completed items, so the queue's
+entire visible face was work nobody could start.
+
+That is why performance kept falling off a list that was supposed to be ordered
+by it. The performance items had all been DONE — the quadratics, the fused
+reducer, the accumulator rewind, the view leak — and nothing replenished the
+queue, because the only things left in it were things that could not move.
+
+WHAT WENT WHERE, and the rule it comes from:
+
+  a ruling                 design/pending-gavels.md
+  a deferred design        the design doc that owns it
+  a condition              whatever already fires on it
+  a standing direction     the rule that makes it fire on contact
+  work that could start    the queue
+
+Twelve items moved out. Three questions gained numbered entries in the gavels
+file (printing a lazy sequence, `pure` as a record type, whether io should
+infect) and four more joined its terse list. Two conditions were closed against
+the rules that already cover them: the performance-PR definition of done
+requires re-running the decode floor on every change and moving the published
+numbers when they shift, which fires on the next front-end change on whatever
+box is running. A permanent task adds nothing to that except an unstartable
+item at the top.
+
+WHAT IS LEFT is the honest number, and it is small: one startable feature item
+and one investigation. That is the real state, and a queue that says so is worth
+more than a hundred-item list whose head nobody can act on.
+
+The general form, which is the same failure as four others in this log: a
+mechanism that cannot fail loudly gets ignored, and a queue whose top is always
+blocked teaches you to stop reading it.
