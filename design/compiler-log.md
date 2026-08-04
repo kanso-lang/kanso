@@ -17406,3 +17406,16 @@ The corpus migration can now proceed area by area: each slice points its
 suite at the library runner, drops `pub play` from its files where the parser
 allows a bare statement, and CI stays green throughout. The compiler's five
 sites go last, when nothing remains that needs them.
+
+## the micro corpus runs as libraries, and its two tests become one
+
+The first area slice of the play migration. The direct-run micro test and the
+imported-corpus test collapsed into one: every sample runs through the
+harness-generated entry, the entry-file samples run directly through the
+runner's fallback, and the three record-printing samples assert their
+qualified goldens per the ruling. Micro no longer touches the compiler's
+entry synthesis at all, which is what migrating an area means.
+
+Synthesis keeps its coverage from the areas not yet migrated — mem, runtime,
+examples, errors — and loses a suite's worth each slice until the five
+compiler sites have nothing left relying on them. Nine golden suites green.
