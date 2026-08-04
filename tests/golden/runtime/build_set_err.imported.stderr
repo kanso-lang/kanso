@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: "no id"
+  born in build_set_err/play at build_set_err.kso:7

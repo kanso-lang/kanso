@@ -4844,7 +4844,10 @@ KValue k_b_push_mut(KValue lv, KValue item) {
 static const char* k_lazy_hint(KValue v) {
     if (v.tag != K_REC) return NULL;
     const char* ty = k_type_name(k_as_rec(v)->type_id);
-    if (!ty || strncmp(ty, "list/", 5) != 0) return NULL;
+    if (!ty) return NULL;
+    /* std/list's adapter types, at whatever depth the import graph
+       qualified them: "list/mapped" directly, "mid/list/mapped" one hop in */
+    if (strncmp(ty, "list/", 5) != 0 && strstr(ty, "/list/") == NULL) return NULL;
     return " — a lazy sequence becomes a list with list/to_list";
 }
 
@@ -4892,7 +4895,7 @@ KValue k_b_length(KValue v) {
        value last and the hint belongs after it. */
     if (v.tag == K_REC) {
         const char* ty = k_type_name(k_as_rec(v)->type_id);
-        if (ty && strncmp(ty, "list/", 5) == 0) {
+        if (ty && (strncmp(ty, "list/", 5) == 0 || strstr(ty, "/list/") != NULL)) {
             KValue shown = k_render(v, 1);
             KStr* s = k_as_str(shown);
             char said[1024];

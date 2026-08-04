@@ -17501,3 +17501,27 @@ qualification tax all along). Welfare 75.68 -> 75.69, ratcheted. Decode,
 encode, basket, compile veins unchanged. Eight mem goldens regenerated
 smaller; build_cycle carries .imported goldens for the ruled qualified
 rendering. The mem suite now enters through run_kanso_as_library.
+
+## the runtime corpus runs as libraries
+
+Third area slice, and the sweep again paid for itself twice. First find: the
+native runtime's lazy hints (`push takes a list …`, `length takes …`) tested
+record types with a bare "list/" prefix, so one import hop deeper the hint
+vanished on native while the interpreter kept it — a real engine
+differential, fixed in k_lazy_hint and the length arm to accept any
+qualification depth, matching eval.rs.
+
+Second find: a pass-order asymmetry. A dependency module ran
+inline_builtin_wrappers at its own compile, so the importer's literal check
+saw `fn wrapped x = text/bytes x` already lowered to `builtin_bytes x`, read
+the author's own wrapper as an alias, and refused `wrapped 5` at compile
+time — where the direct run of the same program dies at runtime, a boundary
+the error corpus documents on purpose. Dependencies now return checked but
+unlowered; only the root lowers. Costs the front end 41 visits on lib/json
+(25874 -> 25915, regenerated); every runtime cost vein is byte-identical.
+
+Of the 56 fixtures, 3 are entry files, 41 are byte-identical through the
+harness entry, and 12 differ only by qualified names in messages and traces
+(the ruled rendering: `endpoint_trace/report ← endpoint_trace/grade`) —
+those carry .imported.stderr goldens. Both engines agree on every one. The
+suite enters through run_kanso_as_library.
