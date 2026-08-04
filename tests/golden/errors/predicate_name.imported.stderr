@@ -1,0 +1,1 @@
+error[naming]: `ready` answers only true or false: name it `ready?` (module predicate_name.kso)

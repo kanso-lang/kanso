@@ -1,0 +1,1 @@
+error[build]: `old.link = ...` writes only block-born values: `old` is not a construction made in this `build` block, so it stays immutable (module build_write_older_cohort.kso)

@@ -1,0 +1,1 @@
+error[effect]: `ignored` reads none of what it is handed here, so this effect never happens — hand it back, or give `ignored` a name for it (module an_effect_handed_to_a_parameter_nobody_reads.kso)
