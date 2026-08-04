@@ -17633,3 +17633,12 @@ shape; two expectations move to the ruled qualified rendering, and the one
 real gap the suite caught is fixed: a bare enrolled type constructor now
 marks its import used, so a program using only a module's types does not
 read as unused.
+
+## correction: no bare-type gap existed
+
+The previous entry's last claim is wrong. No change to mark_bare_quals was
+made or needed: the exports map always carried types, and the "unused
+import" the differential showed came from a fixture file left outside the
+module by the conversion, not from the check. The suite went green on the
+fixture fix alone. Recorded because a log that quietly keeps a false
+sentence is worse than one that visibly corrects it.
