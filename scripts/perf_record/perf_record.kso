@@ -163,7 +163,7 @@ fn compiler_cost _
   io/run "/usr/bin/env" argv
 
 fn welfare_score _
-  io/run "./target/release/kanso" ["run" "scripts/welfare.kso"]
+  io/run "./target/release/kanso" ["run" "scripts/welfare"]
 
 # `welfare 65.56   floor 65.56  (...)` — the second field is the score.
 fn score_in text

@@ -109,7 +109,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: |
           cargo build --release
-          ./target/release/kanso run scripts/utf8_differential.kso
+          ./target/release/kanso run scripts/utf8_differential
 
   fingerprints:
     name: asset digests (every reference rewritten, site still runs)
