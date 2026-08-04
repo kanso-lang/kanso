@@ -1,0 +1,176 @@
+import "std/io"
+import "std/math"
+import "std/text"
+
+# Write the decode board. CI is the only author.
+#
+# RULED (Clay, 2026-08-03): the cross-language comparison is wall-clock,
+# because a competitor's cost cannot be counted by kanso's counters — and it
+# is a RELATIVE metric, averaged over interleaved rounds on whatever runner
+# CI gives us. Contention leans on both lanes at once, so the ratio holds
+# even when the absolute milliseconds wobble. The hand-sat quiet-box rows
+# this replaces are gone, not guarded: every number between the markers is
+# written by the run that measured it, on the pull request that merged it.
+#
+#     relative_board.kso -- <kanso_ms> <serde_ms> <kanso_kb> <serde_kb> <rounds>
+#
+# The splice replaces everything between the page's board markers, so every
+# merge overwrites the last one and the page carries exactly one board.
+fn begun argv
+  told argv (length argv < 5)
+
+fn told _ true
+  usage = "relative_board.kso -- <kanso_ms> <serde_ms> <kanso_kb> <serde_kb>"
+  io/write_err "{usage} <rounds>\n" . (_ -> io/exit 2)
+
+fn told argv false
+  k = text/to_float argv[1]!
+  s = text/to_float argv[2]!
+  kkb = text/to_int argv[3]!
+  skb = text/to_int argv[4]!
+  io/read_file "docs/compiler.html"
+    . (page -> spliced page k s kkb skb argv[5]!)
+
+# A fresh run of a wall-clock race never reproduces exactly, so an
+# unconditional write would commit a slightly different board every run and
+# the pull request's head would churn forever, each push orphaning the checks
+# before it. Within tolerance, the board already on the page IS this
+# measurement, and writing it again would record noise.
+fn spliced page k s kkb skb rounds
+  held = between page
+  same = within? held k s
+  settled page k s kkb skb rounds same
+
+fn settled _ _ _ _ _ _ true
+  io/write "decode board unchanged within tolerance\n"
+
+fn settled page k s kkb skb rounds false
+  board = table k s kkb skb rounds
+  before = (text/split page "<!--relative-->")[1]!
+  rest = (text/split page "<!--/relative-->")[2]!
+  open = "{before}<!--relative-->"
+  close = "<!--/relative-->{rest}"
+  io/write_file "docs/compiler.html" "{open}\n{board}\n{close}"
+    >> io/write "decode board rewritten: {verdict k s (k < s)}\n"
+
+fn between page
+  inner = (text/split page "<!--relative-->")[2]!
+  (text/split inner "<!--/relative-->")[1]!
+
+# Both lanes within five percent of what the page already says. The ratio is
+# the claim, and five percent absorbs the wobble two runs on one runner class
+# show; a real compiler change moves the lanes more than that or moves the
+# counters, which gate elsewhere.
+fn within? held k s
+  hk = number_after held "kanso + arenas"
+  hs = number_after held "serde_json"
+  both? hk hs k s (hk == none or hs == none)
+
+fn both? _ _ _ _ true
+  false
+
+fn both? hk hs k s false
+  close? hk k and close? hs s
+
+fn close? was now
+  gap = grown (was - now) (was < now)
+  gap * 100.0 < was * 5.0
+
+fn grown d true
+  0.0 - d
+
+fn grown d false
+  d
+
+# The ms cell that follows a lane's name: first "num" cell after the marker.
+fn number_after held name
+  parts = text/split held name
+  tail_of parts (length parts < 2)
+
+fn tail_of _ true
+  none
+
+fn tail_of parts false
+  cells = text/split parts[2]! "class=\"num\">"
+  celled cells (length cells < 2)
+
+fn celled _ true
+  none
+
+fn celled cells false
+  text/to_float (text/split cells[2]! "<")[1]!
+
+fn table k s kkb skb rounds
+  first = lane "kanso + arenas" k kkb (k < s) (bar k s k)
+  second = lane "serde_json (rust, hand-tuned)" s skb (s < k) (bar k s s)
+  note = footing k s rounds
+  head_a = "<table class=\"bench-table\">\n  <thead>\n    <tr><th>decoder</th>"
+  head_b = "<th class=\"bar-cell\"></th><th class=\"num\">ms/decode</th>"
+  head_c = "<th class=\"num\">peak mem</th></tr>\n  </thead>\n  <tbody>"
+  "{head_a}{head_b}{head_c}\n{first}\n{second}\n  </tbody>\n</table>\n{note}"
+
+fn lane name ms kb leads width
+  row = winner leads
+  fill = "<span class=\"bar-fill\" style=\"width:{width}%\"></span>"
+  bar_td = "<td class=\"bar-cell\"><span class=\"bar\">{fill}</span></td>"
+  nums = "<td class=\"num\">{fixed ms}</td><td class=\"num\">{mb kb} mb</td>"
+  top = "    <tr{row}>\n      <td>{name}</td>"
+  "{top}\n      {bar_td}\n      {nums}\n    </tr>"
+
+fn winner true
+  " class=\"win\""
+
+fn winner false
+  ""
+
+# The slower lane fills the bar; the faster one is scaled against it.
+fn bar k s mine
+  slow = slower k s (k < s)
+  math/round (100.0 * mine / slow)
+
+fn slower _ s true
+  s
+
+fn slower k _ false
+  k
+
+fn footing k s rounds
+  lead = verdict k s (k < s)
+  head = "<p class=\"board-note\">measured by ci on the merge that published"
+  mid = "this page: {rounds} interleaved rounds on a shared runner, averaged."
+  "{head} {mid} {lead}. the ratio is the claim; the milliseconds wobble.</p>"
+
+fn verdict k s true
+  "kanso ahead by {percent s k}%"
+
+fn verdict k s false
+  "serde_json ahead by {percent k s}%"
+
+fn percent big small
+  tenths = math/round (1000.0 * (big - small) / small)
+  whole = tenths / 10
+  tenth = tenths - whole * 10
+  "{whole}.{tenth}"
+
+fn fixed v
+  hundredths = math/round (v * 100.0)
+  whole = hundredths / 100
+  cents = hundredths - whole * 100
+  "{whole}.{padded cents}"
+
+fn padded c
+  wide c (c < 10)
+
+fn wide c true
+  "0{c}"
+
+fn wide c false
+  "{c}"
+
+# Peak RSS arrives in kbytes; one decimal of megabytes is all the precision
+# a footprint claim deserves.
+fn mb kb
+  tenths = math/round (10.0 * kb / 1024.0)
+  whole = tenths / 10
+  tenth = tenths - whole * 10
+  "{whole}.{tenth}"

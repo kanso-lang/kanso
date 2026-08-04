@@ -1,0 +1,329 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# A body, what it must write, and a name for it. `want` of `?` means the right
+# answer is an open question and only agreement is required: `w == w` on a
+# description answers false today, where `w < w` refuses outright, and which of
+# those is correct has not been settled.
+type shape
+  body
+  label
+  want
+
+# A description is the most novel thing in the language and the least probed.
+# The other sweeps ask what a value renders as, what a std function answers,
+# and what a wrong call says; none of them asks what happens when two effects
+# are sequenced, bound, joined, or nested inside one another. Those
+# combinations are written twice — the interpreter's executor and the C
+# runtime's `k_run` — and the two have no shared code, so they can drift
+# anywhere the corpus does not happen to go.
+#
+# What is probed is the shape of the combination, never the wall clock: a join
+# runs its arms concurrently and interleaving is the scheduler's business, so
+# every probe here either has one arm producing output or collects the arms'
+# answers rather than their order.
+#
+# Both engines must agree on the bytes and on the exit code. A disagreement is
+# a finding, and so is a legal combination that never returns.
+kanso = "target/release/kanso"
+
+probe = "target/effects_probe.kso"
+
+# sequencing and binding at their simplest, so a difference here is not hidden
+# inside a harder case
+seq_two = shape "io/write \"a\" >> io/write \"b\"" "write then write" "ab"
+
+seq_three = shape
+  "io/write \"a\" >> io/write \"b\" >> io/write \"c\""
+  "three writes"
+  "abc"
+
+bind_drop = shape
+  "io/write \"a\" . (_ -> io/write \"b\")"
+  "bind ignores its value"
+  "ab"
+
+bind_value = shape
+  "io/env \"PATH\" . (v -> io/write \"\{v == none}\")"
+  "bind passes its value"
+  "false"
+
+bind_twice = shape
+  "io/write \"a\" . (_ -> io/write \"b\") . (_ -> io/write \"c\")"
+  "bind chained twice"
+  "abc"
+
+re_enter = shape
+  "io/write \"\" . (_ -> 7) . (n -> io/write \"\{n}\")"
+  "a value re-enters"
+  "7"
+
+computed = shape
+  "io/write \"\" . (_ -> 7) . (n -> io/write \"\{n + 1}\")"
+  "a value computed on"
+  "8"
+
+# nesting: a description built inside a bind, and a bind inside a bind
+nested_bind = shape
+  "io/write \"a\" . (_ -> io/write \"b\" . (_ -> io/write \"c\"))"
+  "bind returns a bind"
+  "abc"
+
+seq_in_bind = shape
+  "io/write \"a\" . (_ -> io/write \"b\" >> io/write \"c\")"
+  "seq inside a bind"
+  "abc"
+
+bind_after_seq = shape
+  "io/write \"a\" >> io/write \"b\" . (_ -> io/write \"c\")"
+  "bind after a seq"
+  "abc"
+
+# a parallel group: adjacent statements in a block
+two_lines = shape "io/write \"a\"\n  io/write \"b\"" "two lines" "ab"
+
+three_lines = shape
+  "io/write \"a\"\n  io/write \"b\"\n  io/write \"c\""
+  "three lines"
+  "abc"
+
+wall = shape
+  "io/write \"a\"\n  io/write \"b\" >> io/write \"c\""
+  "a wall between groups"
+  "abc"
+
+bind_beside = shape
+  "io/write \"a\"\n  io/write \"b\" . (_ -> io/write \"c\")"
+  "a bind beside a write"
+  "abc"
+
+group_of_binds = shape
+  "io/env \"A\" . (_ -> io/write \"a\")\n  io/env \"B\" . (_ -> io/write \"b\")"
+  "a group of binds"
+  "ab"
+
+# the effects that read the world, pinned so they answer the same anywhere
+unset = shape
+  "io/env \"KANSO_NO_SUCH_VAR\" . (v -> io/write \"\{v}\")"
+  "an unset variable"
+  "<none>"
+
+absent = shape
+  "io/exists \"/no/such/path\" . (v -> io/write \"\{v}\")"
+  "a path that is not there"
+  "false"
+
+no_args = shape
+  "io/args . (a -> io/write \"\{length a}\")"
+  "the args of no args"
+  "0"
+
+no_dir = shape
+  "io/list_dir \"/no/such/dir\" . (v -> io/write \"\{v}\")"
+  "a directory that is not there"
+  ""
+
+# a failure inside a combination: it takes the chain with it, and the two
+# engines have to agree on where it stops and what reaches the executor
+exit_in_bind = shape
+  "io/write \"a\" . (_ -> io/exit 3)"
+  "exit inside a bind"
+  "a"
+
+exit_before = shape
+  "io/write \"a\" . (_ -> io/exit 3) . (_ -> io/write \"b\")"
+  "exit before a write"
+  "a"
+
+exit_in_group = shape
+  "io/write \"a\"\n  io/exit 3"
+  "exit in a parallel group"
+  ""
+
+read_fails = shape
+  "io/read_file \"/no/such/file\" . (_ -> io/write \"read\")"
+  "a read that fails"
+  ""
+
+read_bound_twice = shape
+  "io/read_file \"/no/f\" . (_ -> io/write \"a\") . (_ -> io/write \"b\")"
+  "a failed read, bound twice"
+  ""
+
+read_beside = shape
+  "io/read_file \"/no/such/file\"\n  io/write \"b\""
+  "a failed read beside a write"
+  "b"
+
+# a description held in a local, and one used twice
+in_a_local = shape
+  "w = io/write \"a\"\n  w >> io/write \"b\""
+  "a description in a local"
+  "ab"
+
+twice_over = shape
+  "w = io/write \"a\"\n  w >> w"
+  "the same description twice"
+  "aa"
+
+from_a_list = shape
+  "ws = [(io/write \"a\") (io/write \"b\")]\n  ws[1]! >> ws[2]!"
+  "a description from a list"
+  "ab"
+
+to_stderr = shape
+  "io/write \"a\" >> io/write_err \"e\""
+  "a description built by a fn"
+  "a"
+
+# descriptions and the ordinary value world
+compares = shape
+  "w = io/write \"a\"\n  io/write \"\{w == w}\" >> w"
+  "a description compares"
+  "?"
+
+renders = shape
+  "w = io/write \"a\"\n  io/write \"\{w}\" >> w"
+  "a description renders"
+  "<io>a"
+
+simple = [seq_two seq_three bind_drop bind_value bind_twice re_enter computed]
+
+nests = [nested_bind seq_in_bind bind_after_seq]
+
+groups = [two_lines three_lines wall bind_beside group_of_binds]
+
+world = [unset absent no_args no_dir]
+
+exits = [exit_in_bind exit_before exit_in_group]
+
+reads = [read_fails read_bound_twice read_beside]
+
+locals = [in_a_local twice_over from_a_list to_stderr compares renders]
+
+probes = text/concat (text/concat simple nests) (text/concat groups world)
+
+tail = text/concat (text/concat exits reads) locals
+
+all_probes = text/concat probes tail
+
+# A probe is a whole program, so it carries exactly the imports it uses and no
+# others — an unused import is an error, and an error compares equal on both
+# engines, which would read as agreement.
+imports = "import \"std/io\"\n\n"
+
+# A body with a newline in it is a block, and adjacent statements in a block
+# are a parallel group; a single expression is written on the `=` line.
+fn source_for body true
+  "{imports}pub play = {body}\n"
+
+fn source_for body false
+  "{imports}pub play =\n  {body}\n"
+
+fn shaped body
+  source_for body (length (text/split body "\n") == 1)
+
+# A legal probe that never returns is a finding, and a louder one than a
+# wording difference — so every run is under `timeout`, which answers 124 when
+# it fires. A box without `timeout` cannot start it, and an err says so rather
+# than the sweep quietly losing the property.
+limit = "20"
+
+fn asked argv
+  io/run "timeout" (text/concat [limit kanso] argv)
+
+fn hung? 124
+  true
+
+fn hung? _
+  false
+
+fn ran source
+  io/write_file probe source . (_ -> both)
+
+both = asked ["run" probe] . against
+
+fn against native
+  asked ["run" probe "--interp"] . (interp -> answer native interp)
+
+fn answer n i
+  stalled n i (hung? n.status or hung? i.status)
+
+fn stalled _ _ true
+  "never returned"
+
+fn stalled n i false
+  same = n.status == i.status and n.stdout == i.stdout
+  agreed n i (same and n.stderr == i.stderr)
+
+fn agreed _ _ false
+  "disagree"
+
+fn agreed n _ true
+  n.stdout
+
+fn judged s "never returned"
+  "  {s.label}: never returned\n"
+
+fn judged s "disagree"
+  "  {s.label}: the engines disagree\n"
+
+fn judged s wrote
+  wanted s wrote (wrote == s.want or s.want == "?")
+
+fn wanted _ _ true
+  ""
+
+fn wanted s wrote false
+  "  {s.label}: wrote {wrote}, the semantics say {s.want}\n"
+
+# A report is written where it is found rather than collected, so the value it
+# names is still the one the bind just produced. Accumulating the reports into
+# a list instead ran the interpreter out of stack, and the reduction is an open
+# thread rather than a diagnosis.
+fn told ""
+  io/write "" . (_ -> 0)
+
+fn told line
+  io/write line . (_ -> 1)
+
+fn swept exprs count
+  onward exprs count (length exprs == 0)
+
+fn onward _ count true
+  io/write "" . (_ -> count)
+
+fn onward exprs count false
+  s = exprs[1]!
+  more = list/to_list (list/drop exprs 1)
+  ran (shaped s.body) . (v -> told (judged s v) . (n -> swept more (count + n)))
+
+# The shape of one probe is checked before any of them run. A probe that lost
+# its interpolation is a program both engines agree about for the wrong reason,
+# which is how the render sweep once reported every value green having compared
+# nothing.
+complaint = "the probe shape changed: probes must interpolate\n"
+
+sample = """
+  import "std/io"
+
+  pub play = io/write "\{1}"
+"""
+
+fn begun false
+  io/write_err complaint . (_ -> io/exit 2)
+
+fn begun true
+  counted 0 . reported
+
+banner = "{length all_probes} combinations\n"
+
+fn counted _
+  io/write banner . (_ -> swept all_probes 0)
+
+fn reported 0
+  io/write "0 wrong\n"
+
+fn reported n
+  io/write "{n} wrong\n" . (_ -> io/exit 1)

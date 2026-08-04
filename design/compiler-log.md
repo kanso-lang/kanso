@@ -17555,3 +17555,14 @@ which is the better diagnostic; the error-corpus fixture's "deliberately
 not refused" paragraph inverts, and the runtime fixture binds its literal
 first to stay a runtime case. front_end_visits back to 25,874; welfare back
 at its floor exactly.
+
+## the scripts run as directory modules
+
+Fifth area slice: every scripts/*.kso carried a single-line `pub play`, and
+all twenty convert uniformly to the hako shape — scripts/x/ holds the
+declarations and a main.kso whose one statement is what the play was. The
+invocations (`kanso run scripts/welfare`) drop the extension at twenty-four
+call sites across ci.yml, book_check.sh and the welfare gate's staging.
+Outputs verified identical on welfare, page_drift, book_panels and the
+dispatch differential; the rest exercise in CI. scripts/ now declares no
+play at all.

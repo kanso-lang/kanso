@@ -44,7 +44,7 @@ fn banked(floor: f64, reason: &str) -> bool {
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
-        .arg(root.join("scripts/welfare.kso"))
+        .arg(root.join("scripts/welfare"))
         .arg("--")
         .arg("--set")
         .arg(reason)
@@ -104,7 +104,7 @@ fn plain_run_with_floor(floor: f64) -> std::process::Output {
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
-        .arg(root.join("scripts/welfare.kso"))
+        .arg(root.join("scripts/welfare"))
         .current_dir(&stage)
         .output()
         .expect("welfare runs");

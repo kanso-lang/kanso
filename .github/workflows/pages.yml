@@ -38,7 +38,7 @@ jobs:
       - name: build the compiler the fingerprinter runs on
         run: cargo build --release
       - name: content-digest the assets
-        run: ./target/release/kanso run scripts/fingerprint.kso -- ./_site
+        run: ./target/release/kanso run scripts/fingerprint -- ./_site
       - name: every reference names a digested file
         run: |
           if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then

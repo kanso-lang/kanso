@@ -1,0 +1,1 @@
+io/read_file "src/runtime.c" . (src -> written (as_harness src))
