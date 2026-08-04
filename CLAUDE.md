@@ -109,6 +109,15 @@ Only Clay arms, disarms or retimes it.
   goldens for diagnostics, micro goldens for one construct, the mem vein for
   allocation shape. A bug that had no home in those is a gap in the corpus,
   and adding the home is part of the fix.
+- **Pin the number, never a band.** `== 10`, not `< 1024`. The language has
+  no formatter and no linter because the grammar decides every question a
+  linter would ask; a spec earns the same treatment, and a tolerance is a
+  guess that stays green through exactly the change it was written to catch.
+  A number that looks noisy is a thing to find out about: measure it several
+  times, and either it is stable and gets pinned, or the variance itself is
+  the finding. Every counter in the veins already works this way — the two
+  per cent the compile-memory gate allows is a host-divergence allowance
+  with a measurement behind it, not a licence to write a loose spec.
 
 ### The differential law
 - The interpreter is the oracle. Every engine that speaks a feature is

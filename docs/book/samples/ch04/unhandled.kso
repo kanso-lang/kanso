@@ -4,6 +4,5 @@ fn describe none
 fn describe x
   "got {x}"
 
-pub play =
-  bad = 10 / 0
-  print (describe bad)
+bad = 10 / 0
+print (describe bad)

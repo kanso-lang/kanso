@@ -1,0 +1,19 @@
+# A module may say what order means for a type it owns. The arm joins the
+# ambient comparison group, which belongs to nobody, so qualifying this module
+# must leave that membership alone or the arm stops matching and two books
+# have no order at all.
+type book
+  pages
+
+fn < a:book b:book
+  a.pages < b.pages
+
+fn > a:book b:book
+  a.pages > b.pages
+
+short = book 100
+
+long = book 300
+
+print "own: {short < long} {short > long}"
+>> print "ints: {1 < 2} {2 < 1}"

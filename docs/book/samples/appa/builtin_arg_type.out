@@ -1,4 +1,4 @@
 error[type]: `length` takes a list, a map, or a string here, not an int
-  --> builtin_arg_type.kso:1:27
-   1 | pub play = print "{length 5}"
-                                 ^
+  --> builtin_arg_type.kso:1:16
+   1 | print "{length 5}"
+                      ^

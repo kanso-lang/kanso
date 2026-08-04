@@ -61,7 +61,7 @@ fn read_one path names at acc kid body
 fn joined a b
   list/to_list (text/concat a b)
 
-pub play = walk_all "a_tree_of_sample_outputs" . (fs -> print (length fs))
+walk_all "a_tree_of_sample_outputs" . (fs -> print (length fs))
 "#;
 
 const TREE: [(&str, usize); 11] = [
@@ -92,7 +92,7 @@ fn scratch() -> PathBuf {
 
 fn answer(dir: &Path, extra: &[&str]) -> (String, String) {
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg("walk.kso")
         .args(extra)
         .current_dir(dir)

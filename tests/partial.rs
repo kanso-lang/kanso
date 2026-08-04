@@ -15,7 +15,7 @@ fn written(name: &str, source: &str) -> PathBuf {
 
 fn interp(name: &str, source: &str) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", written(name, source).to_str().expect("utf-8"), "--interp"])
+        .args(["play", written(name, source).to_str().expect("utf-8"), "--interp"])
         .output()
         .expect("kanso runs")
 }
@@ -30,7 +30,7 @@ fn stdout(out: &std::process::Output) -> String {
 fn a_partial_carries_its_argument_to_wherever_it_is_finished() {
     let out = interp(
         "carry",
-        "fn add a b\n  a + b\n\nfn apply_five f\n  f 5\n\npub play = print \"{apply_five (&add 2)}\"\n",
+        "fn add a b\n  a + b\n\nfn apply_five f\n  f 5\n\nprint \"{apply_five (&add 2)}\"\n",
     );
 
     assert_eq!(stdout(&out), "7");
@@ -43,7 +43,7 @@ fn a_partial_carries_its_argument_to_wherever_it_is_finished() {
 fn a_partial_of_a_parameter_finishes_at_the_call_site() {
     let out = interp(
         "of_param",
-        "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\npub play = print \"{(foo add) 5 7}\"\n",
+        "fn add a b c\n  a + b + c\n\nfn foo f\n  &f 2\n\nprint \"{(foo add) 5 7}\"\n",
     );
 
     assert_eq!(stdout(&out), "14");
@@ -55,7 +55,7 @@ fn a_partial_of_a_parameter_finishes_at_the_call_site() {
 fn a_partial_grows_until_an_arity_matches() {
     let out = interp(
         "grows",
-        "fn add a b c\n  a + b + c\n\nfn half f\n  f 3\n\npub play = print \"{(half (&add 1)) 6}\"\n",
+        "fn add a b c\n  a + b + c\n\nfn half f\n  f 3\n\nprint \"{(half (&add 1)) 6}\"\n",
     );
 
     assert_eq!(stdout(&out), "10");
@@ -67,7 +67,7 @@ fn a_partial_grows_until_an_arity_matches() {
 fn a_partial_completes_against_the_arity_its_count_reaches() {
     let out = interp(
         "arity",
-        "pub play = print \"{(&roll 4) 5}\"\n\nfn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n",
+        "print \"{(&roll 4) 5}\"\n\nfn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n",
     );
 
     assert_eq!(stdout(&out), "20");
@@ -76,7 +76,7 @@ fn a_partial_completes_against_the_arity_its_count_reaches() {
 /// Past every arity is the error, and it says which arities existed.
 #[test]
 fn too_many_arguments_names_the_arities_that_exist() {
-    let out = interp("over", "fn add a b\n  a + b\n\npub play = print \"{(&add 1) 2 3}\"\n");
+    let out = interp("over", "fn add a b\n  a + b\n\nprint \"{(&add 1) 2 3}\"\n");
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("arms take 2"), "diagnostic was: {stderr}");
@@ -87,11 +87,12 @@ fn too_many_arguments_names_the_arities_that_exist() {
 /// same program through both and compares the bytes.
 #[test]
 fn native_and_the_interpreter_agree_on_a_partial() {
-    let source = "fn add a b\n  a + b\n\nfn apply_five f\n  f 5\n\npub play = print \"{apply_five (&add 2)}\"\n";
+    let source =
+        "fn add a b\n  a + b\n\nfn apply_five f\n  f 5\n\nprint \"{apply_five (&add 2)}\"\n";
     let program = written("agree", source);
 
     let native = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", program.to_str().expect("utf-8")])
+        .args(["play", program.to_str().expect("utf-8")])
         .output()
         .expect("kanso runs");
 
@@ -105,11 +106,11 @@ fn native_and_the_interpreter_agree_on_a_partial() {
 /// several live arms are not an ambiguity.
 #[test]
 fn a_partial_dispatches_on_the_total_count_not_at_the_ampersand() {
-    let source = "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\npub play = print \"{(&roll 4) 5}\" >> print \"{(&roll 4) 5 6}\"\n";
+    let source = "fn roll n\n  n + 1\n\nfn roll n sides\n  n * sides\n\nfn roll n sides bonus\n  n * sides + bonus\n\nprint \"{(&roll 4) 5}\" >> print \"{(&roll 4) 5 6}\"\n";
     let program = written("total_count", source);
 
     let native = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", program.to_str().expect("utf-8")])
+        .args(["play", program.to_str().expect("utf-8")])
         .output()
         .expect("kanso runs");
 
@@ -120,8 +121,7 @@ fn a_partial_dispatches_on_the_total_count_not_at_the_ampersand() {
 /// Currying past every arm is the one thing nothing can finish.
 #[test]
 fn holding_more_arguments_than_any_arm_takes_is_refused() {
-    let program =
-        written("overheld", "fn add a b\n  a + b\n\npub play = print \"{(&add 1 2 3)}\"\n");
+    let program = written("overheld", "fn add a b\n  a + b\n\nprint \"{(&add 1 2 3)}\"\n");
 
     let out = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .args(["build", program.to_str().expect("utf-8")])

@@ -20,7 +20,14 @@ fn kso_files(dir: &Path) -> Vec<PathBuf> {
     files
 }
 
+/// A case reached through the entry that imports it prints qualified type
+/// names and names its module in traces, so the cases that show either carry
+/// an `.imported.*` golden beside the direct-run one.
 fn expected(path: &Path, extension: &str) -> String {
+    let imported = path.with_extension(format!("imported.{extension}"));
+    if imported.exists() {
+        return std::fs::read_to_string(&imported).expect("the imported golden reads");
+    }
     let golden = path.with_extension(extension);
     std::fs::read_to_string(&golden).unwrap_or_else(|_| panic!("missing golden file {golden:?}"))
 }
@@ -222,19 +229,69 @@ fn mem_corpus_interp_matches_the_semantic_counters() {
     }
 }
 
-/// Compiles under the bare file name, as the CLI is invoked from the case's
-/// directory, so err origins in traces name the file identically.
+/// A corpus case exports `play` and is a library, so what gets compiled is an
+/// entry that imports it — the same wrapper `kanso run` is handed, since the
+/// language knows no such name. A case that is already an entry file compiles
+/// under its bare name, as the CLI is invoked from the case's directory, so
+/// err origins in traces name the file identically.
 fn compile_case(program: &Path) -> kanso::ast::Program {
-    let file =
-        program.file_name().and_then(|name| name.to_str()).expect("kso files have utf-8 names");
     let source = std::fs::read_to_string(program).expect("case source reads");
-    // the corpora hold all three program shapes: play-libraries, entry files,
-    // and (never here) pure libraries — route exactly as the cli does
-    let compiled = match source.contains("pub play") {
-        true => kanso::compile_play(file, &source),
-        false => kanso::compile_entry(file, &source),
+    let compiled = match source.contains("\npub play") || source.starts_with("pub play") {
+        true => {
+            let entry = staged_entry(program);
+            let wrapper = std::fs::read_to_string(&entry).expect("the entry reads");
+            kanso::compile_entry(&entry.to_string_lossy(), &wrapper)
+        }
+        false => {
+            let file = program
+                .file_name()
+                .and_then(|name| name.to_str())
+                .expect("kso files have utf-8 names");
+            kanso::compile_entry(file, &source)
+        }
     };
     compiled.unwrap_or_else(|rendered| panic!("compile failed for {program:?}:\n{rendered}"))
+}
+
+/// Where a case's directory is staged. The CLI runs from that directory and
+/// names the entry bare, so its traces carry bare file names; compiling by
+/// absolute path here puts the staging prefix in front of them, and the
+/// runtime cases take it back off before comparing.
+fn stage_dir(program: &Path) -> PathBuf {
+    let name = program.file_stem().and_then(|s| s.to_str()).expect("kso files have names");
+    let source = program.parent().expect("cases live in a directory");
+    std::env::temp_dir().join(format!(
+        "kanso-oracle-{}-{name}",
+        source.file_name().and_then(|s| s.to_str()).unwrap_or("dir")
+    ))
+}
+
+/// The case's whole directory is staged, because cases read fixture files and
+/// directories that sit beside them.
+fn staged_entry(program: &Path) -> PathBuf {
+    let name = program.file_stem().and_then(|s| s.to_str()).expect("kso files have names");
+    let source = program.parent().expect("cases live in a directory");
+    let stage = stage_dir(program);
+    let _ = std::fs::remove_dir_all(&stage);
+    stage_tree(source, &stage);
+    let entry = stage.join(format!("run_{name}.kso"));
+    std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+        .expect("the entry file writes");
+    entry
+}
+
+fn stage_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the staging directory is made");
+    for entry in std::fs::read_dir(from).expect("the corpus is readable") {
+        let path = entry.expect("directory entry").path();
+        let landing = to.join(path.file_name().expect("entries have names"));
+        match path.is_dir() {
+            true => stage_tree(&path, &landing),
+            false => {
+                std::fs::copy(&path, &landing).expect("the file copies");
+            }
+        }
+    }
 }
 
 #[test]
@@ -264,8 +321,10 @@ fn interpreter_reports_each_runtime_endpoint_violation() {
 
         let run = evaluate(&compiled, Vec::new());
 
+        let said = run.stderr.replace(&format!("{}/", stage_dir(&program).display()), "");
+
         assert_eq!(
-            run.stderr,
+            said,
             expected(&program, "stderr"),
             "interpreter diagnostics mismatch for {program:?}"
         );

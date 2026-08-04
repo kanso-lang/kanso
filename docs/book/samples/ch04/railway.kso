@@ -1,6 +1,5 @@
-pub play =
-  total = subtotal 120 0
-  print (receipt total)
+total = subtotal 120 0
+print (receipt total)
 
 fn receipt total
   "order total: {total}"

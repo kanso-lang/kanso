@@ -25,7 +25,7 @@ fn out(args: &[&str]) -> String {
 fn both_engines(name: &str, source: &str) -> (String, String) {
     let program = written(name, source);
     let path = program.to_str().expect("utf-8");
-    (out(&["run", path, "--interp"]), out(&["run", path]))
+    (out(&["play", path, "--interp"]), out(&["play", path]))
 }
 
 /// An imported name is enrolled twice — once qualified, once bare — and the
@@ -37,7 +37,7 @@ fn both_engines(name: &str, source: &str) -> (String, String) {
 fn an_imported_builder_held_twice_is_not_written_through() {
     let (interpreted, native) = both_engines(
         "imported_alias",
-        "import \"std/text\"\n\npub play =\n  base = text/append (text/bytes \"\") \"A\"\n  x = text/append base \"B\"\n  y = text/append base \"C\"\n  print \"{text/utf8 x} {text/utf8 y}\"\n",
+        "import \"std/text\"\n\nbase = text/append (text/bytes \"\") \"A\"\nx = text/append base \"B\"\ny = text/append base \"C\"\nprint \"{text/utf8 x} {text/utf8 y}\"\n",
     );
 
     assert_eq!(native, interpreted, "native mutated a builder the interpreter copied");
@@ -50,7 +50,7 @@ fn an_imported_builder_held_twice_is_not_written_through() {
 fn a_builder_passed_twice_through_a_wrapper_is_not_written_through() {
     let (interpreted, native) = both_engines(
         "wrapped_alias",
-        "import \"std/text\"\n\nfn addb acc b\n  text/append acc b\n\npub play =\n  base = text/append (text/bytes \"\") \"A\"\n  x = addb base \"B\"\n  y = addb base \"C\"\n  print \"{text/utf8 x} {text/utf8 y}\"\n",
+        "import \"std/text\"\n\nfn addb acc b\n  text/append acc b\n\nbase = text/append (text/bytes \"\") \"A\"\nx = addb base \"B\"\ny = addb base \"C\"\nprint \"{text/utf8 x} {text/utf8 y}\"\n",
     );
 
     assert_eq!(native, interpreted, "native mutated a builder the interpreter copied");
@@ -64,7 +64,7 @@ fn a_builder_passed_twice_through_a_wrapper_is_not_written_through() {
 fn a_list_held_twice_is_not_pushed_into() {
     let (interpreted, native) = both_engines(
         "list_alias",
-        "pub play =\n  base = push [] 1\n  x = push base 2\n  y = push base 3\n  print \"{length x} {length y}\"\n",
+        "base = push [] 1\nx = push base 2\ny = push base 3\nprint \"{length x} {length y}\"\n",
     );
 
     assert_eq!(native, interpreted);
@@ -76,16 +76,28 @@ fn a_list_held_twice_is_not_pushed_into() {
 /// rather than a retreat from mutating at all.
 #[test]
 fn a_singly_owned_builder_is_still_written_through() {
-    let program = written(
-        "single_owner",
-        "import \"std/text\"\n\nfn grow acc b\n  text/append acc b\n\npub play =\n  out = grow (grow (text/bytes \"\") \"A\") \"B\"\n  print \"{text/utf8 out}\"\n",
-    );
-    let work = program.parent().expect("temp work dir");
-    // built through the CLI because the byte builder arrives by import, and
-    // resolving one needs the module loader rather than a bare source string
+    // a real program, because only a real program builds: the grower is a
+    // library file and the statements that drive it are the entry beside it
+    let dir = std::env::temp_dir().join("kanso-aliasing-build/single_owner");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("grower")).expect("temp work dir");
+    std::fs::write(
+        dir.join("grower/grower.kso"),
+        "import \"std/text\"\n\npub fn grow acc b\n  text/append acc b\n",
+    )
+    .expect("library writes");
+    std::fs::write(
+        dir.join("main.kso"),
+        "import \"grower\"\nimport \"std/text\"\n\nout = grower/grow (grower/grow (text/bytes \"\") \"A\") \"B\"\nprint \"{text/utf8 out}\"\n",
+    )
+    .expect("entry writes");
+    // built from its own output directory: a program's binary takes the
+    // program's name, which would collide with the program's directory
+    let work = std::env::temp_dir().join("kanso-aliasing-build/out");
+    std::fs::create_dir_all(&work).expect("temp work dir");
     let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["build", program.to_str().expect("utf-8"), "--release"])
-        .current_dir(work)
+        .args(["build", dir.to_str().expect("utf-8"), "--release"])
+        .current_dir(&work)
         .output()
         .expect("kanso build runs");
     assert!(built.status.success(), "{}", String::from_utf8_lossy(&built.stderr));
@@ -104,7 +116,7 @@ fn a_singly_owned_builder_is_still_written_through() {
 fn a_map_held_twice_is_not_written_through() {
     let (interpreted, native) = both_engines(
         "map_alias",
-        "pub play =\n  base = put (put {:} \"a\" 1) \"b\" 2\n  x = put base \"c\" 3\n  y = put base \"d\" 4\n  print \"{length x} {length y}\"\n",
+        "base = put (put {:} \"a\" 1) \"b\" 2\nx = put base \"c\" 3\ny = put base \"d\" 4\nprint \"{length x} {length y}\"\n",
     );
 
     assert_eq!(native, interpreted);
@@ -119,7 +131,7 @@ fn a_map_held_twice_is_not_written_through() {
 fn a_fresh_builder_each_iteration_is_not_licensed() {
     let (interpreted, native) = both_engines(
         "fresh_builder",
-        "import \"std/text\"\n\nfn churn acc 0\n  text/utf8 acc\n\nfn churn acc n\n  pad = \"{n}-{n}-{n}-{n}-{n}-{n}-{n}-{n}\"\n  churn (text/append (text/bytes (text/utf8 acc)) pad) (n - 1)\n\npub play =\n  seed = text/bytes \"go\"\n  print \"{length (churn seed 40)}\"\n",
+        "import \"std/text\"\n\nfn churn acc 0\n  text/utf8 acc\n\nfn churn acc n\n  pad = \"{n}-{n}-{n}-{n}-{n}-{n}-{n}-{n}\"\n  churn (text/append (text/bytes (text/utf8 acc)) pad) (n - 1)\n\nseed = text/bytes \"go\"\nprint \"{length (churn seed 40)}\"\n",
     );
 
     assert_eq!(native, interpreted);

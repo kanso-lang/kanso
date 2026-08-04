@@ -1127,7 +1127,6 @@ fn check_predicates(
         if decl.synthetic
             || decl.is_getter()
             || decl.name == crate::ast::ENTRY
-            || decl.name == "play"
             || short.starts_with("test_")
             // an arm extending an operator is named for the operator, and
             // `<` cannot take a `?` — this rule is about identifiers
@@ -2226,10 +2225,10 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
     })
 }
 
-/// A directory is run through the file `main.kso`, and a file through its
-/// `pub play`. Either way the entry is compiled in under a name no program can
-/// spell, so what is missing here is the file or the `play` — never a
-/// declaration the reader was supposed to write called `main`.
+/// A directory is run through the file `main.kso`, whose statements are
+/// compiled in under a name no program can spell. What is missing here is
+/// that file — never a declaration the reader was supposed to write called
+/// `main`.
 fn check_entry(program: &Program, diags: &mut Vec<Diagnostic>) {
     if !program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
         diags.push(Diagnostic::new(

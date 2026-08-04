@@ -24,12 +24,12 @@ fn peak_bytes(n: u64) -> u64 {
         "fn go 0 m\n  print (length (entries m))\n\n\
          fn go n m\n  junk = \"k{{n % 17}}\"\n  \
          go (n - 1) (put m \"k1\" (m[\"k1\"]! + length junk))\n\n\
-         pub play = go {n} {{ \"k1\":0 }}\n"
+         go {n} {{ \"k1\":0 }}\n"
     );
     std::fs::write(dir.join("run.kso"), program).expect("the program writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg("run.kso")
         .env("KANSO_COUNTERS", "1")
         .current_dir(&dir)

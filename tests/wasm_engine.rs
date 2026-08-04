@@ -145,11 +145,40 @@ impl Toolchain {
 
     /// Compile and run one program, answering what a user would see.
     fn run(&mut self, name: &str, source: &str) -> Answer {
-        let (name_ptr, name_len) = self.write(name);
+        // A program that exports `play` is a library: the engine is handed it
+        // under the name an import will use, and compiles the entry that runs
+        // it — the same two files the native engine is given, with no
+        // filesystem under either of them.
+        self.call("kanso_forget_sources", &[], &mut []).expect("the sources clear");
+        let stem = name.strip_suffix(".kso").unwrap_or(name).to_string();
+        let library = source.contains("\npub play") || source.starts_with("pub play");
+        let (compiled_name, compiled) = match library {
+            true => (format!("run_{stem}.kso"), format!("import \"{stem}\"\n\n{stem}/play\n")),
+            false => (name.to_string(), source.to_string()),
+        };
+        if library {
+            let (path_ptr, path_len) = self.write(&stem);
+            let (file_ptr, file_len) = self.write(name);
+            let (src_ptr, src_len) = self.write(source);
+            self.call(
+                "kanso_hand_source",
+                &[
+                    Val::I32(path_ptr),
+                    Val::I32(path_len),
+                    Val::I32(file_ptr),
+                    Val::I32(file_len),
+                    Val::I32(src_ptr),
+                    Val::I32(src_len),
+                ],
+                &mut [],
+            )
+            .expect("the library is accepted");
+        }
+        let (name_ptr, name_len) = self.write(&compiled_name);
         self.call("kanso_set_seed", &[Val::I32(SEED)], &mut []).expect("the seed is accepted");
         self.call("kanso_set_file", &[Val::I32(name_ptr), Val::I32(name_len)], &mut [])
             .expect("the file name is accepted");
-        let (ptr, len) = self.write(source);
+        let (ptr, len) = self.write(&compiled);
         // tail calls on, as every browser this targets reports them: a
         // self-call that must not grow the stack is a different program
         // without them, and comparing that to the golden compares two
@@ -255,6 +284,52 @@ fn corpus() -> Vec<PathBuf> {
     found
 }
 
+/// A corpus program that exports `play` is a library, so the native engine
+/// is handed the entry that imports it — staged once per corpus directory,
+/// because programs read fixtures that sit beside them.
+fn native_entry(path: &Path) -> (PathBuf, String) {
+    let dir = path.parent().expect("a program has a directory").to_path_buf();
+    let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+    let source = std::fs::read_to_string(path).expect("the program reads");
+    if !source.contains("\npub play") && !source.starts_with("pub play") {
+        return (dir, name);
+    }
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let stage =
+        std::env::temp_dir().join("kanso-wasm-native").join(dir.file_name().unwrap_or_default());
+    static STAGED: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<PathBuf>>> =
+        std::sync::OnceLock::new();
+    let mut done = STAGED.get_or_init(Default::default).lock().expect("the staging lock");
+    if done.insert(stage.clone()) {
+        let _ = std::fs::remove_dir_all(&stage);
+        stage_tree(&dir, &stage);
+    }
+    drop(done);
+    // The directory is copied once, for the fixtures beside the program; the
+    // program itself is copied every time, because a caller that writes one
+    // probe after another to the same name would otherwise be answered by the
+    // first one forever.
+    std::fs::copy(path, stage.join(&name)).expect("the program copies");
+    let entry = format!("run_{stem}.kso");
+    std::fs::write(stage.join(&entry), format!("import \"{stem}\"\n\n{stem}/play\n"))
+        .expect("the entry file writes");
+    (stage, entry)
+}
+
+fn stage_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the staging directory is made");
+    for entry in std::fs::read_dir(from).expect("the corpus is readable") {
+        let path = entry.expect("directory entry").path();
+        let landing = to.join(path.file_name().expect("entries have names"));
+        match path.is_dir() {
+            true => stage_tree(&path, &landing),
+            false => {
+                std::fs::copy(&path, &landing).expect("the file copies");
+            }
+        }
+    }
+}
+
 /// What the native engine does with a program: the merged stream and the
 /// exit code, which is the comparison the Chrome harness makes. The `.out`
 /// goldens pin stdout alone and the wasm engine has one output area, so
@@ -262,9 +337,10 @@ fn corpus() -> Vec<PathBuf> {
 fn natively(path: &Path) -> (i32, String) {
     // from the program's own directory, under its bare name: an err stamps
     // the path it was given, and the wasm side is only ever given a basename
+    let (dir, entry) = native_entry(path);
     let done = std::process::Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", &path.file_name().unwrap_or_default().to_string_lossy()])
-        .current_dir(path.parent().expect("a program has a directory"))
+        .args(["run", &entry])
+        .current_dir(&dir)
         .env("KANSO_SEED", SEED_TEXT)
         .output()
         .expect("the native engine runs");

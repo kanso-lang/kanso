@@ -20,7 +20,7 @@ fn peak_for(links: u64) -> u64 {
         &program,
         format!(
             "import \"std/io\"\n\n\
-             pub play = step 1\n\n\
+             step 1\n\n\
              fn step n\n  going n (n > {links})\n\n\
              fn going _ true\n  io/write \"done\\n\"\n\n\
              fn going n false\n  io/write \"\" . (_ -> step (n + 1))\n"
@@ -35,7 +35,7 @@ fn peak_for(links: u64) -> u64 {
         let done = Command::new("/usr/bin/time")
             .arg(flag)
             .arg(env!("CARGO_BIN_EXE_kanso"))
-            .arg("run")
+            .arg("play")
             .arg("chain.kso")
             .arg("--interp")
             .current_dir(&dir)

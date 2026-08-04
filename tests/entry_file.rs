@@ -179,8 +179,9 @@ fn a_typeset_keeps_its_members_across_an_import() {
 fn an_err_reason_renders_unqualified_across_an_import() {
     let dir = "tests/golden/entryfile/an_err_reason_across_the_import";
     let answer = |target: &str, engine: &[&str]| {
+        let verb = if target.ends_with("_alone.kso") { "play" } else { "run" };
         let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-            .arg("run")
+            .arg(verb)
             .arg(target)
             .args(engine)
             .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -192,7 +193,7 @@ fn an_err_reason_renders_unqualified_across_an_import() {
         )
     };
 
-    let (direct, _) = answer(&format!("{dir}/lane.kso"), &[]);
+    let (direct, _) = answer(&format!("{dir}/lane_alone.kso"), &[]);
     let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
     let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
 
@@ -219,8 +220,9 @@ fn an_err_reason_renders_unqualified_across_an_import() {
 fn a_modules_render_arm_survives_being_imported() {
     let dir = "tests/golden/entryfile/a_render_arm_across_the_import";
     let answer = |target: &str, engine: &[&str]| {
+        let verb = if target.ends_with("_alone.kso") { "play" } else { "run" };
         let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-            .arg("run")
+            .arg(verb)
             .arg(target)
             .args(engine)
             .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -232,7 +234,7 @@ fn a_modules_render_arm_survives_being_imported() {
         )
     };
 
-    let (direct, _) = answer(&format!("{dir}/coin.kso"), &[]);
+    let (direct, _) = answer(&format!("{dir}/coin_alone.kso"), &[]);
     let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
     let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
 
@@ -258,8 +260,9 @@ fn a_modules_render_arm_survives_being_imported() {
 fn a_modules_ordering_arm_survives_being_imported() {
     let dir = "tests/golden/entryfile/an_ordering_arm_across_the_import";
     let answer = |target: &str, engine: &[&str]| {
+        let verb = if target.ends_with("_alone.kso") { "play" } else { "run" };
         let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-            .arg("run")
+            .arg(verb)
             .arg(target)
             .args(engine)
             .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -271,7 +274,7 @@ fn a_modules_ordering_arm_survives_being_imported() {
         )
     };
 
-    let (direct, _) = answer(&format!("{dir}/shelf.kso"), &[]);
+    let (direct, _) = answer(&format!("{dir}/shelf_alone.kso"), &[]);
     let (imported, complaint) = answer(&format!("{dir}/main.kso"), &[]);
     let (interp, _) = answer(&format!("{dir}/main.kso"), &["--interp"]);
 

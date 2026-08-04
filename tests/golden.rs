@@ -67,9 +67,6 @@ fn stage_tree(from: &Path, to: &Path) {
 }
 
 fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
-    // `run` is the verb; a file's `pub play` is what `run` finds, not a
-    // different way to start it. Choosing a verb from the source also meant
-    // the corpus never exercised the path `run` takes for a play file.
     let verb = "run";
     let mut command = Command::new(env!("CARGO_BIN_EXE_kanso"));
     // goldens pin the dice; a bare run seeds from entropy
@@ -261,7 +258,7 @@ fn a_set_environment_variable_reads_through() {
     std::fs::write(&file, named).expect("program writes");
 
     for extra in [&[][..], &["--interp"][..]] {
-        let output = run_kanso_env(&file, extra, &[("KANSO_ENV_PROBE", "supplied")]);
+        let output = run_kanso_as_library(&file, extra, &[("KANSO_ENV_PROBE", "supplied")]);
 
         assert_eq!(
             String::from_utf8_lossy(&output.stdout),
@@ -288,7 +285,7 @@ fn a_pinned_clock_reads_the_same_in_both_engines() {
     .expect("program writes");
 
     for extra in [&[][..], &["--interp"][..]] {
-        let output = run_kanso_env(&program, extra, &[("KANSO_NOW", "1700000000000")]);
+        let output = run_kanso_as_library(&program, extra, &[("KANSO_NOW", "1700000000000")]);
 
         assert_eq!(
             String::from_utf8_lossy(&output.stdout),
