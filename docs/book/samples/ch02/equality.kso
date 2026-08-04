@@ -2,10 +2,9 @@ type point
   x
   y
 
-pub play =
-  nums = [1 2 3] == [1 2 3]
-  words = "apple" < "banana"
-  order = 5 <= 5
-  here = point 1 2
-  there = point 1 2
-  print "lists {nums}, words {words}, order {order}, points {here == there}"
+nums = [1 2 3] == [1 2 3]
+words = "apple" < "banana"
+order = 5 <= 5
+here = point 1 2
+there = point 1 2
+print "lists {nums}, words {words}, order {order}, points {here == there}"

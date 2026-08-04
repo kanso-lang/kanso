@@ -4,8 +4,7 @@ fn describe none
 fn describe x
   "fourth flavor: {x}"
 
-pub play =
-  flavors = ["matcha" "ube" "hojicha"]
-  first = flavors[1]
-  fourth = flavors[4]
-  print "first: {first}" >> print (describe fourth)
+flavors = ["matcha" "ube" "hojicha"]
+first = flavors[1]
+fourth = flavors[4]
+print "first: {first}" >> print (describe fourth)

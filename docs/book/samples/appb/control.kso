@@ -1,4 +1,4 @@
 fn classify n
   if (n > 0) "positive" "non-positive"
 
-pub play = print "seven {classify 7}" >> print "zero {classify 0}"
+print "seven {classify 7}" >> print "zero {classify 0}"

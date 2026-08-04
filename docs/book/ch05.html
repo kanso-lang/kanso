@@ -107,7 +107,7 @@ kon kon</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"hello, <span class="i">{name}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="s">"kanso"</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="s">"kanso"</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>hello, kanso</code></pre>
@@ -123,9 +123,8 @@ kon kon</code></pre>
   <span class="f">return</span> hi if hi <span class="o">&lt;</span> n
   <span class="f">n</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{4 . clamp 0 10}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{12 . clamp 0 10}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"<span class="i">{4 . clamp 0 10}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>10
@@ -181,10 +180,9 @@ hojicha</code></pre>
 <span class="k">fn</span> <span class="f">quote</span> pricer amount
   <span class="s">"<span class="i">{amount}</span> becomes <span class="i">{pricer amount}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  local <span class="o">=</span> &amp;tax <span class="n">8</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{quote local 250}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span></code></pre>
+local <span class="o">=</span> &amp;tax <span class="n">8</span>
+<span class="f">print</span> <span class="s">"<span class="i">{quote local 250}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"and again: <span class="i">{local 100}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run currying.kso</div>
     <pre><code>250 becomes 270
@@ -203,10 +201,9 @@ and again: 108</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">tax</span> rate price
   price <span class="o">+</span> price <span class="o">*</span> rate <span class="o">/</span> <span class="n">100</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  on_250 <span class="o">=</span> &amp;tax <span class="n">8</span> <span class="n">250</span>
-  <span class="f">print</span> <span class="s">"still waiting: <span class="i">{on_250}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"called: <span class="i">{on_250()}</span>"</span></code></pre>
+on_250 <span class="o">=</span> &amp;tax <span class="n">8</span> <span class="n">250</span>
+<span class="f">print</span> <span class="s">"still waiting: <span class="i">{on_250}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"called: <span class="i">{on_250()}</span>"</span></code></pre>
 </div>
 
 <div class="code-panel">

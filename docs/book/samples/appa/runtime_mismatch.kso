@@ -1,4 +1,4 @@
 fn measured _
   5
 
-pub play = print "{length (measured 0)}"
+print "{length (measured 0)}"
