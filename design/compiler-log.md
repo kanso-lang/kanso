@@ -17619,3 +17619,17 @@ floor; every vein byte-identical; 45 suites green.
 Still PROPOSED, not ruled: the relaxed program file (declarations plus
 statements in one unimportable file). Committee analysis in
 design/pending-gavels.md; nothing of it is built.
+
+## the benches and the module differential follow the entry gavel
+
+The 769 CI reds were mine to find locally and did not get found, because
+the cost-vein check reran binaries built before the branch. The four bench
+programs convert to the ruled layout (jsonbench via its generator, the
+tracked three by hand), the build verb gains the same directory targeting
+as run and check, and every cost vein is byte-identical under the extra
+hop — which is the fold fix doing exactly what it was built to do. The
+module differential's member-era cases convert to entry-imports-module
+shape; two expectations move to the ruled qualified rendering, and the one
+real gap the suite caught is fixed: a bare enrolled type constructor now
+marks its import used, so a program using only a module's types does not
+read as unused.

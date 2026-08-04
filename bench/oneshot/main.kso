@@ -1,3 +1,4 @@
+import "oneshot"
 import "std/io"
 
 io/read_file "bench/large.json" . report

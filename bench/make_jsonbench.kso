@@ -10,12 +10,14 @@ import "std/text"
 # Run the built ./jsonbench from the repo root; divide its wall time by 150.
 out = "bench/jsonbench"
 
+module_dir = "bench/jsonbench/jsonbench"
+
 # `failure_position` rescues an err this program raises, and a benchmark that
 # only decodes has no use for it.
 dropped = "fn failure_position"
 
 bench_text = """
-  fn go cs
+  pub fn go cs
     print "decoded 150 times, checksum \{loop cs 150 0}"
 
   fn loop _ 0 acc
@@ -26,6 +28,7 @@ bench_text = """
 """
 
 main_text = """
+  import "jsonbench"
   import "std/io"
 
   io/read_file "bench/large.json" . go
@@ -35,18 +38,19 @@ ready = "{out} ready (150x runtime-read; run ./jsonbench from repo root)\n"
 
 pub play = built
 
-built = io/make_dir out . (_ -> copied)
+built = io/make_dir out . (_ -> io/make_dir module_dir) . (_ -> copied)
 
 copied = plain "number" . (_ -> plain "scan") . (_ -> plain "text")
   . (_ -> plain "value") . (_ -> trimmed) . (_ -> written)
 
 fn plain name
-  io/read_file "lib/json/{name}.kso" . (s -> io/write_file "{out}/{name}.kso" s)
+  io/read_file "lib/json/{name}.kso"
+    . (s -> io/write_file "{module_dir}/{name}.kso" s)
 
 trimmed = io/read_file "lib/json/json.kso" . stripped
 
 fn stripped source
-  io/write_file "{out}/json.kso" (kept source)
+  io/write_file "{module_dir}/json.kso" (kept source)
 
 # Blocks are separated by a blank line, which is what makes the one function
 # this benchmark does not want addressable without parsing the file.
@@ -58,6 +62,6 @@ fn kept source
 fn starts_dropped? block
   text/slice block 1 (length dropped) == dropped
 
-written = io/write_file "{out}/bench.kso" bench_text
+written = io/write_file "{module_dir}/bench.kso" bench_text
   . (_ -> io/write_file "{out}/main.kso" main_text)
   . (_ -> io/write ready)

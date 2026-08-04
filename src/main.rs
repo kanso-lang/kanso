@@ -124,7 +124,7 @@ fn driven() -> ExitCode {
     // directory checks the same program. A directory without an entry is a
     // library, compiled as the module it is.
     let entry_inside = std::path::Path::new(&file).join("main.kso");
-    let file = match matches!(command.as_str(), "run" | "check") && entry_inside.is_file() {
+    let file = match matches!(command.as_str(), "run" | "check" | "build") && entry_inside.is_file() {
         true => entry_inside.to_string_lossy().into_owned(),
         false => file,
     };

@@ -1,7 +1,6 @@
-import "std/io"
 import "std/json"
 
-fn report text
+pub fn report text
   doc = json/decode text
   out = json/encode doc
   print "held {length doc} wrote {length out}"
