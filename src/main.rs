@@ -124,7 +124,15 @@ fn driven() -> ExitCode {
     // directory checks the same program. A directory without an entry is a
     // library, compiled as the module it is.
     let entry_inside = std::path::Path::new(&file).join("main.kso");
-    let file = match matches!(command.as_str(), "run" | "check" | "build") && entry_inside.is_file() {
+    let rerouted_dir =
+        matches!(command.as_str(), "run" | "check" | "build") && entry_inside.is_file();
+    // A build rerouted through a directory keeps the directory's name: the
+    // program is `bench/jsonbench`, and `main` names nothing.
+    let built_as = match rerouted_dir {
+        true => std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()),
+        false => None,
+    };
+    let file = match rerouted_dir {
         true => entry_inside.to_string_lossy().into_owned(),
         false => file,
     };
@@ -218,7 +226,7 @@ fn driven() -> ExitCode {
         return run_tests(&program, &file, &source);
     }
     if command == "build" {
-        return build(&program, &file, release);
+        return build(&program, &file, release, built_as);
     }
     if interp {
         return run_interpreted(&program, program_args());
@@ -500,7 +508,7 @@ fn program_args() -> Vec<String> {
     }
 }
 
-fn build(program: &ast::Program, file: &str, release: bool) -> ExitCode {
+fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<String>) -> ExitCode {
     let ir = match kanso::codegen::emit_ir(program) {
         Ok(ir) => ir,
         Err(unsupported) => {
@@ -508,11 +516,12 @@ fn build(program: &ast::Program, file: &str, release: bool) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let stem = std::path::Path::new(file)
+    let named = std::path::Path::new(file)
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("out")
         .to_string();
+    let stem = built_as.unwrap_or(named);
     let ll_path = format!("{stem}.ll");
     if let Err(io) = std::fs::write(&ll_path, ir) {
         eprintln!("error: cannot write {ll_path}: {io}");
