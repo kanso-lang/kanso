@@ -17654,3 +17654,26 @@ line draws against is now floored at two percent of the series' magnitude.
 Verified differentially on a synthetic two-row series: identical values
 draw one y; the 7MB->3MB oneshot cliff spans the plot; the fifteen-byte
 compile wiggle moves one pixel.
+
+## GAVEL: the play verb runs little programs
+
+Ruled by Clay, 2026-08-04, resolving pending-gavels entry 24. The relaxed
+single file — declarations and statements together — exists, but only
+behind a verb built to stay small: `kanso play foo.kso` runs it and will
+not build it; its imports are the stdlib and nothing else, which is all
+the web playground could offer anyway (the Go playground's contract); and
+nothing can import a play file, so the form cannot leak into real
+programs. Inside one, functions and types are defined right beside the
+statements that use them — no `pub play`, no wrapper, no ceremony. The
+browser playground buffer is a play file; book samples that teach single
+ideas become play files shown whole.
+
+This supersedes one clause of the earlier no-play-verb ruling: that ruling
+kept the compiler from blessing a NAME; this verb is a harness for a FILE
+SHAPE, and the name coming back to mean exactly what it says is the point.
+`pub play` survives only where it belongs — library fixtures the test
+harness runs through generated entries to pin the imported path.
+
+Serving, for the last two python ports, follows net/http's shape: handler
+functions, a mux, listen-and-serve, a file server — the minimal kanso
+equivalent, designed after this lands.
