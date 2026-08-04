@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: exit_needs_a_status/io/exit_status exit_needs_a_status/wrong 1 2
+  born in exit_needs_a_status/io/exit at std/io/io.kso:23

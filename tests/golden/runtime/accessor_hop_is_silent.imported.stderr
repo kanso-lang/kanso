@@ -1,0 +1,2 @@
+error[endpoint]: unhandled err reached the entry: "gone"
+  born in accessor_hop_is_silent/boom at accessor_hop_is_silent.kso:5

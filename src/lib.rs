@@ -2795,7 +2795,14 @@ fn compile_module_loaded(
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
-    inline::inline_builtin_wrappers(&mut merged);
+    // Only the root lowers wrappers to their builtins. A dependency returns
+    // checked but unlowered: its importer's own check must see the same
+    // bodies the author wrote, or a wrapper's wrapper reads as an alias one
+    // hop in and a literal is refused at compile time on the imported path
+    // that dies at runtime on the direct one.
+    if root {
+        inline::inline_builtin_wrappers(&mut merged);
+    }
     if !diags.is_empty() {
         let file = dir.to_string_lossy();
         let rendered: Vec<String> = diags

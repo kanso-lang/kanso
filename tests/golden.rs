@@ -209,14 +209,23 @@ fn strict_mode_thunks_nothing_with_identical_output() {
 #[test]
 fn runtime_corpus_reports_endpoint_violations() {
     for program in kso_files(&manifest_dir().join("tests/golden/runtime")) {
+        let imported_golden = program.with_extension("imported.stderr");
+        let expected_err = if imported_golden.exists() {
+            std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
+        } else {
+            expected(&program, "stderr")
+        };
         // Both engines must report the endpoint violation identically: native
-        // (the compiled binary) and the interpreter oracle.
+        // (the compiled binary) and the interpreter oracle. Every fixture
+        // runs as a LIBRARY through the harness-generated entry; the 13 whose
+        // messages render a value or a trace carry `.imported.stderr`
+        // goldens, because names spell QUALIFIED through an import.
         for extra in [&[][..], &["--interp"][..]] {
-            let output = run_kanso(&program, extra);
+            let output = run_kanso_as_library(&program, extra, &[]);
 
             assert_eq!(
                 String::from_utf8_lossy(&output.stderr),
-                expected(&program, "stderr"),
+                expected_err,
                 "diagnostics mismatch for {program:?} (extra {extra:?})"
             );
             assert_eq!(

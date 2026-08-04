@@ -1,0 +1,1 @@
+error[runtime]: length takes a list, string, or map, not length_points_at_to_list/list/mapped <fn> length_points_at_to_list/list/cursor 1 [1 2 3] — a lazy sequence becomes a list with list/to_list
