@@ -1,1 +1,3 @@
-io/list_dir "src" . (names -> over_sources (list/to_list names) [])
+import "diagnostic_coverage"
+
+diagnostic_coverage/play

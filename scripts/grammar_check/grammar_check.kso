@@ -232,3 +232,5 @@ fn telling _ _ acc true
 
 fn telling faults at acc false
   spelled faults (at + 1) "{acc}FAIL  {faults[at]!}\n"
+
+pub play = io/read_file grammar_path . (raw -> read_grammar raw)

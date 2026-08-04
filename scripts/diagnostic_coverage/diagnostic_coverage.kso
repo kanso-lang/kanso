@@ -377,3 +377,5 @@ fn settled 0
 
 fn settled _
   io/exit 1
+
+pub play = io/list_dir "src" . (names -> over_sources (list/to_list names) [])

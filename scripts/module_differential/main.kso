@@ -1,1 +1,3 @@
-swept cases 1 [] (wrong -> then_known wrong)
+import "module_differential"
+
+module_differential/play

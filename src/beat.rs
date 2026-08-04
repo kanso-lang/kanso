@@ -1667,8 +1667,9 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("kanso-beat-{name}"));
         std::fs::create_dir_all(dir.join("work")).expect("fixture dir");
         std::fs::write(dir.join("work/work.kso"), lib).expect("fixture writes");
-        std::fs::write(dir.join("main.kso"), entry).expect("fixture writes");
-        crate::compile_module(&dir, false).unwrap()
+        let main = dir.join("main.kso");
+        std::fs::write(&main, entry).expect("fixture writes");
+        crate::compile_entry(&main.to_string_lossy(), entry).unwrap()
     }
 
     #[test]

@@ -1,1 +1,3 @@
-print "{main 41}"
+import "lib"
+
+print "{lib/main 41}"

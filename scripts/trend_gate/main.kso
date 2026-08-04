@@ -1,1 +1,3 @@
-io/args . (a -> started (base_of a))
+import "trend_gate"
+
+trend_gate/play

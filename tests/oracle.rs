@@ -275,8 +275,10 @@ fn interpreter_reports_each_runtime_endpoint_violation() {
 
 #[test]
 fn interpreter_runs_the_trace_demo_module_with_default_and_explicit_args() {
-    let dir = manifest_dir().join("examples/trace_demo");
-    let program = kanso::compile_module(&dir, true).expect("trace_demo compiles");
+    let entry = manifest_dir().join("examples/trace_demo/main.kso");
+    let source = std::fs::read_to_string(&entry).expect("the entry reads");
+    let program =
+        kanso::compile_entry(&entry.to_string_lossy(), &source).expect("trace_demo compiles");
     for args in [Vec::new(), vec!["examples/trace_demo/VERSION".to_string()]] {
         let run = evaluate(&program, args.clone());
 

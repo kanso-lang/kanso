@@ -68,3 +68,5 @@ fn overrides rest
 fn split_at spec
   halves = text/split spec "@"
   [halves[1]! halves[2]!]
+
+pub play = io/args . ran

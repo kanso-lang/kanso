@@ -327,3 +327,5 @@ fn reported 0
 
 fn reported n
   io/write "{n} wrong\n" . (_ -> io/exit 1)
+
+pub play = begun (shaped "io/write \"\{1}\"" == sample)

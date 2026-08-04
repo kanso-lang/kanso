@@ -1,1 +1,3 @@
-go 0
+import "orphan"
+
+orphan/go 0

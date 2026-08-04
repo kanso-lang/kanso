@@ -50,16 +50,16 @@ one_src = """
 
 arity_said = "error[arity]: no 2-argument arm of `one` (arms take 1)"
 
-c1a = filed "a.kso" """
+c1a = filed "m/a.kso" """
   pub fn greet _
     "hello"
 """
 
-c1m = filed "main.kso" "print \"\{greet 0}\"\n"
+c1m = filed "main.kso" "import \"m\"\n\nprint \"\{greet 0}\"\n"
 
 c1 = kase "a sibling file's name is in scope" [c1a c1m] "" "prints" "hello\n"
 
-c2a = filed "a.kso" """
+c2a = filed "m/a.kso" """
   fn quiet _
     "hush"
 
@@ -67,47 +67,47 @@ c2a = filed "a.kso" """
     quiet n
 """
 
-c2m = filed "main.kso" "print \"\{loud 0}\"\n"
+c2m = filed "main.kso" "import \"m\"\n\nprint \"\{loud 0}\"\n"
 
 c2l = "a private name is in scope inside the module"
 
 c2 = kase c2l [c2a c2m] "" "prints" "hush\n"
 
-c3a = filed "a.kso" point_src
+c3a = filed "m/a.kso" point_src
 
-c3b = filed "b.kso" """
+c3b = filed "m/b.kso" """
   pub fn origin _
     point 0 0
 """
 
-c3m = filed "main.kso" "print \"\{origin 0}\"\n"
+c3m = filed "main.kso" "import \"m\"\n\nprint \"\{origin 0}\"\n"
 
 c3l = "a type declared in one file, built in another"
 
-c3 = kase c3l [c3a c3b c3m] "" "prints" "point 0 0\n"
+c3 = kase c3l [c3a c3b c3m] "" "prints" "m/point 0 0\n"
 
-c4b = filed "b.kso" """
+c4b = filed "m/b.kso" """
   pub fn across p
     p.x
 """
 
-c4m = filed "main.kso" "print \"\{across (point 3 4)}\"\n"
+c4m = filed "main.kso" "import \"m\"\n\nprint \"\{across (point 3 4)}\"\n"
 
 c4l = "a field of a type from a sibling file"
 
 c4 = kase c4l [c3a c4b c4m] "" "prints" "3\n"
 
-c5a = filed "a.kso" """
+c5a = filed "m/a.kso" """
   pub fn which 0
     "zero"
 """
 
-c5b = filed "b.kso" """
+c5b = filed "m/b.kso" """
   pub fn which _
     "any"
 """
 
-c5m = filed "main.kso" "print \"\{which 0} \{which 9}\"\n"
+c5m = filed "main.kso" "import \"m\"\n\nprint \"\{which 0} \{which 9}\"\n"
 
 c5l = "an arm in each file of one group"
 
@@ -121,35 +121,37 @@ c6head = """
 
 c6src = "{c6head}  list/to_list (list/map ps _.x)\n"
 
-c6b = filed "b.kso" c6src
+c6b = filed "m/b.kso" c6src
 
-c6m = filed "main.kso" "print \"\{xs [(point 1 2) (point 3 4)]}\"\n"
+c6body = "print \"\{xs [(point 1 2) (point 3 4)]}\"\n"
+
+c6m = filed "main.kso" "import \"m\"\n\n{c6body}"
 
 c6l = "a getter of a sibling's type, as a value"
 
 c6 = kase c6l [c3a c6b c6m] "" "prints" "[1 3]\n"
 
-c7a = filed "a.kso" """
+c7a = filed "m/a.kso" """
   pub type thing
     n
 """
 
-c7b = filed "b.kso" """
+c7b = filed "m/b.kso" """
   pub fn thing _
     1
 """
 
-c7m = filed "main.kso" "print \"\{thing 0}\"\n"
+c7m = filed "main.kso" "import \"m\"\n\nprint \"\{thing 0}\"\n"
 
 c7l = "a type and a function sharing a name"
 
-c7 = kase c7l [c7a c7b c7m] "" "prints" "thing 0\n"
+c7 = kase c7l [c7a c7b c7m] "" "prints" "m/thing 0\n"
 
 c8m = filed "main.kso" "print \"\{1}\"\n"
 
 c8 = kase "an entry file that is only statements" [c8m] "" "prints" "1\n"
 
-c9a = filed "a.kso" """
+c9a = filed "m/a.kso" """
   fn unused _
     1
 
@@ -157,40 +159,40 @@ c9a = filed "a.kso" """
     2
 """
 
-c9m = filed "main.kso" "print \"\{used 0}\"\n"
+c9m = filed "main.kso" "import \"m\"\n\nprint \"\{used 0}\"\n"
 
 c9 = kase "a private name used nowhere" [c9a c9m] "" "prints" "2\n"
 
-c10a = filed "a.kso" one_src
+c10a = filed "m/a.kso" one_src
 
-c10b = filed "b.kso" """
+c10b = filed "m/b.kso" """
   pub fn misuse k
     one k 2
 """
 
-c10m = filed "main.kso" "print \"\{misuse 1}\"\n"
+c10m = filed "main.kso" "import \"m\"\n\nprint \"\{misuse 1}\"\n"
 
 c10l = "a call to a sibling at the wrong arity"
 
 c10 = kase c10l [c10a c10b c10m] "" "check refuses" arity_said
 
-c11m = filed "main.kso" "print \"\{one 1 2}\"\n"
+c11m = filed "main.kso" "import \"m\"\n\nprint \"\{one 1 2}\"\n"
 
 c11l = "a call from the entry at the wrong arity"
 
 c11 = kase c11l [c10a c11m] "" "check refuses" arity_said
 
-c12a = filed "a.kso" """
+c12a = filed "m/a.kso" """
   pub fn twice _
     1
 """
 
-c12b = filed "b.kso" """
+c12b = filed "m/b.kso" """
   pub fn twice _
     2
 """
 
-c12m = filed "main.kso" "print \"\{twice 0}\"\n"
+c12m = filed "main.kso" "import \"m\"\n\nprint \"\{twice 0}\"\n"
 
 c12said = "error[dispatch]: overlapping overloads of `twice` are illegal"
 
@@ -198,18 +200,18 @@ c12l = "an arm no call can reach"
 
 c12 = kase c12l [c12a c12b c12m] "" "check refuses" c12said
 
-c13a = filed "a.kso" """
+c13a = filed "m/a.kso" """
   pub fn taken _
     1
 """
 
-c13b = filed "b.kso" """
+c13b = filed "m/b.kso" """
   pub fn tries k
     taken = 2
     taken + k
 """
 
-c13m = filed "main.kso" "print \"\{tries 1}\"\n"
+c13m = filed "main.kso" "import \"m\"\n\nprint \"\{tries 1}\"\n"
 
 c13said = "error[name]: `taken` is already a declaration; rename the binding"
 
@@ -217,7 +219,7 @@ c13l = "a binding shadowing a sibling's declaration"
 
 c13 = kase c13l [c13a c13b c13m] "" "check refuses" c13said
 
-c14a = filed "a.kso" """
+c14a = filed "m/a.kso" """
   pub fn known _
     1
 """
@@ -478,3 +480,5 @@ fn ending true
 
 fn ending false
   io/exit 1
+
+pub play = swept cases 1 [] (wrong -> then_known wrong)

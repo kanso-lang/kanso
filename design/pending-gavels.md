@@ -716,3 +716,40 @@ readable from the expression. Raised, not argued.
   priority, and a real hole in the privacy story.
 - **A one-line function form**, `fn agreed _ _ true = ""`: sugar for
   arms whose body is a single expression.
+
+
+## 24. the relaxed program file (single-file programs with declarations)
+
+Clay floated it, then asked for committee deliberation: should a single
+file be allowed to hold declarations AND statements — importing libraries
+freely, but itself unimportable and unsplittable — as the form for
+playground buffers, book samples, and small scripts? The alternative keeps
+such code as libraries exporting `play` behind a real-but-unshown entry.
+
+The committee's read:
+
+- Hickey: two file kinds with one role each (library = declarations for
+  others; program = a run) is simpler than three artifacts braided by an
+  invisible relationship. `pub play` as a convention makes a value carry
+  entry semantics by name — folk magic the compiler just stopped speaking;
+  keeping it on every teaching sample perpetuates it.
+- Bernhardt: declarations-plus-statements in one file is the functional-
+  core/imperative-shell boundary at file scale — the natural teaching
+  artifact. Forcing project-scale structure onto postcard programs is
+  ceremony.
+- Beck: the beginner's first screen should say exactly what happens.
+  A `pub play` the page never explains fails reveals-intent; so does an
+  entry the reader is told exists but never sees.
+
+The product argument that moved the room: under the wrapper convention,
+every teaching sample's output prints QUALIFIED (`sample/point 3 4`),
+because the sample is a library behind an import. Under the relaxed file
+the sample's names are its own and output stays bare — the first thing a
+reader ever prints is clean. The wrapper convention survives where it
+belongs: harness fixtures that exist to pin the imported path.
+
+RECOMMENDED: adopt the relaxed program file as THE entry-file rule (main.kso
+is one; a playground buffer is one), refuse importing a program file,
+refuse `pub` inside it, statements run top to bottom with declarations
+visible file-wide. The scripts then collapse back to single files; only
+multi-file programs (hako) keep entry-beside-module. Awaiting Clay.

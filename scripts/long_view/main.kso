@@ -1,1 +1,3 @@
-io/read_file series_path . decoded
+import "long_view"
+
+long_view/play

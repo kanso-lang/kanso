@@ -33,5 +33,5 @@ fn major_of text
   digits = text/join (text/slice cs 1 (dot - 1)) ""
   text/to_int digits
 
-fn start argv
+pub fn start argv
   io/read_file (chosen argv) . check

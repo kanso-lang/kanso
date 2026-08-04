@@ -479,3 +479,5 @@ fn listed _ 0
 fn listed found _
   oracle = "\nthe interpreter is the oracle: these are native's to match.\n"
   io/write "{text/join found ""}{oracle}" . (_ -> io/exit 1)
+
+pub play = ran sound_src . (v -> sound_enough v)

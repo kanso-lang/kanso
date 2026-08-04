@@ -1,1 +1,3 @@
-io/args . begun
+import "relative_board"
+
+relative_board/play

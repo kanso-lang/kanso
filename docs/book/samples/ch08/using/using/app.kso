@@ -1,0 +1,5 @@
+pub fn describe (err (parse_failure p reason))
+  "parse failed at byte {p}: {reason}"
+
+pub fn describe v
+  "decoded: {v}"

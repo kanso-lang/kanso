@@ -1,1 +1,3 @@
-io/args . (given -> started (rounds_from given))
+import "numeric_differential"
+
+numeric_differential/play

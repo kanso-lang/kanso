@@ -1,1 +1,3 @@
-io/args . (given -> loaded (asks_write? given))
+import "golden_prose"
+
+golden_prose/play

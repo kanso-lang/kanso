@@ -12,7 +12,7 @@ dims = 2
 fn dist2 p q
   sum (list/map (range (length p)) (d -> sq (p[d] - q[d])))
 
-fn means sums
+pub fn means sums
   print "plurality VSE {sums[1] / runs}"
   >> print "approval  VSE {sums[2] / runs}"
   >> print "score     VSE {sums[3] / runs}"
@@ -30,7 +30,7 @@ fn point 0 acc
 fn point d acc
   math/random 1000 . (c -> point (d - 1) (push acc c))
 
-runs = 400
+pub runs = 400
 
 fn socutil voters c
   sum (list/map voters (v -> v[c]))
@@ -51,10 +51,10 @@ fn tally acc elec
   m = acc[6] + vse socs (minimax_winner elec)
   [p a s st i m]
 
-fn trials 0 acc
+pub fn trials 0 acc
   acc
 
-fn trials k acc
+pub fn trials k acc
   cloud nvot dims [] . (vp -> with_voters k acc vp)
 
 fn util vpos cpos

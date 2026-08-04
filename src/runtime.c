@@ -6274,7 +6274,13 @@ static int k_exit_status(KValue e) {
     KValue reason = k_err_inner(e);
     if (reason.tag != K_REC) return -1;
     KRec* r = k_as_rec(reason);
-    if (strcmp(k_type_name(r->type_id), "io/exit_status")) return -1;
+    /* the module chain qualifies at whatever depth the import graph built:
+       io/exit_status directly, hako/io/exit_status one hop in */
+    const char* xty = k_type_name(r->type_id);
+    size_t xn = strlen(xty);
+    if (strcmp(xty, "io/exit_status") &&
+        (xn < 15 || strcmp(xty + xn - 15, "/io/exit_status")))
+        return -1;
     /* an exit_status carrying something that is not a status is not a program
        saying what it meant — it is one that went wrong computing the code, and
        the reader is owed that rather than a silent 1 */

@@ -241,3 +241,5 @@ fn settled s key head shown body seen actual false
   note = "{said}, golden says {want}\n"
   out = "{s.out}{marker}{key}\"{head}>{want}<{tail}"
   sweep (s.drift + 1) "{s.notes}{note}" out
+
+pub play = io/args . (given -> loaded (asks_write? given))

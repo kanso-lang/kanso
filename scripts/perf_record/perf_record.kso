@@ -210,3 +210,5 @@ fn assembled line d e o bk c cc w
 
 fn written pairs
   io/write "{json/encode (list/to_h pairs)}\n"
+
+pub play = asked ["log" "-1" "--format=%h %cI %s"] . stamped

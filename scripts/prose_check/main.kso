@@ -1,1 +1,3 @@
-io/list_dir "docs" . (top -> with_book top)
+import "prose_check"
+
+prose_check/play

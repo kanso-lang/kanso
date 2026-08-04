@@ -1,1 +1,3 @@
-begun (plain "1" == sample)
+import "render_differential"
+
+render_differential/play

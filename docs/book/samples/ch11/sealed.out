@@ -1,4 +1,4 @@
-error[name]: unknown name `ride_km`
+error[name]: unknown name `resort/ride_km`
   --> sealed/main.kso:3:9
-   3 | print "{ride_km 1.0 2.0}"
+   3 | print "{resort/ride_km 1.0 2.0}"
                ^
