@@ -17533,3 +17533,25 @@ are byte-identical through the harness entry, and 5 differ only by the
 ruled qualified record rendering (`record_render/point 3 4`) — those carry
 .imported.stdout goldens beside the direct ones in tests/golden/examples.
 No compiler change needed; the suite enters through run_kanso_as_library.
+
+## a rename of a rename is still a rename, and a small fall still fails
+
+The scripts slice stumbled on both. Running welfare read 75.68 against a
+75.69 floor: #765's 41-visit front-end regression was priced at 0.003
+points, never re-ratcheted, and the verdict's 0.01 dead band read it as
+holding — CI green with the score below the floor. The band now covers only
+what two hosts actually disagree about (56 bytes of compile peak, under a
+ten-thousandth of a point): 0.001, with a spec staging a floor five
+thousandths above the score and watching the plain run fail.
+
+The visits themselves are reclaimed rather than paid. #765's
+dependencies-stay-unlowered gate is reverted; the diagnostic asymmetry it
+fixed is closed from the other side, by making inline::aliases transitive —
+a single-arm wrapper whose body forwards to a known alias resolves to the
+same builtin, so `fn wrapped x = text/bytes x` carries the builtin's
+literal demand to its call sites on the direct path exactly as the imported
+path always saw it. `wrapped 5` is now refused at compile time everywhere,
+which is the better diagnostic; the error-corpus fixture's "deliberately
+not refused" paragraph inverts, and the runtime fixture binds its literal
+first to stay a runtime case. front_end_visits back to 25,874; welfare back
+at its floor exactly.

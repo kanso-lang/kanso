@@ -1,3 +1,7 @@
+error[type]: `chars` takes a string here, not an int
+  --> a_std_wrapper_does_not_hide_its_builtin.kso:21:28
+  21 | pub play = print "{chopped 5} {text/split 5 ","} {text/bytes 5}"
+                                  ^
 error[type]: `split` takes a string here, not an int
   --> a_std_wrapper_does_not_hide_its_builtin.kso:21:43
   21 | pub play = print "{chopped 5} {text/split 5 ","} {text/bytes 5}"

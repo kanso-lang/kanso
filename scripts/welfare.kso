@@ -472,10 +472,12 @@ fn dimension_of name
   found = list/select terms (d -> list/any? d.counters (c -> c == name))
   list/first (list/to_list found)
 
-# a hundredth of a point is below anything a real change moves, and leaves room
-# for a term that rounds
+# the band covers only what two hosts disagree about — compile peak bytes
+# wobbles 56 bytes between linux and macos, worth under a ten-thousandth of a
+# point. every other term is deterministic, so a three-thousandths fall is a
+# real regression and fails
 fn verdict value floor
-  ruling value floor (value < floor - 0.01) (value > floor + 0.01)
+  ruling value floor (value < floor - 0.001) (value > floor + 0.001)
 
 fn ruling value floor true _
   fell (floor - value) . (_ -> io/exit 1)
