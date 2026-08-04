@@ -2,7 +2,7 @@
    and the tokenizer live in kanso-engine.js, shared with the landing page. */
 'use strict';
 
-const { ready, runSource, highlight, callKanso } = window.KansoEngine;
+const { ready, playSource, highlight, callKanso } = window.KansoEngine;
 /* ---------- editor: transparent textarea over a highlighted mirror ---------- */
 
 const editor = document.getElementById('editor');
@@ -25,7 +25,7 @@ function syncMirror() {
 }
 
 async function run() {
-  const result = await runSource(editor.value);
+  const result = await playSource(editor.value);
   const badge = { wasm: '⚡ compiled to wasm in your tab', interp: 'interpreted', error: '' }[result.engine];
   output.textContent = (result.text || '(no output)') + (badge ? `\n\n— ${badge}` : '');
   output.classList.toggle('play-error', result.code !== 0);
@@ -66,7 +66,7 @@ replForm.addEventListener('submit', async (event) => {
   if (!input.trim()) return;
   replInput.value = '';
   replEcho('repl-in', '» ' + input);
-  /* callKanso reaches into the module directly, so unlike runSource it has
+  /* callKanso reaches into the module directly, so unlike playSource it has
      no load of its own to wait on */
   await ready();
   const { code, text } = callKanso('kanso_repl_eval', input);
