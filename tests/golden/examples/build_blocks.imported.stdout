@@ -1,0 +1,2 @@
+[build_blocks/node "a" [build_blocks/node "b" [<cycle>]] build_blocks/node "b" [build_blocks/node "a" [<cycle>]]]
+build_blocks/node "seed" [<cycle>]

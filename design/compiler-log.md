@@ -17525,3 +17525,11 @@ harness entry, and 12 differ only by qualified names in messages and traces
 (the ruled rendering: `endpoint_trace/report ← endpoint_trace/grade`) —
 those carry .imported.stderr goldens. Both engines agree on every one. The
 suite enters through run_kanso_as_library.
+
+## the examples corpus runs as libraries
+
+Fourth area slice, quiet this time: of 47 examples, 7 are entry files, 35
+are byte-identical through the harness entry, and 5 differ only by the
+ruled qualified record rendering (`record_render/point 3 4`) — those carry
+.imported.stdout goldens beside the direct ones in tests/golden/examples.
+No compiler change needed; the suite enters through run_kanso_as_library.
