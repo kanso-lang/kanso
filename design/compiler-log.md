@@ -17642,3 +17642,15 @@ import" the differential showed came from a fixture file left outside the
 module by the conversion, not from the check. The suite went green on the
 fixture fix alone. Recorded because a log that quietly keeps a false
 sentence is worse than one that visibly corrects it.
+
+## a flat line draws flat
+
+Twice in one day the range-scaled chart read as a cliff where nothing
+happened: welfare on a 0.01 move, compile memory on fifteen bytes of an
+819-kilobyte peak (819,173 -> 819,188 with #769, inside the documented
+±56-byte host wobble). Each line is scaled to its own historical range, so
+a near-flat series amplifies its noise to full plot height. The span a
+line draws against is now floored at two percent of the series' magnitude.
+Verified differentially on a synthetic two-row series: identical values
+draw one y; the 7MB->3MB oneshot cliff spans the plot; the fifteen-byte
+compile wiggle moves one pixel.

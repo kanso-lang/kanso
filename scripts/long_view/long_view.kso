@@ -152,13 +152,39 @@ fn extended acc at v false
 fn drawn _ _ 0 _
   ""
 
+# A near-flat series draws flat. Scaling every line to its own range makes
+# a fifteen-byte wiggle on an 819-kilobyte peak fill the whole plot, and a
+# reader is right to read that as a cliff. The span a line is drawn against
+# is therefore never smaller than two percent of the series' magnitude:
+# real moves keep their shape, and noise draws as the flat line it is.
 fn drawn s pairs n total
   values = list/to_list (list/map pairs (p -> p[2]!))
   low = list/min values
   high = list/max values
-  coords = stepped pairs low high total 1 n ""
+  floor_span = magnitude low high / 50
+  span = widened (high - low) floor_span (high - low < floor_span)
+  mid = (low + high) / 2
+  coords = stepped pairs (mid - span / 2) (mid + span / 2) total 1 n ""
   open = "<polyline fill=\"none\" stroke=\"{s.colour}\""
   "{open} stroke-width=\"2\" points=\"{coords}\"/>"
+
+fn magnitude low high
+  grown_mag (low + high) / 2
+
+fn grown_mag m
+  flipped m (m < 0)
+
+fn flipped m true
+  0 - m
+
+fn flipped m false
+  m
+
+fn widened _ floor_span true
+  floor_span
+
+fn widened span _ false
+  span
 
 fn stepped pairs low high total at n acc
   placing pairs low high total at n acc (at > n)
