@@ -17737,3 +17737,21 @@ is that `run` says so — the first heuristic (no `pub play` plus any
 definition) rewrote that lesson, which is what a corpus is for. The
 mode-suffixed samples (_check, _test, _build, _plan, _counters) keep the
 library shape their recorded verb needs.
+
+## a file names what it uses
+
+The gavel's first clause, built: imports are per-file. Declarations still
+merge across a module's files; the import list does not. Two findings per
+file — an import nothing in it uses, and a qualified name no import in it
+declares — and the second is the one the pooled loader could never make,
+because a sibling's import resolved the name.
+
+The corpus was nearly clean, which is the argument for the rule rather
+than against it: authors already wrote the imports where they used them.
+Three dead imports fell out — lib/json/json.kso, hako/hako/update.kso,
+and the same line in kq's and kanso-json's mirrors of json.kso — each a
+line that named a dependency the file did not have.
+
+The check runs over the parsed files before the merge, so it reports the
+file and the line rather than the module. Its own module's name and the
+ambient render qual are not imports and are exempt.

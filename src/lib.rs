@@ -2782,6 +2782,42 @@ fn compile_module_loaded(
                 .map_err(|d| diag::render(&[d], file, source))?;
         }
     }
+    // Each file names what it uses. Declarations merge across a module's
+    // files; imports do not, so a file that leans on a sibling's import is
+    // a file whose dependencies are invisible in it.
+    let mut import_diags = Vec::new();
+    for (file, source, program) in &parsed {
+        let mut quals = std::collections::HashSet::new();
+        used_quals(program, &mut quals);
+        let mut with_bare = quals.clone();
+        mark_bare_quals(program, &exports, &mut with_bare);
+        let mut diags = unused_imports(&program.imports, &with_bare);
+        let named: std::collections::HashSet<String> = program
+            .imports
+            .iter()
+            .map(|i| i.alias.clone().unwrap_or_else(|| short_name(&i.path).to_string()))
+            .collect();
+        let own = dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let mut borrowed: Vec<&String> =
+            quals.iter().filter(|q| !named.contains(*q) && **q != own && *q != "render").collect();
+        borrowed.sort();
+        for qual in borrowed {
+            diags.push(diag::Diagnostic::new(
+                "import",
+                format!(
+                    "`{qual}` is not imported here — a module's files share \
+                     their declarations, not their imports"
+                ),
+                diag::Span { line: 1, col: 1 },
+            ));
+        }
+        if !diags.is_empty() {
+            import_diags.push(diag::render(&diags, file, source));
+        }
+    }
+    if !import_diags.is_empty() {
+        return Err(import_diags.join(""));
+    }
     let mut all_names = std::collections::HashSet::new();
     let mut all_markers = std::collections::HashSet::new();
     let mut all_type_names = std::collections::HashSet::new();

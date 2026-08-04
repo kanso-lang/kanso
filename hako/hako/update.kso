@@ -1,6 +1,5 @@
 import "std/io"
 import "std/list"
-import "std/text"
 
 # `kanso update` — walk tags forward and rewrite the lock. A release is the
 # only thing it walks to; a pin that is not a release stays where it is,
