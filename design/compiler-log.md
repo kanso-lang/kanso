@@ -17386,3 +17386,23 @@ the test caught immediately.
 This unblocks the chain that has been reported blocked for two days: the
 harness rework, the corpus migration by area, and the compiler's five `play`
 sites last.
+
+## the harness owns the entry, which is where the play convention now lives
+
+Step one of the ratified migration. `run_kanso_as_library` stages a sample's
+directory, writes the two-line entry that imports it and names its exported
+lambda, and runs that — the convention the compiler used to synthesise, now
+authored by the thing that runs samples. A sample with no `pub play` is
+already an entry file and runs directly, which is the same test the compiler's
+`declares_play` applies; when the corpus finishes migrating, that test dies
+with the other four sites.
+
+Its first consumer is the imported-corpus test, which hand-rolled the same
+staging and now dedupes into the runner — eighty samples through the entry
+path on both engines, the three record-printing ones against their qualified
+goldens, ten of ten golden suites green.
+
+The corpus migration can now proceed area by area: each slice points its
+suite at the library runner, drops `pub play` from its files where the parser
+allows a bare statement, and CI stays green throughout. The compiler's five
+sites go last, when nothing remains that needs them.
