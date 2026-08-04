@@ -521,11 +521,22 @@ jobs:
       # Commit on the pull request only. Main is protected — a direct push
       # is refused, by design — and what a PR wrote IS the measurement of
       # the code that merges, so main needs no second write.
+      #
+      # The board carries wall-clock numbers, which move every run, so a
+      # branch whose head is already a chart commit would be handed another
+      # one, and that one another, forever — one pull request collected eight
+      # before anybody noticed it could never be seen green. The chart commit
+      # still gets a full run of every gate; what stops here is the second
+      # redraw, which is what lets the branch settle.
       - name: commit the published surfaces if they moved
         if: github.head_ref != ''
         run: |
           git config user.name "kanso-ci"
           git config user.email "cshentrup@gmail.com"
+          if [ "$(git log -1 --pretty=%s)" = "the chart and the board, remeasured" ]; then
+            echo "the head commit is the chart; a second redraw would never settle"
+            exit 0
+          fi
           if git diff --quiet -- docs/compiler.html; then
             echo "the published surfaces are unchanged"
             exit 0

@@ -17737,3 +17737,58 @@ is that `run` says so — the first heuristic (no `pub play` plus any
 definition) rewrote that lesson, which is what a corpus is for. The
 mode-suffixed samples (_check, _test, _build, _plan, _counters) keep the
 library shape their recorded verb needs.
+
+## a file names what it uses
+
+The gavel's first clause, built: imports are per-file. Declarations still
+merge across a module's files; the import list does not. Two findings per
+file — an import nothing in it uses, and a qualified name no import in it
+declares — and the second is the one the pooled loader could never make,
+because a sibling's import resolved the name.
+
+The corpus was nearly clean, which is the argument for the rule rather
+than against it: authors already wrote the imports where they used them.
+Three dead imports fell out — lib/json/json.kso, hako/hako/update.kso,
+and the same line in kq's and kanso-json's mirrors of json.kso — each a
+line that named a dependency the file did not have.
+
+The check runs over the parsed files before the merge, so it reports the
+file and the line rather than the module. Its own module's name and the
+ambient render qual are not imports and are exempt.
+
+## the order dependencies load in is the module's, not the file list's
+
+Dropping that dead `import "std/list"` from lib/json/json.kso turned the
+compile-memory golden red: 819,217 to 856,191, over the two per cent CI
+allows. The per-file check was not the cause — deleting the whole block
+left the number where it was, and the compiler's own contribution
+measured at minus 158 bytes.
+
+What moved was which file names std/list. json.kso is the module's first
+file and text.kso its fourth, so removing the dead line moved std/list
+from first in the import union to second. A 2x2 measurement, binary
+against source: 819,402 with list named first, 856,349 with it named
+second, and 819,376 when json.kso alone names it. Rounds and visits are
+31 and 25,874 in every one of them — the same work, held differently.
+
+Each dependency is compiled on top of everything loaded before it, so a
+dependency's own peak stacks on the accumulated result of its
+predecessors. Peak is therefore max over deps of (what came before +
+what this one costs to compile), and the order decides it: compiling the
+expensive dependency last, on the largest accumulator, is the worst
+arrangement. An allocator trace of the top of each run says the peak is
+a plateau of small live objects rather than one buffer, and the two runs
+diverge gradually from about 102 KB on — B holding more of the same
+throughout, not one table doubling.
+
+The union is now sorted by path. Nothing about a module changed, so
+nothing about what checking it costs should depend on which of its files
+happened to name a shared import first. lib/json reads 819,218 against
+the golden's 819,217, and welfare holds at 75.69.
+
+tests/import_order.rs pins it: the same two declarations, split across
+two files two ways, checked and compared. Watched red at 531,434 against
+568,417 — the same 37 KB. The assertion allows a kibibyte rather than
+demanding equality, because a module's declarations still merge in file
+order and moving one between files costs ten bytes here; what it refuses
+is a swing of order-scale.

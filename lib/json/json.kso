@@ -1,4 +1,3 @@
-import "std/list"
 import "std/text"
 
 type defect
