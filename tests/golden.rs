@@ -20,6 +20,52 @@ fn run_kanso(program: &Path, extra: &[&str]) -> Output {
     run_kanso_env(program, extra, &[])
 }
 
+/// Run a sample the way a user runs a library: through a generated entry
+/// file that imports it and names its exported lambda. RULED: `play` is an
+/// ordinary exported name the language knows nothing about, so the
+/// convention of running one lives here, in the harness, not in the
+/// compiler. A sample with no `pub play` is already an entry file and runs
+/// directly.
+///
+/// The sample's whole directory is staged, because samples read fixture
+/// files and directories that sit beside them.
+fn run_kanso_as_library(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
+    let text = std::fs::read_to_string(program).expect("the sample reads");
+    if !text.contains("\npub play") && !text.starts_with("pub play") {
+        return run_kanso_env(program, extra, envs);
+    }
+
+    let name =
+        program.file_stem().and_then(|s| s.to_str()).expect("kso files have names").to_string();
+    let source = program.parent().expect("samples live in a directory");
+    let stage = std::env::temp_dir().join(format!(
+        "kanso-entry-{}-{name}",
+        source.file_name().and_then(|s| s.to_str()).unwrap_or("dir")
+    ));
+    let _ = std::fs::remove_dir_all(&stage);
+    stage_tree(source, &stage);
+    let entry = stage.join(format!("run_{name}.kso"));
+    std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+        .expect("the entry file writes");
+
+    let out = run_kanso_env(&entry, extra, envs);
+    let _ = std::fs::remove_dir_all(&stage);
+    out
+}
+
+fn stage_tree(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).expect("the staging directory is made");
+    for entry in std::fs::read_dir(from).expect("the corpus is readable") {
+        let path = entry.expect("directory entry").path();
+        let landing = to.join(path.file_name().expect("entries have names"));
+        if path.is_dir() {
+            stage_tree(&path, &landing);
+        } else {
+            std::fs::copy(&path, &landing).expect("the file copies");
+        }
+    }
+}
+
 fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
     // `run` is the verb; a file's `pub play` is what `run` finds, not a
     // different way to start it. Choosing a verb from the source also meant
@@ -227,20 +273,6 @@ fn a_pinned_clock_reads_the_same_in_both_engines() {
     }
 }
 
-/// Copy a tree, so a sample that reads a directory beside it still finds one.
-fn copy_tree(from: &Path, to: &Path) {
-    std::fs::create_dir_all(to).expect("the staging directory is made");
-    for entry in std::fs::read_dir(from).expect("the corpus is readable") {
-        let path = entry.expect("directory entry").path();
-        let landing = to.join(path.file_name().expect("entries have names"));
-        if path.is_dir() {
-            copy_tree(&path, &landing);
-        } else {
-            std::fs::copy(&path, &landing).expect("the file copies");
-        }
-    }
-}
-
 /// Every micro sample run a second way: as a LIBRARY, reached through a
 /// generated entry file that imports it and names its exported lambda.
 ///
@@ -256,9 +288,6 @@ fn copy_tree(from: &Path, to: &Path) {
 #[test]
 fn micro_corpus_agrees_when_it_is_imported() {
     let source = manifest_dir().join("tests/golden/micro");
-    let stage = std::env::temp_dir().join("kanso-micro-imported");
-    let _ = std::fs::remove_dir_all(&stage);
-    copy_tree(&source, &stage);
 
     let mut covered = 0;
     for program in kso_files(&source) {
@@ -280,14 +309,10 @@ fn micro_corpus_agrees_when_it_is_imported() {
         } else {
             expected(&program, "out")
         };
-
-        let entry = stage.join(format!("run_{name}.kso"));
-        std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
-            .expect("the entry file writes");
         covered += 1;
 
         for extra in [&[][..], &["--interp"][..]] {
-            let output = run_kanso(&entry, extra);
+            let output = run_kanso_as_library(&program, extra, &[]);
 
             assert_eq!(
                 String::from_utf8_lossy(&output.stdout),
@@ -302,8 +327,7 @@ fn micro_corpus_agrees_when_it_is_imported() {
         }
     }
 
-    // A staging step that silently copied nothing would make every assertion
+    // A loop that silently skipped everything would make every assertion
     // above vacuous, and the test would go on passing.
     assert!(covered > 53, "only {covered} samples were reached through an import");
-    let _ = std::fs::remove_dir_all(&stage);
 }
