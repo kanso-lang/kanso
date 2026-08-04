@@ -84,7 +84,7 @@ const EXAMPLES = {
 fn fact n
   n * fact (n - 1)
 
-pub play = print "20! = {fact 20}"
+print "20! = {fact 20}"
 `,
   json: `import "std/json"
 
@@ -94,11 +94,11 @@ fn report (err reason)
 fn report doc
   "title {doc["title"]}, {length doc} fields in all"
 
-pub play =
-  good = "\\{\\"title\\": \\"kanso\\", \\"stars\\": 3}"
-  torn = "\\{\\"title\\": \\"kanso\\", \\"stars\\": }"
-  print (report (json/decode good))
-  >> print (report (json/decode torn))
+good = "\\{\\"title\\": \\"kanso\\", \\"stars\\": 3}"
+
+torn = "\\{\\"title\\": \\"kanso\\", \\"stars\\": }"
+print (report (json/decode good))
+>> print (report (json/decode torn))
 `,
   railway: `fn describe n
   "half is {n}"
@@ -109,29 +109,29 @@ fn half 0
 fn half n
   n / 2
 
-pub play = print (describe (half 42))
+print (describe (half 42))
 `,
   pipes: `import "std/list"
 
-pub play =
-  total = [9 1 8 2 7] . sort . map (n -> n * n) . sum
-  print "sum of squares: {total}"
+total = [9 1 8 2 7] . sort . map (n -> n * n) . sum
+print "sum of squares: {total}"
 `,
   ordering: `import "std/list"
 
-fn cheapest prices
-  first (sort prices)
+fn cheapest all
+  first (sort all)
 
-pub play =
-  prices = [520 380 450 610 290]
-  # these two share nothing: the compiler is free to run them in parallel
-  low = cheapest prices
-  total = sum prices
-  # report consumes both, so it waits for both -- the barrier is the data
-  report low total
+prices = [520 380 450 610 290]
+# these two share nothing: the compiler is free to run them in parallel
 
-fn report low total
-  print "cheapest: {low} yen / total: {total} yen"
+low = cheapest prices
+
+total = sum prices
+# report consumes both, so it waits for both -- the barrier is the data
+report low total
+
+fn report best whole
+  print "cheapest: {best} yen / total: {whole} yen"
 `,
   fanout: `# in go this is four goroutines, a channel, a WaitGroup, and a select.
 # in kanso the channel is the data flow itself: fan-out is a map whose
@@ -145,11 +145,12 @@ import "std/list"
 fn fetch_quote city
   length city * 130
 
-pub play =
-  cities = ["tokyo" "kyoto" "osaka" "sapporo"]
-  quotes = map cities (c -> fetch_quote c)
-  cheapest = first (sort quotes)
-  print "four lookups fanned out, one answer fanned in: {cheapest} yen"
+cities = ["tokyo" "kyoto" "osaka" "sapporo"]
+
+quotes = map cities (c -> fetch_quote c)
+
+cheapest = first (sort quotes)
+print "four lookups fanned out, one answer fanned in: {cheapest} yen"
 `,
   build: `# two objects that point at each other. in most languages this needs a
 # nullable field you check forever after, or a second pass that patches the
@@ -160,14 +161,14 @@ type person
   name
   partner
 
-pub play =
-  couple = build
-    ada = person "ada" none
-    bob = person "bob" ada
-    ada.partner = bob
-    [ada bob]
-  a = couple[1]!
-  print "{a.name} <-> {a.partner.name} <-> {a.partner.partner.name}"
+couple = build
+  ada = person "ada" none
+  bob = person "bob" ada
+  ada.partner = bob
+  [ada bob]
+
+a = couple[1]!
+print "{a.name} <-> {a.partner.name} <-> {a.partner.partner.name}"
 `,
   contained: `# the same knot, but crossing call boundaries and then thrown away in
 # bulk. tie hands the cycle out as an ordinary return value, round_trip
@@ -196,11 +197,10 @@ fn spin 0 acc
 fn spin n acc
   spin (n - 1) (acc + length (round_trip (tie "ping")))
 
-pub play =
-  knot = tie "ping"
-  print "one hop: {knot.peer.name}"
-  >> print "back home: {round_trip knot}"
-  >> print "two thousand more, all discarded: {spin 2000 0}"
+knot = tie "ping"
+print "one hop: {knot.peer.name}"
+>> print "back home: {round_trip knot}"
+>> print "two thousand more, all discarded: {spin 2000 0}"
 `,
   currying: `# & holds a function's first arguments and waits for the rest.
 # tax is a two-argument function; &tax 8 fixes the rate and hands back
@@ -212,12 +212,12 @@ fn tax rate price
 fn quote pricer amount
   "{amount} becomes {pricer amount}"
 
-pub play =
-  local = &tax 8
-  luxury = &tax 20
-  print "one rate:  {quote local 250}"
-  >> print "the other: {quote luxury 250}"
-  >> print "and the same partial again: {local 100}"
+local = &tax 8
+
+luxury = &tax 20
+print "one rate:  {quote local 250}"
+>> print "the other: {quote luxury 250}"
+>> print "and the same partial again: {local 100}"
 `,
   running: `# & supplies arguments; it never runs anything. supply every argument an
 # arm takes and you still have a value -- one that is waiting to be called.
@@ -226,12 +226,12 @@ pub play =
 fn tax rate price
   price + price * rate / 100
 
-pub play =
-  local = &tax 8
-  on_250 = &tax 8 250
-  print "still waiting: {on_250}"
-  >> print "supplied one, called with the other: {local 250}"
-  >> print "supplied both, then called: {on_250()}"
+local = &tax 8
+
+on_250 = &tax 8 250
+print "still waiting: {on_250}"
+>> print "supplied one, called with the other: {local 250}"
+>> print "supplied both, then called: {on_250()}"
 `,
   join: `# two effects with no order between them -- parallel is the default, so
 # plain lines say it. the >> is the wall: serving happens only after both.
@@ -250,16 +250,13 @@ print "warming the cups"
 import "std/math"
 import "std/time"
 
-brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
-
-pub play =
-  brew
-  rolls
-
 fn roll i
   math/random 6 . (n -> print "roll {i}: a {n + 1}")
 
+brew = print "brew: steeping" >> time/sleep 60 >> print "brew: poured"
 rolls = roll 1 >> roll 2 >> roll 3 >> roll 4 >> roll 5
+brew
+rolls
 `,
   redux: `import "std/time"
 
@@ -280,9 +277,8 @@ fn notify logger (deposit n) balance
 fn notify logger (withdraw n) balance
   print "[logger] -{n} yen out -> the till holds {balance}"
 
-pub play =
-  moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
-  drive 0 moves 1 logger (print "the till opens at 0 yen")
+moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
+drive 0 moves 1 logger (print "the till opens at 0 yen")
 
 fn step _ _ _ _ out none
   out >> print "the till closes"

@@ -17692,3 +17692,32 @@ blank between the declaration half and the statements is a boundary, not a
 trailing blank — the one parser subtlety worth recording. Four specs in
 tests/play_verb.rs, a small golden corpus, every vein byte-identical,
 welfare at floor.
+
+## the playground buffer is a play file
+
+The browser reaches the play door: kanso_play beside kanso_run for the
+interpreter, kanso_play_wasm beside kanso_compile_wasm for the compiled
+path, one lowering helper under both. playSource picks them; the
+playground and the landing sample use it, and their twelve examples drop
+`pub play` — a beginner's first screen is now a function and the lines
+that use it.
+
+Two rules the examples settled, after trying each the other way:
+
+Declarations are `fn`, `type` and `import`. A binding stays part of the
+run, exactly as in an entry file. Bindings-as-constants was tried first
+and made the relaxed form MORE restrictive than the old wrapper: a
+parameter could no longer take a constant's name (two teaching examples
+broke on the shadow rule), and `build` — a statement form — could not be
+bound at top level at all. A constant several functions share is a
+library's job, and needing one is where a little program graduates to
+`kanso run`.
+
+The split is by kind, not position. Declarations are order-free
+everywhere else in kanso and a relaxed file is not the place to invent an
+ordering rule. The parser therefore hands the library parser a
+non-contiguous half, which needs its blank lines synthesized: exactly one
+per gap between consecutive declaration lines, taken from the original
+blanks where the gap holds one. Comments never reach the parser at all —
+the lexer drops them — so a gap's "next line" walk skips missing numbers
+rather than only blanks.

@@ -67,7 +67,7 @@ fn written(name: &str, source: &str) -> PathBuf {
 /// compared at all, only observed disagreeing.
 fn play(file: &PathBuf, engine: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg(file)
         .args(engine)
         .env("KANSO_SEED", "2685821657736338717")
@@ -126,7 +126,7 @@ fn every_playground_example_agrees_between_the_interpreter_and_native() {
 #[test]
 fn every_playground_example_survives_the_browser_backend() {
     for (name, source) in examples() {
-        let program = kanso::compile_source("run", &format!("{name}.kso"), &source)
+        let program = kanso::compile_play_file(&format!("{name}.kso"), &source)
             .unwrap_or_else(|e| panic!("the {name} example must compile: {e}"));
 
         let emitted = kanso::wasm_backend::compile(&program, false);

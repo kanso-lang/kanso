@@ -184,9 +184,9 @@ function rtImports() {
 /* compile the editor's program to a wasm module and run it natively in the
    tab; returns null when the browser backend doesn't cover the program yet
    (the interpreter picks it up) */
-async function runCompiled(src) {
+async function runCompiled(src, compileFn) {
   const { ptr, len } = writeInput(src);
-  const status = wasm.kanso_compile_wasm(ptr, len, tailCalls ? 1 : 0);
+  const status = compileFn(ptr, len, tailCalls ? 1 : 0);
   if (status === 2) return { code: 1, text: readOut(), engine: 'error' };
   if (status === 1) return null;
   const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr(), wasm.kanso_wasm_len()).slice();
@@ -227,10 +227,20 @@ async function ready() {
 async function runSource(src) {
   await ready();
   wasm.kanso_set_seed(Date.now() >>> 0);
-  const compiled = await runCompiled(src);
+  const compiled = await runCompiled(src, wasm.kanso_compile_wasm);
   if (compiled) return compiled;
   return Object.assign(callKanso('kanso_run', src), { engine: 'interp' });
 }
 
-window.KansoEngine = { ready, runSource, highlight, callKanso, get wasm() { return wasm; } };
+/* Run a playground buffer: a play file — declarations and statements in
+   one file, stdlib imports only. Same two engines, the play door. */
+async function playSource(src) {
+  await ready();
+  wasm.kanso_set_seed(Date.now() >>> 0);
+  const compiled = await runCompiled(src, wasm.kanso_play_wasm);
+  if (compiled) return compiled;
+  return Object.assign(callKanso('kanso_play', src), { engine: 'interp' });
+}
+
+window.KansoEngine = { ready, runSource, playSource, highlight, callKanso, get wasm() { return wasm; } };
 })();
