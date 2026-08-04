@@ -50,6 +50,14 @@ for out in docs/book/samples/*/*.out; do
     rm -rf "$tmp"
   else
     verb="$mode"
+    # a sample holding BOTH definitions and bare statements is a play file —
+    # the relaxed single-file form. Definitions alone are a library, and the
+    # book has a sample whose whole lesson is that `run` says so.
+    if [ "$mode" = run ] && [ -f "$src" ] && ! grep -q '^pub play' "$src" \
+      && grep -qE '^(fn|type) ' "$src" \
+      && awk '/^[^ #]/ && !/^(import|fn|type) / { found = 1 } END { exit !found }' "$src"; then
+      verb=play
+    fi
     actual=$( (cd "$dir" && env $env_prefix "$KANSO" "$verb" "$name" $extra 2>&1) ) || true
   fi
   if [ "$actual" != "$(cat "$out")" ]; then

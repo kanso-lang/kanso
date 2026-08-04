@@ -109,11 +109,10 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"fourth flavor: <span class="i">{x}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
-  first <span class="o">=</span> flavors[<span class="n">1</span>]
-  fourth <span class="o">=</span> flavors[<span class="n">4</span>]
-  <span class="f">print</span> <span class="s">"first: <span class="i">{first}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> fourth)</code></pre>
+flavors <span class="o">=</span> [<span class="s">"matcha"</span> <span class="s">"ube"</span> <span class="s">"hojicha"</span>]
+first <span class="o">=</span> flavors[<span class="n">1</span>]
+fourth <span class="o">=</span> flavors[<span class="n">4</span>]
+<span class="f">print</span> <span class="s">"first: <span class="i">{first}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> fourth)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>first: matcha
@@ -131,9 +130,8 @@ no fourth flavor</code></pre>
 <span class="k">fn</span> <span class="f">describe</span> price
   <span class="s">"<span class="i">{price}</span> yen"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
-  <span class="f">print</span> (<span class="f">describe</span> menu[<span class="s">"pocky"</span>])</code></pre>
+menu <span class="o">=</span> { <span class="s">"dango"</span>:<span class="n">350</span> <span class="s">"taiyaki"</span>:<span class="n">500</span> }
+<span class="f">print</span> (<span class="f">describe</span> menu[<span class="s">"pocky"</span>])</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>not on the menu</code></pre>
@@ -199,9 +197,8 @@ third <span class="o">=</span> flavors[<span class="n">3</span>]
 <span class="k">fn</span> <span class="f">parse_flag</span> _
   <span class="f">malformed</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"on"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>))</code></pre>
+<span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"on"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> (<span class="f">parse_flag</span> <span class="s">"banana"</span>))</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>flag: true

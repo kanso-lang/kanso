@@ -17721,3 +17721,19 @@ per gap between consecutive declaration lines, taken from the original
 blanks where the gap holds one. Comments never reach the parser at all —
 the lexer drops them — so a gap's "next line" walk skips missing numbers
 rather than only blanks.
+
+## the book shows little programs whole
+
+Forty-three single-idea samples drop their `pub play` and become play
+files: a reader sees the functions and the lines that use them, with no
+wrapper to explain. Each was converted and re-run before the change was
+kept — the recorded output had to be byte-identical, and eighteen
+candidates that moved were put back untouched.
+
+book_check.sh picks the verb from the file's shape: a sample holding BOTH
+definitions and a bare top-level statement is a play file. Definitions
+alone stay a library, because appa/no_main is a sample whose whole lesson
+is that `run` says so — the first heuristic (no `pub play` plus any
+definition) rewrote that lesson, which is what a corpus is for. The
+mode-suffixed samples (_check, _test, _build, _plan, _counters) keep the
+library shape their recorded verb needs.

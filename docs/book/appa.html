@@ -517,7 +517,7 @@ size <span class="o">=</span> <span class="n">9</span>
 <div class="code-panel">
   <div class="code-panel-title">field_type_check.kso</div>
   <pre><code><span class="k">type</span> track
-  <span class="f">artist</span><span class="o">:</span><span class="t">string</span>
+  artist:string
   <span class="f">title</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
@@ -564,7 +564,7 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <div class="code-panel">
   <div class="code-panel-title">retired_any_check.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">label</span> x<span class="o">:</span><span class="t">any</span>
+  <pre><code><span class="k">fn</span> <span class="f">label</span> x:any
   <span class="s">"a value: <span class="i">{x}</span>"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{label 3}</span>"</span></code></pre>
@@ -709,10 +709,10 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <div class="code-panel">
   <div class="code-panel-title">runtime_mismatch.kso</div>
-  <pre><code><span class="k">fn</span> <span class="f">measured</span> <span class="o">_</span>
+  <pre><code><span class="k">fn</span> <span class="f">measured</span> _
   <span class="n">5</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"<span class="i">{length (measured 0)}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{length (measured 0)}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run runtime_mismatch.kso</div>
     <pre><code><span class="k">error[runtime]</span>: length takes a list, string, or map, not 5</code></pre>
@@ -727,9 +727,9 @@ size <span class="o">=</span> <span class="n">9</span>
   <span class="n">0</span>
 
 <span class="k">fn</span> <span class="f">weigh</span> n
-  n <span class="o">+</span> <span class="f">weigh</span> (n <span class="o">-</span> <span class="n">1</span>)
+  n <span class="o">+</span> weigh (n <span class="o">-</span> <span class="n">1</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"sum <span class="i">{weigh 1000000}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"sum <span class="i">{weigh 1000000}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run deep_recursion.kso</div>
     <pre><code><span class="k">error[runtime]</span>: the program ran out of stack: recursion went deeper than the stack holds</code></pre>

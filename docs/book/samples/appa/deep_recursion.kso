@@ -4,4 +4,4 @@ fn weigh 0
 fn weigh n
   n + weigh (n - 1)
 
-pub play = print "sum {weigh 1000000}"
+print "sum {weigh 1000000}"

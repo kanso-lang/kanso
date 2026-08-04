@@ -6,6 +6,5 @@ type track
 fn credit (track artist _ title)
   "{title}—{artist}"
 
-pub play =
-  song = track "fishmans" 6 "long season"
-  print (credit song)
+song = track "fishmans" 6 "long season"
+print (credit song)

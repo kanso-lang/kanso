@@ -24,11 +24,10 @@ extra_css: /book/book.css
   <span class="f">minutes</span>
   <span class="f">title</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
-  <span class="f">track</span> artist minutes title <span class="o">=</span> <span class="f">song</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{artist}</span>—<span class="i">{minutes}</span> minutes"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"or just the one field: <span class="i">{song.title}</span>"</span></code></pre>
+song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+<span class="f">track</span> artist minutes title <span class="o">=</span> <span class="f">song</span>
+<span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{artist}</span>—<span class="i">{minutes}</span> minutes"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"or just the one field: <span class="i">{song.title}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>long season, by fishmans—6 minutes</code></pre>
@@ -58,10 +57,9 @@ extra_css: /book/book.css
   <span class="f">minutes</span>
   <span class="f">title</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
-  { artist:who title } <span class="o">=</span> <span class="f">song</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{who}</span>"</span></code></pre>
+song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+{ artist:who title } <span class="o">=</span> <span class="f">song</span>
+<span class="f">print</span> <span class="s">"<span class="i">{title}</span>, by <span class="i">{who}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>long season, by fishmans</code></pre>
@@ -102,9 +100,8 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">credit</span> (<span class="f">track</span> artist _ title)
   <span class="s">"<span class="i">{title}</span>—<span class="i">{artist}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
-  <span class="f">print</span> (<span class="f">credit</span> song)</code></pre>
+song <span class="o">=</span> <span class="f">track</span> <span class="s">"fishmans"</span> <span class="n">6</span> <span class="s">"long season"</span>
+<span class="f">print</span> (<span class="f">credit</span> song)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>long season—fishmans</code></pre>
@@ -125,14 +122,13 @@ extra_css: /book/book.css
   <span class="f">name</span>
   <span class="f">partner</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  couple <span class="o">=</span> <span class="f">build</span>
-    ada <span class="o">=</span> <span class="f">person</span> <span class="s">"ada"</span> none
-    bob <span class="o">=</span> <span class="f">person</span> <span class="s">"bob"</span> ada
-    <span class="f">ada</span><span class="o">.</span>partner <span class="o">=</span> <span class="f">bob</span>
-    <span class="f">ada</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{couple.name}</span> and <span class="i">{couple.partner.name}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{couple.partner.partner.name}</span>"</span></code></pre>
+couple <span class="o">=</span> <span class="f">build</span>
+  ada <span class="o">=</span> <span class="f">person</span> <span class="s">"ada"</span> none
+  bob <span class="o">=</span> <span class="f">person</span> <span class="s">"bob"</span> ada
+  <span class="f">ada</span><span class="o">.</span>partner <span class="o">=</span> <span class="f">bob</span>
+  <span class="f">ada</span>
+<span class="f">print</span> <span class="s">"<span class="i">{couple.name}</span> and <span class="i">{couple.partner.name}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{couple.partner.partner.name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code></code></pre>
@@ -161,11 +157,10 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"something else: <span class="i">{x}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">describe</span> <span class="n">0</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">7</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="s">"seven"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">1.5</span>)</code></pre>
+<span class="f">print</span> (<span class="f">describe</span> <span class="n">0</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">7</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="s">"seven"</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">1.5</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>zero
@@ -187,9 +182,8 @@ something else: 1.5</code></pre>
 <span class="k">fn</span> <span class="f">fact</span> n
   n <span class="o">*</span> fact (n <span class="o">-</span> <span class="n">1</span>)
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  answer <span class="o">=</span> <span class="f">fact</span> <span class="n">20</span>
-  <span class="f">print</span> <span class="s">"20! = <span class="i">{answer}</span>"</span></code></pre>
+answer <span class="o">=</span> <span class="f">fact</span> <span class="n">20</span>
+<span class="f">print</span> <span class="s">"20! = <span class="i">{answer}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>20! = 2432902008176640000</code></pre>
@@ -212,7 +206,7 @@ something else: 1.5</code></pre>
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">describe</span> null) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">5</span>)</code></pre>
+<span class="f">print</span> (<span class="f">describe</span> null) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">describe</span> <span class="n">5</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>nothing here
@@ -257,10 +251,9 @@ got 5</code></pre>
 <span class="k">fn</span> <span class="f">label</span> pending
   <span class="s">"coming soon"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">label</span> active)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> archived)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> pending)</code></pre>
+<span class="f">print</span> (<span class="f">label</span> active)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> archived)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">label</span> pending)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>live
@@ -296,9 +289,8 @@ coming soon</code></pre>
 <span class="k">fn</span> <span class="f">label</span> published
   <span class="s">"live"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  p <span class="o">=</span> <span class="f">post</span> draft <span class="s">"long season"</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{p.title}</span> is <span class="i">{label p.state}</span>"</span></code></pre>
+p <span class="o">=</span> <span class="f">post</span> draft <span class="s">"long season"</span>
+<span class="f">print</span> <span class="s">"<span class="i">{p.title}</span> is <span class="i">{label p.state}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run membership.kso</div>
     <pre><code>long season is a draft</code></pre>
@@ -315,23 +307,22 @@ coming soon</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">wrappers.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">cents</span> <span class="t">int</span>
+  <pre><code><span class="k">type</span> cents int
 
-<span class="k">type</span> <span class="t">post_body</span> <span class="t">string</span>
+<span class="k">type</span> post_body string
 
-<span class="k">fn</span> <span class="f">to_string</span> <span class="o">_</span>:<span class="t">cents</span>
+<span class="k">fn</span> <span class="f">to_string</span> _:cents
   <span class="s">"a price"</span>
 
-<span class="k">fn</span> <span class="f">quote</span> c:<span class="t">cents</span>
+<span class="k">fn</span> <span class="f">quote</span> c:cents
   <span class="s">"<span class="i">{c}</span> for the set"</span>
 
-<span class="k">fn</span> <span class="f">quote</span> n:<span class="t">int</span>
+<span class="k">fn</span> <span class="f">quote</span> n:int
   <span class="s">"<span class="i">{n}</span> plain"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">quote</span> (<span class="t">cents</span> <span class="n">350</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">quote</span> <span class="n">350</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"a body reads through: <span class="i">{post_body "hello"}</span>"</span></code></pre>
+<span class="f">print</span> (<span class="f">quote</span> (<span class="f">cents</span> <span class="n">350</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">quote</span> <span class="n">350</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"a body reads through: <span class="i">{post_body </span>"</span>hello<span class="s">"}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run wrappers.kso</div>
     <pre><code>a price for the set
@@ -393,7 +384,7 @@ a body reads through: hello</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">admission</span> age
   <span class="f">if</span> (age <span class="o">&lt;</span> <span class="n">13</span>) <span class="s">"child ticket"</span> <span class="s">"regular ticket"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> (<span class="f">admission</span> <span class="n">9</span>) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">admission</span> <span class="n">30</span>)</code></pre>
+<span class="f">print</span> (<span class="f">admission</span> <span class="n">9</span>) <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">admission</span> <span class="n">30</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>child ticket
@@ -405,10 +396,9 @@ regular ticket</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">sign.kso</div>
-  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">sign</span> (<span class="n">0</span> <span class="o">-</span> <span class="n">4</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">sign</span> <span class="n">0</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">sign</span> <span class="n">9</span>)
+  <pre><code><span class="f">print</span> (<span class="f">sign</span> (<span class="n">0</span> <span class="o">-</span> <span class="n">4</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">sign</span> <span class="n">0</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">sign</span> <span class="n">9</span>)
 
 <span class="k">fn</span> <span class="f">sign</span> n
   <span class="f">if</span> (n <span class="o">&lt;</span> <span class="n">0</span>) <span class="s">"negative"</span> (<span class="f">if</span> (n <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"positive"</span> <span class="s">"zero"</span>)</code></pre>
@@ -424,9 +414,8 @@ positive</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">receipt.kso</div>
-  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">total_line</span> <span class="n">12000</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">total_line</span> <span class="n">800</span>)
+  <pre><code><span class="f">print</span> (<span class="f">total_line</span> <span class="n">12000</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">total_line</span> <span class="n">800</span>)
 
 <span class="k">fn</span> <span class="f">total_line</span> spent
   <span class="f">if</span> (<span class="n">10000</span> <span class="o">&lt;</span> spent)
@@ -457,10 +446,9 @@ thanks: 800 yen</code></pre>
   <span class="f">after</span>
   <span class="f">before</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">render</span> (<span class="f">joined</span> <span class="s">"clay"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">render</span> (<span class="f">renamed</span> <span class="s">"kanso"</span> <span class="s">"kai"</span>))
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">render</span> (<span class="f">left</span> <span class="s">"mugi"</span>))
+<span class="f">print</span> (<span class="f">render</span> (<span class="f">joined</span> <span class="s">"clay"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">render</span> (<span class="f">renamed</span> <span class="s">"kanso"</span> <span class="s">"kai"</span>))
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">render</span> (<span class="f">left</span> <span class="s">"mugi"</span>))
 
 <span class="k">fn</span> <span class="f">render</span> (<span class="f">joined</span> who)
   <span class="s">"<span class="i">{who}</span> joined"</span>

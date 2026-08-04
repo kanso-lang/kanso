@@ -3,8 +3,7 @@ type track
   minutes
   title
 
-pub play =
-  song = track "fishmans" 6 "long season"
-  track artist minutes title = song
-  print "{title}, by {artist}—{minutes} minutes"
-  >> print "or just the one field: {song.title}"
+song = track "fishmans" 6 "long season"
+track artist minutes title = song
+print "{title}, by {artist}—{minutes} minutes"
+>> print "or just the one field: {song.title}"

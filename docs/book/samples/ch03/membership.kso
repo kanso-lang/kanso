@@ -19,6 +19,5 @@ fn label draft
 fn label published
   "live"
 
-pub play =
-  p = post draft "long season"
-  print "{p.title} is {label p.state}"
+p = post draft "long season"
+print "{p.title} is {label p.state}"

@@ -15,6 +15,5 @@ fn parse_flag "on"
 fn parse_flag _
   malformed
 
-pub play =
-  print (describe (parse_flag "on"))
-  >> print (describe (parse_flag "banana"))
+print (describe (parse_flag "on"))
+>> print (describe (parse_flag "banana"))

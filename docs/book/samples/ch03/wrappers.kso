@@ -11,7 +11,6 @@ fn quote c:cents
 fn quote n:int
   "{n} plain"
 
-pub play =
-  print (quote (cents 350))
-  >> print (quote 350)
-  >> print "a body reads through: {post_body "hello"}"
+print (quote (cents 350))
+>> print (quote 350)
+>> print "a body reads through: {post_body "hello"}"

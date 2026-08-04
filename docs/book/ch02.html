@@ -182,11 +182,10 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   <span class="f">age</span>
   <span class="f">name</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
-  <span class="f">user</span> years who <span class="o">=</span> <span class="f">clay</span>
-  { name:alias } <span class="o">=</span> <span class="f">clay</span>
-  <span class="f">print</span> <span class="s">"<span class="i">{who}</span> is <span class="i">{years}</span>, also known as <span class="i">{alias}</span>"</span></code></pre>
+clay <span class="o">=</span> <span class="f">user</span> <span class="n">47</span> <span class="s">"clay"</span>
+<span class="f">user</span> years who <span class="o">=</span> <span class="f">clay</span>
+{ name:alias } <span class="o">=</span> <span class="f">clay</span>
+<span class="f">print</span> <span class="s">"<span class="i">{who}</span> is <span class="i">{years}</span>, also known as <span class="i">{alias}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>clay is 47, also known as clay</code></pre>
@@ -205,13 +204,12 @@ all: [entry "clay" 47 entry "mai" 8 entry "sam" 30]</code></pre>
   <span class="f">x</span>
   <span class="f">y</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  nums <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>] <span class="o">==</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
-  words <span class="o">=</span> <span class="s">"apple"</span> <span class="o">&lt;</span> <span class="s">"banana"</span>
-  order <span class="o">=</span> <span class="n">5</span> <span class="o">&lt;=</span> <span class="n">5</span>
-  here <span class="o">=</span> <span class="f">point</span> <span class="n">1</span> <span class="n">2</span>
-  there <span class="o">=</span> <span class="f">point</span> <span class="n">1</span> <span class="n">2</span>
-  <span class="f">print</span> <span class="s">"lists <span class="i">{nums}</span>, words <span class="i">{words}</span>, order <span class="i">{order}</span>, points <span class="i">{here == there}</span>"</span></code></pre>
+nums <span class="o">=</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>] <span class="o">==</span> [<span class="n">1</span> <span class="n">2</span> <span class="n">3</span>]
+words <span class="o">=</span> <span class="s">"apple"</span> <span class="o">&lt;</span> <span class="s">"banana"</span>
+order <span class="o">=</span> <span class="n">5</span> <span class="o">&lt;=</span> <span class="n">5</span>
+here <span class="o">=</span> <span class="f">point</span> <span class="n">1</span> <span class="n">2</span>
+there <span class="o">=</span> <span class="f">point</span> <span class="n">1</span> <span class="n">2</span>
+<span class="f">print</span> <span class="s">"lists <span class="i">{nums}</span>, words <span class="i">{words}</span>, order <span class="i">{order}</span>, points <span class="i">{here == there}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>lists true, words true, order true, points true</code></pre>

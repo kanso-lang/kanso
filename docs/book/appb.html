@@ -269,10 +269,9 @@ concat [3 1 2 9]</code></pre>
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"value is <span class="i">{x}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  found <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">2</span>]
-  gone <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">9</span>]
-  <span class="f">print</span> <span class="s">"in-range: <span class="i">{found}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"missing: <span class="i">{gone}</span>"</span></code></pre>
+found <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">2</span>]
+gone <span class="o">=</span> <span class="f">describe</span> [<span class="n">10</span> <span class="n">20</span> <span class="n">30</span>][<span class="n">9</span>]
+<span class="f">print</span> <span class="s">"in-range: <span class="i">{found}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"missing: <span class="i">{gone}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing.kso</div>
     <pre><code>in-range: value is 20
@@ -356,7 +355,7 @@ find2 2</code></pre>
   <pre><code><span class="k">fn</span> <span class="f">classify</span> n
   <span class="f">if</span> (n <span class="o">&gt;</span> <span class="n">0</span>) <span class="s">"positive"</span> <span class="s">"non-positive"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"seven <span class="i">{classify 7}</span>"</span> <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zero <span class="i">{classify 0}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run control.kso</div>
     <pre><code>seven positive
@@ -396,19 +395,19 @@ zero non-positive</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">wrap_err.kso</div>
-  <pre><code><span class="k">type</span> <span class="t">config_bad</span>
-  file
+  <pre><code><span class="k">type</span> config_bad
+  <span class="f">file</span>
 
-<span class="k">type</span> <span class="t">disk_torn</span>
-  path
+<span class="k">type</span> disk_torn
+  <span class="f">path</span>
 
-<span class="k">fn</span> <span class="f">low_read</span> <span class="o">_</span>
-  <span class="k">err</span> (<span class="t">disk_torn</span> <span class="s">"/etc/x"</span>)
+<span class="k">fn</span> <span class="f">low_read</span> _
+  <span class="f">err</span> (<span class="f">disk_torn</span> <span class="s">"/etc/x"</span>)
 
-<span class="k">fn</span> <span class="f">relabel</span> e:<span class="t">err</span>
-  <span class="f">wrap_err</span> (<span class="t">config_bad</span> <span class="s">"app.conf"</span>) e
+<span class="k">fn</span> <span class="f">relabel</span> e:err
+  <span class="f">wrap_err</span> (<span class="f">config_bad</span> <span class="s">"app.conf"</span>) e
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">relabel</span> (<span class="f">low_read</span> <span class="n">0</span>)</code></pre>
+<span class="f">relabel</span> (<span class="f">low_read</span> <span class="n">0</span>)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run wrap_err.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: config_bad "app.conf"

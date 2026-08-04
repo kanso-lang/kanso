@@ -8,10 +8,9 @@ type renamed
   after
   before
 
-pub play =
-  print (render (joined "clay"))
-  >> print (render (renamed "kanso" "kai"))
-  >> print (render (left "mugi"))
+print (render (joined "clay"))
+>> print (render (renamed "kanso" "kai"))
+>> print (render (left "mugi"))
 
 fn render (joined who)
   "{who} joined"

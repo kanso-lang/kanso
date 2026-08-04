@@ -10,4 +10,4 @@ fn low_read _
 fn relabel e:err
   wrap_err (config_bad "app.conf") e
 
-pub play = relabel (low_read 0)
+relabel (low_read 0)

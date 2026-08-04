@@ -4,7 +4,6 @@ fn tax rate price
 fn quote pricer amount
   "{amount} becomes {pricer amount}"
 
-pub play =
-  local = &tax 8
-  print "{quote local 250}"
-  >> print "and again: {local 100}"
+local = &tax 8
+print "{quote local 250}"
+>> print "and again: {local 100}"
