@@ -90,17 +90,26 @@ fn expected(path: &Path, extension: &str) -> String {
     std::fs::read_to_string(&golden).unwrap_or_else(|_| panic!("missing golden file {golden:?}"))
 }
 
+/// Every example runs as a LIBRARY through the harness-generated entry. The
+/// five whose output renders records carry `.imported.stdout` goldens,
+/// because an imported record prints its qualified type name.
 #[test]
 fn examples_print_their_golden_stdout() {
     for program in kso_files(&manifest_dir().join("examples")) {
         let golden = manifest_dir()
             .join("tests/golden/examples")
             .join(program.file_name().expect("kso files have names"));
-        let output = run_kanso(&program, &[]);
+        let imported_golden = golden.with_extension("imported.stdout");
+        let expected_out = if imported_golden.exists() {
+            std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
+        } else {
+            expected(&golden, "stdout")
+        };
+        let output = run_kanso_as_library(&program, &[], &[]);
 
         assert_eq!(
             String::from_utf8_lossy(&output.stdout),
-            expected(&golden, "stdout"),
+            expected_out,
             "stdout mismatch for {program:?}"
         );
         assert!(output.status.success(), "expected success for {program:?}");
