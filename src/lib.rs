@@ -2807,10 +2807,7 @@ fn compile_module_loaded(
         );
         borrowed.clear();
         borrowed.extend(
-            quals
-                .iter()
-                .filter(|q| !named.contains(*q) && **q != own && *q != "render")
-                .cloned(),
+            quals.iter().filter(|q| !named.contains(*q) && **q != own && *q != "render").cloned(),
         );
         borrowed.sort();
         mark_bare_quals(program, &exports, &mut quals);
