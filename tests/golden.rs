@@ -150,20 +150,37 @@ fn error_corpus_reports_each_golden_diagnostic() {
 fn mem_corpus_pins_native_allocator_counters() {
     // The memory-goldens vein: each program's .mem file pins the native
     // runtime's deterministic allocator counters, the same ratchet idea as
-    // bench/cost_golden.txt but per-program. The lazy fragment will extend
+    // bench/cost_golden.txt but per-program. Every fixture runs as a LIBRARY
+    // through the harness-generated entry, and the counters must match the
+    // direct-run goldens byte for byte — an imported program pays the same
+    // allocation shape as a direct one. The one exception is qualified
+    // record rendering, whose longer type names cost string bytes; those
+    // fixtures carry `.imported.*` goldens. The lazy fragment will extend
     // these with engine-shared semantic counters (forces, evaluations,
     // cells live at exit) asserted on both engines.
     for program in kso_files(&manifest_dir().join("tests/golden/mem")) {
-        let output = run_kanso_env(&program, &[], &[("KANSO_COUNTERS", "1")]);
+        let imported_out = program.with_extension("imported.stdout");
+        let expected_out = if imported_out.exists() {
+            std::fs::read_to_string(&imported_out).expect("the imported golden reads")
+        } else {
+            expected(&program, "stdout")
+        };
+        let imported_mem = program.with_extension("imported.mem");
+        let expected_mem = if imported_mem.exists() {
+            std::fs::read_to_string(&imported_mem).expect("the imported golden reads")
+        } else {
+            expected(&program, "mem")
+        };
+        let output = run_kanso_as_library(&program, &[], &[("KANSO_COUNTERS", "1")]);
 
         assert_eq!(
             String::from_utf8_lossy(&output.stdout),
-            expected(&program, "stdout"),
+            expected_out,
             "stdout mismatch for {program:?}"
         );
         assert_eq!(
             String::from_utf8_lossy(&output.stderr),
-            expected(&program, "mem"),
+            expected_mem,
             "allocator counters drifted for {program:?}"
         );
         assert!(output.status.success(), "expected success for {program:?}");
@@ -176,7 +193,7 @@ fn strict_mode_thunks_nothing_with_identical_output() {
     // eager. Output must match the lazy build; the counters prove no cell
     // was ever created.
     let program = manifest_dir().join("tests/golden/mem/skip_unused.kso");
-    let strict = run_kanso_env(&program, &["--strict"], &[("KANSO_COUNTERS", "1")]);
+    let strict = run_kanso_as_library(&program, &["--strict"], &[("KANSO_COUNTERS", "1")]);
 
     assert_eq!(
         String::from_utf8_lossy(&strict.stdout),

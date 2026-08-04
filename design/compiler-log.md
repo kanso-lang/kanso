@@ -17470,3 +17470,34 @@ entry, and 23 differ only by the loader's ` (module …)` suffix — those carry
 `.imported.stderr` goldens, the same shape as micro's `.imported.out`. The
 suite runs every fixture through the library path and the corpus no longer
 touches the compiler's entry synthesis.
+
+## a fold one import hop deep loses its accumulator
+
+The mem-corpus play slice found it: swept through the harness entry, 17 of
+41 fixtures diverged, fused_tally by 16x in allocations and 500x in held
+peak. Three passes recognized std/list's fold by the spellings "fold" and
+"list/fold", so a caller one import deeper — "mid/list/fold", which is every
+library user — never got the accumulator dispensation, and in-place push,
+put and append all degraded to copies. Fold recognition is now
+declaration-keyed (linear::fold_spellings: file std/list, short name fold,
+arity 3, every spelling the module graph produced), used by linear.rs and
+beat.rs both.
+
+Two more pipeline divergences fell out of the same sweep. compile_one — the
+direct-run path — was the only pipeline not running inline_builtin_wrappers,
+so direct runs paid a dispatch hop per std wrapper that entry and directory
+builds did not; it runs it now. And the inline pass itself rewrote calls to
+multi-arm groups (text/split's empty-separator err arm), deleting the
+dispatch that reaches the other arm — a latent defect on every path the
+corpus did not cover; the rewrite now requires the forwarder to be its
+group's only arm, while the type checker keeps the per-arm map. The
+construction-cohort license generalized from "caller is unqualified" to
+"the call crosses down into a nested module", which is the same boundary at
+any depth.
+
+Numbers: oneshot allocs 234,323 -> 128,528, arena peak 7.3 MB -> 3.8 MB,
+beat_iters 1 -> 12,581 (the directory-built bench had been paying the
+qualification tax all along). Welfare 75.68 -> 75.69, ratcheted. Decode,
+encode, basket, compile veins unchanged. Eight mem goldens regenerated
+smaller; build_cycle carries .imported goldens for the ruled qualified
+rendering. The mem suite now enters through run_kanso_as_library.

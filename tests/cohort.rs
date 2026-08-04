@@ -43,10 +43,14 @@ fn a_result_heavy_cohort_is_kept_not_copied() {
     assert_eq!(stdout, "chars 2400000\n", "stdout mismatch: {stderr}");
     assert!(stderr.contains("cohort_kept=1"), "the guard never engaged: {stderr}");
     // An internal verdict, asserted deliberately: for this fixture the peak is
-    // the same whether the cohort fires or not, so the counter is the only
-    // signal that the kernel is still there — which is what makes it worth
-    // pinning, and what makes it wrong to read as a cost. Measured: with the
-    // rewind threshold raised out of reach, this program's peak does not move.
-    assert!(stderr.contains("cohort_frees=1"), "free count moved: {stderr}");
+    // the same whether a cohort fires or not, so the counters are the only
+    // signal the kernels are still there — which is what makes them worth
+    // pinning, and what makes them wrong to read as a cost. The loop's own
+    // beat bracket reclaims the per-iteration garbage, so no cohort has
+    // anything left to free; the firing-cohort kernel is pinned by the
+    // bound-pipe test above. Measured: arena and held peaks are byte-equal
+    // with and without the free.
+    assert!(stderr.contains("cohort_frees=0"), "free count moved: {stderr}");
+    assert!(stderr.contains("beat_iters=150000"), "the loop lost its bracket: {stderr}");
     assert!(output.status.success());
 }
