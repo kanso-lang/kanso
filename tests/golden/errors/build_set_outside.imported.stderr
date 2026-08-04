@@ -1,0 +1,1 @@
+error[build]: `a.peers = ...` writes a field, and only a `build` block may do that (module build_set_outside.kso)

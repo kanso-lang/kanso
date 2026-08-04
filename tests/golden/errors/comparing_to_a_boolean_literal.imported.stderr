@@ -1,0 +1,1 @@
+error[name]: comparing to `true` asks a question the value already answers — write the value itself (module comparing_to_a_boolean_literal.kso)

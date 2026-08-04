@@ -17462,3 +17462,11 @@ more than a hundred-item list whose head nobody can act on.
 The general form, which is the same failure as four others in this log: a
 mechanism that cannot fail loudly gets ignored, and a queue whose top is always
 blocked teaches you to stop reading it.
+## the errors corpus runs as libraries
+
+Second area slice. Swept first: of the 124 fixtures, 29 are entry files
+already, 97 produce byte-identical diagnostics through the harness-generated
+entry, and 23 differ only by the loader's ` (module …)` suffix — those carry
+`.imported.stderr` goldens, the same shape as micro's `.imported.out`. The
+suite runs every fixture through the library path and the corpus no longer
+touches the compiler's entry synthesis.

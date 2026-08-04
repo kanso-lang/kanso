@@ -120,14 +120,25 @@ fn plan_prints_the_description_without_executing_it() {
     );
 }
 
+/// Every fixture runs as a LIBRARY through the harness-generated entry, per
+/// the play migration — this corpus no longer touches the compiler's entry
+/// synthesis. Most diagnostics are byte-identical either way; the 23 that
+/// gain the loader's ` (module …)` suffix carry a second golden for this
+/// path, the same shape as the micro corpus's `.imported.out`.
 #[test]
 fn error_corpus_reports_each_golden_diagnostic() {
     for program in kso_files(&manifest_dir().join("tests/golden/errors")) {
-        let output = run_kanso(&program, &[]);
+        let imported_golden = program.with_extension("imported.stderr");
+        let expected_err = if imported_golden.exists() {
+            std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
+        } else {
+            expected(&program, "stderr")
+        };
+        let output = run_kanso_as_library(&program, &[], &[]);
 
         assert_eq!(
             String::from_utf8_lossy(&output.stderr),
-            expected(&program, "stderr"),
+            expected_err,
             "diagnostics mismatch for {program:?}"
         );
         assert_eq!(output.status.code(), Some(2), "compile errors exit 2 for {program:?}");

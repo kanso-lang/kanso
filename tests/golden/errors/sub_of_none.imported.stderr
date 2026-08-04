@@ -1,0 +1,1 @@
+error[type]: `missing` cannot derive from `none` yet — name the members you mean, or use a zero-field marker type (module sub_of_none.kso)
