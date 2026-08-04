@@ -241,17 +241,6 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// The samples this cannot cover yet, and the one question all three ask.
-///
-/// Each prints a record, and an imported record prints its module: `point 3 4`
-/// direct against `sample/point 3 4` through the import. Which of those is
-/// right is a language question — the qualified spelling is honest about where
-/// the type came from, and the bare one is what somebody reading the output
-/// expects — and it is not the harness's to settle by pinning one. Listing
-/// them keeps the question visible instead of letting an exclusion swallow it.
-const RECORDS_PRINT_THEIR_MODULE: [&str; 3] =
-    ["err_trap_named", "render_record_none", "subtype_chain"];
-
 /// Every micro sample run a second way: as a LIBRARY, reached through a
 /// generated entry file that imports it and names its exported lambda.
 ///
@@ -276,9 +265,21 @@ fn micro_corpus_agrees_when_it_is_imported() {
         let name =
             program.file_stem().and_then(|s| s.to_str()).expect("kso files have names").to_string();
         let text = std::fs::read_to_string(&program).expect("the sample reads");
-        if !text.contains("\npub play") || RECORDS_PRINT_THEIR_MODULE.contains(&name.as_str()) {
+        if !text.contains("\npub play") {
             continue;
         }
+
+        // RULED: an imported record prints its QUALIFIED type name, so a
+        // sample that prints records legitimately answers differently as a
+        // library — `sample/point 3 4` where the direct run says `point 3 4`.
+        // Those samples carry a second golden for this path; everything else
+        // must match its ordinary one byte for byte.
+        let imported_golden = program.with_extension("imported.out");
+        let expected_out = if imported_golden.exists() {
+            std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
+        } else {
+            expected(&program, "out")
+        };
 
         let entry = stage.join(format!("run_{name}.kso"));
         std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
@@ -290,7 +291,7 @@ fn micro_corpus_agrees_when_it_is_imported() {
 
             assert_eq!(
                 String::from_utf8_lossy(&output.stdout),
-                expected(&program, "out"),
+                expected_out,
                 "{name} answers differently as a library (extra {extra:?})"
             );
             assert_eq!(
@@ -303,6 +304,6 @@ fn micro_corpus_agrees_when_it_is_imported() {
 
     // A staging step that silently copied nothing would make every assertion
     // above vacuous, and the test would go on passing.
-    assert!(covered > 50, "only {covered} samples were reached through an import");
+    assert!(covered > 53, "only {covered} samples were reached through an import");
     let _ = std::fs::remove_dir_all(&stage);
 }
