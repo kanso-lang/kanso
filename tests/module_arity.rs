@@ -38,20 +38,19 @@ fn a_sibling_files_arity_is_checked() {
     let (_, err, code) = kanso("check", "sibling", &[]);
     assert_eq!(
         err.lines().next(),
-        Some("error[arity]: no 2-argument arm of `adder` (arms take 1) (module tests/golden/arity/sibling)"),
+        Some("error[arity]: no 2-argument arm of `adder` (arms take 1) (module tests/golden/arity/sibling/sibling)"),
         "check did not report the arity: {err}"
     );
     assert_eq!(code, Some(2), "a compile error exits 2");
 }
 
-/// The same call from the entry file, whose statements are a declaration
-/// nobody else in the module can see.
+/// The same call from the entry file, against the module it imports.
 #[test]
 fn an_entry_files_arity_is_checked() {
     let (_, err, code) = kanso("check", "entry", &[]);
     assert_eq!(
         err.lines().next(),
-        Some("error[arity]: no 2-argument arm of `adder` (arms take 1) (module tests/golden/arity/entry)"),
+        Some("error[arity]: no 2-argument arm of `lib/adder` (arms take 1)"),
         "check did not report the arity: {err}"
     );
     assert_eq!(code, Some(2), "a compile error exits 2");
@@ -63,8 +62,12 @@ fn no_engine_hands_the_reader_llvm() {
     for fixture in ["sibling", "entry"] {
         for engine in ENGINES {
             let (out, err, code) = kanso("run", fixture, engine);
+            let named = match fixture {
+                "entry" => "error[arity]: no 2-argument arm of `lib/adder`",
+                _ => "error[arity]: no 2-argument arm of `adder`",
+            };
             assert!(
-                err.starts_with("error[arity]: no 2-argument arm of `adder`"),
+                err.starts_with(named),
                 "{fixture} {engine:?} did not report the arity: out={out:?} err={err:?}"
             );
             assert!(
@@ -88,7 +91,7 @@ fn an_arm_no_call_can_reach_is_refused_across_files() {
         err.lines().next(),
         Some(
             "error[dispatch]: overlapping overloads of `twice` are illegal \
-             (module tests/golden/arity/overlap)"
+             (module tests/golden/arity/overlap/overlap)"
         ),
         "check did not report the unreachable arm: {err}"
     );
@@ -106,7 +109,7 @@ fn a_construction_across_files_counts_its_fields() {
         err.lines().next(),
         Some(
             "error[arity]: `local` has 2 field(s), got 3 (construction is positional, \
-             fields alphabetical) (module tests/golden/arity/construction)"
+             fields alphabetical) (module tests/golden/arity/construction/construction)"
         ),
         "check did not count the fields: {err}"
     );

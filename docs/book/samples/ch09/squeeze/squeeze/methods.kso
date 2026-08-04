@@ -4,7 +4,7 @@ import "std/math"
 fn approval_col voters c
   sum (list/map voters (v -> approves v c))
 
-fn approval_winner voters
+pub fn approval_winner voters
   argmax (to_list (list/map (range ncand) (c -> approval_col voters c)))
 
 fn approves v c
@@ -35,7 +35,7 @@ fn irv_go voters elim
 fn irv_next voters elim counts
   irv_go voters (push elim (min_alive counts elim))
 
-fn irv_winner voters
+pub fn irv_winner voters
   irv_go voters []
 
 fn keep_min counts elim b c
@@ -50,13 +50,13 @@ fn margin_or_high voters a b
 fn min_alive counts elim
   fold (range ncand) 0 (b c -> keep_min counts elim b c)
 
-fn minimax_winner voters
+pub fn minimax_winner voters
   argmax (to_list (list/map (range ncand) (c -> worst_margin voters c)))
 
 fn pair voters a b
   sum (list/map voters (v -> if (v[b] < v[a]) 1 0))
 
-fn plurality_winner voters
+pub fn plurality_winner voters
   firsts = list/map voters (v -> argmax v)
   argmax (to_list (list/map (range ncand) (c -> count firsts (x -> x == c))))
 
@@ -74,10 +74,10 @@ fn score_ballot v c
 fn score_col voters c
   sum (list/map voters (v -> score_ballot v c))
 
-fn score_winner voters
+pub fn score_winner voters
   argmax (to_list (list/map (range ncand) (c -> score_col voters c)))
 
-fn star_winner voters
+pub fn star_winner voters
   totals = to_list (list/map (range ncand) (c -> score_col voters c))
   a = argmax totals
   b = argmax_except totals a

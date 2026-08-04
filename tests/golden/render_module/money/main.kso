@@ -1,1 +1,3 @@
-go 0
+import "money"
+
+money/go 0

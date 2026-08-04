@@ -1,1 +1,3 @@
-print "{twice 0}"
+import "overlap"
+
+print "{overlap/twice 0}"

@@ -611,7 +611,7 @@ fn heads t _ _ false
   t
 
 fn heads t _ after true
-  applied? t after (argumentish? after)
+  applied t after (argumentish? after)
 
 fn argumentish? ""
   true
@@ -625,10 +625,10 @@ fn starts_arg? _ true
 fn starts_arg? a false
   word? ["(" "["] a or text/slice a 1 1 == "\""
 
-fn applied? t _ true
+fn applied t _ true
   "<span class=\"f\">{t}</span>"
 
-fn applied? t after false
+fn applied t after false
   trailing t (word? [">>" "."] after)
 
 fn trailing t true
@@ -700,3 +700,5 @@ fn ending true
 
 fn ending false
   io/exit 1
+
+pub play = io/args . (given -> over_chapters (writing? given))

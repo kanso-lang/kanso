@@ -69,3 +69,5 @@ fn owed _
   >> io/write "entries with no page edit means the presented design has\n"
   >> io/write "fallen behind what the compiler does. Write the entry the\n"
   >> io/write "page owes — one for a campaign is fine, not one per commit.\n"
+
+pub play = asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] . measured

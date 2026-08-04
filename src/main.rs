@@ -119,6 +119,51 @@ fn driven() -> ExitCode {
     }
 
     let require_entry = command == "run";
+    // Targeting a directory means its entry: `kanso run foo` is
+    // `kanso run foo/main.kso` (the module-shape gavel), and checking the
+    // directory checks the same program. A directory without an entry is a
+    // library, compiled as the module it is.
+    let entry_inside = std::path::Path::new(&file).join("main.kso");
+    let file = match matches!(command.as_str(), "run" | "check") && entry_inside.is_file() {
+        true => entry_inside.to_string_lossy().into_owned(),
+        false => file,
+    };
+    // Testing a program directory tests its module: the entry holds
+    // statements, the tests live in the library beside it. The descent only
+    // happens when it is unambiguous — no root library files and exactly
+    // one module directory.
+    let file = match command == "test" && entry_inside.is_file() {
+        true => {
+            let dir = std::path::Path::new(&file);
+            let root_libs = std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter(|e| {
+                    e.path().extension().is_some_and(|x| x == "kso") && e.file_name() != "main.kso"
+                })
+                .count();
+            let subdirs: Vec<std::path::PathBuf> = std::fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.is_dir()
+                        && std::fs::read_dir(p)
+                            .into_iter()
+                            .flatten()
+                            .flatten()
+                            .any(|e| e.path().extension().is_some_and(|x| x == "kso"))
+                })
+                .collect();
+            match (root_libs, subdirs.as_slice()) {
+                (0, [only]) => only.to_string_lossy().into_owned(),
+                _ => file,
+            }
+        }
+        false => file,
+    };
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
         true => match kanso::compile_module(path, require_entry) {
@@ -404,7 +449,9 @@ fn opens_block(line: &str) -> bool {
 /// to say what it meant — it said it.
 fn deliberate_exit(reason: &eval::Value) -> Option<u8> {
     let eval::Value::Record { ty, fields } = reason else { return None };
-    if &**ty != "io/exit_status" {
+    // the type spells its module chain at whatever depth the import graph
+    // qualified it: io/exit_status directly, hako/io/exit_status one hop in
+    if !(ty.as_ref() == "io/exit_status" || ty.ends_with("/io/exit_status")) {
         return None;
     }
     match fields.borrow().first() {

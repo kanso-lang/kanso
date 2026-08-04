@@ -478,3 +478,5 @@ fn ending true
 
 fn ending false
   io/exit 1
+
+pub play = swept cases 1 [] (wrong -> then_known wrong)

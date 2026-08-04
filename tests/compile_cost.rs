@@ -28,13 +28,18 @@ fn module_dir(name: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/compile").join(name)
 }
 
+fn module_entry(name: &str) -> kanso::ast::Program {
+    let entry = module_dir(name).join("main.kso");
+    let source = std::fs::read_to_string(&entry).expect("the entry reads");
+    kanso::compile_entry(&entry.to_string_lossy(), &source).expect("module compiles")
+}
+
 fn ir_for_module(name: &str) -> String {
-    let program = kanso::compile_module(&module_dir(name), true).expect("module compiles");
-    kanso::codegen::emit_ir(&program).expect("module lowers to IR")
+    kanso::codegen::emit_ir(&module_entry(name)).expect("module lowers to IR")
 }
 
 fn work_for_module(name: &str) -> (u64, u64) {
-    let program = kanso::compile_module(&module_dir(name), true).expect("module compiles");
+    let program = module_entry(name);
     kanso::infer::work::reset();
     let _ = kanso::infer::infer(&program);
     kanso::infer::work::taken()

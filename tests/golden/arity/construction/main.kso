@@ -1,1 +1,3 @@
-print "{own 0}"
+import "construction"
+
+print "{construction/own 0}"

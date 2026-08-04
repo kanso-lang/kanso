@@ -1,1 +1,3 @@
-asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] . measured
+import "page_drift"
+
+page_drift/play

@@ -1,1 +1,3 @@
-print "{misuse 1}"
+import "sibling"
+
+print "{sibling/misuse 1}"

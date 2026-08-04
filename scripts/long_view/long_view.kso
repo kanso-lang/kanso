@@ -217,3 +217,5 @@ fn frame body keys n
   said = "five measures across {n} commits"
   titled = "{open} aria-label=\"{said}\">"
   "{titled}\n{body}\n{keys}\n</svg>"
+
+pub play = io/read_file series_path . decoded

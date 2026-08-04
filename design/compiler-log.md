@@ -17595,3 +17595,27 @@ Ruled by Clay, 2026-08-03, in dialog:
 
 This closes the book-presentation and playground questions in one stroke
 and clears the path to deleting the compiler's five play sites.
+
+## an entry is a file, not a member — the gavel lands
+
+The ruled parts of the module-shape gavel, built: main.kso never joins a
+module merge, whether the directory is a root or a dependency (the
+parse_entry-in-deps defect dies with it); `kanso run dir` and `kanso check
+dir` mean dir/main.kso; `kanso test dir` on a program directory descends to
+its single module; an entry compile skips the self-import guards, because
+an entry importing the module beside it is the ordinary case, and reads the
+project's lock from its own directory. hako flips to the ruled layout —
+main.kso beside hako/hako/ — and the embedded build compiles the entry
+against embedded module files. The twenty scripts keep their single pub
+play and their entries become the uniform two-liner. Fixtures that leaned
+on member entries (arity, render_module, trace_demo, four book samples)
+convert to the same shape; ch07's teahouse and ch08's using export the
+surface their entries consume; ch11's sealed sample teaches the re-export
+boundary in the qualified spelling now. Two long-standing recognizers were
+blind one hop deep and surfaced under the new entries: io/exit's sentinel
+(both engines) and book_panels' mis-named `applied?`. Welfare holds at its
+floor; every vein byte-identical; 45 suites green.
+
+Still PROPOSED, not ruled: the relaxed program file (declarations plus
+statements in one unimportable file). Committee analysis in
+design/pending-gavels.md; nothing of it is built.

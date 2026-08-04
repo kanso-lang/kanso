@@ -1,1 +1,3 @@
-io/args . ran
+import "hako"
+
+hako/play

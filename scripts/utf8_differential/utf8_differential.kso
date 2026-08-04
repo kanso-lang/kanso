@@ -125,3 +125,5 @@ fn verdict 0
 fn verdict _
   io/write_err "FAIL  the validator and the reference disagree\n"
     . (_ -> io/exit 1)
+
+pub play = io/read_file "src/runtime.c" . (src -> written (as_harness src))

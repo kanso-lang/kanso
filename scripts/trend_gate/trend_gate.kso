@@ -371,3 +371,5 @@ fn refused _
 
 fn settled false
   io/write ""
+
+pub play = io/args . (a -> started (base_of a))

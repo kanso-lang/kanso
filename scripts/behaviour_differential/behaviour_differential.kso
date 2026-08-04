@@ -281,3 +281,5 @@ fn finished 0
 
 fn finished n
   io/write "{n} disagree\n" . (_ -> io/exit 1)
+
+pub play = begun (shaped "text" "1" == sample)

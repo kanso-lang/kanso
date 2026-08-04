@@ -1,1 +1,3 @@
-io/read_file "src/runtime.c" . (src -> written (as_harness src))
+import "utf8_differential"
+
+utf8_differential/play

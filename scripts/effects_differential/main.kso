@@ -1,1 +1,3 @@
-begun (shaped "io/write \"\{1}\"" == sample)
+import "effects_differential"
+
+effects_differential/play

@@ -16,11 +16,11 @@
 /// bench/jsonbench is generated rather than checked in, and a test that
 /// reaches for it passes on the machine that just built it and nowhere else.
 fn passes_for_the_sample() -> u64 {
-    let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/golden/compile")
-        .join("module");
+    let entry = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/golden/compile/module/main.kso");
+    let source = std::fs::read_to_string(&entry).expect("the entry reads");
     kanso::infer::work::reset();
-    let _ = kanso::compile_module(&dir, true).expect("the sample compiles");
+    let _ = kanso::compile_entry(&entry.to_string_lossy(), &source).expect("the sample compiles");
     kanso::infer::work::passes()
 }
 

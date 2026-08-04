@@ -201,3 +201,5 @@ fn padding s true
 
 fn padding s false
   padded "{s} "
+
+pub play = io/args . (given -> with_args given)

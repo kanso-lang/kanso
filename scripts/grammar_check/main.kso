@@ -1,1 +1,3 @@
-io/read_file grammar_path . (raw -> read_grammar raw)
+import "grammar_check"
+
+grammar_check/play

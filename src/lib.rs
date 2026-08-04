@@ -42,6 +42,17 @@ pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Pro
 
 /// Compile a single file as an entry: its statements are the program.
 pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
+    // The entry's directory is the project: its lock pins every hako import
+    // the build resolves, exactly as a module root's does.
+    let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
+    LOCK.with(|l| *l.borrow_mut() = hako::read_lock(&base));
+    ENTRY_COMPILE.with(|c| c.set(true));
+    let built = compile_entry_inner(file, source);
+    ENTRY_COMPILE.with(|c| c.set(false));
+    built
+}
+
+fn compile_entry_inner(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, file, source))?;
     synthesize_getters(&mut program);
@@ -404,6 +415,12 @@ fn declares_tests(source: &str) -> bool {
 /// The CLI and the browser share this so the engines never diverge on which
 /// compile a file gets.
 pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Program, String> {
+    // main.kso is an entry by NAME (the module-shape gavel): the filename
+    // states the intent, so a definition inside one gets the entry
+    // diagnostic rather than a guess from the file's shape.
+    if std::path::Path::new(file).file_name().is_some_and(|n| n == "main.kso") {
+        return compile_entry(file, source);
+    }
     // Which compile a file gets is decided by what it declares, not by what
     // its text happens to contain: a comment or a string mentioning `pub
     // play` used to reroute the whole file and reject a valid entry with a
@@ -1955,13 +1972,16 @@ fn load_dependencies(
                     ("value.kso", include_str!("../lib/json/value.kso")),
                 ],
             )),
+            "hako" if HAKO_EMBEDDED.with(|c| c.get()) => Some(("hako", HAKO_FILES)),
             _ => None,
         };
         if let Some((short, files)) = embedded {
             // a module importing itself compiles a second copy, so every type
             // gets a twin and a constructor pattern stops matching values the
-            // other half built — a confusing failure a long way from here
-            if base.file_name().is_some_and(|n| n == short) {
+            // other half built — a confusing failure a long way from here.
+            // An entry file is not a member, so its import of the module
+            // beside it is the ordinary case.
+            if !ENTRY_COMPILE.with(|c| c.get()) && base.file_name().is_some_and(|n| n == short) {
                 return Err(format!(
                     "error: a module cannot import itself — `{path}` is this \
                      module, and the second copy's types would not match this \
@@ -1988,10 +2008,11 @@ fn load_dependencies(
         // importing one's own module compiles a second copy of it, so every
         // type gets a twin and a constructor pattern stops matching values
         // built by the other half — a confusing failure a long way from here
-        let same = std::fs::canonicalize(&dep_dir)
-            .ok()
-            .zip(std::fs::canonicalize(base).ok())
-            .is_some_and(|(a, b)| a == b);
+        let same = !ENTRY_COMPILE.with(|c| c.get())
+            && std::fs::canonicalize(&dep_dir)
+                .ok()
+                .zip(std::fs::canonicalize(base).ok())
+                .is_some_and(|(a, b)| a == b);
         if same {
             return Err(format!(
                 "error: a module cannot import itself — `{path}` resolves to \
@@ -2399,22 +2420,32 @@ pub fn compile_module(dir: &std::path::Path, require_entry: bool) -> Result<ast:
 /// shipped library is. There is no directory to read: an installed `kanso`
 /// has no `hako/` beside it, and the files are the ones in this checkout.
 pub fn compile_hako() -> Result<ast::Program, String> {
-    const FILES: &[(&str, &str)] = &[
-        ("cache.kso", include_str!("../hako/cache.kso")),
-        ("hako.kso", include_str!("../hako/hako.kso")),
-        ("install.kso", include_str!("../hako/install.kso")),
-        ("lock.kso", include_str!("../hako/lock.kso")),
-        ("main.kso", include_str!("../hako/main.kso")),
-        ("remote.kso", include_str!("../hako/remote.kso")),
-        ("update.kso", include_str!("../hako/update.kso")),
-    ];
     LOCK.with(|l| l.borrow_mut().clear());
-    let mut visited = std::collections::HashSet::new();
-    AMBIENT_ROOT.with(|c| c.set(true));
-    let built = compile_module_inner(std::path::Path::new("hako"), true, &mut visited, Some(FILES));
-    AMBIENT_ROOT.with(|c| c.set(false));
+    HAKO_EMBEDDED.with(|c| c.set(true));
+    let built = compile_entry("hako/main.kso", include_str!("../hako/main.kso"));
+    HAKO_EMBEDDED.with(|c| c.set(false));
     built
 }
+
+thread_local! {
+    /// An installed `kanso` has no hako/ checkout beside it, so while the
+    /// hako entry compiles, `import "hako"` resolves to the embedded module
+    /// files instead of the filesystem.
+    static HAKO_EMBEDDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Whether the current root compile is an entry file, whose imports may
+    /// name the module directory it sits in or beside without being cycles.
+    static ENTRY_COMPILE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// hako's module files, embedded the way the shipped library is.
+const HAKO_FILES: &[(&str, &str)] = &[
+    ("cache.kso", include_str!("../hako/hako/cache.kso")),
+    ("hako.kso", include_str!("../hako/hako/hako.kso")),
+    ("install.kso", include_str!("../hako/hako/install.kso")),
+    ("lock.kso", include_str!("../hako/hako/lock.kso")),
+    ("remote.kso", include_str!("../hako/hako/remote.kso")),
+    ("update.kso", include_str!("../hako/hako/update.kso")),
+];
 
 /// The root module gets the ambient imports (design/render-plan.md);
 /// dependencies never do — deps compile exactly as written.
@@ -2635,17 +2666,25 @@ fn compile_module_loaded(
     if sources.is_empty() {
         return Err(format!("error: no .kso files in {}\n", dir.display()));
     }
+    // An entry file is a program, not a package member (the module-shape
+    // gavel): main.kso never joins the merge, whether this directory is the
+    // root of a build or somebody's dependency.
+    sources.retain(|(file, _)| {
+        !std::path::Path::new(file).file_name().is_some_and(|n| n == "main.kso")
+    });
+    if sources.is_empty() {
+        return Err(format!(
+            "error: {} holds only an entry file — a module is its library \
+             files, and main.kso is a program\n",
+            dir.display()
+        ));
+    }
     let mut parsed = Vec::new();
     for (file, source) in sources.drain(..) {
-        let path = std::path::PathBuf::from(&file);
         let lexed = phase::watched("lex", || lexer::lex(&source))
             .map_err(|d| diag::render(&d, &file, &source))?;
-        let is_entry = path.file_name().is_some_and(|n| n == "main.kso");
-        let mut program = phase::watched("parse", || match is_entry {
-            true => parser::parse_entry(&lexed),
-            false => parser::parse(&lexed),
-        })
-        .map_err(|d| diag::render(&d, &file, &source))?;
+        let mut program = phase::watched("parse", || parser::parse(&lexed))
+            .map_err(|d| diag::render(&d, &file, &source))?;
         phase::watched("synthesize_getters", || synthesize_getters(&mut program));
         stamp_file(&mut program, &file);
         parsed.push((file, source, program));

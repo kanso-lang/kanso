@@ -1,1 +1,3 @@
-io/args . (given -> over_chapters (writing? given))
+import "book_panels"
+
+book_panels/play

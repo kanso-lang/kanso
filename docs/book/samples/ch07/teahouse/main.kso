@@ -1,3 +1,5 @@
+import "teahouse"
+
 dango = price "dango"
 pocky = price "pocky"
 print (describe dango) >> print (describe pocky)

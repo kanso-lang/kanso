@@ -1,1 +1,3 @@
-print "{adder 3 4}"
+import "lib"
+
+print "{lib/adder 3 4}"

@@ -294,3 +294,5 @@ fn closed 0 _
 fn closed _ _
   io/write "\nthe interpreter is the oracle: these are native's to fix.\n"
     . (_ -> io/exit 1)
+
+pub play = io/args . (given -> started (rounds_from given))

@@ -1,1 +1,3 @@
-asked "bench/cost_golden.txt" . (d -> with_decode d)
+import "welfare"
+
+welfare/play

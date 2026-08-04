@@ -1,1 +1,3 @@
-asked ["log" "-1" "--format=%h %cI %s"] . stamped
+import "perf_record"
+
+perf_record/play

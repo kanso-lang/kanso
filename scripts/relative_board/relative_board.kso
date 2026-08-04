@@ -174,3 +174,5 @@ fn mb kb
   whole = tenths / 10
   tenth = tenths - whole * 10
   "{whole}.{tenth}"
+
+pub play = io/args . begun

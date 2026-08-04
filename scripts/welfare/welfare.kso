@@ -518,3 +518,5 @@ fn with_basket d e o b
 
 fn with_compile d e o b c
   asked "bench/compile_memory_golden.txt" . (held -> gauge d e o b c held)
+
+pub play = asked "bench/cost_golden.txt" . (d -> with_decode d)

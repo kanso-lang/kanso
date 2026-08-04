@@ -1,3 +1,4 @@
 import "std/io"
+import "version"
 
-io/args . start
+io/args . version/start

@@ -1,1 +1,3 @@
-io/args . (given -> with_args given)
+import "fingerprint"
+
+fingerprint/play

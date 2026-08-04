@@ -170,3 +170,5 @@ fn sound 0
 
 fn sound _
   1
+
+pub play = begun (plain "1" == sample)

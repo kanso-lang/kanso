@@ -1,1 +1,3 @@
-ran sound_src . (v -> sound_enough v)
+import "diagnostic_differential"
+
+diagnostic_differential/play

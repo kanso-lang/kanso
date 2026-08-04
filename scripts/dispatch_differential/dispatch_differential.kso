@@ -386,3 +386,5 @@ fn finished 0
 
 fn finished n
   io/write "{n} wrong\n" . (_ -> io/exit 1)
+
+pub play = begun (source_for check == sample)
