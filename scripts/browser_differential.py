@@ -95,7 +95,10 @@ async function runCase(c) {
   wasm.kanso_set_seed(SEED);
   wasm.kanso_set_file(name.ptr, name.len);
   const { ptr, len } = writeInput(c.src);
-  const status = wasm.kanso_compile_wasm(ptr, len, tailCalls ? 1 : 0);
+  // a playground sample is a play file: declarations and statements in one
+  // buffer, which the run door does not accept and the play door does
+  const compile = c.play ? wasm.kanso_play_wasm : wasm.kanso_compile_wasm;
+  const status = compile(ptr, len, tailCalls ? 1 : 0);
   if (status === 2) return { kind: 'compile-error', code: 2, text: readOut() };
   if (status === 1) return { kind: 'fallback', reason: readOut() };
   const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr(), wasm.kanso_wasm_len()).slice();
@@ -208,9 +211,16 @@ def corpus():
     return runnable
 
 
+def is_play(path):
+    """The playground's samples are play files — the relaxed single-file
+    form the buffer holds. Both sides must use the same door or the
+    differential compares a program against a refusal."""
+    return path.parent.name == "playground-corpus"
+
+
 def native_outcome(path):
     run = subprocess.run(
-        [str(KANSO), "run", path.name],
+        [str(KANSO), "play" if is_play(path) else "run", path.name],
         capture_output=True,
         cwd=path.parent,
         text=True,
@@ -295,7 +305,12 @@ KNOWN_GAPS = known_gaps()
 def main():
     paths = corpus()
     entries = [
-        {"name": str(path.relative_to(ROOT)), "src": path.read_text()} for path in paths
+        {
+            "name": str(path.relative_to(ROOT)),
+            "src": path.read_text(),
+            "play": is_play(path),
+        }
+        for path in paths
     ]
     payload = browser_results(entries)
     results = payload["results"]

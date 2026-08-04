@@ -167,6 +167,28 @@ pub extern "C" fn kanso_compile_wasm(ptr: *const u8, len: usize, tailcalls: i32)
             return 2;
         }
     };
+    lower_to_wasm(program, tailcalls)
+}
+
+/// The play compile for the browser's compiled path: the playground buffer
+/// is a play file, and it reaches the wasm backend the same way `run`
+/// programs do.
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn kanso_play_wasm(ptr: *const u8, len: usize, tailcalls: i32) -> i32 {
+    let source = take_input(ptr, len);
+    let program = match crate::compile_play_file(&current_file(), &source) {
+        Ok(program) => program,
+        Err(rendered) => {
+            set_out(&rendered);
+            return 2;
+        }
+    };
+    lower_to_wasm(program, tailcalls)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn lower_to_wasm(program: crate::ast::Program, tailcalls: i32) -> i32 {
     STACK_HINT.with(|h| *h.borrow_mut() = crate::stack_hint(&program));
     match crate::wasm_backend::compile(&program, tailcalls != 0) {
         Ok(compiled) => {

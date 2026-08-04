@@ -11,56 +11,59 @@ use crate::lexer::{Lexed, Line, StrPart, Tok};
 /// declaration after them would read as part of the run.
 pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
     let mut diags = Vec::new();
-    let mut first_stmt = None;
-    for (idx, line) in lexed.lines.iter().enumerate() {
+    // Declarations are order-free everywhere else in kanso, and a relaxed
+    // file is not the place to invent an ordering rule: the split is by
+    // KIND, not position. A top-level `fn`, `type`, `import` or constant
+    // (with the indented lines that belong to it) is the library half;
+    // everything else is the run, in the order written.
+    let mut decl_lines: Vec<Line> = Vec::new();
+    let mut stmt_lines: Vec<Line> = Vec::new();
+    let mut in_decl = false;
+    for line in &lexed.lines {
         if line.indent != 0 {
+            match in_decl {
+                true => decl_lines.push(line.clone()),
+                false => stmt_lines.push(line.clone()),
+            }
             continue;
         }
-        match line.tokens.first() {
-            Some((Tok::KwImport | Tok::KwFn | Tok::KwType, _)) => {
-                if first_stmt.is_some() {
-                    diags.push(Diagnostic::new(
-                        "syntax",
-                        "declarations and imports come before the statements in a play file"
-                            .to_string(),
-                        head_span(line),
-                    ));
+        if let Some((Tok::KwPub, _)) = line.tokens.first() {
+            // pointing `play` at a pub-play library is a wrong-verb
+            // mistake, not a wrong-file one; say which door to use
+            let says_play = matches!(
+                line.tokens.get(1),
+                Some((Tok::Ident(name), _)) if name == "play"
+            );
+            let said = match says_play {
+                true => {
+                    "`pub play` is a library's export — `kanso run` runs this \
+                     file; `kanso play` takes bare statements"
                 }
-            }
-            Some((Tok::KwPub, _)) => {
-                // pointing `play` at a pub-play library is a wrong-verb
-                // mistake, not a wrong-file one; say which door to use
-                let says_play = matches!(
-                    line.tokens.get(1),
-                    Some((Tok::Ident(name), _)) if name == "play"
-                );
-                let said = match says_play {
-                    true => {
-                        "`pub play` is a library's export — `kanso run` runs \
-                         this file; `kanso play` takes bare statements"
-                    }
-                    false => {
-                        "a play file exports nothing — drop the `pub`; \
-                         everything here is for this run"
-                    }
-                };
-                diags.push(Diagnostic::new("syntax", said.to_string(), head_span(line)));
-            }
-            // a top-level binding before any statement is a constant, the
-            // library reading; after the first statement it is a statement
-            Some((Tok::Ident(_), _))
-                if first_stmt.is_none()
-                    && line.tokens.get(1).is_some_and(|(t, _)| matches!(t, Tok::Bind)) => {}
-            _ => {
-                if first_stmt.is_none() {
-                    first_stmt = Some(idx);
+                false => {
+                    "a play file exports nothing — drop the `pub`; everything \
+                     here is for this run"
                 }
-            }
+            };
+            diags.push(Diagnostic::new("syntax", said.to_string(), head_span(line)));
+            in_decl = true;
+            decl_lines.push(line.clone());
+            continue;
+        }
+        // `fn`, `type` and `import` declare; a binding is part of the run,
+        // exactly as in an entry file. That keeps the relaxed form a
+        // relaxation and never a new restriction: a bound name cannot
+        // collide with a parameter, and a `build` block keeps the statement
+        // form it has everywhere else. A constant several functions share is
+        // a library's job — needing one is where a little program graduates
+        // to `kanso run`.
+        let declares =
+            matches!(line.tokens.first(), Some((Tok::KwImport | Tok::KwFn | Tok::KwType, _)));
+        in_decl = declares;
+        match declares {
+            true => decl_lines.push(line.clone()),
+            false => stmt_lines.push(line.clone()),
         }
     }
-    let split = first_stmt.unwrap_or(lexed.lines.len());
-    let decl_lines: Vec<Line> = lexed.lines[..split].to_vec();
-    let stmt_lines: &[Line] = &lexed.lines[split..];
     // a shape already refused says everything; a missing statement on top
     // of it is cascade, not information
     if stmt_lines.is_empty() && diags.is_empty() {
@@ -70,48 +73,37 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
             Span { line: 1, col: 1 },
         ));
     }
-    // the blank separating declarations from statements is a boundary, not
-    // a trailing blank of the declaration half
-    let decl_end = decl_lines.last().map(|l| l.number).unwrap_or(0);
-    let decl_blanks: Vec<usize> =
-        lexed.blank_lines.iter().copied().filter(|n| *n < decl_end).collect();
+    // The declaration half is interleaved with statements, so its lines are
+    // not contiguous: what the library parser needs between two of them is
+    // exactly one blank in the gap. Take an original blank when the gap has
+    // one, and otherwise mark a line the gap already holds — a statement's
+    // line is not a declaration's neighbour, so nothing is being invented
+    // about the code, only about the space between two forms.
+    let blanks: std::collections::HashSet<usize> = lexed.blank_lines.iter().copied().collect();
+    let mut decl_blanks: Vec<usize> = Vec::new();
+    for pair in decl_lines.windows(2) {
+        let (a, b) = (pair[0].number, pair[1].number);
+        if b <= a + 1 {
+            continue;
+        }
+        let found = (a + 1..b).find(|n| blanks.contains(n));
+        decl_blanks.push(found.unwrap_or(a + 1));
+    }
     let decl_half = Lexed { lines: decl_lines, blank_lines: decl_blanks };
     let mut program = match parse(&decl_half) {
         Ok(program) => program,
         Err(more) => {
             diags.extend(more);
-            if !diags.is_empty() {
-                return Err(diags);
-            }
-            unreachable!("parse failed without a diagnostic")
-        }
-    };
-    // a continuation may not restart after a blank: the chain it would
-    // splice into has already closed
-    for line in stmt_lines {
-        if line.indent != 0
-            && lexed.blank_lines.contains(&(line.number - 1))
-            && matches!(line.tokens.first(), Some((Tok::SeqOp | Tok::Pipe, _)))
-        {
-            diags.push(Diagnostic::new(
-                "formatting",
-                "a continuation may not follow a blank line — the statement \
-                 it would splice into has closed"
-                    .to_string(),
-                head_span(line),
-            ));
-        }
-    }
-    let body = match parse_body(stmt_lines) {
-        Ok(body) => body,
-        Err(d) => {
-            diags.push(d);
-            Vec::new()
+            return Err(diags);
         }
     };
     if !diags.is_empty() {
         return Err(diags);
     }
+    let body = match parse_body(&stmt_lines) {
+        Ok(body) => body,
+        Err(d) => return Err(vec![d]),
+    };
     let span = stmt_lines.first().map(head_span).unwrap_or(Span { line: 1, col: 1 });
     program.fns.push(FnDecl {
         name: crate::ast::ENTRY.to_string(),

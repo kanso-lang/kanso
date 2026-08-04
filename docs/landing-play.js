@@ -10,7 +10,7 @@
   const mirror = document.getElementById('hero-mirror');
   const output = document.getElementById('hero-output');
   const runButton = document.getElementById('hero-run');
-  const { ready, runSource, highlight } = window.KansoEngine;
+  const { ready, playSource, highlight } = window.KansoEngine;
 
   /* the <pre> is the scroll container; the <code> mirror inside it is inline
      and cannot scroll, so the highlight layer has to be moved by its parent
@@ -39,7 +39,7 @@
   const run = async () => {
     wake();
     output.textContent = 'running…';
-    const result = await runSource(editor.value);
+    const result = await playSource(editor.value);
     output.textContent = result.text || '(no output)';
     output.classList.toggle('play-error', result.code !== 0);
     panel.classList.add('has-run');
