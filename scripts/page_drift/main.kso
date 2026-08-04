@@ -1,0 +1,1 @@
+asked ["log" "-1" "--format=%H" "--" "docs/compiler.html"] . measured

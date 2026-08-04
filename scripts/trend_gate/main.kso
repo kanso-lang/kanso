@@ -1,0 +1,1 @@
+io/args . (a -> started (base_of a))

@@ -76,7 +76,7 @@ jobs:
       - name: integer arithmetic, on the architecture linux is not
         run: |
           cargo build --release
-          ./target/release/kanso run scripts/numeric_differential.kso -- 0
+          ./target/release/kanso run scripts/numeric_differential -- 0
 
   playground:
     name: playground examples (every engine)
@@ -123,7 +123,7 @@ jobs:
       - name: the jekyll container owns _site, so take it back
         run: sudo chown -R "$USER" ./_site
       - run: cargo build --release
-      - run: ./target/release/kanso run scripts/fingerprint.kso -- ./_site
+      - run: ./target/release/kanso run scripts/fingerprint -- ./_site
       - name: no undigested reference survives
         run: |
           if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then
@@ -146,7 +146,7 @@ jobs:
       - name: welfare, and where it came from
         run: |
           set +e
-          ./target/release/kanso run scripts/welfare.kso >/tmp/welfare.txt 2>&1
+          ./target/release/kanso run scripts/welfare >/tmp/welfare.txt 2>&1
           verdict=$?
           set -e
           {
@@ -159,7 +159,7 @@ jobs:
           cat /tmp/welfare.txt
           exit $verdict
       - name: prose numbers match the golden they quote
-        run: ./target/release/kanso run scripts/golden_prose.kso
+        run: ./target/release/kanso run scripts/golden_prose
 
   grammar:
     name: editor grammar (types, strings and comments still painted)
@@ -169,7 +169,7 @@ jobs:
       # the check is a kanso program, so the job compiles the toolchain it runs
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      - run: ./target/release/kanso run scripts/grammar_check.kso
+      - run: ./target/release/kanso run scripts/grammar_check
 
   book:
     name: book samples (every panel executed, outputs verified)
@@ -213,7 +213,7 @@ jobs:
         run: |
           git fetch origin main --depth 1
           set +e
-          ./target/release/kanso run scripts/trend_gate.kso -- origin/main >/tmp/trend.txt 2>&1
+          ./target/release/kanso run scripts/trend_gate -- origin/main >/tmp/trend.txt 2>&1
           verdict=$?
           set -e
           {
@@ -231,7 +231,7 @@ jobs:
       - name: the page keeps up with the log
         run: |
           git fetch origin main --depth 1 || true
-          ./target/release/kanso run scripts/page_drift.kso
+          ./target/release/kanso run scripts/page_drift
       - name: one-shot counters
         run: |
           KANSO_COUNTERS=1 ./oneshot 2>counters_oneshot.txt >/dev/null
@@ -370,34 +370,34 @@ jobs:
       - run: cargo build --release
       # asks every exported std function for the wrong thing, in every
       # argument position, and requires the two engines to answer identically
-      - run: ./target/release/kanso run scripts/diagnostic_differential.kso
+      - run: ./target/release/kanso run scripts/diagnostic_differential
       # rendering is written twice — `render` in the interpreter and
       # `k_render` in the C runtime — and every print goes through it
-      - run: ./target/release/kanso run scripts/render_differential.kso
+      - run: ./target/release/kanso run scripts/render_differential
       # the same std surface, asked for the awkward thing rather than the
       # wrong one: what a function ANSWERS at its edges, not what it complains
-      - run: ./target/release/kanso run scripts/behaviour_differential.kso
+      - run: ./target/release/kanso run scripts/behaviour_differential
       # integer arithmetic across the two engines. Run with no random rounds:
       # every random draw lands past the native ceiling, so the rounds spend
       # ten minutes re-confirming what the 561 edge cases already say. The
       # edges are what straddle the boundary; run it with rounds by hand to
       # probe further.
-      - run: ./target/release/kanso run scripts/numeric_differential.kso -- 0
+      - run: ./target/release/kanso run scripts/numeric_differential -- 0
       # how effects COMBINE — sequenced, bound, nested, run beside each other.
       # the executor is written twice with no shared code, so the two halves
       # can drift anywhere the corpus does not happen to go
-      - run: ./target/release/kanso run scripts/effects_differential.kso
+      - run: ./target/release/kanso run scripts/effects_differential
       # which arm answers. dispatch is what every branch in the language is
       # made of, and it is an arm search in one engine and a switch with guard
       # chains in the other
-      - run: ./target/release/kanso run scripts/dispatch_differential.kso
+      - run: ./target/release/kanso run scripts/dispatch_differential
       # whole modules on disk: what a directory of files sharing one namespace
       # lets through and what it refuses. the seam that hid two bugs already
       # --interp: see the note at the top of the sweep (task #57)
-      - run: ./target/release/kanso run scripts/module_differential.kso
+      - run: ./target/release/kanso run scripts/module_differential
       # a diagnostic with no golden can be reworded, weakened or lost with
       # nothing going red — the corpus grew by whoever remembered
-      - run: ./target/release/kanso run scripts/diagnostic_coverage.kso
+      - run: ./target/release/kanso run scripts/diagnostic_coverage
 
   site:
     name: site (landing sample and playground run in a browser)
@@ -416,7 +416,7 @@ jobs:
       # the gate is a kanso program now, so this job needs the toolchain it
       # was previously only building for the browser
       - run: cargo build --release
-      - run: ./target/release/kanso run scripts/prose_check.kso
+      - run: ./target/release/kanso run scripts/prose_check
 
   browser:
     name: browser differential (three engines, byte-identical, headless chrome)
@@ -439,7 +439,7 @@ jobs:
   # and every push, and committed back to the branch under test. It was not,
   # for a long time: perf_record has appended a row per commit to the history
   # branch since the panel was built, faithfully, 474 of them — and nothing has
-  # ever run scripts/long_view.kso, so the published chart sat frozen at
+  # ever run scripts/long_view, so the published chart sat frozen at
   # whenever somebody last ran it by hand. Collected, gated, never surfaced,
   # which is the same shape as the regression that made this job worth fixing.
   #
@@ -467,9 +467,9 @@ jobs:
         run: |
           git fetch origin perf-history
           git show origin/perf-history:history.jsonl > bench/history_series.jsonl
-          ./target/release/kanso run scripts/perf_record.kso >> bench/history_series.jsonl
+          ./target/release/kanso run scripts/perf_record >> bench/history_series.jsonl
       - name: redraw the chart
-        run: ./target/release/kanso run scripts/long_view.kso
+        run: ./target/release/kanso run scripts/long_view
       # The decode board: wall-clock because a competitor's cost cannot be
       # counted by kanso's counters, RELATIVE because a shared runner's
       # absolute milliseconds wobble. Five interleaved rounds, both lanes
@@ -515,7 +515,7 @@ jobs:
       # instead of churning the head.
       - name: splice the board
         run: |
-          ./target/release/kanso run scripts/relative_board.kso -- \
+          ./target/release/kanso run scripts/relative_board -- \
             "${{ steps.race.outputs.kavg }}" "${{ steps.race.outputs.savg }}" \
             "${{ steps.race.outputs.kkb }}" "${{ steps.race.outputs.skb }}" 5
       # Commit on the pull request only. Main is protected — a direct push
@@ -535,7 +535,7 @@ jobs:
           git push origin "HEAD:${{ github.head_ref }}"
       - name: record this commit
         if: github.ref == 'refs/heads/main'
-        run: ./target/release/kanso run scripts/perf_record.kso > /tmp/record.json
+        run: ./target/release/kanso run scripts/perf_record > /tmp/record.json
       - name: append to the history branch
         if: github.ref == 'refs/heads/main'
         run: |

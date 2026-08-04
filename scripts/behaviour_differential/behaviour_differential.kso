@@ -1,0 +1,283 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# `diagnostic_differential` asks std functions for the wrong thing and compares
+# the complaints. This asks them for the awkward thing and compares the
+# answers: a slice that starts past the end, a sort of things that compare
+# equal, a take of more than there is, a map read that misses, a round that
+# lands on a half. Those are the places where two implementations of the same
+# function drift, because they are the places the obvious implementation does
+# not say.
+#
+# Every probe here is a legal call. If the engines answer differently, one of
+# them is wrong about the library's contract — and if the contract does not
+# say, that is worth knowing too.
+kanso = "target/release/kanso"
+
+probe = "target/behaviour_probe.kso"
+
+# A legal probe that never returns is a finding, and a louder one than a
+# wording difference — so every run is under `timeout`, which answers 124 when
+# it fires. A box without `timeout` cannot start it, and an err says so rather
+# than the sweep quietly losing the property.
+limit = "20"
+
+# text/slice: both bounds, past either end, inverted, unicode
+text_0a = ["text/slice \"abcdef\" 1 3" "text/slice \"abcdef\" 4 6"]
+
+text_0b = ["text/slice \"abcdef\" 1 99" "text/slice \"abcdef\" 1 7"]
+
+text_0c = ["text/slice \"abcdef\" 6 7" "text/slice \"日本語\" 1 4"]
+
+text_0d = ["text/slice \"ab\" 1 3" "text/slice \"abcdef\" 0 3"]
+
+text_0e = ["text/slice \"abcdef\" 5 2" "text/slice \"abcdef\" 7 9"]
+
+text_0f = ["text/slice \"\" 1 1" "text/slice \"héllo\" 1 2"]
+
+text_0g = ["text/slice \"日本語\" 1 2"]
+
+text_0h = ["text/slice \"emoji 🌱 here\" 7 7"]
+
+# text: joining and splitting at the edges
+text_1a = ["text/join [] \"-\"" "text/join [\"a\"] \"-\""]
+
+text_1b = ["text/join [\"\" \"\"] \"-\"" "text/split \"\" \"\""]
+
+text_1c = ["text/split \"aaa\" \"aa\"" "text/concat \"\" \"\""]
+
+text_1d = ["text/chars \"\"" "text/chars \"日本語\"" "text/bytes \"é\""]
+
+text_1e = ["text/to_int \"007\"" "text/to_int \"-0\""]
+
+text_1f = ["text/to_float \"1\"" "text/char_code \"a\""]
+
+text_1g = ["text/from_code 10"]
+
+# list: empty, one, past the end, equal keys
+list_2a = ["list/to_list (list/take [1 2 3] 0)"]
+
+list_2b = ["list/to_list (list/take [1 2 3] 99)"]
+
+list_2c = ["list/to_list (list/drop [1 2 3] 0)"]
+
+list_2d = ["list/to_list (list/drop [1 2 3] 99)"]
+
+list_2e = ["list/to_list (list/sort [])"]
+
+list_2f = ["list/to_list (list/sort [3 1 2])"]
+
+list_2g = ["list/to_list (list/sort [\"b\" \"a\"])"]
+
+list_2h = ["list/to_list (list/sort [1 1 1])" "list/first []"]
+
+list_2i = ["list/last []" "list/first [1 2]" "list/last [1 2]"]
+
+list_2j = ["list/max []" "list/min []" "list/sum []" "list/mean []"]
+
+list_2k = ["list/mean [1 2]" "list/count [] (x -> true)"]
+
+list_2l = ["list/to_list (list/zip [1 2] [3])"]
+
+list_2m = ["list/to_list (list/zip [] [1])" "list/tally []"]
+
+list_2n = ["list/tally [\"a\" \"a\" \"b\"]"]
+
+# `repeat` and `iterate` are infinite by design, so they are taken from
+# rather than forced — forcing one is not an awkward call, it is a
+# different program that never ends
+list_3a = ["list/to_list (list/take (list/repeat 5) 3)"]
+
+list_3b = ["list/to_list (list/take (list/repeat 5) 0)"]
+
+# map: reads that miss, and the order entries come back in
+list_4a = ["list/to_h [[\"b\" 2] [\"a\" 1]]"]
+
+list_4b = ["list/transform_values \{ \"a\":1 } (v -> v + 1)"]
+
+# math at the awkward values
+math_5a = ["math/round 0.5" "math/round 1.5" "math/round -0.5"]
+
+math_5b = ["math/round -1.5" "math/round 2.5" "math/sqrt 0"]
+
+math_5c = ["math/sqrt 2" "math/sqrt 0.25"]
+
+# indexing, the non-strict form that answers none
+list_6a = ["[1 2 3][0]" "[1 2 3][4]" "\{ \"a\":1 }[\"b\"]"]
+
+list_6b = ["\"abc\"[2]"]
+
+text_all0 = text/concat text_0a text_0b
+
+text_all1 = text/concat text_all0 text_0c
+
+text_all2 = text/concat text_all1 text_0d
+
+text_all3 = text/concat text_all2 text_0e
+
+text_all4 = text/concat text_all3 text_0f
+
+text_all5 = text/concat text_all4 text_0g
+
+text_all6 = text/concat text_all5 text_0h
+
+text_all7 = text/concat text_all6 text_1a
+
+text_all8 = text/concat text_all7 text_1b
+
+text_all9 = text/concat text_all8 text_1c
+
+text_all10 = text/concat text_all9 text_1d
+
+text_all11 = text/concat text_all10 text_1e
+
+text_all12 = text/concat text_all11 text_1f
+
+text_probes = text/concat text_all12 text_1g
+
+list_all0 = text/concat list_2a list_2b
+
+list_all1 = text/concat list_all0 list_2c
+
+list_all2 = text/concat list_all1 list_2d
+
+list_all3 = text/concat list_all2 list_2e
+
+list_all4 = text/concat list_all3 list_2f
+
+list_all5 = text/concat list_all4 list_2g
+
+list_all6 = text/concat list_all5 list_2h
+
+list_all7 = text/concat list_all6 list_2i
+
+list_all8 = text/concat list_all7 list_2j
+
+list_all9 = text/concat list_all8 list_2k
+
+list_all10 = text/concat list_all9 list_2l
+
+list_all11 = text/concat list_all10 list_2m
+
+list_all12 = text/concat list_all11 list_2n
+
+list_all13 = text/concat list_all12 list_3a
+
+list_all14 = text/concat list_all13 list_3b
+
+list_all15 = text/concat list_all14 list_4a
+
+list_all16 = text/concat list_all15 list_4b
+
+list_all17 = text/concat list_all16 list_6a
+
+list_probes = text/concat list_all17 list_6b
+
+math_all0 = text/concat math_5a math_5b
+
+math_probes = text/concat math_all0 math_5c
+
+fn shaped module expr
+  """
+    import "std/{module}"
+
+    pub play = print "\{{expr}}"
+  """
+
+fn asked argv
+  io/run "timeout" (text/concat [limit kanso] argv)
+
+fn hung? 124
+  true
+
+fn hung? _
+  false
+
+# The probe is written once and read by both engines, so a difference is the
+# engines and never two different files.
+fn ran source
+  io/write_file probe source . (_ -> both)
+
+both = asked ["run" probe] . against
+
+fn against native
+  asked ["run" probe "--interp"] . (interp -> answer native interp)
+
+fn answer n i
+  stalled n i (hung? n.status or hung? i.status)
+
+fn stalled n i true
+  "    never returned: native {n.status} interp {i.status}\n"
+
+fn stalled n i false
+  same = n.status == i.status and n.stdout == i.stdout
+  agreed n i (same and n.stderr == i.stderr)
+
+fn agreed _ _ true
+  ""
+
+fn agreed n i false
+  native = "    native: {n.status} {n.stdout}{n.stderr}"
+  "{native}    interp: {i.status} {i.stdout}{i.stderr}\n"
+
+fn told ""
+  io/write "" . (_ -> 0)
+
+fn told line
+  io/write line . (_ -> 1)
+
+fn named _ ""
+  ""
+
+fn named expr line
+  "  {expr}\n{line}"
+
+# Recursion rather than a fold, because each step is an effect whose answer the
+# next step needs: the list is walked by binding, one probe at a time.
+fn swept module exprs count
+  onward module exprs count (length exprs == 0)
+
+fn onward _ _ count true
+  io/write "" . (_ -> count)
+
+fn onward module exprs count false
+  rest = list/to_list (list/drop exprs 1)
+  expr = exprs[1]!
+  ran (shaped module expr) . (v -> reported module rest count expr v)
+
+fn reported module rest count expr v
+  told (named expr v) . (n -> swept module rest (count + n))
+
+# A probe that lost its interpolation prints a plain string, which both engines
+# render identically — so the sweep agrees with itself about nothing and
+# reports every call green. That is what a first draft of the render sweep did.
+sample = """
+  import "std/text"
+
+  pub play = print "\{1}"
+"""
+
+complaint = "the probe shape changed: probes must interpolate\n"
+
+total = length text_probes + length list_probes + length math_probes
+
+banner = "{total} awkward calls\n"
+
+fn begun false
+  io/write_err complaint . (_ -> io/exit 2)
+
+fn begun true
+  counted 0 . answered
+
+fn counted _
+  io/write banner . (_ -> swept "text" text_probes 0)
+
+fn answered n
+  swept "list" list_probes n . (m -> swept "math" math_probes m . finished)
+
+fn finished 0
+  io/write "0 disagree\n"
+
+fn finished n
+  io/write "{n} disagree\n" . (_ -> io/exit 1)

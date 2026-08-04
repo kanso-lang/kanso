@@ -1,0 +1,480 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# What a module lets through, what it refuses, and whether the engines agree.
+#
+# A module is a directory of files sharing one namespace, `pub` is the whole
+# visibility system, and imports arrive qualified with enrollment making the
+# qualifier optional. Those rules interact — a name is visible or not depending
+# on which file declares it, whether it is `pub`, whether the reader is inside
+# the module or importing it, and whether the qualifier was written.
+#
+# Two questions are asked of every case, because this seam has produced bugs of
+# both kinds. The first is agreement: both engines get the same directory and
+# must answer identically. The second is the verdict itself — a module that
+# compiles must print what it is supposed to print, and one that is refused
+# must be refused for the stated reason. Agreement alone cannot see a rule that
+# is wrong in both engines, and this surface has had one of those.
+# One file of a case, and the case itself. `entry` is the directory actually
+# compiled: usually the module root, and for a case that needs an importer
+# beside its dependency, the subdirectory that imports.
+type filed
+  name
+  text
+
+type kase
+  label
+  files
+  entry
+  verdict
+  expected
+
+kanso = "target/release/kanso"
+
+work = "target/module_differential"
+
+# `prints` compiles and writes exactly `expected`; `check refuses` fails the
+# check with a message containing it; `run refuses` checks clean and fails
+# when run.
+point_src = """
+  pub type point
+    x
+    y
+"""
+
+one_src = """
+  pub fn one _
+    1
+"""
+
+arity_said = "error[arity]: no 2-argument arm of `one` (arms take 1)"
+
+c1a = filed "a.kso" """
+  pub fn greet _
+    "hello"
+"""
+
+c1m = filed "main.kso" "print \"\{greet 0}\"\n"
+
+c1 = kase "a sibling file's name is in scope" [c1a c1m] "" "prints" "hello\n"
+
+c2a = filed "a.kso" """
+  fn quiet _
+    "hush"
+
+  pub fn loud n
+    quiet n
+"""
+
+c2m = filed "main.kso" "print \"\{loud 0}\"\n"
+
+c2l = "a private name is in scope inside the module"
+
+c2 = kase c2l [c2a c2m] "" "prints" "hush\n"
+
+c3a = filed "a.kso" point_src
+
+c3b = filed "b.kso" """
+  pub fn origin _
+    point 0 0
+"""
+
+c3m = filed "main.kso" "print \"\{origin 0}\"\n"
+
+c3l = "a type declared in one file, built in another"
+
+c3 = kase c3l [c3a c3b c3m] "" "prints" "point 0 0\n"
+
+c4b = filed "b.kso" """
+  pub fn across p
+    p.x
+"""
+
+c4m = filed "main.kso" "print \"\{across (point 3 4)}\"\n"
+
+c4l = "a field of a type from a sibling file"
+
+c4 = kase c4l [c3a c4b c4m] "" "prints" "3\n"
+
+c5a = filed "a.kso" """
+  pub fn which 0
+    "zero"
+"""
+
+c5b = filed "b.kso" """
+  pub fn which _
+    "any"
+"""
+
+c5m = filed "main.kso" "print \"\{which 0} \{which 9}\"\n"
+
+c5l = "an arm in each file of one group"
+
+c5 = kase c5l [c5a c5b c5m] "" "prints" "zero any\n"
+
+c6head = """
+  import "std/list"
+
+  pub fn xs ps
+"""
+
+c6src = "{c6head}  list/to_list (list/map ps _.x)\n"
+
+c6b = filed "b.kso" c6src
+
+c6m = filed "main.kso" "print \"\{xs [(point 1 2) (point 3 4)]}\"\n"
+
+c6l = "a getter of a sibling's type, as a value"
+
+c6 = kase c6l [c3a c6b c6m] "" "prints" "[1 3]\n"
+
+c7a = filed "a.kso" """
+  pub type thing
+    n
+"""
+
+c7b = filed "b.kso" """
+  pub fn thing _
+    1
+"""
+
+c7m = filed "main.kso" "print \"\{thing 0}\"\n"
+
+c7l = "a type and a function sharing a name"
+
+c7 = kase c7l [c7a c7b c7m] "" "prints" "thing 0\n"
+
+c8m = filed "main.kso" "print \"\{1}\"\n"
+
+c8 = kase "an entry file that is only statements" [c8m] "" "prints" "1\n"
+
+c9a = filed "a.kso" """
+  fn unused _
+    1
+
+  pub fn used _
+    2
+"""
+
+c9m = filed "main.kso" "print \"\{used 0}\"\n"
+
+c9 = kase "a private name used nowhere" [c9a c9m] "" "prints" "2\n"
+
+c10a = filed "a.kso" one_src
+
+c10b = filed "b.kso" """
+  pub fn misuse k
+    one k 2
+"""
+
+c10m = filed "main.kso" "print \"\{misuse 1}\"\n"
+
+c10l = "a call to a sibling at the wrong arity"
+
+c10 = kase c10l [c10a c10b c10m] "" "check refuses" arity_said
+
+c11m = filed "main.kso" "print \"\{one 1 2}\"\n"
+
+c11l = "a call from the entry at the wrong arity"
+
+c11 = kase c11l [c10a c11m] "" "check refuses" arity_said
+
+c12a = filed "a.kso" """
+  pub fn twice _
+    1
+"""
+
+c12b = filed "b.kso" """
+  pub fn twice _
+    2
+"""
+
+c12m = filed "main.kso" "print \"\{twice 0}\"\n"
+
+c12said = "error[dispatch]: overlapping overloads of `twice` are illegal"
+
+c12l = "an arm no call can reach"
+
+c12 = kase c12l [c12a c12b c12m] "" "check refuses" c12said
+
+c13a = filed "a.kso" """
+  pub fn taken _
+    1
+"""
+
+c13b = filed "b.kso" """
+  pub fn tries k
+    taken = 2
+    taken + k
+"""
+
+c13m = filed "main.kso" "print \"\{tries 1}\"\n"
+
+c13said = "error[name]: `taken` is already a declaration; rename the binding"
+
+c13l = "a binding shadowing a sibling's declaration"
+
+c13 = kase c13l [c13a c13b c13m] "" "check refuses" c13said
+
+c14a = filed "a.kso" """
+  pub fn known _
+    1
+"""
+
+c14m = filed "main.kso" "print \"\{unknown 0}\"\n"
+
+c14said = "error[name]: unknown name `unknown`"
+
+c14 = kase "a name nothing declares" [c14a c14m] "" "check refuses" c14said
+
+c15a = filed "a.kso" """
+  pub fn only _
+    1
+"""
+
+c15head = "error[name]: a directory runs through `main.kso`, and this"
+
+c15said = "{c15head} module has none"
+
+c15 = kase "a module with no entry" [c15a] "" "run refuses" c15said
+
+c16src = """
+  type spot
+    from
+    to
+
+  pub fn reach n
+    s = spot n 9
+    s.from
+"""
+
+c16a = filed "dep/dep.kso" c16src
+
+c16m = filed "app/main.kso" """
+  import "../dep"
+
+  print "\{dep/reach 3}"
+"""
+
+c16l = "a module reading a field of its own record, imported"
+
+c16 = kase c16l [c16a c16m] "app" "prints" "3\n"
+
+cases = [c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16]
+
+# Behaviour that is wrong, and known to be wrong. Recorded the way
+# tests/golden/wasm_gaps.txt records an engine's declines: a defect written
+# down stops being a surprise, and a defect that quietly changes shape is how
+# it survives a rewrite. An entry here that stops matching fails this sweep,
+# which is the reminder to settle it and delete the entry — never to update the
+# expectation to whatever it does now.
+dep_src = """
+  import "std/text"
+
+  pub fn pick a b
+    text/join [a b] "-"
+
+  pub fn join a b
+    "OWN(\{a},\{b})"
+"""
+
+app_src = """
+  import "../dep"
+
+  print "\{dep/join "x" "y"}"
+"""
+
+w1d = filed "dep/dep.kso" dep_src
+
+w1a = filed "app/main.kso" app_src
+
+w1l = "a module's own pub, shadowed by a dependency's name (task #51)"
+
+w1said = "an import of `dep` exports `join` too and took the name"
+
+w1 = kase w1l [w1d w1a] "app" "check refuses" w1said
+
+known_wrong = [w1]
+
+fn in? hay needle
+  length (text/split hay needle) > 1
+
+# A file's directory, made before the file is written. There is no mkdir in
+# io yet — the os package that would own one is unsettled — so the sweep asks
+# the shell, which it is already doing to reach the compiler.
+fn holding name
+  parts = text/split name "/"
+  up parts (length parts < 2)
+
+fn up _ true
+  ""
+
+fn up parts false
+  dirs = list/to_list (list/take parts (length parts - 1))
+  slash = "/"
+  "{slash}{text/join dirs slash}"
+
+fn made root f after
+  io/run "mkdir" ["-p" "{root}{holding f.name}"]
+    . (_ -> io/write_file "{root}/{f.name}" f.text)
+    . (_ -> after)
+
+fn laid root files at after
+  laying root files at after (at > length files)
+
+fn laying _ _ _ after true
+  after
+
+fn laying root files at after false
+  made root files[at]! (laid root files (at + 1) after)
+
+fn asked argv
+  io/run kanso argv
+
+# The engine flag follows the path — `kanso run <dir> --interp`. Putting it
+# first makes the CLI print its usage, which is a different exit code on a
+# different stream and reads as the two engines disagreeing about a program
+# neither of them was asked about.
+#
+# Both engines are given the SAME directory, because a diagnostic names the
+# module it is about and two directories have two names.
+fn judged k after
+  root = "{work}/m"
+  target = aimed root k.entry
+  io/run "rm" ["-rf" work]
+    . (_ -> laid root k.files 1 (asked ["check" target]))
+    . (c -> ruled k.verdict target k c after)
+
+fn aimed root ""
+  root
+
+fn aimed root under
+  "{root}/{under}"
+
+fn ruled "check refuses" _ k c after
+  after (refused k c (c.status == 0))
+
+fn refused k _ true
+  "expected a refusal saying {shown k.expected}, but it compiled"
+
+fn refused k c false
+  named k c (in? c.stderr k.expected)
+
+fn named _ _ true
+  ""
+
+fn named k c false
+  "refused, but not with {shown k.expected}: {clipped c.stderr}"
+
+fn ruled _ target k c after
+  compiled target k c after (c.status == 0)
+
+fn compiled _ _ c after false
+  after "expected it to compile: {clipped c.stderr}"
+
+fn compiled target k _ after true
+  asked ["run" target] . (n -> crossed target k n after)
+
+fn crossed target k n after
+  asked ["run" target "--interp"] . (i -> after (agreed k n i (same? n i)))
+
+fn same? n i
+  n.status == i.status and n.stdout == i.stdout and n.stderr == i.stderr
+
+fn agreed _ n i false
+  mine = "the engines disagree — native {n.status} {shown n.stdout}"
+  "{mine} against interp {i.status} {shown i.stdout}"
+
+fn agreed k n _ true
+  answered k.verdict k n
+
+fn answered "run refuses" k n
+  ran k n (n.status == 0)
+
+fn ran k _ true
+  "expected running it to fail with {shown k.expected}"
+
+fn ran k n false
+  named k n (in? n.stderr k.expected)
+
+fn answered _ k n
+  printed k n (n.stdout == k.expected)
+
+fn printed _ _ true
+  ""
+
+fn printed k n false
+  "printed {shown n.stdout}, expected {shown k.expected}"
+
+fn shown s
+  "'{s}'"
+
+fn clipped s
+  one_line = text/join (text/split (text/trim s) "\n") " "
+  shortened one_line (length one_line > 120)
+
+fn shortened s false
+  s
+
+fn shortened s true
+  "{text/slice s 1 120}…"
+
+# The sweep walks the cases one at a time because each writes the same
+# directory: a shared scratch keeps the diagnostics naming one module rather
+# than fifteen temporary ones.
+fn swept all at found after
+  sweeping all at found after (at > length all)
+
+fn sweeping _ _ found after true
+  after found
+
+fn sweeping all at found after false
+  k = all[at]!
+  judged k (fault -> swept all (at + 1) (kept found k fault) after)
+
+fn kept found _ ""
+  found
+
+fn kept found k fault
+  push found "  {k.label}\n    {fault}"
+
+fn then_known wrong
+  swept known_wrong 1 [] (healed -> reported wrong healed)
+
+fn reported wrong healed
+  count = "{length cases} modules, {length wrong} wrong; "
+  seen = "{length known_wrong} known defects, {length healed}"
+  tail = "{seen} no longer as recorded\n"
+  io/run "rm" ["-rf" work]
+    . (_ -> io/write "{count}{tail}")
+    . (_ -> io/write "{spelled wrong}{spelled healed}")
+    . (_ -> closed wrong healed)
+
+fn spelled lines
+  said (text/join lines "\n") (length lines == 0)
+
+fn said _ true
+  ""
+
+fn said joined false
+  "{joined}\n"
+
+fn closed wrong healed
+  first = "\na known defect is recorded as it behaves, never as it"
+  second = "should.\nif one is settled, delete its entry — do not update it.\n"
+  advice = "{first} {second}"
+  clean = length wrong == 0 and length healed == 0
+  io/write (spoken advice (length healed == 0)) . (_ -> ending clean)
+
+fn spoken _ true
+  ""
+
+fn spoken advice false
+  advice
+
+fn ending true
+  io/write ""
+
+fn ending false
+  io/exit 1
