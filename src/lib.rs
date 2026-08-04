@@ -52,9 +52,44 @@ pub fn compile_entry(file: &str, source: &str) -> Result<ast::Program, String> {
     built
 }
 
+/// `kanso play`: the relaxed single file — declarations and statements
+/// together, no `pub`, no local imports. The verb is the only door, so the
+/// form cannot leak into real programs; everything past the parse and the
+/// stdlib gate is the entry pipeline unchanged.
+pub fn compile_play_file(file: &str, source: &str) -> Result<ast::Program, String> {
+    let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
+    let program = parser::parse_play(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    for import in &program.imports {
+        if !import.path.starts_with("std/") {
+            let d = diag::Diagnostic::new(
+                "import",
+                format!(
+                    "a play file imports the stdlib and nothing else — \
+                     `{}` needs a real program (`kanso run`)",
+                    import.path
+                ),
+                import.span,
+            );
+            return Err(diag::render(&[d], file, source));
+        }
+    }
+    ENTRY_COMPILE.with(|c| c.set(true));
+    let built = compile_parsed_entry(program, file, source);
+    ENTRY_COMPILE.with(|c| c.set(false));
+    built
+}
+
 fn compile_entry_inner(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
-    let mut program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    let program = parser::parse_entry(&lexed).map_err(|d| diag::render(&d, file, source))?;
+    compile_parsed_entry(program, file, source)
+}
+
+fn compile_parsed_entry(
+    mut program: ast::Program,
+    file: &str,
+    source: &str,
+) -> Result<ast::Program, String> {
     synthesize_getters(&mut program);
     stamp_file(&mut program, file);
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();

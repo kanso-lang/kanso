@@ -17677,3 +17677,18 @@ harness runs through generated entries to pin the imported path.
 Serving, for the last two python ports, follows net/http's shape: handler
 functions, a mux, listen-and-serve, a file server — the minimal kanso
 equivalent, designed after this lands.
+
+## kanso play, built
+
+The verb from this morning's gavel: `kanso play foo.kso` runs the relaxed
+single file — constants and declarations first, then the statements that
+use them — on either engine, and the browser gets the same door
+(kanso_play beside kanso_run, sharing one execution tail). The handicaps
+that keep the form small are all diagnostics with specs: `pub` is refused
+("a play file exports nothing"), imports beyond the stdlib are refused
+("a play file imports the stdlib and nothing else"), a declaration after
+the statements is refused, and `build` never accepts one. The boundary
+blank between the declaration half and the statements is a boundary, not a
+trailing blank — the one parser subtlety worth recording. Four specs in
+tests/play_verb.rs, a small golden corpus, every vein byte-identical,
+welfare at floor.
