@@ -23,17 +23,50 @@ use std::collections::HashMap;
 /// Wrapper name and arity, mapped to the builtin it stands for. An arm
 /// qualifies when its body is exactly one call to a builtin, passing its own
 /// parameters in their own order and nothing else — anything more and
-/// treating it as the builtin would be a decision rather than a rename. The
+/// treating it as the builtin would be a decision rather than a rename. A
+/// rename of a rename resolves too: `fn wrapped x = text/bytes x` stands for
+/// the builtin whichever module wrote the hop, so a literal argument is
+/// refused at the same compile whether the chain is one link or three. The
 /// type checker reads this map per arm; the call-site rewrite below adds the
 /// stricter only-arm condition on top.
 pub fn aliases(program: &Program) -> HashMap<(String, usize), String> {
+    let mut found = direct_aliases(program, &HashMap::new());
+    loop {
+        let grown = direct_aliases(program, &found);
+        if grown.len() == found.len() {
+            return found;
+        }
+        found = grown;
+    }
+}
+
+fn direct_aliases(
+    program: &Program,
+    known: &HashMap<(String, usize), String>,
+) -> HashMap<(String, usize), String> {
+    let mut counts: HashMap<(&str, usize), usize> = HashMap::new();
+    for decl in &program.fns {
+        *counts.entry((decl.name.as_str(), decl.params.len())).or_default() += 1;
+    }
     let mut found = HashMap::new();
     for decl in &program.fns {
         let [Stmt::Expr(Expr::App { head, args, piped: false, .. })] = decl.body.as_slice() else {
             continue;
         };
         let Expr::Ident(callee, _) = head.as_ref() else { continue };
-        if !callee.starts_with("builtin_") || args.len() != decl.params.len() {
+        // A hop through a named wrapper is a rename only when that wrapper is
+        // its own group's single arm — a second arm makes it a dispatch, and
+        // the value could take the other door.
+        let resolved = match callee.strip_prefix("builtin_") {
+            Some(target) => Some(target.to_string()),
+            None => known
+                .get(&(callee.clone(), args.len()))
+                .filter(|_| counts.get(&(callee.as_str(), args.len())) == Some(&1))
+                .map(|v| v.strip_prefix("builtin_").unwrap_or(v).to_string()),
+        };
+        let Some(target) = resolved else { continue };
+        let callee = &format!("builtin_{target}");
+        if args.len() != decl.params.len() {
             continue;
         }
         // A builtin that can give birth to an err takes the calling site's

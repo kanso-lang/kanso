@@ -7,4 +7,6 @@ import "std/text"
 fn wrapped x
   text/bytes x
 
-pub play = print "{wrapped 5}"
+pub play =
+  n = 5
+  print "{wrapped n}"

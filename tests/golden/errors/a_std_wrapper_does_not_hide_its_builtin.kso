@@ -8,11 +8,11 @@
 # shadowed the builtin it forwards to, and which builtins got a good message
 # came down to whether somebody had written a wrapper over them.
 #
-# `chopped 5` is deliberately here and deliberately not refused: the check
-# reads literals at the call site, and a literal handed through a function of
-# the reader's own is past what it can see. That boundary is the same one
-# `print` has always had, and naming it here keeps somebody from reading the
-# two refusals below as a promise of more.
+# `chopped 5` is refused too: a rename of a rename is still a rename, so the
+# reader's own one-line wrapper over `text/chars` carries the builtin's
+# demand to its call site. The boundary that remains is dataflow — a literal
+# bound to a name first, or an arm that does anything besides forward, is
+# past what the check reads.
 import "std/text"
 
 fn chopped s
