@@ -179,6 +179,7 @@ pub enum Desc {
     WriteFile(String, String),
     Run(String, Vec<String>),
     Bind(Rc<Desc>, Value),
+    Await(i64),
     Listen(i64),
     Accept(i64),
     Receive(i64),
@@ -187,6 +188,12 @@ pub enum Desc {
     Sleep(u64),
     Random(u64),
     Nil,
+}
+
+/// What a finished process answers: its status and the two streams.
+fn ran_value(done: (i64, String, String)) -> Value {
+    let (status, out, errs) = done;
+    Value::List(Rc::new(vec![Value::Int(status.into()), Value::Str(out), Value::Str(errs)]))
 }
 
 /// SplitMix64: a deterministic, seedable generator. A real run draws its
@@ -331,6 +338,17 @@ pub trait Executor {
     /// because a caller usually wants to read it rather than be stopped by
     /// it. `Err` is reserved for the process never starting at all.
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String>;
+    /// Starts a process and answers a handle. A fiber running one must not
+    /// hold the runtime while it waits, or nothing else in its parallel group
+    /// can make the progress the process is waiting for.
+    fn start(&mut self, cmd: &str, args: &[String]) -> Result<i64, String> {
+        let _ = (cmd, args);
+        Err("this engine cannot start processes".to_string())
+    }
+    /// `None` while it is still running; the scheduler puts the fiber back.
+    fn finished(&mut self, _handle: i64) -> Result<Option<(i64, String, String)>, String> {
+        Err("this engine cannot start processes".to_string())
+    }
     fn write(&mut self, text: &str);
     /// Diagnostics, so a tool's chatter stays out of what it is piped into.
     fn write_err(&mut self, text: &str);
@@ -357,7 +375,10 @@ pub trait Executor {
     fn listen(&mut self, _port: i64) -> Result<i64, String> {
         Err("this engine has no sockets".to_string())
     }
-    fn accept(&mut self, _listener: i64) -> Result<i64, String> {
+    /// Asks whether a connection is waiting. `None` means not yet, and the
+    /// scheduler puts the fiber back — a server is one statement of a
+    /// parallel group and must not hold the runtime while it waits.
+    fn accept(&mut self, _listener: i64) -> Result<Option<i64>, String> {
         Err("this engine has no sockets".to_string())
     }
     fn receive(&mut self, _conn: i64) -> Result<String, String> {
@@ -395,6 +416,13 @@ thread_local! {
     /// in half a dozen places and copied into none of them. A handle is the
     /// number a program holds; what it names stays here.
     static SOCKETS: std::cell::RefCell<Sockets> = std::cell::RefCell::new(Sockets::default());
+    static KIDS: std::cell::RefCell<Kids> = std::cell::RefCell::new(Kids::default());
+}
+
+#[derive(Default)]
+struct Kids {
+    next: i64,
+    running: std::collections::HashMap<i64, std::process::Child>,
 }
 
 #[derive(Default)]
@@ -416,6 +444,44 @@ impl Executor for RealExecutor {
         println!("{text}");
     }
 
+    fn start(&mut self, cmd: &str, args: &[String]) -> Result<i64, String> {
+        let child = std::process::Command::new(cmd)
+            .args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|_| format!("cannot start {cmd}"))?;
+        KIDS.with(|k| {
+            let mut k = k.borrow_mut();
+            k.next += 1;
+            let handle = k.next;
+            k.running.insert(handle, child);
+            Ok(handle)
+        })
+    }
+
+    fn finished(&mut self, handle: i64) -> Result<Option<(i64, String, String)>, String> {
+        use std::io::Read;
+        KIDS.with(|k| {
+            let mut k = k.borrow_mut();
+            let Some(child) = k.running.get_mut(&handle) else {
+                return Err(format!("{handle} is not a running process"));
+            };
+            let status = child.try_wait().map_err(|e| e.to_string())?;
+            let Some(status) = status else { return Ok(None) };
+            let mut child = k.running.remove(&handle).expect("just seen");
+            let mut out = String::new();
+            let mut errs = String::new();
+            if let Some(pipe) = child.stdout.as_mut() {
+                let _ = pipe.read_to_string(&mut out);
+            }
+            if let Some(pipe) = child.stderr.as_mut() {
+                let _ = pipe.read_to_string(&mut errs);
+            }
+            Ok(Some((status.code().map_or(128, i64::from), out, errs)))
+        })
+    }
+
     /// A port of 0 asks the operating system for a free one, and the handle
     /// answers it — a test that pinned a port would collide with whatever
     /// else is running on the machine.
@@ -430,7 +496,7 @@ impl Executor for RealExecutor {
         })
     }
 
-    fn accept(&mut self, listener: i64) -> Result<i64, String> {
+    fn accept(&mut self, listener: i64) -> Result<Option<i64>, String> {
         let socket = SOCKETS.with(|s| {
             let s = s.borrow();
             let found = s.listeners.get(&listener);
@@ -439,12 +505,20 @@ impl Executor for RealExecutor {
         let Some(socket) = socket else {
             return Err(format!("{listener} is not a listener"));
         };
-        let (stream, _) = socket.accept().map_err(|e| format!("cannot accept: {e}"))?;
+        socket.set_nonblocking(true).map_err(|e| e.to_string())?;
+        let taken = match socket.accept() {
+            Ok((stream, _)) => stream,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
+            Err(e) => return Err(format!("cannot accept: {e}")),
+        };
+        // the connection itself blocks again, which is what a fiber holding
+        // one wants: it has work to do and nothing to wait for
+        taken.set_nonblocking(false).map_err(|e| e.to_string())?;
         SOCKETS.with(|s| {
             let mut s = s.borrow_mut();
             let handle = s.hand();
-            s.conns.insert(handle, stream);
-            Ok(handle)
+            s.conns.insert(handle, taken);
+            Ok(Some(handle))
         })
     }
 
@@ -3265,11 +3339,13 @@ impl<'a> Interp<'a> {
             // three answers in a list, which the std wrapper turns into a
             // record: a builtin cannot name a type declared in kanso.
             Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
-                Ok((status, out, errs)) => Value::List(Rc::new(vec![
-                    Value::Int(status.into()),
-                    Value::Str(out),
-                    Value::Str(errs),
-                ])),
+                Ok(done) => ran_value(done),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            // Only reached outside a parallel group; step() starts and awaits.
+            Desc::Await(handle) => Ok(match executor.finished(*handle) {
+                Ok(Some(done)) => ran_value(done),
+                Ok(None) => err_value(Value::Str("still running".to_string()), None),
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::Write(text) => {
@@ -3310,7 +3386,10 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::Accept(listener) => Ok(match executor.accept(*listener) {
-                Ok(handle) => Value::Int(handle.into()),
+                Ok(Some(handle)) => Value::Int(handle.into()),
+                // Reached only outside a parallel group, where no other fiber
+                // could ever connect; step() yields instead of arriving here.
+                Ok(None) => err_value(Value::Str("nothing connected".to_string()), None),
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::Receive(conn) => Ok(match executor.receive(*conn) {
@@ -3415,6 +3494,25 @@ impl<'a> Interp<'a> {
         let origin = Span { line: 0, col: 0 };
         match &**desc {
             Desc::Sleep(ms) => Ok(Step::Blocked(*ms, Rc::new(Desc::Nil))),
+            // A fiber waiting for a connection is a fiber with nothing to do:
+            // it goes back in the queue and the group's other statements run,
+            // which is how anything ever connects to it.
+            Desc::Accept(listener) => match executor.accept(*listener) {
+                Ok(Some(handle)) => Ok(Step::Done(Value::Int(handle.into()))),
+                Ok(None) => Ok(Step::Blocked(1, desc.clone())),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+            },
+            // Same shape for a process: start it, then wait by yielding, so
+            // the other statements of the group run while it does.
+            Desc::Run(cmd, argv) => match executor.start(cmd, argv) {
+                Ok(handle) => Ok(Step::Blocked(1, Rc::new(Desc::Await(handle)))),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+            },
+            Desc::Await(handle) => match executor.finished(*handle) {
+                Ok(Some(done)) => Ok(Step::Done(ran_value(done))),
+                Ok(None) => Ok(Step::Blocked(1, desc.clone())),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+            },
             Desc::Seq(a, b) => match self.step(a, executor)? {
                 Step::Blocked(ms, cont) => {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone()))))
@@ -3471,6 +3569,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Stdin => out.push_str("  stdin\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
+        Desc::Await(handle) => out.push_str(&format!("  await {handle}\n")),
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
