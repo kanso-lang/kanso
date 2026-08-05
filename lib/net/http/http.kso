@@ -50,7 +50,7 @@ pub fn rendered r
   "HTTP/1.1 {r.status} {r.reason}\r\n{header_block r}\r\n{r.body}"
 
 fn header_block r
-  sized = text/concat r.headers ["content-length: {length r.body}"]
+  sized = text/concat r.headers ["content-length: {length (text/bytes r.body)}"]
   "{text/join sized "\r\n"}\r\n"
 
 # One request, answered by the handler it is given. `serve_once` is the whole

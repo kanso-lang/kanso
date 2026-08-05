@@ -13,6 +13,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
+#include <signal.h>
 
 #if defined(__aarch64__)
 #include <arm_neon.h>
@@ -219,7 +220,7 @@ struct KDesc { long long dtag; KValue x; KValue y; };
 /* dtag: 0 print, 1 seq, 2 args, 3 stdin, 4 read_file, 5 write_file, 6 bind,
    7 join, 8 sleep, 9 random, 10 nil, 11 write (stdout, no newline),
    12 write_err, 13 env, 14 exists, 15 list_dir, 16 now, 17 run,
-   18 is_dir */
+   18 is_dir, 26 start, 27 kill */
 
 /* An err's propagation trace rides on the err value alone: the origin
    ("fn at file:line", interned at the construction site; NULL for
@@ -1526,6 +1527,15 @@ KValue k_str_n(const char* data, long long len) {
 
 static KValue k_str(const char* data) { return k_str_n(data, (long long)strlen(data)); }
 
+static KValue k_accumulate_failures(KValue l, KValue r);
+
+/* Two failures in one operation merge, the way two in a parallel group do
+   (Clay, 2026-08-05): neither side caused the other, and the one that lost a
+   race to be first is not less true. One failure propagates as itself. */
+static KValue k_both_or_either(KValue a, KValue b) {
+    return k_accumulate_failures(a, b);
+}
+
 long long k_not_failure(KValue v) { return v.tag != K_ERR; }
 
 /* `any` is every value a slot may hold; the absence channel is disjoint */
@@ -1740,8 +1750,7 @@ KValue k_concat_arr(long long n, const KValue* parts) {
 }
 
 KValue k_concat(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     KStr* sa = k_as_str(a);
     KStr* sb = k_as_str(b);
     KStr* s = k_str_alloc(sa->len + sb->len);
@@ -3009,8 +3018,7 @@ long long k_check_str(KValue v, const char* data, long long len) {
 KValue k_add(KValue a, KValue b) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
         if (__builtin_add_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
@@ -3024,8 +3032,7 @@ KValue k_add(KValue a, KValue b) {
 }
 
 KValue k_sub(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
         if (__builtin_sub_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
@@ -3041,8 +3048,7 @@ KValue k_sub(KValue a, KValue b) {
 KValue k_mul(KValue a, KValue b) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
         if (__builtin_mul_overflow(a.payload, b.payload, &r)) k_die("integer overflow (int64 native build; spec int is arbitrary precision)");
@@ -3056,8 +3062,7 @@ KValue k_mul(KValue a, KValue b) {
 }
 
 KValue k_div(KValue a, KValue b, const char* origin) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_err(k_str("division by zero"), origin);
         /* the one signed division that overflows: the least integer over -1
@@ -3083,8 +3088,7 @@ KValue k_div(KValue a, KValue b, const char* origin) {
 }
 
 KValue k_mod(KValue a, KValue b, const char* origin) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_err(k_str("modulo by zero"), origin);
         /* the least integer modulo -1 is zero, and zero fits — but the
@@ -3128,8 +3132,7 @@ static int k_order(KValue a, KValue b) {
 KValue k_cmp(KValue a, KValue b, long long op) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (op == 0) return k_bool(k_eq(a, b));
     if (op == 1) return k_bool(!k_eq(a, b));
     int c = k_order(a, b);
@@ -3140,6 +3143,9 @@ KValue k_cmp(KValue a, KValue b, long long op) {
         default: return k_bool(c >= 0);
     }
 }
+
+static long long k_fork_kid(KValue cmd, KValue argv_list);
+static KValue k_kill_kid(KValue handle);
 
 static KValue k_mkdesc(long long dtag, KValue x, KValue y) {
     KDesc* d = k_alloc(sizeof(KDesc));
@@ -3154,8 +3160,7 @@ KValue k_desc_print(KValue text) {
 }
 
 KValue k_seq(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag != K_DESC || b.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
     return k_mkdesc(1, a, b);
 }
@@ -3233,6 +3238,20 @@ KValue k_b_run(KValue cmd, KValue argv) {
     if (cmd.tag != K_STR) k_die("run takes a command string");
     if (cmd.tag == K_STR && argv.tag != K_LIST) k_die("run takes a list of argument strings");
     return k_mkdesc(17, cmd, argv);
+}
+
+KValue k_b_start(KValue cmd, KValue argv) {
+    if (!k_not_failure(cmd)) return cmd;
+    if (!k_not_failure(argv)) return argv;
+    if (cmd.tag != K_STR) k_die("start takes a command string");
+    if (cmd.tag == K_STR && argv.tag != K_LIST) k_die("start takes a list of argument strings");
+    return k_mkdesc(26, cmd, argv);
+}
+
+KValue k_b_kill(KValue handle) {
+    if (!k_not_failure(handle)) return handle;
+    if (handle.tag != K_INT) k_die("kill takes a started process");
+    return k_mkdesc(27, handle, k_none());
 }
 
 KValue k_b_write(KValue content) {
@@ -3550,6 +3569,12 @@ static KValue k_exec(KDesc* d) {
             const char* found = getenv(k_as_str(d->x)->data);
             return found ? k_str(found) : k_none();
         }
+        case 26: {
+            long long h = k_fork_kid(d->x, d->y);
+            if (h < 0) return k_err(k_concat(k_str("cannot start "), d->x), NULL);
+            return k_int(h);
+        }
+        case 27: return k_kill_kid(d->x);
         case 17: {
             /* Two pipes rather than popen, because both streams are wanted and
                popen gives one. A non-zero status is an answer the caller reads,
@@ -3740,6 +3765,72 @@ static void k_drain(int fd, char** buf, long long* len, long long* cap) {
     }
 }
 
+/* Forks a child with both pipes registered and non-blocking, answering the
+   handle a later await or kill names. -1 is the fork or the pipes failing. */
+static long long k_fork_kid(KValue cmd, KValue argv_list) {
+    KList* args = k_as_list(argv_list);
+    long long argc = args->len;
+    char** argv = malloc(sizeof(char*) * (size_t)(argc + 2));
+    argv[0] = k_as_str(cmd)->data;
+    for (long long i = 0; i < argc; i++) {
+        KValue item = args->items[i];
+        if (item.tag != K_STR) k_die("run takes a list of argument strings");
+        argv[i + 1] = k_as_str(item)->data;
+    }
+    argv[argc + 1] = NULL;
+    int outp[2], errp[2];
+    if (pipe(outp) || pipe(errp)) {
+        free(argv);
+        return -1;
+    }
+    pid_t kid = fork();
+    if (kid < 0) {
+        free(argv);
+        close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+        return -1;
+    }
+    if (kid == 0) {
+        dup2(outp[1], 1);
+        dup2(errp[1], 2);
+        close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+    free(argv);
+    close(outp[1]);
+    close(errp[1]);
+    fcntl(outp[0], F_SETFL, fcntl(outp[0], F_GETFL, 0) | O_NONBLOCK);
+    fcntl(errp[0], F_SETFL, fcntl(errp[0], F_GETFL, 0) | O_NONBLOCK);
+    if (k_handles + 1 >= K_SOCKETS) k_die("too many processes at once");
+    long long h = ++k_handles;
+    long long slot = h % K_SOCKETS;
+    k_kids[slot].used = 1;
+    k_kids[slot].pid = kid;
+    k_kids[slot].out = outp[0];
+    k_kids[slot].err = errp[0];
+    k_kids[slot].obuf = NULL; k_kids[slot].olen = 0; k_kids[slot].ocap = 0;
+    k_kids[slot].ebuf = NULL; k_kids[slot].elen = 0; k_kids[slot].ecap = 0;
+    return h;
+}
+
+/* Ends a process the program is holding and reaps it, so a child that ignores
+   its own exit budget does not outlive the run that started it. */
+static KValue k_kill_kid(KValue handle) {
+    long long slot = handle.payload % K_SOCKETS;
+    if (!k_kids[slot].used) {
+        return k_err(k_str("that is not a running process"), NULL);
+    }
+    int status = 0;
+    kill(k_kids[slot].pid, SIGKILL);
+    waitpid(k_kids[slot].pid, &status, 0);
+    close(k_kids[slot].out);
+    close(k_kids[slot].err);
+    free(k_kids[slot].obuf);
+    free(k_kids[slot].ebuf);
+    k_kids[slot].used = 0;
+    return k_none();
+}
+
 static KStep k_step(KDesc* d) {
     switch (d->dtag) {
         case 21: {
@@ -3766,53 +3857,27 @@ static KStep k_step(KDesc* d) {
         case 17: {
             /* Same shape for a process: start it, then wait by yielding, so
                the other statements of the group run while it does. */
-            KList* args = k_as_list(d->y);
-            long long argc = args->len;
-            char** argv = malloc(sizeof(char*) * (size_t)(argc + 2));
-            argv[0] = k_as_str(d->x)->data;
-            for (long long i = 0; i < argc; i++) {
-                KValue item = args->items[i];
-                if (item.tag != K_STR) k_die("run takes a list of argument strings");
-                argv[i + 1] = k_as_str(item)->data;
-            }
-            argv[argc + 1] = NULL;
-            int outp[2], errp[2];
-            if (pipe(outp) || pipe(errp)) {
-                free(argv);
+            long long h = k_fork_kid(d->x, d->y);
+            if (h < 0) {
                 KStep s = {0, 0, k_none(),
                            k_err(k_concat(k_str("cannot start "), d->x), NULL)};
                 return s;
             }
-            pid_t kid = fork();
-            if (kid < 0) {
-                free(argv);
-                close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
-                KStep s = {0, 0, k_none(),
-                           k_err(k_concat(k_str("cannot start "), d->x), NULL)};
-                return s;
-            }
-            if (kid == 0) {
-                dup2(outp[1], 1);
-                dup2(errp[1], 2);
-                close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
-                execvp(argv[0], argv);
-                _exit(127);
-            }
-            free(argv);
-            close(outp[1]);
-            close(errp[1]);
-            fcntl(outp[0], F_SETFL, fcntl(outp[0], F_GETFL, 0) | O_NONBLOCK);
-            fcntl(errp[0], F_SETFL, fcntl(errp[0], F_GETFL, 0) | O_NONBLOCK);
-            if (k_handles + 1 >= K_SOCKETS) k_die("too many processes at once");
-            long long h = ++k_handles;
-            long long slot = h % K_SOCKETS;
-            k_kids[slot].used = 1;
-            k_kids[slot].pid = kid;
-            k_kids[slot].out = outp[0];
-            k_kids[slot].err = errp[0];
-            k_kids[slot].obuf = NULL; k_kids[slot].olen = 0; k_kids[slot].ocap = 0;
-            k_kids[slot].ebuf = NULL; k_kids[slot].elen = 0; k_kids[slot].ecap = 0;
             KStep s = {1, 1, k_mkdesc(25, k_int(h), k_none()), k_none()};
+            return s;
+        }
+        case 26: {
+            long long h = k_fork_kid(d->x, d->y);
+            if (h < 0) {
+                KStep s = {0, 0, k_none(),
+                           k_err(k_concat(k_str("cannot start "), d->x), NULL)};
+                return s;
+            }
+            KStep s = {0, 0, k_none(), k_int(h)};
+            return s;
+        }
+        case 27: {
+            KStep s = {0, 0, k_none(), k_kill_kid(d->x)};
             return s;
         }
         case 25: {
@@ -4171,8 +4236,7 @@ KValue k_call1(KValue f, KValue a) {
    dispatcher. */
 KValue k_call2(KValue f, KValue a, KValue b) {
     if (!k_not_failure(f)) return f;
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (f.tag == K_CLOSURE) {
         KClosure* c = (KClosure*)(intptr_t)f.payload;
         if (c->arity != 2) k_die_arity(c->arity, 2);
@@ -4189,8 +4253,7 @@ KValue k_call2(KValue f, KValue a, KValue b) {
 
 KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
     if (!k_not_failure(f)) return f;
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (!k_not_failure(c)) return c;
     if (f.tag == K_CLOSURE) {
         KClosure* cl = (KClosure*)(intptr_t)f.payload;
@@ -4208,8 +4271,7 @@ KValue k_call3(KValue f, KValue a, KValue b, KValue c) {
 
 KValue k_call4(KValue f, KValue a, KValue b, KValue c, KValue d) {
     if (!k_not_failure(f)) return f;
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (!k_not_failure(c)) return c;
     if (!k_not_failure(d)) return d;
     if (f.tag == K_CLOSURE) {
@@ -5154,8 +5216,7 @@ KValue k_b_find2(KValue cs, KValue from, KValue a, KValue b) {
     k_stat_find2_calls++;
     if (!k_not_failure(cs)) return cs;
     if (!k_not_failure(from)) return from;
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (cs.tag != K_BYTES) k_die("find2 takes bytes");
     KBytes* by = k_as_bytes(cs);
     long long p = from.payload < 1 ? 0 : from.payload - 1;
@@ -5333,8 +5394,7 @@ KValue k_b_find2_below(KValue cs, KValue from, KValue a, KValue b, KValue lim) {
     k_stat_find2_calls++;
     if (!k_not_failure(cs)) return cs;
     if (!k_not_failure(from)) return from;
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (!k_not_failure(lim)) return lim;
     if (cs.tag != K_BYTES) k_die("find2_below takes bytes");
     KBytes* by = k_as_bytes(cs);
@@ -5641,20 +5701,17 @@ static long long k_shift_of(KValue v, const char* what) {
 }
 
 KValue k_b_bit_and(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     return k_int(k_bits_of(a, "and") & k_bits_of(b, "and"));
 }
 
 KValue k_b_bit_or(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     return k_int(k_bits_of(a, "or") | k_bits_of(b, "or"));
 }
 
 KValue k_b_bit_xor(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     return k_int(k_bits_of(a, "xor") ^ k_bits_of(b, "xor"));
 }
 
@@ -5664,8 +5721,7 @@ KValue k_b_bit_not(KValue a) {
 }
 
 KValue k_b_bit_shl(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     /* shifting a signed value left is undefined once it reaches the sign bit,
        so the shift is done on the unsigned twin and cast back */
     unsigned long long bits = (unsigned long long)k_bits_of(a, "shl");
@@ -5673,8 +5729,7 @@ KValue k_b_bit_shl(KValue a, KValue b) {
 }
 
 KValue k_b_bit_shr(KValue a, KValue b) {
-    if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
+    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     long long bits = k_bits_of(a, "shr");
     long long by = k_shift_of(b, "shr");
     /* arithmetic, spelled without relying on the implementation-defined sign

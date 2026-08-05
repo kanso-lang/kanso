@@ -1,0 +1,14 @@
+fn boom what
+  err what
+
+fn shown (err reason)
+  "{reason}"
+
+fn shown _
+  "not a failure"
+
+pub play =
+  print "both: {shown (boom "a" + boom "b")}"
+  >> print "left: {shown (boom "a" + 1)}"
+  >> print "right: {shown (1 + boom "b")}"
+  >> print "compared: {shown (boom "a" < boom "b")}"

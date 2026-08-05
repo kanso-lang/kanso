@@ -237,6 +237,8 @@ declare %KValue @k_desc_now()
 declare %KValue @k_b_make_dir(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_b_run(%KValue, %KValue)
+declare %KValue @k_b_start(%KValue, %KValue)
+declare %KValue @k_b_kill(%KValue)
 declare %KValue @k_b_listen(%KValue)
 declare %KValue @k_b_accept(%KValue)
 declare %KValue @k_b_net_read(%KValue)
@@ -301,7 +303,9 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 49] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 51] = [
+    ("start", 2),
+    ("kill", 1),
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),

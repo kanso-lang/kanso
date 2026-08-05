@@ -1153,3 +1153,58 @@ lines, appended on every change and read only at the tail; it keeps the last
 forty entries and the older end moves, unedited, to log/compiler-log-archive.md.
 STATUS.md at the root says what is in flight and what waits on Clay, because a
 task list he has to ask me to interpret is not a monitor.
+
+## Two failures in one operation
+
+Clay's ruling: when both sides of an operation fail, the answer carries both.
+Before, every operator propagated a failing argument and `boom "a" + boom "b"`
+answered `a`, discarding the other; a parallel group already merged. One rule
+now covers both, on all three engines.
+
+The mechanism was already there — the reason list a parallel group builds — so
+the change is where it is reached from. In the interpreter, three sites that
+found the first failing argument fold across all of them instead; the binary
+operator matches on the pair. In the native runtime, nineteen paired guards
+that returned whichever side failed first became one call.
+
+Measuring the wall the same day turned up something that reads as a third rule
+and is not:
+
+    print "left {boom a}"  >> print "right ok"        →  a
+    print "left ok"        >> print "right {boom b}"  →  b
+    print "left {boom a}"  >> print "right {boom b}"  →  [a b]
+
+Nothing prints in any of the three. `>>` orders effects, and both descriptions
+are built before either runs, so a failure raised while building is not ordered
+by the wall — two of them are simultaneous and merge, the same reasoning the
+parallel group uses. Haskell's `>>` answers `a` in the third case because it is
+lazy in its right side; kanso builds both and learns more. Whether that is the
+rule to keep is #141, and it collides with #105 wanting the right side lazy for
+an unrelated reason: laziness would buy back Haskell's answer and lose the
+merge. That is the trade, and it is Clay's.
+
+## A process can be ended
+
+Headless chrome ignores `--virtual-time-budget` and runs until something kills
+it — measured at the full forty seconds until an external `timeout` fired. The
+two python scripts both handle this the same way, with `chrome.kill()` once the
+page's report arrives over HTTP, and kanso had no equivalent: `io/run` starts a
+process and waits for it, and nothing hands the program the handle.
+
+So `io/start` answers the handle and `io/kill` ends what it names, which is
+Go's `cmd.Start()` and `cmd.Process.Kill()` under the rule that the stdlib apes
+Go. Both engines fork through one function now; the browser refuses, as it does
+for every process effect. The spec observes what a killed child never got to
+do: it writes a file two seconds in, the program kills it and waits three, and
+asks whether the file arrived. Without the kill it says true.
+
+Adding a name to the stdlib broke an example, which is the collision #53
+describes: `examples/trace_demo/version.kso` declared its own `pub start` and
+imports `std/io`, so the diagnostic told it to rename. The example's entry is
+`announce` now.
+
+The port also found `content-length` counting characters where the protocol
+counts bytes — `rendered (ok "650 円")` promised seven bytes' worth of page and
+claimed five, which truncates it at any client that believes the header. The
+http module has its own suite now, and `text/bytes` is what the count runs
+through.

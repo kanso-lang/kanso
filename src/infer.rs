@@ -611,6 +611,8 @@ fn desc_yield(e: &Expr) -> Set {
             Expr::Ident(n, _) if matches!(base(n), "read_file" | "stdin") => STR,
             // status, stdout, stderr — the std wrapper reads them into a record
             Expr::Ident(n, _) if base(n) == "run" => LIST,
+            // the handle a later kill names
+            Expr::Ident(n, _) if base(n) == "start" => INT,
             Expr::Ident(n, _) if base(n) == "args" => LIST,
             Expr::Ident(n, _) if base(n) == "random" => INT,
             // an unset variable yields none, which is a value the consumer
@@ -692,7 +694,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
         "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
-        | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "listen" | "accept"
+        | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "start" | "kill"
+        | "listen" | "accept"
         | "net_read" | "net_write" | "net_close" => DESC | fails,
         _ => TOP,
     }

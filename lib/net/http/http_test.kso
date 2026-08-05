@@ -1,0 +1,25 @@
+import "std/text"
+
+# content-length counts bytes, and a page whose body is not plain ascii has
+# more bytes than characters. A client takes the number at its word, so a
+# count of characters hands back a truncated page.
+yen = ok "650 円"
+
+asked = parsed "POST /report HTTP/1.1\r\nhost: x\r\n\r\nthe body"
+
+test_content_length_counts_bytes = contains? (rendered yen) "content-length: 7"
+
+abc = ok "abc"
+
+test_content_length_of_ascii = contains? (rendered abc) "content-length: 3"
+
+test_status_line = contains? (rendered not_found) "HTTP/1.1 404 Not Found"
+
+test_parsed_reads_the_method = asked.method == "POST"
+
+test_parsed_reads_the_path = asked.path == "/report"
+
+test_parsed_keeps_the_body = asked.body == "the body"
+
+fn contains? haystack needle
+  length (text/split haystack needle) > 1

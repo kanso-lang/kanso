@@ -51,6 +51,15 @@ pub fn read_file path
 pub fn run cmd argv
   builtin_run cmd argv . answered
 
+# Where run waits, start hands back the process so the program decides when it
+# is done — a browser told to render a page ignores its own exit budget and
+# runs until something ends it.
+pub fn start cmd argv
+  builtin_start cmd argv
+
+pub fn kill p
+  builtin_kill p
+
 fn answered r
   process r[1]! r[3]! r[2]!
 

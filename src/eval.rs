@@ -178,6 +178,8 @@ pub enum Desc {
     MakeDir(String),
     WriteFile(String, String),
     Run(String, Vec<String>),
+    Start(String, Vec<String>),
+    Kill(i64),
     Bind(Rc<Desc>, Value),
     Await(i64),
     Listen(i64),
@@ -349,6 +351,12 @@ pub trait Executor {
     fn finished(&mut self, _handle: i64) -> Result<Option<(i64, String, String)>, String> {
         Err("this engine cannot start processes".to_string())
     }
+    /// Ends a process the program is holding, and reaps it. A program that
+    /// starts something outliving its usefulness — a browser that ignores its
+    /// own exit budget — has no other way to be done with it.
+    fn kill(&mut self, _handle: i64) -> Result<(), String> {
+        Err("this engine cannot start processes".to_string())
+    }
     fn write(&mut self, text: &str);
     /// Diagnostics, so a tool's chatter stays out of what it is piped into.
     fn write_err(&mut self, text: &str);
@@ -457,6 +465,18 @@ impl Executor for RealExecutor {
             let handle = k.next;
             k.running.insert(handle, child);
             Ok(handle)
+        })
+    }
+
+    fn kill(&mut self, handle: i64) -> Result<(), String> {
+        KIDS.with(|k| {
+            let mut k = k.borrow_mut();
+            let Some(mut child) = k.running.remove(&handle) else {
+                return Err(format!("{handle} is not a running process"));
+            };
+            let _ = child.kill();
+            child.wait().map_err(|e| e.to_string())?;
+            Ok(())
         })
     }
 
@@ -1506,8 +1526,8 @@ impl<'a> Interp<'a> {
                 span,
             });
         }
-        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
-            return Ok(bad.clone());
+        if args.iter().any(is_failure) {
+            return Ok(merged_failures(&args));
         }
         let mut env = closure.env.clone();
         for (name, value) in closure.params.iter().zip(args) {
@@ -1605,8 +1625,8 @@ impl<'a> Interp<'a> {
                 span,
             });
         }
-        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
-            return Ok(bad.clone());
+        if args.iter().any(is_failure) {
+            return Ok(merged_failures(&args));
         }
         for ((field, tys, _), arg) in ty.fields.iter().zip(&args) {
             if tys.len() >= 2 && !tys.iter().any(|t| type_matches(t, arg)) {
@@ -1787,10 +1807,8 @@ impl<'a> Interp<'a> {
                 cause: Some(cause),
             })));
         }
-        // the harness's hole, and the second one: `failed?` exists to look at a
-        // failure, so it must be asked before infectiousness answers for it
-        // the harness's hole, and the second one: `failed?` exists to look at a
-        // failure, so it must be asked before infectiousness answers for it
+        // `failed?` exists to look at a failure, so it is asked before a
+        // failing argument answers for the whole call.
         if name == "failed?" {
             let [value] = arity(args, name, span)?;
             return Ok(match is_failure(&value) {
@@ -1798,21 +1816,31 @@ impl<'a> Interp<'a> {
                 false => Value::False,
             });
         }
-        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
-            return Ok(bad.clone());
+        if args.iter().any(is_failure) {
+            return Ok(merged_failures(&args));
         }
         match name {
-            "run" => {
+            "kill" => {
+                let [handle] = arity(args, name, span)?;
+                let Value::Int(handle) = &handle else {
+                    return Err(RuntimeError {
+                        message: "kill takes a started process".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Kill(handle.to_i64().unwrap_or(-1)))))
+            }
+            "run" | "start" => {
                 let [cmd, args_list] = arity(args, name, span)?;
                 let Value::Str(cmd) = cmd else {
                     return Err(RuntimeError {
-                        message: "run takes a command string".to_string(),
+                        message: format!("{name} takes a command string"),
                         span,
                     });
                 };
                 let Value::List(items) = args_list else {
                     return Err(RuntimeError {
-                        message: "run takes a list of argument strings".to_string(),
+                        message: format!("{name} takes a list of argument strings"),
                         span,
                     });
                 };
@@ -1820,13 +1848,16 @@ impl<'a> Interp<'a> {
                 for item in items.iter() {
                     let Value::Str(text) = item else {
                         return Err(RuntimeError {
-                            message: "run takes a list of argument strings".to_string(),
+                            message: format!("{name} takes a list of argument strings"),
                             span,
                         });
                     };
                     argv.push(text.clone());
                 }
-                Ok(Value::Desc(Rc::new(Desc::Run(cmd, argv))))
+                Ok(Value::Desc(Rc::new(match name {
+                    "start" => Desc::Start(cmd, argv),
+                    _ => Desc::Run(cmd, argv),
+                })))
             }
             "read_file" => {
                 let [path] = arity(args, name, span)?;
@@ -2973,6 +3004,18 @@ pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
 
 /// Merge two failures: err + err becomes one err whose reason is the list of
 /// both reasons; a `none` adds nothing to an err; two nones stay none.
+/// Every failure among a call's arguments, merged. Two failures in one call
+/// are two facts, and the one that lost a race to be first is not less true —
+/// the parallel group has always merged them, and Clay ruled (2026-08-05) that
+/// an operation does too.
+fn merged_failures(args: &[Value]) -> Value {
+    args.iter()
+        .filter(|a| is_failure(a))
+        .cloned()
+        .reduce(accumulate_failures)
+        .expect("a caller checked that one argument fails")
+}
+
 fn accumulate_failures(left: Value, right: Value) -> Value {
     match (&left, &right) {
         (Value::ErrV(a), Value::ErrV(b)) => {
@@ -3012,11 +3055,15 @@ fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
 }
 
 pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame) -> EvalResult {
-    if is_failure(&left) {
-        return Ok(left);
-    }
-    if is_failure(&right) {
-        return Ok(right);
+    // Two failures in one operation merge, exactly as two failures in a
+    // parallel group do (Clay, 2026-08-05): neither side caused the other, so
+    // neither deserves top billing, and the one that loses would otherwise be
+    // discarded without a word. One failure propagates as itself.
+    match (is_failure(&left), is_failure(&right)) {
+        (true, true) => return Ok(accumulate_failures(left, right)),
+        (true, false) => return Ok(left),
+        (false, true) => return Ok(right),
+        (false, false) => {}
     }
     if op == "==" || op == "!=" {
         // Asking whether two functions are the same function is asking which
@@ -3381,6 +3428,14 @@ impl<'a> Interp<'a> {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
+            Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
+                Ok(handle) => Value::Int(handle.into()),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Kill(handle) => Ok(match executor.kill(*handle) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
             Desc::Listen(port) => Ok(match executor.listen(*port) {
                 Ok(handle) => Value::Int(handle.into()),
                 Err(reason) => err_value(Value::Str(reason), None),
@@ -3569,6 +3624,8 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Stdin => out.push_str("  stdin\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
+        Desc::Start(cmd, argv) => out.push_str(&format!("  start {cmd:?} {argv:?}\n")),
+        Desc::Kill(handle) => out.push_str(&format!("  kill {handle}\n")),
         Desc::Await(handle) => out.push_str(&format!("  await {handle}\n")),
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
