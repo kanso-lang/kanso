@@ -94,7 +94,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: |
           cargo build --release
-          ./target/release/kanso run bench/make_jsonbench.kso
+          ./target/release/kanso run bench/make_jsonbench
           ./target/release/kanso build bench/jsonbench --release
           out=$(./jsonbench)
           echo "$out"
@@ -195,7 +195,7 @@ jobs:
       - name: build the benchmarks
         run: |
           cargo build --release
-          ./target/release/kanso run bench/make_jsonbench.kso
+          ./target/release/kanso run bench/make_jsonbench
           ./target/release/kanso build bench/jsonbench --release
           ./target/release/kanso build bench/encodebench --release >/dev/null
           ./target/release/kanso build bench/oneshot --release >/dev/null
@@ -478,7 +478,7 @@ jobs:
       - name: race the decoders, interleaved
         id: race
         run: |
-          ./target/release/kanso run bench/make_jsonbench.kso
+          ./target/release/kanso run bench/make_jsonbench
           ./target/release/kanso build bench/jsonbench --release
           (cd bench/serde_bench && cargo build --release)
           rounds=5

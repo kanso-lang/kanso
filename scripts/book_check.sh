@@ -50,6 +50,9 @@ for out in docs/book/samples/*/*.out; do
     rm -rf "$tmp"
   else
     verb="$mode"
+    target="$name"
+    where="$dir"
+    stage=""
     # a sample holding BOTH definitions and bare statements is a play file —
     # the relaxed single-file form. Definitions alone are a library, and the
     # book has a sample whose whole lesson is that `run` says so.
@@ -58,7 +61,22 @@ for out in docs/book/samples/*/*.out; do
       && awk '/^[^ #]/ && !/^(import|fn|type) / { found = 1 } END { exit !found }' "$src"; then
       verb=play
     fi
-    actual=$( (cd "$dir" && env $env_prefix "$KANSO" "$verb" "$name" $extra 2>&1) ) || true
+    # a sample that exports `play` is a library, and what runs one is the
+    # entry file that imports it. The directory comes along, because samples
+    # read fixtures that sit beside them — all but a directory of the
+    # sample's own name: the chapter that teaches modules has both `shop.kso`
+    # and a `shop/`, and an import cannot name both.
+    if [ "$mode" = run ] && [ -f "$src" ] && grep -q '^pub play' "$src"; then
+      stage=$(mktemp -d)
+      cp -R "$dir/." "$stage/"
+      stem="${name%.kso}"
+      rm -rf "$stage/$stem"
+      printf 'import "%s"\n\n%s/play\n' "$stem" "$stem" > "$stage/run_$stem.kso"
+      target="run_$stem.kso"
+      where="$stage"
+    fi
+    actual=$( (cd "$where" && env $env_prefix "$KANSO" "$verb" "$target" $extra 2>&1) ) || true
+    [ -n "$stage" ] && rm -rf "$stage"
   fi
   if [ "$actual" != "$(cat "$out")" ]; then
     echo "MISMATCH: $out (mode $mode)"

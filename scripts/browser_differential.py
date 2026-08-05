@@ -93,8 +93,24 @@ async function runCase(c) {
   // pin the dice: the native side gets the same value through KANSO_SEED, or
   // a program that calls `random` compares two unrelated streams
   wasm.kanso_set_seed(SEED);
-  wasm.kanso_set_file(name.ptr, name.len);
-  const { ptr, len } = writeInput(c.src);
+  // A corpus program that exports `play` is a library, so the engine is
+  // handed it under the name an import will use and compiles the entry that
+  // runs it — the same two files the native side gets, neither read from a
+  // filesystem the browser does not have.
+  wasm.kanso_forget_sources();
+  let source = c.src;
+  if (c.library) {
+    const path = writeInput(c.stem);
+    const file = writeInput(c.stem + '.kso');
+    const lib = writeInput(c.src);
+    wasm.kanso_hand_source(path.ptr, path.len, file.ptr, file.len, lib.ptr, lib.len);
+    source = `import "${c.stem}"\n\n${c.stem}/play\n`;
+    const entry = writeInput(`run_${c.stem}.kso`);
+    wasm.kanso_set_file(entry.ptr, entry.len);
+  } else {
+    wasm.kanso_set_file(name.ptr, name.len);
+  }
+  const { ptr, len } = writeInput(source);
   // a playground sample is a play file: declarations and statements in one
   // buffer, which the run door does not accept and the play door does
   const compile = c.play ? wasm.kanso_play_wasm : wasm.kanso_compile_wasm;
@@ -218,9 +234,38 @@ def is_play(path):
     return path.parent.name == "playground-corpus"
 
 
+def is_library(path):
+    """A corpus program that exports `play` is a library, and what runs one
+    is the entry file that imports it — the same two files both sides get."""
+    text = path.read_text()
+    return text.startswith("pub play") or "\npub play" in text
+
+
+STAGED = {}
+
+
+def staged_entry(path):
+    """Where the native side runs a library from. The directory is copied
+    once, for the fixtures beside a program; the entry is written per
+    program."""
+    stage = Path(tempfile.gettempdir()) / "kanso-browser-native" / path.parent.name
+    if stage not in STAGED:
+        shutil.rmtree(stage, ignore_errors=True)
+        shutil.copytree(path.parent, stage)
+        STAGED[stage] = True
+    entry = stage / f"run_{path.stem}.kso"
+    entry.write_text(f'import "{path.stem}"\n\n{path.stem}/play\n')
+    return entry
+
+
 def native_outcome(path):
+    if is_library(path):
+        path = staged_entry(path)
+        verb = "run"
+    else:
+        verb = "play" if is_play(path) else "run"
     run = subprocess.run(
-        [str(KANSO), "play" if is_play(path) else "run", path.name],
+        [str(KANSO), verb, path.name],
         capture_output=True,
         cwd=path.parent,
         text=True,
@@ -309,6 +354,8 @@ def main():
             "name": str(path.relative_to(ROOT)),
             "src": path.read_text(),
             "play": is_play(path),
+            "library": is_library(path),
+            "stem": path.stem,
         }
         for path in paths
     ]

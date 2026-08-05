@@ -9,4 +9,4 @@ fn major_of none
 fn major_of line
   text/to_int line
 
-pub play = print "major: {first_major []}"
+print "major: {first_major []}"

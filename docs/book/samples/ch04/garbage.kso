@@ -7,4 +7,4 @@ fn announce text
 fn major_of text
   text/to_int text
 
-pub play = io/read_file "garbage.txt" . announce
+io/read_file "garbage.txt" . announce

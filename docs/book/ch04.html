@@ -30,9 +30,8 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">railway.kso</div>
-  <pre><code><span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="n">0</span>
-  <span class="f">print</span> (<span class="f">receipt</span> total)
+  <pre><code>total <span class="o">=</span> <span class="f">subtotal</span> <span class="n">120</span> <span class="n">0</span>
+<span class="f">print</span> (<span class="f">receipt</span> total)
 
 <span class="k">fn</span> <span class="f">receipt</span> total
   <span class="s">"order total: <span class="i">{total}</span>"</span>
@@ -44,9 +43,9 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">with_tip</span> share
   share <span class="o">+</span> share <span class="o">/</span> <span class="n">10</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run railway.kso</div>
+    <div class="code-panel-title">kanso play railway.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in subtotal at railway.kso:9
+  born in subtotal at railway.kso:8
   passed through receipt ← with_tip</code></pre>
   </div>
 </div>
@@ -67,13 +66,12 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
-  <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
+bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+<span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run unhandled.kso</div>
+    <div class="code-panel-title">kanso play unhandled.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in play at unhandled.kso:8
+  born in the entry at unhandled.kso:7
   passed through describe</code></pre>
   </div>
 </div>
@@ -223,9 +221,9 @@ not a flag</code></pre>
 <span class="k">fn</span> <span class="f">major_of</span> line
   <span class="f">text/to_int</span> line
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">print</span> <span class="s">"major: <span class="i">{first_major []}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"major: <span class="i">{first_major []}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run escalate.kso</div>
+    <div class="code-panel-title">kanso play escalate.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "no version line"
   born in major_of at escalate.kso:7</code></pre>
   </div>
@@ -270,9 +268,9 @@ not a flag</code></pre>
 <span class="k">fn</span> <span class="f">major_of</span> text
   <span class="f">text/to_int</span> text
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
+<span class="f">io/read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run garbage.kso</div>
+    <div class="code-panel-title">kanso play garbage.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
   born in text/to_int at std/text/text.kso:84</code></pre>
   </div>

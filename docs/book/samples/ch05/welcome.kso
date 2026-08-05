@@ -6,4 +6,4 @@ fn first xs
 fn greet name
   "irasshaimase, {name}"
 
-pub play = io/args . first . greet . print
+io/args . first . greet . print

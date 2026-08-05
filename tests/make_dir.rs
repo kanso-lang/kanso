@@ -1,7 +1,7 @@
 //! A program that writes a file has to be able to make the directory it goes
 //! in. `io/write_file` refuses a path whose parent is missing, so without this
 //! every generator script shells out to `mkdir -p` — which is what
-//! bench/make_jsonbench.kso still does, and what this exists to retire.
+//! bench/make_jsonbench still does, and what this exists to retire.
 //!
 //! Making a directory that is already there succeeds, the way `mkdir -p` does.
 //! A generator run twice is the ordinary case, not an error.
