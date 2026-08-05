@@ -215,10 +215,43 @@ def local_import(source):
     )
 
 
+# What a tab cannot give a program. book-play.js upgrades a panel only when
+# the sample passes this, so the differential covers exactly the programs a
+# reader can actually press run on.
+NEEDS_A_MACHINE = re.compile(
+    r"\bio/(read_file|write_file|args|stdin|list_dir|run|make_dir|exists|is_dir)\b"
+)
+
+
+def book_samples():
+    """The book's samples run in the reader's tab now, so the three engines
+    are held to them too — a panel whose recorded output the browser cannot
+    reproduce would otherwise just show a reader the difference."""
+    # One level down only: a sample nested deeper is a member of a directory
+    # module, which is a program the tab cannot hold and no panel runs alone.
+    # And only the ones the book runs: a sample recorded under `check` is a
+    # program that never compiles, which is its whole lesson.
+    found = []
+    for path in sorted((ROOT / "docs/book/samples").glob("*/*.kso")):
+        if path.stem.endswith("_test"):
+            continue  # `kanso test` runs these, and its report is their output
+        recorded = path.with_suffix(".out")
+        if not recorded.exists():
+            continue
+        said = recorded.read_text()
+        if said.startswith("error"):
+            continue
+        source = path.read_text()
+        if not NEEDS_A_MACHINE.search(source):
+            found.append(path)
+    return found
+
+
 def corpus():
     dirs = [ROOT / "examples", ROOT / "tests/golden/runtime", ROOT / "tests/golden/micro"]
     paths = [path for d in dirs for path in sorted(d.glob("*.kso"))]
     paths += playground_examples()
+    paths += book_samples()
     runnable, skipped = [], []
     for path in paths:
         (skipped if local_import(path.read_text()) else runnable).append(path)
@@ -228,10 +261,17 @@ def corpus():
 
 
 def is_play(path):
-    """The playground's samples are play files — the relaxed single-file
-    form the buffer holds. Both sides must use the same door or the
-    differential compares a program against a refusal."""
-    return path.parent.name == "playground-corpus"
+    """A file holding both declarations and bare statements is a play file —
+    the relaxed single-file form the playground buffer and most of the book's
+    samples have. Both sides must use the same door or the differential
+    compares a program against a refusal."""
+    source = path.read_text()
+    if is_library(path):
+        return False
+    lines = [line for line in source.splitlines() if line and not line[0].isspace()]
+    declares = any(line.startswith(("fn ", "type ")) for line in lines)
+    states = any(not line.startswith(("import ", "fn ", "type ", "#")) for line in lines)
+    return declares and states
 
 
 def is_library(path):
@@ -253,6 +293,9 @@ def staged_entry(path):
         shutil.rmtree(stage, ignore_errors=True)
         shutil.copytree(path.parent, stage)
         STAGED[stage] = True
+    # all but a directory of the sample's own name: the chapter that teaches
+    # modules has both shop.kso and a shop/, and an import cannot name both
+    shutil.rmtree(stage / path.stem, ignore_errors=True)
     entry = stage / f"run_{path.stem}.kso"
     entry.write_text(f'import "{path.stem}"\n\n{path.stem}/play\n')
     return entry
