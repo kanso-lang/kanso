@@ -17879,3 +17879,25 @@ What it does not yet do is hold the book to the differential — the sweep
 covers examples and the two golden corpora, so a panel that disagrees
 with its recorded output would simply show a reader the difference. That
 is the next task.
+
+## the book joins the differential
+
+The panels run in a reader's tab now, so the book belongs under the same
+law as everything else: the sweep took 193 programs and takes 267. What
+it added is every sample a panel actually runs — one level down, so a
+member of a directory module is left out; recorded under `run`, so the
+appendix's deliberately-broken programs are left out; and free of the
+filesystem, argv and stdin a tab does not have, which is the same test
+book-play.js applies before it upgrades a panel.
+
+Three things had to be right for the two sides to compare programs
+rather than refusals. The door is chosen by the file's shape now — a file
+holding declarations beside statements is a play file wherever it lives,
+where the harness had been asking whether the path was the playground
+corpus. A test file is skipped, because `kanso test` runs one and the
+report is its output. And the native side drops a staged directory whose
+name matches the sample, because the modules chapter has both shop.kso
+and a shop/ and an import cannot name both — the same collision
+book_check hit earlier today, in the same place.
+
+267 passed, 6 known gaps, 0 failed.
