@@ -75,6 +75,13 @@ payoff. These are the four shapes it takes here, and what to do instead.
   idea is not.
 - **A correction is an interrupt, not a terminus.** Fix it, say what was wrong
   in a sentence, carry on in the same turn.
+- **A decision that is Clay's goes to him the moment it is found**, not at the
+  end of the turn that found it: a task named CLAY'S CALL / BLOCKING carrying
+  the options and the measurement behind them, a `PushNotification`, and the
+  first line of the reply rather than the last. He cannot act on what he cannot
+  see, and the whole stream waits either way. (`~/.claude/hooks/attention.sh`
+  reads JSON on stdin — `echo '{}' | ...` or it hangs in `cat` and never makes
+  a sound.)
 
 The `/loop` is a last resort that restarts the work after a stop. It is not a
 schedule to hand work to, and needing it means something already went wrong.
