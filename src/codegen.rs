@@ -237,6 +237,11 @@ declare %KValue @k_desc_now()
 declare %KValue @k_b_make_dir(%KValue)
 declare %KValue @k_b_write_file(%KValue, %KValue)
 declare %KValue @k_b_run(%KValue, %KValue)
+declare %KValue @k_b_listen(%KValue)
+declare %KValue @k_b_accept(%KValue)
+declare %KValue @k_b_net_read(%KValue)
+declare %KValue @k_b_net_write(%KValue, %KValue)
+declare %KValue @k_b_net_close(%KValue)
 declare %KValue @k_maybe_bind(%KValue, %KValue)
 declare %KValue @k_desc_join(%KValue, %KValue)
 declare %KValue @k_desc_sleep(%KValue)
@@ -296,7 +301,7 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 44] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 49] = [
     ("at", 2),
     ("is_desc", 1),
     ("append", 2),
@@ -314,6 +319,11 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 44] = [
     ("make_dir", 1),
     ("write_file", 2),
     ("run", 2),
+    ("listen", 1),
+    ("accept", 1),
+    ("net_read", 1),
+    ("net_write", 2),
+    ("net_close", 1),
     ("concat", 2),
     ("utf8", 1),
     ("char_code", 1),

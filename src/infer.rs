@@ -624,8 +624,14 @@ fn desc_yield(e: &Expr) -> Set {
             Expr::Ident(n, _)
                 if matches!(
                     base(n),
-                    "print" | "write" | "write_err" | "write_file" | "make_dir" | "sleep"
-                        | "net_write" | "net_close"
+                    "print"
+                        | "write"
+                        | "write_err"
+                        | "write_file"
+                        | "make_dir"
+                        | "sleep"
+                        | "net_write"
+                        | "net_close"
                 ) =>
             {
                 0

@@ -10,6 +10,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
 
 #if defined(__aarch64__)
 #include <arm_neon.h>
@@ -3169,6 +3172,61 @@ KValue k_b_read_file(KValue path) {
 
 /* argv is a kanso list of strings; the description carries it whole so the
    process is not started until the description runs. */
+/* Sockets and running children live for the process. A program holds a
+   handle — a small number counted from one, the same number the interpreter
+   hands out, so a program that prints one reads the same on both engines. */
+#define K_SOCKETS 64
+static struct { int used; int fd; } k_sockets[K_SOCKETS];
+static struct { int used; pid_t pid; int out; int err;
+                char* obuf; long long olen; long long ocap;
+                char* ebuf; long long elen; long long ecap; } k_kids[K_SOCKETS];
+static long long k_handles = 0;
+
+static long long k_hold_socket(int fd) {
+    if (k_handles + 1 >= K_SOCKETS) k_die("too many sockets open at once");
+    long long h = ++k_handles;
+    k_sockets[h % K_SOCKETS].used = 1;
+    k_sockets[h % K_SOCKETS].fd = fd;
+    return h;
+}
+
+static int k_socket_of(long long h) {
+    if (h <= 0 || !k_sockets[h % K_SOCKETS].used) return -1;
+    return k_sockets[h % K_SOCKETS].fd;
+}
+
+KValue k_b_listen(KValue port) {
+    if (!k_not_failure(port)) return port;
+    if (port.tag != K_INT) k_die("listen takes a port number");
+    return k_mkdesc(20, port, k_none());
+}
+
+KValue k_b_accept(KValue listener) {
+    if (!k_not_failure(listener)) return listener;
+    if (listener.tag != K_INT) k_die("accept takes a listener");
+    return k_mkdesc(21, listener, k_none());
+}
+
+KValue k_b_net_read(KValue conn) {
+    if (!k_not_failure(conn)) return conn;
+    if (conn.tag != K_INT) k_die("net_read takes a connection");
+    return k_mkdesc(22, conn, k_none());
+}
+
+KValue k_b_net_write(KValue conn, KValue text) {
+    if (!k_not_failure(conn)) return conn;
+    if (!k_not_failure(text)) return text;
+    if (conn.tag != K_INT || text.tag != K_STR)
+        k_die("net_write takes a connection and a string");
+    return k_mkdesc(23, conn, text);
+}
+
+KValue k_b_net_close(KValue handle) {
+    if (!k_not_failure(handle)) return handle;
+    if (handle.tag != K_INT) k_die("net_close takes a listener or a connection");
+    return k_mkdesc(24, handle, k_none());
+}
+
 KValue k_b_run(KValue cmd, KValue argv) {
     if (!k_not_failure(cmd)) return cmd;
     if (!k_not_failure(argv)) return argv;
@@ -3376,6 +3434,55 @@ static KValue k_exec(KDesc* d) {
             KValue out = k_str_n(data, (long long)got);
             free(data);
             return out;
+        }
+        case 20: {
+            int fd = socket(AF_INET, SOCK_STREAM, 0);
+            if (fd < 0) return k_err(k_str("cannot open a socket"), NULL);
+            int yes = 1;
+            setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+            struct sockaddr_in addr;
+            memset(&addr, 0, sizeof(addr));
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+            addr.sin_port = htons((unsigned short)d->x.payload);
+            if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) || listen(fd, 16)) {
+                close(fd);
+                return k_err(k_str("cannot listen on that port"), NULL);
+            }
+            return k_int(k_hold_socket(fd));
+        }
+        case 21: {
+            /* Only reached outside a parallel group, where nothing else could
+               ever connect; k_step yields instead of arriving here. */
+            return k_err(k_str("nothing connected"), NULL);
+        }
+        case 22: {
+            int fd = k_socket_of(d->x.payload);
+            if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
+            char buf[65536];
+            ssize_t got = read(fd, buf, sizeof(buf));
+            if (got < 0) return k_err(k_str("cannot read"), NULL);
+            return k_str_n(buf, (long long)got);
+        }
+        case 23: {
+            int fd = k_socket_of(d->x.payload);
+            if (fd < 0) return k_err(k_str("that is not a connection"), NULL);
+            KStr* t = k_as_str(d->y);
+            long long sent = 0;
+            while (sent < t->len) {
+                ssize_t n = write(fd, t->data + sent, (size_t)(t->len - sent));
+                if (n <= 0) return k_err(k_str("cannot write"), NULL);
+                sent += n;
+            }
+            return k_none();
+        }
+        case 24: {
+            long long h = d->x.payload;
+            int fd = k_socket_of(h);
+            if (fd < 0) return k_err(k_str("that is not an open socket"), NULL);
+            close(fd);
+            k_sockets[h % K_SOCKETS].used = 0;
+            return k_none();
         }
         case 19: {
             KStr* p = k_as_str(d->x);
@@ -3618,8 +3725,138 @@ static KValue k_exec(KDesc* d) {
     }
 }
 
+/* Drain what a child has written so far. A pipe nobody reads fills, and a
+   child blocked on a full pipe never exits, so every poll takes what is
+   there. */
+static void k_drain(int fd, char** buf, long long* len, long long* cap) {
+    for (;;) {
+        if (*len + 4096 > *cap) {
+            *cap = *cap ? *cap * 2 : 8192;
+            *buf = realloc(*buf, (size_t)*cap);
+        }
+        ssize_t got = read(fd, *buf + *len, (size_t)(*cap - *len));
+        if (got <= 0) return;
+        *len += got;
+    }
+}
+
 static KStep k_step(KDesc* d) {
     switch (d->dtag) {
+        case 21: {
+            /* A fiber waiting for a connection has nothing to do: it goes back
+               in the queue and the group's other statements run, which is how
+               anything ever connects to it. */
+            int fd = k_socket_of(d->x.payload);
+            if (fd < 0) {
+                KStep s = {0, 0, k_none(), k_err(k_str("that is not a listener"), NULL)};
+                return s;
+            }
+            int flags = fcntl(fd, F_GETFL, 0);
+            fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+            int taken = accept(fd, NULL, NULL);
+            if (taken < 0) {
+                KStep s = {1, 1, k_mkdesc(21, d->x, d->y), k_none()};
+                return s;
+            }
+            int tf = fcntl(taken, F_GETFL, 0);
+            fcntl(taken, F_SETFL, tf & ~O_NONBLOCK);
+            KStep s = {0, 0, k_none(), k_int(k_hold_socket(taken))};
+            return s;
+        }
+        case 17: {
+            /* Same shape for a process: start it, then wait by yielding, so
+               the other statements of the group run while it does. */
+            KList* args = k_as_list(d->y);
+            long long argc = args->len;
+            char** argv = malloc(sizeof(char*) * (size_t)(argc + 2));
+            argv[0] = k_as_str(d->x)->data;
+            for (long long i = 0; i < argc; i++) {
+                KValue item = args->items[i];
+                if (item.tag != K_STR) k_die("run takes a list of argument strings");
+                argv[i + 1] = k_as_str(item)->data;
+            }
+            argv[argc + 1] = NULL;
+            int outp[2], errp[2];
+            if (pipe(outp) || pipe(errp)) {
+                free(argv);
+                KStep s = {0, 0, k_none(),
+                           k_err(k_concat(k_str("cannot start "), d->x), NULL)};
+                return s;
+            }
+            pid_t kid = fork();
+            if (kid < 0) {
+                free(argv);
+                close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+                KStep s = {0, 0, k_none(),
+                           k_err(k_concat(k_str("cannot start "), d->x), NULL)};
+                return s;
+            }
+            if (kid == 0) {
+                dup2(outp[1], 1);
+                dup2(errp[1], 2);
+                close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+                execvp(argv[0], argv);
+                _exit(127);
+            }
+            free(argv);
+            close(outp[1]);
+            close(errp[1]);
+            fcntl(outp[0], F_SETFL, fcntl(outp[0], F_GETFL, 0) | O_NONBLOCK);
+            fcntl(errp[0], F_SETFL, fcntl(errp[0], F_GETFL, 0) | O_NONBLOCK);
+            if (k_handles + 1 >= K_SOCKETS) k_die("too many processes at once");
+            long long h = ++k_handles;
+            long long slot = h % K_SOCKETS;
+            k_kids[slot].used = 1;
+            k_kids[slot].pid = kid;
+            k_kids[slot].out = outp[0];
+            k_kids[slot].err = errp[0];
+            k_kids[slot].obuf = NULL; k_kids[slot].olen = 0; k_kids[slot].ocap = 0;
+            k_kids[slot].ebuf = NULL; k_kids[slot].elen = 0; k_kids[slot].ecap = 0;
+            KStep s = {1, 1, k_mkdesc(25, k_int(h), k_none()), k_none()};
+            return s;
+        }
+        case 25: {
+            long long slot = d->x.payload % K_SOCKETS;
+            if (!k_kids[slot].used) {
+                KStep s = {0, 0, k_none(),
+                           k_err(k_str("that is not a running process"), NULL)};
+                return s;
+            }
+            k_drain(k_kids[slot].out, &k_kids[slot].obuf, &k_kids[slot].olen,
+                    &k_kids[slot].ocap);
+            k_drain(k_kids[slot].err, &k_kids[slot].ebuf, &k_kids[slot].elen,
+                    &k_kids[slot].ecap);
+            int status = 0;
+            pid_t done = waitpid(k_kids[slot].pid, &status, WNOHANG);
+            if (done == 0) {
+                KStep s = {1, 1, k_mkdesc(25, d->x, d->y), k_none()};
+                return s;
+            }
+            k_drain(k_kids[slot].out, &k_kids[slot].obuf, &k_kids[slot].olen,
+                    &k_kids[slot].ocap);
+            k_drain(k_kids[slot].err, &k_kids[slot].ebuf, &k_kids[slot].elen,
+                    &k_kids[slot].ecap);
+            close(k_kids[slot].out);
+            close(k_kids[slot].err);
+            k_kids[slot].used = 0;
+            long long code = WIFEXITED(status) ? WEXITSTATUS(status) : 128;
+            if (code == 127) {
+                free(k_kids[slot].obuf);
+                free(k_kids[slot].ebuf);
+                KStep s = {0, 0, k_none(), k_err(k_str("cannot start that"), NULL)};
+                return s;
+            }
+            KValue triple[3];
+            triple[0] = k_int(code);
+            triple[1] = k_str_n(k_kids[slot].obuf ? k_kids[slot].obuf : "",
+                                k_kids[slot].olen);
+            triple[2] = k_str_n(k_kids[slot].ebuf ? k_kids[slot].ebuf : "",
+                                k_kids[slot].elen);
+            free(k_kids[slot].obuf);
+            free(k_kids[slot].ebuf);
+            KStep s = {0, 0, k_none(), k_mklist(3, triple)};
+            return s;
+        }
         case 8: {
             long long ms = d->x.tag == K_INT ? d->x.payload : 0;
             KStep s = {1, (unsigned long long)(ms < 0 ? 0 : ms), k_desc_nil(), k_none()};
