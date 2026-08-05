@@ -6,13 +6,15 @@ is stale — say so.
 
 ## Waiting on Clay
 
-**Two errs in one operation keep the left one, where a parallel group merges
-both** (task #140). Measured: every operator propagates an err from either
-side, but `boom "a" + boom "b"` answers `a` and discards `b`, while
-`print x >> print y` with both failing answers one err whose reason is
-`[a b]`. Merge for consistency, or first-wins because an operator reads
-left to right? My recommendation is merge; it changes every arithmetic path,
-so it is yours.
+**Does `>>` accumulate failures the way a parallel group does, or stop at the
+first one?** (task #141). Both channels are settled: the value channel answers
+one value, and failures merge associatively so the fractal you worried about
+never gets built — that is the applicative/monad split, with `.` as the monad.
+The open fork is measured: a *build* failure on either side merges, but a
+run-time *effect* failure on the left stops the right dead. So one operator
+behaves two ways depending on when the failure lands. Say the wall orders
+effects and unordered failures cannot preempt, or run the right anyway and
+merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
 
@@ -26,9 +28,15 @@ and `scripts/site_smoke.py` both serve HTTP while driving headless chrome.
 - `std/net/http`: done. Request and response are records, a handler is a plain
   function from one to the other, and the mux is arms on the path. A routed POST
   round-trips end to end.
-- Next: port the two scripts, which is what proves the surface is right.
+- `io/start` and `io/kill`: done, both engines. Headless chrome ignores its own
+  exit budget, so the port needed Go's `cmd.Start()` and `Process.Kill()`.
+- Next: port the two scripts, which is what proves the surface is right. The
+  first thing writing an http test found was `content-length` counting
+  characters where the protocol counts bytes.
 
 ## Recently ruled by Clay
+
+- **2026-08-05** — two errs in one operation merge, both engines. Shipped.
 
 - **2026-08-05** — the chart draws from deterministic counters; wall clock is
   only for kq's table against jq, where a third party's cost cannot be counted.
