@@ -1,6 +1,10 @@
 'use strict';
 
 (function () {
+/* Where this script was loaded from, so the wasm beside it is found from a
+   page at any depth — a chapter lives under /book/ and a relative fetch would
+   look for the engine inside that directory. */
+const HERE = document.currentScript ? document.currentScript.src : location.href;
 /* The kanso engine in the tab: the real toolchain compiled to wasm, plus the
    tokenizer that paints it. Shared by the playground and the landing page's
    live sample so the wiring exists once. */
@@ -149,7 +153,7 @@ const TAILCALL_PROBE = new Uint8Array([
 const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
 
 async function loadWasm() {
-  const response = await fetch('kanso.wasm');
+  const response = await fetch(new URL('kanso.wasm', HERE));
   const imports = { env: { k_callback: (t, e, a) => programTable.get(t)(e, a) } };
   const { instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
   wasm = instance.exports;
@@ -242,5 +246,26 @@ async function playSource(src) {
   return Object.assign(callKanso('kanso_play', src), { engine: 'interp' });
 }
 
-window.KansoEngine = { ready, runSource, playSource, highlight, callKanso, get wasm() { return wasm; } };
+/* Run a library: a file that exports `play`, which the language runs through
+   an entry file that imports it. There is no filesystem here, so the engine
+   is handed the library under the name the import will use and compiles the
+   entry beside it — the same two files the command line is given. */
+async function runLibrary(stem, src) {
+  await ready();
+  wasm.kanso_set_seed(Date.now() >>> 0);
+  wasm.kanso_forget_sources();
+  const path = writeInput(stem);
+  const file = writeInput(stem + '.kso');
+  const lib = writeInput(src);
+  wasm.kanso_hand_source(path.ptr, path.len, file.ptr, file.len, lib.ptr, lib.len);
+  const entry = `import "${stem}"\n\n${stem}/play\n`;
+  const compiled = await runCompiled(entry, wasm.kanso_compile_wasm);
+  if (compiled) return compiled;
+  return Object.assign(callKanso('kanso_run', entry), { engine: 'interp' });
+}
+
+window.KansoEngine = {
+  ready, runSource, playSource, runLibrary, highlight, callKanso,
+  get wasm() { return wasm; },
+};
 })();
