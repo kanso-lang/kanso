@@ -373,11 +373,41 @@ check = arm "d" "l" "1" "w"
 
 banner = "{length cases} dispatch cases\n"
 
+# And that check compares one string to another without starting an engine.
+# When every probe stopped compiling, both engines refused identically and
+# this sweep called 22 cases green having run none of them. So a probe whose
+# answer is known runs first, on both engines.
+mute = "the probes do not run: neither engine answered the sample\n"
+
+# Built through the same template the sweep uses, so a template that stops
+# producing a runnable program is caught here rather than reported green.
+sound_arm = arm "fn twice n\n  n + n\n" "the sample" "twice 1" "2"
+
+sound_src = source_for sound_arm
+
+fn sound? r
+  r.status == 0 and r.stdout == "2\n"
+
+fn works? n i
+  sound? n and sound? i
+
+fn ready native
+  asked ["play" probe "--interp"] . (interp -> live native interp)
+
+fn live n i
+  running (works? n i)
+
+fn running true
+  counted 0 . finished
+
+fn running false
+  io/write_err mute . (_ -> io/exit 2)
+
 fn begun false
   io/write_err complaint . (_ -> io/exit 2)
 
 fn begun true
-  counted 0 . finished
+  io/write_file probe sound_src . (_ -> asked ["play" probe]) . ready
 
 fn counted _
   io/write banner . (_ -> swept cases 0)

@@ -255,7 +255,7 @@ fn reported module rest count expr v
 sample = """
   import "std/text"
 
-  print "\{1}"
+  print "\{text/trim " 1 "}"
 """
 
 complaint = "the probe shape changed: probes must interpolate\n"
@@ -264,11 +264,35 @@ total = length text_probes + length list_probes + length math_probes
 
 banner = "{total} awkward calls\n"
 
+# The shape check compares one string to another and never starts an engine.
+# When every probe stopped compiling, both engines refused identically and
+# this sweep reported 66 calls green having run none of them. So the sample
+# runs first, on both engines, and has to answer.
+mute = "the probes do not run: neither engine printed 1 for the sample\n"
+
+fn sound? r
+  r.status == 0 and r.stdout == "1\n"
+
+fn works? n i
+  sound? n and sound? i
+
+fn ready native
+  asked ["play" probe "--interp"] . (interp -> live native interp)
+
+fn live n i
+  running (works? n i)
+
+fn running true
+  counted 0 . answered
+
+fn running false
+  io/write_err mute . (_ -> io/exit 2)
+
 fn begun false
   io/write_err complaint . (_ -> io/exit 2)
 
 fn begun true
-  counted 0 . answered
+  io/write_file probe sample . (_ -> asked ["play" probe]) . ready
 
 fn counted _
   io/write banner . (_ -> swept "text" text_probes 0)
@@ -282,4 +306,4 @@ fn finished 0
 fn finished n
   io/write "{n} disagree\n" . (_ -> io/exit 1)
 
-pub play = begun (shaped "text" "1" == sample)
+pub play = begun (shaped "text" "text/trim \" 1 \"" == sample)

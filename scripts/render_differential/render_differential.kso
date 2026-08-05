@@ -151,11 +151,35 @@ complaint = "the probe shape changed: probes must interpolate\n"
 
 sample = "print \"\{1}\"\n"
 
+# And that check is not enough on its own: it compares one string to another
+# and never starts an engine. When every probe stopped compiling, both engines
+# refused identically and this sweep called 68 values green having run none of
+# them. So the sample runs first, on both engines, and has to answer.
+mute = "the probes do not run: neither engine printed 1 for the sample\n"
+
+fn sound? r
+  r.status == 0 and r.stdout == "1\n"
+
+fn works? n i
+  sound? n and sound? i
+
+fn ready native
+  asked ["play" probe "--interp"] . (interp -> live native interp)
+
+fn live n i
+  running (works? n i)
+
+fn running true
+  swept plain values [] . (a -> swept typed shaped a . reported)
+
+fn running false
+  io/write_err mute . (_ -> io/exit 2)
+
 fn begun false
   io/write_err complaint . (_ -> io/exit 2)
 
 fn begun true
-  swept plain values [] . (a -> swept typed shaped a . reported)
+  io/write_file probe sample . (_ -> asked ["play" probe]) . ready
 
 fn reported found
   said found . (_ -> io/exit (sound (length found)))

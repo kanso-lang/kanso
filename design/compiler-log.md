@@ -17825,3 +17825,27 @@ recording: the corpus directory is copied once, for the fixtures beside
 a program, and the program itself every time — staging it once answered
 every later probe with the first one's output, which read as a wasm
 divergence on bits/shl and was nothing of the sort.
+
+## a sweep proves it can run
+
+Three of the differential sweeps spent a day reporting confident numbers
+about nothing. Every probe they write was a `pub play` library handed to
+`kanso run`, which refuses one now, so both engines refused identically,
+the sweeps compared two refusals, and render said 68 values agree,
+behaviour 66 calls, dispatch 22 cases. None of them had started an
+engine.
+
+Each already carried a shape check — one string compared to another,
+asserting that a probe still interpolates. That check cannot notice this,
+because the probe it inspects is a string and the failure is what happens
+when the string is run. The effects sweep is the one that caught the
+break, because it asserts the bytes each probe should print rather than
+only that the engines agree with each other.
+
+So each of the three now runs one probe whose answer is known, on both
+engines, before any of them sweep, and stops with a word if the answer
+does not arrive. The dispatch sample is built through the same template
+the sweep uses, so a template that stops producing a runnable program is
+caught by the same gate. Watched red three times, each by breaking the
+template and the sample together — which is the shape the real failure
+had, and the shape the string check is blind to.
