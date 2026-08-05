@@ -113,10 +113,40 @@ window.PAGE_PROBE = async (settled) => {
 """
 
 
-def render(page, probe_body, work):
+BOOK = """
+window.PAGE_PROBE = async (settled) => {
+  for (let i = 0; i < 60 && !window.KansoEngine; i++) await new Promise(r => setTimeout(r, 100));
+  await window.KansoEngine.ready();
+  // a chapter's panels: the ones that can run here grew an editor and a
+  // button, and the ones that need a filesystem stayed as the book recorded
+  const panels = [...document.querySelectorAll('.code-panel')];
+  const live = panels.filter(p => p.querySelector('.book-run'));
+  const first = live[0];
+  const out = first.querySelector('.code-output pre code');
+  const before = out.textContent;
+  first.querySelector('.book-run').click();
+  for (let i = 0; i < 120 && out.textContent === before; i++)
+    await new Promise(r => setTimeout(r, 100));
+  // and the same panel against source the reader typed
+  const editor = first.querySelector('textarea');
+  editor.value = 'print "the reader edited this: {6 * 7}"\\n';
+  editor.dispatchEvent(new Event('input'));
+  const ran = out.textContent;
+  first.querySelector('.book-run').click();
+  for (let i = 0; i < 120 && out.textContent === ran; i++)
+    await new Promise(r => setTimeout(r, 100));
+  return {panels: panels.length, live: live.length, ran, edited: out.textContent,
+          name: first.querySelector('.code-panel-title').textContent.trim()};
+};
+"""
+
+
+def render(page, probe_body, work, extra=()):
     header = (DOCS / "_includes/site-header.html").read_text()
     body = re.sub(r"^---.*?---\n", "", (DOCS / page).read_text(), flags=re.S)
     body = body.replace('src="/', 'src="')
+    # a chapter is served by a layout, which is where its scripts live
+    body += "".join(f'<script src="{name}"></script>' for name in extra)
     html = (
         "<!doctype html><html><head><meta charset=utf-8></head><body>"
         + header
@@ -125,7 +155,9 @@ def render(page, probe_body, work):
         + PROBE
         + "</body></html>"
     )
-    (work / page).write_text(html)
+    landing = work / page
+    landing.parent.mkdir(parents=True, exist_ok=True)
+    landing.write_text(html)
 
 
 def visit(page, work):
@@ -170,6 +202,8 @@ def main():
         shutil.copy(DOCS / asset, work / asset)
     render("index.html", LANDING, work)
     render("playground.html", PLAYGROUND, work)
+    shutil.copy(DOCS / "book-play.js", work / "book-play.js")
+    render("book/ch04.html", BOOK, work, extra=("/kanso-engine.js", "/book-play.js"))
     os.chdir(work)
 
     failures = []
@@ -193,6 +227,14 @@ def main():
         failures.append(f"the run button did not run edited source: {playground.get('edited')!r}")
     if "keys then run 5" not in (playground.get("keyed") or ""):
         failures.append(f"⌘⏎ did not run edited source: {playground.get('keyed')!r}")
+
+    book = visit("book/ch04.html", work)
+    if not (book.get("live") or 0):
+        failures.append(f"no panel in chapter 04 became runnable: {book}")
+    if "division by zero" not in (book.get("ran") or ""):
+        failures.append(f"the chapter's first panel did not run: {book}")
+    if "the reader edited this: 42" not in (book.get("edited") or ""):
+        failures.append(f"a book panel did not run edited source: {book}")
 
     for line in failures:
         print(f"FAIL  {line}")

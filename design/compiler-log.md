@@ -17849,3 +17849,33 @@ the sweep uses, so a template that stops producing a runnable program is
 caught by the same gate. Watched red three times, each by breaking the
 template and the sample together — which is the shape the real failure
 had, and the shape the string check is blind to.
+
+## the book runs in your tab
+
+Every sample in the book that can run in a browser is now an editor with a
+run button, answered by the toolchain compiled into the page. A panel is
+upgraded only when the program can actually run there: no filesystem, no
+argv, no stdin, and no sibling import, so a sample that reads a fixture
+keeps the output the book recorded from a machine that had one. Chapter
+04 has fifteen panels and twelve of them are live.
+
+A sample that exports `play` is a library, and what runs one is the entry
+that imports it — which is why this waited on `kanso_hand_source`. The
+engine is handed the library under the name the import will use and
+compiles the entry beside it, the same two files the command line gets.
+
+Two things had to be repaired to make it work at all. The engine fetched
+`kanso.wasm` relative to the page, so it resolved only for pages at the
+site root and a chapter under /book/ would have asked for
+/book/kanso.wasm; it now resolves against the script's own URL. And a
+panel's markup ends at the last character of the program, where a file
+ends with exactly one newline — the first run answered with a formatting
+diagnostic rather than the program's output.
+
+site_smoke grew the case: it loads a real chapter, counts the panels that
+went live, clicks the first one and requires the recorded failure back,
+then types a different program into the same panel and requires that.
+What it does not yet do is hold the book to the differential — the sweep
+covers examples and the two golden corpora, so a panel that disagrees
+with its recorded output would simply show a reader the difference. That
+is the next task.

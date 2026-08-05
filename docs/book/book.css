@@ -347,3 +347,77 @@
   color: var(--accent);
   font-weight: 700;
 }
+
+/* ---------- a sample you can run ---------- */
+
+/* A book panel becomes an editor the same way the landing page's does: a
+   transparent textarea over a highlighted mirror, sharing the panel's own
+   type and padding so it reads as the object it replaced. */
+.book-edit {
+  position: relative;
+}
+
+.book-edit textarea,
+.book-edit pre {
+  bottom: 0;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  left: 0;
+  line-height: 1.7;
+  margin: 0;
+  overflow: auto;
+  padding: 1.1rem 1.25rem;
+  position: absolute;
+  right: 0;
+  top: 0;
+  white-space: pre;
+}
+
+.book-edit pre {
+  pointer-events: none;
+}
+
+/* the mirror must share the textarea's exact metrics or the highlight drifts
+   from the caret; the UA `code { font-family: monospace }` rule would win */
+.book-edit pre code {
+  color: var(--code-ink);
+  font: inherit;
+}
+
+.book-edit textarea {
+  background: transparent;
+  border: none;
+  caret-color: var(--accent);
+  color: transparent;
+  outline: none;
+  resize: none;
+}
+
+.book-edit textarea::selection {
+  background: rgba(240, 58, 0, 0.25);
+}
+
+.book-run {
+  background: var(--accent);
+  border: none;
+  border-radius: 0.2rem;
+  color: #fff;
+  cursor: pointer;
+  float: right;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.6rem;
+  text-transform: lowercase;
+}
+
+.book-run:disabled {
+  opacity: 0.55;
+}
+
+/* what the reader's own run answered, marked so it is not mistaken for the
+   output the book recorded */
+.book-ran .code-output .code-panel-title::after {
+  color: var(--accent);
+  content: " — your run";
+}
