@@ -1,0 +1,64 @@
+import "std/net"
+import "std/text"
+
+# HTTP in the shape Go's net/http has, with one difference that matters: a
+# handler is a plain function from a request to a response. There is no writer
+# to hand it and no recorder to fake, so a test calls it and reads the value it
+# answers — and injecting a different handler is passing a different function,
+# because a function is already a value.
+pub type request
+  method
+  path
+  body
+
+pub type response
+  status
+  reason
+  headers
+  body
+
+pub fn ok body
+  response 200 "OK" [] body
+
+pub fn text_page body
+  response 200 "OK" ["content-type: text/plain; charset=utf-8"] body
+
+pub not_found = response 404 "Not Found" [] "not found\n"
+
+# Parsing stops at the head because that is all a request line and its headers
+# are; the body is whatever the read brought with it.
+pub fn parsed raw
+  head = text/split raw "\r\n\r\n"
+  lines = text/split head[1]! "\r\n"
+  start = text/split lines[1]! " "
+  request start[1]! start[2]! (body_of head)
+
+fn body_of head
+  present head[2]! (length head > 1)
+
+fn present body true
+  body
+
+fn present _ false
+  ""
+
+pub fn rendered r
+  "HTTP/1.1 {r.status} {r.reason}\r\n{header_block r}\r\n{r.body}"
+
+fn header_block r
+  sized = text/concat r.headers ["content-length: {length r.body}"]
+  "{text/join sized "\r\n"}\r\n"
+
+# One request, answered by the handler it is given. `serve_once` is the whole
+# of what a harness needs: a server that answers and stops.
+pub fn serve_once port handler
+  net/listen port . (l -> taken l handler)
+
+fn taken l handler
+  net/accept l . (c -> answered c handler) . (_ -> net/close_listener l)
+
+fn answered c handler
+  net/read c . (raw -> replied c handler raw) . (_ -> net/close_conn c)
+
+fn replied c handler raw
+  net/write c (rendered (handler (parsed raw)))

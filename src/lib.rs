@@ -1941,6 +1941,9 @@ fn load_dependencies(
             "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
             "std/bits" => Some(("bits", &[("bits.kso", include_str!("../lib/bits/bits.kso"))])),
             "std/net" => Some(("net", &[("net.kso", include_str!("../lib/net/net.kso"))])),
+            "std/net/http" => {
+                Some(("http", &[("http.kso", include_str!("../lib/net/http/http.kso"))]))
+            }
             "std/path" => Some(("path", &[("path.kso", include_str!("../lib/path/path.kso"))])),
             "std/sha256" => {
                 Some(("sha256", &[("sha256.kso", include_str!("../lib/sha256/sha256.kso"))]))

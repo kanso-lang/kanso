@@ -242,6 +242,18 @@ Only Clay arms, disarms or retimes it.
    the compiler page so ideas stay declined.
 5. Techniques ledger and mined-queue statuses move in the same PR.
 
+### The log, and what it costs to read
+
+- **design/compiler-log.md holds the last forty entries; the rest is
+  design/log/compiler-log-archive.md, unedited.** The log reached 17,935 lines
+  by being appended on every change and read only at the tail, which is a cost
+  with no return. Append to the live file; when it passes a few thousand lines,
+  move the older end to the archive rather than trimming it. Search the archive
+  before calling an idea new — that is what it is for.
+- **A design note whose work has shipped is deleted, not kept for history.**
+  The log carries history. Seven plans described a system that already exists;
+  they cost a reader time and told them nothing the code does not.
+
 ### Design flow
 - Dialog before changes while Clay is designing; a gavel is recorded in the
   append-only log AND a memory file before implementation starts.
