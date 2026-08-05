@@ -498,6 +498,9 @@ impl Executor for RealExecutor {
             if let Some(pipe) = child.stderr.as_mut() {
                 let _ = pipe.read_to_string(&mut errs);
             }
+            // try_wait already reaped it; this says so to anything reading the
+            // types rather than the sequence.
+            let _ = child.wait();
             Ok(Some((status.code().map_or(128, i64::from), out, errs)))
         })
     }

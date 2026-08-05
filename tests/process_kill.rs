@@ -35,8 +35,7 @@ fn ran(engine: &[&str], dir: &std::path::Path) -> String {
         .output()
         .expect("kanso binary runs");
 
-    String::from_utf8_lossy(&output.stdout).into_owned()
-        + &String::from_utf8_lossy(&output.stderr)
+    String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr)
 }
 
 /// Watched red on both engines: `unknown name start`.

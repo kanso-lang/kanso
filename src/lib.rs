@@ -2689,9 +2689,8 @@ fn compile_module_loaded(
     // An entry file is a program, not a package member (the module-shape
     // gavel): main.kso never joins the merge, whether this directory is the
     // root of a build or somebody's dependency.
-    sources.retain(|(file, _)| {
-        !std::path::Path::new(file).file_name().is_some_and(|n| n == "main.kso")
-    });
+    sources
+        .retain(|(file, _)| std::path::Path::new(file).file_name().is_none_or(|n| n != "main.kso"));
     if sources.is_empty() {
         return Err(format!(
             "error: {} holds only an entry file — a module is its library \
