@@ -74,6 +74,11 @@ pub struct ErrInfo {
     /// The err this one was wrapped around, kept so a re-raise never
     /// discards what it was told (`wrap_err`).
     pub cause: Option<Rc<ErrInfo>>,
+    /// Whether this err's reason is a list *of reasons* rather than one
+    /// reason that happens to be a list. Merging is a fold, so three failures
+    /// answer three reasons however they were grouped — and `err ["a" "b"]`
+    /// stays one reason, which is why the mark cannot be read off the shape.
+    pub merged: bool,
 }
 
 /// The evaluation frame an expression runs in, as an err-origin prefix
@@ -89,7 +94,7 @@ pub fn origin_at(frame: &Frame, span: Span) -> Option<Rc<str>> {
 }
 
 pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
-    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new(), cause: None }))
+    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new(), cause: None, merged: false }))
 }
 
 /// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
@@ -122,6 +127,7 @@ pub fn hop(failure: Value, name: &str) -> Value {
                 origin: info.origin.clone(),
                 hops,
                 cause: info.cause.clone(),
+                merged: info.merged,
             }))
         }
         other => other,
@@ -1319,6 +1325,10 @@ impl<'a> Interp<'a> {
             Expr::Seq(lhs, rhs, span) => {
                 let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
                 let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
+                // The wall is ordered, so the first failure is the answer and
+                // what follows it never speaks. A parallel group accumulates
+                // because nothing there is first. Dependence decides, which is
+                // the rule chapter four states.
                 if is_failure(&left) {
                     return Ok(left);
                 }
@@ -1808,6 +1818,7 @@ impl<'a> Interp<'a> {
                 origin: origin_at(frame, span),
                 hops: Vec::new(),
                 cause: Some(cause),
+                merged: false,
             })));
         }
         // `failed?` exists to look at a failure, so it is asked before a
@@ -3022,11 +3033,28 @@ fn merged_failures(args: &[Value]) -> Value {
 fn accumulate_failures(left: Value, right: Value) -> Value {
     match (&left, &right) {
         (Value::ErrV(a), Value::ErrV(b)) => {
-            err_value(Value::List(Rc::new(vec![a.reason.clone(), b.reason.clone()])), None)
+            let mut reasons = reasons_of(a);
+            reasons.extend(reasons_of(b));
+            Value::ErrV(Rc::new(ErrInfo {
+                reason: Value::List(Rc::new(reasons)),
+                origin: None,
+                hops: Vec::new(),
+                cause: None,
+                merged: true,
+            }))
         }
         (Value::ErrV(_), _) => left,
         (_, Value::ErrV(_)) => right,
         _ => left,
+    }
+}
+
+/// What an err contributes to a merge: the reasons it already carries if it
+/// was itself merged, and otherwise itself, whatever shape its reason has.
+fn reasons_of(info: &Rc<ErrInfo>) -> Vec<Value> {
+    match (info.merged, &info.reason) {
+        (true, Value::List(items)) => items.as_ref().clone(),
+        _ => vec![info.reason.clone()],
     }
 }
 

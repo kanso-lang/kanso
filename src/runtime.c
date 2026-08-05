@@ -228,7 +228,11 @@ struct KDesc { long long dtag; KValue x; KValue y; };
    newest first. The happy path never allocates or touches any of this. */
 typedef struct KHop { const char* fn; struct KHop* prev; } KHop;
 typedef struct KErrBox KErrBox;
-struct KErrBox { KValue reason; const char* origin; KHop* hops; KErrBox* cause; };
+/* `merged` says the reason is a list *of reasons* rather than one reason
+   that happens to be a list, so merging is a fold: three failures answer
+   three reasons however they were grouped, and `err ["a" "b"]` stays one. */
+struct KErrBox { KValue reason; const char* origin; KHop* hops; KErrBox* cause;
+                 long long merged; };
 
 static KValue k_mklist(long long n, KValue* items);
 static KValue* k_buf(long long cap);
@@ -1549,6 +1553,7 @@ KValue k_err(KValue reason, const char* origin) {
     box->origin = origin;
     box->hops = NULL;
     box->cause = NULL;
+    box->merged = 0;
     KValue v; v.tag = K_ERR; v.payload = k_ptr(box); return v;
 }
 
@@ -3160,7 +3165,11 @@ KValue k_desc_print(KValue text) {
 }
 
 KValue k_seq(KValue a, KValue b) {
-    if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
+    /* The one pair that does not merge: the wall is ordered, so the first
+       failure is the answer and what follows it never speaks. Accumulation
+       belongs to the parallel group, where nothing is first. */
+    if (!k_not_failure(a)) return a;
+    if (!k_not_failure(b)) return b;
     if (a.tag != K_DESC || b.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
     return k_mkdesc(1, a, b);
 }
@@ -3313,12 +3322,34 @@ KValue k_b_write_file(KValue path, KValue content) {
 /* Merge two failures: err + err becomes one err whose reason lists both
    reasons (origin-less: the merge has no single birthplace); a none adds
    nothing to an err; two nones stay none. Mirrors eval.rs exactly. */
+/* What an err contributes to a merge: the reasons it already carries when it
+   was itself merged, and otherwise itself, whatever shape its reason has. */
+static long long k_reason_count(KValue e) {
+    KErrBox* box = k_err_box(e);
+    if (!box->merged) return 1;
+    return k_as_list(box->reason)->len;
+}
+
+static long long k_spill_reasons(KValue e, KValue* into, long long at) {
+    KErrBox* box = k_err_box(e);
+    if (!box->merged) {
+        into[at] = box->reason;
+        return at + 1;
+    }
+    KList* held = k_as_list(box->reason);
+    for (long long i = 0; i < held->len; i++) into[at + i] = held->items[i];
+    return at + held->len;
+}
+
 static KValue k_accumulate_failures(KValue l, KValue r) {
     if (l.tag == K_ERR && r.tag == K_ERR) {
-        KValue* items = k_buf(2);
-        items[0] = k_err_inner(l);
-        items[1] = k_err_inner(r);
-        return k_err(k_list_own(items, 2), NULL);
+        long long n = k_reason_count(l) + k_reason_count(r);
+        KValue* items = k_buf(n);
+        long long at = k_spill_reasons(l, items, 0);
+        k_spill_reasons(r, items, at);
+        KValue merged = k_err(k_list_own(items, n), NULL);
+        k_err_box(merged)->merged = 1;
+        return merged;
     }
     if (l.tag == K_ERR) return l;
     if (r.tag == K_ERR) return r;

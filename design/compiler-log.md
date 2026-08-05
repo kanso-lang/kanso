@@ -1208,3 +1208,32 @@ counts bytes — `rendered (ok "650 円")` promised seven bytes' worth of page a
 claimed five, which truncates it at any client that believes the header. The
 http module has its own suite now, and `text/bytes` is what the count runs
 through.
+
+## The wall was never supposed to merge
+
+Clay asked what `>>` does with a function that answers either a description or
+an err, and the answer exposed two defects behind the morning's merge.
+
+The first: merging was pairwise cons, not a fold. Three failures in one
+expression answered `[["a" "b"] "c"]`, and the same three grouped differently
+answered a different shape, so the reasons a program reported depended on where
+its parentheses fell. An err now carries a `merged` mark saying its reason is a
+list *of reasons* rather than one reason that happens to be a list, and the
+merge folds through it. `err ["a" "b"]` stays one reason, which is why the mark
+cannot be read off the shape. Both associativity directions are pinned in the
+micro corpus, which is the only way to see that a fold is a fold.
+
+The second was worse. The sweep that gave every paired guard the merge gave it
+to `k_seq` too, and `k_seq` is the one pair that must not have it: the wall is
+ordered, so the first failure is the answer and what follows never speaks. The
+interpreter still short-circuited, so native and interp disagreed on the same
+program — `boom "a" >> boom "b" >> boom "c"` answered a merge on one and `"a"`
+on the other, and only the book's own sample caught it. Chapter four states the
+rule the sweep broke: short-circuit where there is order, accumulate where
+there is none, and dependence decides. Both engines say that again.
+
+The design thread this opened is #141, where the shape is a pair of monoids
+over one carrier — adjacency associative and commutative with merge, the wall
+associative with an absorbing zero — and the interesting part is that the laws
+are what make grouping unobservable. Overloading either operator would mean
+enforcing them, which the differential fuzzers can do.
