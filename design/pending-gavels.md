@@ -753,3 +753,43 @@ is one; a playground buffer is one), refuse importing a program file,
 refuse `pub` inside it, statements run top to bottom with declarations
 visible file-wide. The scripts then collapse back to single files; only
 multi-file programs (hako) keep entry-beside-module. Awaiting Clay.
+
+## 10. The two composition operators, their laws, and whether they overload
+
+Clay, 2026-08-05, from asking what `>>` does with a function that answers
+either a description or an err. The chain of results looked fractal — each hop
+can be a parallel group, whose result can itself be a chain — and the question
+was whether something has to take an array of results, or two at a time
+recursively.
+
+**The proposal.** kanso already has both operators; what is missing is their
+laws. Adjacency and the wall are the series-parallel pair over one carrier.
+
+| | associative | commutative | identity | failure rule |
+|---|---|---|---|---|
+| adjacency | yes | yes | the do-nothing statement | merge |
+| `>>` | yes | no | the same | first failure absorbs |
+
+Two at a time, and associativity makes it identical to an array: N adjacent
+statements are a fold of the binary form whose shape is unobservable. There is
+no third operator and the n-ary form is derived convenience.
+
+The law is what kills the fractal rather than the flattening. Associativity
+means `(a‖b)‖c` and `a‖(b‖c)` are one value, so no grouping survives into the
+result and there is nothing to recurse into. Drop it and the shape becomes
+observable and the fractal returns — which is what #143 was.
+
+**What overloading would then mean.** A type supplies two arms, each carrying
+an obligation: its adjacency arm associative and commutative, its wall arm
+associative with failure absorbing on the left. Both are fuzzable with the
+differential machinery already here, so this is open dispatch with the laws a
+closed typeclass only documents.
+
+**Still Clay's.** Whether `>>` becomes overloadable at all — it is a compiler
+special form today and carries the ordered-effects meaning, which would move to
+the default arm — and it needs #105's lazy right side first, because an arm
+cannot short-circuit something already paid for.
+
+**Not a gavel, already fixed:** the engines disagreed. Native's `k_seq` merged
+where the interpreter and chapter four short-circuit. Both engines say the
+book's rule again.
