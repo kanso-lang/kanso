@@ -39,6 +39,30 @@ pub extern "C" fn kanso_set_file(ptr: *const u8, len: usize) {
     FILE.with(|f| *f.borrow_mut() = name);
 }
 
+/// Hands the compiler a one-file module under the path an import will name,
+/// so a program that is a library plus the entry file that runs it compiles
+/// where there is no filesystem to read either from. The sources stay until
+/// `kanso_forget_sources`.
+#[no_mangle]
+pub extern "C" fn kanso_hand_source(
+    path_ptr: *const u8,
+    path_len: usize,
+    file_ptr: *const u8,
+    file_len: usize,
+    src_ptr: *const u8,
+    src_len: usize,
+) {
+    let path = take_input(path_ptr, path_len);
+    let file = take_input(file_ptr, file_len);
+    let source = take_input(src_ptr, src_len);
+    crate::hand_source(&path, vec![(file, source)]);
+}
+
+#[no_mangle]
+pub extern "C" fn kanso_forget_sources() {
+    crate::forget_sources();
+}
+
 /// Playground executor: print goes to a captured stdout; there is no
 /// filesystem, argv, or stdin in the browser.
 struct BrowserExecutor {

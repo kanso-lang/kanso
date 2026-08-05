@@ -1,4 +1,4 @@
 fn twice n:int
   n * 2
 
-pub play = print "{twice "a string"}"
+print "{twice "a string"}"

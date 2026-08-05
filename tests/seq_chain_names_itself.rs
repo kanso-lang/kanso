@@ -28,12 +28,12 @@ fn ran(engine: &[&str]) -> String {
     std::fs::write(
         dir.join("run.kso"),
         "import \"std/io\"\n\nfn step 400000\n  io/write \"done\\n\"\n\n\
-         fn step n\n  io/write \"\" >> step (n + 1)\n\npub play = step 0\n",
+         fn step n\n  io/write \"\" >> step (n + 1)\n\nstep 0\n",
     )
     .expect("the program writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg("run.kso")
         .args(engine)
         .current_dir(&dir)

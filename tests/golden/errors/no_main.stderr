@@ -1,1 +1,1 @@
-error: `no_main.kso` is a library — nothing to run. give the module a main.kso entry, or define a `pub play` for `run` to find
+error: `no_main.kso` is a library — nothing to run. give the module a main.kso entry, or run its definitions beside their statements with `kanso play`

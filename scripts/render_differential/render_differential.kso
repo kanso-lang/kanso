@@ -76,10 +76,10 @@ prelude = """
 """
 
 fn plain expr
-  "pub play = print \"\{{expr}}\"\n"
+  "print \"\{{expr}}\"\n"
 
 fn typed expr
-  "{prelude}pub play = print \"\{{expr}}\"\n"
+  "{prelude}print \"\{{expr}}\"\n"
 
 # A legal probe that never returns is a finding, and a louder one than a
 # wording difference — so every run is under `timeout`, which answers 124 when
@@ -101,10 +101,10 @@ fn hung? _
 fn ran source
   io/write_file probe source . (_ -> both)
 
-both = asked ["run" probe] . matched
+both = asked ["play" probe] . matched
 
 fn matched native
-  asked ["run" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -149,7 +149,7 @@ fn noted found expr verdict
 # nothing. So the shape of one probe is checked before any of them run.
 complaint = "the probe shape changed: probes must interpolate\n"
 
-sample = "pub play = print \"\{1}\"\n"
+sample = "print \"\{1}\"\n"
 
 fn begun false
   io/write_err complaint . (_ -> io/exit 2)

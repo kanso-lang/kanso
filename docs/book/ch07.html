@@ -78,11 +78,11 @@ gomen: we do not serve pocky</code></pre>
 service <span class="o">=</span> <span class="n">50</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run shop.kso</div>
-    <pre><code>receipt 1250</code></pre>
+    <pre><code>shop/receipt 1250</code></pre>
   </div>
 </div>
 
-<p>read the declaration heads top to bottom: the type <code>receipt</code>, then <code>checkout</code>, <code>line</code>, <code>main</code>, <code>price</code>, <code>service</code>. that is the order the author chose, and the compiler has nothing to say about it. definition order is not scope either: <code>checkout</code> calls <code>line</code> and <code>main</code> reads <code>service</code>, both defined below them, and it all resolves.</p>
+<p>read the declaration heads top to bottom: the type <code>receipt</code>, then <code>checkout</code>, <code>line</code>, <code>play</code>, <code>price</code>, <code>service</code>. that is the order the author chose, and the compiler has nothing to say about it. definition order is not scope either: <code>checkout</code> calls <code>line</code> and <code>line</code> reads <code>service</code>, both defined below them, and it all resolves.</p>
 
 <p>so put a helper beside the thing it helps, and keep the entry point wherever a reader will look for it. the two <code>price</code> arms sit together here because reading them together is the point, not because anything requires it — an overload set is one declaration split across arms, and the arms may be written wherever they read best.</p>
 </div>

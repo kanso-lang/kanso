@@ -12,7 +12,7 @@ fn run(name: &str, source: &str) -> String {
     let path = dir.join("prog.kso");
     std::fs::write(&path, source).expect("write fixture");
     let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg("prog.kso")
         .current_dir(&dir)
         .output()
@@ -26,7 +26,7 @@ fn construction_in_tail_call_argument_reaches_the_destructuring_callee() {
     let out = run(
         "tail",
         "type user\n  age\n  name\n\nfn foo (user age name)\n  \
-         print \"{name} is age {age}\"\n\npub play = foo (user 44 \"clay\")\n",
+         print \"{name} is age {age}\"\n\nfoo (user 44 \"clay\")\n",
     );
 
     assert_eq!(out, "clay is age 44\n");
@@ -37,7 +37,7 @@ fn construction_bound_then_passed_reaches_the_destructuring_callee() {
     let out = run(
         "bound",
         "type user\n  age\n  name\n\nfn foo (user age name)\n  \
-         \"{name}/{age}\"\n\npub play =\n  a = foo (user 1 \"x\")\n  b = foo (user 2 \"y\")\n  \
+         \"{name}/{age}\"\n\na = foo (user 1 \"x\")\nb = foo (user 2 \"y\")\n\
          print \"{a} {b}\"\n",
     );
 
@@ -48,7 +48,7 @@ fn construction_bound_then_passed_reaches_the_destructuring_callee() {
 fn string_first_type_stays_boxed_and_correct() {
     let out = run(
         "boxed",
-        "type tag\n  label\n  weight\n\npub play = show (tag \"hot\" 9)\n\n\
+        "type tag\n  label\n  weight\n\nshow (tag \"hot\" 9)\n\n\
          fn show (tag label weight)\n  print \"{label}:{weight}\"\n",
     );
 

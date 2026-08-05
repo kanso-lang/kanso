@@ -1,8 +1,7 @@
 import "std/list"
 
 xs = [1 2 3]
+recipe = list/map xs (n -> n * 10)
 
-pub play =
-  recipe = list/map xs (n -> n * 10)
-  print "the recipe: {recipe}"
-  >> print "the result: {list/to_list recipe}"
+print "the recipe: {recipe}"
+>> print "the result: {list/to_list recipe}"

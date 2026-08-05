@@ -229,23 +229,14 @@ pub mod phase {
 /// `kanso play`: the playground's convention at the terminal. The file is a
 /// library defining `pub play`; the synthesized entry runs it.
 /// A `play` file: one source with its imports, and a `pub play` to run.
-pub fn compile_play(file: &str, source: &str) -> Result<ast::Program, String> {
-    compile_one(file, source, true, false)
-}
-
 /// The repl's session: the same thing without an entry point, so a prompt can
 /// import a module and reach it. An unused binding at a prompt is exploration
 /// rather than a mistake, so those are dropped here and nowhere else.
 pub fn compile_repl(file: &str, source: &str) -> Result<ast::Program, String> {
-    compile_one(file, source, false, true)
+    compile_one(file, source, true)
 }
 
-fn compile_one(
-    file: &str,
-    source: &str,
-    require_play: bool,
-    drop_unused: bool,
-) -> Result<ast::Program, String> {
+fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
     synthesize_getters(&mut program);
@@ -312,27 +303,6 @@ fn compile_one(
         check::check_merged(&program, false).into_iter().filter(|d| d.kind != "unused").collect();
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
-    }
-    let has_play = program.fns.iter().any(|d| d.name == "play" && d.is_pub);
-    if require_play && !has_play {
-        return Err(format!(
-            "error: nothing to play — define `pub play`, or point `kanso run` \
-             at an entry file\n  --> {file}\n"
-        ));
-    }
-    let span = diag::Span { line: 1, col: 1 };
-    // A session has no entry point until somebody writes one, and a `main`
-    // calling a `play` that is not there would name nothing.
-    if has_play {
-        program.fns.push(ast::FnDecl {
-            name: ast::ENTRY.to_string(),
-            params: Vec::new(),
-            body: vec![ast::Stmt::Expr(ast::Expr::Ident("play".to_string(), span))],
-            span,
-            is_pub: false,
-            file: file.to_string(),
-            synthetic: false,
-        });
     }
     canonicalize_types(&mut program);
     canonicalize_bare_aliases(&mut program);
@@ -427,16 +397,6 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
 /// string literals cannot change how a file compiles. A file that does not
 /// parse declares nothing, and the compile it is routed to reports the syntax
 /// error properly.
-/// Whether the file declares `pub play`, or None when it does not parse at
-/// all. A source with a syntax error has no shape yet, and calling it a
-/// library hides the error behind a sentence about libraries — the reader is
-/// told to add an entry point they already wrote.
-fn declares_play(source: &str) -> Option<bool> {
-    let lexed = lexer::lex(source).ok()?;
-    let program = parser::parse(&lexed).ok()?;
-    Some(program.fns.iter().any(|d| d.is_pub && d.name == "play"))
-}
-
 /// Whether the file holds tests, by the same rule `kanso test` collects them:
 /// a zero-argument constant named `test_*`. A file of those has an entry
 /// point already — it is just spelled for a different verb, and saying so
@@ -460,29 +420,19 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     // its text happens to contain: a comment or a string mentioning `pub
     // play` used to reroute the whole file and reject a valid entry with a
     // diagnostic that named none of this.
-    let declared = declares_play(source);
     let has_defs = source
         .lines()
         .any(|l| l.starts_with("fn ") || l.starts_with("type ") || l.starts_with("pub "));
-    // A file of bare statements never parses as a library, and that is not an
-    // error — it is an entry. But a file that declares things and still does
-    // not parse has a syntax error, and answering it with the shape of the
-    // file tells the reader to add an entry point they already wrote.
-    if declared.is_none() && has_defs {
-        return compile_play(file, source);
-    }
-    let has_play = declared.unwrap_or(false);
     let library_verb = command == "test";
-    match (command, has_play, has_defs) {
-        (_, true, _) if !library_verb => compile_play(file, source),
-        ("check", false, true) => compile_library(file, source),
-        (_, false, true) if !library_verb && declares_tests(source) => {
+    match (command, has_defs) {
+        ("check", true) => compile_library(file, source),
+        (_, true) if !library_verb && declares_tests(source) => {
             Err(format!("error: `{file}` holds tests — `kanso test {file}` runs them\n"))
         }
-        (_, false, true) if !library_verb => Err(format!(
-            "error: `{file}` is a library — nothing to run. give the \
-             module a main.kso entry, or define a `pub play` for `run` to \
-             find\n"
+        (_, true) if !library_verb => Err(format!(
+            "error: `{file}` is a library — nothing to run. give the module a \
+             main.kso entry, or run its definitions beside their statements \
+             with `kanso play`\n"
         )),
         _ if library_verb => compile_library(file, source),
         _ => compile_entry(file, source),
@@ -2010,6 +1960,20 @@ fn load_dependencies(
             "hako" if HAKO_EMBEDDED.with(|c| c.get()) => Some(("hako", HAKO_FILES)),
             _ => None,
         };
+        // A handed-in module: the browser has no filesystem, so a program
+        // that is a library plus the entry that runs it arrives as sources
+        // rather than as files.
+        let handed = HANDED_SOURCES.with(|c| c.borrow().get(path).cloned());
+        if let Some(files) = handed {
+            let borrowed: Vec<(&str, &str)> =
+                files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
+            let mut dep =
+                compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
+            qualify(&mut dep, qual, &mut exports, &mut shadowed);
+            dep_program.types.extend(dep.types);
+            dep_program.fns.extend(dep.fns);
+            continue;
+        }
         if let Some((short, files)) = embedded {
             // a module importing itself compiles a second copy, so every type
             // gets a twin and a constructor pattern stops matching values the
@@ -2470,6 +2434,23 @@ thread_local! {
     /// Whether the current root compile is an entry file, whose imports may
     /// name the module directory it sits in or beside without being cycles.
     static ENTRY_COMPILE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// Modules handed in as sources rather than read from disk, by import
+    /// path. The browser compiles a program with no filesystem under it, and
+    /// a program is a library plus the entry file that runs it.
+    static HANDED_SOURCES: std::cell::RefCell<
+        std::collections::HashMap<String, Vec<(String, String)>>,
+    > = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// Hands the compiler a module's files under the path an import will name.
+/// They live until `forget_sources`, so a caller compiling one program after
+/// another says when the last one's sources stop applying.
+pub fn hand_source(path: &str, files: Vec<(String, String)>) {
+    HANDED_SOURCES.with(|c| c.borrow_mut().insert(path.to_string(), files));
+}
+
+pub fn forget_sources() {
+    HANDED_SOURCES.with(|c| c.borrow_mut().clear());
 }
 
 /// hako's module files, embedded the way the shipped library is.

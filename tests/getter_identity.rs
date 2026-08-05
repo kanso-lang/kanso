@@ -46,7 +46,7 @@ fn corpus() -> Vec<PathBuf> {
 fn seen(program: &Path, engine: &[&str]) -> String {
     // `run` is the verb; a file's `pub play` is what `run` finds
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg(program.file_name().expect("programs have names"))
         .args(engine)
         .env("KANSO_SEED", "2685821657736338717")
@@ -85,19 +85,15 @@ fn a_failed_field_read_names_the_field_and_not_the_function() {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).expect("a directory of its own");
     let cases = [
-        (
-            "no_such_field",
-            "type point\n  x\n\npub play =\n  p = point 1\n  print \"{p.y}\"\n",
-            "field `y`",
-        ),
+        ("no_such_field", "type point\n  x\n\np = point 1\nprint \"{p.y}\"\n", "field `y`"),
         (
             "wrong_record",
             "import \"std/list\"\n\ntype city\n  name\n\ntype user\n  age\n\n\
-             pub play =\n  rows = [(city \"a\") (user 3)]\n  \
+             rows = [(city \"a\") (user 3)]\n\
              print \"{list/to_list (list/map rows _.name)}\"\n",
             "has no field `name`",
         ),
-        ("not_a_record", "pub play =\n  n = 5\n  print \"{n.name}\"\n", "field `name`"),
+        ("not_a_record", "n = 5\nprint \"{n.name}\"\n", "field `name`"),
     ];
     for (name, source, expected) in cases {
         let program = work.join(format!("{name}.kso"));

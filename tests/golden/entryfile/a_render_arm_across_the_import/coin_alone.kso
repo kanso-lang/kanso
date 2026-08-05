@@ -1,0 +1,12 @@
+# A module may claim rendering for a type it owns. The arm joins the ambient
+# render group, which belongs to nobody, so qualifying this module must leave
+# that membership alone or the arm renders nothing.
+type money int
+
+type plain_tag int
+
+fn to_string _:money
+  "$3.50"
+
+print "custom: {money 350}"
+>> print "default: {plain_tag 7}"

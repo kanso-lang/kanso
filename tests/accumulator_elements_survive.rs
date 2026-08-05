@@ -26,7 +26,7 @@ fn ran(program: &str, name: &str) -> (String, String, Option<i32>) {
     let file = dir.join("run.kso");
     std::fs::write(&file, program).expect("the program writes");
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg("run.kso")
         .current_dir(&dir)
         .output()
@@ -52,7 +52,7 @@ fn a_map_value_built_each_iteration_is_still_readable_after_the_loop() {
                    fn go n m\n  fresh = \"v{n % 7}\"\n  \
                    go (n - 1) (put m \"k{n % 3}\" fresh)\n\n\
                    built = go 6000 { \"k0\":\"\" }\n\n\
-                   pub play = print \"{built[\"k0\"]!} {built[\"k1\"]!} {built[\"k2\"]!}\"\n";
+                   print \"{built[\"k0\"]!} {built[\"k1\"]!} {built[\"k2\"]!}\"\n";
 
     let (out, err, code) = ran(program, "kanso-acc-elements");
 
@@ -73,7 +73,7 @@ fn a_list_element_built_each_iteration_is_still_readable_after_the_loop() {
                    fn go n xs\n  fresh = \"e{n % 5}\"\n  \
                    go (n - 1) (push xs fresh)\n\n\
                    built = go 4000 []\n\n\
-                   pub play = print \"{built[1]!} {built[2000]!} {length built}\"\n";
+                   print \"{built[1]!} {built[2000]!} {length built}\"\n";
 
     let (out, err, code) = ran(program, "kanso-acc-list-elements");
 

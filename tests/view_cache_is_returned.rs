@@ -30,12 +30,12 @@ fn views(n: u64) -> (u64, u64) {
         "fn go 0 seen\n  seen\n\n\
          fn go n seen\n  fresh = put {{:}} \"k\" n\n  \
          go (n - 1) (seen + length fresh)\n\n\
-         pub play = print \"{{go {n} 0}}\"\n"
+         print \"{{go {n} 0}}\"\n"
     );
     std::fs::write(dir.join("run.kso"), program).expect("the program writes");
 
     let done = Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .arg("run")
+        .arg("play")
         .arg("run.kso")
         .env("KANSO_COUNTERS", "1")
         .current_dir(&dir)

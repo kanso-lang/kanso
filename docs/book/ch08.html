@@ -345,13 +345,12 @@ err at 1: unexpected character `?`</code></pre>
 <span class="k">fn</span> <span class="f">number_end</span> cs p
   <span class="f">if</span> (<span class="f">is_number_char</span> cs[p]) (<span class="f">number_end</span> cs (p <span class="o">+</span> <span class="n">1</span>)) p
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>)
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"6e3"</span>)</code></pre>
+<span class="f">print</span> (<span class="f">classify</span> <span class="s">"42"</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"-17"</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"3.25"</span>)
+<span class="o">&gt;&gt;</span> <span class="f">print</span> (<span class="f">classify</span> <span class="s">"6e3"</span>)</code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run numbers.kso</div>
+    <div class="code-panel-title">kanso play numbers.kso</div>
     <pre><code><span class="k">error[naming]</span>: `is_number_char` answers only true or false: name it `is_number_char?`
 <span class="c">  --&gt; numbers.kso:10:4</span>
   10 | fn is_number_char 43

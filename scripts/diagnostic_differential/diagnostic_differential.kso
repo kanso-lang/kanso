@@ -150,9 +150,8 @@ fn program_for line
   """
     import "std/{module}"
 
-    {prelude}pub play =
-      bad = wrong 1 2
-      print "\{{call}}"
+    {prelude}bad = wrong 1 2
+    print "\{{call}}"
   """
 
 # What the LANGUAGE says: arity, indexing, dispatch, arithmetic,
@@ -163,7 +162,7 @@ langa_src = """
   fn one a
     a
 
-  pub play = print "\{one 1 2}"
+  print "\{one 1 2}"
 """
 
 langa = [langa_says langa_src]
@@ -174,7 +173,7 @@ langb_src = """
   fn two a b
     a
 
-  pub play = print "\{two 1}"
+  print "\{two 1}"
 """
 
 langb = [langb_says langb_src]
@@ -185,9 +184,8 @@ langc_src = """
   type point
     x
 
-  pub play =
-    p = point 1
-    print "\{p.y}"
+  p = point 1
+  print "\{p.y}"
 """
 
 langc = [langc_says langc_src]
@@ -195,9 +193,8 @@ langc = [langc_says langc_src]
 langd_says = "a field of a non-record"
 
 langd_src = """
-  pub play =
-    n = 5
-    print "\{n.x}"
+  n = 5
+  print "\{n.x}"
 """
 
 langd = [langd_says langd_src]
@@ -205,9 +202,8 @@ langd = [langd_says langd_src]
 lange_says = "a strict index past the end"
 
 lange_src = """
-  pub play =
-    xs = [1 2]
-    print "\{xs[9]!}"
+  xs = [1 2]
+  print "\{xs[9]!}"
 """
 
 lange = [lange_says lange_src]
@@ -215,9 +211,8 @@ lange = [lange_says lange_src]
 langf_says = "a strict index at zero"
 
 langf_src = """
-  pub play =
-    xs = [1 2]
-    print "\{xs[0]!}"
+  xs = [1 2]
+  print "\{xs[0]!}"
 """
 
 langf = [langf_says langf_src]
@@ -225,9 +220,8 @@ langf = [langf_says langf_src]
 langg_says = "division by zero"
 
 langg_src = """
-  pub play =
-    n = 0
-    print "\{1 / n}"
+  n = 0
+  print "\{1 / n}"
 """
 
 langg = [langg_says langg_src]
@@ -235,9 +229,8 @@ langg = [langg_says langg_src]
 langh_says = "remainder by zero"
 
 langh_src = """
-  pub play =
-    n = 0
-    print "\{1 % n}"
+  n = 0
+  print "\{1 % n}"
 """
 
 langh = [langh_says langh_src]
@@ -245,9 +238,8 @@ langh = [langh_says langh_src]
 langi_says = "adding a string to a number"
 
 langi_src = """
-  pub play =
-    s = "a"
-    print "\{1 + s}"
+  s = "a"
+  print "\{1 + s}"
 """
 
 langi = [langi_says langi_src]
@@ -258,9 +250,8 @@ langj_src = """
   type point
     x
 
-  pub play =
-    p = point 1
-    print "\{p < 2}"
+  p = point 1
+  print "\{p < 2}"
 """
 
 langj = [langj_says langj_src]
@@ -268,9 +259,8 @@ langj = [langj_says langj_src]
 langk_says = "an if condition that is not a bool"
 
 langk_src = """
-  pub play =
-    n = 5
-    print "\{if n 1 2}"
+  n = 5
+  print "\{if n 1 2}"
 """
 
 langk = [langk_says langk_src]
@@ -282,7 +272,7 @@ langl_src = """
     x
     y
 
-  pub play = print "\{point 1}"
+  print "\{point 1}"
 """
 
 langl = [langl_says langl_src]
@@ -293,9 +283,8 @@ langm_src = """
   fn only 0
     "zero"
 
-  pub play =
-    n = 7
-    print "\{only n}"
+  n = 7
+  print "\{only n}"
 """
 
 langm = [langm_says langm_src]
@@ -307,9 +296,8 @@ langm = [langm_says langm_src]
 lango_says = "a float as a map key"
 
 lango_src = """
-  pub play =
-    m = put \{ 1:"a" } 2.5 "b"
-    print "\{m}"
+  m = put \{ 1:"a" } 2.5 "b"
+  print "\{m}"
 """
 
 lango = [lango_says lango_src]
@@ -317,9 +305,8 @@ lango = [lango_says lango_src]
 langn_says = "indexing something that is not a collection"
 
 langn_src = """
-  pub play =
-    n = 5
-    print "\{n[1]!}"
+  n = 5
+  print "\{n[1]!}"
 """
 
 langn = [langn_says langn_src]
@@ -357,7 +344,7 @@ language = text/concat lang_all12 [lango]
 # from one that agrees. The python this replaced reported "0 disagree" for a
 # week after `play` stopped being a verb, having compared nothing. So a program
 # that works has to work first.
-sound_src = "pub play = print \"ok\"\n"
+sound_src = "print \"ok\"\n"
 
 fn sound? r
   r.status == 0 and r.stdout == "ok\n"
@@ -368,10 +355,10 @@ fn asked argv
 fn ran source
   io/write_file probe source . (_ -> both)
 
-both = asked ["run" probe] . against
+both = asked ["play" probe] . against
 
 fn against native
-  asked ["run" probe "--interp"] . (i -> verdict native i)
+  asked ["play" probe "--interp"] . (i -> verdict native i)
 
 fn verdict n i
   same = n.status == i.status and n.stdout == i.stdout

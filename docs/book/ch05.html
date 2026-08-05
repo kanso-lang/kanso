@@ -248,9 +248,9 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run welcome.kso -- clay</div>
+    <div class="code-panel-title">kanso play welcome.kso -- clay</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
   born in first at welcome.kso:4</code></pre>
   </div>
@@ -286,9 +286,9 @@ order <span class="o">=</span> <span class="s">"one taiyaki, extra custard"</spa
 <span class="k">fn</span> <span class="f">greet</span> name
   <span class="s">"irasshaimase, <span class="i">{name}</span>"</span>
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
+<span class="f">io/args</span> <span class="o">.</span> <span class="f">first</span> <span class="o">.</span> <span class="f">greet</span> <span class="o">.</span> <span class="f">print</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run welcome.kso</div>
+    <div class="code-panel-title">kanso play welcome.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "missing index 1"
   born in first at welcome.kso:4</code></pre>
   </div>

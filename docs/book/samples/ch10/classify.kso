@@ -13,4 +13,4 @@ fn kind 101
 fn kind _
   "other"
 
-pub play = print (kind 46)
+print (kind 46)
