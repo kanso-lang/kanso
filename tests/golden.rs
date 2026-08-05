@@ -66,8 +66,34 @@ fn stage_tree(from: &Path, to: &Path) {
     }
 }
 
+/// A file holding declarations beside bare statements is a play file — the
+/// relaxed single-file form. The verb follows the file's shape, because a
+/// reader running one of these by hand has to pick the same door.
+fn play_file(program: &Path) -> bool {
+    let Ok(text) = std::fs::read_to_string(program) else { return false };
+    if text.starts_with("pub play") || text.contains("\npub play") {
+        return false;
+    }
+    let tops: Vec<&str> = text.lines().filter(|l| !l.is_empty() && !l.starts_with(' ')).collect();
+    let declares = tops.iter().any(|l| l.starts_with("fn ") || l.starts_with("type "));
+    // A binding is not a statement: a file of `fn`s and `test_` bindings is a
+    // test file, and it has a verb of its own.
+    let states = tops.iter().any(|l| {
+        let plain = !l.starts_with("import ")
+            && !l.starts_with("fn ")
+            && !l.starts_with("type ")
+            && !l.starts_with('#');
+        let binds = l.split_once(" = ").is_some_and(|(head, _)| !head.contains(' '));
+        plain && !binds
+    });
+    declares && states
+}
+
 fn run_kanso_env(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -> Output {
-    let verb = "run";
+    let verb = match play_file(program) {
+        true => "play",
+        false => "run",
+    };
     let mut command = Command::new(env!("CARGO_BIN_EXE_kanso"));
     // goldens pin the dice; a bare run seeds from entropy
     command.env("KANSO_SEED", "2685821657736338717");
@@ -87,21 +113,15 @@ fn expected(path: &Path, extension: &str) -> String {
     std::fs::read_to_string(&golden).unwrap_or_else(|_| panic!("missing golden file {golden:?}"))
 }
 
-/// Every example runs as a LIBRARY through the harness-generated entry. The
-/// five whose output renders records carry `.imported.stdout` goldens,
-/// because an imported record prints its qualified type name.
+/// Every example is a little program a reader runs by hand, so the harness
+/// runs it the way they would rather than through a generated entry.
 #[test]
 fn examples_print_their_golden_stdout() {
     for program in kso_files(&manifest_dir().join("examples")) {
         let golden = manifest_dir()
             .join("tests/golden/examples")
             .join(program.file_name().expect("kso files have names"));
-        let imported_golden = golden.with_extension("imported.stdout");
-        let expected_out = if imported_golden.exists() {
-            std::fs::read_to_string(&imported_golden).expect("the imported golden reads")
-        } else {
-            expected(&golden, "stdout")
-        };
+        let expected_out = expected(&golden, "stdout");
         let output = run_kanso_as_library(&program, &[], &[]);
 
         assert_eq!(

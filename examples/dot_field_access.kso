@@ -6,8 +6,7 @@ type segment
   head
   tail
 
-pub play =
-  s = segment (point 1 2) (point 3 4)
-  hx = s.head.x
-  ty = s.tail.y
-  print "{hx} {ty}"
+s = segment (point 1 2) (point 3 4)
+hx = s.head.x
+ty = s.tail.y
+print "{hx} {ty}"

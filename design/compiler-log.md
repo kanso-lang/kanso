@@ -17901,3 +17901,35 @@ and a shop/ and an import cannot name both — the same collision
 book_check hit earlier today, in the same place.
 
 267 passed, 6 known gaps, 0 failed.
+
+## the examples nobody could run
+
+Forty of the forty-seven shipped examples could not be run by any verb.
+`kanso run examples/guards.kso` said the file is a library and to run its
+definitions beside their statements with `kanso play`; `kanso play` said
+`pub play` is a library's export and to use `kanso run`. Two diagnostics
+pointing at each other, on the first thing anybody types. It shipped in
+the play migration and Clay found it.
+
+They are single-file little programs, which is what the play verb is for,
+so they became play files. Every one of the forty-seven then reproduced
+its recorded golden byte for byte, which is what says the conversion
+changed nothing but the door.
+
+The harnesses that had been wrapping an example in a generated entry now
+pick the door by the file's shape — declarations beside bare statements
+is a play file — in golden.rs, oracle.rs and wasm_engine.rs, the same
+rule the browser differential already uses. A binding is not a statement
+there, or a file of `fn`s and `test_` bindings reads as a play file when
+it is a test file with a verb of its own; the error corpus caught that
+within a minute of the first attempt.
+
+Two consequences worth naming. The five `.imported.stdout` goldens are
+gone, because an example that runs directly prints unqualified names and
+nothing reaches it through an import any more. And native.rs builds from
+the micro corpus now rather than from examples, because a play file runs
+and never builds — a binary is the first step of a real program, which is
+what a library and its entry are for.
+
+tests/examples_run.rs is the spec: every example, by the verb its shape
+asks for, has to run. Watched red on all forty.

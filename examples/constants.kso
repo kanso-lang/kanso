@@ -1,3 +1,4 @@
-pub play = print "tau is {tau}, twice the classic"
 
 tau = 6.28318
+
+print "tau is {tau}, twice the classic"

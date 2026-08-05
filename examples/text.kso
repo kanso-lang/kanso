@@ -2,4 +2,4 @@ import "std/text"
 
 back = text/utf8 (text/bytes "mochi")
 
-pub play = print "{back} has {length (text/chars "héllo")} chars"
+print "{back} has {length (text/chars "héllo")} chars"

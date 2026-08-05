@@ -4,10 +4,10 @@ fn describe (err reason)
 fn describe n
   "result: {n}"
 
-pub play =
-  good = safe_ratio 10 2
-  bad = safe_ratio 10 0
-  print (describe good) >> print (describe bad)
 
 fn safe_ratio a b
   a / b
+
+good = safe_ratio 10 2
+bad = safe_ratio 10 0
+print (describe good) >> print (describe bad)

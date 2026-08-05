@@ -19,8 +19,7 @@ fn spin 0 acc
 fn spin n acc
   spin (n - 1) (acc + length (round_trip (tie "ping")))
 
-pub play =
-  knot = tie "ping"
-  print "one hop: {knot.peer.name}"
-  >> print "back home: {round_trip knot}"
-  >> print "two thousand more, all discarded: {spin 2000 0}"
+knot = tie "ping"
+print "one hop: {knot.peer.name}"
+>> print "back home: {round_trip knot}"
+>> print "two thousand more, all discarded: {spin 2000 0}"

@@ -7,4 +7,4 @@ fn age_of (user age _)
 
 clay = user 44 "clay"
 
-pub play = print "{age_of clay}"
+print "{age_of clay}"

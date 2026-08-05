@@ -1,16 +1,27 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const SLICE_ONE: [&str; 7] =
-    ["hello", "pipes", "dispatch", "errors", "records", "effects", "constants"];
+/// A spread of what the emitter has distinct paths for. These come from the
+/// micro corpus rather than examples/, because an example is a play file and
+/// the play verb runs without ever building — a binary is the first step of a
+/// real program, which is what a library and its entry are for.
+const SLICE_ONE: [&str; 7] = [
+    "dispatch_int",
+    "arity_overload",
+    "err_trap_leaf",
+    "bare_field",
+    "accessor_value",
+    "a_text_block",
+    "bitwise_operators",
+];
 
-/// Most examples export `play` and are libraries, so what gets built is an
+/// A corpus sample exports `play` and is a library, so what gets built is an
 /// entry that imports one — the language knows no such name, and the
-/// convention of running one lives in the harness. An example that is already
+/// convention of running one lives in the harness. A sample that is already
 /// an entry file is staged as it stands.
 fn staged_entry(manifest: &Path, work: &Path, name: &str) -> (PathBuf, String) {
     std::fs::create_dir_all(work).expect("temp work dir");
-    let sample = manifest.join("examples").join(format!("{name}.kso"));
+    let sample = manifest.join("tests/golden/micro").join(format!("{name}.kso"));
     let text = std::fs::read_to_string(&sample).expect("the example reads");
     std::fs::copy(&sample, work.join(format!("{name}.kso"))).expect("the example copies");
     if !text.contains("\npub play") && !text.starts_with("pub play") {
@@ -63,7 +74,7 @@ fn native_builds_match_interpreter_output() {
 fn release_build_matches_interpreter_output() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let work = std::env::temp_dir().join("kanso-native-test-release");
-    let (program, binary) = staged_entry(&manifest, &work, "dispatch");
+    let (program, binary) = staged_entry(&manifest, &work, "dispatch_int");
     let interpreted = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("run")
         .arg(&program)

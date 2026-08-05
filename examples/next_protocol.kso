@@ -8,6 +8,5 @@ fn drain (step elem rest) acc
 fn drain (done _) acc
   acc
 
-pub play =
-  start = cursor 1 [10 20 30]
-  print "drained: {drain (next start) []}"
+start = cursor 1 [10 20 30]
+print "drained: {drain (next start) []}"
