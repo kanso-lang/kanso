@@ -2,25 +2,24 @@ type node
   id
   peer
 
-pub play =
-  ring1 = build
-    a = node 1 0
-    b = node 2 0
-    a.peer = b
-    b.peer = a
-    a
-  twin = build
-    c = node 1 0
-    d = node 2 0
-    c.peer = d
-    d.peer = c
-    c
-  other = build
-    e = node 1 0
-    f = node 99 0
-    e.peer = f
-    f.peer = e
-    e
-  print "{ring1 == twin}"
-  >> print "{ring1 == other}"
-  >> print "{ring1 == ring1}"
+ring1 = build
+  a = node 1 0
+  b = node 2 0
+  a.peer = b
+  b.peer = a
+  a
+twin = build
+  c = node 1 0
+  d = node 2 0
+  c.peer = d
+  d.peer = c
+  c
+other = build
+  e = node 1 0
+  f = node 99 0
+  e.peer = f
+  f.peer = e
+  e
+print "{ring1 == twin}"
+>> print "{ring1 == other}"
+>> print "{ring1 == ring1}"

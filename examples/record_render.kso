@@ -2,6 +2,5 @@ type point
   x
   y
 
-pub play =
-  p = point 3 4
-  print "the point is {p}"
+p = point 3 4
+print "the point is {p}"

@@ -9,7 +9,6 @@ type slot
 type wallet
   amount
 
-pub play =
-  print "{slot none} {slot 7} {slot "text"}"
-  >> print "{count 3} {count 2.5}"
-  >> print "{wallet (money 350)} {wallet none}"
+print "{slot none} {slot 7} {slot "text"}"
+>> print "{count 3} {count 2.5}"
+>> print "{wallet (money 350)} {wallet none}"

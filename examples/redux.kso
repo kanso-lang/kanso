@@ -17,9 +17,6 @@ fn notify logger (deposit n) balance
 fn notify logger (withdraw n) balance
   print "[logger] -{n} yen out -> the till holds {balance}"
 
-pub play =
-  moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
-  drive 0 moves 1 logger (print "the till opens at 0 yen")
 
 fn step _ _ _ _ out none
   out >> print "the till closes"
@@ -34,3 +31,6 @@ fn update balance (deposit n)
 
 fn update balance (withdraw n)
   if (balance < n) (err "overdrawn: tried {n} against {balance}") (balance - n)
+
+moves = [(deposit 100) (withdraw 30) (withdraw 60) (deposit 5)]
+drive 0 moves 1 logger (print "the till opens at 0 yen")

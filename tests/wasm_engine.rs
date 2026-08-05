@@ -152,6 +152,19 @@ impl Toolchain {
         self.call("kanso_forget_sources", &[], &mut []).expect("the sources clear");
         let stem = name.strip_suffix(".kso").unwrap_or(name).to_string();
         let library = source.contains("\npub play") || source.starts_with("pub play");
+        // definitions beside statements: the play door, wherever the file lives
+        let tops: Vec<&str> =
+            source.lines().filter(|l| !l.is_empty() && !l.starts_with(' ')).collect();
+        let declares = tops.iter().any(|l| l.starts_with("fn ") || l.starts_with("type "));
+        let states = tops.iter().any(|l| {
+            let plain = !l.starts_with("import ")
+                && !l.starts_with("fn ")
+                && !l.starts_with("type ")
+                && !l.starts_with('#');
+            let binds = l.split_once(" = ").is_some_and(|(head, _)| !head.contains(' '));
+            plain && !binds
+        });
+        let plays = !library && declares && states;
         let (compiled_name, compiled) = match library {
             true => (format!("run_{stem}.kso"), format!("import \"{stem}\"\n\n{stem}/play\n")),
             false => (name.to_string(), source.to_string()),
@@ -183,8 +196,11 @@ impl Toolchain {
         // self-call that must not grow the stack is a different program
         // without them, and comparing that to the golden compares two
         // different programs
-        let status =
-            self.i32_call("kanso_compile_wasm", &[Val::I32(ptr), Val::I32(len), Val::I32(1)]);
+        let door = match plays {
+            true => "kanso_play_wasm",
+            false => "kanso_compile_wasm",
+        };
+        let status = self.i32_call(door, &[Val::I32(ptr), Val::I32(len), Val::I32(1)]);
         if status == 2 {
             return Answer::CompileError(self.output());
         }
@@ -287,12 +303,16 @@ fn corpus() -> Vec<PathBuf> {
 /// A corpus program that exports `play` is a library, so the native engine
 /// is handed the entry that imports it — staged once per corpus directory,
 /// because programs read fixtures that sit beside them.
-fn native_entry(path: &Path) -> (PathBuf, String) {
+fn native_entry(path: &Path) -> (PathBuf, String, &'static str) {
     let dir = path.parent().expect("a program has a directory").to_path_buf();
     let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
     let source = std::fs::read_to_string(path).expect("the program reads");
     if !source.contains("\npub play") && !source.starts_with("pub play") {
-        return (dir, name);
+        let verb = match play_shaped(&source) {
+            true => "play",
+            false => "run",
+        };
+        return (dir, name, verb);
     }
     let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
     let stage =
@@ -313,7 +333,24 @@ fn native_entry(path: &Path) -> (PathBuf, String) {
     let entry = format!("run_{stem}.kso");
     std::fs::write(stage.join(&entry), format!("import \"{stem}\"\n\n{stem}/play\n"))
         .expect("the entry file writes");
-    (stage, entry)
+    (stage, entry, "run")
+}
+
+/// Declarations beside bare statements: the play door, wherever the file
+/// lives. A binding is not a statement — a file of `fn`s and `test_` bindings
+/// is a test file, which has a verb of its own.
+fn play_shaped(source: &str) -> bool {
+    let tops: Vec<&str> = source.lines().filter(|l| !l.is_empty() && !l.starts_with(' ')).collect();
+    let declares = tops.iter().any(|l| l.starts_with("fn ") || l.starts_with("type "));
+    let states = tops.iter().any(|l| {
+        let plain = !l.starts_with("import ")
+            && !l.starts_with("fn ")
+            && !l.starts_with("type ")
+            && !l.starts_with('#');
+        let binds = l.split_once(" = ").is_some_and(|(head, _)| !head.contains(' '));
+        plain && !binds
+    });
+    declares && states
 }
 
 fn stage_tree(from: &Path, to: &Path) {
@@ -337,9 +374,9 @@ fn stage_tree(from: &Path, to: &Path) {
 fn natively(path: &Path) -> (i32, String) {
     // from the program's own directory, under its bare name: an err stamps
     // the path it was given, and the wasm side is only ever given a basename
-    let (dir, entry) = native_entry(path);
+    let (dir, entry, verb) = native_entry(path);
     let done = std::process::Command::new(env!("CARGO_BIN_EXE_kanso"))
-        .args(["run", &entry])
+        .args([verb, &entry])
         .current_dir(&dir)
         .env("KANSO_SEED", SEED_TEXT)
         .output()

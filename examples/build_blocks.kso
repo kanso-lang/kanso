@@ -2,15 +2,14 @@ type node
   id
   peers
 
-pub play =
-  graph = build
-    a = node "a" []
-    b = node "b" [a]
-    a.peers = [b]
-    [a b]
-  ring = build
-    base = node "seed" []
-    base.peers = [base]
-    base
-  print "{graph}"
-  >> print "{ring}"
+graph = build
+  a = node "a" []
+  b = node "b" [a]
+  a.peers = [b]
+  [a b]
+ring = build
+  base = node "seed" []
+  base.peers = [base]
+  base
+print "{graph}"
+>> print "{ring}"

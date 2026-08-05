@@ -3,7 +3,6 @@ type post
   body
   title
 
-pub play =
-  hello = post "clay" "a language of only decisions" "hello kanso"
-  { author:writer title } = hello
-  print "{title}, by {writer}"
+hello = post "clay" "a language of only decisions" "hello kanso"
+{ author:writer title } = hello
+print "{title}, by {writer}"

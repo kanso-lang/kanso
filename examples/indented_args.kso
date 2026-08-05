@@ -9,11 +9,10 @@ fn judge n
     "small enough for the first branch of the indented expression form"
     "large enough for the second branch of the indented expression form"
 
-pub play =
-  card = brochure
-    "the long-name matcha parfait of the west garden annex"
-    1200
-    "a dessert whose description would never have fit inline"
-  print card
-  >> print (judge 4)
-  >> print (judge 40)
+card = brochure
+  "the long-name matcha parfait of the west garden annex"
+  1200
+  "a dessert whose description would never have fit inline"
+print card
+>> print (judge 4)
+>> print (judge 40)

@@ -10,8 +10,7 @@ import "std/list"
 fn fetch_quote city
   length city * 130
 
-pub play =
-  cities = ["tokyo" "kyoto" "osaka" "sapporo"]
-  quotes = list/map cities (c -> fetch_quote c)
-  cheapest = (list/sort quotes)[1]
-  print "four lookups fanned out, one answer fanned in: {cheapest} yen"
+cities = ["tokyo" "kyoto" "osaka" "sapporo"]
+quotes = list/map cities (c -> fetch_quote c)
+cheapest = (list/sort quotes)[1]
+print "four lookups fanned out, one answer fanned in: {cheapest} yen"

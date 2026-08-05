@@ -231,26 +231,41 @@ fn mem_corpus_interp_matches_the_semantic_counters() {
 
 /// A corpus case exports `play` and is a library, so what gets compiled is an
 /// entry that imports it — the same wrapper `kanso run` is handed, since the
-/// language knows no such name. A case that is already an entry file compiles
-/// under its bare name, as the CLI is invoked from the case's directory, so
-/// err origins in traces name the file identically.
+/// language knows no such name. Everything else compiles under its bare name,
+/// as the CLI is invoked from the case's directory, so err origins in traces
+/// name the file identically — through the play door when the file holds
+/// definitions beside statements, which is the door its reader would use.
 fn compile_case(program: &Path) -> kanso::ast::Program {
     let source = std::fs::read_to_string(program).expect("case source reads");
+    let file =
+        program.file_name().and_then(|name| name.to_str()).expect("kso files have utf-8 names");
     let compiled = match source.contains("\npub play") || source.starts_with("pub play") {
         true => {
             let entry = staged_entry(program);
             let wrapper = std::fs::read_to_string(&entry).expect("the entry reads");
             kanso::compile_entry(&entry.to_string_lossy(), &wrapper)
         }
-        false => {
-            let file = program
-                .file_name()
-                .and_then(|name| name.to_str())
-                .expect("kso files have utf-8 names");
-            kanso::compile_entry(file, &source)
-        }
+        false if play_shaped(&source) => kanso::compile_play_file(file, &source),
+        false => kanso::compile_entry(file, &source),
     };
     compiled.unwrap_or_else(|rendered| panic!("compile failed for {program:?}:\n{rendered}"))
+}
+
+/// A file holding declarations beside bare statements is a play file. A
+/// binding is not a statement: a file of `fn`s and `test_` bindings is a test
+/// file, and it has a verb of its own.
+fn play_shaped(source: &str) -> bool {
+    let tops: Vec<&str> = source.lines().filter(|l| !l.is_empty() && !l.starts_with(' ')).collect();
+    let declares = tops.iter().any(|l| l.starts_with("fn ") || l.starts_with("type "));
+    let states = tops.iter().any(|l| {
+        let plain = !l.starts_with("import ")
+            && !l.starts_with("fn ")
+            && !l.starts_with("type ")
+            && !l.starts_with('#');
+        let binds = l.split_once(" = ").is_some_and(|(head, _)| !head.contains(' '));
+        plain && !binds
+    });
+    declares && states
 }
 
 /// Where a case's directory is staged. The CLI runs from that directory and

@@ -2,10 +2,9 @@ type node
   id
   peer
 
-pub play =
-  ring = build
-    a = node 1 none
-    b = node 2 0
-    a.peer = b
-    a
-  print "{ring}"
+ring = build
+  a = node 1 none
+  b = node 2 0
+  a.peer = b
+  a
+print "{ring}"
