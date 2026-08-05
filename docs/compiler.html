@@ -170,7 +170,7 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <span class="eyebrow">the compiler</span>
 <h1>guardrails, not lifetimes</h1>
 
-<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same machine and the same file, are the json decoders people actually ship. the clock is milliseconds of cpu per decode — 2026-07-27, on a quiet desktop, load average under five. the four run interleaved, and each per-decode cost is read as a slope: the same decoder built to run 150 times and 450 times, floors differenced over the extra 300, which cancels process startup and the file read for all four alike. cpu time rather than wall time because it is the precise instrument — it counts only what the process spent, so a passing background task cannot inflate it. one caveat it carries: cpu time bills every thread, so go's collector threads count against it, and go's wall figure is 1.80 rather than 1.95. shorter is faster.</p>
+<p>here is a json decoder reading a 188&nbsp;kb file—nested objects, arrays, escapes, unicode. it is written in a pure language with no pointers, no manual memory, and not one lifetime annotation. beside it, on the same runner and the same file, is the json decoder a rust team hand-tunes and ships. the clock is milliseconds per decode, measured by ci on the merge that published this page, and the two lanes run interleaved so contention leans on both at once. what the row claims is the ratio; the absolute millisecond belongs to whatever machine github handed the job. shorter is faster.</p>
 
 <ul class="book-toc page-toc">
   <li><a href="#idea"><span class="ch-num">01</span><span class="ch-title">constraints buy freedom</span></a></li>
@@ -207,7 +207,25 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 <p class="board-note">measured by ci on the merge that published this page: 5 interleaved rounds on a shared runner, averaged. serde_json ahead by 1.9%. the ratio is the claim; the milliseconds wobble.</p>
 <!--/relative-->
 
-<p>the board is two lanes because those are the two ci runs on every merge: kanso against <code>serde_json</code>, the parser a rust team hand-tunes and actually ships. the person who wrote the kanso decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. the two run interleaved in one job and the ratio is the claim — contention leans on both lanes at once, so the comparison holds even when the absolute milliseconds wobble. wider comparisons — a plainly-written rust parser, go's <code>encoding/json</code> — live in the recipe at the bottom of this page, which you can run on your own machine in a few minutes.</p>
+<p>the board above is two lanes because those are the two ci races on every merge: kanso against <code>serde_json</code>, the parser a rust team hand-tunes and actually ships. the person who wrote the kanso decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy.</p>
+
+<p>the wider field is a demonstration rather than a gate, re-sat on a quiet desktop when a release goes out. it is a different instrument — milliseconds of cpu per decode, read as a slope from the same decoder built to run 150 times and 450 times so process startup and the file read cancel — and the four lanes ran interleaved:</p>
+
+<table class="bench-table">
+  <thead>
+    <tr><th>decoder</th><th class="num">ms/decode</th><th class="num">peak mem</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>kanso + arenas</td><td class="num">0.78</td><td class="num">4.1 mb</td></tr>
+    <tr><td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td><td class="num">0.87</td><td class="num">7.0 mb</td></tr>
+    <tr><td>reasonably-written rust</td><td class="num">1.02</td><td class="num">7.1 mb</td></tr>
+    <tr><td>go encoding/json</td><td class="num">1.95</td><td class="num">10.6 mb</td></tr>
+  </tbody>
+</table>
+
+<p class="board-note">sat 2026-07-27 on a quiet desktop, load average under five; re-sat at releases. cpu time bills every thread, so go's collector counts against it — go's wall figure is 1.80 rather than 1.95.</p>
+
+<p>a reasonably-written rust parser running the same algorithm trails by a fifth, and go takes better than twice as long with its collector working. the recipe at the bottom of this page runs the whole field on your own machine in a few minutes.</p>
 
 <p>a pure, annotation-free language keeping pace with hand-tuned rust is a claim worth doubting. so the rest of this page is the evidence: the papers we read, the experiments that failed (twice, in one case), the one idea that did most of the work, and the recipe. no lifetimes, no garbage collector, no annotations — guardrails instead.</p>
 
