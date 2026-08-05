@@ -182,7 +182,7 @@ fn shaped module expr
   """
     import "std/{module}"
 
-    pub play = print "\{{expr}}"
+    print "\{{expr}}"
   """
 
 fn asked argv
@@ -199,10 +199,10 @@ fn hung? _
 fn ran source
   io/write_file probe source . (_ -> both)
 
-both = asked ["run" probe] . against
+both = asked ["play" probe] . against
 
 fn against native
-  asked ["run" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -255,7 +255,7 @@ fn reported module rest count expr v
 sample = """
   import "std/text"
 
-  pub play = print "\{1}"
+  print "\{1}"
 """
 
 complaint = "the probe shape changed: probes must interpolate\n"

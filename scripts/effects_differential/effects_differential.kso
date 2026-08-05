@@ -213,16 +213,13 @@ all_probes = text/concat probes tail
 # engines, which would read as agreement.
 imports = "import \"std/io\"\n\n"
 
-# A body with a newline in it is a block, and adjacent statements in a block
-# are a parallel group; a single expression is written on the `=` line.
-fn source_for body true
-  "{imports}pub play = {body}\n"
-
-fn source_for body false
-  "{imports}pub play =\n  {body}\n"
-
+# The probe is a play file: its statements sit at the top level, where
+# adjacent ones are a parallel group exactly as they were inside a block.
+# A probe body is written as a block's lines, so the indent that made them
+# one comes off.
 fn shaped body
-  source_for body (length (text/split body "\n") == 1)
+  lines = text/split body "\n  "
+  "{imports}{text/join lines "\n"}\n"
 
 # A legal probe that never returns is a finding, and a louder one than a
 # wording difference — so every run is under `timeout`, which answers 124 when
@@ -242,10 +239,10 @@ fn hung? _
 fn ran source
   io/write_file probe source . (_ -> both)
 
-both = asked ["run" probe] . against
+both = asked ["play" probe] . against
 
 fn against native
-  asked ["run" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -308,7 +305,7 @@ complaint = "the probe shape changed: probes must interpolate\n"
 sample = """
   import "std/io"
 
-  pub play = io/write "\{1}"
+  io/write "\{1}"
 """
 
 fn begun false

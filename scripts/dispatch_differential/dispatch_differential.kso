@@ -270,16 +270,17 @@ cases19 = text/concat cases18 [pu]
 
 cases = text/concat cases19 [pv]
 
-# A probe whose expression spans lines is a block under `pub play`; a single
-# expression is printed inline.
+# A probe whose expression spans lines is written as statements; a single
+# expression is printed inline. Either way the probe is a play file, so its
+# statements sit at the top level.
 fn shaped a true
-  "{a.decls}\npub play = print \"\{{a.shown}}\"\n"
+  "{a.decls}\nprint \"\{{a.shown}}\"\n"
 
 fn shaped a false
+  lines = text/split a.shown "\n  "
   """
     {a.decls}
-    pub play =
-      {a.shown}
+    {text/join lines "\n"}
   """
 
 fn source_for a
@@ -297,10 +298,10 @@ fn hung? _
 fn ran source
   io/write_file probe source . (_ -> both)
 
-both = asked ["run" probe] . against
+both = asked ["play" probe] . against
 
 fn against native
-  asked ["run" probe "--interp"] . (interp -> answer native interp)
+  asked ["play" probe "--interp"] . (interp -> answer native interp)
 
 fn answer n i
   stalled n i (hung? n.status or hung? i.status)
@@ -364,7 +365,7 @@ fn reported a rest count v
 
 # A probe that lost its interpolation prints a plain string, which both engines
 # render identically — so the sweep agrees with itself about nothing.
-sample = "d\npub play = print \"\{1}\"\n"
+sample = "d\nprint \"\{1}\"\n"
 
 complaint = "the probe shape changed: probes must interpolate\n"
 
