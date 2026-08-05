@@ -6,7 +6,13 @@ is stale — say so.
 
 ## Waiting on Clay
 
-Nothing.
+**Two errs in one operation keep the left one, where a parallel group merges
+both** (task #140). Measured: every operator propagates an err from either
+side, but `boom "a" + boom "b"` answers `a` and discards `b`, while
+`print x >> print y` with both failing answers one err whose reason is
+`[a b]`. Merge for consistency, or first-wins because an operator reads
+left to right? My recommendation is merge; it changes every arithmetic path,
+so it is yours.
 
 ## In flight
 
