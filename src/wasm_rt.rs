@@ -455,6 +455,7 @@ pub extern "C" fn rt_err_stamp(h: u32, origin_lit: u32) -> u32 {
                 origin: Some(lit_str(origin_lit)),
                 hops: info.hops.clone(),
                 cause: info.cause.clone(),
+                merged: info.merged,
             }))))
         }
         _ => h,
