@@ -179,6 +179,11 @@ pub enum Desc {
     WriteFile(String, String),
     Run(String, Vec<String>),
     Bind(Rc<Desc>, Value),
+    Listen(i64),
+    Accept(i64),
+    Receive(i64),
+    Send(i64, String),
+    CloseSocket(i64),
     Sleep(u64),
     Random(u64),
     Nil,
@@ -346,6 +351,24 @@ pub trait Executor {
     /// already exists — a generator run twice is the ordinary case.
     fn make_dir(&mut self, path: &str) -> Result<(), String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
+    /// A socket listening on a port, answering the handle a later accept
+    /// names. Every engine that has a filesystem has these; the browser has
+    /// neither, and says so.
+    fn listen(&mut self, _port: i64) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn accept(&mut self, _listener: i64) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn receive(&mut self, _conn: i64) -> Result<String, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn send(&mut self, _conn: i64, _text: &str) -> Result<(), String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn close_socket(&mut self, _handle: i64) -> Result<(), String> {
+        Err("this engine has no sockets".to_string())
+    }
     /// Pause wall-clock time. The scheduler decides output *order*; sleep only
     /// makes a concurrent program take real time, so a viewer feels the
     /// overlap. Default is virtual (no wait) — output is identical either way.
@@ -367,9 +390,104 @@ pub struct RealExecutor {
     pub rng: Rng,
 }
 
+thread_local! {
+    /// Sockets live for the run rather than in the executor, which is built
+    /// in half a dozen places and copied into none of them. A handle is the
+    /// number a program holds; what it names stays here.
+    static SOCKETS: std::cell::RefCell<Sockets> = std::cell::RefCell::new(Sockets::default());
+}
+
+#[derive(Default)]
+struct Sockets {
+    next: i64,
+    listeners: std::collections::HashMap<i64, std::net::TcpListener>,
+    conns: std::collections::HashMap<i64, std::net::TcpStream>,
+}
+
+impl Sockets {
+    fn hand(&mut self) -> i64 {
+        self.next += 1;
+        self.next
+    }
+}
+
 impl Executor for RealExecutor {
     fn print(&mut self, text: &str) {
         println!("{text}");
+    }
+
+    /// A port of 0 asks the operating system for a free one, and the handle
+    /// answers it — a test that pinned a port would collide with whatever
+    /// else is running on the machine.
+    fn listen(&mut self, port: i64) -> Result<i64, String> {
+        let socket = std::net::TcpListener::bind(("127.0.0.1", port as u16))
+            .map_err(|e| format!("cannot listen on port {port}: {e}"))?;
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let handle = s.hand();
+            s.listeners.insert(handle, socket);
+            Ok(handle)
+        })
+    }
+
+    fn accept(&mut self, listener: i64) -> Result<i64, String> {
+        let socket = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.listeners.get(&listener);
+            found.map(|l| l.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(socket) = socket else {
+            return Err(format!("{listener} is not a listener"));
+        };
+        let (stream, _) = socket.accept().map_err(|e| format!("cannot accept: {e}"))?;
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let handle = s.hand();
+            s.conns.insert(handle, stream);
+            Ok(handle)
+        })
+    }
+
+    /// One read of what has arrived. An HTTP request that spans packets is
+    /// the caller's problem to notice, which is what content-length is for.
+    fn receive(&mut self, conn: i64) -> Result<String, String> {
+        use std::io::Read;
+        let mut stream = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.conns.get(&conn);
+            found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(stream) = stream.as_mut() else {
+            return Err(format!("{conn} is not a connection"));
+        };
+        let mut buffer = [0u8; 65536];
+        let read = stream.read(&mut buffer).map_err(|e| format!("cannot read: {e}"))?;
+        Ok(String::from_utf8_lossy(&buffer[..read]).into_owned())
+    }
+
+    fn send(&mut self, conn: i64, text: &str) -> Result<(), String> {
+        use std::io::Write;
+        let mut stream = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.conns.get(&conn);
+            found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(stream) = stream.as_mut() else {
+            return Err(format!("{conn} is not a connection"));
+        };
+        stream.write_all(text.as_bytes()).map_err(|e| format!("cannot write: {e}"))?;
+        stream.flush().map_err(|e| format!("cannot write: {e}"))
+    }
+
+    fn close_socket(&mut self, handle: i64) -> Result<(), String> {
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let closed = s.conns.remove(&handle).is_some() || s.listeners.remove(&handle).is_some();
+            match closed {
+                true => Ok(()),
+                false => Err(format!("{handle} is not an open socket")),
+            }
+        })
     }
 
     fn write(&mut self, text: &str) {
@@ -1694,6 +1812,56 @@ impl<'a> Interp<'a> {
                     });
                 };
                 Ok(Value::Desc(Rc::new(Desc::MakeDir(path.clone()))))
+            }
+            "listen" => {
+                let [port] = arity(args, name, span)?;
+                let Value::Int(port) = &port else {
+                    return Err(RuntimeError {
+                        message: "listen takes a port number".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Listen(port.to_i64().unwrap_or(-1)))))
+            }
+            "accept" => {
+                let [listener] = arity(args, name, span)?;
+                let Value::Int(listener) = &listener else {
+                    return Err(RuntimeError {
+                        message: "accept takes a listener".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Accept(listener.to_i64().unwrap_or(-1)))))
+            }
+            "net_read" => {
+                let [conn] = arity(args, name, span)?;
+                let Value::Int(conn) = &conn else {
+                    return Err(RuntimeError {
+                        message: "net_read takes a connection".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Receive(conn.to_i64().unwrap_or(-1)))))
+            }
+            "net_write" => {
+                let [conn, text] = arity(args, name, span)?;
+                let (Value::Int(conn), Value::Str(text)) = (&conn, &text) else {
+                    return Err(RuntimeError {
+                        message: "net_write takes a connection and a string".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Send(conn.to_i64().unwrap_or(-1), text.clone()))))
+            }
+            "net_close" => {
+                let [handle] = arity(args, name, span)?;
+                let Value::Int(handle) = &handle else {
+                    return Err(RuntimeError {
+                        message: "net_close takes a listener or a connection".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::CloseSocket(handle.to_i64().unwrap_or(-1)))))
             }
             "write_file" => {
                 let [path, content] = arity(args, name, span)?;
@@ -3137,6 +3305,26 @@ impl<'a> Interp<'a> {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
+            Desc::Listen(port) => Ok(match executor.listen(*port) {
+                Ok(handle) => Value::Int(handle.into()),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Accept(listener) => Ok(match executor.accept(*listener) {
+                Ok(handle) => Value::Int(handle.into()),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Receive(conn) => Ok(match executor.receive(*conn) {
+                Ok(text) => Value::Str(text),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::CloseSocket(handle) => Ok(match executor.close_socket(*handle) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
         }
     }
 
@@ -3292,6 +3480,11 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::MakeDir(path) => out.push_str(&format!("  make_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
+        Desc::Listen(port) => out.push_str(&format!("  listen {port}\n")),
+        Desc::Accept(listener) => out.push_str(&format!("  accept {listener}\n")),
+        Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
+        Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
+        Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out);
             out.push_str("  . <continuation>\n");

@@ -625,6 +625,7 @@ fn desc_yield(e: &Expr) -> Set {
                 if matches!(
                     base(n),
                     "print" | "write" | "write_err" | "write_file" | "make_dir" | "sleep"
+                        | "net_write" | "net_close"
                 ) =>
             {
                 0
@@ -685,7 +686,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "sqrt" => FLOAT | fails,
         "round" => INT | fails,
         "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
-        | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" => DESC | fails,
+        | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "listen" | "accept"
+        | "net_read" | "net_write" | "net_close" => DESC | fails,
         _ => TOP,
     }
 }
