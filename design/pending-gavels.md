@@ -839,3 +839,41 @@ each clause are in the compiler log entry of the same date.
 **Buildable now:** clause 3 and 4 need no lattice work — ERR is its own bit,
 outside the REC collapse that blocks the rest. Everything touching user record
 types waits on refining REC.
+
+## 12. GAVELED 2026-08-06: effects are invisible; the compiler tracks them
+
+Clay: "effects are invisible to the user. the compiler tracks them."
+
+A function is written as though it receives a string. The compiler knows the
+string arrived through an effect and carries that fact alongside the value.
+io-ness is a property the fixpoint maintains, never a wrapper the value sits
+inside — which is the whole difference from Haskell, where `IO a` and `a` are
+distinct types and `pure` exists only to convert between them.
+
+**What this retires**, each of which had been treated as work to do:
+
+- `answer` / entry 18 — nothing to lift into, so no lift. Retired, not renamed.
+- the narrowing handler (`fn as_io d:io` / `fn as_io v`) — no io-or-value union
+  exists to narrow.
+- `io` as a matchable type name — nothing to match on.
+- `io[t]` — already ruled unnecessary; now doubly so.
+- the runtime error `log_if false _ -> none` currently dies with (`>>` sequences
+  two effect descriptions) — the arms simply unify.
+
+**What survives.** `>>`, because ordering through the world cannot be inferred:
+`write_file p` then `read_file q` share no value, and whether p and q name the
+same file is a runtime question. Only the author knows, and `>>` is how they
+say it. Adjacency stays parallel (settled).
+
+**Open, and it decides the size of the change.** Whether `.` retires with the
+rest. It is 349 sites against `>>`'s 287. For effects it becomes unnecessary —
+`text = io/read_file p` then use `text`. But `.` also pipes plain values today
+(`"from cache" . (s -> ...)` works), so it may survive as the pure pipe while
+ceasing to be the effect bind. That is a separate ruling and the migration
+depends on it.
+
+**Not yet worked out:** how the runtime keeps what it needs. The scheduler holds
+and resumes continuation descriptions, and `accept` yields by handing one back.
+Those are internal and unaffected in principle — representation and surface
+semantics are different questions — but nobody has checked that the internal
+form survives untouched when the surface one goes.
