@@ -793,3 +793,49 @@ cannot short-circuit something already paid for.
 **Not a gavel, already fixed:** the engines disagreed. Native's `k_seq` merged
 where the interpreter and chapter four short-circuit. Both engines say the
 book's rule again.
+
+## 11. GAVELED 2026-08-06: one bind, and the err arm is optional
+
+Reached across a long dialog that started from "what does `>>` do with a
+function answering either a description or an err". The measurements behind
+each clause are in the compiler log entry of the same date.
+
+**Ruled.**
+
+1. **One bind.** `.` and nothing else. No `bind_error`, no error-side twin.
+   Every use case for one — substitute a default, try another source, convert
+   to a value — is ordinary dispatch once the failure is a value, and the two
+   that remain are `wrap_err` and the endpoint.
+2. **The callback's argument is not typed at the bind.** Whatever the effect
+   may yield is handled by the callback's own arms, dispatched internally.
+3. **An arm that takes an err must answer an err** — scoped to bind-callback
+   use, not to the declaration, so an ordinary function may still inspect an
+   err and answer something else. This is what makes swallowing impossible:
+   Java allows `catch (e) {}` and Rust allows `.ok()`, and an arm that can
+   only answer an err can enrich the trace and nothing else.
+4. **The err arm is optional.** Absent means pass-through, which is today's
+   behaviour and costs nothing. Writing one is how you add context.
+
+**Established alongside, not yet ruled.**
+
+- Exceptional means *declined*. A case you chose not to handle, with the
+  degenerate case being one you never knew existed. OOM is declined, not a
+  broken model.
+- Bubbling is structural rather than instrumental: to decline is to have no
+  answer, and a frame that cannot produce a value cannot return. Reporting is
+  downstream of that, not its purpose.
+- Handleable failure should be a value. The stdlib is already split against
+  its own gavel — `env` answers none, `exists` answers false, `run` answers a
+  status, while `read_file` and `list_dir` raise. The last two are the
+  outliers, and a missing file is no more exceptional than an unset variable.
+- The enforcement is coverage over the yield set, and it is absent: `env`
+  yields `string | none`, a block handling only the string passes `check` and
+  dies at run time. Build that BEFORE migrating the outliers, or two loud
+  failures become two silent ones.
+- `answer`, not `pure`. Already the house verb, 28 uses in eval.rs.
+- `io[t]` is not needed. Dispatch on the yield happens inside the block where
+  the value exists; the compiler already tracks yields and enforces nothing.
+
+**Buildable now:** clause 3 and 4 need no lattice work — ERR is its own bit,
+outside the REC collapse that blocks the rest. Everything touching user record
+types waits on refining REC.
