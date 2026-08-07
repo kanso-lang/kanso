@@ -1,0 +1,4 @@
+left first: ["a" "b" "c"]
+right first: ["a" "b" "c"]
+list reason: [["a" "b"] "c"]
+the wall: a

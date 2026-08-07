@@ -5,32 +5,45 @@ literature → dream grounded-but-wild ideas → refute each with a skeptic →
 synthesize. 16 ideas generated; 0 survived unqualified, 9 partial, 7 refuted.
 Every claim is falsifiable against the tree or a named paper.
 
-## 0. The receipt that reframes everything (STALE — see note)
+## Where every idea stands
 
-**This section describes a tree from before the uniqueness campaign.**
-`linear.rs` is consumed by codegen (which selects `push_mut` at proven
-sites), `k_b_push_mut` is called, and the gauntlet reports 334,950 buffer
-reuses per run. The honest baseline is no longer "beats + copying
-construction". Left in place because the reasoning that follows it is
-still worth reading; the premise is not.
+Twelve ideas, and the state of each. The prose below carries the reasoning;
+this says only which of them are in the tree.
 
-## 0. The receipt as originally written (VERIFIED against the tree, then)
+| # | idea | state |
+|---|---|---|
+| 3.1 | wire `linear.rs` into codegen | **shipped** — consumed at four sites in `beat.rs`; codegen selects `k_b_push_mut`; 334,950 buffer reuses per gauntlet run |
+| 3.2 | free-the-top mini-rewind | **declined** 2026-07-27, with the reopening condition named |
+| 3.3 | generalize the non-heap-scalar rewind | **unverified** — the cited `runtime.c:134` has moved and the `SCALAR` set now lives in `beat.rs`; nobody has rechecked whether the generalization landed |
+| 3.4 | three-way escape split | **declined** 2026-07-27, measured |
+| 3.5 | `--explain-copies` + AARA footprint ratchet | **half shipped** — the counter stack exists and is CI-gated; the diagnostic naming each copy's source site does not |
+| 3.6 | TRMC | **shipped** (#394, #395) |
+| 3.7 | cohort-counting soundness ratchet test | **shipped** |
+| 4.1 | static reuse-in-place inside the build-block | **declined**, measured |
+| 4.2 | tag-hoist under monomorphism speculation | **already harvested** |
+| 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
+| 4.4 | build-blocks hosting in-place graph algorithms | **not expressible today** — the blocker is the block-born rule, not the theorem |
+| 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
 
-Our own honesty tiers are optimistic by one notch. In-place reuse for
-uniquely-owned list builders is treated as **built**. It is not wired:
+Two things this memo does not answer, both from 2026-08-06: evacuation copies
+have no counter, so the cost beats pay for their O(1) frees is unmeasured; and
+nothing has ever been compared against a Perceus runtime, so the mechanism
+question is settled while the scoreboard is empty.
 
-- `src/linear.rs` computes the linearity fixpoint correctly, but **nothing
-  consumes its output** — the only external reference is `pub mod linear;` in
-  lib.rs. Dead analysis.
-- `k_b_push_mut` (runtime.c:1319, the in-place push) is **called by nothing**;
-  it falls back to the copying `k_b_push`. codegen emits neither.
-- The 16-byte `KHeader{rc,pad}` is allocated on **every** heap object; `k_dup`/
-  `k_drop` "count only, no freeing yet"; codegen emits no calls.
+## 0. Where the tree actually stands
 
-So today we pay Perceus's per-object header tax with **none** of the reuse
-benefit, and the marquee "functional-but-in-place" win doesn't fire. The honest
-baseline is **beats + copying construction**, not beats + reuse. (What IS real:
-the beat arena + rewind; JSON decoder flat at ~7.1MB, serde parity.)
+Beat arenas plus rewind are the mechanism, and the reuse path is wired: the
+linearity fixpoint in `src/linear.rs` is consumed by `beat.rs` through
+`fold_spellings` and `in_place_pushes`, codegen selects `k_b_push_mut` at
+proven sites, and the gauntlet reports 334,950 buffer reuses per run. No
+per-object header is allocated — `KHeader` does not exist. The only reference
+count left is on `KThunk`, which is malloc-backed on purpose so a pending thunk
+cannot pin a rewindable region.
+
+So the baseline is **beats + static reuse**. What is not measured is the other
+side of the ledger: a value outliving its beat is evacuated, and nothing counts
+how often or how many bytes. Until that counter exists, the memory claim has
+one side weighed and the other blank.
 
 ## 1. Is beats the frontier?
 
@@ -71,8 +84,8 @@ reuse: a narrow measurable sliver whose right home is the build-block.**
 
 ## 3. Making beats more optimal — survivors ranked (payoff × feasibility)
 
-1. **Wire `linear.rs` into codegen** — the reuse the docs already claim starts
-   firing. Analysis + runtime fn both exist and are tested; only the codegen
+1. **Wire `linear.rs` into codegen — SHIPPED.** The reuse the docs claimed
+   now fires. Analysis + runtime fn both exist and are tested; only the codegen
    selection between `k_b_push`/`k_b_push_mut` is missing. Add an
    observable-allocation-count test, measure the spine case first. *(Memory-
    behavior-sensitive — mutation in place; supervise the x86 gate.)*
@@ -261,8 +274,8 @@ IS a copying-GC minor collection — regresses the defining property).
 beats generational O(live) trace; MLKit confirms). Nothing meaningful left in the
 free schedule; the real gap is the tag. **Perceus-on-beats?** The count never
 (delete the header); static reuse only in a sliver, home is the build-block; the
-LIFO win is cheaper via free-the-top. **Grindable new ground?** Wire the dead
-reuse (3.1, first); free-the-top + generalized scalar rewind; the born-in-shelf
+LIFO win is cheaper via free-the-top. **Grindable new ground?** The reuse is wired
+(3.1); free-the-top + generalized scalar rewind; the born-in-shelf
 survivor split; tag-hoist (the real 13%); auto-SoA (gated on a numeric workload);
 build-blocks for in-place graph algorithms. And before regions ship, write the
 cohort-birthday ratchet test — the highest-value verification target because it's

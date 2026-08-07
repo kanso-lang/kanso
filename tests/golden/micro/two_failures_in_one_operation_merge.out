@@ -1,0 +1,4 @@
+both: ["a" "b"]
+left: a
+right: b
+compared: ["a" "b"]

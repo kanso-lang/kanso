@@ -74,6 +74,11 @@ pub struct ErrInfo {
     /// The err this one was wrapped around, kept so a re-raise never
     /// discards what it was told (`wrap_err`).
     pub cause: Option<Rc<ErrInfo>>,
+    /// Whether this err's reason is a list *of reasons* rather than one
+    /// reason that happens to be a list. Merging is a fold, so three failures
+    /// answer three reasons however they were grouped — and `err ["a" "b"]`
+    /// stays one reason, which is why the mark cannot be read off the shape.
+    pub merged: bool,
 }
 
 /// The evaluation frame an expression runs in, as an err-origin prefix
@@ -89,7 +94,7 @@ pub fn origin_at(frame: &Frame, span: Span) -> Option<Rc<str>> {
 }
 
 pub fn err_value(reason: Value, origin: Option<Rc<str>>) -> Value {
-    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new(), cause: None }))
+    Value::ErrV(Rc::new(ErrInfo { reason, origin, hops: Vec::new(), cause: None, merged: false }))
 }
 
 /// A byte list (the scanner's `bytes`/`slice` view) as its utf-8 text, so a
@@ -122,6 +127,7 @@ pub fn hop(failure: Value, name: &str) -> Value {
                 origin: info.origin.clone(),
                 hops,
                 cause: info.cause.clone(),
+                merged: info.merged,
             }))
         }
         other => other,
@@ -178,10 +184,24 @@ pub enum Desc {
     MakeDir(String),
     WriteFile(String, String),
     Run(String, Vec<String>),
+    Start(String, Vec<String>),
+    Kill(i64),
     Bind(Rc<Desc>, Value),
+    Await(i64),
+    Listen(i64),
+    Accept(i64),
+    Receive(i64),
+    Send(i64, String),
+    CloseSocket(i64),
     Sleep(u64),
     Random(u64),
     Nil,
+}
+
+/// What a finished process answers: its status and the two streams.
+fn ran_value(done: (i64, String, String)) -> Value {
+    let (status, out, errs) = done;
+    Value::List(Rc::new(vec![Value::Int(status.into()), Value::Str(out), Value::Str(errs)]))
 }
 
 /// SplitMix64: a deterministic, seedable generator. A real run draws its
@@ -326,6 +346,23 @@ pub trait Executor {
     /// because a caller usually wants to read it rather than be stopped by
     /// it. `Err` is reserved for the process never starting at all.
     fn run(&mut self, cmd: &str, args: &[String]) -> Result<(i64, String, String), String>;
+    /// Starts a process and answers a handle. A fiber running one must not
+    /// hold the runtime while it waits, or nothing else in its parallel group
+    /// can make the progress the process is waiting for.
+    fn start(&mut self, cmd: &str, args: &[String]) -> Result<i64, String> {
+        let _ = (cmd, args);
+        Err("this engine cannot start processes".to_string())
+    }
+    /// `None` while it is still running; the scheduler puts the fiber back.
+    fn finished(&mut self, _handle: i64) -> Result<Option<(i64, String, String)>, String> {
+        Err("this engine cannot start processes".to_string())
+    }
+    /// Ends a process the program is holding, and reaps it. A program that
+    /// starts something outliving its usefulness — a browser that ignores its
+    /// own exit budget — has no other way to be done with it.
+    fn kill(&mut self, _handle: i64) -> Result<(), String> {
+        Err("this engine cannot start processes".to_string())
+    }
     fn write(&mut self, text: &str);
     /// Diagnostics, so a tool's chatter stays out of what it is piped into.
     fn write_err(&mut self, text: &str);
@@ -346,6 +383,27 @@ pub trait Executor {
     /// already exists — a generator run twice is the ordinary case.
     fn make_dir(&mut self, path: &str) -> Result<(), String>;
     fn write_file(&mut self, path: &str, content: &str) -> Result<(), String>;
+    /// A socket listening on a port, answering the handle a later accept
+    /// names. Every engine that has a filesystem has these; the browser has
+    /// neither, and says so.
+    fn listen(&mut self, _port: i64) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    /// Asks whether a connection is waiting. `None` means not yet, and the
+    /// scheduler puts the fiber back — a server is one statement of a
+    /// parallel group and must not hold the runtime while it waits.
+    fn accept(&mut self, _listener: i64) -> Result<Option<i64>, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn receive(&mut self, _conn: i64) -> Result<String, String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn send(&mut self, _conn: i64, _text: &str) -> Result<(), String> {
+        Err("this engine has no sockets".to_string())
+    }
+    fn close_socket(&mut self, _handle: i64) -> Result<(), String> {
+        Err("this engine has no sockets".to_string())
+    }
     /// Pause wall-clock time. The scheduler decides output *order*; sleep only
     /// makes a concurrent program take real time, so a viewer feels the
     /// overlap. Default is virtual (no wait) — output is identical either way.
@@ -367,9 +425,172 @@ pub struct RealExecutor {
     pub rng: Rng,
 }
 
+thread_local! {
+    /// Sockets live for the run rather than in the executor, which is built
+    /// in half a dozen places and copied into none of them. A handle is the
+    /// number a program holds; what it names stays here.
+    static SOCKETS: std::cell::RefCell<Sockets> = std::cell::RefCell::new(Sockets::default());
+    static KIDS: std::cell::RefCell<Kids> = std::cell::RefCell::new(Kids::default());
+}
+
+#[derive(Default)]
+struct Kids {
+    next: i64,
+    running: std::collections::HashMap<i64, std::process::Child>,
+}
+
+#[derive(Default)]
+struct Sockets {
+    next: i64,
+    listeners: std::collections::HashMap<i64, std::net::TcpListener>,
+    conns: std::collections::HashMap<i64, std::net::TcpStream>,
+}
+
+impl Sockets {
+    fn hand(&mut self) -> i64 {
+        self.next += 1;
+        self.next
+    }
+}
+
 impl Executor for RealExecutor {
     fn print(&mut self, text: &str) {
         println!("{text}");
+    }
+
+    fn start(&mut self, cmd: &str, args: &[String]) -> Result<i64, String> {
+        let child = std::process::Command::new(cmd)
+            .args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|_| format!("cannot start {cmd}"))?;
+        KIDS.with(|k| {
+            let mut k = k.borrow_mut();
+            k.next += 1;
+            let handle = k.next;
+            k.running.insert(handle, child);
+            Ok(handle)
+        })
+    }
+
+    fn kill(&mut self, handle: i64) -> Result<(), String> {
+        KIDS.with(|k| {
+            let mut k = k.borrow_mut();
+            let Some(mut child) = k.running.remove(&handle) else {
+                return Err(format!("{handle} is not a running process"));
+            };
+            let _ = child.kill();
+            child.wait().map_err(|e| e.to_string())?;
+            Ok(())
+        })
+    }
+
+    fn finished(&mut self, handle: i64) -> Result<Option<(i64, String, String)>, String> {
+        use std::io::Read;
+        KIDS.with(|k| {
+            let mut k = k.borrow_mut();
+            let Some(child) = k.running.get_mut(&handle) else {
+                return Err(format!("{handle} is not a running process"));
+            };
+            let status = child.try_wait().map_err(|e| e.to_string())?;
+            let Some(status) = status else { return Ok(None) };
+            let mut child = k.running.remove(&handle).expect("just seen");
+            let mut out = String::new();
+            let mut errs = String::new();
+            if let Some(pipe) = child.stdout.as_mut() {
+                let _ = pipe.read_to_string(&mut out);
+            }
+            if let Some(pipe) = child.stderr.as_mut() {
+                let _ = pipe.read_to_string(&mut errs);
+            }
+            // try_wait already reaped it; this says so to anything reading the
+            // types rather than the sequence.
+            let _ = child.wait();
+            Ok(Some((status.code().map_or(128, i64::from), out, errs)))
+        })
+    }
+
+    /// A port of 0 asks the operating system for a free one, and the handle
+    /// answers it — a test that pinned a port would collide with whatever
+    /// else is running on the machine.
+    fn listen(&mut self, port: i64) -> Result<i64, String> {
+        let socket = std::net::TcpListener::bind(("127.0.0.1", port as u16))
+            .map_err(|e| format!("cannot listen on port {port}: {e}"))?;
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let handle = s.hand();
+            s.listeners.insert(handle, socket);
+            Ok(handle)
+        })
+    }
+
+    fn accept(&mut self, listener: i64) -> Result<Option<i64>, String> {
+        let socket = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.listeners.get(&listener);
+            found.map(|l| l.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(socket) = socket else {
+            return Err(format!("{listener} is not a listener"));
+        };
+        socket.set_nonblocking(true).map_err(|e| e.to_string())?;
+        let taken = match socket.accept() {
+            Ok((stream, _)) => stream,
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(None),
+            Err(e) => return Err(format!("cannot accept: {e}")),
+        };
+        // the connection itself blocks again, which is what a fiber holding
+        // one wants: it has work to do and nothing to wait for
+        taken.set_nonblocking(false).map_err(|e| e.to_string())?;
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let handle = s.hand();
+            s.conns.insert(handle, taken);
+            Ok(Some(handle))
+        })
+    }
+
+    /// One read of what has arrived. An HTTP request that spans packets is
+    /// the caller's problem to notice, which is what content-length is for.
+    fn receive(&mut self, conn: i64) -> Result<String, String> {
+        use std::io::Read;
+        let mut stream = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.conns.get(&conn);
+            found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(stream) = stream.as_mut() else {
+            return Err(format!("{conn} is not a connection"));
+        };
+        let mut buffer = [0u8; 65536];
+        let read = stream.read(&mut buffer).map_err(|e| format!("cannot read: {e}"))?;
+        Ok(String::from_utf8_lossy(&buffer[..read]).into_owned())
+    }
+
+    fn send(&mut self, conn: i64, text: &str) -> Result<(), String> {
+        use std::io::Write;
+        let mut stream = SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s.conns.get(&conn);
+            found.map(|c| c.try_clone()).transpose().map_err(|e| e.to_string())
+        })?;
+        let Some(stream) = stream.as_mut() else {
+            return Err(format!("{conn} is not a connection"));
+        };
+        stream.write_all(text.as_bytes()).map_err(|e| format!("cannot write: {e}"))?;
+        stream.flush().map_err(|e| format!("cannot write: {e}"))
+    }
+
+    fn close_socket(&mut self, handle: i64) -> Result<(), String> {
+        SOCKETS.with(|s| {
+            let mut s = s.borrow_mut();
+            let closed = s.conns.remove(&handle).is_some() || s.listeners.remove(&handle).is_some();
+            match closed {
+                true => Ok(()),
+                false => Err(format!("{handle} is not an open socket")),
+            }
+        })
     }
 
     fn write(&mut self, text: &str) {
@@ -1104,6 +1325,10 @@ impl<'a> Interp<'a> {
             Expr::Seq(lhs, rhs, span) => {
                 let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
                 let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
+                // The wall is ordered, so the first failure is the answer and
+                // what follows it never speaks. A parallel group accumulates
+                // because nothing there is first. Dependence decides, which is
+                // the rule chapter four states.
                 if is_failure(&left) {
                     return Ok(left);
                 }
@@ -1314,8 +1539,8 @@ impl<'a> Interp<'a> {
                 span,
             });
         }
-        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
-            return Ok(bad.clone());
+        if args.iter().any(is_failure) {
+            return Ok(merged_failures(&args));
         }
         let mut env = closure.env.clone();
         for (name, value) in closure.params.iter().zip(args) {
@@ -1413,8 +1638,8 @@ impl<'a> Interp<'a> {
                 span,
             });
         }
-        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
-            return Ok(bad.clone());
+        if args.iter().any(is_failure) {
+            return Ok(merged_failures(&args));
         }
         for ((field, tys, _), arg) in ty.fields.iter().zip(&args) {
             if tys.len() >= 2 && !tys.iter().any(|t| type_matches(t, arg)) {
@@ -1593,12 +1818,11 @@ impl<'a> Interp<'a> {
                 origin: origin_at(frame, span),
                 hops: Vec::new(),
                 cause: Some(cause),
+                merged: false,
             })));
         }
-        // the harness's hole, and the second one: `failed?` exists to look at a
-        // failure, so it must be asked before infectiousness answers for it
-        // the harness's hole, and the second one: `failed?` exists to look at a
-        // failure, so it must be asked before infectiousness answers for it
+        // `failed?` exists to look at a failure, so it is asked before a
+        // failing argument answers for the whole call.
         if name == "failed?" {
             let [value] = arity(args, name, span)?;
             return Ok(match is_failure(&value) {
@@ -1606,21 +1830,31 @@ impl<'a> Interp<'a> {
                 false => Value::False,
             });
         }
-        if let Some(bad) = args.iter().find(|a| is_failure(a)) {
-            return Ok(bad.clone());
+        if args.iter().any(is_failure) {
+            return Ok(merged_failures(&args));
         }
         match name {
-            "run" => {
+            "kill" => {
+                let [handle] = arity(args, name, span)?;
+                let Value::Int(handle) = &handle else {
+                    return Err(RuntimeError {
+                        message: "kill takes a started process".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Kill(handle.to_i64().unwrap_or(-1)))))
+            }
+            "run" | "start" => {
                 let [cmd, args_list] = arity(args, name, span)?;
                 let Value::Str(cmd) = cmd else {
                     return Err(RuntimeError {
-                        message: "run takes a command string".to_string(),
+                        message: format!("{name} takes a command string"),
                         span,
                     });
                 };
                 let Value::List(items) = args_list else {
                     return Err(RuntimeError {
-                        message: "run takes a list of argument strings".to_string(),
+                        message: format!("{name} takes a list of argument strings"),
                         span,
                     });
                 };
@@ -1628,13 +1862,16 @@ impl<'a> Interp<'a> {
                 for item in items.iter() {
                     let Value::Str(text) = item else {
                         return Err(RuntimeError {
-                            message: "run takes a list of argument strings".to_string(),
+                            message: format!("{name} takes a list of argument strings"),
                             span,
                         });
                     };
                     argv.push(text.clone());
                 }
-                Ok(Value::Desc(Rc::new(Desc::Run(cmd, argv))))
+                Ok(Value::Desc(Rc::new(match name {
+                    "start" => Desc::Start(cmd, argv),
+                    _ => Desc::Run(cmd, argv),
+                })))
             }
             "read_file" => {
                 let [path] = arity(args, name, span)?;
@@ -1694,6 +1931,56 @@ impl<'a> Interp<'a> {
                     });
                 };
                 Ok(Value::Desc(Rc::new(Desc::MakeDir(path.clone()))))
+            }
+            "listen" => {
+                let [port] = arity(args, name, span)?;
+                let Value::Int(port) = &port else {
+                    return Err(RuntimeError {
+                        message: "listen takes a port number".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Listen(port.to_i64().unwrap_or(-1)))))
+            }
+            "accept" => {
+                let [listener] = arity(args, name, span)?;
+                let Value::Int(listener) = &listener else {
+                    return Err(RuntimeError {
+                        message: "accept takes a listener".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Accept(listener.to_i64().unwrap_or(-1)))))
+            }
+            "net_read" => {
+                let [conn] = arity(args, name, span)?;
+                let Value::Int(conn) = &conn else {
+                    return Err(RuntimeError {
+                        message: "net_read takes a connection".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Receive(conn.to_i64().unwrap_or(-1)))))
+            }
+            "net_write" => {
+                let [conn, text] = arity(args, name, span)?;
+                let (Value::Int(conn), Value::Str(text)) = (&conn, &text) else {
+                    return Err(RuntimeError {
+                        message: "net_write takes a connection and a string".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::Send(conn.to_i64().unwrap_or(-1), text.clone()))))
+            }
+            "net_close" => {
+                let [handle] = arity(args, name, span)?;
+                let Value::Int(handle) = &handle else {
+                    return Err(RuntimeError {
+                        message: "net_close takes a listener or a connection".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::CloseSocket(handle.to_i64().unwrap_or(-1)))))
             }
             "write_file" => {
                 let [path, content] = arity(args, name, span)?;
@@ -2731,14 +3018,43 @@ pub fn join_values(left: Value, right: Value, span: Span) -> EvalResult {
 
 /// Merge two failures: err + err becomes one err whose reason is the list of
 /// both reasons; a `none` adds nothing to an err; two nones stay none.
+/// Every failure among a call's arguments, merged. Two failures in one call
+/// are two facts, and the one that lost a race to be first is not less true —
+/// the parallel group has always merged them, and Clay ruled (2026-08-05) that
+/// an operation does too.
+fn merged_failures(args: &[Value]) -> Value {
+    args.iter()
+        .filter(|a| is_failure(a))
+        .cloned()
+        .reduce(accumulate_failures)
+        .expect("a caller checked that one argument fails")
+}
+
 fn accumulate_failures(left: Value, right: Value) -> Value {
     match (&left, &right) {
         (Value::ErrV(a), Value::ErrV(b)) => {
-            err_value(Value::List(Rc::new(vec![a.reason.clone(), b.reason.clone()])), None)
+            let mut reasons = reasons_of(a);
+            reasons.extend(reasons_of(b));
+            Value::ErrV(Rc::new(ErrInfo {
+                reason: Value::List(Rc::new(reasons)),
+                origin: None,
+                hops: Vec::new(),
+                cause: None,
+                merged: true,
+            }))
         }
         (Value::ErrV(_), _) => left,
         (_, Value::ErrV(_)) => right,
         _ => left,
+    }
+}
+
+/// What an err contributes to a merge: the reasons it already carries if it
+/// was itself merged, and otherwise itself, whatever shape its reason has.
+fn reasons_of(info: &Rc<ErrInfo>) -> Vec<Value> {
+    match (info.merged, &info.reason) {
+        (true, Value::List(items)) => items.as_ref().clone(),
+        _ => vec![info.reason.clone()],
     }
 }
 
@@ -2770,11 +3086,15 @@ fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
 }
 
 pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame) -> EvalResult {
-    if is_failure(&left) {
-        return Ok(left);
-    }
-    if is_failure(&right) {
-        return Ok(right);
+    // Two failures in one operation merge, exactly as two failures in a
+    // parallel group do (Clay, 2026-08-05): neither side caused the other, so
+    // neither deserves top billing, and the one that loses would otherwise be
+    // discarded without a word. One failure propagates as itself.
+    match (is_failure(&left), is_failure(&right)) {
+        (true, true) => return Ok(accumulate_failures(left, right)),
+        (true, false) => return Ok(left),
+        (false, true) => return Ok(right),
+        (false, false) => {}
     }
     if op == "==" || op == "!=" {
         // Asking whether two functions are the same function is asking which
@@ -3097,11 +3417,13 @@ impl<'a> Interp<'a> {
             // three answers in a list, which the std wrapper turns into a
             // record: a builtin cannot name a type declared in kanso.
             Desc::Run(cmd, argv) => Ok(match executor.run(cmd, argv) {
-                Ok((status, out, errs)) => Value::List(Rc::new(vec![
-                    Value::Int(status.into()),
-                    Value::Str(out),
-                    Value::Str(errs),
-                ])),
+                Ok(done) => ran_value(done),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            // Only reached outside a parallel group; step() starts and awaits.
+            Desc::Await(handle) => Ok(match executor.finished(*handle) {
+                Ok(Some(done)) => ran_value(done),
+                Ok(None) => err_value(Value::Str("still running".to_string()), None),
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::Write(text) => {
@@ -3134,6 +3456,37 @@ impl<'a> Interp<'a> {
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
             Desc::WriteFile(path, content) => Ok(match executor.write_file(path, content) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Start(cmd, argv) => Ok(match executor.start(cmd, argv) {
+                Ok(handle) => Value::Int(handle.into()),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Kill(handle) => Ok(match executor.kill(*handle) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Listen(port) => Ok(match executor.listen(*port) {
+                Ok(handle) => Value::Int(handle.into()),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Accept(listener) => Ok(match executor.accept(*listener) {
+                Ok(Some(handle)) => Value::Int(handle.into()),
+                // Reached only outside a parallel group, where no other fiber
+                // could ever connect; step() yields instead of arriving here.
+                Ok(None) => err_value(Value::Str("nothing connected".to_string()), None),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Receive(conn) => Ok(match executor.receive(*conn) {
+                Ok(text) => Value::Str(text),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::Send(conn, text) => Ok(match executor.send(*conn, text) {
+                Ok(()) => Value::NoneV,
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
+            Desc::CloseSocket(handle) => Ok(match executor.close_socket(*handle) {
                 Ok(()) => Value::NoneV,
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
@@ -3227,6 +3580,25 @@ impl<'a> Interp<'a> {
         let origin = Span { line: 0, col: 0 };
         match &**desc {
             Desc::Sleep(ms) => Ok(Step::Blocked(*ms, Rc::new(Desc::Nil))),
+            // A fiber waiting for a connection is a fiber with nothing to do:
+            // it goes back in the queue and the group's other statements run,
+            // which is how anything ever connects to it.
+            Desc::Accept(listener) => match executor.accept(*listener) {
+                Ok(Some(handle)) => Ok(Step::Done(Value::Int(handle.into()))),
+                Ok(None) => Ok(Step::Blocked(1, desc.clone())),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+            },
+            // Same shape for a process: start it, then wait by yielding, so
+            // the other statements of the group run while it does.
+            Desc::Run(cmd, argv) => match executor.start(cmd, argv) {
+                Ok(handle) => Ok(Step::Blocked(1, Rc::new(Desc::Await(handle)))),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+            },
+            Desc::Await(handle) => match executor.finished(*handle) {
+                Ok(Some(done)) => Ok(Step::Done(ran_value(done))),
+                Ok(None) => Ok(Step::Blocked(1, desc.clone())),
+                Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
+            },
             Desc::Seq(a, b) => match self.step(a, executor)? {
                 Step::Blocked(ms, cont) => {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone()))))
@@ -3283,6 +3655,9 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Stdin => out.push_str("  stdin\n"),
         Desc::ReadFile(path) => out.push_str(&format!("  read_file {path:?}\n")),
         Desc::Run(cmd, argv) => out.push_str(&format!("  run {cmd:?} {argv:?}\n")),
+        Desc::Start(cmd, argv) => out.push_str(&format!("  start {cmd:?} {argv:?}\n")),
+        Desc::Kill(handle) => out.push_str(&format!("  kill {handle}\n")),
+        Desc::Await(handle) => out.push_str(&format!("  await {handle}\n")),
         Desc::Write(text) => out.push_str(&format!("  write {text:?}\n")),
         Desc::WriteErr(text) => out.push_str(&format!("  write_err {text:?}\n")),
         Desc::Env(name) => out.push_str(&format!("  env {name:?}\n")),
@@ -3292,6 +3667,11 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::ListDir(path) => out.push_str(&format!("  list_dir {path:?}\n")),
         Desc::MakeDir(path) => out.push_str(&format!("  make_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
+        Desc::Listen(port) => out.push_str(&format!("  listen {port}\n")),
+        Desc::Accept(listener) => out.push_str(&format!("  accept {listener}\n")),
+        Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
+        Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
+        Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
         Desc::Bind(inner, _) => {
             render_plan(inner, out);
             out.push_str("  . <continuation>\n");

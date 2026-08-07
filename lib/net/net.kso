@@ -1,0 +1,36 @@
+# Sockets, in the shape Go's net package has: something you listen with,
+# something a connection is, and four things you do to one. What a program
+# holds is a record; the number inside it is the operating system's and
+# belongs to this module.
+pub type listener
+  handle
+
+pub type conn
+  handle
+
+# Port 0 asks the operating system for a free one, and `port` reads back
+# what it gave — a program that pinned a number would collide with whatever
+# else the machine is running.
+pub fn listen port
+  builtin_listen port . held
+
+fn held h
+  listener h
+
+pub fn accept l
+  builtin_accept l.handle . taken
+
+fn taken h
+  conn h
+
+pub fn read c
+  builtin_net_read c.handle
+
+pub fn write c text
+  builtin_net_write c.handle text
+
+pub fn close_conn c
+  builtin_net_close c.handle
+
+pub fn close_listener l
+  builtin_net_close l.handle

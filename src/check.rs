@@ -2,7 +2,7 @@ use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
 use std::collections::{HashMap, HashSet};
 
-pub const BUILTINS: [&str; 46] = [
+pub const BUILTINS: [&str; 53] = [
     "append",
     "args",
     "bytes",
@@ -26,6 +26,8 @@ pub const BUILTINS: [&str; 46] = [
     "read_file",
     "render_value",
     "run",
+    "start",
+    "kill",
     "round",
     "sleep",
     "slice",
@@ -49,6 +51,11 @@ pub const BUILTINS: [&str; 46] = [
     "write_err",
     "make_dir",
     "write_file",
+    "listen",
+    "accept",
+    "net_read",
+    "net_write",
+    "net_close",
 ];
 
 /// The bare-name subset: what resolves without an import. Everything else
@@ -1483,8 +1490,15 @@ fn builtin_demand(name: &str, index: usize) -> Option<&'static [LitKind]> {
         ("list_dir", &[&[Str]]),
         ("read_file", &[&[Str]]),
         ("run", &[&[Str], &[List]]),
+        ("start", &[&[Str], &[List]]),
+        ("kill", &[&[Int]]),
         ("make_dir", &[&[Str]]),
         ("write_file", &[&[Str], &[Str]]),
+        ("listen", &[&[Int]]),
+        ("accept", &[&[Int]]),
+        ("net_read", &[&[Int]]),
+        ("net_write", &[&[Int], &[Str]]),
+        ("net_close", &[&[Int]]),
         ("push", &[&[List]]),
         ("put", &[&[Map]]),
         ("sleep", &[&[Int]]),

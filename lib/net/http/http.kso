@@ -1,0 +1,94 @@
+import "std/net"
+import "std/text"
+
+# HTTP in the shape Go's net/http has, with one difference that matters: a
+# handler is a plain function from a request to a response. There is no writer
+# to hand it and no recorder to fake, so a test calls it and reads the value it
+# answers — and injecting a different handler is passing a different function,
+# because a function is already a value.
+pub type request
+  method
+  path
+  body
+
+pub type turn
+  answer
+  carried
+
+pub type response
+  status
+  reason
+  headers
+  body
+
+pub fn ok body
+  response 200 "OK" [] body
+
+pub fn text_page body
+  response 200 "OK" ["content-type: text/plain; charset=utf-8"] body
+
+pub not_found = response 404 "Not Found" [] "not found\n"
+
+# Parsing stops at the head because that is all a request line and its headers
+# are; the body is whatever the read brought with it.
+pub fn parsed raw
+  head = text/split raw "\r\n\r\n"
+  lines = text/split head[1]! "\r\n"
+  start = text/split lines[1]! " "
+  request start[1]! start[2]! (body_of head)
+
+fn body_of head
+  present head[2]! (length head > 1)
+
+fn present body true
+  body
+
+fn present _ false
+  ""
+
+pub fn rendered r
+  "HTTP/1.1 {r.status} {r.reason}\r\n{header_block r}\r\n{r.body}"
+
+fn header_block r
+  sized = text/concat r.headers ["content-length: {length (text/bytes r.body)}"]
+  "{text/join sized "\r\n"}\r\n"
+
+# One request, answered by the handler it is given. `serve_once` is the whole
+# of what a harness needs: a server that answers and stops.
+pub fn serve_once port handler
+  net/listen port . (l -> taken l handler)
+
+fn taken l handler
+  net/accept l . (c -> answered c handler) . (_ -> net/close_listener l)
+
+fn answered c handler
+  net/read c . (raw -> replied c handler raw) . (_ -> net/close_conn c)
+
+fn replied c handler raw
+  net/write c (rendered (handler (parsed raw)))
+
+# Many requests, folded. The handler answers a `turn`: the response, and what
+# to carry to the next request. Carrying `none` closes the door — and it is a
+# record because a list may not hold a none. That is the whole of what a
+# harness needs — serve the page, serve its assets, and stop when the report
+# the page posts back arrives.
+pub fn serve_until port handler seed
+  net/listen port . (l -> served l handler seed)
+
+fn served l handler carried
+  net/accept l . (c -> asked c handler carried) . (next -> more l handler next)
+
+fn asked c handler carried
+  net/read c . (raw -> answered_with c handler carried raw)
+
+fn answered_with c handler carried raw
+  took = handler (parsed raw) carried
+  net/write c (rendered took.answer)
+    . (_ -> net/close_conn c)
+    . (_ -> took.carried)
+
+fn more l _ none
+  net/close_listener l
+
+fn more l handler carried
+  served l handler carried

@@ -1,0 +1,27 @@
+# Merging is a fold, so three failures answer three reasons however they were
+# grouped. The merge conses a pair at each step unless it knows which errs
+# were born merged, and then the same three reasons print three ways depending
+# on where the parentheses fell.
+#
+# The wall is the other half: it is ordered, so the first failure is the answer
+# and what follows never speaks. Both rules are here because the sweep that
+# gave every operator the merge gave it to `>>` too, on one engine only, and
+# nothing said so.
+fn boom what
+  err what
+
+fn shown (err reason)
+  "{reason}"
+
+fn shown _
+  "not a failure"
+
+# A reason that is genuinely a list is one reason, and merging must not open it.
+fn listed _
+  err ["a" "b"]
+
+pub play =
+  print "left first: {shown (boom "a" + boom "b" + boom "c")}"
+  >> print "right first: {shown (boom "a" + (boom "b" + boom "c"))}"
+  >> print "list reason: {shown (listed 0 + boom "c")}"
+  >> print "the wall: {shown (boom "a" >> boom "b")}"

@@ -753,3 +753,127 @@ is one; a playground buffer is one), refuse importing a program file,
 refuse `pub` inside it, statements run top to bottom with declarations
 visible file-wide. The scripts then collapse back to single files; only
 multi-file programs (hako) keep entry-beside-module. Awaiting Clay.
+
+## 10. The two composition operators, their laws, and whether they overload
+
+Clay, 2026-08-05, from asking what `>>` does with a function that answers
+either a description or an err. The chain of results looked fractal — each hop
+can be a parallel group, whose result can itself be a chain — and the question
+was whether something has to take an array of results, or two at a time
+recursively.
+
+**The proposal.** kanso already has both operators; what is missing is their
+laws. Adjacency and the wall are the series-parallel pair over one carrier.
+
+| | associative | commutative | identity | failure rule |
+|---|---|---|---|---|
+| adjacency | yes | yes | the do-nothing statement | merge |
+| `>>` | yes | no | the same | first failure absorbs |
+
+Two at a time, and associativity makes it identical to an array: N adjacent
+statements are a fold of the binary form whose shape is unobservable. There is
+no third operator and the n-ary form is derived convenience.
+
+The law is what kills the fractal rather than the flattening. Associativity
+means `(a‖b)‖c` and `a‖(b‖c)` are one value, so no grouping survives into the
+result and there is nothing to recurse into. Drop it and the shape becomes
+observable and the fractal returns — which is what #143 was.
+
+**What overloading would then mean.** A type supplies two arms, each carrying
+an obligation: its adjacency arm associative and commutative, its wall arm
+associative with failure absorbing on the left. Both are fuzzable with the
+differential machinery already here, so this is open dispatch with the laws a
+closed typeclass only documents.
+
+**Still Clay's.** Whether `>>` becomes overloadable at all — it is a compiler
+special form today and carries the ordered-effects meaning, which would move to
+the default arm — and it needs #105's lazy right side first, because an arm
+cannot short-circuit something already paid for.
+
+**Not a gavel, already fixed:** the engines disagreed. Native's `k_seq` merged
+where the interpreter and chapter four short-circuit. Both engines say the
+book's rule again.
+
+## 11. GAVELED 2026-08-06: one bind, and the err arm is optional
+
+Reached across a long dialog that started from "what does `>>` do with a
+function answering either a description or an err". The measurements behind
+each clause are in the compiler log entry of the same date.
+
+**Ruled.**
+
+1. **One bind.** `.` and nothing else. No `bind_error`, no error-side twin.
+   Every use case for one — substitute a default, try another source, convert
+   to a value — is ordinary dispatch once the failure is a value, and the two
+   that remain are `wrap_err` and the endpoint.
+2. **The callback's argument is not typed at the bind.** Whatever the effect
+   may yield is handled by the callback's own arms, dispatched internally.
+3. **An arm that takes an err must answer an err** — scoped to bind-callback
+   use, not to the declaration, so an ordinary function may still inspect an
+   err and answer something else. This is what makes swallowing impossible:
+   Java allows `catch (e) {}` and Rust allows `.ok()`, and an arm that can
+   only answer an err can enrich the trace and nothing else.
+4. **The err arm is optional.** Absent means pass-through, which is today's
+   behaviour and costs nothing. Writing one is how you add context.
+
+**Established alongside, not yet ruled.**
+
+- Exceptional means *declined*. A case you chose not to handle, with the
+  degenerate case being one you never knew existed. OOM is declined, not a
+  broken model.
+- Bubbling is structural rather than instrumental: to decline is to have no
+  answer, and a frame that cannot produce a value cannot return. Reporting is
+  downstream of that, not its purpose.
+- Handleable failure should be a value. The stdlib is already split against
+  its own gavel — `env` answers none, `exists` answers false, `run` answers a
+  status, while `read_file` and `list_dir` raise. The last two are the
+  outliers, and a missing file is no more exceptional than an unset variable.
+- The enforcement is coverage over the yield set, and it is absent: `env`
+  yields `string | none`, a block handling only the string passes `check` and
+  dies at run time. Build that BEFORE migrating the outliers, or two loud
+  failures become two silent ones.
+- `answer`, not `pure`. Already the house verb, 28 uses in eval.rs.
+- `io[t]` is not needed. Dispatch on the yield happens inside the block where
+  the value exists; the compiler already tracks yields and enforces nothing.
+
+**Buildable now:** clause 3 and 4 need no lattice work — ERR is its own bit,
+outside the REC collapse that blocks the rest. Everything touching user record
+types waits on refining REC.
+
+## 12. GAVELED 2026-08-06: effects are invisible; the compiler tracks them
+
+Clay: "effects are invisible to the user. the compiler tracks them."
+
+A function is written as though it receives a string. The compiler knows the
+string arrived through an effect and carries that fact alongside the value.
+io-ness is a property the fixpoint maintains, never a wrapper the value sits
+inside — which is the whole difference from Haskell, where `IO a` and `a` are
+distinct types and `pure` exists only to convert between them.
+
+**What this retires**, each of which had been treated as work to do:
+
+- `answer` / entry 18 — nothing to lift into, so no lift. Retired, not renamed.
+- the narrowing handler (`fn as_io d:io` / `fn as_io v`) — no io-or-value union
+  exists to narrow.
+- `io` as a matchable type name — nothing to match on.
+- `io[t]` — already ruled unnecessary; now doubly so.
+- the runtime error `log_if false _ -> none` currently dies with (`>>` sequences
+  two effect descriptions) — the arms simply unify.
+
+**What survives.** `>>`, because ordering through the world cannot be inferred:
+`write_file p` then `read_file q` share no value, and whether p and q name the
+same file is a runtime question. Only the author knows, and `>>` is how they
+say it. Adjacency stays parallel (settled).
+
+**Open, and it decides the size of the change.** Whether `.` retires with the
+rest. It is 349 sites against `>>`'s 287. For effects it becomes unnecessary —
+`text = io/read_file p` then use `text`. But `.` also pipes plain values today
+(`"from cache" . (s -> ...)` works), so it may survive as the pure pipe while
+ceasing to be the effect bind. That is a separate ruling and the migration
+depends on it.
+
+**Not yet worked out:** how the runtime keeps what it needs. The scheduler holds
+and resumes continuation descriptions, and `accept` yields by handing one back.
+Those are internal and unaffected in principle — representation and surface
+semantics are different questions — but nobody has checked that the internal
+form survives untouched when the surface one goes.

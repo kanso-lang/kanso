@@ -1940,6 +1940,10 @@ fn load_dependencies(
             "std/text" => Some(("text", &[("text.kso", include_str!("../lib/text/text.kso"))])),
             "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
             "std/bits" => Some(("bits", &[("bits.kso", include_str!("../lib/bits/bits.kso"))])),
+            "std/net" => Some(("net", &[("net.kso", include_str!("../lib/net/net.kso"))])),
+            "std/net/http" => {
+                Some(("http", &[("http.kso", include_str!("../lib/net/http/http.kso"))]))
+            }
             "std/path" => Some(("path", &[("path.kso", include_str!("../lib/path/path.kso"))])),
             "std/sha256" => {
                 Some(("sha256", &[("sha256.kso", include_str!("../lib/sha256/sha256.kso"))]))
@@ -2685,9 +2689,8 @@ fn compile_module_loaded(
     // An entry file is a program, not a package member (the module-shape
     // gavel): main.kso never joins the merge, whether this directory is the
     // root of a build or somebody's dependency.
-    sources.retain(|(file, _)| {
-        !std::path::Path::new(file).file_name().is_some_and(|n| n == "main.kso")
-    });
+    sources
+        .retain(|(file, _)| std::path::Path::new(file).file_name().is_none_or(|n| n != "main.kso"));
     if sources.is_empty() {
         return Err(format!(
             "error: {} holds only an entry file — a module is its library \

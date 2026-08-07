@@ -194,6 +194,30 @@ fn driven() -> ExitCode {
         }
         false => file,
     };
+    // A test file is a member of its module, and a module's files share their
+    // declarations — so testing one compiles the module it belongs to, or the
+    // file cannot see the very functions it is testing.
+    let among_siblings = command == "test"
+        && std::path::Path::new(&file).is_file()
+        && std::path::Path::new(&file).parent().is_some_and(|dir| {
+            std::fs::read_dir(dir).into_iter().flatten().flatten().any(|e| {
+                let path = e.path();
+                path.extension().is_some_and(|x| x == "kso")
+                    && path.file_name() != std::path::Path::new(&file).file_name()
+                    && e.file_name() != "main.kso"
+            })
+        });
+    let only_from = match among_siblings {
+        true => std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()),
+        false => None,
+    };
+    let file = match among_siblings {
+        true => std::path::Path::new(&file)
+            .parent()
+            .map(|d| d.to_string_lossy().into_owned())
+            .unwrap_or(file),
+        false => file,
+    };
     let path = std::path::Path::new(&file);
     let (program, source) = match path.is_dir() {
         true => match kanso::compile_module(path, require_entry) {
@@ -245,7 +269,7 @@ fn driven() -> ExitCode {
         return ExitCode::SUCCESS;
     }
     if command == "test" {
-        return run_tests(&program, &file, &source);
+        return run_tests(&program, &file, &source, only_from.as_deref());
     }
     if command == "build" {
         return build(&program, &file, release, built_as);
@@ -636,12 +660,21 @@ fn cached_runtime_object(profile: &str, opt: &[&str]) -> std::io::Result<std::pa
     Ok(object)
 }
 
-fn run_tests(program: &ast::Program, file: &str, source: &str) -> ExitCode {
+/// `only_from` names one of the module's files: `kanso test lib/list/list_test.kso`
+/// compiles the module and runs that file's tests, where the bare directory
+/// runs them all.
+fn run_tests(
+    program: &ast::Program,
+    file: &str,
+    source: &str,
+    only_from: Option<&str>,
+) -> ExitCode {
     let interp = eval::Interp::new(program);
     let mut names: Vec<&str> = program
         .fns
         .iter()
         .filter(|d| d.name.starts_with("test_") && d.params.is_empty())
+        .filter(|d| only_from.is_none_or(|want| d.file.ends_with(want)))
         .map(|d| d.name.as_str())
         .collect();
     names.dedup();

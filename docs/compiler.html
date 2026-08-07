@@ -192,19 +192,19 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
     <tr><th>decoder</th><th class="bar-cell"></th><th class="num">ms/decode</th><th class="num">peak mem</th></tr>
   </thead>
   <tbody>
-    <tr class="win">
-      <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:89%"></span></span></td>
-      <td class="num">1.96</td><td class="num">4.3 mb</td>
-    </tr>
     <tr>
-      <td>serde_json (rust, hand-tuned)</td>
+      <td>kanso + arenas</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">2.20</td><td class="num">7.3 mb</td>
+      <td class="num">2.13</td><td class="num">4.3 mb</td>
+    </tr>
+    <tr class="win">
+      <td>serde_json (rust, hand-tuned)</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:98%"></span></span></td>
+      <td class="num">2.08</td><td class="num">7.3 mb</td>
     </tr>
   </tbody>
 </table>
-<p class="board-note">measured by ci on the merge that published this page: 5 interleaved rounds on a shared runner, averaged. kanso ahead by 12.2%. the ratio is the claim; the milliseconds wobble.</p>
+<p class="board-note">measured by ci on the merge that published this page: 5 interleaved rounds on a shared runner, averaged. serde_json ahead by 2.5%. the ratio is the claim; the milliseconds wobble.</p>
 <!--/relative-->
 
 <p>the board above is two lanes because those are the two ci races on every merge: kanso against <code>serde_json</code>, the parser a rust team hand-tunes and actually ships. the person who wrote the kanso decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy.</p>
@@ -1092,6 +1092,22 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 <p><code>flag == true</code> is a compile error, and so are its three siblings. the comparison asks a question the value has already answered, and comparing two booleans to each other is exclusive-nor wearing a comparison's clothes — a spelling the language declines to offer. elsewhere this is what a linter warns about; kanso has no linter layer, and a language with one way to write a thing has nowhere to put a warning, so what a linter would flag is refused instead. the error names the replacement: the value itself, or <code>not</code> the value.</p>
 
 <p>there is no <code>nand</code> and no <code>nor</code>. <code>not (a and b)</code> already says it, with the denial on the outside where it reads.</p>
+
+<h2 id="sockets"><span class="sec-num">16</span>a server is two ordinary statements<span class="status status-shipped">shipped</span></h2>
+
+<p>kanso speaks tcp now, and the syscalls were the easy half. a server that blocks on <code>accept</code> cannot share a program with the client that would connect to it, so the two would have to be two programs — which is the moment a language usually grows goroutines, channels and a select to arbitrate them. kanso already has the arbitration: adjacent statements are one parallel group, scheduled by a deterministic green-thread runtime. what was missing was for <code>accept</code> to answer &ldquo;not yet&rdquo; and go back in the queue instead of holding the runtime, and the same for starting a process. with those two as scheduling points, a program serves itself — the server on one line, the request on the next, byte-identical interpreted and compiled.</p>
+
+<p><code>std/net/http</code> sits on top in Go&rsquo;s shape, with one difference that matters: a handler is a plain function from a request record to a response record. there is no writer to hand it and no recorder to fake, so a test calls it and reads what it answered, and injecting a different handler is passing a different function. the mux is arms on the path, and adding a route is adding an arm. many requests are a fold — the handler answers the response and what to carry to the next one, and carrying <code>none</code> closes the door.</p>
+
+<p>processes gained the other half of Go&rsquo;s pair. <code>io/run</code> starts one and waits; <code>io/start</code> answers the handle and <code>io/kill</code> ends what it names, because a browser told to render a page ignores its own exit budget and runs until something stops it.</p>
+
+<h2 id="failures"><span class="sec-num">17</span>two failures, and which one you hear about</h2>
+
+<p>a failure in an operation propagates: hand an err to anything and you get the err back. when both sides fail, the answer carries both — the reason becomes the list of reasons, and neither failure is billed above the other, because neither caused the other. that merge is a fold rather than a pairing, so three failures answer three reasons however they were grouped, and the shape of the expression that produced them is not recoverable from the result. an err whose reason is <em>itself</em> a list stays one reason; the mark saying which is which is structural, because it cannot be read off the shape.</p>
+
+<p>the wall is the other rule. <code>&gt;&gt;</code> is ordered, so the first failure is the answer and what follows it never speaks. adjacency accumulates because nothing there is first. short-circuit where there is order, accumulate where there is none — you never choose between the two, because each is the only behaviour its structure permits.</p>
+
+<p>the two rules make the same pair of algebraic objects, over one carrier: adjacency associative and commutative, the wall associative with the first failure absorbing. that is what makes the grouping invisible, and it is also what a user-supplied version of either would have to obey.</p>
 
 <h2 id="counted"><span class="sec-num">17</span>what a count can and cannot see</h2>
 
