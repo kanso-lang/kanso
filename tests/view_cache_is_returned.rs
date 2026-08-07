@@ -28,7 +28,7 @@ fn views(n: u64) -> (u64, u64) {
     // `put`. Reading its length is what forces the view.
     let program = format!(
         "fn go 0 seen\n  seen\n\n\
-         fn go n seen\n  fresh = put {{:}} \"k\" n\n  \
+         fn go n seen\n  fresh = put {{}} \"k\" n\n  \
          go (n - 1) (seen + length fresh)\n\n\
          print \"{{go {n} 0}}\"\n"
     );

@@ -897,6 +897,10 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
         (Tok::RBracket, Tok::Bang) => 0,
         // the partial sigil hugs its name: &add 2
         (Tok::Op("&"), Tok::Ident(_)) => 0,
+        // A map's braces hold their contents apart — `{ "a":1 "b":2 }` — but
+        // the empty pair has no contents to hold, so it closes on itself and
+        // `{ }` is the non-canonical spelling of it.
+        (Tok::LBrace, Tok::RBrace) => 0,
         _ => 1,
     }
 }

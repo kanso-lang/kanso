@@ -1,4 +1,4 @@
-error[syntax]: maps use curly braces: `{:}` is the empty map
+error[syntax]: maps use curly braces: the empty map is `{}`
   --> an_empty_map_written_with_brackets.kso:1:21
    1 | pub play = print "{[:]}"
                            ^
