@@ -27,7 +27,7 @@ test_group_by_buckets =
   buckets["even"]! == [2 4 6] and buckets["odd"]! == [1 3 5]
 
 test_transform_values_keys_untouched =
-  doubled = transform_values (put (put {:} "a" 2) "b" 3) (v -> v * 2)
+  doubled = transform_values { "a":2 "b":3 } (v -> v * 2)
   doubled["a"]! == 4 and doubled["b"]! == 6
 
 test_zip_pulls_lazily = to_list (zip naturals ["x" "y"]) == [[1 "x"] [2 "y"]]
@@ -45,10 +45,10 @@ test_range_spread = range [31 17 58 42] == 41
 
 test_to_h_last_wins =
   built = to_h [["a" 1] ["b" 5] ["a" 9]]
-  built == put (put {:} "a" 9) "b" 5
+  built == { "a":9 "b":5 }
 
 test_transform_keys_collide =
-  folded = transform_keys (put (put {:} "Ash" 1) "ash" 2) (_ -> "ash")
+  folded = transform_keys { "Ash":1 "ash":2 } (_ -> "ash")
   folded["ash"]! == 2 and length folded == 1
 
 test_find_bounds_naturals = (find naturals (n -> n * n > 50)) == 8
