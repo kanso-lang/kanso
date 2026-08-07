@@ -116,7 +116,7 @@ fn a_singly_owned_builder_is_still_written_through() {
 fn a_map_held_twice_is_not_written_through() {
     let (interpreted, native) = both_engines(
         "map_alias",
-        "base = put (put {:} \"a\" 1) \"b\" 2\nx = put base \"c\" 3\ny = put base \"d\" 4\nprint \"{length x} {length y}\"\n",
+        "base = put (put {} \"a\" 1) \"b\" 2\nx = put base \"c\" 3\ny = put base \"d\" 4\nprint \"{length x} {length y}\"\n",
     );
 
     assert_eq!(native, interpreted);

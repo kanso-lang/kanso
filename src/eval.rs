@@ -3337,7 +3337,7 @@ fn render_seen(
         Value::Int(n) => n.to_string(),
         Value::Float(x) => render_float(*x),
         Value::Map(entries) => match entries.is_empty() {
-            true => "{:}".to_string(),
+            true => "{}".to_string(),
             false => {
                 let inner: Vec<String> = entries
                     .iter()

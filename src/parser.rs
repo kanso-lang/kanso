@@ -2094,15 +2094,12 @@ impl<'a> P<'a> {
             }
             Some(Tok::LBrace) => {
                 self.pos += 1;
-                if matches!(self.peek(), Some(Tok::Colon)) {
+                if matches!(self.peek(), Some(Tok::RBrace)) {
                     self.pos += 1;
-                    match self.peek() {
-                        Some(Tok::RBrace) => {
-                            self.pos += 1;
-                            return Ok(Expr::MapLit(Vec::new(), span));
-                        }
-                        _ => return Err(self.err("`{:}` is the empty map".to_string())),
-                    }
+                    return Ok(Expr::MapLit(Vec::new(), span));
+                }
+                if matches!(self.peek(), Some(Tok::Colon)) {
+                    return Err(self.err("the empty map is `{}`".to_string()));
                 }
                 let mut pairs = Vec::new();
                 let mut key = self.parse_atom()?;
@@ -2135,7 +2132,7 @@ impl<'a> P<'a> {
                 self.pos += 1;
                 if matches!(self.peek(), Some(Tok::Colon)) {
                     return Err(
-                        self.err("maps use curly braces: `{:}` is the empty map".to_string())
+                        self.err("maps use curly braces: the empty map is `{}`".to_string())
                     );
                 }
                 if matches!(self.peek(), Some(Tok::RBracket)) {

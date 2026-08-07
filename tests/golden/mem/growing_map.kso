@@ -10,4 +10,4 @@ fn go 0 m
 fn go n m
   go (n - 1) (put m "k{n}" (bump m["k{n}"]))
 
-pub play = print "distinct {length (go 800 {:})}"
+pub play = print "distinct {length (go 800 {})}"

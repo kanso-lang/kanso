@@ -494,7 +494,7 @@ fn takes_acc_first(args: &[Expr], acc: &str) -> bool {
 /// The accumulator arrives first, and appears nowhere else — unless the callee
 /// is a builtin, which forces every argument before it runs. Then a read in a
 /// sibling argument of the very call that writes is finished before the write:
-/// `tally` is `fold coll {:} (m x -> put m x (bump m[x]))`, which mentions the
+/// `tally` is `fold coll {} (m x -> put m x (bump m[x]))`, which mentions the
 /// map twice and holds it once. That is the same discount `effective_uses`
 /// already gives a bare call site, and without it a tally copied its map once
 /// an element.

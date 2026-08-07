@@ -1452,3 +1452,29 @@ result.
 An err is a legitimate line on its own, since it propagates through the group,
 so a call is refused only when it can be neither an effect nor a failure — the
 same narrowing the wall check needed two entries above, learned the same way.
+
+## The empty map is `{}`
+
+RULED (Clay, 2026-08-07): the empty map literal is `{}`, spelled the way every
+other language spells it. `{:}` is gone.
+
+It had never been gaveled. It appears as one bullet in an archived batch note
+and in no design doc or on the compiler page, and the only user-facing mention
+was one line of appendix B. Nothing contends for `{}` in expression position:
+`parse_atom` has exactly one `LBrace` arm and it goes straight to map parsing,
+while the other brace uses are `import { … }`, a statement, and keyed
+destructuring, which enters through a different door.
+
+What made `{}` refuse before was not the parser but `required_gap` in the lexer,
+which had no brace rule and so demanded a space between any pair — `x = {}`
+answered `canonical form requires exactly one space here` and pointed at the
+closing brace, a message that was wrong under either spelling. The rule now
+says `(LBrace, RBrace) => 0`: a map's braces hold their contents apart, and the
+empty pair has no contents to hold. That keeps `{ "a":1 "b":2 }` exactly as it
+was and makes `{ }` non-canonical, so there is one spelling of the empty map
+rather than two.
+
+Both renderers print `{}`, and `{:}` now gets a diagnostic naming the
+replacement. The appendix's sample printed the *spelling* through escaped
+interpolation braces — `"empty {{:}}"` — so it never showed an empty map at
+all; it binds one and prints it now.

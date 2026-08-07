@@ -1544,7 +1544,7 @@ mod tests {
         // A growing map carries too now, under a literal key: its pairs moved
         // out of the arena the same way a list's items did, and its sorted
         // view was always malloc'd, so the rewind can reach neither.
-        let maps = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k\" n)\n\nmain = print \"{collect 3 {:}}\"\n";
+        let maps = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k\" n)\n\nmain = print \"{collect 3 {}}\"\n";
         let (mp, mi) = compiled(maps);
         let mbeats = super::beat_loops(&mp, &mi, &crate::linear::in_place_pushes(&mp));
         assert!(
@@ -1555,7 +1555,7 @@ mod tests {
         // And an interpolated key is not, because that string is assembled in
         // the arena each time round and the view would hold it after the
         // rewind freed it. This is the boundary the licence stops at.
-        let keyed = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k{n}\" n)\n\nmain = print \"{collect 3 {:}}\"\n";
+        let keyed = "fn collect 0 acc\n  length acc\n\nfn collect n acc\n  collect (n - 1) (put acc \"k{n}\" n)\n\nmain = print \"{collect 3 {}}\"\n";
         let (kp, ki) = compiled(keyed);
         let kbeats = super::beat_loops(&kp, &ki, &crate::linear::in_place_pushes(&kp));
         assert!(

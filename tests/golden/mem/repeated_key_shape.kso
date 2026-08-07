@@ -15,5 +15,5 @@ fn go n m
   go (n - 1) (put m "k{n - n / 64 * 64}" (bump m["k{n - n / 64 * 64}"]))
 
 pub play =
-  counts = go 4000 {:}
+  counts = go 4000 {}
   print "keys {length counts} at k7 {counts["k7"]}"

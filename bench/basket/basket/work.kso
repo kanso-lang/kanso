@@ -108,8 +108,8 @@ fn shift n p
 
 pub fn run _
   built = text_build 4000 ""
-  repeated = tally_repeat 4000 {:}
-  grown = tally_grow 2000 {:}
+  repeated = tally_repeat 4000 {}
+  grown = tally_grow 2000 {}
   xs = list_build 4000 []
   summed = list_sum 4000 xs 0
   mapped = list/map xs (v -> v * 2)

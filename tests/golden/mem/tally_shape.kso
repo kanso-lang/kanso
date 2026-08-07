@@ -1,4 +1,4 @@
-# a tally is `fold coll {:} (m x -> put m x (bump m[x]))`, which mentions the
+# a tally is `fold coll {} (m x -> put m x (bump m[x]))`, which mentions the
 # map twice and holds it once: the read in the sibling argument finishes before
 # the write, because a builtin forces every argument before it runs. Without
 # that discount the fold copied its map once an element — 4,000 map headers and
