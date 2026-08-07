@@ -7,7 +7,7 @@ Every claim is falsifiable against the tree or a named paper.
 
 ## Where every idea stands
 
-Twelve ideas, and the state of each. The prose below carries the reasoning;
+Fifteen ideas, and the state of each. The prose below carries the reasoning;
 this says only which of them are in the tree.
 
 | # | idea | state |
@@ -24,11 +24,61 @@ this says only which of them are in the tree.
 | 4.3 | auto-SoA via whole-program field-touch | **declined** for want of a numeric workload |
 | 4.4 | build-blocks hosting in-place graph algorithms | **not expressible today** — the blocker is the block-born rule, not the theorem |
 | 4.5 | e-graph fusion over pure IR | **declined** for want of a customer |
+| 5.1 | copy-or-pin for survivors | **measured, not built** — the highest-value move on the board, see below |
+| 5.2 | per-beat policy selection by survivor ratio | **new 2026-08-07**, not among the original sixteen |
+| 5.3 | the reuse delta — does dynamic reuse beat static? | **the well-posed form of "Perceus vs beats"** |
 
-Two things this memo does not answer, both from 2026-08-06: evacuation copies
-have no counter, so the cost beats pay for their O(1) frees is unmeasured; and
-nothing has ever been compared against a Perceus runtime, so the mechanism
-question is settled while the scoreboard is empty.
+## What the evacuation counter changed (2026-08-07)
+
+This memo used to end its table by naming two gaps, both dated 2026-08-06:
+evacuation copies had no counter, and nothing had been compared against a
+Perceus runtime. **The first is closed.** `evac_allocs` and `evac_bytes` count
+at `k_copy_alloc`, the one point every evacuated byte passes through, and they
+are CI-gated across four cost goldens and 41 `.mem` fixtures.
+
+The cost is concentrated far more sharply than anyone expected:
+
+| shelf | evacuation allocations | of total | evacuated bytes |
+|---|---|---|---|
+| decode | 11 | 7,577,414 | 464 |
+| encode | 19 | — | 624 |
+| basket | 0 | — | 0 |
+| **one-shot** | **63,967** | **128,528** | **1,991,456** |
+
+Half of every allocation the one-shot program makes is the copy-out. The
+streaming shelves pay almost nothing, where a refcounting runtime would be
+paying per-reference traffic throughout. That reshapes the second gap: a
+head-to-head on decode is a formality kanso wins by construction, and one-shot
+is the only shelf where the comparison has teeth.
+
+**5.1 Copy-or-pin.** The one-shot cost is the evacuation rather than the free
+schedule. Instead of copying a survivor out before the rewind, pin its page and
+rewind around it. This deletes the measured half without importing a single
+refcount operation, which is what puts it ahead of reaching for Perceus. It was
+named as planned-not-built on `compiler.html` §03 long before there was a
+number to justify it; the counter is that number.
+
+**5.2 Per-beat policy selection, survivor ratio as the decision variable.**
+Beats and refcounting fail in complementary ways — beats lose when survivors
+are large and frequent, refcounting loses on short-lived garbage — and those
+are statically distinguishable by machinery already in the tree (`src/linear.rs`
+plus whole-program inference). A beat with a provably small survivor set stays
+an O(1) rewind; one with a large survivor set becomes a refcounted region. This
+is absent from the original sixteen because the ratio it selects on could not be
+measured until the counter existed.
+
+**5.3 The reuse delta.** Perceus's real contribution over what kanso already
+ships is *dynamic* reuse: catching last-reference cases static analysis cannot
+prove. Kanso ships the static half (3.1, 334,950 buffer reuses per gauntlet
+run) and declined the build-block extension on measurement (4.1). So the
+well-posed experiment is not "Perceus vs beats" but: does dynamic reuse catch
+enough that static misses to pay for a count on every object?
+
+**The structural point to defend, and not to trade away.** Perceus requires a
+count field on every heap object. Kanso has no per-object header at all —
+`KHeader` does not exist. That is a representational advantage over Koka rather
+than a tuning one, and any hybrid that reintroduces a count everywhere has
+given it back.
 
 ## 0. Where the tree actually stands
 
@@ -40,10 +90,11 @@ per-object header is allocated — `KHeader` does not exist. The only reference
 count left is on `KThunk`, which is malloc-backed on purpose so a pending thunk
 cannot pin a rewindable region.
 
-So the baseline is **beats + static reuse**. What is not measured is the other
-side of the ledger: a value outliving its beat is evacuated, and nothing counts
-how often or how many bytes. Until that counter exists, the memory claim has
-one side weighed and the other blank.
+So the baseline is **beats + static reuse**. Both sides of the ledger are
+weighed now: `evac_allocs` and `evac_bytes` count what a value outliving its
+beat costs to move, and the answer is that decode pays 11 allocations out of
+7.6 million while the one-shot shelf pays half of everything it allocates. See
+"What the evacuation counter changed" above.
 
 ## 1. Is beats the frontier?
 
