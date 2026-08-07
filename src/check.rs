@@ -1240,6 +1240,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &inference, &mut diags);
     check_wall_operands(program, &inference, &mut diags);
+    check_discarded_value(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
     check_call_shaped_list(program, &mut diags);
     check_boolean_equality(program, &mut diags);
@@ -2701,5 +2702,73 @@ fn check_wall_operands(
                 stack.extend(crate::expr_children(cur));
             }
         }
+    }
+}
+
+/// A non-final statement that is a call answering neither an effect nor a
+/// failure computes something nobody reads.
+///
+/// The parser catches the same thing for a literal, where shape alone decides.
+/// A call needs the fixpoint: `print x` and `double 21` are the same shape, and
+/// only inference separates them. Left to the runtime it dies inside the
+/// group's join naming `&`, an operator the author never wrote.
+fn check_discarded_value(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{DESC, ERR};
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::new();
+    for (i, d) in program.fns.iter().enumerate() {
+        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
+    }
+
+    let refused = |e: &Expr| -> bool {
+        let Expr::App { head, args, piped: false, .. } = e else { return false };
+        let Expr::Ident(name, _) = head.as_ref() else { return false };
+        // An err propagates through the group, so a line that only fails is
+        // still doing something — a call is refused when it can be neither.
+        returns.get(&(name.as_str(), args.len())).is_some_and(|set| set & (DESC | ERR) == 0)
+    };
+
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        let Some(end) = decl.body.len().checked_sub(1) else { continue };
+        for (at, stmt) in decl.body.iter().enumerate() {
+            let Stmt::Expr(expr) = stmt else { continue };
+            // Adjacent lines are one joined expression by now, so the members
+            // of a group are leaves of its join spine rather than statements.
+            let mut leaves = Vec::new();
+            flatten_join(expr, &mut leaves);
+            // The body's result is the last leaf of the last statement; every
+            // other leaf is a line whose value nothing reads.
+            let keep = match at == end {
+                true => leaves.len().saturating_sub(1),
+                false => leaves.len(),
+            };
+            for leaf in &leaves[..keep] {
+                if refused(leaf) {
+                    diags.push(Diagnostic::new(
+                        "unused",
+                        "this value is never used: a non-final line binds a name, or \
+                         is an effect joining the group"
+                            .to_string(),
+                        leaf.span(),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn flatten_join<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
+    match e {
+        Expr::Join { lhs, rhs, .. } => {
+            flatten_join(lhs, out);
+            flatten_join(rhs, out);
+        }
+        _ => out.push(e),
     }
 }
