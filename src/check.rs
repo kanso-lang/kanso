@@ -1,6 +1,5 @@
 use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
-use num_traits::Zero;
 use std::collections::{HashMap, HashSet};
 
 pub const BUILTINS: [&str; 53] = [
@@ -1239,7 +1238,6 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
-    check_decidable_failures(program, &mut diags);
     check_effect_discarded(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
     check_call_shaped_list(program, &mut diags);
@@ -2635,82 +2633,5 @@ impl Resolver<'_> {
                 self.diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
             }
         }
-    }
-}
-
-/// A failure the compiler can work out by reading is not a runtime failure.
-///
-/// Only what is written in the source: a divisor that IS the literal zero, a
-/// conversion whose argument IS a literal that does not parse. A divisor that
-/// arrives as a parameter cannot be decided here and is left alone — refusing
-/// what it cannot read would be worse than the bug.
-fn check_decidable_failures(program: &Program, diags: &mut Vec<Diagnostic>) {
-    for decl in &program.fns {
-        if decl.synthetic {
-            continue;
-        }
-        for stmt in &decl.body {
-            match stmt {
-                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
-                    decidable_walk(expr, diags)
-                }
-            }
-        }
-    }
-}
-
-fn decidable_walk(e: &Expr, diags: &mut Vec<Diagnostic>) {
-    if let Expr::BinOp { op, rhs, span, .. } = e {
-        if matches!(*op, "/" | "%") && matches!(rhs.as_ref(), Expr::Int(n, _) if n.is_zero()) {
-            let named = match *op {
-                "/" => "division by zero",
-                _ => "modulo by zero",
-            };
-            diags.push(Diagnostic::new("value", named.to_string(), *span));
-        }
-    }
-    if let Expr::App { head, args, .. } = e {
-        if let Expr::Ident(name, _) = head.as_ref() {
-            unparseable_conversion(name, args, diags);
-        }
-    }
-    // An `if` guards its branches, and `and`/`or` are written as one — so a
-    // branch may be unreachable and refusing it would refuse a program that
-    // runs. examples/logical_ops.kso demonstrates exactly that: `2 < 1 and
-    // 1 / 0 < 9` never divides. The condition itself is unguarded and stays
-    // in the walk.
-    if let Expr::App { head, args, .. } = e {
-        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() == 3 {
-            decidable_walk(&args[0], diags);
-            return;
-        }
-    }
-    for child in crate::expr_children(e) {
-        decidable_walk(child, diags);
-    }
-}
-
-/// `to_int` and `to_float` given a literal that will not parse.
-fn unparseable_conversion(name: &str, args: &[Expr], diags: &mut Vec<Diagnostic>) {
-    let bare = name.rsplit_once('/').map(|(_, s)| s).unwrap_or(name);
-    let Some(Expr::Str(parts, span)) = args.first() else { return };
-    let [TemplatePart::Lit(text)] = parts.as_slice() else { return };
-    let refuses = match bare {
-        "to_int" => text.trim().parse::<i64>().is_err(),
-        "to_float" => text.trim().parse::<f64>().is_err(),
-        _ => return,
-    };
-    if refuses {
-        diags.push(Diagnostic::new(
-            "value",
-            format!(
-                "{text:?} is not {}",
-                match bare {
-                    "to_int" => "an integer",
-                    _ => "a number",
-                }
-            ),
-            *span,
-        ));
     }
 }
