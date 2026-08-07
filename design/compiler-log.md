@@ -1277,3 +1277,37 @@ fixpoint has already built, so it buys no extra round and no extra visit —
 2.6% more compiler allocation for a diagnostic that moves `1 >> 2` from a
 runtime death to a compile error. Welfare holds at 75.69, since it weighs
 rounds and visits rather than compile allocations.
+
+## What the copy costs, finally counted
+
+Beats trade refcount traffic for a copy: survivors are evacuated out of a
+region before it rewinds, and until now nothing counted the bytes that move.
+That is the term the Perceus comparison turns on, because a refcounting runtime
+pays none of it and pays per reference instead, so an argument about which is
+cheaper had no number on one side of it.
+
+`evac_allocs` and `evac_bytes` count at `k_copy_alloc`, the one point every
+evacuated byte passes through — the loop carry, the beat pop, and the constant
+freeze all route through it, so one counter covers three sites that would
+otherwise need three.
+
+The shape is far more lopsided than expected. Decode evacuates 11 allocations
+and 464 bytes against 7,577,414 total allocations. Encode evacuates 19. The
+basket evacuates nothing at all. Every one of those was assumed to be paying a
+steady copying tax, and none of them is: a streaming shelf hands its survivor
+straight out, and the region it rewinds held only garbage.
+
+The one-shot shelf is the whole cost. 63,967 evacuation allocations against
+128,528 total — half of every allocation the program makes is the copy-out —
+and 1,991,456 bytes of 5,928,668. That is the same shelf the kq footprint work
+found worst, and it now has a mechanism rather than a shrug: the full-print
+path builds a result the beat cannot keep, so the beat copies it.
+
+For the Perceus comparison this narrows the question usefully. On the streaming
+shelves there is nothing to trade away, and a refcounting runtime would be
+paying per-reference traffic for a copy cost of 464 bytes. The comparison has to
+be made on the one-shot shelf or it is not a comparison at all.
+
+The goldens were generated on darwin/arm64. Byte counts come from `sizeof` on
+16-aligned allocations, so they should be identical on ubuntu/x86_64, but that
+is a prediction and CI is what tests it.
