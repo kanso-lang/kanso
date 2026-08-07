@@ -1237,3 +1237,48 @@ over one carrier — adjacency associative and commutative with merge, the wall
 associative with an absorbing zero — and the interesting part is that the laws
 are what make grouping unobservable. Overloading either operator would mean
 enforcing them, which the differential fuzzers can do.
+
+## The suite was never finishing, and check learned to fold
+
+Three things, and the first is the one that matters because it makes the other
+two trustworthy.
+
+`tests/sockets_serve.rs` pinned port 8137. `curl` reaches whichever process
+holds a port, so a leftover server from an earlier run answered the request and
+the fresh run's `accept` yielded forever. `ps` found processes a day and seven
+hours old with eight background suites stacked behind them; killing the stale
+ones released all eight at once. A run that never finishes reports nothing, and
+several "the suite is green" readings this week were of runs that had not
+completed. The port now comes from the operating system per run — which
+`listen`'s own comment has recommended since it was written — the program
+closes its listener, and a wedge fails at thirty seconds. Both engines, 0.91s.
+
+`check` refused a file holding declarations beside a statement by complaining
+that blank lines may not appear inside a body, about a line that is not in a
+body; removing the blank moved it to "a top-level line must begin with `fn`".
+Neither named the rule or the verb. It says what `run` already said: a library
+has no statements to run, and `kanso play` runs both in one file. A malformed
+declaration keeps the old wording, which the error corpus caught when the first
+attempt broadened the message over it.
+
+And a failure the compiler can work out by reading is no longer a runtime
+failure. `3 / 0`, `3 % 0` and `to_int "two"` are refused where they are
+written. Only what is in the source: a divisor that IS the literal zero, a
+conversion whose argument IS a literal that will not parse. A divisor arriving
+as a parameter is left alone, because refusing what cannot be read would be
+worse than the bug.
+
+Two corpus cases were built on decidable failures and said so immediately.
+`examples/logical_ops.kso` demonstrates short-circuiting with `2 < 1 and
+1 / 0 < 9`, where the division is unreachable by design — so the walk skips a
+guarded branch and keeps the condition, and `and` needed no special handling
+because it is written as an `if`. And `tests/golden/runtime/endpoint_err.kso`
+was `10 / 0`, a program whose whole purpose is to reach the endpoint; it divides
+by `length []` now, which is just as zero and not readable. The endpoint report
+is unchanged.
+
+The same thing is true of the book: ch04's `teas.kso` is built on `3 / 0` and
+`to_int "two"`, so the chapter that teaches the err merge now needs io-born
+examples. That is the argument for err-comes-from-io arriving rather than a
+cost — the two most obvious "fails at run time" illustrations turned out to be
+things a compiler should have caught.
