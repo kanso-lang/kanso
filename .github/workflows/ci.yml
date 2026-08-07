@@ -552,6 +552,13 @@ jobs:
         run: |
           git config user.name "kanso-ci"
           git config user.email "cshentrup@gmail.com"
+          # The chart steps above redrew docs/compiler.html. On main that is
+          # deliberately never committed — main is protected and the pull
+          # request already wrote the measurement of the code that merged — so
+          # the redraw is left in the working tree, where it refuses the branch
+          # switch below. Discard it: this job's business here is the history
+          # file, and the page's own commit belongs to the pull request.
+          git checkout -- docs/compiler.html
           if git fetch origin perf-history 2>/dev/null; then
             git checkout -B perf-history origin/perf-history
           else
