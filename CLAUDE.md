@@ -53,7 +53,12 @@ A clean grep is necessary, not sufficient — the families above are wider than 
   rule exists because a conflict resolution once silently deleted
   Eisel-Lemire from main and nothing noticed.
 - **Counters changed → regenerate every vein in the same PR**: all .mem
-  files, both cost goldens, the ch10 sample, then book panels.
+  files, all four cost goldens, the ch10 sample, then book panels — and the
+  SIBLINGS, which keep veins of their own. kq has `bench/cost_golden.txt`,
+  `bench/cost_golden_decode.txt` and a `bench/numbers_stamp.txt` keyed to the
+  first. Adding `evac_allocs` broke kq's gating check for exactly this reason:
+  the counter was new everywhere, and only kanso's veins had been regenerated.
+  A purely additive counter still moves those files.
 
 ### Do not stop
 
