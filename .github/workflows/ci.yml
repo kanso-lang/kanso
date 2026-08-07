@@ -43,6 +43,20 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
+      # The rebuild above is what the spec runs, so the spec can never see a
+      # stale COMMITTED blob — and the committed one is what the site serves.
+      # CI could stay green forever while the published playground ran an
+      # engine the source no longer describes. The build is reproducible, so
+      # the two must agree.
+      - name: the shipped engine is the one just built
+        run: |
+          if ! git diff --quiet -- docs/kanso.wasm; then
+            echo "::error::docs/kanso.wasm differs from a fresh build of this"
+            echo "::error::source. The site serves the committed blob, so the"
+            echo "::error::playground would run an engine this tree does not"
+            echo "::error::describe. Run scripts/build_wasm.sh and commit it."
+            exit 1
+          fi
       - run: cargo test
       - name: the shipped library's own tests
         run: |

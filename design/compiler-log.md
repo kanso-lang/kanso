@@ -1524,3 +1524,26 @@ The controls that would have caught each are cheap: diff the emitted IR before
 believing a per-commit timing; rebuild the accused commit with neutral padding
 and see whether a no-op moves it as far; and plot a proposed cause against the
 effect across the whole window before calling it a cause.
+
+## The shipped engine is the tested one
+
+`docs/kanso.wasm` is committed, and the site serves the committed file. Every
+wasm job rebuilt it before testing, so the spec measured a blob CI had just
+made and never the one in the tree. The two could differ indefinitely with
+every check green, and the published playground would run an engine the source
+no longer describes.
+
+That is not hypothetical. On 2026-08-07 a fresh build of main's own source
+produced a different blob from the one main shipped, and the build is
+reproducible — two consecutive builds give an identical hash — so the committed
+file was genuinely behind. It has since caught up, because several changes
+rebuilt it in passing, which is luck rather than a rule.
+
+The only guard was a freshness check in `tests/wasm_engine.rs` comparing
+MTIMES. A fresh checkout writes every file at about the same moment, so that
+check cannot see content staleness at all; it fires locally, which is how this
+surfaced, and never in CI.
+
+The specs job now refuses a `docs/kanso.wasm` that differs from the rebuild it
+just performed. Watched red: appending a byte to the committed blob turns it
+red, and restoring turns it green.
