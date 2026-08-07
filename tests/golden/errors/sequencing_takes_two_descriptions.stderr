@@ -1,0 +1,1 @@
+error[type]: `>>` sequences two effects, and this side answers a plain value — bind it with `.` if you want what it answers (module sequencing_takes_two_descriptions.kso)

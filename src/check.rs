@@ -1239,6 +1239,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_field_exists(program, &mut diags);
     check_literal_arguments(program, &mut diags);
     check_effect_discarded(program, &inference, &mut diags);
+    check_wall_operands(program, &inference, &mut diags);
     check_err_as_value(program, &mut diags);
     check_call_shaped_list(program, &mut diags);
     check_boolean_equality(program, &mut diags);
@@ -2631,6 +2632,73 @@ impl Resolver<'_> {
             }
             false => {
                 self.diags.push(Diagnostic::new("name", format!("unknown name `{name}`"), span));
+            }
+        }
+    }
+}
+
+/// `>>` sequences effects, refused where the operand is written.
+///
+/// `1 >> 2` passed check clean and died at run time, though both operands are
+/// literals and the wall's own rule names what it takes. A call that can never
+/// answer an effect is the same case one step out, and the fixpoint knows
+/// which those are. An operand it cannot judge is left alone.
+fn check_wall_operands(
+    program: &Program,
+    inference: &crate::infer::Inference,
+    diags: &mut Vec<Diagnostic>,
+) {
+    use crate::infer::{DESC, ERR};
+    let mut returns: HashMap<(&str, usize), crate::infer::Set> = HashMap::new();
+    for (i, d) in program.fns.iter().enumerate() {
+        *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
+    }
+
+    // An err is a legitimate operand — propagating one is what the wall does
+    // when a side fails — so only a side that can be neither an effect nor a
+    // failure is refused. A literal qualifies by its shape; a call qualifies
+    // when every arm of its group answers without either.
+    let never_describes = |e: &Expr| -> bool {
+        match e {
+            Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::Str(..)
+            | Expr::List(..)
+            | Expr::MapLit(..)
+            | Expr::Lambda { .. } => true,
+            Expr::App { head, args, piped: false, .. } => match head.as_ref() {
+                Expr::Ident(name, _) => returns
+                    .get(&(name.as_str(), args.len()))
+                    .is_some_and(|set| set & (DESC | ERR) == 0),
+                _ => false,
+            },
+            _ => false,
+        }
+    };
+
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        for stmt in &decl.body {
+            let root = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => expr,
+            };
+            let mut stack = vec![root];
+            while let Some(cur) = stack.pop() {
+                if let Expr::Seq(lhs, rhs, span) = cur {
+                    if never_describes(lhs) || never_describes(rhs) {
+                        diags.push(Diagnostic::new(
+                            "type",
+                            "`>>` sequences two effects, and this side answers a \
+                             plain value — bind it with `.` if you want what it \
+                             answers"
+                                .to_string(),
+                            *span,
+                        ));
+                    }
+                }
+                stack.extend(crate::expr_children(cur));
             }
         }
     }
