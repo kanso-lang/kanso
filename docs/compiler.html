@@ -193,28 +193,28 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
   <tbody>
     <tr class="win">
       <td>kanso + arenas</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:40%"></span></span></td>
-      <td class="num">0.78</td><td class="num">4.1 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:42%"></span></span></td>
+      <td class="num">0.87</td><td class="num">4.2 mb</td>
     </tr>
     <tr>
       <td>serde_json <span style="color:var(--muted)">(rust, hand-tuned)</span></td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:45%"></span></span></td>
-      <td class="num">0.87</td><td class="num">7.0 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:44%"></span></span></td>
+      <td class="num">0.90</td><td class="num">6.8 mb</td>
     </tr>
     <tr>
       <td>reasonably-written rust</td>
-      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:52%"></span></span></td>
-      <td class="num">1.02</td><td class="num">7.1 mb</td>
+      <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:51%"></span></span></td>
+      <td class="num">1.04</td><td class="num">6.9 mb</td>
     </tr>
     <tr>
       <td>go encoding/json</td>
       <td class="bar-cell"><span class="bar"><span class="bar-fill" style="width:100%"></span></span></td>
-      <td class="num">1.95</td><td class="num">10.6 mb</td>
+      <td class="num">2.05</td><td class="num">11.8 mb</td>
     </tr>
   </tbody>
 </table>
 
-<p class="board-note">sat 2026-07-27 on a quiet desktop, load average under five, four lanes interleaved. milliseconds of cpu per decode, read as a slope from the same decoder built to run 150 times and 450 times so process startup and the file read cancel. cpu time bills every thread, so go's collector counts against it — go's wall figure is 1.80 rather than 1.95. this board is re-sat by hand when a release goes out; nothing rewrites it on a merge.</p>
+<p class="board-note">sat 2026-08-07, seven rounds, four lanes interleaved so contention leans on all of them at once. milliseconds of cpu per decode, read as a slope from the same decoder built to run 150 times and 450 times so process startup and the file read cancel. cpu time bills every thread, so go's collector counts against it. this board is re-sat by hand when a release goes out; nothing rewrites it on a merge.</p>
 
 <p>the person who wrote the kanso decoder never typed the word <em>lifetime</em>, never named a buffer, never freed anything, never chose a memory strategy. a reasonably-written rust parser running the same algorithm trails by a fifth, and go takes better than twice as long with its collector working. the recipe at the bottom of this page runs the whole field on your own machine in a few minutes.</p>
 
@@ -762,10 +762,10 @@ KANSO_SCHED_DEBUG=1 ./overlapped     <span class="c"># watch elapsed + wait = de
 
 <div class="code-panel">
   <div class="code-panel-title">the scoreboard—per-decode floors from one interleaved sitting, and how to reproduce it</div>
-  <pre><code><span class="c"># kanso, shipped default    ~0.76 ms   5.6 mb rss, flat  (arenas, §03)</span>
-<span class="c"># serde_json (hand-tuned)   ~0.86 ms   6.7 mb rss</span>
-<span class="c"># reasonably-written rust   ~0.99 ms   6.9 mb rss</span>
-<span class="c"># go encoding/json          ~2.00 ms   10.5 mb rss</span>
+  <pre><code><span class="c"># kanso, shipped default    ~0.87 ms   4.2 mb rss, flat  (arenas, §03)</span>
+<span class="c"># serde_json (hand-tuned)   ~0.90 ms   6.8 mb rss</span>
+<span class="c"># reasonably-written rust   ~1.04 ms   6.9 mb rss</span>
+<span class="c"># go encoding/json          ~2.05 ms  11.8 mb rss</span>
 
 cargo build --release
 ./target/release/kanso run bench/make_jsonbench

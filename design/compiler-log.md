@@ -1348,3 +1348,38 @@ that no clock feeds it, so a rerun writes the same bytes and the churn is gone
 — but publishing at all still means a write, and main is protected. Killing the
 last approval means building the page at deploy time instead of committing it,
 which is a larger change and not this one.
+
+## The board, re-sat, and what it says
+
+Seven interleaved rounds on 2026-08-07, slope method — each lane built to run
+150 times and 450 times, the difference divided by 300, so process startup and
+the file read cancel out of both ends.
+
+    lane                07-27    08-07     peak
+    kanso                0.78     0.87    4.2 mb
+    serde_json           0.87     0.90    6.8 mb
+    reasonably rust      1.02     1.04    6.9 mb
+    go                   1.95     2.05   11.8 mb
+
+Every absolute number is up, because the box was not idle. The ratios are what
+interleaving buys, and they say the drift was not uniform:
+
+    kanso / serde   0.897 -> 0.967
+    naive / serde   1.17  -> 1.16
+    go    / serde   2.24  -> 2.28
+
+Three lanes held their relationship to each other and one moved. Kanso's lead
+over serde fell from about ten per cent to about three, which is a regression
+of roughly seven points, and the field standing still is what makes it one
+rather than weather.
+
+The deterministic counters did not move: decode allocations are still
+7,577,414 and the cost golden is green. So this is time per allocation rather
+than a count, which puts representation, thunk forcing on the decode path, or a
+fast path no presence counter covers ahead of anything allocation-shaped. The
+page already says laziness spent a slice of the margin back, and that is the
+first place to look. Peak memory improved slightly over the same window, so
+nothing was traded for footprint.
+
+Recorded as its own thread; the ratio against serde is the number to watch,
+because it is the one contention cannot move.
