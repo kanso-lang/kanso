@@ -37,4 +37,3 @@ bench/naive_json/Cargo.lock
 /overlapped
 /profbench
 /twosleep
-bench/history_series.jsonl
