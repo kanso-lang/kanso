@@ -1237,3 +1237,20 @@ over one carrier — adjacency associative and commutative with merge, the wall
 associative with an absorbing zero — and the interesting part is that the laws
 are what make grouping unobservable. Overloading either operator would mean
 enforcing them, which the differential fuzzers can do.
+
+## The wall says what it takes
+
+`1 >> 2` passed `kanso check` clean and died at run time, though both operands
+are literals and the wall's own rule names what it accepts. A call to a
+function that can never answer an effect is the same case one step out, and the
+fixpoint already knows which those are, so the judgement moved to `check`.
+
+An err is a legitimate operand — propagating one is what the wall does when a
+side fails — so the rule is narrower than it first looked: a side is refused
+only when it can be neither an effect nor a failure. This morning's own micro
+golden caught the wider version immediately, because its last line is
+`boom "a" >> boom "b"`, two errs and entirely deliberate.
+
+`tests/golden/runtime/sequencing_takes_two_descriptions.kso` moved to the
+errors corpus. Its purpose was the runtime refusal, and the refusal is a
+compile error now, which is where a case demonstrating it belongs.
