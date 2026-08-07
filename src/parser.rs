@@ -299,9 +299,21 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
                 Ok(reexport) => reexports.push(reexport),
                 Err(d) => diags.push(d),
             },
+            // A line opening with a name is a call — a statement, which a
+            // library has no room for. Anything else is a declaration written
+            // wrong, and saying "use kanso play" would send its author to the
+            // wrong place.
             _ => diags.push(Diagnostic::new(
                 "syntax",
-                "a top-level line must begin with `fn`, `type`, or a constant binding".to_string(),
+                match line.tokens.first() {
+                    Some((Tok::Ident(_), _)) => {
+                        "a file with declarations is a library, and a library has no \
+                         statements to run — `kanso play` runs declarations beside \
+                         statements in one file"
+                    }
+                    _ => "a top-level line must begin with `fn`, `type`, or a constant binding",
+                }
+                .to_string(),
                 head_span(line),
             )),
         }
@@ -499,6 +511,14 @@ fn check_blank_policy(lexed: &Lexed, diags: &mut Vec<Diagnostic>) {
                     (pair[1].tokens.first(), pair[1].tokens.get(1)),
                     (Some((Tok::Ident(_), _)), Some((Tok::Bind, _)))
                 );
+        // A top-level line that declares nothing is a statement, and a module
+        // has no room for one. The parse names that and names the verb that
+        // does; a blank-line complaint here would describe a rule the author
+        // did not break.
+        let imports_here = matches!(pair[1].tokens.first(), Some((Tok::KwImport, _)));
+        if pair[1].indent == 0 && !decl_start && !imports_here {
+            continue;
+        }
         let required = match pair[1].indent {
             // the import block stacks; one blank closes it
             0 if both_imports => 0,
