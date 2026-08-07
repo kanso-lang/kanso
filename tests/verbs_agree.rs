@@ -21,8 +21,7 @@ fn verb(verb: &str, dir: &std::path::Path) -> String {
         .current_dir(dir)
         .output()
         .expect("kanso binary runs");
-    String::from_utf8_lossy(&output.stdout).into_owned()
-        + &String::from_utf8_lossy(&output.stderr)
+    String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr)
 }
 
 /// Watched red: check answered `error[formatting]: blank lines may not appear
