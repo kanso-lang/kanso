@@ -1,0 +1,19 @@
+# What the compiler wrote for the decoder, counted from jsonbench.ll before
+# the linker touches it — so this is deterministic and, unlike a timing, blind
+# to code layout.
+#
+# The decode cost golden beside this one counts what the program ALLOCATES at
+# run time. Nothing counted what was EMITTED for it: between 2026-07-27 and
+# 2026-08-07 the decoder gained 20% more calls and 23% more branches while its
+# allocation counts stayed byte-identical.
+#
+# That growth is not the cause of the 7.6% slowdown over the same window. The
+# code grew while the time held flat and the time rose while the code did not.
+# Two dimensions, both worth watching, neither explaining the other.
+#
+# A rise here is a regression to explain; a fall is a win to bank. Either way
+# say which in the PR and regenerate.
+defines=250
+calls=2346
+branches=1311
+lines=13329

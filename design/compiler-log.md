@@ -1478,3 +1478,49 @@ Both renderers print `{}`, and `{:}` now gets a diagnostic naming the
 replacement. The appendix's sample printed the *spelling* through escaped
 interpolation braces — `"empty {{:}}"` — so it never showed an empty map at
 all; it binds one and prints it now.
+
+## The decoder shows what it emits
+
+Nothing counted the emitted code of `bench/jsonbench` — the one program whose
+runtime the decode board publishes. `bench/compile_golden.txt` counts emitted
+lines, calls and branches for five small samples; `perf_record` counts them for
+`kanso check lib/json`, which is front-end cost. The decoder's own emitted code
+was unwatched, and it grew:
+
+    2026-07-27   calls 1957   branches 1067   defines 217   lines 11,080
+    2026-08-07   calls 2346   branches 1311   defines 250   lines 13,329
+
+Twenty per cent more calls for a program whose allocation counters never moved
+— allocs reads 7,577,414 at both ends and at all 396 commits between.
+`bench/emitted_golden.txt` pins it now, counted from the IR before the linker
+runs, which makes it deterministic and blind to code layout.
+
+**It does not explain the 7.6% decode regression, and the series is why.**
+Emitted calls against measured time, both taken across the same window:
+
+    07-27   calls 1957   0.806 ms
+    #592    calls 2325   —
+    #607    calls 2325   0.811 ms
+    #618    calls 2325   —
+    main    calls 2346   0.867 ms
+
+The code grew nineteen per cent while the time held flat, and then the time
+rose seven and a half per cent while the code grew one. The two are
+anticorrelated over this window, so emitted-call growth is a real unwatched
+dimension and a false explanation, and the cause of the slowdown is still
+unknown.
+
+Three claims were retracted getting here, all from the same root: believing a
+number before running the control that could falsify it. #607 was named as a
+six per cent regression from single builds that reproduced to 0.002 ms —
+repeatability that was real and meaningless, since it measured one binary's
+alignment twice; its IR is byte-identical to its parent's at 445,691 bytes. The
+kanso/serde ratio was adopted as "contention-invariant" when serde is built
+once and reused, so its drift leaks in rather than cancelling. And emitted-call
+growth was published as the cause of the slowdown before the series that
+disproves it had been plotted.
+
+The controls that would have caught each are cheap: diff the emitted IR before
+believing a per-commit timing; rebuild the accused commit with neutral padding
+and see whether a no-op moves it as far; and plot a proposed cause against the
+effect across the whole window before calling it a cause.
