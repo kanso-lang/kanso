@@ -1,0 +1,4 @@
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group
+  --> unused_call.kso:4:1
+   4 | double 21
+       ^

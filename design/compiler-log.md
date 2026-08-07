@@ -522,6 +522,7 @@ Main needs no second write. What the PR committed IS the measurement of the
 code that merges, and the commit-back step now runs only where a head exists
 to push to. The perf-history append is untouched — that branch is unprotected,
 which is precisely why the series lives there.
+
 ## the third stale premise in one week, and the probe that measured a corpse
 
 Read-write map uniqueness sat in pending-gavels as entry 2, waiting on Clay.
@@ -551,6 +552,7 @@ refused on the first iteration and the counters measured a corpse — five
 allocations, beautifully flat, meaning nothing. A measurement is not the
 counters alone; it is the counters of a program whose OUTPUT was checked.
 Flat-at-five was too good, which is the only reason it was caught.
+
 ## RULED: an imported record prints its qualified type name
 
 Recorded here after Clay had to say it a fourth time, which is its own
@@ -608,6 +610,7 @@ entry synthesis at all, which is what migrating an area means.
 Synthesis keeps its coverage from the areas not yet migrated — mem, runtime,
 examples, errors — and loses a suite's worth each slice until the five
 compiler sites have nothing left relying on them. Nine golden suites green.
+
 ## the queue held nothing anybody could start
 
 Clay, looking at the visible task list: "it has been stuck on 108 tasks with the
@@ -651,6 +654,7 @@ more than a hundred-item list whose head nobody can act on.
 The general form, which is the same failure as four others in this log: a
 mechanism that cannot fail loudly gets ignored, and a queue whose top is always
 blocked teaches you to stop reading it.
+
 ## the errors corpus runs as libraries
 
 Second area slice. Swept first: of the 124 fixtures, 29 are entry files
@@ -1410,3 +1414,41 @@ Verified by running the ported drawing over the real 500-row series: five
 polylines, five legend keys, 3,154 coordinates, none outside the viewBox, and
 the aria-label counting the rows it was handed. The page's own javascript
 parses — checked through JavaScriptCore, since the box has no node.
+
+## The value nobody reads
+
+`42` on a line of its own was a compile error and `double 21` was a crash. The
+parser catches the first because shape alone decides it — an integer literal is
+not an effect, and the parser runs before inference so shape is all it has. A
+call is the same line to the parser: `print x` and `double 21` are one shape,
+and only the fixpoint separates them. So the second reached the runtime and
+died inside the group's join, naming `&`, an operator the author never wrote
+and cannot go find in their file.
+
+The check belongs where the inference already sits, and `check_effect_discarded`
+was the template. What made it awkward was not the pass.
+
+Three call sites dropped every diagnostic whose kind is "unused" before anything
+could read them, and the shape of that turned out to be worth the measurement.
+Two of the three filtered the output of `check_merged`, which emits no "unused"
+diagnostic at all — they removed nothing and always had. The third sat two lines
+below a call to `check_unused_private` whose every finding it then discarded: the
+front end walked the whole program to build diagnostics it threw away, on every
+compile. Add-then-discard is not a policy. Not calling it is, and that is what
+the play path does now.
+
+So no retagging was needed. `tests/golden/errors/unused_expression.stderr`
+already pins kind "unused" for exactly this finding one step in, and the new
+case joins it as `unused_call`.
+
+The pass took two attempts because the first was written against a shape that
+does not exist by the time checks run. A body's adjacent lines are not a list of
+statements there — they are one `Expr::Join` spine, which is why the runtime
+message says `&`. `decl.body[..last]` is therefore almost always empty, and the
+first version could not have fired on anything. The members of a group are the
+leaves of that spine, and the last leaf of the last statement is the body's
+result.
+
+An err is a legitimate line on its own, since it propagates through the group,
+so a call is refused only when it can be neither an effect nor a failure — the
+same narrowing the wall check needed two entries above, learned the same way.

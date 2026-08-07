@@ -149,14 +149,12 @@ fn compile_parsed_entry(
     merged.fns.extend(dep_program.fns);
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
-    let mut merged_diags = check::check_merged(&merged, true);
-    check::check_unused_private(&merged, &used, &mut merged_diags);
+    let merged_diags = check::check_merged(&merged, true);
     synthesize_getters(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
     inline::inline_builtin_wrappers(&mut merged);
-    let merged_diags: Vec<_> = merged_diags.into_iter().filter(|d| d.kind != "unused").collect();
     match merged_diags.is_empty() {
         true => {
             phase::watched("canonicalize_types", || canonicalize_types(&mut merged));
@@ -299,8 +297,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    let merged_diags: Vec<_> =
-        check::check_merged(&program, false).into_iter().filter(|d| d.kind != "unused").collect();
+    let merged_diags = check::check_merged(&program, false);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
@@ -373,8 +370,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     program.types.extend(dep_program.types);
     program.fns.extend(dep_program.fns);
-    let merged_diags: Vec<_> =
-        check::check_merged(&program, false).into_iter().filter(|d| d.kind != "unused").collect();
+    let merged_diags = check::check_merged(&program, false);
     if !merged_diags.is_empty() {
         return Err(diag::render(&merged_diags, file, source));
     }
