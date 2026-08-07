@@ -470,70 +470,21 @@ jobs:
           ./target/release/kanso run scripts/perf_record >> bench/history_series.jsonl
       - name: redraw the chart
         run: ./target/release/kanso run scripts/long_view
-      # The decode board: wall-clock because a competitor's cost cannot be
-      # counted by kanso's counters, RELATIVE because a shared runner's
-      # absolute milliseconds wobble. Five interleaved rounds, both lanes
-      # under the same contention, averaged. CI is the board's only author —
-      # there is no hand-sat number left to age.
-      - name: race the decoders, interleaved
-        id: race
-        run: |
-          ./target/release/kanso run bench/make_jsonbench
-          ./target/release/kanso build bench/jsonbench --release
-          (cd bench/serde_bench && cargo build --release)
-          rounds=5
-          ktot=0; stot=0; kkb=0; skb=0
-          for i in $(seq $rounds); do
-            /usr/bin/time -v ./jsonbench >/dev/null 2>/tmp/kt.txt
-            kms=$(awk '/Elapsed .wall clock/{split($8,a,":");print (a[1]*60+a[2])/150*1000}' /tmp/kt.txt)
-            kb=$(awk '/Maximum resident/{print $6}' /tmp/kt.txt)
-            /usr/bin/time -v ./bench/serde_bench/target/release/serde_bench bench/large.json >/dev/null 2>/tmp/st.txt
-            sms=$(awk '/Elapsed .wall clock/{split($8,a,":");print (a[1]*60+a[2])/150*1000}' /tmp/st.txt)
-            sb=$(awk '/Maximum resident/{print $6}' /tmp/st.txt)
-            ktot=$(awk -v t=$ktot -v x=$kms 'BEGIN{print t+x}')
-            stot=$(awk -v t=$stot -v x=$sms 'BEGIN{print t+x}')
-            [ "$kb" -gt "$kkb" ] && kkb=$kb
-            [ "$sb" -gt "$skb" ] && skb=$sb
-          done
-          kavg=$(awk -v t=$ktot -v n=$rounds 'BEGIN{printf "%.3f", t/n}')
-          savg=$(awk -v t=$stot -v n=$rounds 'BEGIN{printf "%.3f", t/n}')
-          {
-            echo "## decode race ($rounds interleaved rounds, averaged)"
-            echo ""
-            echo "kanso ${kavg} ms · serde_json ${savg} ms — relative only."
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "kavg=$kavg" >> "$GITHUB_OUTPUT"
-          echo "savg=$savg" >> "$GITHUB_OUTPUT"
-          echo "kkb=$kkb" >> "$GITHUB_OUTPUT"
-          echo "skb=$skb" >> "$GITHUB_OUTPUT"
-      # The board is the one wall-clock artifact, so a bare splice can never
-      # be idempotent — and main's branch protection refuses any direct push,
-      # so nothing can be committed after the merge either. Both constraints
-      # meet in the splicer itself: it skips the write when the fresh
-      # measurement is within tolerance of what the page already says. A
-      # pull request's first run writes the board; every rerun converges
-      # instead of churning the head.
-      - name: splice the board
-        run: |
-          ./target/release/kanso run scripts/relative_board -- \
-            "${{ steps.race.outputs.kavg }}" "${{ steps.race.outputs.savg }}" \
-            "${{ steps.race.outputs.kkb }}" "${{ steps.race.outputs.skb }}" 5
       # Commit on the pull request only. Main is protected — a direct push
       # is refused, by design — and what a PR wrote IS the measurement of
       # the code that merges, so main needs no second write.
       #
-      # The board carries wall-clock numbers, which move every run, so a
-      # branch whose head is already a chart commit would be handed another
-      # one, and that one another, forever — one pull request collected eight
-      # before anybody noticed it could never be seen green. The chart commit
-      # still gets a full run of every gate; what stops here is the second
-      # redraw, which is what lets the branch settle.
-      - name: commit the published surfaces if they moved
+      # RULED (Clay, 2026-08-07): no auto-updated wall-clock artifact belongs
+      # on this page. Every number the chart carries is counted rather than
+      # timed, so a redraw is deterministic for a given commit and a rerun
+      # writes the same bytes. The decode board is hand-sat and lives in the
+      # page as static markup; a release re-sits it on a quiet box.
+      - name: commit the chart if it moved
         if: github.head_ref != ''
         run: |
           git config user.name "kanso-ci"
           git config user.email "cshentrup@gmail.com"
-          if [ "$(git log -1 --pretty=%s)" = "the chart and the board, remeasured" ]; then
+          if [ "$(git log -1 --pretty=%s)" = "the chart, redrawn" ]; then
             echo "the head commit is the chart; a second redraw would never settle"
             exit 0
           fi
@@ -542,7 +493,7 @@ jobs:
             exit 0
           fi
           git add docs/compiler.html
-          git commit -m "the chart and the board, remeasured"
+          git commit -m "the chart, redrawn"
           git push origin "HEAD:${{ github.head_ref }}"
       - name: record this commit
         if: github.ref == 'refs/heads/main'
