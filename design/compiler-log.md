@@ -1254,3 +1254,26 @@ golden caught the wider version immediately, because its last line is
 `tests/golden/runtime/sequencing_takes_two_descriptions.kso` moved to the
 errors corpus. Its purpose was the runtime refusal, and the refusal is a
 compile error now, which is where a case demonstrating it belongs.
+
+## The history branch could not be reached
+
+Main had been half-red for days: every push produced one green run and one red,
+and the red was always `perf history`. The job redraws `docs/compiler.html`,
+skips the commit step on main by design, and then `git checkout -B perf-history`
+refuses to switch with the redrawn file dirty in the tree. So the branch it
+exists to append to had not been appended to since 08-05, and the failure was
+telling the truth about something nobody was reading.
+
+The fix is `git checkout -- docs/compiler.html` before the switch, which is one
+line and cost more to find than to write. It could not be verified locally — a
+workflow change only runs when it runs — so it went in unproven and said so.
+The proof is the row for `1e26bd1` in `history.jsonl`, the first since 08-05,
+carrying its own PR's subject.
+
+That row also prices the wall check from #144: `compile_allocs` 125679 →
+128946, `compile_alloc_bytes` 6760131 → 6877123, with `compile_rounds` at 11
+and `compile_visits` at 126 unmoved. The check walks the `returns` map the
+fixpoint has already built, so it buys no extra round and no extra visit —
+2.6% more compiler allocation for a diagnostic that moves `1 >> 2` from a
+runtime death to a compile error. Welfare holds at 75.69, since it weighs
+rounds and visits rather than compile allocations.
