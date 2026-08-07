@@ -266,6 +266,8 @@ static long long k_stat_alloc_bytes = 0;
 static long long k_stat_blocks = 0;
 static long long k_stat_perm_allocs = 0;
 static long long k_stat_beat_iters = 0;
+static long long k_stat_evac_bytes = 0;
+static long long k_stat_evac_allocs = 0;
 
 static void k_stats_dump(void) {
     fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
@@ -275,6 +277,8 @@ static void k_stats_dump(void) {
     fprintf(stderr, "cohort_frees=%lld\ncohort_kept=%lld\n", k_stat_cohort_frees, k_stat_cohort_kept);
     fprintf(stderr, "perm_allocs=%lld\n", k_stat_perm_allocs);
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
+    fprintf(stderr, "evac_allocs=%lld\nevac_bytes=%lld\n",
+            k_stat_evac_allocs, k_stat_evac_bytes);
     fprintf(stderr,
         "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
@@ -629,6 +633,13 @@ typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; } KCopy;
 
 static void* k_copy_alloc(KCopy* cp, size_t n) {
     n = (n + 15) & ~(size_t)15;
+    /* What the copying strategy costs, at the one point every evacuated byte
+       passes through. A refcounting runtime pays none of it and pays per
+       reference instead, so this is the side of that trade beats can measure.
+       The arena path is counted here and in allocs both: the two ask different
+       questions, one what was allocated and one why. */
+    k_stat_evac_bytes += (long long)n;
+    k_stat_evac_allocs++;
     if (cp->to_arena) return k_alloc(n);
     void* p = cp->buf->data + cp->buf->used;
     cp->buf->used += n;
