@@ -1311,3 +1311,75 @@ be made on the one-shot shelf or it is not a comparison at all.
 The goldens were generated on darwin/arm64. Byte counts come from `sizeof` on
 16-aligned allocations, so they should be identical on ubuntu/x86_64, but that
 is a prediction and CI is what tests it.
+
+## The board sits still
+
+RULED (Clay, 2026-08-07): no auto-updated wall-clock artifact belongs on the
+compiler page. The decode board is hand-sat and re-sat by hand when a release
+goes out. Live racing stays where a jq comparison lives, in kq, because that
+comparison cannot be made any other way. Everything else the page shows is
+counted rather than timed — allocations, arena blocks, rewind iterations,
+what the compiler spent deciding and emitting.
+
+This reverses the ruling of 2026-08-03, which made CI the board's only author
+on the grounds that a hand-sat number ages. It does age. What it does not do is
+rewrite the page on every merge, and that turned out to cost more.
+
+The splice was the root of the chart-commit churn. CI raced the decoders,
+wrote a fresh board into `docs/compiler.html`, committed it back to the pull
+request, and that bot commit spawned a `pull_request` run attributed to
+`github-actions[bot]` — which waits at `action_required` until a human clicks
+approve. No pull request could go green unattended. Two were approved by hand
+in one sitting before the pattern was named.
+
+The board had also quietly lost half of itself. CI's two-lane splice replaced a
+four-lane board, so the page had been claiming kanso against serde_json alone
+while the reasonably-written rust and go lanes sat in a second table below it,
+saying almost the same thing at a different scale. There is one board now, four
+lanes, sat 2026-07-27 on a quiet desktop, and the duplicate is gone.
+
+`scripts/relative_board` is deleted rather than kept: nothing invokes it, it
+splices a two-lane shape the page no longer has, and its header comment carried
+the ruling that this entry reverses.
+
+What this does not fix: the chart still commits once per pull request, and that
+commit still spawns a run that needs approving. The redraw is deterministic now
+that no clock feeds it, so a rerun writes the same bytes and the churn is gone
+— but publishing at all still means a write, and main is protected. Killing the
+last approval means building the page at deploy time instead of committing it,
+which is a larger change and not this one.
+
+## The board, re-sat, and what it says
+
+Seven interleaved rounds on 2026-08-07, slope method — each lane built to run
+150 times and 450 times, the difference divided by 300, so process startup and
+the file read cancel out of both ends.
+
+    lane                07-27    08-07     peak
+    kanso                0.78     0.87    4.2 mb
+    serde_json           0.87     0.90    6.8 mb
+    reasonably rust      1.02     1.04    6.9 mb
+    go                   1.95     2.05   11.8 mb
+
+Every absolute number is up, because the box was not idle. The ratios are what
+interleaving buys, and they say the drift was not uniform:
+
+    kanso / serde   0.897 -> 0.967
+    naive / serde   1.17  -> 1.16
+    go    / serde   2.24  -> 2.28
+
+Three lanes held their relationship to each other and one moved. Kanso's lead
+over serde fell from about ten per cent to about three, which is a regression
+of roughly seven points, and the field standing still is what makes it one
+rather than weather.
+
+The deterministic counters did not move: decode allocations are still
+7,577,414 and the cost golden is green. So this is time per allocation rather
+than a count, which puts representation, thunk forcing on the decode path, or a
+fast path no presence counter covers ahead of anything allocation-shaped. The
+page already says laziness spent a slice of the margin back, and that is the
+first place to look. Peak memory improved slightly over the same window, so
+nothing was traded for footprint.
+
+Recorded as its own thread; the ratio against serde is the number to watch,
+because it is the one contention cannot move.
