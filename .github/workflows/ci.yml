@@ -431,23 +431,20 @@ jobs:
             exit 1
           }
 
-  # Publishes the deterministic counters to an unprotected branch on every
-  # push to main; the compiler page charts them. Pages serves from main/docs
-  # and main requires review, so history cannot live there — it lives on
-  # perf-history and the panel fetches it.
-  # The chart on the compiler page is regenerated HERE, on every pull request
-  # and every push, and committed back to the branch under test. It was not,
-  # for a long time: perf_record has appended a row per commit to the history
-  # branch since the panel was built, faithfully, 474 of them — and nothing has
-  # ever run scripts/long_view, so the published chart sat frozen at
-  # whenever somebody last ran it by hand. Collected, gated, never surfaced,
-  # which is the same shape as the regression that made this job worth fixing.
+  # Appends this commit's deterministic counters to an unprotected branch on
+  # every push to main. Pages serves from main/docs and main requires review,
+  # so the history cannot live there — it lives on perf-history, and the
+  # compiler page fetches it in the browser: both the counter panel and the
+  # chart above it read the same rows from the same url.
   #
-  # macOS because the figures are instructions retired and peak footprint from
-  # `/usr/bin/time -l`. Linux `time -v` reports the footprint and not the
-  # instructions, and half a row would draw a cliff no change made.
+  # This job writes nothing to the page. It used to redraw the chart and commit
+  # the result back to the branch under test, which meant every pull request
+  # collected a bot commit, and a run on a bot commit waits for a human to
+  # approve it — so no pull request could go green unattended. Drawing in the
+  # browser removes the commit, and the series extends the moment a row lands
+  # rather than the next time somebody publishes.
   perf-history:
-    name: perf history (published to the compiler page)
+    name: perf history (appended to the history branch)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -457,44 +454,6 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release
-      # Every number on the chart is deterministic, so ANY runner extends the
-      # series and none can smear it — that is the ruling the chart implements
-      # (four core metrics plus welfare, wall clock nowhere). The series is the
-      # perf-history branch; a pull request's own row is appended last, so a
-      # PR's chart ends at the PR, and the redraw is committed back to the
-      # branch under test where a reviewer sees it in the diff.
-      - name: stage the series and this commit's row
-        run: |
-          git fetch origin perf-history
-          git show origin/perf-history:history.jsonl > bench/history_series.jsonl
-          ./target/release/kanso run scripts/perf_record >> bench/history_series.jsonl
-      - name: redraw the chart
-        run: ./target/release/kanso run scripts/long_view
-      # Commit on the pull request only. Main is protected — a direct push
-      # is refused, by design — and what a PR wrote IS the measurement of
-      # the code that merges, so main needs no second write.
-      #
-      # RULED (Clay, 2026-08-07): no auto-updated wall-clock artifact belongs
-      # on this page. Every number the chart carries is counted rather than
-      # timed, so a redraw is deterministic for a given commit and a rerun
-      # writes the same bytes. The decode board is hand-sat and lives in the
-      # page as static markup; a release re-sits it on a quiet box.
-      - name: commit the chart if it moved
-        if: github.head_ref != ''
-        run: |
-          git config user.name "kanso-ci"
-          git config user.email "cshentrup@gmail.com"
-          if [ "$(git log -1 --pretty=%s)" = "the chart, redrawn" ]; then
-            echo "the head commit is the chart; a second redraw would never settle"
-            exit 0
-          fi
-          if git diff --quiet -- docs/compiler.html; then
-            echo "the published surfaces are unchanged"
-            exit 0
-          fi
-          git add docs/compiler.html
-          git commit -m "the chart, redrawn"
-          git push origin "HEAD:${{ github.head_ref }}"
       - name: record this commit
         if: github.ref == 'refs/heads/main'
         run: ./target/release/kanso run scripts/perf_record > /tmp/record.json
