@@ -1,9 +1,3 @@
-#
-# 2026-08-08: str_scans and str_scan_bytes are new. They count characters
-# counted by walking, which a string that can cache its count pays once and a
-# builder used to pay on every read — linear per read, quadratic in a loop,
-# and invisible to every counter above because walking allocates nothing. The
-# decoder never walks; encode walks four hundred distinct strings once each.
 allocs=7577414
 alloc_bytes=334437312
 arena_blocks=3
