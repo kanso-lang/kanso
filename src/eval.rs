@@ -2851,9 +2851,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             }
             let base = sub_base(arg.clone());
             match &base {
-                Value::Record { fields: vfields, .. }
-                    if fields.len() == vfields.borrow().len() =>
-                {
+                Value::Record { fields: vfields, .. } if fields.len() == vfields.borrow().len() => {
                     for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
                         match_one(fp, fv, binds)?;
                     }
