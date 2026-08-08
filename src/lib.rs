@@ -1432,7 +1432,7 @@ fn is_ambient_group(name: &str) -> bool {
 }
 
 /// The operators an arm may extend, as src/parser.rs accepts them.
-fn is_operator(name: &str) -> bool {
+pub(crate) fn is_operator(name: &str) -> bool {
     matches!(name, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
 }
 

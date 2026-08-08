@@ -279,8 +279,11 @@ pub extern "C" fn rt_check_rec(h: u32, tid: u32, nfields: u32) -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn rt_is_rec(h: u32) -> u32 {
-    matches!(slot(h), Slot::V(Value::Record { .. })) as u32
+pub extern "C" fn rt_routes_to_arms(h: u32) -> u32 {
+    match slot(h) {
+        Slot::V(v) => crate::eval::routes_to_arms(&v) as u32,
+        _ => 0,
+    }
 }
 
 #[no_mangle]

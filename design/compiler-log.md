@@ -1605,3 +1605,68 @@ acceptable is the question, and it is Clay's.
 The seven book samples wait on it. Under the current design they teach catching
 a failure; under the contention they teach handling a value, and writing them
 twice is the one outcome nobody wants.
+## 2026-08-08 — an operator asks both its operands
+
+An arm naming its type in the second position — `fn + _ b:money` — compiled on
+every engine and could never be called. All three gated dispatch on the LEFT
+operand: `matches!(&left, Value::Record { .. })` in the interpreter,
+`f.set_of(a) & REC` plus a tag test on `a` in codegen, one `rt_is_rec(a)` in
+wasm. The only shipped example of an operator arm puts a record on both sides,
+so nothing exercised the asymmetry.
+
+The gate now asks both sides, through one predicate the three engines share:
+a record routes, and so does a subtype of one. `2 + 3` is untouched — the
+static half of the native gate still requires a REC in the inferred set, and
+the whole branch only exists in programs that declare an arm for that
+operator. The decode and emitted goldens are byte-identical, and welfare holds
+at 75.69.
+
+Writing the golden for it turned up three more, none of them the gate:
+
+- **k_sub, k_div and k_mod did not unwrap a subtype**, where k_add, k_mul and
+  k_cmp did. `money 350 - 1` answered 349 on the oracle and died on native —
+  a differential-law violation of the worst kind, since the refusal reads as
+  a type complaint rather than a missing feature. Fixed here, pinned by a
+  micro golden that sends one subtype through every operator.
+- **A subtype of a primitive owns no operator at all** (#162). `type money int`
+  with `fn * _ price:money` compiles and never runs; the same program with
+  `money` as a record does. Both engines agree, so it is a design question,
+  and it is Clay's — it decides whether the operator propagation #159 asks for
+  works, depending on which shape the math failures take.
+- **Native dies on an operator arm that answers a string** (#163), on either
+  side, on main as well. The message comes from the string-accumulator path,
+  so the interpolation is lowered against a set that says the operand is a
+  number.
+
+A subtype also refuses to match its parent's *constructor* pattern —
+`fn * n (money cents)` never sees a `sale_price`. A plain function refuses it
+identically, so it is the pattern layer rather than the operator, and an
+annotation (`_:money`) matches where the destructuring form does not.
+
+## 2026-08-08 — the operator that had no callers
+
+#163 above, chased and fixed in the same change rather than left filed. The
+crash was not in the operator machinery at all: `linear::string_builders` marks
+a parameter an accumulator when every caller hands it over uniquely, and it
+looks for that by walking named calls. An operator is called by syntax, so
+`money 350 * 3` is a `BinOp` node and the walk finds no calls to `*` — the
+question answers yes over an empty set, the plain parameter is marked a string
+builder, and codegen emits the in-place join for a seed that was never
+converted. `k_concat_arr_mut` then found a string with no capacity and said so.
+
+The same hole was already closed once, from the other side: `escapes_as_value`
+refuses the marking for a group handed to a fold or curried, "because a
+question about what every caller hands over then has no calls to look at and
+answers yes for free". That is this bug's sentence, written before this bug.
+The fix sits beside it — an operator group is refused for the same reason,
+which is the honest answer when the analysis cannot see the call sites.
+
+Only operators were reachable. The other ambient group, render/to_string, is
+protected by the ownership rule: an arm must match on a type the module owns,
+and at arity one that leaves no room for the bare parameter this needs. At
+arity two an operator can name its type in one position and take a bare
+variable in the other, which is exactly the shape that fails.
+
+All three cost goldens are byte-identical and welfare holds at 75.69 — the
+guard only ever declines a marking, and nothing shipped has an operator arm
+that answers a string.

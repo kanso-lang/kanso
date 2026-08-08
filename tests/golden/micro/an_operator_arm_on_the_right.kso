@@ -1,0 +1,15 @@
+# an operator asks both operands whether they own it, so an arm naming its
+# type in the second position is reachable — and a subtype answers where its
+# parent does
+type money
+  cents
+
+type sale_price money
+
+fn * n _:money
+  n * 100
+
+pub play =
+  print "record on the right: {3 * money 350}"
+  >> print "subtype on the right: {2 * sale_price (money 250)}"
+  >> print "plain ints stay on the builtin: {3 * 2}"

@@ -1,0 +1,16 @@
+# an operator's calls are written `a * b`, so a walk looking for named calls
+# finds none and concludes every caller hands its argument over — which marked
+# the plain parameter here an accumulator and sent a literal to the in-place
+# string join
+type money
+  cents
+
+fn * _:money n
+  "{n} priced things"
+
+fn + n _:money
+  "{n} on the right"
+
+pub play =
+  print "left: {money 350 * 3}"
+  >> print "right: {3 + money 350}"

@@ -2683,6 +2683,13 @@ static KValue k_sub_base(KValue v) {
     return v;
 }
 
+/* Whether an operand sends an operator to its user arms. A record does, and
+   so does a subtype of one, which is the same value wearing a narrower name. */
+long long k_routes_to_arms(KValue v) {
+    if (v.tag == K_SUB) v = k_sub_base(v);
+    return v.tag == K_REC;
+}
+
 KValue k_sub_wrap(long long type_id, KValue inner) {
     if (!k_not_failure(inner)) return inner;
     KSub* s = k_alloc(sizeof(KSub));
@@ -3048,6 +3055,8 @@ KValue k_add(KValue a, KValue b) {
 }
 
 KValue k_sub(KValue a, KValue b) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         long long r;
@@ -3078,6 +3087,8 @@ KValue k_mul(KValue a, KValue b) {
 }
 
 KValue k_div(KValue a, KValue b, const char* origin) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_err(k_str("division by zero"), origin);
@@ -3104,6 +3115,8 @@ KValue k_div(KValue a, KValue b, const char* origin) {
 }
 
 KValue k_mod(KValue a, KValue b, const char* origin) {
+    if (a.tag == K_SUB) a = k_sub_base(a);
+    if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
         if (b.payload == 0) return k_err(k_str("modulo by zero"), origin);

@@ -167,7 +167,13 @@ impl<'a> Analysis<'a> {
     /// expression that consumes it. Nothing here touches `linear_params`, so
     /// what a push or a put is allowed to do is unchanged.
     fn callers_hand_over(&self, name: &str, arity: usize, i: usize) -> bool {
-        if self.escapes_as_value(name, arity) {
+        // An operator is called by syntax, so its calls are `a * b` rather
+        // than a named call this walk can find — the same blindness
+        // `escapes_as_value` refuses, arrived at from the other direction.
+        // With no call sites to look at the question answers yes for free,
+        // and a parameter marked an accumulator on that answer reaches the
+        // runtime as a plain string it was promised it could write into.
+        if crate::is_operator(name) || self.escapes_as_value(name, arity) {
             return false;
         }
         self.program.fns.iter().all(|caller| {

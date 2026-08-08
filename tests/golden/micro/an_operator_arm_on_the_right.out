@@ -1,0 +1,3 @@
+record on the right: 300
+subtype on the right: 200
+plain ints stay on the builtin: 6

@@ -196,6 +196,7 @@ declare %KValue @k_concat(%KValue, %KValue)
 declare %KValue @k_concat_arr(i64, ptr)
 declare %KValue @k_render(%KValue, i64)
 declare i64 @k_render_dispatchable(%KValue)
+declare i64 @k_routes_to_arms(%KValue)
 declare %KValue @k_add(%KValue, %KValue)
 declare %KValue @k_sub(%KValue, %KValue)
 declare %KValue @k_mul(%KValue, %KValue)
@@ -3064,15 +3065,19 @@ impl<'a> Backend<'a> {
         let a_owned = self.as_value(f, a);
         let b_owned = self.as_value(f, b);
         let (a, b) = (a_owned.as_str(), b_owned.as_str());
-        // a record on the left dispatches to the operator's user arms; the
+        // a record on either side dispatches to the operator's user arms; the
         // numeric fast paths below stay untouched for everything else
         let armable = matches!(op, "+" | "-" | "*" | "/" | "%" | "<" | ">" | "<=" | ">=" | "==")
             && self.program.fns.iter().any(|d| d.name == op && d.params.len() == 2);
-        if armable && f.set_of(a) & REC != 0 {
-            let tag = f.tmp();
-            f.line(&format!("{tag} = extractvalue %KValue {a}, 0"));
+        if armable && (f.set_of(a) | f.set_of(b)) & REC != 0 {
+            let a_routes = f.tmp();
+            f.line(&format!("{a_routes} = call i64 @k_routes_to_arms(%KValue {a})"));
+            let b_routes = f.tmp();
+            f.line(&format!("{b_routes} = call i64 @k_routes_to_arms(%KValue {b})"));
+            let either = f.tmp();
+            f.line(&format!("{either} = or i64 {a_routes}, {b_routes}"));
             let isrec = f.tmp();
-            f.line(&format!("{isrec} = icmp eq i64 {tag}, 7"));
+            f.line(&format!("{isrec} = icmp ne i64 {either}, 0"));
             let user = f.label();
             let builtin = f.label();
             let merge = f.label();
@@ -3092,7 +3097,10 @@ impl<'a> Backend<'a> {
             f.start_block(&merge);
             let t = f.tmp();
             f.line(&format!("{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"));
-            f.record(&t, f.set_of(&bv) | self.group_return_set(op, 2) | (f.set_of(a) & FAIL));
+            f.record(
+                &t,
+                f.set_of(&bv) | self.group_return_set(op, 2) | ((f.set_of(a) | f.set_of(b)) & FAIL),
+            );
             return Ok(t);
         }
         self.emit_binop_builtin(f, op, a, b, span)

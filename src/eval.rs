@@ -1354,9 +1354,11 @@ impl<'a> Interp<'a> {
                 let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 // records dispatch to the operator's user arms; numbers stay
                 // on the builtin (coherence licenses the fast path, and the
-                // orphan rule keeps 2 + 3 meaning one thing forever)
-                if matches!(&left, Value::Record { .. })
-                    && !is_failure(&left)
+                // orphan rule keeps 2 + 3 meaning one thing forever). Either
+                // side carries the question: an arm naming its type in the
+                // second position is a declaration too, and a gate reading
+                // only the first leaves it matching nothing.
+                if (routes_to_arms(&left) || routes_to_arms(&right))
                     && self.fns.contains_key(op as &str)
                 {
                     return self.call_named(op, vec![left, right], *span, frame);
@@ -2888,6 +2890,18 @@ fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
 
 pub fn is_failure(value: &Value) -> bool {
     matches!(value, Value::ErrV(_))
+}
+
+/// Whether an operand sends an operator to its user arms. A record does, and
+/// so does a subtype of one, which is the same value wearing a narrower name.
+/// An err does not: it carries the operation's failure past the operator
+/// rather than answering it.
+pub fn routes_to_arms(value: &Value) -> bool {
+    match value {
+        Value::Record { .. } => true,
+        Value::Sub { inner, .. } => routes_to_arms(inner),
+        _ => false,
+    }
 }
 
 thread_local! {
