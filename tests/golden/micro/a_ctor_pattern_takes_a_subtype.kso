@@ -1,0 +1,11 @@
+# a pattern names a type, and a subtype of it is that type for matching, so
+# the arm binds the base record's field through the wrapper
+type money
+  cents
+
+type sale_price money
+
+fn scale (money c) n
+  c * n
+
+pub play = print "{scale (sale_price (money 350)) 2}"

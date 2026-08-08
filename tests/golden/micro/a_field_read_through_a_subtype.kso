@@ -1,0 +1,10 @@
+# a getter is a constructor pattern, so a field read sees through a subtype
+# for the same reason one matches
+type coin
+  cents
+
+type sale_price coin
+
+pub play =
+  s = sale_price (coin 350)
+  print "{s.cents}"

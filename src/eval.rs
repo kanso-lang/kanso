@@ -1214,6 +1214,12 @@ impl<'a> Interp<'a> {
                 if is_failure(&value) {
                     return Ok(value);
                 }
+                // a getter is a constructor pattern, so it reads through a
+                // subtype for the same reason one matches
+                let value = match value {
+                    Value::Sub { .. } => sub_base(value),
+                    other => other,
+                };
                 let Value::Record { ty, fields } = &value else {
                     return Err(RuntimeError {
                         message: format!(
@@ -2819,6 +2825,43 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             }
             Some(0)
         }
+        // A pattern naming a type takes a subtype of it, the same way an
+        // annotation does, and ranks the same way: how many wrappers come off
+        // before the named type is the one in hand, zero when it names the
+        // subtype itself. So an arm naming the child still beats one naming
+        // the parent, and the fields bound are the base record's either way.
+        (Pattern::Ctor { ty, fields }, Value::Sub { .. }) => {
+            let mut depth: u8 = 0;
+            let mut cur = arg;
+            let names_it = loop {
+                match cur {
+                    Value::Sub { ty: vty, inner } => match ty.as_str() == &**vty {
+                        true => break true,
+                        false => {
+                            depth = depth.saturating_add(1);
+                            cur = inner;
+                        }
+                    },
+                    Value::Record { ty: vty, .. } => break ty.as_str() == &**vty,
+                    _ => break false,
+                }
+            };
+            if !names_it {
+                return None;
+            }
+            let base = sub_base(arg.clone());
+            match &base {
+                Value::Record { fields: vfields, .. }
+                    if fields.len() == vfields.borrow().len() =>
+                {
+                    for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
+                        match_one(fp, fv, binds)?;
+                    }
+                    Some(depth)
+                }
+                _ => None,
+            }
+        }
         _ => None,
     }
 }
@@ -2888,7 +2931,10 @@ pub fn is_failure(value: &Value) -> bool {
 pub fn routes_to_arms(value: &Value) -> bool {
     match value {
         Value::Record { .. } => true,
-        Value::Sub { inner, .. } => routes_to_arms(inner),
+        // a subtype is user-owned whatever it wraps, so an arm written for
+        // `type money int` is reachable where the int's builtin would
+        // otherwise answer first and the arm would never run
+        Value::Sub { .. } => true,
         _ => false,
     }
 }
