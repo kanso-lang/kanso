@@ -2245,6 +2245,9 @@ impl<'a> Backend<'a> {
                     let mut args = String::new();
                     for cap in &captures {
                         let temp = f.lookup(cap).expect("capture is bound");
+                        // A capture is stored as a %KValue, and a group that
+                        // returns its record in registers holds a %parsed.
+                        let temp = self.as_value(f, &temp);
                         args.push_str(&format!(", %KValue {temp}"));
                     }
                     let t = f.tmp();
@@ -2751,6 +2754,7 @@ impl<'a> Backend<'a> {
                 f.line(&format!("{arr} = alloca [{n} x %KValue]"));
                 for (i, cap) in captures.iter().enumerate() {
                     let temp = f.lookup(cap).expect("capture is bound");
+                    let temp = self.as_value(f, &temp);
                     let slot = f.tmp();
                     f.line(&format!(
                         "{slot} = getelementptr [{n} x %KValue], ptr {arr}, i64 0, i64 {i}"
