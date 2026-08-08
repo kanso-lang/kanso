@@ -559,8 +559,8 @@ struct FnEmit {
     sets: HashMap<String, Set>,
     /// Temps carrying the by-value %parsed type rather than a boxed KValue.
     /// Operands living in the by-value convention, and the record type
-    /// each one holds — boxing one back needs to name its type.
-    parsed: std::collections::HashMap<String, String>,
+    /// each one holds — boxing one back needs to name its type and its id.
+    parsed: std::collections::HashMap<String, (String, i64)>,
     /// Err-origin prefix "{fn lazy_cells: Vec::new(), } at {file}" for the declaration being emitted.
     origin_prefix: String,
     /// Source file of the declaration being emitted, for keying push sites.
@@ -609,7 +609,78 @@ impl FnEmit {
         format!("L{}", self.label)
     }
 
+    /// Only a carried argument slot reads the two-word convention. Every other
+    /// consumer names its operand as a `%KValue`, and a `%parsed` reaching one
+    /// is invalid IR the host's clang refuses. Repairing here rather than at
+    /// each consumer is what makes the rule hold for consumers nobody has
+    /// written yet: five separate sites were fixed one at a time before this,
+    /// and the sixth would have shipped the same way.
     fn line(&mut self, text: &str) {
+        let text = self.boxing_any_parsed_operand(text);
+        let _ = writeln!(self.out, "  {text}");
+    }
+
+    fn boxing_any_parsed_operand(&mut self, text: &str) -> String {
+        if self.parsed.is_empty() {
+            return text.to_string();
+        }
+        let carried: Vec<String> = self
+            .parsed
+            .keys()
+            .filter(|t| named_as_a_value(text, t))
+            .cloned()
+            .collect();
+        carried.iter().fold(text.to_string(), |acc, t| {
+            let boxed = self.box_parsed(t);
+            let named = format!("%KValue {t}");
+            let boxed_as = format!("%KValue {boxed}");
+            let inner = acc
+                .replace(&format!("{named},"), &format!("{boxed_as},"))
+                .replace(&format!("{named})"), &format!("{boxed_as})"));
+            match inner.strip_suffix(&named) {
+                Some(head) => format!("{head}{boxed_as}"),
+                None => inner,
+            }
+        })
+    }
+
+    /// Undo the by-value convention: rebuild the record the two words hold.
+    /// The type is whatever produced the value, which the escape analysis
+    /// already knows, because only a returnable type is ever in this shape.
+    fn box_parsed(&mut self, e: &str) -> String {
+        let (_, id) = self.parsed[e];
+        let w0 = self.tmp();
+        self.raw(&format!("{w0} = extractvalue %parsed {e}, 0"));
+        let w1 = self.tmp();
+        self.raw(&format!("{w1} = extractvalue %parsed {e}, 1"));
+        let pos = self.tmp();
+        self.raw(&format!("{pos} = lshr i64 {w0}, 8"));
+        let vtag = self.tmp();
+        self.raw(&format!("{vtag} = and i64 {w0}, 255"));
+        let f0a = self.tmp();
+        self.raw(&format!("{f0a} = insertvalue %KValue undef, i64 0, 0"));
+        let f0 = self.tmp();
+        self.raw(&format!("{f0} = insertvalue %KValue {f0a}, i64 {pos}, 1"));
+        let f1a = self.tmp();
+        self.raw(&format!("{f1a} = insertvalue %KValue undef, i64 {vtag}, 0"));
+        let f1 = self.tmp();
+        self.raw(&format!("{f1} = insertvalue %KValue {f1a}, i64 {w1}, 1"));
+        let arr = self.tmp();
+        self.raw(&format!("{arr} = alloca [2 x %KValue]"));
+        let p0 = self.tmp();
+        self.raw(&format!("{p0} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 0"));
+        self.raw(&format!("store %KValue {f0}, ptr {p0}"));
+        let p1 = self.tmp();
+        self.raw(&format!("{p1} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 1"));
+        self.raw(&format!("store %KValue {f1}, ptr {p1}"));
+        let t = self.tmp();
+        self.raw(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
+        t
+    }
+
+    /// A line whose operands are already values: the boxing rewrite emits
+    /// through here, so a fresh temp is never scanned against itself.
+    fn raw(&mut self, text: &str) {
         let _ = writeln!(self.out, "  {text}");
     }
 
@@ -626,16 +697,12 @@ impl FnEmit {
         self.versions.get(name).cloned()
     }
 
-    fn record_parsed(&mut self, operand: &str, ty: &str) {
-        self.parsed.insert(operand.to_string(), ty.to_string());
+    fn record_parsed(&mut self, operand: &str, ty: &str, id: i64) {
+        self.parsed.insert(operand.to_string(), (ty.to_string(), id));
     }
 
     fn is_parsed(&self, operand: &str) -> bool {
         self.parsed.contains_key(operand)
-    }
-
-    fn parsed_ty(&self, operand: &str) -> Option<&str> {
-        self.parsed.get(operand).map(String::as_str)
     }
 
     fn record(&mut self, operand: &str, set: Set) {
@@ -654,6 +721,16 @@ impl FnEmit {
         }
         self.sets.get(operand).copied().unwrap_or(TOP)
     }
+}
+
+/// Whether an emitted line names this temp in a `%KValue` operand position.
+/// The delimiter matters: `%t2` is a prefix of `%t20`, and boxing the wrong
+/// register writes a program that type-checks and computes the wrong record.
+fn named_as_a_value(text: &str, temp: &str) -> bool {
+    let needle = format!("%KValue {temp}");
+    text.match_indices(&needle).any(|(at, _)| {
+        matches!(text.as_bytes().get(at + needle.len()), Some(b',') | Some(b')') | None)
+    })
 }
 
 /// LLVM symbol for a dispatcher: quoted when the kanso name carries a
@@ -750,45 +827,9 @@ impl<'a> Backend<'a> {
     /// convention and worth 254 MB on a json decode.
     fn as_value(&self, f: &mut FnEmit, e: &str) -> String {
         match f.is_parsed(e) {
-            true => self.box_parsed(f, e),
+            true => f.box_parsed(e),
             false => e.to_string(),
         }
-    }
-
-    /// Undo the by-value convention: rebuild the record the two words hold.
-    /// The type is whatever produced the value, which the escape analysis
-    /// already knows, because only a returnable type is ever in this shape.
-    fn box_parsed(&self, f: &mut FnEmit, e: &str) -> String {
-        let ty = f.parsed_ty(e).expect("a parsed operand came from a returnable group").to_string();
-        let ty = ty.as_str();
-        let id = self.type_ids[ty];
-        let w0 = f.tmp();
-        f.line(&format!("{w0} = extractvalue %parsed {e}, 0"));
-        let w1 = f.tmp();
-        f.line(&format!("{w1} = extractvalue %parsed {e}, 1"));
-        let pos = f.tmp();
-        f.line(&format!("{pos} = lshr i64 {w0}, 8"));
-        let vtag = f.tmp();
-        f.line(&format!("{vtag} = and i64 {w0}, 255"));
-        let f0a = f.tmp();
-        f.line(&format!("{f0a} = insertvalue %KValue undef, i64 0, 0"));
-        let f0 = f.tmp();
-        f.line(&format!("{f0} = insertvalue %KValue {f0a}, i64 {pos}, 1"));
-        let f1a = f.tmp();
-        f.line(&format!("{f1a} = insertvalue %KValue undef, i64 {vtag}, 0"));
-        let f1 = f.tmp();
-        f.line(&format!("{f1} = insertvalue %KValue {f1a}, i64 {w1}, 1"));
-        let arr = f.tmp();
-        f.line(&format!("{arr} = alloca [2 x %KValue]"));
-        let p0 = f.tmp();
-        f.line(&format!("{p0} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 0"));
-        f.line(&format!("store %KValue {f0}, ptr {p0}"));
-        let p1 = f.tmp();
-        f.line(&format!("{p1} = getelementptr [2 x %KValue], ptr {arr}, i64 0, i64 1"));
-        f.line(&format!("store %KValue {f1}, ptr {p1}"));
-        let t = f.tmp();
-        f.line(&format!("{t} = call %KValue @k_rec(i64 {id}, i64 2, ptr {arr})"));
-        t
     }
 
     fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
@@ -840,7 +881,7 @@ impl<'a> Backend<'a> {
         let boxed;
         let e = match f.is_parsed(e) && self.escape.carries_ty(callee, arity, i).is_none() {
             true => {
-                boxed = self.box_parsed(f, e);
+                boxed = f.box_parsed(e);
                 boxed.as_str()
             }
             false => e,
@@ -1969,7 +2010,8 @@ impl<'a> Backend<'a> {
         f.line(&format!("{a} = insertvalue %parsed undef, i64 {w0}, 0"));
         let p = f.tmp();
         f.line(&format!("{p} = insertvalue %parsed {a}, i64 {w1}, 1"));
-        f.record_parsed(&p, ty);
+        let pid = self.type_ids[ty];
+        f.record_parsed(&p, ty, pid);
         Ok(p)
     }
 
@@ -2578,7 +2620,7 @@ impl<'a> Backend<'a> {
                     // the callee's side, and a constant is evaluated once.
                     let t = match self.escape.returns_ty(name, 0) {
                         Some(ty) if callee_ret == "%parsed" => {
-                            f.record_parsed(&t, ty);
+                            f.record_parsed(&t, ty, self.type_ids[ty]);
                             self.as_value(f, &t)
                         }
                         _ => t,
@@ -3829,7 +3871,7 @@ impl<'a> Backend<'a> {
             };
             if let Some(ty) = self.escape.returns_ty(name, n) {
                 if callee_ret == "%parsed" {
-                    f.record_parsed(&result, ty);
+                    f.record_parsed(&result, ty, self.type_ids[ty]);
                 }
             }
             f.record(&result, self.group_return_set(name, n) | fails);

@@ -1814,3 +1814,40 @@ of which import regexp, and the IR verifier builds the sample corpus without
 the flag. `micro_corpus_survives_a_release_build` now runs all eighty-five
 against the goldens the other engines answer to, because what a program prints
 cannot depend on how hard it was optimized.
+
+## the invariant moves into the emitter
+
+A register-returned record travels as `%parsed`, two words in registers, and
+only one consumer reads it in that shape: a carried argument slot. Every other
+consumer names its operand `%KValue`, and handing it the two words instead
+emits IR the host's clang refuses. That rule has been written in a comment
+above `as_value` for months and enforced nowhere, so it was maintained one
+consumer at a time: the binop operands, the thunk capture, the closure
+capture, the nullary constant, the list and map elements. Five fixes, each
+correct for the shape it was written against.
+
+The sixth was a field read reached through a closure — `k_b_field` handed a
+`%parsed` — and the seventh a return, `ret %KValue` on a name bound to a
+carried call. Fixing those two the same way would have left an eighth.
+
+So `FnEmit::line` boxes instead. A line about to name a parsed temp in a
+`%KValue` operand position gets the record built back first and the operand
+substituted; `box_parsed` moved onto `FnEmit`, with the type id riding in the
+parsed map, so the repair needs nothing from the backend. Carried slots write
+`%parsed` and are untouched. The delimiter set is `,`, `)` and end of line —
+the last of those is the `ret` case, and `%t2` being a prefix of `%t20` is why
+it is a delimiter test rather than a substring one.
+
+    jsonbench emitted IR         byte-identical
+    jsonbench build, 5 rounds    0.19 s either way
+    welfare                      75.69, at the floor
+    isolated consumer probes     9 of 9 agree, %parsed live in each
+
+The IR being byte-identical on the heaviest `%parsed` user is the measurement
+that matters: the chokepoint fires only where the program was already invalid,
+so the register convention keeps everything it buys.
+
+The probes are the other half. A sample exercising many consumers of one group
+tests none of them — one escaping use boxes the whole group and the convention
+never comes up — so each probe is its own program with its own type, and each
+was checked for a live `define %parsed` before its answer was believed.

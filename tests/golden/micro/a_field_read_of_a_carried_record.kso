@@ -1,0 +1,11 @@
+# a record returned in registers, read for a field from inside a closure
+type pair
+  a
+  b
+
+fn make x
+  pair x (x + 1)
+
+pub play =
+  p = make 1
+  print "{(_ -> p.b) 0}"
