@@ -1,0 +1,13 @@
+# `pair` has two fields, so `make` hands its result back in registers — and a
+# capture is stored as an ordinary value, whichever shape it arrived in
+type pair
+  a
+  b
+
+fn make x
+  pair x (x + 1)
+
+pub play =
+  p = make 1
+  f = (_ -> p.a + p.b)
+  print "{f 0}"
