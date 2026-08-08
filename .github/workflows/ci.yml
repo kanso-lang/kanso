@@ -464,12 +464,11 @@ jobs:
   # compiler page fetches it in the browser: both the counter panel and the
   # chart above it read the same rows from the same url.
   #
-  # This job writes nothing to the page. It used to redraw the chart and commit
-  # the result back to the branch under test, which meant every pull request
-  # collected a bot commit, and a run on a bot commit waits for a human to
-  # approve it — so no pull request could go green unattended. Drawing in the
-  # browser removes the commit, and the series extends the moment a row lands
-  # rather than the next time somebody publishes.
+  # This job writes nothing to the page, and must not. A redraw committed back
+  # to the branch under test puts a bot commit on every pull request, and a run
+  # on a bot commit waits for a human to approve it, so nothing goes green
+  # unattended. Drawing in the browser costs no commit, and the series extends
+  # the moment a row lands rather than the next time somebody publishes.
   perf-history:
     name: perf history (appended to the history branch)
     runs-on: ubuntu-latest
@@ -489,13 +488,6 @@ jobs:
         run: |
           git config user.name "kanso-ci"
           git config user.email "cshentrup@gmail.com"
-          # The chart steps above redrew docs/compiler.html. On main that is
-          # deliberately never committed — main is protected and the pull
-          # request already wrote the measurement of the code that merged — so
-          # the redraw is left in the working tree, where it refuses the branch
-          # switch below. Discard it: this job's business here is the history
-          # file, and the page's own commit belongs to the pull request.
-          git checkout -- docs/compiler.html
           if git fetch origin perf-history 2>/dev/null; then
             git checkout -B perf-history origin/perf-history
           else
