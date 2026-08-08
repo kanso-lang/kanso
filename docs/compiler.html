@@ -358,7 +358,21 @@ description: "how kanso reaches serde_json's speed with no garbage collector, no
 
 <p>grow-only, the peak tracks the work: <strong>0.76&nbsp;gb</strong> at 150 decodes, <strong>15&nbsp;gb</strong> at 3000, because the program keeps every scrap it ever touched. swept every beat, the peak is <strong>5.8&nbsp;mb</strong> at 150 decodes and <strong>5.8&nbsp;mb</strong> at 3000 — flat, because a decode's scraps die with the decode. and the swept version ran <em>faster</em> too: instead of asking the operating system for fresh, cold pages, it reused the same warm ones, so the cache stayed hot for the whole run.</p>
 
-<p><strong>the honesty tier.</strong> the compiler now emits the beat boundaries itself: an analysis proves that a loop's iterations keep nothing across the line. with the per-object header gone from the arena, the emitted version measures <strong>5.8&nbsp;mb</strong> peak—under serde's 6.7 and the reasonably-written rust's 6.8. still <em>planned</em>, not yet built: the copy-or-pin split for survivors, and the static sweep points for long beats. and the number that will ultimately judge the whole design isn't on this page yet—write the kanso compiler in kanso, count the survivors per beat, and find out how rare "rare" really is.</p>
+<p><strong>the honesty tier.</strong> the compiler now emits the beat boundaries itself: an analysis proves that a loop's iterations keep nothing across the line. with the per-object header gone from the arena, the emitted version measures <strong>5.8&nbsp;mb</strong> peak—under serde's 6.7 and the reasonably-written rust's 6.8. the copy-or-pin split for survivors was the last thing here still called planned; it is now declined on its own numbers, which the ledger carries — pinning the survivor's page died to a measurement before it was built, and retaining the region instead was built and measured and lost. what remains planned is the static sweep points for long beats.</p>
+
+<p>"almost everything a program makes, it makes inside a beat" is the claim this whole section rests on, and it now has a number on the four boards. at a beat boundary the live set is exactly what the carry stages, and the runtime already sizes it to allocate a buffer, so counting it costs nothing:</p>
+
+<pre><code>shelf      boundaries   live crossing (max)   arena held then
+decode              1        112 bytes          1,048,576
+encode            401         80 bytes          4,194,304
+one-shot            3          995,504          3,145,728
+basket         10,000                0          1,048,576</code></pre>
+
+<p>encode crosses a hundred and twenty-eight bytes in <em>total</em> across four hundred and one boundaries, and basket crosses nothing at all across ten thousand. "rare" is rarer than the design assumed. one-shot is the exception at 31.6%, which is the same board the evacuation counter singles out, and the two agree about where the remaining cost lives.</p>
+
+<p>what this measures is liveness <em>at</em> the rewind, so it bounds how much of what the arena holds is already dead — at encode's rewinds, essentially all four megabytes of it. it does not say what a reference-counted runtime's peak would be, because such a runtime frees as values die rather than at boundaries, and its peak is the largest set live at one instant. that quantity is still unmeasured, and it is the last unknown in the comparison. the honest ceiling on the gap is smaller than the table looks in any case: the arena's floor is one block, so eighty bytes is not a footprint any policy here could reach.</p>
+
+<p>this is the corpus, not the verdict. the number that will ultimately judge the design is still the one this section has always named—write the kanso compiler in kanso and count survivors on a program nobody tuned for the boards.</p>
 
 
 <h2 id="ladder"><span class="sec-num">04</span>the last stretch to serde<span class="status status-shipped">shipped</span></h2>
