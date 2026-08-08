@@ -2045,3 +2045,16 @@ which is the failure this is for.
 
 Seen red before it was pinned green: with `drawTrend` returning early, the
 harness says `the chart drew []; five series of 6 points were fed to it`.
+
+The first stub was invented rather than shaped, and CI caught it where this
+machine did not: `rejected: RangeError: Invalid time value`. The rows carried
+the counters the chart reads and no `date`, which the page formats, so it threw
+before drawing — a fixture the pipeline would never produce, asserting a
+fiction, which is the trap the corpus rules already name. The rows are now
+shaped from a real row of the history branch.
+
+Two things about that are worth keeping. The probe reported a blank reason at
+first, because an unhandled rejection does not fire the `error` listener; it
+listens for both now. And the failure was invisible here and loud there, which
+is the ordinary shape of a browser difference — the local Chrome tolerated the
+invalid date the CI one refused.

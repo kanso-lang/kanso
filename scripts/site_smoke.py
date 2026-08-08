@@ -148,18 +148,31 @@ window.PAGE_PROBE = async (settled) => {
 # many points — a presence check would pass on an empty canvas, which is the
 # failure this exists to catch.
 CHART_ROWS = 6
+# Shaped from a real row of the history branch rather than invented: the first
+# stub omitted `date`, and the page threw RangeError: Invalid time value before
+# it drew anything — a fixture the pipeline would never produce, asserting a
+# fiction. The values vary so a flat series cannot pass for a drawn one.
 CHART_HISTORY = "\n".join(
     json.dumps(
         {
-            "commit": f"c{i}",
-            "allocs": 7_000_000 + i * 1000,
-            "encode_allocs": 16_000_000 + i * 2000,
-            "oneshot_arena_peak_bytes": 3_000_000 + i * 4096,
+            "commit": f"c0ffee{i}",
+            "subject": f"a change that moved something ({i})",
+            "date": f"2026-08-0{i + 1}T12:00:00-07:00",
+            "allocs": 7_577_414 + i * 1000,
+            "alloc_bytes": 334_437_312 + i * 4096,
+            "arena_blocks": 3,
+            "beat_iters": 151 + i,
+            "encode_allocs": 16_259_950 + i * 2000,
+            "oneshot_arena_peak_bytes": 7_340_032 + i * 4096,
             "compile_rounds": 40 + i,
             "compile_visits": 9000 + i * 10,
+            "compile_peak_bytes": 819_173 + i * 512,
             "emitted_lines": 1500 + i,
-            "compile_peak_bytes": 80_000_000 + i * 8192,
-            "welfare": f"{75.0 + i * 0.1:.2f}",
+            "el_parses": 0,
+            "utf8_bytes": 0,
+            "held_peak_bytes": 1024 + i,
+            "perm_allocs": 9,
+            "welfare": 75.60 + i * 0.01,
         }
     )
     for i in range(CHART_ROWS)
