@@ -1,0 +1,5 @@
+# a constant naming itself inside a list: the cell is never demanded, and both
+# engines say so with the same word
+ring = [ring]
+
+pub play = print "{ring}"
