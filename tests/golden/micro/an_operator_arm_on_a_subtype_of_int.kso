@@ -1,0 +1,9 @@
+# a subtype is user-owned whatever it wraps, so an arm written for a subtype
+# of int is reachable — before this the int's builtin answered first and the
+# arm never ran, silently, on every engine
+type money int
+
+fn * _:money n
+  "{n} things"
+
+pub play = print "{money 350 * 2}"

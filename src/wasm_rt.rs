@@ -271,7 +271,24 @@ pub extern "C" fn rt_check_type(h: u32, code: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_check_rec(h: u32, tid: u32, nfields: u32) -> u32 {
-    let Slot::V(Value::Record { ty, fields }) = slot(h) else {
+    let Slot::V(value) = slot(h) else {
+        return 0;
+    };
+    // A pattern naming a type takes a subtype of it, so the walk looks for
+    // the named type at each level before reaching the base: one naming the
+    // wrapper matches the wrapper, one naming what it wraps matches through
+    // it. The fields bound are the base record's either way.
+    let mut cur = value.clone();
+    while let Value::Sub { ty, inner } = cur {
+        if type_index(&ty).is_some_and(|i| i == tid as usize) {
+            return match eval::sub_base(value) {
+                Value::Record { fields, .. } => (fields.borrow().len() == nfields as usize) as u32,
+                _ => 0,
+            };
+        }
+        cur = (*inner).clone();
+    }
+    let Value::Record { ty, fields } = cur else {
         return 0;
     };
     let matches_ty = type_index(&ty).is_some_and(|i| i == tid as usize);
@@ -293,7 +310,9 @@ pub extern "C" fn rt_check_err(h: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_field(h: u32, i: u32) -> u32 {
-    let Slot::V(Value::Record { fields, .. }) = slot(h) else {
+    // the fields bound are the base record's, whatever names wrap it
+    let Slot::V(v) = slot(h) else { die("not a record".to_string()) };
+    let Value::Record { fields, .. } = eval::sub_base(v) else {
         die("not a record".to_string());
     };
     let field = fields.borrow()[i as usize].clone();
@@ -405,7 +424,8 @@ pub extern "C" fn rt_keyed_field(h: u32, name_lit: u32) -> u32 {
         Value::Str(s) => s,
         _ => die("field name must be a string".to_string()),
     };
-    let Slot::V(Value::Record { ty, fields }) = slot(h) else {
+    let Slot::V(v) = slot(h) else { die("not a record".to_string()) };
+    let Value::Record { ty, fields } = eval::sub_base(v) else {
         die("not a record".to_string());
     };
     let position = TYPES.with(|t| {

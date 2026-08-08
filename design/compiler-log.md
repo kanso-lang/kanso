@@ -1963,3 +1963,52 @@ byte-identical, and `bench/emitted_golden.txt` did not move at all — the
 counter is a runtime one and the decoder emits the same code. Welfare 75.69,
 at the floor. kq keeps veins of its own and will want the same two lines when
 its pin moves.
+
+## a subtype matches where its parent does
+
+Clay ruled it: subtypes work as in Go, with one difference — kanso dispatches
+on the types of all call arguments rather than a receiver, so Go's "the
+declared type inherits no methods" does not transfer, because kanso has no
+method sets. A function matches on any subtype of the type it takes, and the
+specificity rule already settled breaks the tie. That is the whole rule.
+
+Three rows disagreed with it. A constructor pattern refused a subtype; a field
+read refused one, which is the same mechanism because a getter is synthesised
+as a constructor pattern; and an arm written for `type money int` was dead
+where the same program written with a record ran it — `money 350 * 2` answered
+700, silently, on every engine. Nothing here broke a law: all three engines
+agreed on the wrong answer.
+
+The rule was already implemented, once, for annotations. `type_match_depth`
+walks a subtype chain and adds a step per level, so `_:money` matching a
+`sale_price` ranks below an exact `_:sale_price`. Constructor patterns never
+learned it, and neither did the two backends' arm ordering, which scored every
+constructor pattern a flat 2000.
+
+So the change is the same sentence in six places: match at the level the
+pattern NAMES rather than peeling to the base first, count the wrappers removed
+getting there, and rank by that count. `Pattern::Ctor` in the interpreter,
+`k_check_rec` and `k_field` in the runtime, `rt_check_rec` and the two field
+readers in the browser, and `2000 + depth_of(ty)` in both backends' scorers.
+
+A first attempt peeled every wrapper before comparing, which made a pattern
+naming the child unmatchable — it compared `sale_price` against the base
+`money` and found nothing. The precedence probe caught it. The lesson is that
+peeling and naming are different questions: a field read peels, a pattern
+names.
+
+    fn scale (money c)  on a sale_price     700, was "no overload matches"
+    sale.cents through a subtype            350, was "not a record"
+    an arm on `type money int`              ran, was silently skipped
+    child arm against parent arm            child, was parent
+    two levels, nearest ancestor            middle, was parent
+
+Four micro goldens, each watched red on main for its own reason. Welfare holds
+at 75.69 and the whole suite is green, which is the interesting part: a rule
+this central changed and no existing golden moved. The corpus had no program
+that asked a constructor pattern about a subtype.
+
+This unblocks the division-by-zero design. Both halves of "handle as
+generically as they like" hold now: an arm on `_:math_failure` catches a
+`divide_by_zero`, and reading the reason off it works, so the root type may be
+`type math_failure string` with live operator arms.

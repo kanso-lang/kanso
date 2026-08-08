@@ -1,0 +1,20 @@
+# a subtype matches where its parent does, and specificity breaks the tie:
+# the arm naming the nearer declaration wins, and a plain parent still finds
+# the parent's arm
+type money
+  cents
+
+type sale_price money
+
+type clearance sale_price
+
+fn scale (money c) n
+  "parent {c} {n}"
+
+fn scale (sale_price m) n
+  "nearer {m} {n}"
+
+pub play =
+  print "{scale (sale_price (money 350)) 2}"
+  >> print "{scale (money 350) 2}"
+  >> print "{scale (clearance (sale_price (money 1))) 2}"

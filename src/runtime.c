@@ -1700,13 +1700,34 @@ KValue k_rec(long long type_id, long long n, KValue* args) {
     KValue v; v.tag = K_REC; v.payload = k_ptr(r); return v;
 }
 
-KValue k_field(KValue v, long long i) { return k_as_rec(v)->fields[i]; }
+static KValue k_sub_base(KValue v);
+
+/* A pattern naming a type takes a subtype of it, so the check and the field
+   read that follows both see through the wrapper — the same rule the oracle
+   follows, and the reason a getter reads a subtype at all. */
+KValue k_field(KValue v, long long i) {
+    if (v.tag == K_SUB) v = k_sub_base(v);
+    return k_as_rec(v)->fields[i];
+}
 KValue k_err_inner(KValue v) { return k_err_box(v)->reason; }
 
 /* pattern checks: nonzero on match */
 long long k_check_tag(KValue v, long long tag) { return v.tag == tag; }
 long long k_check_int(KValue v, long long n) { return v.tag == K_INT && v.payload == n; }
 long long k_check_rec(KValue v, long long type_id, long long nfields) {
+    /* A pattern naming a type takes a subtype of it, so the walk looks for
+       the named type at each level before reaching the base: one naming the
+       wrapper matches the wrapper, one naming what it wraps matches through
+       it. The fields bound are the base record's either way, so the arity
+       is checked there. */
+    while (v.tag == K_SUB) {
+        KSub* w = (KSub*)(intptr_t)v.payload;
+        if (w->type_id == type_id) {
+            KValue base = k_sub_base(v);
+            return base.tag == K_REC && k_as_rec(base)->nfields == nfields;
+        }
+        v = w->inner;
+    }
     return v.tag == K_REC && k_as_rec(v)->type_id == type_id
         && k_as_rec(v)->nfields == nfields;
 }
@@ -1881,6 +1902,9 @@ static void k_die_value(const char* msg, KValue v) {
 
 KValue k_b_field(KValue v, const char* name) {
     if (!k_not_failure(v)) return v;
+    /* a getter is a constructor pattern, so it reads through a subtype for
+       the same reason one matches */
+    if (v.tag == K_SUB) v = k_sub_base(v);
     if (v.tag != K_REC) {
         KValue shown = k_render(v, 1);
         fprintf(stderr, "%serror[runtime]:%s `.` reads a field of a record, not %s\n",
@@ -1897,7 +1921,6 @@ KValue k_b_field(KValue v, const char* name) {
     KValue none; none.tag = K_NONE; none.payload = 0; return none;
 }
 
-static KValue k_sub_base(KValue v);
 
 KValue k_set_field(KValue target, const char* name, KValue v) {
     if (!k_not_failure(target)) return target;
@@ -2739,7 +2762,10 @@ static KValue k_sub_base(KValue v) {
 /* Whether an operand sends an operator to its user arms. A record does, and
    so does a subtype of one, which is the same value wearing a narrower name. */
 long long k_routes_to_arms(KValue v) {
-    if (v.tag == K_SUB) v = k_sub_base(v);
+    /* a subtype is user-owned whatever it wraps, so an arm written for
+       `type money int` is reachable where the int's builtin would otherwise
+       answer first and the arm would never run */
+    if (v.tag == K_SUB) return 1;
     return v.tag == K_REC;
 }
 

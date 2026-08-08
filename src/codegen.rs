@@ -1171,7 +1171,11 @@ impl<'a> Backend<'a> {
                                 _ => 2000,
                             }
                         }
-                        Pattern::Ctor { .. } | Pattern::Keyed { .. } => 2000,
+                        // a constructor pattern ranks by the same chain the
+                        // annotations use: naming the subtype is nearer than
+                        // naming what it wraps
+                        Pattern::Ctor { ty, .. } => 2000 + depth_of(ty),
+                        Pattern::Keyed { .. } => 2000,
                         Pattern::Var(..) | Pattern::Wildcard(..) => 0,
                     })
                     .sum();
