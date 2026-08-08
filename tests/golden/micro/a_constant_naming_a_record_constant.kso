@@ -1,0 +1,11 @@
+# a constant whose body calls another constant: the callee returns its record
+# in registers, and everything reading it here wants the boxed shape
+type node
+  id
+  peer
+
+pub thing = node 1 0
+
+pub other = node 2 thing
+
+pub play = print "{other.peer.id}"

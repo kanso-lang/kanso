@@ -2567,11 +2567,19 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, 0);
                     let t = f.tmp();
                     f.line(&format!("{t} = call tailcc {callee_ret} @{}()", dsym(name, 0)));
-                    if let Some(ty) = self.escape.returns_ty(name, 0) {
-                        if callee_ret == "%parsed" {
+                    // A group that returns its record in registers hands back a
+                    // %parsed, and everything downstream of a constant reads a
+                    // %KValue: the failure guard, the return, the field read.
+                    // Box it here, once, rather than teaching each consumer the
+                    // other shape — the saving the register return buys is on
+                    // the callee's side, and a constant is evaluated once.
+                    let t = match self.escape.returns_ty(name, 0) {
+                        Some(ty) if callee_ret == "%parsed" => {
                             f.record_parsed(&t, ty);
+                            self.as_value(f, &t)
                         }
-                    }
+                        _ => t,
+                    };
                     f.record(&t, self.group_return_set(name, 0));
                     return Ok(t);
                 }
