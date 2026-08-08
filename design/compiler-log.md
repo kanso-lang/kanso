@@ -1525,28 +1525,34 @@ believing a per-commit timing; rebuild the accused commit with neutral padding
 and see whether a no-op moves it as far; and plot a proposed cause against the
 effect across the whole window before calling it a cause.
 
-## The shipped engine is the tested one
+## The shipped engine is not byte-comparable, and that is the finding
 
-`docs/kanso.wasm` is committed, and the site serves the committed file. Every
-wasm job rebuilt it before testing, so the spec measured a blob CI had just
-made and never the one in the tree. The two could differ indefinitely with
-every check green, and the published playground would run an engine the source
-no longer describes.
+`docs/kanso.wasm` is committed and the site serves the committed file, while
+every wasm job rebuilds it before testing. So the spec measures a blob CI has
+just made and never the one in the tree, and a stale committed blob would be
+invisible.
 
-That is not hypothetical. On 2026-08-07 a fresh build of main's own source
-produced a different blob from the one main shipped, and the build is
-reproducible — two consecutive builds give an identical hash — so the committed
-file was genuinely behind. It has since caught up, because several changes
-rebuilt it in passing, which is luck rather than a rule.
+A check refusing a committed blob that differs from the rebuild went red in CI
+immediately — and it was the check that was wrong, not the blob. A fresh build
+on this machine reproduces main's committed blob exactly; CI's linux build does
+not. The wasm build is deterministic WITHIN a host and not ACROSS hosts, and
+the earlier claim that it was reproducible came from two consecutive builds on
+one machine, which tests only the first thing.
 
-The only guard was a freshness check in `tests/wasm_engine.rs` comparing
-MTIMES. A fresh checkout writes every file at about the same moment, so that
-check cannot see content staleness at all; it fires locally, which is how this
-surfaced, and never in CI.
+That also retires the finding that started this. The blob main shipped was not
+behind its source; it was built somewhere else. There was no staleness to
+catch.
 
-The specs job now refuses a `docs/kanso.wasm` that differs from the rebuild it
-just performed. Watched red: appending a byte to the committed blob turns it
-red, and restoring turns it green.
+What survives is narrower and still real: nothing exercises the artifact the
+site actually serves, and no byte comparison can, because byte-identity is not
+defined across hosts. The check that would work is behavioural rather than
+textual — run the engine differential against the COMMITTED blob instead of a
+freshly built one, and let it answer whether the shipped engine agrees with the
+oracle. That is a different job from the one attempted here and is not built.
+
+The mtime guard in `tests/wasm_engine.rs` looks better in this light than it
+did. It cannot see content staleness, which is a real limit, but content
+staleness is not measurable by comparison either.
 
 ## The wall is not overloadable
 
