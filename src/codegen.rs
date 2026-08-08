@@ -3099,9 +3099,7 @@ impl<'a> Backend<'a> {
             f.line(&format!("{t} = phi %KValue [ {uv}, %{user_from} ], [ {bv}, %{builtin_from} ]"));
             f.record(
                 &t,
-                f.set_of(&bv)
-                    | self.group_return_set(op, 2)
-                    | ((f.set_of(a) | f.set_of(b)) & FAIL),
+                f.set_of(&bv) | self.group_return_set(op, 2) | ((f.set_of(a) | f.set_of(b)) & FAIL),
             );
             return Ok(t);
         }
