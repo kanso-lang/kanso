@@ -1524,3 +1524,84 @@ The controls that would have caught each are cheap: diff the emitted IR before
 believing a per-commit timing; rebuild the accused commit with neutral padding
 and see whether a no-op moves it as far; and plot a proposed cause against the
 effect across the whole window before calling it a cause.
+
+## The shipped engine is not byte-comparable, and that is the finding
+
+`docs/kanso.wasm` is committed and the site serves the committed file, while
+every wasm job rebuilds it before testing. So the spec measures a blob CI has
+just made and never the one in the tree, and a stale committed blob would be
+invisible.
+
+A check refusing a committed blob that differs from the rebuild went red in CI
+immediately — and it was the check that was wrong, not the blob. A fresh build
+on this machine reproduces main's committed blob exactly; CI's linux build does
+not. The wasm build is deterministic WITHIN a host and not ACROSS hosts, and
+the earlier claim that it was reproducible came from two consecutive builds on
+one machine, which tests only the first thing.
+
+That also retires the finding that started this. The blob main shipped was not
+behind its source; it was built somewhere else. There was no staleness to
+catch.
+
+What survives is narrower and still real: nothing exercises the artifact the
+site actually serves, and no byte comparison can, because byte-identity is not
+defined across hosts. The check that would work is behavioural rather than
+textual — run the engine differential against the COMMITTED blob instead of a
+freshly built one, and let it answer whether the shipped engine agrees with the
+oracle. That is a different job from the one attempted here and is not built.
+
+The mtime guard in `tests/wasm_engine.rs` looks better in this light than it
+did. It cannot see content staleness, which is a real limit, but content
+staleness is not measurable by comparison either.
+
+## The wall is not overloadable
+
+RULED (Clay, 2026-08-07): `>>` is not overloadable. He could think of no
+meaningful overload, and that settles it — the wall stays a compiler special
+form and the ordered-effects meaning stays with it rather than moving to a
+default arm.
+
+The laws survive the ruling. They describe the operators without being a
+user-extensible interface: adjacency is associative and commutative with an
+identity and a merge on failure, the wall is associative and not commutative
+with the same identity and an absorbing zero. That answers the question that
+opened the thread — whether the wall takes an array of results or two at a
+time — with two at a time, because associativity makes the binary fold
+indistinguishable from an n-ary form. No third operator, and the shape of the
+grouping is unobservable in the result.
+
+Associativity is also what kills the fractal rather than any flattening step.
+Drop it and grouping becomes observable, which is the bug #143 fixed.
+
+Also ruled the same day, on the book samples the decidable-failure fold turns
+into compile errors: teach both, because a compile-time refusal and a run-time
+failure are different lessons. That work is held, though, because of what
+follows.
+
+## Division by zero may not be a failure at all
+
+Clay, contending rather than ruling: division by zero is not an error but a
+standard type you have to handle.
+
+Today it is an err — `3 / 0`, `3 % 0` and the float forms all raise into the
+unhandleable channel and reach the endpoint. The contention is that this
+mis-files it. An err means we did it wrong; dividing by zero is a question with
+no answer, and `total / count` where the count is zero is an ordinary data
+condition rather than a contract violation. That is what `none` is for, under
+the gavel that already says none is a value and err is the failure.
+
+What it would do to the decidable-failure fold is the interesting part: it
+repurposes it rather than retiring it. The fold's job today is to refuse
+`3 / 0` where it is written. If division answers none, the job becomes proving
+which divisions CAN answer none — where the divisor is provably non-zero the
+result carries no obligation at all, and where it is provably zero the value is
+none and the existing none rules make the author handle it. Same analysis,
+better outcome.
+
+The cost is that arithmetic acquires a handling obligation it does not have
+today, everywhere the divisor is not provably non-zero. Whether that is
+acceptable is the question, and it is Clay's.
+
+The seven book samples wait on it. Under the current design they teach catching
+a failure; under the contention they teach handling a value, and writing them
+twice is the one outcome nobody wants.
