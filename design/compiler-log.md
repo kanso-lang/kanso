@@ -1670,3 +1670,58 @@ variable in the other, which is exactly the shape that fails.
 All three cost goldens are byte-identical and welfare holds at 75.69 — the
 guard only ever declines a marking, and nothing shipped has an operator arm
 that answers a string.
+
+## 2026-08-08 — the carry keeps its copy
+
+Built the copy-or-pin idea the shelf campaign left open, measured it, and
+declined it. The change is reverted; this is the record.
+
+`k_cohort_pop` already refuses a copy that buys too little — it sizes the
+survivor and keeps the region when `(2 * survivor) > grown || survivor > cap`.
+`k_beat_iter_carry` sizes the very same walk to allocate its buffer and then
+always copies. Porting the cohort's ratio there is a four-line change.
+
+Where the copies come from, split by a probe on bench/oneshot:
+
+    cohort pop     1 call    ~31,986 copies    cohort_kept=0
+    iter carry     2 calls    31,981 copies    need=995,600 bytes
+
+The cohort's guard was never missing from this picture. It ran, priced the
+trade and took the copy. And the loop carry fires twice, not once per element,
+so the 63,967 evacuations were never the shape the name "copy every iteration"
+suggests.
+
+The port, across all four benchmarks:
+
+                  evac_allocs      evac_bytes        arena peak
+    jsonbench     11 ->  8         464 -> 352        flat
+    encodebench   19 -> 19         624 -> 624        4 MB -> 5 MB
+    oneshot       63,967 -> same   unchanged         flat
+    basket        0 -> 0           0                 flat
+
+It fires 352 times on encode, saves nothing, and costs a megabyte of peak.
+One-shot does not move at all, because both its carries have `2 * need <=
+grown` — the region that grew is more than twice the survivor, so the copy is
+worth making by the project's own rule.
+
+The comment written with the change argued that retention is self-limiting:
+the garbage kept raises `grown`, the ratio falls, the rewind returns. Encode
+falsifies it. Three hundred and fifty-two retentions in a row grew the arena by
+a block rather than converging, because each one keeps so little that the
+threshold never crosses.
+
+The cohort tests a size floor before its ratio, which the port omitted. Adding
+it gives `carry_kept=0` everywhere and numbers byte-identical to baseline. So
+the guard is a loss without the floor and a no-op with it, and there is no
+version of it in between.
+
+The reason is a difference in distribution, not in code. The cohort decides
+once, at a pop, where the region is large and the survivor is the whole result.
+The carry decides every iteration, where the region is one iteration's garbage
+and the survivor is the accumulator. Above the floor, no carry in the corpus
+holds a survivor worth more than half its region; below it, the ratio fires on
+trivia. One threshold does not serve both.
+
+What this leaves for the frontier: those 63,967 copies are not waste any policy
+here would remove. Avoiding them without retaining the garbage takes reference
+counting, which is the Perceus measurement that has still never been run.
