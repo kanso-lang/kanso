@@ -166,11 +166,18 @@ CHART_HISTORY = "\n".join(
 )
 
 CHART_PRELUDE = (
+    "window.__chart = {stub: 0, err: ''};\n"
+    "window.addEventListener('error', (e) => "
+    "{ window.__chart.err = window.__chart.err || String(e.message); });\n"
     "const REAL = window.fetch.bind(window);\n"
     "const HISTORY_TEXT = " + json.dumps(CHART_HISTORY) + ";\n"
-    "window.fetch = (url, opts) => String(url).includes('history.jsonl')\n"
-    "  ? Promise.resolve(new Response(HISTORY_TEXT, {status: 200}))\n"
-    "  : REAL(url, opts);\n"
+    "window.fetch = (url, opts) => {\n"
+    "  if (String(url).includes('history.jsonl')) {\n"
+    "    window.__chart.stub += 1;\n"
+    "    return Promise.resolve(new Response(HISTORY_TEXT, {status: 200}));\n"
+    "  }\n"
+    "  return REAL(url, opts);\n"
+    "};\n"
 )
 
 CHART = """
@@ -189,7 +196,17 @@ async function PAGE_PROBE() {
     if (got) return {series: got};
     await new Promise((r) => setTimeout(r, 250));
   }
-  return {series: []};
+  const host = document.getElementById('trend-chart');
+  const panel = document.querySelector('.perf-loading');
+  return {
+    series: [],
+    why: {
+      stubbed: window.__chart.stub,
+      error: window.__chart.err,
+      host: host ? host.innerHTML.slice(0, 200) : 'no #trend-chart',
+      panel: panel ? panel.textContent.slice(0, 160) : 'no .perf-loading',
+    },
+  };
 }
 """
 
@@ -291,6 +308,7 @@ def main():
     if drawn != [CHART_ROWS] * 5:
         failures.append(
             f"the chart drew {drawn!r}; five series of {CHART_ROWS} points were fed to it"
+            f" — {chart.get('why')}"
         )
 
     book = visit("book/ch04.html", work)
