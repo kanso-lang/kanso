@@ -1,0 +1,27 @@
+# A string built in a loop and then read four hundred times. `length` asks for
+# a character count, and a string that will not grow caches the answer in its
+# header — but a builder's header is spoken for by the room it may grow into,
+# so for a long time it had nowhere to put one and walked the whole string on
+# every read. Linear per read is quadratic in a loop, and no allocation
+# counter can see it: walking allocates nothing.
+#
+# str_scan_bytes is the whole point of this fixture. It must stay flat as the
+# loop count rises — the number below is what four hundred reads of a 7,200
+# byte string costs when the count is kept rather than recomputed, and it is
+# the count of the parts as they arrive, not of the accumulator. Before the
+# builder could remember, the same program walked 2,880,000 bytes.
+fn grown 0 acc
+  acc
+
+fn grown n acc
+  grown (n - 1) "{acc}slice of text, "
+
+fn read 0 _ total
+  total
+
+fn read n s total
+  read (n - 1) s (total + length s)
+
+pub play =
+  s = grown 400 ""
+  print "{read 400 s 0}"
