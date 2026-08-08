@@ -25,6 +25,11 @@ type panels
   src
   out
 
+# One matched panel and which shape's fixer answers for it.
+type placed
+  m
+  shape
+
 # A rewritten chapter, how many of its panels moved, and what to say about it.
 type outcome
   text
@@ -192,17 +197,45 @@ fn again acc found false
   push acc found
 
 fn with_files names at drift write name raw p files dir
-  first = rebuilt raw p.src name dir files write 1
-  both = rebuilt first.text p.out name dir files write 2
-  said = told first both
+  said = rebuilt raw (merged p.src p.out 1 1 []) name dir files write
   on = (_ -> next_chapter names at drift write name raw said)
   io/write said.log . on
 
+# Both panel shapes in one ascending list, because one pass over the chapter is
+# what keeps an offset honest. Matched separately and rewritten in two passes,
+# the second pass carries offsets from the text as it arrived: a source body
+# that grew moves everything after it, and the output panel then lands inside
+# the source panel's markup. A new panel is where it shows, its body going from
+# a placeholder to hundreds of characters at once.
+fn merged src out i j acc
+  merging src out i j acc (i > length src) (j > length out)
+
+fn merging src _ i _ acc false true
+  trailing src i acc 1
+
+fn merging src out i j acc false false
+  ahead src out i j acc (src[i]!.from < out[j]!.from)
+
+fn merging _ out _ j acc true _
+  trailing out j acc 2
+
+fn ahead src out i j acc true
+  merged src out (i + 1) j (push acc (placed src[i]! 1))
+
+fn ahead src out i j acc false
+  merged src out i (j + 1) (push acc (placed out[j]! 2))
+
+fn trailing xs at acc shape
+  trailed xs at acc shape (at > length xs)
+
+fn trailed _ _ acc _ true
+  acc
+
+fn trailed xs at acc shape false
+  trailing xs (at + 1) (push acc (placed xs[at]! shape)) shape
+
 fn dir_of name
   "{chapters}/samples/{(text/split name ".")[1]!}"
-
-fn told first both
-  outcome both.text (first.drift + both.drift) "{first.log}{both.log}"
 
 fn next_chapter names at drift write name raw said
   saved "{chapters}/{name}" raw said.text write
@@ -219,24 +252,25 @@ fn keeping path text false
 
 # A python `PANEL.sub(fn, text)` in the small: walk the matches, copy the gap
 # before each, append what the fixer answered, and finish with the tail.
-fn rebuilt raw found name dir files write shape
-  stitched raw found 1 1 "" 0 "" name dir files write shape
+fn rebuilt raw found name dir files write
+  stitched raw found 1 1 "" 0 "" name dir files write
 
-fn stitched raw found at from acc drift log name dir files write shape
-  stitching raw found at from acc drift log name dir files write shape
+fn stitched raw found at from acc drift log name dir files write
+  stitching raw found at from acc drift log name dir files write
     (at > length found)
 
-fn stitching raw _ _ from acc drift log _ _ _ _ _ true
+fn stitching raw _ _ from acc drift log _ _ _ _ true
   outcome "{acc}{span_of raw from (length raw)}" drift log
 
-fn stitching raw found at from acc drift log name dir files write shape false
-  m = found[at]!
+fn stitching raw found at from acc drift log name dir files write false
+  p = found[at]!
+  m = p.m
   gap = span_of raw from (m.from - 1)
-  said = fixed raw m name dir files write shape
+  said = fixed raw m name dir files write p.shape
   grown = "{acc}{gap}{said.text}"
   moved = drift + said.drift
   more = "{log}{said.log}"
-  stitched raw found (at + 1) m.to grown moved more name dir files write shape
+  stitched raw found (at + 1) m.to grown moved more name dir files write
 
 fn span_of raw from to
   empty_span raw from to (from > to or from > length raw)

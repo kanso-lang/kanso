@@ -1,0 +1,8 @@
+import "std/io"
+
+fn show p
+  print "read: [{p.stdout}]"
+
+pub play =
+  io/run "sh" ["-c" "sleep 1; printf written > slow.txt"]
+  >> io/run "cat" ["slow.txt"] . show
