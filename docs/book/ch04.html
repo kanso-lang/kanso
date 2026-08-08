@@ -334,6 +334,46 @@ not a flag</code></pre>
 
 <p>short-circuit where there is order, accumulate where there is none. you never choose between those policies, because they are not policies—each is the only behavior its structure permits. dependence decides.</p>
 
+<p>the compiler cannot always see the dependence. these two statements are adjacent, so they are a group, so they run together:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">unwalled.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">fn</span> <span class="f">show</span> p
+  <span class="f">print</span> <span class="s">"read: [<span class="i">{p.stdout}</span>]"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">io/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
+  <span class="f">io/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.</span> <span class="f">show</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run unwalled.kso</div>
+    <pre><code>read: []</code></pre>
+  </div>
+</div>
+
+<p>the write takes a second. the read does not wait for it, because nothing tells it to—no value passes from the first statement to the second. the dependency between them runs through the filesystem, which is outside the program, and no analysis can follow it there. the read finishes first and finds nothing.</p>
+
+<p>the wall says what the compiler could not work out:</p>
+
+<div class="code-panel">
+  <div class="code-panel-title">walled.kso</div>
+  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+
+<span class="k">fn</span> <span class="f">show</span> p
+  <span class="f">print</span> <span class="s">"read: [<span class="i">{p.stdout}</span>]"</span>
+
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
+  <span class="f">io/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
+  <span class="o">&gt;&gt;</span> <span class="f">io/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.</span> <span class="f">show</span></code></pre>
+  <div class="code-output">
+    <div class="code-panel-title">kanso run walled.kso</div>
+    <pre><code>read: [written]</code></pre>
+  </div>
+</div>
+
+<p>this is the edge of "dependence decides." the compiler orders what it can prove is ordered, and the rest is yours to say. when two statements touch the same file, the same socket, the same directory, you are the only one who knows.</p>
+
 <div class="tip">
 <svg class="sprite" viewBox="0 0 44 38" role="img" aria-label="err" shape-rendering="crispEdges"><title>err - always arrives, never uninvited</title><rect x="18" y="3" width="8" height="1" fill="#f03a00"/><rect x="15" y="4" width="14" height="1" fill="#f03a00"/><rect x="13" y="5" width="18" height="1" fill="#f03a00"/><rect x="12" y="6" width="20" height="1" fill="#f03a00"/><rect x="11" y="7" width="3" height="1" fill="#f03a00"/><rect x="14" y="7" width="2" height="1" fill="#ff7a52"/><rect x="16" y="7" width="17" height="1" fill="#f03a00"/><rect x="10" y="8" width="4" height="1" fill="#f03a00"/><rect x="14" y="8" width="2" height="1" fill="#ff7a52"/><rect x="16" y="8" width="18" height="1" fill="#f03a00"/><rect x="9" y="9" width="2" height="1" fill="#f03a00"/><rect x="11" y="9" width="2" height="1" fill="#ff7a52"/><rect x="13" y="9" width="1" height="1" fill="#f03a00"/><rect x="14" y="9" width="2" height="1" fill="#ff7a52"/><rect x="16" y="9" width="19" height="1" fill="#f03a00"/><rect x="9" y="10" width="1" height="1" fill="#f03a00"/><rect x="10" y="10" width="6" height="1" fill="#ff7a52"/><rect x="16" y="10" width="19" height="1" fill="#f03a00"/><rect x="8" y="11" width="2" height="1" fill="#f03a00"/><rect x="10" y="11" width="4" height="1" fill="#ff7a52"/><rect x="14" y="11" width="22" height="1" fill="#f03a00"/><rect x="8" y="12" width="2" height="1" fill="#f03a00"/><rect x="10" y="12" width="4" height="1" fill="#ff7a52"/><rect x="14" y="12" width="22" height="1" fill="#f03a00"/><rect x="7" y="13" width="3" height="1" fill="#f03a00"/><rect x="10" y="13" width="4" height="1" fill="#ff7a52"/><rect x="14" y="13" width="23" height="1" fill="#f03a00"/><rect x="7" y="14" width="4" height="1" fill="#f03a00"/><rect x="11" y="14" width="2" height="1" fill="#ff7a52"/><rect x="13" y="14" width="24" height="1" fill="#f03a00"/><rect x="6" y="15" width="32" height="1" fill="#f03a00"/><rect x="6" y="16" width="32" height="1" fill="#f03a00"/><rect x="5" y="17" width="9" height="1" fill="#f03a00"/><rect x="14" y="17" width="4" height="1" fill="#2b2320"/><rect x="18" y="17" width="9" height="1" fill="#f03a00"/><rect x="27" y="17" width="4" height="1" fill="#2b2320"/><rect x="31" y="17" width="8" height="1" fill="#f03a00"/><rect x="5" y="18" width="9" height="1" fill="#f03a00"/><rect x="14" y="18" width="3" height="1" fill="#2b2320"/><rect x="17" y="18" width="1" height="1" fill="#faf3e3"/><rect x="18" y="18" width="9" height="1" fill="#f03a00"/><rect x="27" y="18" width="3" height="1" fill="#2b2320"/><rect x="30" y="18" width="1" height="1" fill="#faf3e3"/><rect x="31" y="18" width="8" height="1" fill="#f03a00"/><rect x="5" y="19" width="9" height="1" fill="#f03a00"/><rect x="14" y="19" width="4" height="1" fill="#2b2320"/><rect x="18" y="19" width="9" height="1" fill="#f03a00"/><rect x="27" y="19" width="4" height="1" fill="#2b2320"/><rect x="31" y="19" width="8" height="1" fill="#f03a00"/><rect x="5" y="20" width="9" height="1" fill="#f03a00"/><rect x="14" y="20" width="4" height="1" fill="#2b2320"/><rect x="18" y="20" width="9" height="1" fill="#f03a00"/><rect x="27" y="20" width="4" height="1" fill="#2b2320"/><rect x="31" y="20" width="8" height="1" fill="#f03a00"/><rect x="5" y="21" width="9" height="1" fill="#f03a00"/><rect x="14" y="21" width="4" height="1" fill="#2b2320"/><rect x="18" y="21" width="9" height="1" fill="#f03a00"/><rect x="27" y="21" width="4" height="1" fill="#2b2320"/><rect x="31" y="21" width="8" height="1" fill="#f03a00"/><rect x="5" y="22" width="9" height="1" fill="#f03a00"/><rect x="14" y="22" width="4" height="1" fill="#2b2320"/><rect x="18" y="22" width="9" height="1" fill="#f03a00"/><rect x="27" y="22" width="4" height="1" fill="#2b2320"/><rect x="31" y="22" width="8" height="1" fill="#f03a00"/><rect x="5" y="23" width="9" height="1" fill="#f03a00"/><rect x="14" y="23" width="4" height="1" fill="#2b2320"/><rect x="18" y="23" width="9" height="1" fill="#f03a00"/><rect x="27" y="23" width="4" height="1" fill="#2b2320"/><rect x="31" y="23" width="8" height="1" fill="#f03a00"/><rect x="5" y="24" width="34" height="1" fill="#f03a00"/><rect x="6" y="25" width="32" height="1" fill="#f03a00"/><rect x="6" y="26" width="32" height="1" fill="#f03a00"/><rect x="7" y="27" width="12" height="1" fill="#f03a00"/><rect x="19" y="27" width="7" height="1" fill="#2b2320"/><rect x="26" y="27" width="11" height="1" fill="#f03a00"/><rect x="7" y="28" width="13" height="1" fill="#f03a00"/><rect x="20" y="28" width="5" height="1" fill="#2b2320"/><rect x="25" y="28" width="12" height="1" fill="#f03a00"/><rect x="8" y="29" width="28" height="1" fill="#f03a00"/><rect x="9" y="30" width="26" height="1" fill="#f03a00"/><rect x="10" y="31" width="24" height="1" fill="#f03a00"/><rect x="11" y="32" width="22" height="1" fill="#f03a00"/><rect x="10" y="33" width="23" height="1" fill="#f03a00"/><rect x="9" y="34" width="25" height="1" fill="#f03a00"/><rect x="9" y="35" width="6" height="1" fill="#f03a00"/><rect x="18" y="35" width="8" height="1" fill="#f03a00"/><rect x="28" y="35" width="6" height="1" fill="#f03a00"/><rect x="10" y="36" width="4" height="1" fill="#f03a00"/><rect x="29" y="36" width="4" height="1" fill="#f03a00"/></svg>
 <div class="tip-bubble">
