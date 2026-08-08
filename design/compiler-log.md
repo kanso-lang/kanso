@@ -1761,3 +1761,56 @@ A route recorded earlier and now withdrawn: measuring live-at-peak on the
 interpreter as a proxy for native. The interpreter has no arena and no beats,
 so the two share the language and nothing about allocation. The measurement
 site was in the native runtime the whole time.
+
+## 2026-08-08 — the convention each profile can keep
+
+`kanso build --release` produced a segfaulting binary for ten of the eighty-five
+sample programs. Nine imported std/regexp and one imported only std/list and
+std/io, which is what said the shape rather than the module was the trouble.
+The default build ran all eighty-five correctly, and so did both other engines.
+
+The IR is byte-identical between the profiles — `--release` only changes the
+clang invocation — so nothing kanso wrote was at fault. -O0 works, -O1 and
+above crash, optimising the runtime alone is fine, and the IR passes clang's
+verifier. ASan named the failure as a jump to address 11: a value reached the
+program counter. opt-bisect over 42,420 passes put the first break at CodeGen
+Prepare on a seven-parameter `tailcc` arm holding a `musttail` to itself — six
+KValues at two registers each plus an int, thirteen against arm64's eight.
+
+That is the shape #587 already knew about. Its trampoline routes calls to such
+functions through a plain wrapper, and exempts `musttail` because a guaranteed
+tail call cannot survive one. Removing the exemption takes the failures from
+ten to six, which is a real hole closed and not the cause: stripping every
+`tailcc` and `musttail` from the module makes the same program answer correctly
+at -O3, so the convention itself is what the optimizer breaks here.
+
+Stripping it everywhere is not available either. At -O0 nothing turns a call
+into a jump, so `deep_tail` — two hundred thousand hops through mutually
+tail-calling arms — overflows the stack in the default build the moment the
+convention goes.
+
+So each profile keeps the convention exactly where it is the one that works.
+The default build emits `tailcc` and `musttail` as before. The release build
+emits neither, and -O3 performs the tail calls itself:
+
+    default build, deep_tail                200,000 hops
+    release build, deep_tail                200,000 hops
+    release build, arms of differing arity  200,000 hops
+    release corpus                          85 of 85, was 75
+    decode, seven interleaved rounds        0.12 s either way
+
+The arity case is measured because plain sibling-call optimization is not
+obliged to take it and the beat machinery needs it taken.
+
+What release gives up is the guarantee rather than the behaviour: -O0 promises
+the jump in the IR where -O3 is observed to make it. A future LLVM that
+declined would show as a stack overflow, which is loud and pinned by
+`deep_tail` in the release gate below. Today's defect is a binary that jumps to
+address 11 and says nothing.
+
+The gate is the other half, and it is the reason this went unseen: nothing
+release-built a program and ran it. CI release-builds only the benchmarks, none
+of which import regexp, and the IR verifier builds the sample corpus without
+the flag. `micro_corpus_survives_a_release_build` now runs all eighty-five
+against the goldens the other engines answer to, because what a program prints
+cannot depend on how hard it was optimized.
