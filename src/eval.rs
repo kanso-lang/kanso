@@ -779,21 +779,6 @@ impl Executor for ScriptedExecutor {
     }
 }
 
-fn mentions_itself(decl: &FnDecl) -> bool {
-    fn mentions(expr: &Expr, name: &str) -> bool {
-        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
-            if n == name {
-                return true;
-            }
-        }
-        crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
-    }
-    decl.body.iter().any(|stmt| match stmt {
-        Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &decl.name),
-        Stmt::Set { value, .. } => mentions(value, &decl.name),
-    })
-}
-
 pub struct Interp<'a> {
     fns: HashMap<&'a str, Vec<&'a FnDecl>>,
     types: HashMap<&'a str, &'a TypeDecl>,
@@ -1394,9 +1379,13 @@ impl<'a> Interp<'a> {
         }
         if let Some(decls) = self.fns.get(name) {
             if let Some(constant) = decls.iter().find(|d| d.params.is_empty()) {
-                if !mentions_itself(constant) {
-                    return self.eval_body_of(constant, None);
-                }
+                // Every constant goes through the knot, not only one that
+                // names itself. `knotted` installs a blackhole before it
+                // evaluates, so re-entering the name finds it — and a cycle
+                // reaches its second name as readily as its first. Asking
+                // whether a constant mentions its own name sees `a = f b` and
+                // `b = f a` as two ordinary constants, and evaluating either
+                // recurses until the process dies.
                 return self.knotted(name, constant);
             }
         }
