@@ -2,9 +2,13 @@ type node
   id
   peer
 
-ring = build
-  a = node 1 none
-  b = node 2 0
-  a.peer = b
-  a
+fn ring_from head tail
+  build
+    a = node head none
+    b = node tail 0
+    a.peer = b
+    a
+
+ring = ring_from 1 2
+
 print "{ring}"

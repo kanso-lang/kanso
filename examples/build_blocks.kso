@@ -2,14 +2,22 @@ type node
   id
   peers
 
-graph = build
-  a = node "a" []
-  b = node "b" [a]
-  a.peers = [b]
-  [a b]
-ring = build
-  base = node "seed" []
-  base.peers = [base]
-  base
+fn pair_of first second
+  build
+    a = node first []
+    b = node second [a]
+    a.peers = [b]
+    [a b]
+
+fn ring_of name
+  build
+    base = node name []
+    base.peers = [base]
+    base
+
+graph = pair_of "a" "b"
+
+ring = ring_of "seed"
+
 print "{graph}"
 >> print "{ring}"
