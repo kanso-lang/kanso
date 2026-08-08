@@ -624,8 +624,12 @@ impl FnEmit {
         if self.parsed.is_empty() {
             return text.to_string();
         }
-        let carried: Vec<String> =
+        // Sorted because the map's order is randomized per process, and a line
+        // naming two carried operands would otherwise box them in an order
+        // that differs between builds of the same program.
+        let mut carried: Vec<String> =
             self.parsed.keys().filter(|t| named_as_a_value(text, t)).cloned().collect();
+        carried.sort();
         carried.iter().fold(text.to_string(), |acc, t| {
             let boxed = self.box_parsed(t);
             let named = format!("%KValue {t}");
