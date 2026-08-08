@@ -169,12 +169,18 @@ CHART_PRELUDE = (
     "window.__chart = {stub: 0, err: ''};\n"
     "window.addEventListener('error', (e) => "
     "{ window.__chart.err = window.__chart.err || String(e.message); });\n"
+    "window.addEventListener('unhandledrejection', (e) => "
+    "{ window.__chart.err = window.__chart.err || 'rejected: ' + String(e.reason); });\n"
     "const REAL = window.fetch.bind(window);\n"
     "const HISTORY_TEXT = " + json.dumps(CHART_HISTORY) + ";\n"
     "window.fetch = (url, opts) => {\n"
     "  if (String(url).includes('history.jsonl')) {\n"
     "    window.__chart.stub += 1;\n"
-    "    return Promise.resolve(new Response(HISTORY_TEXT, {status: 200}));\n"
+    "    try {\n"
+    "      const r = new Response(HISTORY_TEXT, {status: 200});\n"
+    "      window.__chart.made = 1;\n"
+    "      return Promise.resolve(r);\n"
+    "    } catch (e) { window.__chart.err = 'stub: ' + String(e); throw e; }\n"
     "  }\n"
     "  return REAL(url, opts);\n"
     "};\n"
@@ -191,7 +197,7 @@ async function PAGE_PROBE() {
       .map((l) => (l.getAttribute('points') || '').trim().split(/\\s+/).filter(Boolean).length)
       .sort((a, b) => a - b);
   };
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 600; i++) {
     const got = await counts();
     if (got) return {series: got};
     await new Promise((r) => setTimeout(r, 250));
@@ -202,6 +208,7 @@ async function PAGE_PROBE() {
     series: [],
     why: {
       stubbed: window.__chart.stub,
+      made: window.__chart.made || 0,
       error: window.__chart.err,
       host: host ? host.innerHTML.slice(0, 200) : 'no #trend-chart',
       panel: panel ? panel.textContent.slice(0, 160) : 'no .perf-loading',
