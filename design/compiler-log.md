@@ -1725,3 +1725,39 @@ trivia. One threshold does not serve both.
 What this leaves for the frontier: those 63,967 copies are not waste any policy
 here would remove. Avoiding them without retaining the garbage takes reference
 counting, which is the Perceus measurement that has still never been run.
+## 2026-08-08 — what crosses a beat boundary
+
+The Perceus comparison has been blocked on a number nobody had: how much of
+what the arena holds is still needed. A probe at the two sites where the live
+set is exactly known — the loop carry's `need` and the cohort pop's `survivor`,
+both already sized by `k_copy_size` to allocate a buffer — supplies it.
+
+    shelf      boundaries   live crossing (max)   arena held then
+    decode              1        112 bytes          1,048,576
+    encode            401         80 bytes          4,194,304
+    one-shot            3          995,504          3,145,728
+    basket         10,000                0          1,048,576
+
+Encode crosses a hundred and twenty-eight bytes in total across four hundred
+and one boundaries. Basket crosses nothing at all across ten thousand. On three
+of the four shelves the beat model retains almost exactly what it must, and a
+refcounting runtime would pay a count on every one of 7.5, 16.2 and 0.03
+million allocations to improve on that. One-shot is the exception at 31.6%,
+which is the shelf the evacuation counter had already singled out.
+
+What it establishes, and the earlier compaction-ratio framing blurred this: it
+measures liveness AT the rewind, so it bounds retained garbage from above —
+at encode's rewinds essentially the whole four megabytes held is dead. It does
+not give a refcounting peak, because RC frees as values die rather than at
+boundaries, so its peak is the maximum simultaneously-live set, a quantity
+between eighty bytes and one block that this probe cannot see.
+
+Two things bound the apparent gap in any case. The arena's floor is a block, so
+eighty bytes is not a footprint any policy here could reach. And a count field
+is a per-object header kanso does not have at all, which is the one advantage
+over Koka that a hybrid must not trade away.
+
+A route recorded earlier and now withdrawn: measuring live-at-peak on the
+interpreter as a proxy for native. The interpreter has no arena and no beats,
+so the two share the language and nothing about allocation. The measurement
+site was in the native runtime the whole time.
