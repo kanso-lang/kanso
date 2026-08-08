@@ -2012,3 +2012,36 @@ This unblocks the division-by-zero design. Both halves of "handle as
 generically as they like" hold now: an arm on `_:math_failure` catches a
 `divide_by_zero`, and reading the reason off it works, so the root type may be
 `type math_failure string` with live operator arms.
+
+## the chart has to draw
+
+Nothing asserted that the compiler page's chart renders. Not the site smoke
+harness, not the browser differential, not any test in tests/. The series could
+have drawn empty, or not at all, and every check stayed green.
+
+The gap is older than it looked. I first recorded it as coverage that #791 and
+#793 removed when they deleted the drawing scripts, and that is wrong — the
+comment #793 deleted says so directly: "nothing has ever run scripts/long_view,
+so the published chart sat frozen at whenever somebody last ran it by hand."
+The script was manual, CI never ran it, and its failing never made anything
+red. Those two changes improved on what preceded them; the hole predates all
+of it.
+
+`site_smoke.py` already drives headless Chrome over three pages, so it is the
+place. It now renders `compiler.html` too, and asserts the chart drew five
+series of exactly six points.
+
+The number comes from a stub. The chart reads its rows from the history branch
+over the network, and a test that let it do so would depend on a branch's
+contents and on the network being there, and could pin nothing. So `render`
+gained a prelude — a script in the head, before the page's own — which stands
+in for `fetch` when the url names history.jsonl and hands back six rows. The
+prelude passes every other request through, which the probe needs, because it
+reports its findings by posting one.
+
+Asserting the count rather than the presence is the whole point. An element
+exists on a page whose chart drew nothing, and a presence check passes there,
+which is the failure this is for.
+
+Seen red before it was pinned green: with `drawTrend` returning early, the
+harness says `the chart drew []; five series of 6 points were fed to it`.

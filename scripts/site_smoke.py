@@ -141,14 +141,71 @@ window.PAGE_PROBE = async (settled) => {
 """
 
 
-def render(page, probe_body, work, extra=()):
+# The chart reads its rows from the history branch over the network. A test
+# that let it do so would depend on a branch's contents and on the network
+# being there, and could pin no number. So the fetch is stubbed with a history
+# of known length, and the assertion is that every series draws exactly that
+# many points — a presence check would pass on an empty canvas, which is the
+# failure this exists to catch.
+CHART_ROWS = 6
+CHART_HISTORY = "\n".join(
+    json.dumps(
+        {
+            "commit": f"c{i}",
+            "allocs": 7_000_000 + i * 1000,
+            "encode_allocs": 16_000_000 + i * 2000,
+            "oneshot_arena_peak_bytes": 3_000_000 + i * 4096,
+            "compile_rounds": 40 + i,
+            "compile_visits": 9000 + i * 10,
+            "emitted_lines": 1500 + i,
+            "compile_peak_bytes": 80_000_000 + i * 8192,
+            "welfare": f"{75.0 + i * 0.1:.2f}",
+        }
+    )
+    for i in range(CHART_ROWS)
+)
+
+CHART_PRELUDE = (
+    "const REAL = window.fetch.bind(window);\n"
+    "const HISTORY_TEXT = " + json.dumps(CHART_HISTORY) + ";\n"
+    "window.fetch = (url, opts) => String(url).includes('history.jsonl')\n"
+    "  ? Promise.resolve(new Response(HISTORY_TEXT, {status: 200}))\n"
+    "  : REAL(url, opts);\n"
+)
+
+CHART = """
+async function PAGE_PROBE() {
+  const counts = async () => {
+    const host = document.getElementById('trend-chart');
+    if (!host) return null;
+    const lines = [...host.querySelectorAll('polyline')];
+    if (!lines.length) return null;
+    return lines
+      .map((l) => (l.getAttribute('points') || '').trim().split(/\\s+/).filter(Boolean).length)
+      .sort((a, b) => a - b);
+  };
+  for (let i = 0; i < 200; i++) {
+    const got = await counts();
+    if (got) return {series: got};
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return {series: []};
+}
+"""
+
+
+def render(page, probe_body, work, extra=(), prelude=""):
     header = (DOCS / "_includes/site-header.html").read_text()
     body = re.sub(r"^---.*?---\n", "", (DOCS / page).read_text(), flags=re.S)
     body = body.replace('src="/', 'src="')
     # a chapter is served by a layout, which is where its scripts live
     body += "".join(f'<script src="{name}"></script>' for name in extra)
+    # a prelude runs before the page's own scripts, which is the only place a
+    # stub can stand in for something the page fetches on load
     html = (
-        "<!doctype html><html><head><meta charset=utf-8></head><body>"
+        "<!doctype html><html><head><meta charset=utf-8>"
+        + (f"<script>{prelude}</script>" if prelude else "")
+        + "</head><body>"
         + header
         + body
         + f"<script>{probe_body}</script>"
@@ -204,6 +261,7 @@ def main():
     render("playground.html", PLAYGROUND, work)
     shutil.copy(DOCS / "book-play.js", work / "book-play.js")
     render("book/ch04.html", BOOK, work, extra=("/kanso-engine.js", "/book-play.js"))
+    render("compiler.html", CHART, work, prelude=CHART_PRELUDE)
     os.chdir(work)
 
     failures = []
@@ -227,6 +285,13 @@ def main():
         failures.append(f"the run button did not run edited source: {playground.get('edited')!r}")
     if "keys then run 5" not in (playground.get("keyed") or ""):
         failures.append(f"⌘⏎ did not run edited source: {playground.get('keyed')!r}")
+
+    chart = visit("compiler.html", work)
+    drawn = chart.get("series") or []
+    if drawn != [CHART_ROWS] * 5:
+        failures.append(
+            f"the chart drew {drawn!r}; five series of {CHART_ROWS} points were fed to it"
+        )
 
     book = visit("book/ch04.html", work)
     if not (book.get("live") or 0):
