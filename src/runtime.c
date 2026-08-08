@@ -33,6 +33,17 @@ enum { K_INT, K_FLOAT, K_TRUE, K_FALSE, K_NONE, K_ERR, K_STR, K_REC, K_DESC, K_L
    sixteen bytes: a string is the most numerous heap object a decode makes, and
    widening it moves the survivor ratio the cohort guard reads. */
 typedef struct { char* data; int len; int cap; } KStr;
+
+/* A builder's storage carries its character count in the eight bytes before
+   the data, where `k_buf_of` keeps a list's header for the same reason. A
+   string that will not grow caches its count in `cap`; a builder's `cap` is
+   already spoken for by the room, so without this a read walks the whole
+   string every time — linear per read, quadratic in a loop, and invisible to
+   every allocation counter because the walk allocates nothing. The count is
+   kept as bytes arrive, so nothing ever walks a builder at all. */
+#define K_STR_HEAD ((long long)sizeof(long long))
+#define k_str_count(s) (((long long*)(void*)(s)->data)[-1])
+static long long k_str_chars(KStr* s);
 typedef struct { long long cap; long long used; } KBuf;
 /* cap == 0 is a borrowed view; cap != 0 marks data as the body of a
    KBuf-headed buffer this value may extend at its frontier. */
@@ -66,6 +77,12 @@ static long long k_stat_find2_calls = 0;
 static long long k_stat_append_fast = 0;
 static long long k_stat_append_grow = 0;
 static long long k_stat_utf8_zerocopy = 0;
+/* Characters counted by walking, which a string that can cache its count
+   pays once and a builder pays on every read. Quadratic when a builder is
+   read in a loop, and invisible to every allocation counter — the scan
+   allocates nothing. */
+static long long k_stat_str_scans = 0;
+static long long k_stat_str_scan_bytes = 0;
 static long long k_stat_carry_dedup = 0;
 static long long k_stat_bytes_malloc = 0;
 /* Where arena bytes go, by value shape. The totals above say how much was
@@ -316,6 +333,8 @@ static void k_stats_dump(void) {
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
         k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
+    fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\n",
+            k_stat_str_scans, k_stat_str_scan_bytes);
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
     fprintf(stderr, "view_allocs=%lld\nview_frees=%lld\n",
             k_stat_view_allocs, k_stat_view_frees);
@@ -1710,8 +1729,9 @@ KValue k_b_str_builder(KValue sv) {
     if (sv.tag != K_STR) k_die("a string builder starts from a string");
     KStr* src = k_as_str(sv);
     long long cap = (long long)src->len * 2 + 32;
-    char* room = malloc((size_t)cap + 1);
-    if (!room) { fputs("out of memory\n", stderr); exit(1); }
+    char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
+    if (!base) { fputs("out of memory\n", stderr); exit(1); }
+    char* room = base + K_STR_HEAD;
     if (__builtin_expect(k_stats_on > 0, 0)) {
         k_stat_allocs++;
         k_stat_alloc_bytes += cap + 1;
@@ -1724,6 +1744,7 @@ KValue k_b_str_builder(KValue sv) {
     out->len = src->len;
     out->data = room;
     out->cap = (int)cap;
+    k_str_count(out) = k_str_chars(src);
     KValue v; v.tag = K_STR; v.payload = k_ptr(out);
     return v;
 }
@@ -1748,22 +1769,29 @@ KValue k_concat_arr_mut(long long n, const KValue* parts) {
     if (want > acc->cap) {
         long long cap = want * 2 + 32;
         if (cap > 2147483647LL) cap = 2147483647LL;
-        char* room = malloc((size_t)cap + 1);
-        if (!room) { fputs("out of memory\n", stderr); exit(1); }
+        char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
+        if (!base) { fputs("out of memory\n", stderr); exit(1); }
+        char* room = base + K_STR_HEAD;
         if (__builtin_expect(k_stats_on > 0, 0)) {
             k_stat_allocs++;
             k_stat_alloc_bytes += cap + 1;
             k_stat_bytes_malloc++;
         }
         memcpy(room, acc->data, (size_t)acc->len);
-        free(acc->data);
+        long long carried = k_str_count(acc);
+        free(acc->data - K_STR_HEAD);
         acc->data = room;
         acc->cap = (int)cap;
+        k_str_count(acc) = carried;
     }
     long long at = acc->len;
     for (long long i = 1; i < n; i++) {
         KStr* ps = k_as_str(parts[i]);
         memcpy(acc->data + at, ps->data, (size_t)ps->len);
+        /* Each part counts its own characters once and remembers; the sum is
+           the whole, because a part is a string and a string is whole
+           characters. Nothing walks what is already in the builder. */
+        k_str_count(acc) += k_str_chars(ps);
         at += ps->len;
     }
     acc->data[want] = 0;
@@ -5258,6 +5286,9 @@ static long k_seek_byte = 0;
 
 static long long k_str_chars(KStr* s) {
     if (s->cap < 0) return -(long long)s->cap - 1;
+    if (s->cap > 0) return k_str_count(s);
+    k_stat_str_scans++;
+    k_stat_str_scan_bytes += s->len;
     long long count = 0;
     for (long i = 0; i < s->len; i += k_cp_len((unsigned char)s->data[i])) count++;
     if (s->cap == 0 && count < 2147483647LL) s->cap = (int)(-count - 1);
@@ -5555,12 +5586,14 @@ KValue k_b_slice(KValue container, KValue fromv, KValue tov) {
 
            Every walk over text goes forward, so one remembered position is
            enough to make the whole sweep linear: the next slice resumes where
-           the last one stopped rather than from the front. Only a counted
-           ordinary string qualifies, so a builder that may still grow under
-           the cursor is never resumed from. */
+           the last one stopped rather than from the front. A builder qualifies
+           too: it only ever appends, and the cursor is an offset into what is
+           already there, which appending does not move — not even across a
+           grow, because the header is the same object and the offset is a
+           number rather than a pointer. */
         long start = -1, end = -1, at = 0;
         long long seen = 0;
-        if (s == k_seek_str && s->cap < 0) {
+        if (s == k_seek_str && s->cap != 0) {
             at = k_seek_byte;
             /* `seen` counts characters already passed, and the loop increments
                before it compares — so resuming AT the remembered character

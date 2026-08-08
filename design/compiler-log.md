@@ -1899,3 +1899,67 @@ yet and they do not use the same word, which is a gap recorded in
 `tests/golden/wasm_gaps.txt` rather than a divergence hidden. Closing it means
 teaching the renderer to ask a deferral what it is, and the renderer is the
 interpreter's own.
+
+## a builder can count itself now
+
+`regexp/matches` over a freshly stitched chapter cost 45.4 seconds where the
+same bytes read from a file cost 2.3, every match paid again, and crossing a
+beat made it fast. Several ticks had gone at that with the wrong theories —
+laziness, memoisation, evacuation, the matcher's shape — and every one of them
+was wrong for the same reason: they were allocation theories, and every
+allocation counter is byte-identical between the fast and slow positions.
+9,205,650 allocs, 327,097 evacuations, 281,268 thunk evaluations, 1,056 beat
+iterations, both ways. Twenty times the wall clock for identical allocation
+work is a walk, not an allocation.
+
+Two memos, and a builder could use neither.
+
+`k_str_chars` caches a character count in `cap` as a negative number, and only
+`if (cap == 0)`. A builder's `cap` is the room it may grow into, so the memo
+was never written and every read walked the whole string. The seek cursor in
+`k_b_slice` — one remembered position, which is what makes a forward sweep over
+prose linear — is gated the same way, `s == k_seek_str && s->cap < 0`, and its
+comment said why: a builder may grow under the cursor.
+
+    position                    scans        bytes walked   wall
+    before the io/write     2,433,691   136,831,850,690    45.4 s
+    after the io/write              0                 0     2.3 s
+
+136 GB of character counting for a book of a few hundred KB.
+
+The count now lives in the eight bytes before a builder's data, where
+`k_buf_of` keeps a list's header for the same reason, and it is kept as bytes
+arrive rather than recomputed: each part counts its own characters once and
+caches that itself, so the sum is free and nothing ever walks the accumulator.
+The cursor's objection turns out not to hold — a builder only ever appends, and
+the cursor is an offset into what is already there, which appending does not
+move, not even across a grow, because the header is the same object and the
+offset is a number rather than a pointer.
+
+    45.4 s  ->  12.7 s   the count kept
+    12.7 s  ->   2.30 s  the cursor opened to builders
+
+which is the baseline and the file-read control, both 2.3. The report the
+script prints is byte-identical.
+
+A DESIGN BUILT AND MEASURED INSUFFICIENT, first: a sticky "every character is
+one byte" bit in the top of `cap`, which answers what slice asks without
+needing anywhere to put a count. It was hit zero times. The stitched chapter
+has 158 multibyte characters in 70,773 bytes, so the condition never held —
+the em-dashes the slice comment already warns about, in a case built to serve
+the ascii path. A cheaper proxy for the count could not stand in for it.
+
+`str_scans` and `str_scan_bytes` are new, and they are the point. This cost is
+invisible to every allocation counter because walking allocates nothing, which
+is exactly how it survived: the timing looks like layout noise and nothing else
+moves. `tests/golden/mem/builder_counts_once.kso` pins them flat — 2 scans and
+15 bytes for four hundred reads of a 7,200 byte string. With the memo read
+deleted the same program answers 402 and 2,400,015, so the ratchet has been
+seen red for its own reason.
+
+Every vein moved by exactly two lines and nothing else: 41 `.mem` goldens and
+all four cost goldens gained the two counters with every other number
+byte-identical, and `bench/emitted_golden.txt` did not move at all — the
+counter is a runtime one and the decoder emits the same code. Welfare 75.69,
+at the floor. kq keeps veins of its own and will want the same two lines when
+its pin moves.
