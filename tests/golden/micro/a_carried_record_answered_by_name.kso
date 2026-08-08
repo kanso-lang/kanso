@@ -1,0 +1,13 @@
+# a record returned in registers, bound to a name and answered as the tail
+type pair
+  a
+  b
+
+fn make x
+  pair x (x + 1)
+
+fn hand x
+  p = make x
+  p
+
+pub play = print "{(hand 1).b}"
