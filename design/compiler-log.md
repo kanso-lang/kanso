@@ -1851,3 +1851,51 @@ The probes are the other half. A sample exercising many consumers of one group
 tests none of them — one escaping use boxes the whole group and the convention
 never comes up — so each probe is its own program with its own type, and each
 was checked for a live `define %parsed` before its answer was believed.
+
+## what a constant that names itself is worth
+
+Three engines held a self-naming constant three ways, and one of them made up
+an answer. `ring = cell ring` printed `probe/cell 0` on native where the oracle
+refused: the mention loads the constant's global while `k_caf_init` is still
+building it, and a zeroed `KValue` is the integer zero. Nothing said so. A
+program could read that field and compute with it.
+
+Two changes, both small.
+
+`k_render` had no case for a cell, so an unforced one fell through the switch
+to `<value>` where the oracle says `<thunk>`. It now unwraps a forced cell and
+names a pending one, which is what the oracle does — rendering demands nothing
+on either engine.
+
+And `k_caf_init` seeds every cell with a blackhole before it runs any builder.
+The mention then loads a cell nobody has demanded rather than a zero, so the
+fabricated integer is gone. What replaces it is `probe/cell <thunk>`, which is
+still not the oracle's `error[runtime]: a lazy binding demands its own value` —
+but it is honest about having no value, and demanding it refuses rather than
+answering.
+
+    jsonbench calls     2346 -> 2350
+    jsonbench lines    13329 -> 13338
+    defines, branches  unchanged
+    welfare            75.69, at the floor
+
+Four calls and four stores, once, before main — the decoder has four constant
+cells. Nothing in a decode loop moved.
+
+Two gaps stay open and are written down rather than left to be rediscovered.
+
+The demand path is the larger one. The oracle forces where a value's identity
+is needed; native forces only where the callee pattern-matches the argument,
+so `x + 1` on a pending cell answers "`+` is not defined for these values"
+instead of demanding it. Forcing both operands in `emit_binop` was built and
+measured: it did not fix the case — a parameter's static set carries no thunk
+bit, so the force is a no-op exactly where it is needed — and it changed the
+decoder's emitted code, where it is not. That is a demand-analysis question,
+not an emitter one, and it was declined here on the measurement.
+
+The browser holds a deferral as the closure that would answer it, so it says
+`<fn>` where the other two say `<thunk>`. Both are honest about having no value
+yet and they do not use the same word, which is a gap recorded in
+`tests/golden/wasm_gaps.txt` rather than a divergence hidden. Closing it means
+teaching the renderer to ask a deferral what it is, and the renderer is the
+interpreter's own.

@@ -126,6 +126,30 @@ KValue k_thunk_new(long long site, int argc, ...) {
     return v;
 }
 
+/* A constant that names itself hands its own cell out while it is still
+   being built, and the cell has to answer for itself. `k_caf_init` seeds
+   every cell with one of these before it runs any builder, so a mention
+   during the build loads a thunk rather than the zeroed global — which is an
+   integer zero, and reads as one. Demanding it is the failure the oracle
+   reports; holding it without demanding it renders as any pending cell. */
+void k_die(const char* msg);
+
+enum { K_SITE_BLACKHOLE = -1 };
+
+KValue k_caf_blackhole(void) {
+    KThunk* t = (KThunk*)malloc(sizeof(KThunk));
+    if (!t) { fputs("out of memory\n", stderr); exit(1); }
+    t->rc = 1;
+    t->site = K_SITE_BLACKHOLE;
+    t->forced = 0;
+    t->argc = 0;
+    t->next_free = 0;
+    KValue v;
+    v.tag = K_THUNK;
+    v.payload = (long long)t;
+    return v;
+}
+
 static void k_thunk_drop_args(KThunk* t);
 
 static void k_thunk_release_cell(KThunk* t) {
@@ -181,6 +205,7 @@ KValue k_force(KValue v) {
     KThunk* t = (KThunk*)v.payload;
     k_stat_thunk_forces++;
     if (t->forced) return t->result;
+    if (t->site == K_SITE_BLACKHOLE) k_die("a lazy binding demands its own value");
     k_stat_thunk_evals++;
     KValue answer = d_thunk_eval(t->site, t->args);
     if (!k_memo_outlives(answer)) return answer;
@@ -2785,6 +2810,13 @@ KValue k_render(KValue v, long long quote) {
     // value and renders its sentinel below
     if (v.tag == K_ERR) return v;
     if (v.tag == K_SUB) return k_render(k_sub_base(v), quote);
+    /* Rendering demands nothing: a cell already forced shows what it holds,
+       and one still pending says so. The oracle answers the same way, and a
+       cell that reaches here unforced is a missed force point either way. */
+    if (v.tag == K_THUNK) {
+        KThunk* cell = (KThunk*)(intptr_t)v.payload;
+        return cell->forced ? k_render(cell->result, quote) : k_str("<thunk>");
+    }
     char buf[64];
     switch (v.tag) {
         case K_INT:

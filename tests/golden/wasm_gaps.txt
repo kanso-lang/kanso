@@ -25,3 +25,11 @@ tests/golden/runtime/read_missing_file.kso	the playground has no filesystem
 # no filesystem to ask — so the golden's first answer differs there.
 tests/golden/micro/is_dir.kso	false
 tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
+
+# A constant that names itself defers the mention, and the three engines hold
+# that deferral differently: native and the oracle keep a cell nobody has
+# demanded and say `<thunk>`, where the browser keeps the closure that would
+# answer it and says `<fn>`. Both are honest about having no value yet; they
+# do not use the same word for it. Closing this means teaching the renderer to
+# ask a deferral what it is, which reaches into the interpreter's own render.
+tests/golden/micro/a_constant_that_holds_itself.kso	<fn>

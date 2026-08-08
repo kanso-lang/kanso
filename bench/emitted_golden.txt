@@ -13,7 +13,14 @@
 #
 # A rise here is a regression to explain; a fall is a win to bank. Either way
 # say which in the PR and regenerate.
+#
+# 2026-08-08: calls 2346 -> 2350 and lines 13329 -> 13338. Every constant cell
+# is seeded with a blackhole before `k_caf_init` runs a builder, so a constant
+# that names itself loads a cell rather than the zeroed global — which is an
+# integer zero and was being printed as one. The decoder has four such cells:
+# four calls and four stores, once, before main. Nothing in a decode loop
+# moved, and defines and branches are unchanged.
 defines=250
-calls=2346
+calls=2350
 branches=1311
-lines=13329
+lines=13338

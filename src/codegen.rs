@@ -173,6 +173,7 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
 declare i64 @k_truthy_bad(%KValue)
 
 declare %KValue @k_caf_freeze(%KValue)
+declare %KValue @k_caf_blackhole()
 declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
@@ -1289,6 +1290,13 @@ impl<'a> Backend<'a> {
         // with no lazy sites still defines the symbol so every binary links.
         self.emit_thunk_dispatcher();
         let mut fills = String::new();
+        // Every cell is seeded before any builder runs, so a constant that
+        // mentions itself loads a blackhole rather than the zeroed global —
+        // which is an integer zero and reads as one.
+        for (i, (cell, _)) in self.caf_fills.iter().enumerate() {
+            let _ = writeln!(fills, "  %b{i} = call %KValue @k_caf_blackhole()");
+            let _ = writeln!(fills, "  store %KValue %b{i}, ptr @{cell}");
+        }
         for (i, (cell, build)) in self.caf_fills.iter().enumerate() {
             let _ = writeln!(fills, "  %v{i} = call tailcc %KValue @{build}()");
             let _ = writeln!(fills, "  %f{i} = call %KValue @k_caf_freeze(%KValue %v{i})");
