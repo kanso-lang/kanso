@@ -373,3 +373,72 @@ fn micro_corpus_agrees_across_engines() {
     // above vacuous, and the test would go on passing.
     assert!(covered > 53, "only {covered} samples were reached through an import");
 }
+
+/// The same corpus, release-built and executed.
+///
+/// `--release` is `-O3 -flto` where the default build is `-O0` against a
+/// cached runtime, and the two disagreed for months: a tailcc arm whose
+/// arguments overflow the eight argument registers was miscompiled under the
+/// optimizer, so any program importing std/regexp segfaulted with no
+/// diagnostic. Nothing caught it because nothing here release-built a program
+/// and ran it — CI release-builds only the benchmarks, none of which import
+/// regexp, and the IR verifier builds this corpus without the flag.
+///
+/// The profile is not an engine, so this asserts against the same goldens the
+/// other runs do: what a program prints cannot depend on how hard it was
+/// optimized.
+#[test]
+fn micro_corpus_survives_a_release_build() {
+    let source = manifest_dir().join("tests/golden/micro");
+
+    let mut covered = 0;
+    for program in kso_files(&source) {
+        let name =
+            program.file_stem().and_then(|s| s.to_str()).expect("kso files have names").to_string();
+        let text = std::fs::read_to_string(&program).expect("the sample reads");
+        if !text.contains("\npub play") {
+            continue;
+        }
+        let imported_golden = program.with_extension("imported.out");
+        let expected_out = match imported_golden.exists() {
+            true => std::fs::read_to_string(&imported_golden).expect("the imported golden reads"),
+            false => expected(&program, "out"),
+        };
+        covered += 1;
+
+        let stage = std::env::temp_dir().join(format!("kanso-release-{name}"));
+        let _ = std::fs::remove_dir_all(&stage);
+        stage_tree(program.parent().expect("samples live in a directory"), &stage);
+        let _ = std::fs::remove_dir_all(stage.join(&name));
+        let entry = format!("run_{name}");
+        std::fs::write(
+            stage.join(format!("{entry}.kso")),
+            format!("import \"{name}\"\n\n{name}/play\n"),
+        )
+        .expect("the entry file writes");
+
+        let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("build")
+            .arg(format!("{entry}.kso"))
+            .arg("--release")
+            .current_dir(&stage)
+            .output()
+            .expect("kanso runs");
+        assert!(
+            built.status.success(),
+            "{name} does not release-build: {}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+
+        let ran = Command::new(stage.join(&entry)).current_dir(&stage).output().expect("it runs");
+        assert_eq!(
+            String::from_utf8_lossy(&ran.stdout),
+            expected_out,
+            "{name} answers differently when release-built"
+        );
+        assert_eq!(ran.status.code(), Some(0), "{name} exits 0 when release-built");
+        let _ = std::fs::remove_dir_all(&stage);
+    }
+
+    assert!(covered > 53, "only {covered} samples were release-built");
+}

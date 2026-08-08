@@ -573,6 +573,10 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
         .to_string();
     let stem = built_as.unwrap_or(named);
     let ll_path = format!("{stem}.ll");
+    let ir = match release {
+        true => without_tailcc(ir),
+        false => ir,
+    };
     if let Err(io) = std::fs::write(&ll_path, ir) {
         eprintln!("error: cannot write {ll_path}: {io}");
         return ExitCode::from(2);
@@ -595,6 +599,27 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
             ExitCode::FAILURE
         }
     }
+}
+
+/// The guaranteed tail call, dropped for the optimized build.
+///
+/// `tailcc` is what the beat machinery's `musttail` needs, and at -O0 it is
+/// both correct and necessary: nothing there turns an ordinary call into a
+/// jump, so without it a tail-recursive arm spends a frame per hop and two
+/// hundred thousand hops overflow. At -O1 and above the reverse holds on
+/// arm64. The convention is miscompiled — ten of the eighty-five sample
+/// programs segfault, arriving at an address that was a value — and the
+/// optimizer performs the tail call itself, including across an arity, which
+/// is the case plain sibling-call optimization is not obliged to take.
+///
+/// So each profile gets the convention exactly where it is the one that
+/// works. What release gives up is the GUARANTEE: -O0 promises the jump in the
+/// IR, where -O3 is observed to make it. Measured at two hundred thousand hops
+/// through arms of equal and of differing arity; a future LLVM that declines
+/// would show up as a stack overflow, which is loud, where today's defect is a
+/// binary that jumps to address 11.
+fn without_tailcc(ir: String) -> String {
+    ir.replace("musttail ", "").replace("tailcc ", "")
 }
 
 /// Release: whole-program LTO across the program and a freshly compiled
