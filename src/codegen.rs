@@ -624,12 +624,8 @@ impl FnEmit {
         if self.parsed.is_empty() {
             return text.to_string();
         }
-        let carried: Vec<String> = self
-            .parsed
-            .keys()
-            .filter(|t| named_as_a_value(text, t))
-            .cloned()
-            .collect();
+        let carried: Vec<String> =
+            self.parsed.keys().filter(|t| named_as_a_value(text, t)).cloned().collect();
         carried.iter().fold(text.to_string(), |acc, t| {
             let boxed = self.box_parsed(t);
             let named = format!("%KValue {t}");
