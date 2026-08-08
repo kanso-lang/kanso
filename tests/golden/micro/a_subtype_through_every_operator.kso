@@ -1,0 +1,12 @@
+# a subtype is its parent wearing a narrower name, so arithmetic reads
+# through it — every operator, not the three that happened to unwrap
+type money int
+
+pub play =
+  print "plus: {money 350 + 1}"
+  >> print "minus: {money 350 - 1}"
+  >> print "times: {money 350 * 2}"
+  >> print "over: {money 350 / 2}"
+  >> print "mod: {money 350 % 3}"
+  >> print "less: {money 350 < 400}"
+  >> print "both sides: {money 350 - money 50}"

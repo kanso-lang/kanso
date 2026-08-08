@@ -66,7 +66,7 @@ const RT_MKSUB: u32 = 29;
 const RT_UPCAST: u32 = 30;
 const RT_SETFIELD: u32 = 31;
 const RT_FIELD_BY_NAME: u32 = 32;
-const RT_IS_REC: u32 = 33;
+const RT_ROUTES_TO_ARMS: u32 = 33;
 const RT_JOIN: u32 = 34;
 const RT_NO_FIELD: u32 = 35;
 const RT_DEFER: u32 = 36;
@@ -106,7 +106,7 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_upcast", params: 2, returns: true },
         Import { name: "rt_setfield", params: 3, returns: true },
         Import { name: "rt_field_by_name", params: 2, returns: true },
-        Import { name: "rt_is_rec", params: 1, returns: true },
+        Import { name: "rt_routes_to_arms", params: 1, returns: true },
         Import { name: "rt_join", params: 2, returns: true },
         Import { name: "rt_no_field", params: 2, returns: true },
         Import { name: "rt_defer", params: 1, returns: true },
@@ -707,7 +707,10 @@ impl<'a> WasmBackend<'a> {
                     self.emit_expr(ctx, rhs, false)?;
                     ctx.body.local_set(b);
                     ctx.body.local_get(a);
-                    ctx.body.call(RT_IS_REC);
+                    ctx.body.call(RT_ROUTES_TO_ARMS);
+                    ctx.body.local_get(b);
+                    ctx.body.call(RT_ROUTES_TO_ARMS);
+                    ctx.body.i32_or();
                     ctx.body.if_i32();
                     ctx.body.local_get(a);
                     ctx.body.local_get(b);
