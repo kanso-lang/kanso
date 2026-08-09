@@ -96,6 +96,19 @@ payoff. These are the four shapes it takes here, and what to do instead.
   reads JSON on stdin — `echo '{}' | ...` or it hangs in `cat` and never makes
   a sound.)
 
+- **Never name work you are about to defer.** A reply containing "next tick I
+  will do X" is a stop wearing a plan's clothes: X was specified, nothing
+  blocked it, and the turn ended anyway. If the next step is known well enough
+  to write down, it is known well enough to start, and the sentence describing
+  it costs more than beginning it would have. Clay has had to say this more
+  than once — "never tell me something you're going to start doing in the next
+  tick just start working on whatever the next thing is." The wakeup's `reason`
+  field is where a cadence is explained; the reply is not.
+- **The tell is the phrase itself.** "Next tick", "next session", "I'll pick
+  this up when" — beside a task that could start now, each is the same stop.
+  Treat writing one as the signal to delete the sentence and make the tool call
+  instead.
+
 The `/loop` is a last resort that restarts the work after a stop. It is not a
 schedule to hand work to, and needing it means something already went wrong.
 Only Clay arms, disarms or retimes it.

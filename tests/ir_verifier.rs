@@ -173,3 +173,64 @@ fn the_ir_kanso_writes_passes_that_verifier() {
         refused.join("\n")
     );
 }
+
+/// Samples written to exercise the register-return convention, where a record
+/// small enough travels as two words rather than a boxed value.
+///
+/// They sit inside a trap. Escape analysis decides the convention per GROUP,
+/// so ONE escaping use boxes every use. A sample that grows a consumer the
+/// analysis treats as escaping stops exercising the convention entirely,
+/// keeps passing, and pins nothing — which nearly happened: a nine-consumer
+/// sample written for this ran correctly on a compiler that had none of the
+/// fixes, because every one of its consumers was boxed.
+///
+/// So each of these must still emit a `%parsed`-returning definition. When one
+/// stops, the sample has quietly become a different test and wants splitting
+/// rather than the assertion relaxed.
+const CARRIED: &[&str] = &[
+    "a_constant_naming_a_record_constant",
+    "a_closure_captures_a_record",
+    "a_field_read_of_a_carried_record",
+    "a_carried_record_answered_by_name",
+];
+
+#[test]
+fn the_carried_samples_still_carry_in_registers() {
+    let micro = manifest_dir().join("tests/golden/micro");
+    let dir = std::env::temp_dir().join("kanso_carried_samples");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("the staging directory is made");
+
+    let boxed: Vec<String> = CARRIED
+        .iter()
+        .filter_map(|stem| {
+            let sample = micro.join(format!("{stem}.kso"));
+            assert!(sample.exists(), "{stem} is listed here but not in the corpus");
+            std::fs::copy(&sample, dir.join(format!("{stem}.kso"))).expect("the sample copies");
+            let entry = dir.join(format!("built_{stem}.kso"));
+            std::fs::write(&entry, format!("import \"{stem}\"\n\n{stem}/play\n"))
+                .expect("the entry file writes");
+
+            let built = Command::new(env!("CARGO_BIN_EXE_kanso"))
+                .arg("build")
+                .arg(entry.file_name().expect("kso files have names"))
+                .current_dir(&dir)
+                .output()
+                .expect("kanso runs");
+            assert!(built.status.success(), "{stem} does not build");
+
+            let ir = std::fs::read_to_string(dir.join(format!("built_{stem}.ll")))
+                .expect("the emitted ir reads");
+            match ir.contains("define %parsed") {
+                true => None,
+                false => Some((*stem).to_string()),
+            }
+        })
+        .collect();
+
+    assert!(
+        boxed.is_empty(),
+        "these are written for the register convention and no longer reach it — every use \
+         of their group is boxed, so they exercise nothing they were written for: {boxed:?}"
+    );
+}
