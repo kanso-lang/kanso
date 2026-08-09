@@ -736,8 +736,17 @@ fn judged progs seen gaps at bad agreed skipped p r said
   same = agrees? r said
   noted_pair progs seen gaps at bad agreed skipped p r said same
 
-fn noted_pair progs seen gaps at bad agreed skipped _ _ _ true
+fn noted_pair progs seen gaps at bad agreed skipped p _ _ true
+  still_listed progs seen gaps at bad agreed skipped p gaps[p.path]
+
+fn still_listed progs seen gaps at bad agreed skipped _ none
   against progs seen gaps (at + 1) bad (agreed + 1) skipped
+
+# A gap that closed and stayed written down is a lie about the engine, so it
+# fails here rather than passing quietly.
+fn still_listed progs seen gaps at bad agreed skipped p _
+  why = "{p.path}: agrees now — take it out of tests/golden/wasm_gaps.txt"
+  against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
 
 fn noted_pair progs seen gaps at bad agreed skipped p r said false
   excused = excused? gaps p.path said
