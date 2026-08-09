@@ -3315,9 +3315,30 @@ static struct { int used; pid_t pid; int out; int err;
                 char* ebuf; long long elen; long long ecap; } k_kids[K_SOCKETS];
 static long long k_handles = 0;
 
+/* A handle names its slot by `h % K_SOCKETS`, so a new one has to land on a
+   slot nobody is using. Counting how many have ever been taken is not the same
+   question: it made a program's sixty-fourth socket or process fail however
+   many it had already closed, and say "at once" about a table holding nothing.
+   A server answering requests spends two of them a turn. */
+static int k_socket_free(long long slot);
+static int k_kid_free(long long slot);
+
+static long long k_free_handle(int (*free_at)(long long)) {
+    for (long long i = 1; i <= K_SOCKETS; i++) {
+        long long cand = k_handles + i;
+        if (free_at(cand % K_SOCKETS)) {
+            k_handles = cand;
+            return cand;
+        }
+    }
+    return -1;
+}
+
+static int k_socket_free(long long slot) { return !k_sockets[slot].used; }
+
 static long long k_hold_socket(int fd) {
-    if (k_handles + 1 >= K_SOCKETS) k_die("too many sockets open at once");
-    long long h = ++k_handles;
+    long long h = k_free_handle(k_socket_free);
+    if (h < 0) k_die("too many sockets open at once");
     k_sockets[h % K_SOCKETS].used = 1;
     k_sockets[h % K_SOCKETS].fd = fd;
     return h;
@@ -3917,6 +3938,8 @@ static void k_drain(int fd, char** buf, long long* len, long long* cap) {
 
 /* Forks a child with both pipes registered and non-blocking, answering the
    handle a later await or kill names. -1 is the fork or the pipes failing. */
+static int k_kid_free(long long slot) { return !k_kids[slot].used; }
+
 static long long k_fork_kid(KValue cmd, KValue argv_list) {
     KList* args = k_as_list(argv_list);
     long long argc = args->len;
@@ -3951,8 +3974,8 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
     close(errp[1]);
     fcntl(outp[0], F_SETFL, fcntl(outp[0], F_GETFL, 0) | O_NONBLOCK);
     fcntl(errp[0], F_SETFL, fcntl(errp[0], F_GETFL, 0) | O_NONBLOCK);
-    if (k_handles + 1 >= K_SOCKETS) k_die("too many processes at once");
-    long long h = ++k_handles;
+    long long h = k_free_handle(k_kid_free);
+    if (h < 0) k_die("too many processes at once");
     long long slot = h % K_SOCKETS;
     k_kids[slot].used = 1;
     k_kids[slot].pid = kid;
