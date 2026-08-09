@@ -2141,3 +2141,63 @@ installs a blackhole and treats re-entry as the error.
 So the gap stays, restated. It moved from a stack overflow to a semantic
 difference, which is smaller and honest, and closing it means giving the
 browser a blackhole keyed by name rather than another patch at the read.
+
+## 2026-08-09 — the python went, and four defects came out with it
+
+The two harnesses that drove headless chrome are kanso now, and nothing in the
+repo is python. `scripts/site_smoke` makes four visits — the landing sample,
+the playground, a book chapter, the chart — and
+`scripts/browser_differential_run` compiles all 287 corpus programs in the tab
+and holds each against the native engine: 279 agree, 8 known gaps, 0 disagree,
+which is what the python said.
+
+Porting them found four defects nothing in the suite could reach.
+
+Two were the library's. `serve_until` folded many requests and carried state
+between them, then answered whatever closing the listener answered — a harness
+had nothing to decide pass or fail from, and the handler cannot print instead,
+because a print and a turn as adjacent statements are a parallel group. And a
+connection that says nothing killed the server: `parsed` demanded a request
+line from one read and refused, which is exactly what a browser's speculative
+preconnection is. curl never opens one, which is why two socket tests had never
+seen it.
+
+Two were the runtime's, and both are the reason to port real workloads rather
+than write more synthetic tests.
+
+`k_repaired_settle` raises the beat mark over bytes a repair copied into the
+arena. It raised three of the mark's four fields and left `left` holding the
+count from when the mark was taken, so the mark described a position that did
+not exist; a later rewind restored that pair and the arena handed out memory
+past the end of a block. glibc caught it on linux as a sysmalloc assertion.
+macOS never noticed, including under Guard Malloc in strict mode, because the
+damage lands inside a block kanso itself owns. The invariant that found it —
+`k_arena + k_arena_left` meets the current block's end — is now checked at every
+rewind, which costs one comparison and says so at the moment the mark goes
+wrong.
+
+And a program could only ever open sixty-three sockets and processes. The guard
+compared how many handles had EVER been taken against the size of the table
+rather than asking whether a slot was free, and one counter served both doors.
+A server spends two a turn: the connection it accepts, and the `run` in the
+statement beside it, which forks rather than blocking because it has to yield.
+Twenty-eight requests answered and thirty-four did not.
+
+Three hypotheses died by measurement on the way to the first of those, and one
+false verification nearly shipped: two container runs compared as fixed against
+unfixed both passed, because the real difference between them was whether
+chromium had started at all. The verification that holds compares fixed against
+unfixed under the invariant assertion, same run, browser working.
+
+### The decode slowdown has a third of a name
+
+The 7.6% between 07-27 and 08-07 reproduces at one build a side: a worktree at
+5896d03c with a 2500-rep jsonbench runs 1.87 s against today's 2.02 s, eight
+per cent. Profiling both — four interleaved pairs, self time, totals within one
+per cent — puts `k_b_put_mut` and `k_b_push_mut` together at about 9.3% of
+samples today against 6.0% then. Three points of the eight.
+
+The old side drifts 4.3 to 8.2 across its four runs, which is most of the
+spread and says a one-second sample is noisy. The first pair alone read as
++6.7 points and would have been a fourth retracted explanation. What is claimed
+is the direction and roughly a third of the gap, not the cause.
