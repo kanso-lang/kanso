@@ -18,24 +18,26 @@ merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
 
-**Replace the last python script** (task #55). `scripts/browser_differential.py`
-serves HTTP while driving headless chrome, and is the last of them.
-`scripts/site_smoke` is kanso now, and it is what CI runs: four visits, one per
-page the site promises — the landing sample, the playground, a book chapter and
-the chart.
+**The repo has no python in it** (task #55, closed). Both harnesses that drove
+headless chrome are kanso now, and CI runs the kanso ones.
 
-- Sockets: done, both engines. `listen`, `accept`, `net_read`, `net_write`,
-  `net_close`, with `accept` and `run` as scheduling points so a server and its
-  client can be adjacent statements. A program serves itself and prints the same
-  bytes interpreted and compiled.
-- `std/net/http`: done. Request and response are records, a handler is a plain
-  function from one to the other, and the mux is arms on the path. A routed POST
-  round-trips end to end.
-- `io/start` and `io/kill`: done, both engines. Headless chrome ignores its own
-  exit budget, so the port needed Go's `cmd.Start()` and `Process.Kill()`.
-- Next: port the two scripts, which is what proves the surface is right. The
-  first thing writing an http test found was `content-length` counting
-  characters where the protocol counts bytes.
+- `scripts/site_smoke` makes four visits, one per page the site promises — the
+  landing sample, the playground, a book chapter and the chart. Each probe was
+  watched red before it was trusted.
+- `scripts/browser_differential_run` compiles all 287 corpus programs in the
+  tab and requires byte-identical status and output against the native engine,
+  excusing a disagreement only where tests/golden/wasm_gaps.txt records what the
+  wasm engine answers instead. It says what the python said: 279 agree, 8 known
+  gaps, 0 disagree.
+
+Porting them found four defects the suite could not see. Two were in the
+library: a server could not hand its report back, and a connection that said
+nothing killed it — which is what a browser's speculative preconnection is.
+Two were in the runtime: a repair raised three of a beat mark's four fields and
+let the arena hand out memory past the end of a block (#823, caught by glibc on
+linux and invisible on macOS), and a program could only ever open sixty-three
+sockets and processes because the guard counted takes rather than asking
+whether a slot was free (#825).
 
 ## Recently ruled by Clay
 
