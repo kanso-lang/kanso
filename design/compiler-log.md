@@ -2247,3 +2247,49 @@ statement that is a plain value is silent for every shape, which is a program
 that computes an answer and does nothing with it; it is loud only when effects
 precede it. So the general rule was right where Clay said it was, and the one
 exception was a bug.
+
+## 2026-08-09 — the decode slowdown is cost per call, and two fixes for it failed
+
+Counters on `k_b_put_mut` and `k_b_push_mut` entries, both trees, the same
+benchmark: put 1,254,150 and push 1,459,800 on each side, with allocations
+already known identical. So the profile's "the in-place writes carry a third
+of it" is not more calls. It is the same calls costing more.
+
+Five randomised layouts a side, one sitting, medians:
+
+    old 5896d03c              1.979 1.988 2.009 1.993 1.994   mean 1.9926
+    new, as it stands         2.156 2.173 2.188 2.184 2.181   mean 2.1764
+    new, three guards removed 2.128 2.111 2.105 2.109 2.100   mean 2.1106
+
+The gap is 0.1838 s and removing three guards recovers 0.0658 of it — 36%,
+lower than control in every layout. Each alone is also lower in every layout:
+`k_check_map_key` on every put (0.0404), `k_map_replace` on every put (0.0354),
+`k_born_this_beat` on the push fast path (0.0316). They overlap, so the
+combined figure is the one that means anything. This is the first causal
+number on this question; everything before it was attribution from samples.
+
+### Two fixes, both declined
+
+Hoisting each guard's fast path to the call site so the common case is a
+compare with no call: 2.1748 against 2.1764. Nothing. Both `k_map_replace` and
+`k_map_view_insert` already return immediately when the map has no sorted view,
+which decode never builds, so what they execute is a load and a predicted
+branch — and removing them still helps while making them cheaper to reach does
+not.
+
+Splitting `k_b_put_mut` so the append onto a view-less unique map is a small
+inlinable body and everything else sits behind one `noinline` call: 2.1408
+against 2.1536 in the same sitting. Half a per cent, and higher than control in
+one of the five layouts. Not enough to justify restructuring a hot path.
+
+Discharging the key check statically, the way provable overflow checks were
+discharged — a second entry point the emitter picks when the key's inferred set
+is within int, string and failure — never fires. The sets at the seven put
+sites in the decoder read 0b11111111111111 at four of them and only slightly
+narrower at the rest. The emitter does not know a decoded key is a string, so
+there is nothing to discharge. Narrowing operand sets at those sites is the
+prerequisite, and it is its own piece of work.
+
+What is left standing is that the cost is the work being present rather than
+the cost of reaching it, and that __TEXT has grown 114,688 against 98,304 while
+runtime.c grew a third. Neither of those is a fix.
