@@ -30,6 +30,11 @@ pub fn ok body
 pub fn text_page body
   response 200 "OK" ["content-type: text/plain; charset=utf-8"] body
 
+# A browser runs no script in a plain-text document, so a page served as text
+# is a page that never reports back.
+pub fn html_page body
+  response 200 "OK" ["content-type: text/html; charset=utf-8"] body
+
 pub not_found = response 404 "Not Found" [] "not found\n"
 
 # Parsing stops at the head because that is all a request line and its headers
