@@ -1,0 +1,4 @@
+error[unused]: this value is never used: a non-final line binds a name, or is an effect joining the group
+  --> unused_construction.kso:4:1
+   4 | box 1
+       ^

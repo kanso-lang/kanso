@@ -1,0 +1,5 @@
+type box
+  value
+
+box 1
+print "hi"

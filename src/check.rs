@@ -2741,12 +2741,28 @@ fn check_discarded_value(
         *returns.entry((d.name.as_str(), d.params.len())).or_insert(0) |= inference.returns[i];
     }
 
+    // A construction answers its own type and nothing else, so it is refused
+    // wherever a call that can only answer a value is. A typeset is a
+    // vocabulary rather than a constructor, and takes no arguments.
+    let ctors: HashSet<(&str, usize)> = program
+        .types
+        .iter()
+        .filter(|t| t.members.is_empty())
+        .map(|t| match t.parent {
+            Some(_) => (t.name.as_str(), 1),
+            None => (t.name.as_str(), t.fields.len()),
+        })
+        .collect();
+
     let refused = |e: &Expr| -> bool {
         let Expr::App { head, args, piped: false, .. } = e else { return false };
         let Expr::Ident(name, _) = head.as_ref() else { return false };
         // An err propagates through the group, so a line that only fails is
         // still doing something — a call is refused when it can be neither.
-        returns.get(&(name.as_str(), args.len())).is_some_and(|set| set & (DESC | ERR) == 0)
+        match returns.get(&(name.as_str(), args.len())) {
+            Some(set) => set & (DESC | ERR) == 0,
+            None => ctors.contains(&(name.as_str(), args.len())),
+        }
     };
 
     for decl in &program.fns {
