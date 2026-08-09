@@ -1,0 +1,164 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# Which door each side must use, decided from the source alone. A program
+# exporting `play` is a library, and what runs one is an entry that imports it.
+# A file holding both declarations and bare statements is a play file. The two
+# sides have to agree, or the differential compares a program against a
+# refusal rather than against an answer.
+type program
+  door
+  path
+  src
+
+dirs = ["examples" "tests/golden/runtime" "tests/golden/micro"]
+
+fn kso? name
+  parts = text/split name "."
+  parts[length parts]! == "kso"
+
+fn library? src
+  starts = text/slice src 1 8 == "pub play"
+  found = length (text/split src "\npub play") > 1
+  either? starts found
+
+fn bare? line
+  heads = ["import " "fn " "type " "#"]
+  starts_any? line heads 1
+
+fn starts_any? line heads at
+  looked? line heads at (at > length heads)
+
+fn looked? _ _ _ true
+  true
+
+fn looked? line heads at false
+  head = heads[at]!
+  seen? line heads at (text/slice line 1 (length head) == head)
+
+fn seen? _ _ _ true
+  false
+
+fn seen? line heads at false
+  starts_any? line heads (at + 1)
+
+fn indented? line
+  text/slice line 1 1 == " "
+
+fn declares? line
+  a_function = text/slice line 1 3 == "fn "
+  a_type = text/slice line 1 5 == "type "
+  either? a_function a_type
+
+fn play? src
+  lines = text/split src "\n"
+  tops = list/to_list (list/reject lines indented?)
+  named = list/to_list (list/reject tops empty?)
+  both? (list/any? named declares?) (list/any? named bare?)
+
+fn empty? line
+  line == ""
+
+fn both? true true
+  true
+
+fn both? _ _
+  false
+
+fn either? true _
+  true
+
+fn either? _ answer
+  answer
+
+fn door_of src
+  chosen src (library? src)
+
+fn chosen _ true
+  "library"
+
+fn chosen src false
+  told src (play? src)
+
+fn told _ true
+  "play"
+
+fn told _ false
+  "run"
+
+# A relative import wants a filesystem the tab does not have; std/* resolves
+# because the toolchain embeds it.
+fn local_import? src
+  lines = text/split src "\n"
+  list/any? lines relative?
+
+fn relative? line
+  trimmed = text/trim line
+  imports = text/slice trimmed 1 7 == "import "
+  standard = text/slice trimmed 1 12 == "import \"std/"
+  only_local? imports standard
+
+fn only_local? true false
+  true
+
+fn only_local? _ _
+  false
+
+fn library_door? p
+  p.door == "library"
+
+fn play_door? p
+  p.door == "play"
+
+fn run_door? p
+  p.door == "run"
+
+fn how_many progs pick
+  length (list/to_list (list/select progs pick))
+
+fn counted progs
+  libs = how_many progs library_door?
+  plays = how_many progs play_door?
+  runs = how_many progs run_door?
+  print "kept {length progs}: library {libs} play {plays} run {runs}"
+
+fn keeping acc _ _ true
+  acc
+
+fn keeping acc path src false
+  which = door_of src
+  one = program which path src
+  text/concat acc [one]
+
+fn one_file paths at acc src
+  kept = keeping acc paths[at]! src (local_import? src)
+  read_all paths (at + 1) kept
+
+fn read_all paths at acc
+  more_files paths at acc (at > length paths)
+
+fn more_files _ _ acc true
+  counted acc
+
+fn more_files paths at acc false
+  on = (src -> one_file paths at acc src)
+  io/read_file paths[at]! . on
+
+fn with_names ds at acc names
+  here = ds[at]!
+  kept = list/to_list (list/select names kso?)
+  paths = list/to_list (list/map kept (n -> "{here}/{n}"))
+  gather_dirs ds (at + 1) (text/concat acc paths)
+
+fn gather_dirs ds at acc
+  more_dirs ds at acc (at > length ds)
+
+fn more_dirs _ _ acc true
+  read_all acc 1 []
+
+fn more_dirs ds at acc false
+  on = (names -> with_names ds at acc names)
+  io/list_dir ds[at]! . on
+
+pub play = gather_dirs dirs 1 []
