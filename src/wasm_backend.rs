@@ -998,9 +998,10 @@ impl<'a> WasmBackend<'a> {
 
     /// Lambda lifting: the closure body becomes a table function taking
     /// (env, args); captures ride in env, both read via rt_envget.
-    /// A list element inside a constant that names itself waits: the cell it
-    /// would read is still being filled, so the element holds the work and a
-    /// later read runs it. Everything else is emitted where it stands.
+    /// A list element or record field inside a constant that names itself
+    /// waits: the cell it would read is still being filled, so the position
+    /// holds the work and a later read runs it. Everything else is emitted
+    /// where it stands.
     fn emit_element(&mut self, ctx: &mut Ctx, item: &Expr) -> Result<(), String> {
         if !self.defers_self(ctx, item) {
             return self.emit_expr(ctx, item, false);
@@ -1174,7 +1175,11 @@ impl<'a> WasmBackend<'a> {
                 .map(|t| t.fields.clone())
                 .unwrap_or_default();
             for (i, arg) in args.iter().enumerate() {
-                self.emit_expr(ctx, arg, false)?;
+                // A field of a constant that names itself waits for the same
+                // reason a list element does: the cell it would read is still
+                // being filled. Emitted where it stands, the mention calls the
+                // constant again and the recursion has no floor.
+                self.emit_element(ctx, arg)?;
                 match fields.get(i).filter(|(_, tys, _)| tys.len() >= 2) {
                     Some((field, tys, _)) => {
                         let value = ctx.body.local();
