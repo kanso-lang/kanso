@@ -15,6 +15,10 @@ test_content_length_of_ascii = contains? (rendered abc) "content-length: 3"
 
 test_status_line = contains? (rendered not_found) "HTTP/1.1 404 Not Found"
 
+page = html_page "<script>report()</script>"
+
+test_html_page_is_html = contains? (rendered page) "content-type: text/html"
+
 test_parsed_reads_the_method = asked.method == "POST"
 
 test_parsed_reads_the_path = asked.path == "/report"
