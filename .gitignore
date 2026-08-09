@@ -21,6 +21,11 @@ HN_DRAFT.md
 /imports
 bench/naive_json/Cargo.lock
 
+# The chart's rows live on the perf-history branch and are fetched, not kept.
+# A local copy is a download, and a download that sits in the working tree long
+# enough starts looking like a file somebody meant to commit.
+bench/history_series.jsonl
+
 # Built programs land beside their source when `kanso build` runs from the
 # repo root. They are Mach-O or ELF, they are large, and thirteen of them once
 # rode into a commit on `git add -A`.
