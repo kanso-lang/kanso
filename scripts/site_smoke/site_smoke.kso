@@ -31,6 +31,16 @@ chapter_scripts = """
   <script src="/book-play.js"></script>
 """
 
+mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+linux_chrome = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
+
+other_chrome = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
+
+rest_chrome = text/concat linux_chrome other_chrome
+
+chrome_paths = text/concat [mac_chrome] rest_chrome
+
 landing_port = 8749
 
 board_port = 8750
@@ -311,7 +321,7 @@ fn document top header page tail extra
 # the same visit run alone passed in seconds.
 fn flags at url
   where = "--user-data-dir=/tmp/kanso-smoke-profile-{at}"
-  ["--headless=new" "--disable-gpu" where url]
+  ["--headless=new" "--disable-gpu" "--no-sandbox" where url]
 
 fn browsing chrome at path
   url = flags at "http://127.0.0.1:{at}{path}"
@@ -521,14 +531,32 @@ fn wanted set
   io/env "KANSO_CHROME" . (told_where -> chosen set told_where)
 
 fn chosen set none
-  mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-  io/exists mac . (there -> either set mac there)
+  first_chrome set chrome_paths 1
 
+# A browser that never starts is a server that waits forever, so a name given
+# by hand is checked before it is trusted.
 fn chosen set where
+  io/exists where . (there -> told_of set where there)
+
+fn told_of set where true
   running set where
 
-fn either set mac true
-  running set mac
+fn told_of _ where false
+  said = "KANSO_CHROME names {where}, which is not there\n"
+  io/write said . (_ -> io/exit 1)
 
-fn either set _ false
-  running set "/usr/bin/google-chrome"
+fn first_chrome set paths at
+  searched set paths at (at > length paths)
+
+fn searched _ _ _ true
+  io/write "no chrome found: set KANSO_CHROME\n" . (_ -> io/exit 1)
+
+fn searched set paths at false
+  on = (there -> found_at set paths at there)
+  io/exists paths[at]! . on
+
+fn found_at set paths at true
+  running set paths[at]!
+
+fn found_at set paths at false
+  first_chrome set paths (at + 1)
