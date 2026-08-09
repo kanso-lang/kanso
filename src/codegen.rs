@@ -724,6 +724,83 @@ impl FnEmit {
     }
 }
 
+/// Dispatchers and wrappers nobody names. A dead caller still writes a call to
+/// its dead callee, so one sweep leaves the callee named by a caller that is
+/// itself about to go — hence the fixpoint. Only `d_` and `w_` symbols are
+/// candidates: everything else is either the entry, a builder the constant
+/// initialiser calls, or a switch the runtime calls by name.
+fn prune_unnamed(body: &str, entry: &str) -> String {
+    let mut blocks = ir_defines(body);
+    loop {
+        let named = |at: usize, sym: &str| {
+            blocks.iter().enumerate().any(|(k, (_, text))| k != at && names_symbol(text, sym))
+        };
+        let doomed = blocks.iter().enumerate().position(|(at, (sym, _))| {
+            // The runtime calls the thunk dispatcher itself, from `k_force`,
+            // so no emitted line names it and it would go on the first sweep.
+            sym != entry
+                && sym != "d_thunk_eval"
+                && (sym.starts_with("d_")
+                    || sym.starts_with("w_")
+                    || sym.starts_with("\"d_")
+                    || sym.starts_with("\"w_"))
+                && !named(at, sym)
+        });
+        match doomed {
+            Some(at) => blocks.remove(at),
+            None => break,
+        };
+    }
+    blocks.into_iter().map(|(_, text)| text).collect()
+}
+
+/// Whether this text names `@sym`. A call writes `@sym(`, but a closure hands
+/// its wrapper over as `ptr @sym,` — so the delimiter decides, and it also
+/// keeps `@w_klam1` from answering for `@w_klam17`.
+fn names_symbol(text: &str, sym: &str) -> bool {
+    let needle = format!("@{sym}");
+    text.match_indices(&needle).any(|(at, _)| {
+        !matches!(
+            text.as_bytes().get(at + needle.len()),
+            Some(b) if b.is_ascii_alphanumeric() || *b == b'_' || *b == b'"'
+        )
+    })
+}
+
+/// Split emitted IR into segments, keeping every byte. A `define` segment
+/// runs from its header to the closing brace on its own line and carries its
+/// symbol; everything between definitions — globals the fnref statics live in
+/// among them — is a segment with no symbol, which the prune never touches.
+fn ir_defines(body: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut sym = String::new();
+    let mut text = String::new();
+    let mut inside = false;
+    for line in body.split_inclusive('\n') {
+        if !inside && line.starts_with("define ") {
+            if !text.is_empty() {
+                out.push((String::new(), std::mem::take(&mut text)));
+            }
+            inside = true;
+            sym = line
+                .find('@')
+                .and_then(|at| {
+                    line[at + 1..].find('(').map(|p| line[at + 1..at + 1 + p].to_string())
+                })
+                .unwrap_or_default();
+        }
+        text.push_str(line);
+        if inside && line.trim_end() == "}" {
+            out.push((std::mem::take(&mut sym), std::mem::take(&mut text)));
+            inside = false;
+        }
+    }
+    if !text.is_empty() {
+        out.push((String::new(), text));
+    }
+    out
+}
+
 /// Whether an emitted line names this temp in a `%KValue` operand position.
 /// The delimiter matters: `%t2` is a prefix of `%t20`, and boxing the wrong
 /// register writes a program that type-checks and computes the wrong record.
@@ -1322,10 +1399,17 @@ impl<'a> Backend<'a> {
         // counts and the reader scrolls past. Keep a declare only when its
         // symbol appears somewhere outside the declare itself — in the body,
         // or inside one of the preamble's own inline definitions.
+        // Only a program with an entry has a place for the walk to start. A
+        // library's surface is its callers' business, and every definition in
+        // it is reachable from outside the module the emitter can see.
+        let body = match self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {
+            true => prune_unnamed(&self.body, &dsym(crate::ast::ENTRY, 0)),
+            false => self.body.clone(),
+        };
         let declares: String = {
             let referenced = |sym: &str| {
                 let probe = format!("@{sym}(");
-                self.body.contains(&probe)
+                body.contains(&probe)
                     || DECLARES
                         .lines()
                         .filter(|l| !l.starts_with("declare"))
@@ -1359,7 +1443,7 @@ impl<'a> Backend<'a> {
             let _ = writeln!(out, "@{name}_lit = internal global %KValue zeroinitializer");
         }
         out.push('\n');
-        out.push_str(&self.body);
+        out.push_str(&body);
         Ok(narrow_tailcc(out))
     }
 
