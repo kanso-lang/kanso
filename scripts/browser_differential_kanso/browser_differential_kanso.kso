@@ -1,6 +1,7 @@
 import "std/io"
 import "std/json"
 import "std/list"
+import "std/net/http"
 import "std/text"
 
 # Which door each side must use, decided from the source alone. A program
@@ -13,6 +14,10 @@ type program
   path
   src
 
+type served
+  page
+  wasm
+
 dirs = ["examples" "tests/golden/runtime" "tests/golden/micro"]
 
 fn kso? name
@@ -21,8 +26,8 @@ fn kso? name
 
 fn library? src
   starts = text/slice src 1 8 == "pub play"
-  found = length (text/split src "\npub play") > 1
-  either? starts found
+  inside = length (text/split src "\npub play") > 1
+  either? starts inside
 
 fn bare? line
   heads = ["import " "fn " "type " "#"]
@@ -122,9 +127,58 @@ fn counted progs
   libs = how_many progs library_door?
   plays = how_many progs play_door?
   runs = how_many progs run_door?
-  said = "kept {length progs}: library {libs} play {plays} run {runs}"
+  said = "{length progs} programs: library {libs} play {plays} run {runs}"
+  on = (_ -> with_page progs)
+  io/write_err "{said}\n" . on
+
+fn with_page progs
   page = page_for progs
-  io/write_file "/tmp/kanso_bd_page.html" page . (_ -> print said)
+  on = (w -> with_engine page w)
+  io/read_file "docs/kanso.wasm" . on
+
+fn with_engine page w
+  set = served page w
+  on = (told_where -> chosen set told_where)
+  io/env "KANSO_CHROME" . on
+
+mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+linux_chrome = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
+
+other_chrome = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
+
+rest_chrome = text/concat linux_chrome other_chrome
+
+chrome_paths = text/concat [mac_chrome] rest_chrome
+
+fn chosen set none
+  first_chrome set chrome_paths 1
+
+fn chosen set where
+  io/exists where . (there -> told_of set where there)
+
+fn told_of set where true
+  watching set where
+
+fn told_of _ where false
+  said = "KANSO_CHROME names {where}, which is not there\n"
+  io/write said . (_ -> io/exit 1)
+
+fn first_chrome set paths at
+  searched set paths at (at > length paths)
+
+fn searched _ _ _ true
+  io/write "no chrome found: set KANSO_CHROME\n" . (_ -> io/exit 1)
+
+fn searched set paths at false
+  on = (there -> found_at set paths at there)
+  io/exists paths[at]! . on
+
+fn found_at set paths at true
+  watching set paths[at]!
+
+fn found_at set paths at false
+  first_chrome set paths (at + 1)
 
 fn keeping acc _ _ true
   acc
@@ -235,8 +289,8 @@ fn hunted? _ _ _ true
   false
 
 fn hunted? src needles at false
-  found = length (text/split src needles[at]!) > 1
-  either? found (names_any? src needles (at + 1))
+  here = length (text/split src needles[at]!) > 1
+  either? here (names_any? src needles (at + 1))
 
 fn a_test? path
   parts = text/split path "/"
@@ -505,3 +559,85 @@ fn page_for progs
   cases = cases_json progs 1 []
   written = replaced page_template "__CASES__" cases
   replaced written "__BSN__" "\\n"
+
+port = 8761
+
+fn body_for "/" set
+  set.page
+
+fn body_for "/index.html" set
+  set.page
+
+fn body_for "/kanso.wasm" set
+  set.wasm
+
+fn body_for _ _
+  none
+
+fn kind_of path
+  parts = text/split path "."
+  named_type parts[length parts]!
+
+fn named_type "wasm"
+  "content-type: application/wasm"
+
+fn named_type _
+  "content-type: text/html; charset=utf-8"
+
+fn handled req set
+  answered req.path req set
+
+fn answered "/report" req _
+  http/turn (http/ok "thanks") (http/done req.body)
+
+fn answered path _ set
+  body = body_for path set
+  http/turn (found body path) set
+
+fn found none _
+  http/not_found
+
+fn found body path
+  http/response 200 "OK" [(kind_of path)] body
+
+fn flags url
+  where = "--user-data-dir=/tmp/kanso-differential-profile"
+  ["--headless=new" "--disable-gpu" "--no-sandbox" where url]
+
+fn browsing chrome
+  at = flags "http://127.0.0.1:{port}/"
+  io/start chrome at
+
+fn watching set chrome
+  http/serve_until port handled set . reported
+  browsing chrome
+
+fn reported raw
+  on = (_ -> tallied raw)
+  io/run "pkill" ["-f" "kanso-differential-profile"] . on
+
+fn tallied raw
+  read = json/decode raw
+  results = read["results"]
+  counts = by_kind results 1 {}
+  print "tail calls {read["tailCalls"]}, {length results} answers: {counts}"
+
+fn by_kind results at acc
+  more_kinds results at acc (at > length results)
+
+fn more_kinds _ _ acc true
+  acc
+
+fn more_kinds results at acc false
+  one = results[at]!
+  which = one["kind"]
+  by_kind results (at + 1) (bumped acc which)
+
+fn bumped acc which
+  raised acc which acc[which]
+
+fn raised acc which none
+  put acc which 1
+
+fn raised acc which n
+  put acc which (n + 1)
