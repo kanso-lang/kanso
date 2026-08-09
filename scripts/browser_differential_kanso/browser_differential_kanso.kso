@@ -210,7 +210,20 @@ fn more_book_files _ _ acc true
   io/read_file "docs/play.js" . on
 
 fn with_playground acc js
-  counted (text/concat acc (playground_from js))
+  written = playground_from js
+  on = (_ -> laid_out written 1 acc)
+  shell "mkdir -p target/playground-corpus" . on
+
+fn laid_out written at acc
+  more_written written at acc (at > length written)
+
+fn more_written written _ acc true
+  counted (text/concat acc written)
+
+fn more_written written at acc false
+  one = written[at]!
+  on = (_ -> laid_out written (at + 1) acc)
+  io/write_file one.path one.src . on
 
 fn more_book_files paths at acc false
   path = paths[at]!
@@ -349,7 +362,8 @@ fn gathered_samples _ _ acc true
 fn gathered_samples parts at acc false
   which = name_before parts[at]!
   src = unescaped parts[at + 1]!
-  one = program (door_of src) "playground/{which}.kso" src
+  where = "target/playground-corpus/{which}.kso"
+  one = program (door_of src) where src
   sample_at parts (at + 2) (text/concat acc [one])
 
 fn playground_from js
@@ -379,7 +393,7 @@ fn stem_of path
   parts[1]!
 
 fn ran_in where verb name
-  shell "cd {where} && {pinned} {root}/target/release/kanso {verb} {name} 2>&1"
+  shell "cd {where} && {pinned} {root}/target/release/kanso {verb} {name}"
 
 fn staged path
   here = dir_of path
@@ -625,8 +639,39 @@ fn tallied progs raw
   counts = by_kind results 1 {}
   said = "the tab: {length results} answers, {counts}"
   seen = keyed results 1 {}
-  on = (_ -> against progs seen 1 [] 0)
+  on = (_ -> with_gaps progs seen)
   io/write_err "{said}\n" . on
+
+# The gaps live in tests/golden/wasm_gaps.txt, which tests/wasm_engine.rs reads
+# too: one home, so a gap cannot close in one harness and stay written down in
+# the other. Each line is a path and the text the wasm engine answers instead.
+fn with_gaps progs seen
+  on = (text -> against progs seen (gaps_from text) 1 [] 0 0)
+  io/read_file "tests/golden/wasm_gaps.txt" . on
+
+fn gaps_from text
+  lines = text/split text "\n"
+  gathered_gaps lines 1 {}
+
+fn gathered_gaps lines at acc
+  more_gaps lines at acc (at > length lines)
+
+fn more_gaps _ _ acc true
+  acc
+
+fn more_gaps lines at acc false
+  line = lines[at]!
+  gathered_gaps lines (at + 1) (noted_gap acc line)
+
+fn noted_gap acc line
+  parts = text/split line "\t"
+  gap_line acc parts (length parts == 2)
+
+fn gap_line acc _ false
+  acc
+
+fn gap_line acc parts true
+  put acc parts[1]! parts[2]!
 
 # The answers, by the name the case carried, so a program can be looked up
 # rather than trusted to arrive in order.
@@ -666,48 +711,71 @@ root = "/Users/clayshentrup/dev/kanso"
 # Each program run natively and held against what the tab said. A differential
 # is only worth the name if both sides are asked the same question, so the
 # door, the seed and the source are all the same on both.
-fn against progs seen at bad agreed
-  more_pairs progs seen at bad agreed (at > length progs)
+fn against progs seen gaps at bad agreed skipped
+  more_pairs progs seen gaps at bad agreed skipped (at > length progs)
 
-fn more_pairs _ _ _ bad agreed true
-  verdict bad agreed
+fn more_pairs _ _ _ _ bad agreed skipped true
+  verdict bad agreed skipped
 
-fn more_pairs progs seen at bad agreed false
+fn more_pairs progs seen gaps at bad agreed skipped false
   p = progs[at]!
-  on = (r -> compared progs seen at bad agreed p r)
+  on = (r -> compared progs seen gaps at bad agreed skipped p r)
   native_of p . on
 
-fn compared progs seen at bad agreed p r
+fn compared progs seen gaps at bad agreed skipped p r
   said = seen[p.path]
-  judged progs seen at bad agreed p r said
+  judged progs seen gaps at bad agreed skipped p r said
 
-fn judged progs seen at bad agreed _ _ none
-  against progs seen (at + 1) bad (agreed + 1)
+fn judged progs seen gaps at bad agreed skipped _ _ none
+  against progs seen gaps (at + 1) bad (agreed + 1) skipped
 
-fn judged progs seen at bad agreed p r said
+fn judged progs seen gaps at bad agreed skipped p r said
   same = agrees? r said
-  noted_pair progs seen at bad agreed p r said same
+  noted_pair progs seen gaps at bad agreed skipped p r said same
 
-fn noted_pair progs seen at bad agreed _ _ _ true
-  against progs seen (at + 1) bad (agreed + 1)
+fn noted_pair progs seen gaps at bad agreed skipped _ _ _ true
+  against progs seen gaps (at + 1) bad (agreed + 1) skipped
 
-fn noted_pair progs seen at bad agreed p r said false
-  mine = "native {r.status} {r.stdout}"
+fn noted_pair progs seen gaps at bad agreed skipped p r said false
+  excused = excused? gaps p.path said
+  filed progs seen gaps at bad agreed skipped p r said excused
+
+fn filed progs seen gaps at bad agreed skipped _ _ _ true
+  against progs seen gaps (at + 1) bad agreed (skipped + 1)
+
+fn filed progs seen gaps at bad agreed skipped p r said false
+  mine = "native {r.status} {said_natively r}"
   theirs = "tab {said["code"]} {said["text"]}"
   why = "{p.path}: {mine} — {theirs}"
-  against progs seen (at + 1) (text/concat bad [why]) agreed
+  against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+
+# A gap excuses a disagreement only when the tab answers the text the ledger
+# recorded for it. Anything else is a disagreement nobody wrote down.
+fn excused? gaps path said
+  wanted = gaps[path]
+  matches? wanted said["text"]
+
+fn matches? none _
+  false
+
+fn matches? wanted text
+  length (text/split text wanted) > 1
+
+fn said_natively r
+  "{r.stdout}{r.stderr}"
 
 fn agrees? r said
   same_code = r.status == said["code"]
-  same_text = r.stdout == said["text"]
+  same_text = said_natively r == said["text"]
   both? same_code same_text
 
-fn verdict bad agreed
-  ended_run bad agreed (length bad == 0)
+fn verdict bad agreed skipped
+  ended_run bad agreed skipped (length bad == 0)
 
-fn ended_run _ agreed true
-  print "PASS  {agreed} programs answer the same in the browser and natively"
+fn ended_run _ agreed skipped true
+  print "PASS  {agreed} agree, {skipped} known gaps, 0 disagree"
 
-fn ended_run bad _ false
-  said = "FAIL  {length bad} disagree:\n{text/join bad "\n"}\n"
+fn ended_run bad agreed skipped false
+  tally = "{agreed} agree, {skipped} known gaps"
+  said = "FAIL  {length bad} disagree ({tally}):\n{text/join bad "\n"}\n"
   io/write said . (_ -> io/exit 1)
