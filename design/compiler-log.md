@@ -2201,3 +2201,49 @@ The old side drifts 4.3 to 8.2 across its four runs, which is most of the
 spread and says a one-second sample is noisy. The first pair alone read as
 +6.7 points and would have been a fourth retracted explanation. What is claimed
 is the direction and roughly a third of the gap, not the cause.
+
+## 2026-08-09 — two rules that were narrower than they read
+
+### A tie only matters at the top
+
+The dispatch check compared arms two at a time. Two arms that each win
+somewhere were refused, and the third arm that settles them — the one at least
+as specific as both, the very arm the diagnostic tells the author to write —
+was invisible to it, because no pairwise comparison ever looks at a third.
+
+    fn + a:math_failure _:math_failure
+    fn + a:math_failure _
+    fn + _ b:math_failure
+
+Clay's rule, on being shown that the division-by-zero design could not be
+written: it does not matter if some arms tie as long as there is a more
+specific one that does not; the problem is only a tied maximum. So the check
+gains a third-arm search, and a genuine tie — the same program with the
+covering arm removed — is still refused. The change only ever accepts programs
+the old rule rejected.
+
+What it unlocks is arithmetic that carries a failure in from either operand,
+and with it the whole of the contended division-by-zero design runs today on a
+`string` root: propagation from either side, through a chain, untouched
+arithmetic unaffected, and generic-or-specific handling by subtype dispatch.
+Two blockers recorded against that design turn out to have been closed weeks
+earlier by the subtype-matching fix, and were only still standing because
+nobody re-measured them.
+
+### A construction is a value nothing reads
+
+Re-measuring the last open question of that design — whether a math failure
+built and dropped is silent — turned up a hole rather than an answer. The
+unused-value check keys its return sets on the program's functions, so a
+constructor was never in the table and the lookup missed. `box 1` on a
+non-final line died at run time with "`&` joins two descriptions", an operator
+that appears nowhere in the author's program, where the neighbouring call is
+refused at compile time with a message that says what is wrong.
+
+Narrowed twice before the shape held. `over 10 n` where `over` divides is
+deliberately allowed, because division can fail and a line that can fail is
+still doing something — multi-arm had nothing to do with it. And a final
+statement that is a plain value is silent for every shape, which is a program
+that computes an answer and does nothing with it; it is loud only when effects
+precede it. So the general rule was right where Clay said it was, and the one
+exception was a bug.
