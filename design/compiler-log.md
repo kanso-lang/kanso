@@ -2327,8 +2327,30 @@ apart, and one of the five layouts is slower rather than faster. With the
 machine code identical there is nothing for a real difference to come from, so
 that is drift.
 
-The code-size hypothesis is therefore still untested rather than weakened. What
-would test it is changing what LLVM keeps, not what the emitter writes.
+### So the code-size hypothesis was tested properly, and it is REAL
+
+Changing what LLVM keeps is what tests it, and the first thing that test needed
+was an honest measurement of the growth. `__TEXT` is page-granular — 98,304 and
+114,688 are exactly six and seven sixteen-kilobyte pages — so the "16.7%" this
+log quoted on the same day says almost nothing. The machine code itself is the
+`__text` section, and it went 54,708 to 79,192 bytes. Forty-five per cent, not
+seventeen.
+
+Padding the old tree with 383 never-called `used, noinline` functions brings
+its `__text` to 79,184, within eight bytes of the new side, with every other
+thing about it unchanged. Five randomised layouts each, one sitting:
+
+    old, as it was   1.930 1.959 1.959 1.961 1.971   mean 1.9560
+    old, padded      1.988 1.993 1.994 1.983 1.978   mean 1.9872
+
+Slower in EVERY layout, by 1.6%. Against a 0.1838 s gap that is 17% of it, from
+code the decoder never executes — it only sits between the code it does.
+
+Two causes now account for about half the slowdown: the three per-call guards
+at 36%, and code size at 17%. They are not cleanly separable, since removing
+the guards also removes code, so treat the sum as an upper bound rather than
+53% exactly. The filler is uniform where the real growth is not, so 1.6% is the
+magnitude and not a precise attribution.
 
 ### The welfare index cannot see this
 
