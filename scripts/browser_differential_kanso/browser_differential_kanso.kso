@@ -1,4 +1,5 @@
 import "std/io"
+import "std/json"
 import "std/list"
 import "std/text"
 
@@ -121,7 +122,9 @@ fn counted progs
   libs = how_many progs library_door?
   plays = how_many progs play_door?
   runs = how_many progs run_door?
-  print "kept {length progs}: library {libs} play {plays} run {runs}"
+  said = "kept {length progs}: library {libs} play {plays} run {runs}"
+  page = page_for progs
+  io/write_file "/tmp/kanso_bd_page.html" page . (_ -> print said)
 
 fn keeping acc _ _ true
   acc
@@ -347,3 +350,158 @@ fn ran_native p root "play"
 
 fn ran_native p root _
   ran_in (dir_of p.path) "run" (file_of p.path) root
+
+# The page the tab runs: it fetches the engine, compiles each case through
+# kanso_compile_wasm (or the play door for a file holding both declarations and
+# statements), instantiates what comes back, executes it, and posts the whole
+# tally home. Taken verbatim from the python it replaces, so the two stay
+# comparable line for line while the swap is made.
+#
+# A text block takes real line breaks rather than escapes, so the three places
+# the script writes a `\n` into a template literal are carried as __BSN__ and
+# put back when the page is built.
+page_template = """
+  <!doctype html>
+  <meta charset="utf-8">
+  <title>kanso browser differential</title>
+  <pre id="results"></pre>
+  <script>
+  'use strict';
+  const CASES = __CASES__;
+
+  const TAILCALL_PROBE = new Uint8Array([
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+    0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
+    0x03, 0x02, 0x01, 0x00,
+    0x0a, 0x06, 0x01, 0x04, 0x00, 0x12, 0x00, 0x0b,
+  ]);
+  const SEED = 2685821657;
+  const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
+
+  let wasm = null;
+  let programTable = null;
+
+  function writeInput(text) \{
+    const bytes = new TextEncoder().encode(text);
+    const ptr = wasm.kanso_alloc(bytes.length);
+    new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
+    return \{ ptr, len: bytes.length };
+  }
+
+  function readOut() \{
+    const out = new Uint8Array(wasm.memory.buffer, wasm.kanso_out_ptr(), wasm.kanso_out_len());
+    return new TextDecoder().decode(out);
+  }
+
+  function rtImports() \{
+    const env = \{};
+    for (const key of Object.keys(wasm)) \{
+      if (key.startsWith('rt_')) env[key] = wasm[key];
+    }
+    return env;
+  }
+
+  async function runCase(c) \{
+    const name = writeInput(c.name.split('/').pop());
+    // pin the dice: the native side gets the same value through KANSO_SEED, or
+    // a program that calls `random` compares two unrelated streams
+    wasm.kanso_set_seed(SEED);
+    // A corpus program that exports `play` is a library, so the engine is
+    // handed it under the name an import will use and compiles the entry that
+    // runs it — the same two files the native side gets, neither read from a
+    // filesystem the browser does not have.
+    wasm.kanso_forget_sources();
+    let source = c.src;
+    if (c.library) \{
+      const path = writeInput(c.stem);
+      const file = writeInput(c.stem + '.kso');
+      const lib = writeInput(c.src);
+      wasm.kanso_hand_source(path.ptr, path.len, file.ptr, file.len, lib.ptr, lib.len);
+      source = `import "$\{c.stem}"__BSN____BSN__$\{c.stem}/play__BSN__`;
+      const entry = writeInput(`run_$\{c.stem}.kso`);
+      wasm.kanso_set_file(entry.ptr, entry.len);
+    } else \{
+      wasm.kanso_set_file(name.ptr, name.len);
+    }
+    const \{ ptr, len } = writeInput(source);
+    // a playground sample is a play file: declarations and statements in one
+    // buffer, which the run door does not accept and the play door does
+    const compile = c.play ? wasm.kanso_play_wasm : wasm.kanso_compile_wasm;
+    const status = compile(ptr, len, tailCalls ? 1 : 0);
+    if (status === 2) return \{ kind: 'compile-error', code: 2, text: readOut() };
+    if (status === 1) return \{ kind: 'fallback', reason: readOut() };
+    const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr(), wasm.kanso_wasm_len()).slice();
+    let instance;
+    try \{
+      (\{ instance } = await WebAssembly.instantiate(bytes, \{ env: rtImports() }));
+    } catch (e) \{
+      return \{ kind: 'reject', reason: String(e) };
+    }
+    programTable = instance.exports.table;
+    let handle;
+    try \{
+      handle = instance.exports.main();
+    } catch (e) \{
+      wasm.kanso_take_rt_error();
+      return \{ kind: 'wasm', code: 1, text: readOut() };
+    }
+    let code;
+    try \{
+      code = wasm.kanso_exec_main(handle);
+    } catch (e) \{
+      wasm.kanso_take_rt_error();
+      return \{ kind: 'wasm', code: 1, text: readOut() };
+    }
+    return \{ kind: 'wasm', code, text: readOut() };
+  }
+
+  async function main() \{
+    const response = await fetch('kanso.wasm');
+    const imports = \{ env: \{ k_callback: (t, e, a) => programTable.get(t)(e, a) } };
+    const \{ instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
+    wasm = instance.exports;
+    const results = [];
+    for (const c of CASES) \{
+      let r;
+      try \{
+        r = await runCase(c);
+      } catch (e) \{
+        r = \{ kind: 'crash', reason: String((e && e.stack) || e) };
+      }
+      r.name = c.name;
+      results.push(r);
+    }
+    return \{ tailCalls, results };
+  }
+
+  main()
+    .then((payload) => fetch('/report', \{ method: 'POST', body: JSON.stringify(payload) }))
+    .catch((e) =>
+      fetch('/report', \{ method: 'POST', body: JSON.stringify(\{ error: String((e && e.stack) || e) }) })
+    );
+  </script>
+"""
+
+fn case_json p
+  named = json/encode p.path
+  body = json/encode p.src
+  stem = json/encode (stem_of p.path)
+  lib = p.door == "library"
+  relaxed = p.door == "play"
+  what = "\{\"name\":{named},\"src\":{body},\"stem\":{stem}"
+  "{what},\"library\":{lib},\"play\":{relaxed}}"
+
+fn cases_json progs at acc
+  more_cases progs at acc (at > length progs)
+
+fn more_cases _ _ acc true
+  "[{text/join acc ","}]"
+
+fn more_cases progs at acc false
+  one = case_json progs[at]!
+  cases_json progs (at + 1) (text/concat acc [one])
+
+fn page_for progs
+  cases = cases_json progs 1 []
+  written = replaced page_template "__CASES__" cases
+  replaced written "__BSN__" "\\n"
