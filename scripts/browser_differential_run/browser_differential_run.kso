@@ -1,0 +1,784 @@
+import "std/io"
+import "std/json"
+import "std/list"
+import "std/net/http"
+import "std/text"
+
+# Which door each side must use, decided from the source alone. A program
+# exporting `play` is a library, and what runs one is an entry that imports it.
+# A file holding both declarations and bare statements is a play file. The two
+# sides have to agree, or the differential compares a program against a
+# refusal rather than against an answer.
+type program
+  door
+  path
+  src
+
+type served
+  page
+  wasm
+
+dirs = ["examples" "tests/golden/runtime" "tests/golden/micro"]
+
+fn kso? name
+  parts = text/split name "."
+  parts[length parts]! == "kso"
+
+fn library? src
+  starts = text/slice src 1 8 == "pub play"
+  inside = length (text/split src "\npub play") > 1
+  either? starts inside
+
+fn bare? line
+  heads = ["import " "fn " "type " "#"]
+  starts_any? line heads 1
+
+fn starts_any? line heads at
+  looked? line heads at (at > length heads)
+
+fn looked? _ _ _ true
+  true
+
+fn looked? line heads at false
+  head = heads[at]!
+  seen? line heads at (text/slice line 1 (length head) == head)
+
+fn seen? _ _ _ true
+  false
+
+fn seen? line heads at false
+  starts_any? line heads (at + 1)
+
+fn indented? line
+  text/slice line 1 1 == " "
+
+fn declares? line
+  a_function = text/slice line 1 3 == "fn "
+  a_type = text/slice line 1 5 == "type "
+  either? a_function a_type
+
+fn play? src
+  lines = text/split src "\n"
+  tops = list/to_list (list/reject lines indented?)
+  named = list/to_list (list/reject tops empty?)
+  both? (list/any? named declares?) (list/any? named bare?)
+
+fn empty? line
+  line == ""
+
+fn both? true true
+  true
+
+fn both? _ _
+  false
+
+fn either? true _
+  true
+
+fn either? _ answer
+  answer
+
+fn door_of src
+  chosen src (library? src)
+
+fn chosen _ true
+  "library"
+
+fn chosen src false
+  told src (play? src)
+
+fn told _ true
+  "play"
+
+fn told _ false
+  "run"
+
+# A relative import wants a filesystem the tab does not have; std/* resolves
+# because the toolchain embeds it.
+fn local_import? src
+  lines = text/split src "\n"
+  list/any? lines relative?
+
+fn relative? line
+  trimmed = text/trim line
+  imports = text/slice trimmed 1 7 == "import "
+  standard = text/slice trimmed 1 12 == "import \"std/"
+  only_local? imports standard
+
+fn only_local? true false
+  true
+
+fn only_local? _ _
+  false
+
+fn library_door? p
+  p.door == "library"
+
+fn play_door? p
+  p.door == "play"
+
+fn run_door? p
+  p.door == "run"
+
+fn how_many progs pick
+  length (list/to_list (list/select progs pick))
+
+fn counted progs
+  libs = how_many progs library_door?
+  plays = how_many progs play_door?
+  runs = how_many progs run_door?
+  said = "{length progs} programs: library {libs} play {plays} run {runs}"
+  on = (_ -> with_page progs)
+  io/write_err "{said}\n" . on
+
+fn with_page progs
+  page = page_for progs
+  on = (w -> with_engine progs page w)
+  io/read_file "docs/kanso.wasm" . on
+
+fn with_engine progs page w
+  set = served page w
+  on = (told_where -> chosen progs set told_where)
+  io/env "KANSO_CHROME" . on
+
+mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+
+linux_chrome = ["/usr/bin/google-chrome" "/usr/bin/chromium-browser"]
+
+other_chrome = ["/usr/bin/chromium" "/usr/bin/google-chrome-stable"]
+
+rest_chrome = text/concat linux_chrome other_chrome
+
+chrome_paths = text/concat [mac_chrome] rest_chrome
+
+fn chosen progs set none
+  first_chrome progs set chrome_paths 1
+
+fn chosen progs set where
+  io/exists where . (there -> told_of progs set where there)
+
+fn told_of progs set where true
+  watching progs set where
+
+fn told_of _ _ where false
+  said = "KANSO_CHROME names {where}, which is not there\n"
+  io/write said . (_ -> io/exit 1)
+
+fn first_chrome progs set paths at
+  searched progs set paths at (at > length paths)
+
+fn searched _ _ _ _ true
+  io/write "no chrome found: set KANSO_CHROME\n" . (_ -> io/exit 1)
+
+fn searched progs set paths at false
+  on = (there -> found_at progs set paths at there)
+  io/exists paths[at]! . on
+
+fn found_at progs set paths at true
+  watching progs set paths[at]!
+
+fn found_at progs set paths at false
+  first_chrome progs set paths (at + 1)
+
+fn keeping acc _ _ true
+  acc
+
+fn keeping acc path src false
+  which = door_of src
+  one = program which path src
+  text/concat acc [one]
+
+fn one_file paths at acc book src
+  kept = keeping acc paths[at]! src (local_import? src)
+  read_all paths (at + 1) kept book
+
+fn read_all paths at acc book
+  more_files paths at acc book (at > length paths)
+
+fn more_files _ _ acc book true
+  book_read book 1 acc
+
+fn more_files paths at acc book false
+  on = (src -> one_file paths at acc book src)
+  io/read_file paths[at]! . on
+
+fn book_read paths at acc
+  more_book_files paths at acc (at > length paths)
+
+fn more_book_files _ _ acc true
+  on = (js -> with_playground acc js)
+  io/read_file "docs/play.js" . on
+
+fn with_playground acc js
+  written = playground_from js
+  on = (_ -> laid_out written 1 acc)
+  shell "mkdir -p target/playground-corpus" . on
+
+fn laid_out written at acc
+  more_written written at acc (at > length written)
+
+fn more_written written _ acc true
+  counted (text/concat acc written)
+
+fn more_written written at acc false
+  one = written[at]!
+  on = (_ -> laid_out written (at + 1) acc)
+  io/write_file one.path one.src . on
+
+fn more_book_files paths at acc false
+  path = paths[at]!
+  recorded = recorded_of path
+  on = (there -> book_maybe paths at acc path there)
+  io/exists recorded . on
+
+fn book_maybe paths at acc _ false
+  book_read paths (at + 1) acc
+
+fn book_maybe paths at acc path true
+  recorded = recorded_of path
+  on = (said -> book_with_out paths at acc path said)
+  io/read_file recorded . on
+
+fn book_with_out paths at acc path said
+  on = (src -> book_one paths at acc path said src)
+  io/read_file path . on
+
+fn book_one paths at acc path said src
+  kept = book_keep acc path src said
+  book_read paths (at + 1) kept
+
+fn with_names ds at acc names
+  here = ds[at]!
+  kept = list/to_list (list/select names kso?)
+  paths = list/to_list (list/map kept (n -> "{here}/{n}"))
+  gather_dirs ds (at + 1) (text/concat acc paths)
+
+fn gather_dirs ds at acc
+  more_dirs ds at acc (at > length ds)
+
+fn more_dirs _ _ acc true
+  book_dirs acc
+
+fn book_dirs simple
+  on = (ds -> book_walk simple ds 1 [])
+  io/list_dir "docs/book/samples" . on
+
+fn book_walk simple ds at acc
+  more_book simple ds at acc (at > length ds)
+
+fn more_book simple _ _ acc true
+  read_all simple 1 [] acc
+
+fn more_book simple ds at acc false
+  here = "docs/book/samples/{ds[at]!}"
+  on = (names -> book_files simple ds at acc here names)
+  io/list_dir here . on
+
+fn book_files simple ds at acc here names
+  kept = list/to_list (list/select names kso?)
+  paths = list/to_list (list/map kept (n -> "{here}/{n}"))
+  wanted = list/to_list (list/reject paths a_test?)
+  book_walk simple ds (at + 1) (text/concat acc wanted)
+
+fn more_dirs ds at acc false
+  on = (names -> with_names ds at acc names)
+  io/list_dir ds[at]! . on
+
+pub play = gather_dirs dirs 1 []
+
+# What a tab cannot give a program. book-play.js upgrades a panel only when a
+# sample passes the same test, so the differential covers exactly the samples
+# a reader can press run on.
+machine_calls = ["io/read_file" "io/write_file" "io/args" "io/stdin"]
+
+more_calls = ["io/list_dir" "io/run" "io/make_dir" "io/exists" "io/is_dir"]
+
+needs_a_machine = text/concat machine_calls more_calls
+
+fn names_any? src needles at
+  hunted? src needles at (at > length needles)
+
+fn hunted? _ _ _ true
+  false
+
+fn hunted? src needles at false
+  here = length (text/split src needles[at]!) > 1
+  either? here (names_any? src needles (at + 1))
+
+fn a_test? path
+  parts = text/split path "/"
+  name = parts[length parts]!
+  length (text/split name "_test.kso") > 1
+
+fn recorded_of path
+  parts = text/split path ".kso"
+  "{parts[1]!}.out"
+
+fn book_keep acc path src said
+  refused = text/slice said 1 5 == "error"
+  machine = names_any? src needs_a_machine 1
+  skip = either? refused machine
+  put_unless acc path src skip
+
+fn put_unless acc _ _ true
+  acc
+
+fn put_unless acc path src false
+  which = door_of src
+  one = program which path src
+  text/concat acc [one]
+
+# The playground's samples live in a JS object literal, so the sources are the
+# pieces between backticks and the names are what precedes each one. A visitor
+# runs one of these before anything else in the corpus, so a new example cannot
+# ship uncovered.
+fn examples_body js
+  parts = text/split js "const EXAMPLES = \{"
+  parts[length parts]!
+
+# What the browser receives, not what the file holds: a template literal's
+# backslash escapes are resolved by JavaScript before the source reaches the
+# compiler, so a sample carrying one would be tested as text no visitor runs.
+fn unescaped raw
+  once = replaced raw "\\\\" "\\"
+  twice = replaced once "\\`" "`"
+  replaced twice "\\$" "$"
+
+fn replaced text from to
+  text/join (text/split text from) to
+
+fn name_before piece
+  lines = text/split piece "\n"
+  last = lines[length lines]!
+  named = text/split last ":"
+  text/trim named[1]!
+
+fn sample_at parts at acc
+  gathered_samples parts at acc (at + 1 > length parts)
+
+fn gathered_samples _ _ acc true
+  acc
+
+fn gathered_samples parts at acc false
+  which = name_before parts[at]!
+  src = unescaped parts[at + 1]!
+  where = "target/playground-corpus/{which}.kso"
+  one = program (door_of src) where src
+  sample_at parts (at + 2) (text/concat acc [one])
+
+fn playground_from js
+  parts = text/split (examples_body js) "`"
+  sample_at parts 1 []
+
+pinned = "KANSO_SEED=2685821657"
+
+# Where the native side runs a library from. The directory comes along for the
+# fixtures beside a program, any directory sharing the sample's name is removed
+# because an import cannot name both, and the entry that imports it is written
+# there. The seed matches the page's kanso_set_seed, or a program that calls
+# `random` compares two unrelated streams.
+fn shell script
+  io/run "sh" ["-c" script]
+
+fn dir_of path
+  parts = text/split path "/"
+  text/slice path 1 (length path - length parts[length parts]! - 1)
+
+fn file_of path
+  parts = text/split path "/"
+  parts[length parts]!
+
+fn stem_of path
+  parts = text/split (file_of path) ".kso"
+  parts[1]!
+
+# The shell starts where the harness was run from, which is the repo, so it
+# can name the toolchain absolutely before it changes directory. A path
+# written down here would be a path on one machine.
+fn ran_in where verb name
+  remembered = "here=$(pwd)"
+  toolchain = "\"$here/target/release/kanso\""
+  shell "{remembered}; cd {where} && {pinned} {toolchain} {verb} {name}"
+
+fn staged path
+  here = dir_of path
+  stem = stem_of path
+  stage = "/tmp/kanso-browser-native/{stem}"
+  door = "{stage}/run_{stem}.kso"
+  body = "import \"{stem}\"\n\n{stem}/play\n"
+  setup = "rm -rf {stage} && mkdir -p {stage} && cp -r {here}/. {stage}/"
+  wrote = "cat > {door} <<'KSOEOF'\n{body}KSOEOF"
+  named = "run_{stem}.kso"
+  on = (_ -> ran_in stage "run" named)
+  shell "{setup} && rm -rf {stage}/{stem} && {wrote}" . on
+
+fn native_of p
+  ran_native p p.door
+
+fn ran_native p "library"
+  staged p.path
+
+fn ran_native p "play"
+  here = dir_of p.path
+  ran_in here "play" (file_of p.path)
+
+fn ran_native p _
+  here = dir_of p.path
+  ran_in here "run" (file_of p.path)
+
+# The page the tab runs: it fetches the engine, compiles each case through
+# kanso_compile_wasm (or the play door for a file holding both declarations and
+# statements), instantiates what comes back, executes it, and posts the whole
+# tally home. Taken verbatim from the python it replaces, so the two stay
+# comparable line for line while the swap is made.
+#
+# A text block takes real line breaks rather than escapes, so the three places
+# the script writes a `\n` into a template literal are carried as __BSN__ and
+# put back when the page is built.
+page_template = """
+  <!doctype html>
+  <meta charset="utf-8">
+  <title>kanso browser differential</title>
+  <pre id="results"></pre>
+  <script>
+  'use strict';
+  const CASES = __CASES__;
+
+  const TAILCALL_PROBE = new Uint8Array([
+    0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+    0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
+    0x03, 0x02, 0x01, 0x00,
+    0x0a, 0x06, 0x01, 0x04, 0x00, 0x12, 0x00, 0x0b,
+  ]);
+  const SEED = 2685821657;
+  const tailCalls = WebAssembly.validate(TAILCALL_PROBE);
+
+  let wasm = null;
+  let programTable = null;
+
+  function writeInput(text) \{
+    const bytes = new TextEncoder().encode(text);
+    const ptr = wasm.kanso_alloc(bytes.length);
+    new Uint8Array(wasm.memory.buffer, ptr, bytes.length).set(bytes);
+    return \{ ptr, len: bytes.length };
+  }
+
+  function readOut() \{
+    const out = new Uint8Array(wasm.memory.buffer, wasm.kanso_out_ptr(), wasm.kanso_out_len());
+    return new TextDecoder().decode(out);
+  }
+
+  function rtImports() \{
+    const env = \{};
+    for (const key of Object.keys(wasm)) \{
+      if (key.startsWith('rt_')) env[key] = wasm[key];
+    }
+    return env;
+  }
+
+  async function runCase(c) \{
+    const name = writeInput(c.name.split('/').pop());
+    // pin the dice: the native side gets the same value through KANSO_SEED, or
+    // a program that calls `random` compares two unrelated streams
+    wasm.kanso_set_seed(SEED);
+    // A corpus program that exports `play` is a library, so the engine is
+    // handed it under the name an import will use and compiles the entry that
+    // runs it — the same two files the native side gets, neither read from a
+    // filesystem the browser does not have.
+    wasm.kanso_forget_sources();
+    let source = c.src;
+    if (c.library) \{
+      const path = writeInput(c.stem);
+      const file = writeInput(c.stem + '.kso');
+      const lib = writeInput(c.src);
+      wasm.kanso_hand_source(path.ptr, path.len, file.ptr, file.len, lib.ptr, lib.len);
+      source = `import "$\{c.stem}"__BSN____BSN__$\{c.stem}/play__BSN__`;
+      const entry = writeInput(`run_$\{c.stem}.kso`);
+      wasm.kanso_set_file(entry.ptr, entry.len);
+    } else \{
+      wasm.kanso_set_file(name.ptr, name.len);
+    }
+    const \{ ptr, len } = writeInput(source);
+    // a playground sample is a play file: declarations and statements in one
+    // buffer, which the run door does not accept and the play door does
+    const compile = c.play ? wasm.kanso_play_wasm : wasm.kanso_compile_wasm;
+    const status = compile(ptr, len, tailCalls ? 1 : 0);
+    if (status === 2) return \{ kind: 'compile-error', code: 2, text: readOut() };
+    if (status === 1) return \{ kind: 'fallback', reason: readOut() };
+    const bytes = new Uint8Array(wasm.memory.buffer, wasm.kanso_wasm_ptr(), wasm.kanso_wasm_len()).slice();
+    let instance;
+    try \{
+      (\{ instance } = await WebAssembly.instantiate(bytes, \{ env: rtImports() }));
+    } catch (e) \{
+      return \{ kind: 'reject', reason: String(e) };
+    }
+    programTable = instance.exports.table;
+    let handle;
+    try \{
+      handle = instance.exports.main();
+    } catch (e) \{
+      wasm.kanso_take_rt_error();
+      return \{ kind: 'wasm', code: 1, text: readOut() };
+    }
+    let code;
+    try \{
+      code = wasm.kanso_exec_main(handle);
+    } catch (e) \{
+      wasm.kanso_take_rt_error();
+      return \{ kind: 'wasm', code: 1, text: readOut() };
+    }
+    return \{ kind: 'wasm', code, text: readOut() };
+  }
+
+  async function main() \{
+    const response = await fetch('kanso.wasm');
+    const imports = \{ env: \{ k_callback: (t, e, a) => programTable.get(t)(e, a) } };
+    const \{ instance } = await WebAssembly.instantiate(await response.arrayBuffer(), imports);
+    wasm = instance.exports;
+    const results = [];
+    for (const c of CASES) \{
+      let r;
+      try \{
+        r = await runCase(c);
+      } catch (e) \{
+        r = \{ kind: 'crash', reason: String((e && e.stack) || e) };
+      }
+      r.name = c.name;
+      results.push(r);
+    }
+    return \{ tailCalls, results };
+  }
+
+  main()
+    .then((payload) => fetch('/report', \{ method: 'POST', body: JSON.stringify(payload) }))
+    .catch((e) =>
+      fetch('/report', \{ method: 'POST', body: JSON.stringify(\{ error: String((e && e.stack) || e) }) })
+    );
+  </script>
+"""
+
+fn case_json p
+  named = json/encode p.path
+  body = json/encode p.src
+  stem = json/encode (stem_of p.path)
+  lib = p.door == "library"
+  relaxed = p.door == "play"
+  what = "\{\"name\":{named},\"src\":{body},\"stem\":{stem}"
+  "{what},\"library\":{lib},\"play\":{relaxed}}"
+
+fn cases_json progs at acc
+  more_cases progs at acc (at > length progs)
+
+fn more_cases _ _ acc true
+  "[{text/join acc ","}]"
+
+fn more_cases progs at acc false
+  one = case_json progs[at]!
+  cases_json progs (at + 1) (text/concat acc [one])
+
+fn page_for progs
+  cases = cases_json progs 1 []
+  written = replaced page_template "__CASES__" cases
+  replaced written "__BSN__" "\\n"
+
+port = 8761
+
+fn body_for "/" set
+  set.page
+
+fn body_for "/index.html" set
+  set.page
+
+fn body_for "/kanso.wasm" set
+  set.wasm
+
+fn body_for _ _
+  none
+
+fn kind_of path
+  parts = text/split path "."
+  named_type parts[length parts]!
+
+fn named_type "wasm"
+  "content-type: application/wasm"
+
+fn named_type _
+  "content-type: text/html; charset=utf-8"
+
+fn handled req set
+  answered req.path req set
+
+fn answered "/report" req _
+  http/turn (http/ok "thanks") (http/done req.body)
+
+fn answered path _ set
+  body = body_for path set
+  http/turn (found body path) set
+
+fn found none _
+  http/not_found
+
+fn found body path
+  http/response 200 "OK" [(kind_of path)] body
+
+fn flags url
+  where = "--user-data-dir=/tmp/kanso-differential-profile"
+  ["--headless=new" "--disable-gpu" "--no-sandbox" where url]
+
+fn browsing chrome
+  at = flags "http://127.0.0.1:{port}/"
+  io/start chrome at
+
+fn watching progs set chrome
+  on = (raw -> reported progs raw)
+  http/serve_until port handled set . on
+  browsing chrome
+
+fn reported progs raw
+  on = (_ -> tallied progs raw)
+  io/run "pkill" ["-f" "kanso-differential-profile"] . on
+
+fn tallied progs raw
+  read = json/decode raw
+  results = read["results"]
+  counts = by_kind results 1 {}
+  said = "the tab: {length results} answers, {counts}"
+  seen = keyed results 1 {}
+  on = (_ -> with_gaps progs seen)
+  io/write_err "{said}\n" . on
+
+# The gaps live in tests/golden/wasm_gaps.txt, which tests/wasm_engine.rs reads
+# too: one home, so a gap cannot close in one harness and stay written down in
+# the other. Each line is a path and the text the wasm engine answers instead.
+fn with_gaps progs seen
+  on = (text -> against progs seen (gaps_from text) 1 [] 0 0)
+  io/read_file "tests/golden/wasm_gaps.txt" . on
+
+fn gaps_from text
+  lines = text/split text "\n"
+  gathered_gaps lines 1 {}
+
+fn gathered_gaps lines at acc
+  more_gaps lines at acc (at > length lines)
+
+fn more_gaps _ _ acc true
+  acc
+
+fn more_gaps lines at acc false
+  line = lines[at]!
+  gathered_gaps lines (at + 1) (noted_gap acc line)
+
+fn noted_gap acc line
+  parts = text/split line "\t"
+  gap_line acc parts (length parts == 2)
+
+fn gap_line acc _ false
+  acc
+
+fn gap_line acc parts true
+  put acc parts[1]! parts[2]!
+
+# The answers, by the name the case carried, so a program can be looked up
+# rather than trusted to arrive in order.
+fn keyed results at acc
+  more_keys results at acc (at > length results)
+
+fn more_keys _ _ acc true
+  acc
+
+fn more_keys results at acc false
+  one = results[at]!
+  named = one["name"]
+  keyed results (at + 1) (put acc named one)
+
+fn by_kind results at acc
+  more_kinds results at acc (at > length results)
+
+fn more_kinds _ _ acc true
+  acc
+
+fn more_kinds results at acc false
+  one = results[at]!
+  which = one["kind"]
+  by_kind results (at + 1) (bumped acc which)
+
+fn bumped acc which
+  raised acc which acc[which]
+
+fn raised acc which none
+  put acc which 1
+
+fn raised acc which n
+  put acc which (n + 1)
+
+# Each program run natively and held against what the tab said. A differential
+# is only worth the name if both sides are asked the same question, so the
+# door, the seed and the source are all the same on both.
+fn against progs seen gaps at bad agreed skipped
+  more_pairs progs seen gaps at bad agreed skipped (at > length progs)
+
+fn more_pairs _ _ _ _ bad agreed skipped true
+  verdict bad agreed skipped
+
+fn more_pairs progs seen gaps at bad agreed skipped false
+  p = progs[at]!
+  on = (r -> compared progs seen gaps at bad agreed skipped p r)
+  native_of p . on
+
+fn compared progs seen gaps at bad agreed skipped p r
+  said = seen[p.path]
+  judged progs seen gaps at bad agreed skipped p r said
+
+fn judged progs seen gaps at bad agreed skipped _ _ none
+  against progs seen gaps (at + 1) bad (agreed + 1) skipped
+
+fn judged progs seen gaps at bad agreed skipped p r said
+  same = agrees? r said
+  noted_pair progs seen gaps at bad agreed skipped p r said same
+
+fn noted_pair progs seen gaps at bad agreed skipped _ _ _ true
+  against progs seen gaps (at + 1) bad (agreed + 1) skipped
+
+fn noted_pair progs seen gaps at bad agreed skipped p r said false
+  excused = excused? gaps p.path said
+  filed progs seen gaps at bad agreed skipped p r said excused
+
+fn filed progs seen gaps at bad agreed skipped _ _ _ true
+  against progs seen gaps (at + 1) bad agreed (skipped + 1)
+
+fn filed progs seen gaps at bad agreed skipped p r said false
+  mine = "native {r.status} {said_natively r}"
+  theirs = "tab {said["code"]} {said["text"]}"
+  why = "{p.path}: {mine} — {theirs}"
+  against progs seen gaps (at + 1) (text/concat bad [why]) agreed skipped
+
+# A gap excuses a disagreement only when the tab answers the text the ledger
+# recorded for it. Anything else is a disagreement nobody wrote down.
+fn excused? gaps path said
+  wanted = gaps[path]
+  matches? wanted said["text"]
+
+fn matches? none _
+  false
+
+fn matches? wanted text
+  length (text/split text wanted) > 1
+
+fn said_natively r
+  "{r.stdout}{r.stderr}"
+
+fn agrees? r said
+  same_code = r.status == said["code"]
+  same_text = said_natively r == said["text"]
+  both? same_code same_text
+
+fn verdict bad agreed skipped
+  ended_run bad agreed skipped (length bad == 0)
+
+fn ended_run _ agreed skipped true
+  print "PASS  {agreed} agree, {skipped} known gaps, 0 disagree"
+
+fn ended_run bad agreed skipped false
+  tally = "{agreed} agree, {skipped} known gaps"
+  said = "FAIL  {length bad} disagree ({tally}):\n{text/join bad "\n"}\n"
+  io/write said . (_ -> io/exit 1)
