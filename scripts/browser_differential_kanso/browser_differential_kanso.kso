@@ -133,12 +133,12 @@ fn counted progs
 
 fn with_page progs
   page = page_for progs
-  on = (w -> with_engine page w)
+  on = (w -> with_engine progs page w)
   io/read_file "docs/kanso.wasm" . on
 
-fn with_engine page w
+fn with_engine progs page w
   set = served page w
-  on = (told_where -> chosen set told_where)
+  on = (told_where -> chosen progs set told_where)
   io/env "KANSO_CHROME" . on
 
 mac_chrome = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -151,34 +151,34 @@ rest_chrome = text/concat linux_chrome other_chrome
 
 chrome_paths = text/concat [mac_chrome] rest_chrome
 
-fn chosen set none
-  first_chrome set chrome_paths 1
+fn chosen progs set none
+  first_chrome progs set chrome_paths 1
 
-fn chosen set where
-  io/exists where . (there -> told_of set where there)
+fn chosen progs set where
+  io/exists where . (there -> told_of progs set where there)
 
-fn told_of set where true
-  watching set where
+fn told_of progs set where true
+  watching progs set where
 
-fn told_of _ where false
+fn told_of _ _ where false
   said = "KANSO_CHROME names {where}, which is not there\n"
   io/write said . (_ -> io/exit 1)
 
-fn first_chrome set paths at
-  searched set paths at (at > length paths)
+fn first_chrome progs set paths at
+  searched progs set paths at (at > length paths)
 
-fn searched _ _ _ true
+fn searched _ _ _ _ true
   io/write "no chrome found: set KANSO_CHROME\n" . (_ -> io/exit 1)
 
-fn searched set paths at false
-  on = (there -> found_at set paths at there)
+fn searched progs set paths at false
+  on = (there -> found_at progs set paths at there)
   io/exists paths[at]! . on
 
-fn found_at set paths at true
-  watching set paths[at]!
+fn found_at progs set paths at true
+  watching progs set paths[at]!
 
-fn found_at set paths at false
-  first_chrome set paths (at + 1)
+fn found_at progs set paths at false
+  first_chrome progs set paths (at + 1)
 
 fn keeping acc _ _ true
   acc
@@ -378,10 +378,10 @@ fn stem_of path
   parts = text/split (file_of path) ".kso"
   parts[1]!
 
-fn ran_in where verb name root
+fn ran_in where verb name
   shell "cd {where} && {pinned} {root}/target/release/kanso {verb} {name} 2>&1"
 
-fn staged path root
+fn staged path
   here = dir_of path
   stem = stem_of path
   stage = "/tmp/kanso-browser-native/{stem}"
@@ -390,20 +390,22 @@ fn staged path root
   setup = "rm -rf {stage} && mkdir -p {stage} && cp -r {here}/. {stage}/"
   wrote = "cat > {door} <<'KSOEOF'\n{body}KSOEOF"
   named = "run_{stem}.kso"
-  on = (_ -> ran_in stage "run" named root)
+  on = (_ -> ran_in stage "run" named)
   shell "{setup} && rm -rf {stage}/{stem} && {wrote}" . on
 
-fn native_of p root
-  ran_native p root p.door
+fn native_of p
+  ran_native p p.door
 
-fn ran_native p root "library"
-  staged p.path root
+fn ran_native p "library"
+  staged p.path
 
-fn ran_native p root "play"
-  ran_in (dir_of p.path) "play" (file_of p.path) root
+fn ran_native p "play"
+  here = dir_of p.path
+  ran_in here "play" (file_of p.path)
 
-fn ran_native p root _
-  ran_in (dir_of p.path) "run" (file_of p.path) root
+fn ran_native p _
+  here = dir_of p.path
+  ran_in here "run" (file_of p.path)
 
 # The page the tab runs: it fetches the engine, compiles each case through
 # kanso_compile_wasm (or the play door for a file holding both declarations and
@@ -608,19 +610,36 @@ fn browsing chrome
   at = flags "http://127.0.0.1:{port}/"
   io/start chrome at
 
-fn watching set chrome
-  http/serve_until port handled set . reported
+fn watching progs set chrome
+  on = (raw -> reported progs raw)
+  http/serve_until port handled set . on
   browsing chrome
 
-fn reported raw
-  on = (_ -> tallied raw)
+fn reported progs raw
+  on = (_ -> tallied progs raw)
   io/run "pkill" ["-f" "kanso-differential-profile"] . on
 
-fn tallied raw
+fn tallied progs raw
   read = json/decode raw
   results = read["results"]
   counts = by_kind results 1 {}
-  print "tail calls {read["tailCalls"]}, {length results} answers: {counts}"
+  said = "the tab: {length results} answers, {counts}"
+  seen = keyed results 1 {}
+  on = (_ -> against progs seen 1 [] 0)
+  io/write_err "{said}\n" . on
+
+# The answers, by the name the case carried, so a program can be looked up
+# rather than trusted to arrive in order.
+fn keyed results at acc
+  more_keys results at acc (at > length results)
+
+fn more_keys _ _ acc true
+  acc
+
+fn more_keys results at acc false
+  one = results[at]!
+  named = one["name"]
+  keyed results (at + 1) (put acc named one)
 
 fn by_kind results at acc
   more_kinds results at acc (at > length results)
@@ -641,3 +660,54 @@ fn raised acc which none
 
 fn raised acc which n
   put acc which (n + 1)
+
+root = "/Users/clayshentrup/dev/kanso"
+
+# Each program run natively and held against what the tab said. A differential
+# is only worth the name if both sides are asked the same question, so the
+# door, the seed and the source are all the same on both.
+fn against progs seen at bad agreed
+  more_pairs progs seen at bad agreed (at > length progs)
+
+fn more_pairs _ _ _ bad agreed true
+  verdict bad agreed
+
+fn more_pairs progs seen at bad agreed false
+  p = progs[at]!
+  on = (r -> compared progs seen at bad agreed p r)
+  native_of p . on
+
+fn compared progs seen at bad agreed p r
+  said = seen[p.path]
+  judged progs seen at bad agreed p r said
+
+fn judged progs seen at bad agreed _ _ none
+  against progs seen (at + 1) bad (agreed + 1)
+
+fn judged progs seen at bad agreed p r said
+  same = agrees? r said
+  noted_pair progs seen at bad agreed p r said same
+
+fn noted_pair progs seen at bad agreed _ _ _ true
+  against progs seen (at + 1) bad (agreed + 1)
+
+fn noted_pair progs seen at bad agreed p r said false
+  mine = "native {r.status} {r.stdout}"
+  theirs = "tab {said["code"]} {said["text"]}"
+  why = "{p.path}: {mine} — {theirs}"
+  against progs seen (at + 1) (text/concat bad [why]) agreed
+
+fn agrees? r said
+  same_code = r.status == said["code"]
+  same_text = r.stdout == said["text"]
+  both? same_code same_text
+
+fn verdict bad agreed
+  ended_run bad agreed (length bad == 0)
+
+fn ended_run _ agreed true
+  print "PASS  {agreed} programs answer the same in the browser and natively"
+
+fn ended_run bad _ false
+  said = "FAIL  {length bad} disagree:\n{text/join bad "\n"}\n"
+  io/write said . (_ -> io/exit 1)
