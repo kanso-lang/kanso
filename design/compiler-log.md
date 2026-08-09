@@ -2110,3 +2110,34 @@ before calling it, but re-evaluating the constant makes a fresh handle, so the
 mark is never the one arrived at. The interpreter's knot is keyed by name and
 installs a blackhole before evaluating, which is why it answers correctly. The
 gap is written into the wasm ledger rather than left to be rediscovered.
+
+## a record field waits too
+
+A constant naming itself ran the browser out of stack where native and the
+oracle refuse. Three readings of it were wrong before the code said what was
+true, and the wrong ones are worth the space because each looked convincing.
+
+The first read `forced()` and found its guard keyed to the deferral's handle,
+while `rt_defer` mints a fresh handle every call — so the mark could never be
+the one arrived at. That reasoning holds and is not the cause: keying the mark
+to the constant instead, the way the interpreter keys its knot by name, left
+the program running out of stack exactly as before. Reading a function is not
+evidence about what runs.
+
+What was true is one line up. `emit_element` defers a self-mention so the cell
+it would read can be filled later, and its own comment said "a list element" —
+because that is the only place it was called. A record field went through
+`emit_expr` and was emitted where it stood, so the mention called the constant
+again and the recursion had no floor. `ring = [ring]` worked and
+`ring = cell ring` did not, which is the whole difference.
+
+A field now waits the way an element does, and the stack is no longer the
+answer. What the browser says instead is that `+` is not defined for these
+values, and that is not a bug in the operator: `ring.v` IS a deferred `ring`,
+so reading it through yields the record, and the browser is answering about the
+record it found. Coherent cyclic semantics — and not the oracle's, which
+installs a blackhole and treats re-entry as the error.
+
+So the gap stays, restated. It moved from a stack overflow to a semantic
+difference, which is smaller and honest, and closing it means giving the
+browser a blackhole keyed by name rather than another patch at the read.
