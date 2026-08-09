@@ -1210,6 +1210,7 @@ static void k_repaired_settle(KMark* m) {
     }
     k_repaired_n = 0;
     m->ptr = k_arena;
+    m->left = k_arena_left;
     m->block = k_blocks;
     m->bytes = k_live_block_bytes;
 }
