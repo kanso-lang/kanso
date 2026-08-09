@@ -108,6 +108,19 @@ payoff. These are the four shapes it takes here, and what to do instead.
   this up when" — beside a task that could start now, each is the same stop.
   Treat writing one as the signal to delete the sentence and make the tool call
   instead.
+- **CALLING ScheduleWakeup IS THE STOP.** This is the move the rules above kept
+  missing, because scheduling reads as diligence rather than as ending a turn.
+  It ends the turn the moment it returns, so reaching for it while work remains
+  is exactly the deferral the rest of this section forbids — the loop skill's
+  "call it as the last action" describes where it goes in a turn that is
+  genuinely over, not permission to end one. Clay, on the fifth occurrence:
+  "there you go again saying you're going to wait till the loop ticks again
+  instead of just continuing to work."
+- **Before scheduling, name what is left.** If the task list holds anything
+  startable, the answer is a tool call, not a wakeup. Schedule only when the
+  honest answer is "nothing here can move without Clay", and say which decision
+  and why in the reply. A wakeup whose reason describes work I could do now is
+  a wakeup that should not have been written.
 
 The `/loop` is a last resort that restarts the work after a stop. It is not a
 schedule to hand work to, and needing it means something already went wrong.
