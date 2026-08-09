@@ -141,14 +141,117 @@ window.PAGE_PROBE = async (settled) => {
 """
 
 
-def render(page, probe_body, work, extra=()):
+# The chart reads its rows from the history branch over the network. A test
+# that let it do so would depend on a branch's contents and on the network
+# being there, and could pin no number. So the fetch is stubbed with a history
+# of known length, and the assertion is that every series draws exactly that
+# many points — a presence check would pass on an empty canvas, which is the
+# failure this exists to catch.
+CHART_ROWS = 6
+# Shaped from a real row of the history branch rather than invented: the first
+# stub omitted `date`, and the page threw RangeError: Invalid time value before
+# it drew anything — a fixture the pipeline would never produce, asserting a
+# fiction. The values vary so a flat series cannot pass for a drawn one.
+CHART_HISTORY = "\n".join(
+    json.dumps(
+        {
+            "commit": f"c0ffee{i}",
+            "subject": f"a change that moved something ({i})",
+            "date": f"2026-08-0{i + 1}T12:00:00-07:00",
+            "allocs": 7_577_414 + i * 1000,
+            "alloc_bytes": 334_437_312 + i * 4096,
+            "arena_blocks": 3,
+            "beat_iters": 151 + i,
+            "encode_allocs": 16_259_950 + i * 2000,
+            "oneshot_arena_peak_bytes": 7_340_032 + i * 4096,
+            "compile_rounds": 40 + i,
+            "compile_visits": 9000 + i * 10,
+            "compile_peak_bytes": 819_173 + i * 512,
+            "emitted_lines": 1500 + i,
+            "el_parses": 0,
+            "utf8_bytes": 0,
+            "held_peak_bytes": 1024 + i,
+            "perm_allocs": 9,
+            "welfare": 75.60 + i * 0.01,
+        }
+    )
+    for i in range(CHART_ROWS)
+)
+
+CHART_PRELUDE = (
+    "window.__chart = {stub: 0, err: ''};\n"
+    "window.__chart.ready = document.readyState === 'complete'\n"
+    "  ? Promise.resolve()\n"
+    "  : new Promise((go) => window.addEventListener('load', () => go()));\n"
+    "window.addEventListener('error', (e) => "
+    "{ window.__chart.err = window.__chart.err || String(e.message); });\n"
+    "window.addEventListener('unhandledrejection', (e) => "
+    "{ window.__chart.err = window.__chart.err || 'rejected: ' + String(e.reason); });\n"
+    "const REAL = window.fetch.bind(window);\n"
+    "const HISTORY_TEXT = " + json.dumps(CHART_HISTORY) + ";\n"
+    "window.fetch = (url, opts) => {\n"
+    "  if (String(url).includes('history.jsonl')) {\n"
+    "    window.__chart.stub += 1;\n"
+    "    const r = new Response(HISTORY_TEXT, {status: 200});\n"
+    "    window.__chart.made = 1;\n"
+    # A stub answering in a microtask is no stand-in for the network: it
+    # resolves before the parser reaches the element the chart draws into, and
+    # drawTrend returns silently on a host that is not there yet. Waiting for
+    # the document puts the stub back behind parsing, where a real fetch is.
+    "    return window.__chart.ready.then(() => r);\n"
+    "  }\n"
+    "  return REAL(url, opts);\n"
+    "};\n"
+    "window.__chart.ready.then(() => "
+    "{ window.__chart.readyAt = document.getElementById('trend-chart') "
+    "? 'host present' : 'host missing'; });\n"
+)
+
+CHART = """
+async function PAGE_PROBE() {
+  const counts = async () => {
+    const host = document.getElementById('trend-chart');
+    if (!host) return null;
+    const lines = [...host.querySelectorAll('polyline')];
+    if (!lines.length) return null;
+    return lines
+      .map((l) => (l.getAttribute('points') || '').trim().split(/\\s+/).filter(Boolean).length)
+      .sort((a, b) => a - b);
+  };
+  for (let i = 0; i < 600; i++) {
+    const got = await counts();
+    if (got) return {series: got};
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  const host = document.getElementById('trend-chart');
+  const panel = document.querySelector('.perf-loading');
+  return {
+    series: [],
+    why: {
+      stubbed: window.__chart.stub,
+      made: window.__chart.made || 0,
+      error: window.__chart.err,
+      host: host ? host.innerHTML.slice(0, 120) : 'no #trend-chart',
+      readyAt: window.__chart.readyAt || 'never',
+      panel: panel ? panel.textContent.slice(0, 160) : 'no .perf-loading',
+    },
+  };
+}
+"""
+
+
+def render(page, probe_body, work, extra=(), prelude=""):
     header = (DOCS / "_includes/site-header.html").read_text()
     body = re.sub(r"^---.*?---\n", "", (DOCS / page).read_text(), flags=re.S)
     body = body.replace('src="/', 'src="')
     # a chapter is served by a layout, which is where its scripts live
     body += "".join(f'<script src="{name}"></script>' for name in extra)
+    # a prelude runs before the page's own scripts, which is the only place a
+    # stub can stand in for something the page fetches on load
     html = (
-        "<!doctype html><html><head><meta charset=utf-8></head><body>"
+        "<!doctype html><html><head><meta charset=utf-8>"
+        + (f"<script>{prelude}</script>" if prelude else "")
+        + "</head><body>"
         + header
         + body
         + f"<script>{probe_body}</script>"
@@ -204,6 +307,7 @@ def main():
     render("playground.html", PLAYGROUND, work)
     shutil.copy(DOCS / "book-play.js", work / "book-play.js")
     render("book/ch04.html", BOOK, work, extra=("/kanso-engine.js", "/book-play.js"))
+    render("compiler.html", CHART, work, prelude=CHART_PRELUDE)
     os.chdir(work)
 
     failures = []
@@ -227,6 +331,14 @@ def main():
         failures.append(f"the run button did not run edited source: {playground.get('edited')!r}")
     if "keys then run 5" not in (playground.get("keyed") or ""):
         failures.append(f"⌘⏎ did not run edited source: {playground.get('keyed')!r}")
+
+    chart = visit("compiler.html", work)
+    drawn = chart.get("series") or []
+    if drawn != [CHART_ROWS] * 5:
+        failures.append(
+            f"the chart drew {drawn!r}; five series of {CHART_ROWS} points were fed to it"
+            f" — {chart.get('why')}"
+        )
 
     book = visit("book/ch04.html", work)
     if not (book.get("live") or 0):
