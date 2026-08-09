@@ -801,6 +801,18 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
             },
         }
     };
+    /// Is `c` at least as specific as `x` in every position, and able to
+    /// match where `x` does? A position they cannot both match disqualifies it.
+    fn covers(
+        c: &FnDecl,
+        x: &FnDecl,
+        compare: &dyn Fn(&Pattern, &Pattern) -> Option<i64>,
+    ) -> bool {
+        c.params.iter().zip(&x.params).all(|(pc, px)| match compare(pc, px) {
+            Some(v) => v >= 0,
+            None => false,
+        })
+    }
     let mut groups: std::collections::HashMap<(&str, usize), Vec<&FnDecl>> =
         std::collections::HashMap::new();
     for d in &program.fns {
@@ -825,7 +837,20 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                         _ => {}
                     }
                 }
-                if overlap && a_stricter && b_stricter {
+                // Two arms that each win somewhere are only ambiguous if
+                // nothing settles them. An arm at least as specific as both in
+                // every position is what a call matching both would pick, so
+                // the tie has a winner and there is nothing to report. Without
+                // this the check is pairwise, and a covering arm the author
+                // already wrote is invisible to it.
+                let settled = overlap
+                    && decls.iter().enumerate().any(|(k, c)| {
+                        k != i
+                            && k != j
+                            && covers(c, a, &compare)
+                            && covers(c, b, &compare)
+                    });
+                if overlap && a_stricter && b_stricter && !settled {
                     diags.push(Diagnostic::new(
                         "dispatch",
                         format!(

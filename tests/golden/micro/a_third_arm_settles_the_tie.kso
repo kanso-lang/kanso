@@ -1,0 +1,31 @@
+# Two arms that each win somewhere are ambiguous only if nothing settles them.
+# The covering arm is what a call matching both would pick, so it is the answer
+# rather than a tie — and the check used to be pairwise, so an author who had
+# already written that arm was told to write it.
+#
+# The shape is arithmetic that propagates a failure from either side, which is
+# what wants the covering arm in the first place.
+type math_failure string
+
+type divide_by_zero math_failure
+
+fn + a:math_failure _:math_failure
+  a
+
+fn + a:math_failure _
+  a
+
+fn + _ b:math_failure
+  b
+
+fn described _:divide_by_zero
+  "specifically: a division by zero"
+
+fn described n
+  "a number: {n}"
+
+inner = math_failure "division by zero"
+
+bad = divide_by_zero inner
+
+pub play = print "{bad + 1} | {1 + bad} | {2 + 3} | {described bad}"
