@@ -15,6 +15,7 @@ type pages
   board
   book
   chapter
+  chart
   engine
   hero
   index
@@ -35,6 +36,8 @@ landing_port = 8749
 board_port = 8750
 
 book_port = 8751
+
+chart_port = 8752
 
 assets = ["kanso-engine.js" "kanso.wasm" "landing-play.js" "play.js"]
 
@@ -97,6 +100,9 @@ fn body_for "/book-play.js" set
 
 fn body_for "/book/ch04.html" set
   set.chapter
+
+fn body_for "/compiler.html" set
+  set.chart
 
 fn body_for "/play.js" set
   set.play_js
@@ -177,6 +183,75 @@ story = """
   </script>
 """
 
+# The chart reads its rows from the history branch over the network. Letting it
+# would tie this test to a branch's contents and to the network being there,
+# and would pin no number. So the fetch is stubbed with a history of known
+# length and the assertion is that every series draws exactly that many points:
+# a presence check would pass on an empty canvas, which is the failure this
+# exists to catch.
+#
+# Shaped from a real row rather than invented. The first stub omitted `date`
+# and the page threw RangeError: Invalid time value before it drew anything —
+# a fixture the pipeline would never produce, asserting a fiction. The values
+# vary so a flat series cannot pass for a drawn one.
+history = """
+  \{"commit": "c0ffee0", "subject": "a change that moved something (0)", "date": "2026-08-01T12:00:00-07:00", "allocs": 7577414, "alloc_bytes": 334437312, "arena_blocks": 3, "beat_iters": 151, "encode_allocs": 16259950, "oneshot_arena_peak_bytes": 7340032, "compile_rounds": 40, "compile_visits": 9000, "compile_peak_bytes": 819173, "emitted_lines": 1500, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1024, "perm_allocs": 9, "welfare": 75.6}
+  \{"commit": "c0ffee1", "subject": "a change that moved something (1)", "date": "2026-08-02T12:00:00-07:00", "allocs": 7578414, "alloc_bytes": 334441408, "arena_blocks": 3, "beat_iters": 152, "encode_allocs": 16261950, "oneshot_arena_peak_bytes": 7344128, "compile_rounds": 41, "compile_visits": 9010, "compile_peak_bytes": 819685, "emitted_lines": 1501, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1025, "perm_allocs": 9, "welfare": 75.61}
+  \{"commit": "c0ffee2", "subject": "a change that moved something (2)", "date": "2026-08-03T12:00:00-07:00", "allocs": 7579414, "alloc_bytes": 334445504, "arena_blocks": 3, "beat_iters": 153, "encode_allocs": 16263950, "oneshot_arena_peak_bytes": 7348224, "compile_rounds": 42, "compile_visits": 9020, "compile_peak_bytes": 820197, "emitted_lines": 1502, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1026, "perm_allocs": 9, "welfare": 75.62}
+  \{"commit": "c0ffee3", "subject": "a change that moved something (3)", "date": "2026-08-04T12:00:00-07:00", "allocs": 7580414, "alloc_bytes": 334449600, "arena_blocks": 3, "beat_iters": 154, "encode_allocs": 16265950, "oneshot_arena_peak_bytes": 7352320, "compile_rounds": 43, "compile_visits": 9030, "compile_peak_bytes": 820709, "emitted_lines": 1503, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1027, "perm_allocs": 9, "welfare": 75.63}
+  \{"commit": "c0ffee4", "subject": "a change that moved something (4)", "date": "2026-08-05T12:00:00-07:00", "allocs": 7581414, "alloc_bytes": 334453696, "arena_blocks": 3, "beat_iters": 155, "encode_allocs": 16267950, "oneshot_arena_peak_bytes": 7356416, "compile_rounds": 44, "compile_visits": 9040, "compile_peak_bytes": 821221, "emitted_lines": 1504, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1028, "perm_allocs": 9, "welfare": 75.64}
+  \{"commit": "c0ffee5", "subject": "a change that moved something (5)", "date": "2026-08-06T12:00:00-07:00", "allocs": 7582414, "alloc_bytes": 334457792, "arena_blocks": 3, "beat_iters": 156, "encode_allocs": 16269950, "oneshot_arena_peak_bytes": 7360512, "compile_rounds": 45, "compile_visits": 9050, "compile_peak_bytes": 821733, "emitted_lines": 1505, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1029, "perm_allocs": 9, "welfare": 75.65}
+"""
+
+# A stub answering in a microtask is no stand-in for the network: it resolves
+# before the parser reaches the element the chart draws into, and drawTrend
+# returns silently on a host that is not there yet. Waiting for the document
+# puts the stub back behind parsing, where a real fetch is.
+stub = """
+  window.__chart = \{stub: 0, err: ''};
+  window.__chart.ready = document.readyState === 'complete'
+    ? Promise.resolve()
+    : new Promise((go) => window.addEventListener('load', () => go()));
+  window.addEventListener('error', (e) =>
+    \{ window.__chart.err = window.__chart.err || String(e.message); });
+  window.addEventListener('unhandledrejection', (e) =>
+    \{ window.__chart.err = window.__chart.err || 'rejected: ' + e.reason; });
+  const REAL = window.fetch.bind(window);
+  window.fetch = (url, opts) => \{
+    if (String(url).includes('history.jsonl')) \{
+      window.__chart.stub += 1;
+      const r = new Response(HISTORY_TEXT, \{status: 200});
+      return window.__chart.ready.then(() => r);
+    }
+    return REAL(url, opts);
+  };
+"""
+
+# A count, never a presence check: an empty canvas has a host and no points.
+trend = """
+  <script>
+  window.PAGE_PROBE = async () => \{
+    const counts = async () => \{
+      const host = document.getElementById('trend-chart');
+      if (!host) return null;
+      const lines = [...host.querySelectorAll('polyline')];
+      if (!lines.length) return null;
+      return lines
+        .map((l) => (l.getAttribute('points') || '').trim()
+                      .split(' ').filter(Boolean).length)
+        .sort((a, b) => a - b);
+    };
+    for (let i = 0; i < 600; i++) \{
+      const got = await counts();
+      if (got) return \{series: got};
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    return \{series: [], stubbed: window.__chart.stub,
+            why: window.__chart.err || 'the chart never drew'};
+  };
+  </script>
+"""
+
 fn replaced text from to
   text/join (text/split text from) to
 
@@ -224,17 +299,22 @@ fn found body path
 # `tail` is appended after the rewrite above, because a chapter is served by a
 # layout and its scripts are absolute: rewriting them would point them at the
 # chapter's own directory, where nothing answers.
-fn document header page tail extra
+fn document top header page tail extra
   body = replaced (without_front_matter page) "src=\"/" "src=\""
-  head = "<!doctype html><html><head><meta charset=utf-8></head><body>"
+  opened = "<!doctype html><html><head><meta charset=utf-8>"
+  head = "{opened}<script>{top}</script></head><body>"
   "{head}{header}{body}{tail}{extra}{probe}</body></html>"
 
-fn flags url
-  where = "--user-data-dir=/tmp/kanso-smoke-profile"
+# A profile per visit. Chrome is killed rather than asked to leave, so the
+# directory it leaves behind is not one a later chrome can open: the fourth
+# visit hung on a profile three earlier browsers had been killed out of, while
+# the same visit run alone passed in seconds.
+fn flags at url
+  where = "--user-data-dir=/tmp/kanso-smoke-profile-{at}"
   ["--headless=new" "--disable-gpu" where url]
 
 fn browsing chrome at path
-  url = flags "http://127.0.0.1:{at}{path}"
+  url = flags at "http://127.0.0.1:{at}{path}"
   io/start chrome url
 
 # The server listens before `accept` yields, and only then does the browser
@@ -298,18 +378,43 @@ fn judged set chrome failures report
   visiting_book set chrome (missing_keys read e)
 
 fn visiting_book set chrome failures
-  on = (report -> booked failures report)
+  on = (report -> booked set chrome failures report)
   visiting set chrome book_port "/book/ch04.html" on
 
-fn booked failures report
-  on = (_ -> read_book failures report)
+fn booked set chrome failures report
+  on = (_ -> read_book set chrome failures report)
   stopping on
 
-fn read_book failures report
+fn read_book set chrome failures report
   read = json/decode report
   a = missing_panels read failures
   b = missing_run read a
-  finished (missing_reader read b) report
+  visiting_chart set chrome (missing_reader read b)
+
+fn visiting_chart set chrome failures
+  on = (report -> charted failures report)
+  visiting set chrome chart_port "/compiler.html" on
+
+fn charted failures report
+  on = (_ -> read_chart failures report)
+  stopping on
+
+fn read_chart failures report
+  read = json/decode report
+  finished (missing_series read failures) report
+
+# Five series, six points each, because six rows were fed to it. A presence
+# check would pass on an empty canvas, which is the failure this exists to
+# catch.
+fn missing_series read acc
+  why = "the chart did not draw five series of six points"
+  noted acc why (drew? read["series"])
+
+fn drew? none
+  false
+
+fn drew? series
+  series == [6 6 6 6 6]
 
 fn missing_panels read acc
   why = "no panel in chapter 04 became runnable"
@@ -355,51 +460,62 @@ fn finished failures report
   ended failures report (length failures == 0)
 
 fn ended _ _ true
-  io/write "PASS  the landing page, the playground and the book run\n"
+  io/write "PASS  every page the site smoke test watches still runs\n"
 
 fn ended failures report false
   said = "FAIL  {text/join failures "; "}\n  the page said: {report}\n"
   io/write said . (_ -> io/exit 1)
 
-pub play = io/read_file "docs/kanso-engine.js" . with_engine
+# The history is embedded as a JS string, and declared after the stub that
+# reads it: the page's own scripts run once this one has finished, so nothing
+# can fetch before the constant exists.
+encoded = json/encode history
 
-fn with_engine engine
-  on = (wasm -> with_wasm engine wasm)
-  io/read_file "docs/kanso.wasm" . on
+chart_head = "{stub}\nconst HISTORY_TEXT = {encoded};\n"
 
-fn with_wasm engine wasm
-  on = (hero -> with_hero engine wasm hero)
-  io/read_file "docs/landing-play.js" . on
+engine_files = ["docs/kanso-engine.js" "docs/kanso.wasm"]
 
-fn with_hero engine wasm hero
-  on = (js -> with_play engine wasm hero js)
-  io/read_file "docs/play.js" . on
+hero_files = ["docs/landing-play.js" "docs/play.js"]
 
-fn with_play engine wasm hero js
-  on = (header -> with_header engine wasm hero js header)
-  io/read_file "docs/_includes/site-header.html" . on
+page_files = ["docs/_includes/site-header.html" "docs/index.html"]
 
-fn with_header engine wasm hero js header
-  on = (page -> with_index engine wasm hero js header page)
-  io/read_file "docs/index.html" . on
+more_pages = ["docs/playground.html" "docs/book-play.js"]
 
-fn with_index engine wasm hero js header page
-  on = (raw -> with_board engine wasm hero js header page raw)
-  io/read_file "docs/playground.html" . on
+last_pages = ["docs/book/ch04.html" "docs/compiler.html"]
 
-fn with_board engine wasm hero js header page raw
-  on = (b -> with_book engine wasm hero js header page raw b)
-  io/read_file "docs/book-play.js" . on
+early_files = text/concat engine_files hero_files
 
-fn with_book engine wasm hero js header page raw b
-  on = (ch -> with_chapter engine wasm hero js header page raw b ch)
-  io/read_file "docs/book/ch04.html" . on
+middle_files = text/concat page_files more_pages
 
-fn with_chapter engine wasm hero js header page raw b ch
-  index = document header page "" landing
-  shown = document header raw "" board
-  read = document header ch chapter_scripts story
-  wanted (pages shown b read engine hero index js wasm)
+opening_files = text/concat early_files middle_files
+
+wanted_files = text/concat opening_files last_pages
+
+pub play = read_each wanted_files 1 []
+
+fn read_each paths at acc
+  gathered paths at acc (at > length paths)
+
+fn gathered _ _ acc true
+  with_all acc
+
+fn gathered paths at acc false
+  on = (body -> read_each paths (at + 1) (text/concat acc [body]))
+  io/read_file paths[at]! . on
+
+fn with_all bodies
+  header = bodies[5]!
+  index = document "" header bodies[6]! "" landing
+  shown = document "" header bodies[7]! "" board
+  read = document "" header bodies[9]! chapter_scripts story
+  drawn = document chart_head header bodies[10]! "" trend
+  assembled bodies shown read drawn index
+
+fn assembled bodies shown read drawn index
+  hero = bodies[3]!
+  js = bodies[4]!
+  set = pages shown bodies[8]! read drawn bodies[1]! hero index js bodies[2]!
+  wanted set
 
 fn wanted set
   io/env "KANSO_CHROME" . (told_where -> chosen set told_where)
