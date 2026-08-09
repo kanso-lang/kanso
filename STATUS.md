@@ -18,8 +18,11 @@ merge. It collides with #105 wanting the right side lazy.
 
 ## In flight
 
-**Replace the last two python scripts** (task #55). `scripts/browser_differential.py`
-and `scripts/site_smoke.py` both serve HTTP while driving headless chrome.
+**Replace the last python script** (task #55). `scripts/browser_differential.py`
+serves HTTP while driving headless chrome, and is the last of them.
+`scripts/site_smoke` is kanso now, and it is what CI runs: four visits, one per
+page the site promises — the landing sample, the playground, a book chapter and
+the chart.
 
 - Sockets: done, both engines. `listen`, `accept`, `net_read`, `net_write`,
   `net_close`, with `accept` and `run` as scheduling points so a server and its

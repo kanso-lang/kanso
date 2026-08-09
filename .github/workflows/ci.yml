@@ -429,6 +429,9 @@ jobs:
   site:
     name: site (landing sample and playground run in a browser)
     runs-on: ubuntu-latest
+    # A browser that never reaches the page leaves the server waiting on a
+    # report that is not coming, and the default job timeout is six hours.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -436,7 +439,8 @@ jobs:
         run: |
           rustup target add wasm32-unknown-unknown
           sh scripts/build_wasm.sh
-      - run: python3 scripts/site_smoke.py
+      - run: cargo build --release
+      - run: ./target/release/kanso run scripts/site_smoke
       # the mechanical half of the writing rules. the families it cannot see —
       # milked metaphors, manufactured triples, epigram endings — still want a
       # read, which is why a clean run is necessary and not sufficient.
