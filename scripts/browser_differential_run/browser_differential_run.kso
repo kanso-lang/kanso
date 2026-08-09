@@ -392,8 +392,13 @@ fn stem_of path
   parts = text/split (file_of path) ".kso"
   parts[1]!
 
+# The shell starts where the harness was run from, which is the repo, so it
+# can name the toolchain absolutely before it changes directory. A path
+# written down here would be a path on one machine.
 fn ran_in where verb name
-  shell "cd {where} && {pinned} {root}/target/release/kanso {verb} {name}"
+  remembered = "here=$(pwd)"
+  toolchain = "\"$here/target/release/kanso\""
+  shell "{remembered}; cd {where} && {pinned} {toolchain} {verb} {name}"
 
 fn staged path
   here = dir_of path
@@ -705,8 +710,6 @@ fn raised acc which none
 
 fn raised acc which n
   put acc which (n + 1)
-
-root = "/Users/clayshentrup/dev/kanso"
 
 # Each program run natively and held against what the tab said. A differential
 # is only worth the name if both sides are asked the same question, so the
