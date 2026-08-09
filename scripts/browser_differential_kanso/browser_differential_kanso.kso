@@ -298,3 +298,52 @@ fn gathered_samples parts at acc false
 fn playground_from js
   parts = text/split (examples_body js) "`"
   sample_at parts 1 []
+
+pinned = "KANSO_SEED=2685821657"
+
+# Where the native side runs a library from. The directory comes along for the
+# fixtures beside a program, any directory sharing the sample's name is removed
+# because an import cannot name both, and the entry that imports it is written
+# there. The seed matches the page's kanso_set_seed, or a program that calls
+# `random` compares two unrelated streams.
+fn shell script
+  io/run "sh" ["-c" script]
+
+fn dir_of path
+  parts = text/split path "/"
+  text/slice path 1 (length path - length parts[length parts]! - 1)
+
+fn file_of path
+  parts = text/split path "/"
+  parts[length parts]!
+
+fn stem_of path
+  parts = text/split (file_of path) ".kso"
+  parts[1]!
+
+fn ran_in where verb name root
+  shell "cd {where} && {pinned} {root}/target/release/kanso {verb} {name} 2>&1"
+
+fn staged path root
+  here = dir_of path
+  stem = stem_of path
+  stage = "/tmp/kanso-browser-native/{stem}"
+  door = "{stage}/run_{stem}.kso"
+  body = "import \"{stem}\"\n\n{stem}/play\n"
+  setup = "rm -rf {stage} && mkdir -p {stage} && cp -r {here}/. {stage}/"
+  wrote = "cat > {door} <<'KSOEOF'\n{body}KSOEOF"
+  named = "run_{stem}.kso"
+  on = (_ -> ran_in stage "run" named root)
+  shell "{setup} && rm -rf {stage}/{stem} && {wrote}" . on
+
+fn native_of p root
+  ran_native p root p.door
+
+fn ran_native p root "library"
+  staged p.path root
+
+fn ran_native p root "play"
+  ran_in (dir_of p.path) "play" (file_of p.path) root
+
+fn ran_native p root _
+  ran_in (dir_of p.path) "run" (file_of p.path) root
