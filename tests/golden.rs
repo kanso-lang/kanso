@@ -204,6 +204,13 @@ fn mem_corpus_pins_native_allocator_counters() {
             expected_out,
             "stdout mismatch for {program:?}"
         );
+        // A new counter is additive and moves every file in this vein at
+        // once; regenerating by hand is how one gets missed.
+        if std::env::var_os("KANSO_REGEN_MEM_GOLDEN").is_some() {
+            let at = if imported_mem.exists() { imported_mem } else { program.with_extension("mem") };
+            std::fs::write(&at, &output.stderr).expect("the mem golden writes");
+            continue;
+        }
         assert_eq!(
             String::from_utf8_lossy(&output.stderr),
             expected_mem,
