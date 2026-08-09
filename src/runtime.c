@@ -551,6 +551,14 @@ static void k_beat_rewind(KMark* m) {
     }
     k_arena = m->ptr;
     k_arena_left = m->left;
+    /* A mark whose pointer and remaining count no longer meet the end of its
+       block hands out memory past that end, and the damage surfaces later in
+       an unrelated allocation — as a glibc abort on linux, and as nothing at
+       all on macOS. One comparison per rewind buys the report at the moment
+       the mark goes wrong. */
+    if (k_blocks && k_arena + k_arena_left != (char*)(k_blocks + 1) + k_blocks->cap) {
+        k_die("a beat mark and the arena disagree about the room that is left");
+    }
 }
 
 void k_carry_clear(int depth);
