@@ -321,7 +321,7 @@ fn document top header page tail extra
 # the same visit run alone passed in seconds.
 fn flags at url
   where = "--user-data-dir=/tmp/kanso-smoke-profile-{at}"
-  ["--headless=new" "--disable-gpu" where url]
+  ["--headless=new" "--disable-gpu" "--no-sandbox" where url]
 
 fn browsing chrome at path
   url = flags at "http://127.0.0.1:{at}{path}"
