@@ -180,6 +180,9 @@ CHART_HISTORY = "\n".join(
 
 CHART_PRELUDE = (
     "window.__chart = {stub: 0, err: ''};\n"
+    "window.__chart.ready = document.readyState === 'complete'\n"
+    "  ? Promise.resolve()\n"
+    "  : new Promise((go) => window.addEventListener('load', () => go()));\n"
     "window.addEventListener('error', (e) => "
     "{ window.__chart.err = window.__chart.err || String(e.message); });\n"
     "window.addEventListener('unhandledrejection', (e) => "
@@ -189,14 +192,19 @@ CHART_PRELUDE = (
     "window.fetch = (url, opts) => {\n"
     "  if (String(url).includes('history.jsonl')) {\n"
     "    window.__chart.stub += 1;\n"
-    "    try {\n"
-    "      const r = new Response(HISTORY_TEXT, {status: 200});\n"
-    "      window.__chart.made = 1;\n"
-    "      return Promise.resolve(r);\n"
-    "    } catch (e) { window.__chart.err = 'stub: ' + String(e); throw e; }\n"
+    "    const r = new Response(HISTORY_TEXT, {status: 200});\n"
+    "    window.__chart.made = 1;\n"
+    # A stub answering in a microtask is no stand-in for the network: it
+    # resolves before the parser reaches the element the chart draws into, and
+    # drawTrend returns silently on a host that is not there yet. Waiting for
+    # the document puts the stub back behind parsing, where a real fetch is.
+    "    return window.__chart.ready.then(() => r);\n"
     "  }\n"
     "  return REAL(url, opts);\n"
     "};\n"
+    "window.__chart.ready.then(() => "
+    "{ window.__chart.readyAt = document.getElementById('trend-chart') "
+    "? 'host present' : 'host missing'; });\n"
 )
 
 CHART = """
@@ -223,7 +231,8 @@ async function PAGE_PROBE() {
       stubbed: window.__chart.stub,
       made: window.__chart.made || 0,
       error: window.__chart.err,
-      host: host ? host.innerHTML.slice(0, 200) : 'no #trend-chart',
+      host: host ? host.innerHTML.slice(0, 120) : 'no #trend-chart',
+      readyAt: window.__chart.readyAt || 'never',
       panel: panel ? panel.textContent.slice(0, 160) : 'no .perf-loading',
     },
   };
