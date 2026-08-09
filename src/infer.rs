@@ -452,7 +452,16 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
             if let Some(decls) = ctx.groups.get(&(name, 0)) {
                 let i = decls[0];
                 ctx.readers[i].insert(ctx.current_index);
-                return ctx.returns[i];
+                // A constant naming itself inside its own body hands over its
+                // cell rather than a value — there is nothing else to hand
+                // over yet. Everything that mention flows into may therefore
+                // hold a thunk, which is what tells a later read to force
+                // rather than to report a value no arm knows.
+                let deferred = match ctx.current_index == i {
+                    true => THUNK,
+                    false => 0,
+                };
+                return ctx.returns[i] | deferred;
             }
             let arities: Vec<usize> =
                 ctx.program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
