@@ -803,11 +803,7 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
     };
     /// Is `c` at least as specific as `x` in every position, and able to
     /// match where `x` does? A position they cannot both match disqualifies it.
-    fn covers(
-        c: &FnDecl,
-        x: &FnDecl,
-        compare: &dyn Fn(&Pattern, &Pattern) -> Option<i64>,
-    ) -> bool {
+    fn covers(c: &FnDecl, x: &FnDecl, compare: &dyn Fn(&Pattern, &Pattern) -> Option<i64>) -> bool {
         c.params.iter().zip(&x.params).all(|(pc, px)| match compare(pc, px) {
             Some(v) => v >= 0,
             None => false,
@@ -845,10 +841,7 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
                 // already wrote is invisible to it.
                 let settled = overlap
                     && decls.iter().enumerate().any(|(k, c)| {
-                        k != i
-                            && k != j
-                            && covers(c, a, &compare)
-                            && covers(c, b, &compare)
+                        k != i && k != j && covers(c, a, &compare) && covers(c, b, &compare)
                     });
                 if overlap && a_stricter && b_stricter && !settled {
                     diags.push(Diagnostic::new(
