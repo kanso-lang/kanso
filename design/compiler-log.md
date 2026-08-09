@@ -2070,3 +2070,43 @@ behind parsing where the thing it stands in for lives.
 
 The rule underneath: a stub is a stand-in for timing as much as for content.
 One that answers sooner than the real thing tests a program nobody runs.
+
+## a deferred constant says it is one
+
+Native reported `+` is not defined for these values where the oracle reported
+a lazy binding demands its own value. Both refuse, so nothing answered where
+another refused — but only one of those sentences is true, and the false one
+blames an operator for not knowing a value it was never given.
+
+The obvious fix was built and declined on 2026-08-08: forcing both operands in
+`emit_binop` neither fixed the case nor came free. `maybe_force` bails when the
+value's static set has no thunk bit, so the force was a no-op exactly where it
+was needed, and it fired elsewhere and moved the decoder's emitted code.
+
+The bit is lost at the source. `Expr::Field` answers TOP, which carries the
+thunk bit — but that arm never runs, because a field read is an application of
+a getter since accessors became functions, and the getter's return comes from a
+constructor pattern over the record's fields. Those fields carry whatever the
+constructor's arguments carried, and a constant naming itself carried a set
+that said the value could not be a thunk. Every consumer downstream inherited
+that: the getter, the parameter, the operator.
+
+So a mention of a constant inside its own body now carries the thunk bit. There
+is nothing else it could hand over at that moment — the value does not exist
+yet — and saying so lets every read downstream decide for itself.
+
+    the decoder's emitted IR     byte-identical
+    welfare                      75.69, at the floor
+    suite                        55 of 55
+
+The IR being byte-identical is the measurement that says the widening is
+confined: the decoder has no self-naming constant, so nothing about it moved.
+`defers_into_containers` already made the same trade for a list, map or string
+read, and this is the same phenomenon in a record.
+
+The corpus had never asked the browser this question, and it answers a third
+way: it recurses until the stack ends. Its guard marks the deferral's handle
+before calling it, but re-evaluating the constant makes a fresh handle, so the
+mark is never the one arrived at. The interpreter's knot is keyed by name and
+installs a blackhole before evaluating, which is why it answers correctly. The
+gap is written into the wasm ledger rather than left to be rediscovered.

@@ -1,0 +1,13 @@
+# A constant naming itself hands its own cell over rather than a value, and
+# reading a field of what it built reaches that cell. Demanding it is the
+# failure both engines report, in the same words — before, native reached the
+# operator with the cell still pending and blamed `+` for not knowing it.
+type cell
+  v
+
+ring = cell ring
+
+fn plus x
+  x + 1
+
+pub play = print "{plus ring.v}"

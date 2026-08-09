@@ -33,3 +33,11 @@ tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
 # do not use the same word for it. Closing this means teaching the renderer to
 # ask a deferral what it is, which reaches into the interpreter's own render.
 tests/golden/micro/a_constant_that_holds_itself.kso	<fn>
+
+# A constant that names itself and is then demanded. Native and the oracle both
+# refuse with "a lazy binding demands its own value"; the browser recurses
+# until the stack ends. Its guard marks the deferral's handle RUNNING before
+# calling it, but re-evaluating the constant makes a FRESH handle, so the mark
+# is never the one re-entered and the guard cannot fire. It refuses, loudly,
+# with the wrong reason.
+tests/golden/runtime/a_constant_that_names_itself_is_demanded.kso	ran out of stack
