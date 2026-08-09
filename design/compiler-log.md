@@ -2362,3 +2362,35 @@ leaves alone. The gain is real on jsonbench and on the module sample and the
 model is blind to it — which is an argument for the sample including an
 entry-bearing program, made here and not acted on, because changing what
 welfare measures is a change to the objective.
+
+## 2026-08-09 — what the runtime grew, and one hint that made it worse
+
+The forty-five per cent is mostly new functions rather than old ones swelling.
+Compiling both runtimes to objects and differencing per-symbol sizes: 293
+symbols exist only in the new one, 22,123 bytes of the 24,484. The largest
+individual moves are `k_repair_interior` (2,608, new), `k_exec` (+2,436),
+`k_step` (+2,328), `k_interior_survives` (1,760, new), `k_render` (+1,460),
+`k_copy_size` (+1,452) and `k_b_push_into_proven` (1,344, new).
+
+Almost none of that runs during a decode. Sampling jsonbench for two seconds
+finds twenty-three runtime functions on CPU, out of 749 symbols in the object:
+the builders, the buffer and string allocators, the comparison and equality
+helpers, the beat push and cohort pop, and the map view insert. Everything else
+is in the same text region without being reached.
+
+### Marking the hot set `hot` is a loss
+
+The obvious hint, and it goes the wrong way. Twenty-three `__attribute__((hot))`
+markers, five randomised layouts a side, one sitting:
+
+    unmarked   2.069 2.090 2.120 2.140 2.141   mean 2.1120
+    marked     2.151 2.162 2.171 2.182 2.171   mean 2.1674
+
+Slower in every layout, by 2.6%, with `__text` identical at 79,192 bytes either
+way. The attribute did not move anything into its own section on Mach-O; what
+it changed was how willing the inliner was, and the same bytes arranged
+differently cost more. Declined and reverted.
+
+That the size is unchanged while the time is not is the useful part: it says
+the cost being chased here is arrangement, not volume, and a change that only
+reorders is enough to move it in either direction.
