@@ -83,7 +83,21 @@ fn served l handler carried
   net/accept l . (c -> asked c handler carried) . (next -> more l handler next)
 
 fn asked c handler carried
-  net/read c . (raw -> answered_with c handler carried raw)
+  net/read c . (raw -> heard c handler carried raw (whole? raw))
+
+# A browser opens connections it may never use, and sends nothing down them
+# until it does. Such a connection is not a request and gets no answer: the
+# door closes and the next one is accepted. A head split across two reads is
+# dropped the same way, which is the price of not waiting on a client that may
+# have nothing more to say.
+fn whole? raw
+  length (text/split raw "\r\n\r\n") > 1
+
+fn heard c handler carried raw true
+  answered_with c handler carried raw
+
+fn heard c _ carried _ false
+  net/close_conn c . (_ -> carried)
 
 fn answered_with c handler carried raw
   took = handler (parsed raw) carried

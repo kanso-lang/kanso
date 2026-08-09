@@ -14,7 +14,10 @@
 //! `listen` says so: "a test that pinned a port would collide with whatever
 //! else is running on the machine."
 
+use std::io::{Read, Write};
+use std::net::TcpStream;
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 const SERVER_AND_CLIENT: &str = r#"import "std/io"
 import "std/net"
@@ -66,6 +69,27 @@ http/serve_until PORT handled "open" . (r -> print "the report says: {r}")
 io/run "curl" get . (_ -> io/run "curl" post)
 "#;
 
+/// A browser opens speculative connections and sends nothing down them, and
+/// this server has to survive being spoken to and told nothing. Nothing in
+/// kanso can open a bare socket — `net` has no `connect` — so the test drives
+/// this one itself, and the program keeps a second statement running to give
+/// the scheduler something to do while it waits.
+const A_CONNECTION_THAT_SAYS_NOTHING: &str = r#"import "std/io"
+import "std/net/http"
+
+fn handled req carried
+  answered req.path req carried
+
+fn answered "/report" req _
+  http/turn (http/ok "thanks") (http/done req.body)
+
+fn answered _ _ carried
+  http/turn (http/ok "the page") carried
+
+http/serve_until PORT handled "open" . (r -> print "the report says: {r}")
+io/run "sleep" ["3"] . (_ -> print "waited")
+"#;
+
 /// A port nothing else on the machine is using, varied per engine so the two
 /// halves of this test cannot collide with each other either.
 fn free_port(offset: u16) -> u16 {
@@ -75,12 +99,21 @@ fn free_port(offset: u16) -> u16 {
     port.wrapping_add(offset).max(1024)
 }
 
-/// Runs one program on one engine and answers what it printed.
-fn printed(name: &str, source: &str, engine: &[&str], offset: u16) -> String {
+/// Runs one program on one engine and answers what it printed. `drive` runs
+/// against the port once the program is up, for the tests whose client is this
+/// harness rather than a statement of the program itself.
+fn printed(
+    name: &str,
+    source: &str,
+    engine: &[&str],
+    offset: u16,
+    drive: impl FnOnce(u16),
+) -> String {
     let dir = std::env::temp_dir().join(format!("kanso-{name}-{offset}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to run in");
-    let source = source.replace("PORT", &free_port(offset).to_string());
+    let port = free_port(offset);
+    let source = source.replace("PORT", &port.to_string());
     std::fs::write(dir.join("serve.kso"), source).expect("the program writes");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_kanso"))
@@ -92,6 +125,8 @@ fn printed(name: &str, source: &str, engine: &[&str], offset: u16) -> String {
         .stderr(Stdio::piped())
         .spawn()
         .expect("kanso binary runs");
+
+    drive(port);
 
     // A wedged run must fail rather than hang: this test hung the whole suite
     // for a day, and a suite that never finishes reports nothing.
@@ -123,8 +158,51 @@ fn printed(name: &str, source: &str, engine: &[&str], offset: u16) -> String {
 #[test]
 fn one_program_serves_itself_on_both_engines() {
     for (offset, engine) in [(0u16, &[][..]), (1, &["--interp"][..])] {
-        let said = printed("sockets-serve", SERVER_AND_CLIENT, engine, offset);
+        let said = printed("sockets-serve", SERVER_AND_CLIENT, engine, offset, |_| {});
         assert_eq!(said, "the page says: kanso\n", "engine {engine:?}");
+    }
+}
+
+/// Connects once and closes without sending a byte, the way a browser's
+/// speculative connection does, then asks for something real. Watched red on
+/// both engines: `error[endpoint]: unhandled err reached the executor:
+/// "missing index 2"`, born in `http/parsed`.
+fn a_silent_visitor_then_a_report(port: u16) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let silent = loop {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(open) => break open,
+            Err(e) if Instant::now() > deadline => panic!("the door never opened: {e}"),
+            Err(_) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    drop(silent);
+
+    // Bounded on purpose. A dead server accepts nothing, so the connection
+    // stays open and unanswered, and an unbounded read here blocks before the
+    // deadline that is supposed to catch a wedged run ever gets a turn.
+    let mut asking = TcpStream::connect(("127.0.0.1", port)).expect("the server still answers");
+    asking
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .expect("a read that cannot outlast the test");
+    asking
+        .write_all(b"POST /report HTTP/1.1\r\nhost: x\r\ncontent-length: 5\r\n\r\ngreen")
+        .expect("the request goes out");
+    let mut answer = String::new();
+    let _ = asking.read_to_string(&mut answer);
+}
+
+#[test]
+fn a_silent_connection_does_not_end_the_server_on_both_engines() {
+    for (offset, engine) in [(4u16, &[][..]), (5, &["--interp"][..])] {
+        let said = printed(
+            "sockets-silent",
+            A_CONNECTION_THAT_SAYS_NOTHING,
+            engine,
+            offset,
+            a_silent_visitor_then_a_report,
+        );
+        assert_eq!(said, "the report says: green\nwaited\n", "engine {engine:?}");
     }
 }
 
@@ -133,7 +211,7 @@ fn one_program_serves_itself_on_both_engines() {
 #[test]
 fn a_served_report_reaches_the_program_on_both_engines() {
     for (offset, engine) in [(2u16, &[][..]), (3, &["--interp"][..])] {
-        let said = printed("sockets-report", SERVE_UNTIL_A_REPORT, engine, offset);
+        let said = printed("sockets-report", SERVE_UNTIL_A_REPORT, engine, offset, |_| {});
         assert_eq!(said, "the report says: green\n", "engine {engine:?}");
     }
 }
