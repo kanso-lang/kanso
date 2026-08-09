@@ -20,7 +20,17 @@
 # integer zero and was being printed as one. The decoder has four such cells:
 # four calls and four stores, once, before main. Nothing in a decode loop
 # moved, and defines and branches are unchanged.
-defines=250
-calls=2350
-branches=1311
-lines=13338
+#
+# 2026-08-09: defines 250 -> 154, calls 2350 -> 1660, branches 1311 -> 1018,
+# lines 13338 -> 10529. A fall, and a deliberate one: a program with an entry
+# now drops any define no remaining line names, to a fixpoint — the rule that
+# already pruned unused declares, applied to definitions. What went is the
+# whole of text/trim's chain, most of io, and the wrappers only those named:
+# a fifth of the file, for a program that decodes json and prints a number.
+# A library keeps everything, because its callers are outside the module.
+# The binary does not change — -flto already internalised and stripped these,
+# __TEXT is 114,688 either way. What is saved is writing them and reading them.
+defines=154
+calls=1660
+branches=1018
+lines=10529
