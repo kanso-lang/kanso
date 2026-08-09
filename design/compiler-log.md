@@ -2058,3 +2058,15 @@ first, because an unhandled rejection does not fire the `error` listener; it
 listens for both now. And the failure was invisible here and loud there, which
 is the ordinary shape of a browser difference — the local Chrome tolerated the
 invalid date the CI one refused.
+
+Then it failed again, differently, and the second cause is the one worth
+remembering. The chart takes its host out of the DOM at draw time, and the
+element sits after the script that draws it. A stub answering in a microtask
+beats the parser to that element, `drawTrend` finds no host and returns
+silently — no error, nothing drawn. A real fetch is never that fast, so the
+page has always worked in a browser and only ever failed against a stand-in
+quicker than the network. The stub now resolves on `load`, which puts it back
+behind parsing where the thing it stands in for lives.
+
+The rule underneath: a stub is a stand-in for timing as much as for content.
+One that answers sooner than the real thing tests a program nobody runs.
