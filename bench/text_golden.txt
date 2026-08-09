@@ -15,7 +15,7 @@
 # bank; a toolchain bump moves every row at once and is regenerated in one go,
 # with a sentence in design/compiler-log.md saying so. A number that changes
 # without a sentence is the thing to catch.
-jsonbench text=81908
-encodebench text=100180
-oneshot text=99476
-basket text=92020
+jsonbench text=82066
+encodebench text=100066
+oneshot text=99362
+basket text=91586
