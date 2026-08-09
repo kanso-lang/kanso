@@ -15,8 +15,9 @@
 //! else is running on the machine."
 
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpListener, TcpStream};
 use std::process::{Command, Stdio};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const SERVER_AND_CLIENT: &str = r#"import "std/io"
@@ -90,29 +91,43 @@ http/serve_until PORT handled "open" . (r -> print "the report says: {r}")
 io/run "sleep" ["3"] . (_ -> print "waited")
 "#;
 
-/// A port nothing else on the machine is using, varied per engine so the two
-/// halves of this test cannot collide with each other either.
-fn free_port(offset: u16) -> u16 {
-    let taken = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("the os hands out a port");
-    let port = taken.local_addr().expect("a bound listener has an address").port();
-    drop(taken);
-    port.wrapping_add(offset).max(1024)
+/// A port nothing else on the machine is using. The os chooses it, and this
+/// only declines to hand the same one out twice, because two halves of one run
+/// that land on one port wedge each other.
+///
+/// Offsetting a free port was the old way of keeping them apart, and it lands
+/// on a port nobody ever checked: "cannot listen on that port" reached CI on
+/// the macos host as soon as a third test made the collision likely.
+fn free_port() -> u16 {
+    static ISSUED: Mutex<Vec<u16>> = Mutex::new(Vec::new());
+    for _ in 0..100 {
+        let taken = TcpListener::bind(("127.0.0.1", 0)).expect("the os hands out a port");
+        let port = taken.local_addr().expect("a bound listener has an address").port();
+        drop(taken);
+        let mut issued = ISSUED.lock().expect("the ports handed out so far");
+        if !issued.contains(&port) {
+            issued.push(port);
+            return port;
+        }
+    }
+    panic!("the os kept offering ports this run had already used");
 }
 
 /// Runs one program on one engine and answers what it printed. `drive` runs
 /// against the port once the program is up, for the tests whose client is this
-/// harness rather than a statement of the program itself.
+/// harness rather than a statement of the program itself. `slot` only keeps
+/// each engine's run in a directory of its own.
 fn printed(
     name: &str,
     source: &str,
     engine: &[&str],
-    offset: u16,
+    slot: u16,
     drive: impl FnOnce(u16),
 ) -> String {
-    let dir = std::env::temp_dir().join(format!("kanso-{name}-{offset}"));
+    let dir = std::env::temp_dir().join(format!("kanso-{name}-{slot}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to run in");
-    let port = free_port(offset);
+    let port = free_port();
     let source = source.replace("PORT", &port.to_string());
     std::fs::write(dir.join("serve.kso"), source).expect("the program writes");
 
@@ -157,8 +172,8 @@ fn printed(
 /// half waiting on the other.
 #[test]
 fn one_program_serves_itself_on_both_engines() {
-    for (offset, engine) in [(0u16, &[][..]), (1, &["--interp"][..])] {
-        let said = printed("sockets-serve", SERVER_AND_CLIENT, engine, offset, |_| {});
+    for (slot, engine) in [(0u16, &[][..]), (1, &["--interp"][..])] {
+        let said = printed("sockets-serve", SERVER_AND_CLIENT, engine, slot, |_| {});
         assert_eq!(said, "the page says: kanso\n", "engine {engine:?}");
     }
 }
@@ -194,12 +209,12 @@ fn a_silent_visitor_then_a_report(port: u16) {
 
 #[test]
 fn a_silent_connection_does_not_end_the_server_on_both_engines() {
-    for (offset, engine) in [(4u16, &[][..]), (5, &["--interp"][..])] {
+    for (slot, engine) in [(4u16, &[][..]), (5, &["--interp"][..])] {
         let said = printed(
             "sockets-silent",
             A_CONNECTION_THAT_SAYS_NOTHING,
             engine,
-            offset,
+            slot,
             a_silent_visitor_then_a_report,
         );
         assert_eq!(said, "the report says: green\nwaited\n", "engine {engine:?}");
@@ -210,8 +225,8 @@ fn a_silent_connection_does_not_end_the_server_on_both_engines() {
 /// stopped on a carried `none` and threw away what the page had posted.
 #[test]
 fn a_served_report_reaches_the_program_on_both_engines() {
-    for (offset, engine) in [(2u16, &[][..]), (3, &["--interp"][..])] {
-        let said = printed("sockets-report", SERVE_UNTIL_A_REPORT, engine, offset, |_| {});
+    for (slot, engine) in [(2u16, &[][..]), (3, &["--interp"][..])] {
+        let said = printed("sockets-report", SERVE_UNTIL_A_REPORT, engine, slot, |_| {});
         assert_eq!(said, "the report says: green\n", "engine {engine:?}");
     }
 }
