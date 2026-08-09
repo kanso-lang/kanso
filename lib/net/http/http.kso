@@ -15,6 +15,9 @@ pub type turn
   answer
   carried
 
+pub type done
+  value
+
 pub type response
   status
   reason
@@ -68,10 +71,11 @@ fn replied c handler raw
   net/write c (rendered (handler (parsed raw)))
 
 # Many requests, folded. The handler answers a `turn`: the response, and what
-# to carry to the next request. Carrying `none` closes the door — and it is a
-# record because a list may not hold a none. That is the whole of what a
-# harness needs — serve the page, serve its assets, and stop when the report
-# the page posts back arrives.
+# to carry to the next request. Carrying a `done` closes the door, and what it
+# holds is what `serve_until` answers — a harness decides pass or fail from the
+# report the page posts back, so the value has to survive the stop. That is the
+# whole of what one needs: serve the page, serve its assets, and answer the
+# report.
 pub fn serve_until port handler seed
   net/listen port . (l -> served l handler seed)
 
@@ -87,8 +91,8 @@ fn answered_with c handler carried raw
     . (_ -> net/close_conn c)
     . (_ -> took.carried)
 
-fn more l _ none
-  net/close_listener l
+fn more l _ (done value)
+  net/close_listener l . (_ -> value)
 
 fn more l handler carried
   served l handler carried
