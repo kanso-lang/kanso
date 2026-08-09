@@ -1,3 +1,4 @@
+import "std/io"
 import "std/list"
 import "std/net/http"
 import "std/text"
@@ -9,6 +10,13 @@ import "std/text"
 #
 # Jekyll is not involved: the pages are fragments with front matter, so the
 # harness strips it and splices the header include, which is all these need.
+type pages
+  engine
+  hero
+  index
+  play_js
+  wasm
+
 port = 8749
 
 assets = ["kanso-engine.js" "kanso.wasm" "landing-play.js" "play.js"]
@@ -49,6 +57,27 @@ landing = """
   </script>
 """
 
+fn body_for "/" set
+  set.index
+
+fn body_for "/index.html" set
+  set.index
+
+fn body_for "/kanso-engine.js" set
+  set.engine
+
+fn body_for "/kanso.wasm" set
+  set.wasm
+
+fn body_for "/landing-play.js" set
+  set.hero
+
+fn body_for "/play.js" set
+  set.play_js
+
+fn body_for _ _
+  none
+
 fn replaced text from to
   text/join (text/split text from) to
 
@@ -83,11 +112,87 @@ fn handled req served
 fn answered "/report" req _
   http/turn (http/ok "thanks") (http/done req.body)
 
-fn answered path _ served
-  http/turn (found served[path] path) served
+fn answered path _ set
+  body = body_for path set
+  http/turn (found body path) set
 
 fn found none _
   http/not_found
 
 fn found body path
   http/response 200 "OK" [(kind path)] body
+
+fn document header page
+  body = replaced (without_front_matter page) "src=\"/" "src=\""
+  head = "<!doctype html><html><head><meta charset=utf-8></head><body>"
+  "{head}{header}{body}{landing}{probe}</body></html>"
+
+fn flags url
+  where = "--user-data-dir=/tmp/kanso-smoke-profile"
+  ["--headless=new" "--disable-gpu" where url]
+
+fn browsing chrome
+  at = flags "http://127.0.0.1:{port}/index.html"
+  io/start chrome at
+
+fn running set chrome
+  http/serve_until port handled set . checked
+  browsing chrome
+
+# Headless chrome does not exit on its own, and the process handle is born in
+# the statement that starts it while the report arrives in the statement that
+# serves — nothing carries a value between them. The profile name is unique to
+# this harness, so it is what identifies the browser to stop.
+fn checked report
+  ran = length (text/split report "hello, kanso") > 1
+  io/run "pkill" ["-f" "kanso-smoke-profile"] . (_ -> told report ran)
+
+fn told _ true
+  io/write "PASS  the landing sample runs in the browser\n"
+
+fn told report false
+  said = "FAIL  the landing sample did not run: {report}\n"
+  io/write said . (_ -> io/exit 1)
+
+pub play = io/read_file "docs/kanso-engine.js" . with_engine
+
+fn with_engine engine
+  on = (wasm -> with_wasm engine wasm)
+  io/read_file "docs/kanso.wasm" . on
+
+fn with_wasm engine wasm
+  on = (hero -> with_hero engine wasm hero)
+  io/read_file "docs/landing-play.js" . on
+
+fn with_hero engine wasm hero
+  on = (js -> with_play engine wasm hero js)
+  io/read_file "docs/play.js" . on
+
+fn with_play engine wasm hero js
+  on = (header -> with_header engine wasm hero js header)
+  io/read_file "docs/_includes/site-header.html" . on
+
+fn with_header engine wasm hero js header
+  on = (page -> with_page engine wasm hero js header page)
+  io/read_file "docs/index.html" . on
+
+fn with_page engine wasm hero js header page
+  index = document header page
+  set = pages engine hero index js wasm
+  wanted set
+
+fn wanted set
+  io/env "KANSO_CHROME" . (told_where -> chosen set told_where)
+
+fn chosen set none
+  mac = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+  io/exists mac . (there -> either set mac there)
+
+fn chosen set where
+  running set where
+
+fn either set mac true
+  running set mac
+
+fn either set _ false
+  running set "/usr/bin/google-chrome"
