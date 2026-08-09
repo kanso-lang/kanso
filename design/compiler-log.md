@@ -2293,3 +2293,50 @@ prerequisite, and it is its own piece of work.
 What is left standing is that the cost is the work being present rather than
 the cost of reaching it, and that __TEXT has grown 114,688 against 98,304 while
 runtime.c grew a third. Neither of those is a fix.
+
+## 2026-08-09 — a fifth of the emitted code, and what it did not explain
+
+A program that decodes json and prints a number was carrying `text/trim`'s
+whole chain, most of `io`, and the wrappers that only those named. The emitter
+now drops any define no remaining line mentions, iterated to a fixpoint, which
+is the rule it already applied to declares. jsonbench falls from 250 defines
+and 13,338 lines to 154 and 10,529; the module compile sample from 6,349 to
+4,430. Rounds and visits do not move — deciding costs the same and only
+writing costs less.
+
+Three constraints, each of which failed loudly first. The fixpoint is
+load-bearing, because a dead caller still writes a call to its dead callee and
+one sweep leaves a definition named by something that is itself about to go. A
+library keeps everything, because its callers live outside the module the
+emitter can see and there is nowhere for the walk to start. And the fnref
+statics sit between definitions rather than inside them, so a splitter that
+runs a block to the next `define` swallows them and three examples stop
+linking.
+
+### It says nothing about the decode slowdown, and that is the point
+
+The obvious hope was that this tests the last standing hypothesis for the 7.6%
+— that the runtime's 33% growth costs cache. It does not, because the binary
+never contained this code: `-flto` internalises and strips it already, and
+__TEXT is 114,688 bytes before and after. A fifth less IR through the compiler,
+byte-identical machine code out.
+
+Five randomised layouts read 2.129 against the day's earlier 2.154, about one
+per cent, in the wrong direction to be trusted: the two sittings are hours
+apart, and one of the five layouts is slower rather than faster. With the
+machine code identical there is nothing for a real difference to come from, so
+that is drift.
+
+The code-size hypothesis is therefore still untested rather than weakened. What
+would test it is changing what LLVM keeps, not what the emitter writes.
+
+### The welfare index cannot see this
+
+75.69 before and after, and the floor stays there. The index was ratcheted to
+76.29 mid-change and put back: that reading came from the prune still applying
+to libraries, which the entry guard then correctly stopped. Its emitted-lines
+term samples five single-file libraries, and a library is exactly what this
+leaves alone. The gain is real on jsonbench and on the module sample and the
+model is blind to it — which is an argument for the sample including an
+entry-bearing program, made here and not acted on, because changing what
+welfare measures is a change to the objective.
