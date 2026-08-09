@@ -2293,3 +2293,72 @@ prerequisite, and it is its own piece of work.
 What is left standing is that the cost is the work being present rather than
 the cost of reaching it, and that __TEXT has grown 114,688 against 98,304 while
 runtime.c grew a third. Neither of those is a fix.
+
+## 2026-08-09 — a fifth of the emitted code, and what it did not explain
+
+A program that decodes json and prints a number was carrying `text/trim`'s
+whole chain, most of `io`, and the wrappers that only those named. The emitter
+now drops any define no remaining line mentions, iterated to a fixpoint, which
+is the rule it already applied to declares. jsonbench falls from 250 defines
+and 13,338 lines to 154 and 10,529; the module compile sample from 6,349 to
+4,430. Rounds and visits do not move — deciding costs the same and only
+writing costs less.
+
+Three constraints, each of which failed loudly first. The fixpoint is
+load-bearing, because a dead caller still writes a call to its dead callee and
+one sweep leaves a definition named by something that is itself about to go. A
+library keeps everything, because its callers live outside the module the
+emitter can see and there is nowhere for the walk to start. And the fnref
+statics sit between definitions rather than inside them, so a splitter that
+runs a block to the next `define` swallows them and three examples stop
+linking.
+
+### It says nothing about the decode slowdown, and that is the point
+
+The obvious hope was that this tests the last standing hypothesis for the 7.6%
+— that the runtime's 33% growth costs cache. It does not, because the binary
+never contained this code: `-flto` internalises and strips it already, and
+__TEXT is 114,688 bytes before and after. A fifth less IR through the compiler,
+byte-identical machine code out.
+
+Five randomised layouts read 2.129 against the day's earlier 2.154, about one
+per cent, in the wrong direction to be trusted: the two sittings are hours
+apart, and one of the five layouts is slower rather than faster. With the
+machine code identical there is nothing for a real difference to come from, so
+that is drift.
+
+### So the code-size hypothesis was tested properly, and it is REAL
+
+Changing what LLVM keeps is what tests it, and the first thing that test needed
+was an honest measurement of the growth. `__TEXT` is page-granular — 98,304 and
+114,688 are exactly six and seven sixteen-kilobyte pages — so the "16.7%" this
+log quoted on the same day says almost nothing. The machine code itself is the
+`__text` section, and it went 54,708 to 79,192 bytes. Forty-five per cent, not
+seventeen.
+
+Padding the old tree with 383 never-called `used, noinline` functions brings
+its `__text` to 79,184, within eight bytes of the new side, with every other
+thing about it unchanged. Five randomised layouts each, one sitting:
+
+    old, as it was   1.930 1.959 1.959 1.961 1.971   mean 1.9560
+    old, padded      1.988 1.993 1.994 1.983 1.978   mean 1.9872
+
+Slower in EVERY layout, by 1.6%. Against a 0.1838 s gap that is 17% of it, from
+code the decoder never executes — it only sits between the code it does.
+
+Two causes now account for about half the slowdown: the three per-call guards
+at 36%, and code size at 17%. They are not cleanly separable, since removing
+the guards also removes code, so treat the sum as an upper bound rather than
+53% exactly. The filler is uniform where the real growth is not, so 1.6% is the
+magnitude and not a precise attribution.
+
+### The welfare index cannot see this
+
+75.69 before and after, and the floor stays there. The index was ratcheted to
+76.29 mid-change and put back: that reading came from the prune still applying
+to libraries, which the entry guard then correctly stopped. Its emitted-lines
+term samples five single-file libraries, and a library is exactly what this
+leaves alone. The gain is real on jsonbench and on the module sample and the
+model is blind to it — which is an argument for the sample including an
+entry-bearing program, made here and not acted on, because changing what
+welfare measures is a change to the objective.
