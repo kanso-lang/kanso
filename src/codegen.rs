@@ -3618,6 +3618,20 @@ impl<'a> Backend<'a> {
         self.emit_call_rest(f, head, args, None, span)
     }
 
+    /// The origin an err would carry had it been born inside the wrapper
+    /// rather than at this call site. Fusing past a wrapper skips the frame
+    /// whose file and line name the birthplace, and the oracle still calls it.
+    fn forwarder_origin(&mut self, name: &str, arity: usize) -> Option<String> {
+        let decl = self.program.fns.iter().find(|d| d.name == name && d.params.len() == arity)?;
+        let line = match decl.body.first()? {
+            Stmt::Expr(Expr::App { span, .. }) => span.line,
+            _ => return None,
+        };
+        let prefix = format!("{} at {}", crate::ast::frame_name(&decl.name), decl.file);
+        let (interned, _) = self.intern(&format!("{prefix}:{line}\0"));
+        Some(format!("ptr @{interned}"))
+    }
+
     /// The builtin a name stands for at a call site: itself with the
     /// `builtin_` prefix off, or whatever the forwarder map says a plain
     /// wrapper of this arity forwards to.
@@ -3800,14 +3814,17 @@ impl<'a> Backend<'a> {
         // above has already turned `text/utf8` and `text/slice` into their
         // builtins, so the pair is visible here as written, before either
         // argument is emitted.
-        // A std wrapper keeps its qualified spelling here: `text/utf8` becomes
-        // `utf8` through the forwarder map a few lines below, at the emit
-        // site. Resolving the same way is what makes the pair visible — the
-        // first cut of this matched the bare names and never once fired.
+        // An err's birthplace is the function it is emitted in, so fusing a
+        // call that still names a wrapper would move it out of `text/utf8` and
+        // into the caller — the oracle, which really does call the wrapper,
+        // would then disagree about where an invalid byte was found. The
+        // wrapper inlining above rewrites the call to the builtin wherever it
+        // can, and only that spelling is fused.
         if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "utf8" {
             if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
                 if let Expr::Ident(inner, _) = &**inner_head {
-                    if self.builtin_named(inner, inner_args.len()) == "slice" && inner_args.len() == 3
+                    if self.builtin_named(inner, inner_args.len()) == "slice"
+                        && inner_args.len() == 3
                     {
                         let mut parts = Vec::new();
                         for a in inner_args {
@@ -3816,7 +3833,16 @@ impl<'a> Backend<'a> {
                         }
                         let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
                         let sliced = infer::builtin_set("slice", &sets);
-                        let origin = self.origin_arg(f, span);
+                        // the wrapper's own line, where the unfused call
+                        // would have been emitted, or this site when the
+                        // spelling is already the builtin
+                        let origin = match name.as_str() {
+                            "builtin_utf8" => self.origin_arg(f, span),
+                            _ => match self.forwarder_origin(name, 1) {
+                                Some(o) => o,
+                                None => self.origin_arg(f, span),
+                            },
+                        };
                         let t = f.tmp();
                         f.line(&format!(
                             "{t} = call %KValue @k_b_utf8_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",

@@ -1,0 +1,10 @@
+# The fused lowering of `utf8` applied to `slice` skips the wrapper the oracle
+# still calls, and an err records the frame it was born in — so a fusion that
+# forgot to carry the wrapper's file and line made the two engines name
+# different birthplaces for the same invalid byte. Nothing in the corpus read
+# an invalid byte through a slice, so it went unseen.
+import "std/text"
+
+bad = [104 255 105]
+
+print "{text/utf8 (text/slice bad 1 3)}"
