@@ -2560,3 +2560,37 @@ layouts. That reproduces the roughly one per cent this page already recorded
 years of measurement ago, and it does not pay for a profile in the repository,
 a job to regenerate it, and a published figure that depends on a workload
 chosen in advance.
+
+## 2026-08-10 — the view test at the call site buys nothing
+
+`k_map_view_insert` costs 22,574,700 instructions across 1,254,150 calls in the
+decode benchmark, eighteen apiece, and its whole body sits behind an early
+return on `m->sorted`. The function is too large to inline, so the reading was
+that every put pays a call to learn the map has no sorted view.
+
+Hoisting that test to both call sites gives 2,762,362,598 instructions against
+a baseline of 2,762,362,598, measured in one sitting on one toolchain with the
+environment pinned. Identical to the digit, and basket likewise at 51,928,666.
+clang already elides the call — partial inlining is exactly this shape — so the
+eighteen instructions are the view maintenance itself, on a view that is live.
+
+That relocates the target. The decode benchmark does build a sorted view and
+keeps 1.25 million insertions into it, and the question worth asking is why a
+decode asks for sorted order at all, not how cheaply the answer is maintained.
+Declined; the branch is gone.
+
+## 2026-08-10 — the instruction gate was reading the run id
+
+The gate added yesterday fired on its second CI run for fourteen instructions
+in three billion, one benchmark up and another down by the same amount, with
+nothing in the compiler changed.
+
+The kernel copies a process's environment onto its stack and libc walks it
+before main, so a `GITHUB_RUN_ID` that gained a digit costs instructions. A
+local pair of runs differing only in environment length read 51,930,665 and
+51,930,740; with `env -i` both read 51,928,666. CI now measures with the
+environment emptied, and every benchmark came down by about seventy-five
+thousand — the startup walk leaving the measurement.
+
+The pin stays exact. A gate needing a tolerance to survive its own second run
+is measuring the runner.
