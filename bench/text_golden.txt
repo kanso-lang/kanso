@@ -1,0 +1,21 @@
+# How much machine code each benchmark carries, the .text section measured on
+# the linux runner before anything runs. Deterministic for a given source and
+# toolchain, and blind to nothing that matters: this is the code itself.
+#
+# It exists because the dimension that carried a measured 17% of the 7.6%
+# decode regression had no gate at all. Every allocation counter was
+# byte-identical across the eleven days it accrued. The emitted-line count did
+# move, but a fifth of those lines turned out to be functions the linker was
+# already dropping, so it moves for reasons that never reach the machine. What
+# grew was the code: 54,708 to 79,192 bytes on the measuring host over that
+# window, and padding an old build up to that size with functions it never
+# calls costs 1.6% of decode time on its own.
+#
+# Watched, not frozen. A rise is a regression to explain and a fall is a win to
+# bank; a toolchain bump moves every row at once and is regenerated in one go,
+# with a sentence in design/compiler-log.md saying so. A number that changes
+# without a sentence is the thing to catch.
+jsonbench text=82066
+encodebench text=100066
+oneshot text=99362
+basket text=91586
