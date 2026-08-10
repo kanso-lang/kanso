@@ -132,6 +132,37 @@ fn amount _ true
 fn amount fs false
   text/to_int (text/split fs[1]! "=")[2]!
 
+# The instructions golden is one benchmark to a line, `name count`. It is the
+# only vein here counting the work a process did rather than what it
+# allocated, which is the dimension the other four are blind to: a decode that
+# allocates identically and executes eight per cent more instructions moves
+# nothing else on this row, and for eleven days nothing did.
+fn ir_line text name
+  wanted = list/select (text/split text "\n") (l -> ir_starts? l name)
+  ir_count_in (list/to_list wanted)
+
+fn ir_starts? line name
+  (text/split line " ")[1]! == name
+
+fn ir_count_in ls
+  ir_amount ls (length ls == 0)
+
+fn ir_amount _ true
+  0
+
+fn ir_amount ls false
+  text/to_int (text/split ls[1]! " ")[2]!
+
+ir_benches = ["jsonbench" "encodebench" "oneshot" "basket"]
+
+ir_tail = ["oneshot_instructions" "basket_instructions"]
+
+ir_fields = text/concat ["instructions" "encode_instructions"] ir_tail
+
+fn instructions text
+  counts = list/map ir_benches (n -> ir_line text n)
+  list/to_list (list/zip ir_fields (list/to_list counts))
+
 # The compile golden is many fields to a line, one line per sample, and the
 # published number is the total across them.
 fn total_for lines key
@@ -206,9 +237,10 @@ fn assembled line d e o bk c cc w
   rest = text/concat (text/concat oneshot basket) (compile_work c)
   measured = text/concat own scored
   tail = text/concat rest measured
-  written (text/concat (described line) (text/concat veins tail))
+  rows = text/concat (described line) (text/concat veins tail)
+  io/read_file "bench/instructions_golden.txt" . (w -> written rows w)
 
-fn written pairs
-  io/write "{json/encode (list/to_h pairs)}\n"
+fn written pairs w
+  io/write "{json/encode (list/to_h (text/concat pairs (instructions w)))}\n"
 
 pub play = asked ["log" "-1" "--format=%h %cI %s"] . stamped
