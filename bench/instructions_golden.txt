@@ -29,7 +29,7 @@
 # here and will not be one — regenerate every row in one go and say so in
 # design/compiler-log.md, and never read a row against a number measured
 # somewhere else.
-jsonbench 3266971711
-encodebench 9283849540
-oneshot 64630634
-basket 56793158
+jsonbench 3266896510
+encodebench 9283777698
+oneshot 64555398
+basket 56717877
