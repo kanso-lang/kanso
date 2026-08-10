@@ -52,6 +52,7 @@ expressions the fixpoint looked at, and lines the emitter wrote.
 .trend { display: block; height: auto; width: 100%; }
 .perf-loading { color: var(--muted); font-size: 0.9rem; }
 .chart-legend { color: var(--muted); font-size: 0.86rem; line-height: 1.7; }
+.trend-key { fill: var(--muted); font-size: 15px; letter-spacing: 0.02em; }
 .perf-panel { border: 1px solid var(--line); border-radius: 10px; margin: 1.5rem 0; padding: 1.1rem 1.3rem; }
 .perf-panel table { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.9rem; width: 100%; }
 .perf-panel th { color: var(--muted); font-weight: 500; text-align: left; }
@@ -146,9 +147,9 @@ expressions the fixpoint looked at, and lines the emitter wrote.
     // The decoder's machine code. Only its own, because every binary links
     // the same runtime and summing them would count it four times.
     ['#facc15', 'binary size', (r) => r.text_bytes],
-    ['#ffd166', 'compile work',
+    ['#38bdf8', 'compile work',
      (r) => sum(sum(r.compile_rounds, r.compile_visits), r.emitted_lines)],
-    ['#f472b6', 'compile memory', (r) => r.compile_peak_bytes],
+    ['#fb923c', 'compile memory', (r) => r.compile_peak_bytes],
     // recorded rather than recomputed: the score a commit shipped with is a
     // fact about that commit. Hundredths, so integer scaling keeps real moves.
     ['#4ade80', 'welfare',
