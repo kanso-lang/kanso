@@ -2560,3 +2560,66 @@ layouts. That reproduces the roughly one per cent this page already recorded
 years of measurement ago, and it does not pay for a profile in the repository,
 a job to regenerate it, and a published figure that depends on a workload
 chosen in advance.
+
+## 2026-08-10 — the view test at the call site buys nothing
+
+`k_map_view_insert` costs 22,574,700 instructions across 1,254,150 calls in the
+decode benchmark, eighteen apiece, and its whole body sits behind an early
+return on `m->sorted`. The function is too large to inline, so the reading was
+that every put pays a call to learn the map has no sorted view.
+
+Hoisting that test to both call sites gives 2,762,362,598 instructions against
+a baseline of 2,762,362,598, measured in one sitting on one toolchain with the
+environment pinned. Identical to the digit, and basket likewise at 51,928,666.
+clang already elides the call — partial inlining is exactly this shape — so the
+eighteen instructions are the view maintenance itself, on a view that is live.
+
+That relocates the target. The decode benchmark does build a sorted view and
+keeps 1.25 million insertions into it, and the question worth asking is why a
+decode asks for sorted order at all, not how cheaply the answer is maintained.
+Declined; the branch is gone.
+
+## 2026-08-10 — the instruction gate was reading the run id
+
+The gate added yesterday fired on its second CI run for fourteen instructions
+in three billion, one benchmark up and another down by the same amount, with
+nothing in the compiler changed.
+
+The kernel copies a process's environment onto its stack and libc walks it
+before main, so a `GITHUB_RUN_ID` that gained a digit costs instructions. A
+local pair of runs differing only in environment length read 51,930,665 and
+51,930,740; with `env -i` both read 51,928,666. CI now measures with the
+environment emptied, and every benchmark came down by about seventy-five
+thousand — the startup walk leaving the measurement.
+
+It happened twice. The pull request carrying this very log entry — a markdown
+file and nothing else — failed the same gate, on a tree whose instruction count
+could not have moved. Two occurrences in two runs is the rate, and a
+performance gate that a documentation change can fail is a gate nobody will
+believe when it fires for a real reason.
+
+The pin stays exact. A gate needing a tolerance to survive its own second run
+is measuring the runner.
+
+## 2026-08-10 — one byte view per scalar token, and the fusion that would skip it
+
+`k_bytes_view` costs 83,462,400 instructions in the decode benchmark, three per
+cent of the run, across 3,091,200 calls at twenty-seven apiece. Every one comes
+from `k_b_slice` and nowhere else.
+
+That is not waste. `cs[p]` on bytes answers an int through `k_b_at`, so reading
+a character allocates nothing; the slices are one per scalar token — the string
+in `string_at`, the digits in `parse_number`, the keyword in `word`. Three
+million tokens in four megabytes is the right order.
+
+What it does show is a fusion. `string_at` reads
+
+    text/utf8 (text/slice cs start (p - 1))
+
+and `text/utf8` on a byte view validates and copies into a fresh string, so the
+twenty-four byte header the slice just built is read once and dropped. 3,054,450
+of the 3,091,200 slices are that shape. A rule that lowers utf8-of-slice to one
+call taking a pointer and a length would skip the header entirely, which is
+worth about two per cent of decode if the rest of the path is unchanged.
+
+Not built. Recorded because the number is measured and the shape is specific.
