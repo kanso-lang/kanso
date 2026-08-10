@@ -2657,3 +2657,26 @@ correctness argument. A divergence going away is not evidence the code runs.
 Checked and clear: to_int, to_float and from_code are the other builtins that
 birth an err through a wrapper, and all three name the same origin on both
 engines. The bypass this fusion introduced was the only one of its kind.
+
+## 2026-08-10 — the stopwatch cannot see the fusion, and that is the point
+
+Randomised-layout timing of the utf8-of-slice fusion, five neutral paddings per
+tree, nine runs each, floor per padding, median of the five floors:
+
+    base    137562 132535 136214 132672 133191   median 133191 us
+    fused   129935 130662 133797 133226 133496   median 133226 us
+
+Delta +0.03%. The spread inside one tree is 3.79% and 2.97%, comfortably larger
+than the 2.26% the instruction count measures exactly. The decode board does
+not move, and no millisecond figure on any page is touched by this change.
+
+The first harness said the fused build was 0.75% SLOWER, which is how the flaw
+was found: a 17% allocation cut and a 2.26% instruction cut do not produce a
+slowdown, so the instrument was wrong before the code was. Each timestamp was
+its own `python3 -c`, putting an interpreter startup inside every measured
+interval — about thirty milliseconds on a benchmark that runs in a hundred and
+twenty. Timing all nine runs inside one process removed it.
+
+This is the case the counter veins were built for. Two exact numbers moved, the
+clock could not say anything, and a per-commit claim in milliseconds would have
+been an artefact of where the linker happened to put things.
