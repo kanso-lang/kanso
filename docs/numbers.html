@@ -1,0 +1,282 @@
+---
+layout: default
+title: "the long view"
+description: "one row per merged commit: what a run costs, what compiling costs, and the welfare score they roll up into."
+---
+<article class="spec-doc prose essay">
+
+<span class="eyebrow">numbers</span>
+<h1>the long view</h1>
+
+<p>every merged commit, one row each. every number is a deterministic count, so any machine extends the series and none can smear it. ci measures the commit under test, appends it as the last point, and redraws this chart on every pull request; what merges is what you see here.</p>
+
+<p>the welfare line is recorded, not recomputed. the score a commit shipped with is a fact about that commit, and replaying history against today's baseline would rewrite it. it is also the one line with a rule attached: it may not go down. a change that would lower it gets optimized until it holds. every other number here is a softer gate — a counter may worsen only if something else improved, and each worsening needs a written sentence naming why.</p>
+
+<p>each line is scaled to its own range, because an instruction count and a byte peak cannot share an axis and stay readable. what the chart shows is shape — which way a number went and when it stepped. the horizontal axis is commit order, because commits are what the ratchet acts on. a line starts where its counters start: the schema grew with the project, so the compile lines reach back to the first recorded row while the welfare line begins where the score was first written down.</p>
+
+<div id="trend-chart"><p class="perf-loading">loading the chart…</p></div>
+
+<p class="chart-legend">how each line is derived, from the code that draws it.
+<strong>run instructions</strong> is <code>instructions + encode_instructions</code>
+in thousands — retired instructions for the decode and encode veins, counted
+under callgrind and pinned in <code>bench/instructions_golden.txt</code>. it is
+what a run costs. <strong>run memory</strong> is
+<code>oneshot_arena_peak_bytes</code>, the high-water mark of the one-shot
+vein's arena. <strong>binary size</strong> is the decoder's <code>.text</code>
+section in bytes, from <code>bench/text_golden.txt</code> — its own only, since
+every binary links the same runtime and summing them would count it four times.
+<strong>compile work</strong> is
+<code>compile_rounds + compile_visits + emitted_lines</code> — fixpoint rounds,
+expressions the fixpoint looked at, and lines the emitter wrote.
+<strong>compile memory</strong> is <code>compile_peak_bytes</code>.
+<strong>welfare</strong> is the score the commit shipped with.</p>
+
+<p>every one of these is an exact integer a rerun reproduces, which is what lets them be diffed rather than eyeballed. the memory and size lines reproduce on any machine; the instruction line reproduces on one compiler, because instruction count is what an optimiser's inlining choices move most, and a toolchain change steps every row of it at once.</p>
+
+<p>the instruction line is here because its absence hid a real regression. between 2026-07-27 and 2026-08-07 the decoder went 2,545,249,871 retired instructions to 2,762,364,162 — eight and a half per cent, matching a wall-clock slowdown measured separately — while every allocation counter stayed byte-identical. the chart used to carry an allocation line named for speed, and it could not say so.</p>
+
+<h2 id="counters"><span class="sec-num">counters</span>what every commit costs</h2>
+
+<p>the chart shows shape; these are the numbers themselves, as ci recorded them on the last push to main. each is deterministic, so a change here is somebody's deliberate edit rather than weather. select a row to read what the counter measures and why it is worth watching.</p>
+
+<p>the numbers above were measured by hand on a named day. these are measured by ci on every push to main, and they are the deterministic ones — allocation counts, arena blocks, rewind iterations, kernel presence, and what the compiler spent deciding and emitting. a noisy runner cannot move any of them, so a change in this panel is somebody's deliberate edit rather than weather. select a row to read what the counter measures and why it is worth watching.</p>
+
+<div class="perf-panel" id="perf-panel">
+  <p class="perf-loading">loading the history…</p>
+</div>
+
+<p>the counts rise across the span because the corpus does: the basket gained a hundred-thousand-element accumulator and a fifty-kilobyte text workload, the encode vein gained lib/json, and each widening was re-baselined so the score read the same either side. these are the cost of the work as it stands each day, not of a frozen file.</p>
+
+<style>
+#trend-chart { margin: 1.6rem 0; }
+.trend { display: block; height: auto; width: 100%; }
+.perf-loading { color: var(--muted); font-size: 0.9rem; }
+.chart-legend { color: var(--muted); font-size: 0.86rem; line-height: 1.7; }
+.perf-panel { border: 1px solid var(--line); border-radius: 10px; margin: 1.5rem 0; padding: 1.1rem 1.3rem; }
+.perf-panel table { border-collapse: collapse; font-family: var(--font-mono); font-size: 0.9rem; width: 100%; }
+.perf-panel th { color: var(--muted); font-weight: 500; text-align: left; }
+.perf-panel td, .perf-panel th { padding: 0.3rem 0.6rem 0.3rem 0; }
+.perf-panel td.n { text-align: right; }
+.perf-panel .delta-up { color: #c0392b; }
+.perf-panel .delta-down { color: var(--accent); }
+.perf-panel .perf-flat { color: var(--muted); font-size: 0.82rem; }
+.perf-panel .perf-when { color: var(--muted); font-size: 0.82rem; margin-top: 0.8rem; }
+.perf-spark { display: block; height: 30px; width: 110px; }
+.perf-panel .perf-head th {
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-family: var(--font-text, inherit);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  padding-top: 1rem;
+  text-transform: lowercase;
+}
+.perf-panel tr:first-child .perf-head th, .perf-panel .perf-head:first-child th { padding-top: 0; }
+.perf-row { cursor: pointer; }
+.perf-row:hover td:first-child, .perf-row:focus-visible td:first-child { color: var(--accent); }
+.perf-caret { display: inline-block; margin-right: 0.45rem; transition: transform 0.12s; }
+.perf-row[aria-expanded='true'] .perf-caret { transform: rotate(90deg); }
+.perf-note td {
+  color: var(--muted);
+  font-family: var(--font-text, inherit);
+  font-size: 0.86rem;
+  line-height: 1.6;
+  max-width: 46rem;
+  padding: 0.1rem 0 0.9rem 1.1rem;
+}
+</style>
+
+<script>
+(async function () {
+  const HISTORY = 'https://raw.githubusercontent.com/kanso-lang/kanso/perf-history/history.jsonl';
+  const panel = document.getElementById('perf-panel');
+  const WATCHED = [
+    ['decoding a 188 kb document, 150 times', null, null],
+    ['allocs', 'allocations',
+     'Every value the decode asks the allocator for. It is a pointer bump into an arena rather than a malloc, so the count is large and cheap — what matters is that it is <em>identical on every machine and every run</em>, because the program is deterministic. A change here is somebody\u2019s edit, never weather.'],
+    ['alloc_bytes', 'bytes allocated',
+     'The same events measured in bytes. It grows with the work done rather than with the footprint: this is cumulative demand over 150 decodes, not memory held. Watch it beside arena blocks — bytes climbing while blocks stay flat is exactly the arena doing its job.'],
+    ['arena_blocks', 'arena blocks',
+     'Peak memory, as a count. Each block is a megabyte the runtime holds; four of them across 150 decodes is the flat-memory guarantee written as a constant. If a decode ever failed to release its scraps, this number would climb with the round count instead of standing still.'],
+    ['perm_allocs', 'frozen constants',
+     'Values copied out of the arena once, at startup, and never recomputed — constant applicative forms. Five of them means five constants in the gauntlet are evaluated a single time no matter how often they are read. If this hits zero, constant freezing has been dropped.'],
+    ['beat_iters', 'rewind iterations',
+     'How many times the arena wound back to a mark. One per decode plus one for the program itself is 151. This is the mechanism behind flat memory: an analysis proves an iteration keeps nothing across the line, so freeing is a pointer reset rather than a walk. A drop here means loops stopped being recognised and memory grows.'],
+    ['el_parses', 'eisel\u2013lemire parses',
+     'Floats parsed by the fast integer path rather than by fallback. It is a presence counter: the algorithm either ran 318,450 times or it silently vanished in a merge, and a zero fails the build. This exists because a conflict resolution once deleted it from main and nothing noticed.'],
+    ['utf8_bytes', 'bytes utf-8 validated',
+     'Every byte the validator looked at. kanso is strict about utf-8, so this is work every decode pays; what it costs fell by a tenth of total decode time once short ascii stopped paying for a sixteen-wide vector setup.'],
+    ['find2_calls', 'simd two-byte scans',
+     'Calls into the vectorised scanner that finds a quote or a backslash sixteen bytes at a time. Another presence counter — if the string scanner regressed to a byte loop this would collapse, and the decode board would follow it down.'],
+    ['encoding the same document, 400 times', null, null],
+    ['encode_allocs', 'allocations',
+     'The write path\u2019s allocation count. Encoding allocates more than decoding because it builds output as well as reading input; the number to watch is the ratio to append_fast below, which says how much of that building happened in place.'],
+    ['encode_arena_blocks', 'arena blocks',
+     'Peak blocks while encoding. Higher than the decode figure because the output buffer is genuinely held rather than discarded per iteration — this is real retained memory, and it is the number that would move if the builder started copying instead of claiming.'],
+    ['encode_ryu_renders', 'shortest float renders',
+     'Floats printed through ry\u016b, which picks the shortest decimal string that reads back as the same double. A presence counter for the renderer; if it fell to zero, something reintroduced the old dtoa path and every float in the output would get longer.'],
+    ['encode_append_fast', 'in-place appends',
+     'Appends that wrote straight into the buffer\u2019s spare capacity, touching nothing else. This is the payoff of the uniqueness analysis: a value proven to have one owner is mutated rather than copied, so a fold of appends is linear instead of quadratic.'],
+    ['encode_append_grow', 'buffer regrowths',
+     'The other half of the pair \u2014 appends that ran out of room and had to reallocate. Five thousand regrowths against forty-two million in-place appends is the ratio the byte builder exists to produce. If this climbs, capacity is being under-reserved somewhere.'],
+    ['encode_utf8_zerocopy', 'strings copied once',
+     'Strings a single vector pass proved need no escaping, so the encoder copied them straight through instead of walking them character by character. Low here only because the benchmark\u2019s strings are deliberately full of escapes; on ordinary documents it dominates.'],
+    ['compiling the sample programs', null, null],
+    ['compile_rounds', 'fixpoint rounds',
+     'How many times whole-program inference swept the program before nothing changed. This is what deciding costs, as opposed to what emitting costs, and the two move independently — grinding a longer fixpoint to write the same code shows up here and nowhere else.'],
+    ['compile_visits', 'expression visits',
+     'Expressions the inference engine looked at across those rounds. Rounds tell you how many passes; visits tell you how much each pass carried. A feature that makes inference re-examine more of the program moves this without moving rounds.'],
+    ['emitted_lines', 'ir lines written',
+     'Lines of llvm ir the backend produced for the sample programs. The output side of the same trade: an optimisation that costs compile work to buy runtime work raises rounds and lowers this, and saying which way it went is the point of publishing both.'],
+    ['emitted_calls', 'calls emitted',
+     'Call instructions in that ir. Falls when inlining, jump-table dispatch, or a fused loop removes a call the old code made; rises when a new runtime helper is introduced. A cheap proxy for how much work stayed in the generated code rather than crossing into the runtime.'],
+    ['emitted_branches', 'branches emitted',
+     'Conditional branches in the generated ir. Whole-program inference deletes type checks it can prove unnecessary, and each deletion shows up here. This is the number that fell when proven paths stopped carrying tag checks and failure guards.'],
+  ];
+  // The chart reads the same rows as the panel below it. Drawing it here
+  // rather than committing an svg is what lets the series extend without a
+  // write: ci appends a row to the history branch and the next reader sees it.
+  const TREND = [
+    // Scaled down so it shares an axis with the others; only shape is read.
+    ['#fb7185', 'run instructions',
+     (r) => (r.instructions == null || r.encode_instructions == null
+       ? null
+       : Math.round((r.instructions + r.encode_instructions) / 1000))],
+    ['#a78bfa', 'run memory', (r) => r.oneshot_arena_peak_bytes],
+    // The decoder's machine code. Only its own, because every binary links
+    // the same runtime and summing them would count it four times.
+    ['#facc15', 'binary size', (r) => r.text_bytes],
+    ['#ffd166', 'compile work',
+     (r) => sum(sum(r.compile_rounds, r.compile_visits), r.emitted_lines)],
+    ['#f472b6', 'compile memory', (r) => r.compile_peak_bytes],
+    // recorded rather than recomputed: the score a commit shipped with is a
+    // fact about that commit. Hundredths, so integer scaling keeps real moves.
+    ['#4ade80', 'welfare',
+     (r) => (r.welfare == null ? null : Math.round(parseFloat(r.welfare) * 100))],
+  ];
+  function sum(a, b) {
+    return a == null || b == null ? null : a + b;
+  }
+  function drawTrend(rows) {
+    const host = document.getElementById('trend-chart');
+    if (!host) return;
+    const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
+    const total = rows.length;
+    const at = (i) => PAD + (i * (W - 2 * PAD)) / Math.max(total - 1, 1);
+    const parts = TREND.map(([colour, , read]) => {
+      const pts = [];
+      rows.forEach((r, i) => {
+        const v = read(r);
+        if (typeof v === 'number' && !Number.isNaN(v)) pts.push([i, v]);
+      });
+      if (!pts.length) return '';
+      const vals = pts.map((p) => p[1]);
+      const lo = Math.min(...vals), hi = Math.max(...vals);
+      // A near-flat series draws flat: scaling to its own range would make a
+      // fifteen-byte wiggle on an 819-kilobyte peak fill the plot, and a
+      // reader is right to read that as a cliff.
+      const floorSpan = Math.abs((lo + hi) / 2) / 50;
+      const span = Math.max(hi - lo, floorSpan);
+      const mid = (lo + hi) / 2, low = mid - span / 2;
+      const y = (v) => (span === 0 ? H / 2 : TOP + USABLE - ((v - low) * USABLE) / span);
+      const coords = pts.map(([i, v]) => `${Math.round(at(i))},${Math.round(y(v))}`).join(' ');
+      return `<polyline fill="none" stroke="${colour}" stroke-width="2" points="${coords}"/>`;
+    });
+    // The keys are spaced by how many there are. A fixed pitch fit five and
+    // ran off the right edge at six, and the next line added would do it again.
+    const perRow = Math.min(TREND.length, 4);
+    const pitch = (W - 2 * PAD) / perRow;
+    const rows_ = Math.ceil(TREND.length / perRow);
+    const keys = TREND.map(([colour, label], i) => {
+      const x = PAD + (i % perRow) * pitch;
+      const ky = H - 16 - (rows_ - 1 - Math.floor(i / perRow)) * 22;
+      return `<rect x="${x}" y="${ky - 9}" width="22" height="3" fill="${colour}"/>` +
+        `<text x="${x + 30}" y="${ky}" class="trend-key">${label}</text>`;
+    });
+    host.innerHTML = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
+      `aria-label="${TREND.length} measures across ${total} commits">` +
+      parts.join('\n') + '\n' + keys.join('\n') + '</svg>';
+  }
+  const host = document.getElementById('trend-chart');
+  let rows;
+  try {
+    const text = await (await fetch(HISTORY, { cache: 'no-store' })).text();
+    rows = text.trim().split('\n').filter(Boolean).map(JSON.parse);
+  } catch (e) {
+    const away = '<p class="perf-loading">the history is published by ci on push to main; it is not reachable from here right now.</p>';
+    host.innerHTML = away;
+    panel.innerHTML = away;
+    return;
+  }
+  if (!rows.length) { host.innerHTML = '<p class="perf-loading">no history recorded yet.</p>'; return; }
+  drawTrend(rows);
+  const last = rows[rows.length - 1];
+  const prev = rows.length > 1 ? rows[rows.length - 2] : null;
+  const spark = (key) => {
+    const series = rows.slice(-40).map((r) => r[key]).filter((v) => typeof v === 'number');
+    if (series.length < 2) return '<span class="perf-flat">one commit so far</span>';
+    const lo = Math.min(...series), hi = Math.max(...series), span = hi - lo;
+    // a run that never moved has no shape to show; draw it down the middle
+    // rather than pinned to the floor, where it reads as a missing chart
+    const y = (v) => (span === 0 ? 15 : 28 - ((v - lo) / span) * 26);
+    const points = series
+      .map((v, i) => `${(i / (series.length - 1)) * 108 + 1},${y(v)}`)
+      .join(' ');
+    return `<svg class="perf-spark" viewBox="0 0 110 30" aria-hidden="true"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
+  };
+  const cells = [];
+  let shown = 0;
+  for (const [key, label, note] of WATCHED) {
+    // a three-field entry with no label is a section heading, not a counter
+    if (label === null) {
+      cells.push(`<tr class="perf-head"><th colspan="4">${key}</th></tr>`);
+      continue;
+    }
+    if (typeof last[key] !== 'number') continue;
+    const now = last[key];
+    let delta = '<span class="perf-flat">first record</span>';
+    if (prev && typeof prev[key] === 'number') {
+      if (prev[key] === now) {
+        // an unchanged counter is the normal case and the point of the panel;
+        // say so, or a blank cell reads as a number nobody measured
+        delta = '<span class="perf-flat">unchanged</span>';
+      } else {
+        const up = now > prev[key];
+        const diff = now - prev[key];
+        const share = prev[key] === 0 ? 0 : (diff / prev[key]) * 100;
+        // a real move on a large counter rounds to 0.0% and then reads as no
+        // move at all, so fall back to the count when the share disappears
+        const size = Math.abs(share) >= 0.05
+          ? `${up ? '+' : ''}${share.toFixed(1)}%`
+          : `${up ? '+' : ''}${diff.toLocaleString()}`;
+        delta = `<span class="${up ? 'delta-up' : 'delta-down'}">${up ? '\u25b2' : '\u25bc'} ${size}</span>`;
+      }
+    }
+    const id = `perf-note-${shown++}`;
+    cells.push(
+      `<tr class="perf-row" tabindex="0" role="button" aria-expanded="false" aria-controls="${id}">` +
+        `<td><span class="perf-caret" aria-hidden="true">\u203a</span>${label}</td>` +
+        `<td class="n">${now.toLocaleString()}</td><td>${delta}</td><td>${spark(key)}</td></tr>`,
+      `<tr class="perf-note" id="${id}" hidden><td colspan="4"><code>${key}</code> — ${note}</td></tr>`
+    );
+  }
+  panel.innerHTML =
+    `<table><thead><tr><th>counter</th><th class="n">now</th><th>since last</th><th>trend</th></tr></thead><tbody>${cells.join('')}</tbody></table>` +
+    `<p class="perf-when">${rows.length} commits recorded \u00b7 newest <code>${last.commit}</code> \u00b7 ${new Date(last.date).toISOString().slice(0, 10)} \u00b7 <span class="perf-flat">select a counter to read what it measures</span></p>`;
+
+  const toggle = (row) => {
+    const note = document.getElementById(row.getAttribute('aria-controls'));
+    const open = row.getAttribute('aria-expanded') === 'true';
+    row.setAttribute('aria-expanded', String(!open));
+    note.hidden = open;
+  };
+  panel.querySelectorAll('.perf-row').forEach((row) => {
+    row.addEventListener('click', () => toggle(row));
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(row); }
+    });
+  });
+})();
+</script>
+
+</article>
