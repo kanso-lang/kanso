@@ -2600,3 +2600,26 @@ believe when it fires for a real reason.
 
 The pin stays exact. A gate needing a tolerance to survive its own second run
 is measuring the runner.
+
+## 2026-08-10 — one byte view per scalar token, and the fusion that would skip it
+
+`k_bytes_view` costs 83,462,400 instructions in the decode benchmark, three per
+cent of the run, across 3,091,200 calls at twenty-seven apiece. Every one comes
+from `k_b_slice` and nowhere else.
+
+That is not waste. `cs[p]` on bytes answers an int through `k_b_at`, so reading
+a character allocates nothing; the slices are one per scalar token — the string
+in `string_at`, the digits in `parse_number`, the keyword in `word`. Three
+million tokens in four megabytes is the right order.
+
+What it does show is a fusion. `string_at` reads
+
+    text/utf8 (text/slice cs start (p - 1))
+
+and `text/utf8` on a byte view validates and copies into a fresh string, so the
+twenty-four byte header the slice just built is read once and dropped. 3,054,450
+of the 3,091,200 slices are that shape. A rule that lowers utf8-of-slice to one
+call taking a pointer and a length would skip the header entirely, which is
+worth about two per cent of decode if the rest of the path is unchanged.
+
+Not built. Recorded because the number is measured and the shape is specific.
