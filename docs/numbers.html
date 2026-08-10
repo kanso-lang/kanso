@@ -160,7 +160,7 @@ expressions the fixpoint looked at, and lines the emitter wrote.
   function drawTrend(rows) {
     const host = document.getElementById('trend-chart');
     if (!host) return;
-    const W = 1200, H = 560, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP;
+    const W = 1200, H = 580, PAD = 64, TOP = PAD / 2, USABLE = H - PAD - TOP - 22;
     const total = rows.length;
     const at = (i) => PAD + (i * (W - 2 * PAD)) / Math.max(total - 1, 1);
     const parts = TREND.map(([colour, , read]) => {
@@ -182,13 +182,19 @@ expressions the fixpoint looked at, and lines the emitter wrote.
       const coords = pts.map(([i, v]) => `${Math.round(at(i))},${Math.round(y(v))}`).join(' ');
       return `<polyline fill="none" stroke="${colour}" stroke-width="2" points="${coords}"/>`;
     });
+    // The keys are spaced by how many there are. A fixed pitch fit five and
+    // ran off the right edge at six, and the next line added would do it again.
+    const perRow = Math.min(TREND.length, 4);
+    const pitch = (W - 2 * PAD) / perRow;
+    const rows_ = Math.ceil(TREND.length / perRow);
     const keys = TREND.map(([colour, label], i) => {
-      const x = PAD + i * 210, ky = H - 16;
+      const x = PAD + (i % perRow) * pitch;
+      const ky = H - 16 - (rows_ - 1 - Math.floor(i / perRow)) * 22;
       return `<rect x="${x}" y="${ky - 9}" width="22" height="3" fill="${colour}"/>` +
         `<text x="${x + 30}" y="${ky}" class="trend-key">${label}</text>`;
     });
     host.innerHTML = `<svg class="trend" viewBox="0 0 ${W} ${H}" role="img" ` +
-      `aria-label="five measures across ${total} commits">` +
+      `aria-label="${TREND.length} measures across ${total} commits">` +
       parts.join('\n') + '\n' + keys.join('\n') + '</svg>';
   }
   const host = document.getElementById('trend-chart');
