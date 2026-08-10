@@ -903,7 +903,16 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
     // executes eight per cent more instructions moves neither of them, which
     // is a thing that happened and went unseen for eleven days.
     ['#4fd1ff', 'run allocations', (r) => sum(r.allocs, r.encode_allocs)],
+    // The work itself, which nothing else here counts. Scaled down so it
+    // shares an axis with the others; only its shape is being read.
+    ['#fb7185', 'run instructions',
+     (r) => (r.instructions == null || r.encode_instructions == null
+       ? null
+       : Math.round((r.instructions + r.encode_instructions) / 1000))],
     ['#a78bfa', 'run memory', (r) => r.oneshot_arena_peak_bytes],
+    // The decoder's machine code. Only its own, because every binary links
+    // the same runtime and summing them would count it four times.
+    ['#facc15', 'binary size', (r) => r.text_bytes],
     ['#ffd166', 'compile work',
      (r) => sum(sum(r.compile_rounds, r.compile_visits), r.emitted_lines)],
     ['#f472b6', 'compile memory', (r) => r.compile_peak_bytes],
@@ -1204,23 +1213,34 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 <p class="chart-legend">how each line is derived, from the code that draws it.
 <strong>run allocations</strong> is <code>allocs + encode_allocs</code>: how many
 times the decode and encode veins call the allocator, counted by the runtime
-itself. <strong>run memory</strong> is <code>oneshot_arena_peak_bytes</code>, the
-high-water mark of the one-shot vein's arena. <strong>compile work</strong> is
+itself. <strong>run instructions</strong> is
+<code>instructions + encode_instructions</code> in thousands — retired
+instructions for the decode and encode veins, counted under callgrind and
+pinned in <code>bench/instructions_golden.txt</code>. It is the only line here
+that counts the work a process did rather than what it allocated.
+<strong>run memory</strong> is <code>oneshot_arena_peak_bytes</code>, the
+high-water mark of the one-shot vein's arena. <strong>binary size</strong> is
+the decoder's <code>.text</code> section in bytes, from
+<code>bench/text_golden.txt</code> — its own only, since every binary links
+the same runtime and summing them would count it four times. <strong>compile work</strong> is
 <code>compile_rounds + compile_visits + emitted_lines</code> — fixpoint rounds,
 expressions the fixpoint looked at, and lines the emitter wrote.
 <strong>compile memory</strong> is <code>compile_peak_bytes</code>. <strong>welfare</strong>
 is the score the commit shipped with, recorded rather than recomputed.</p>
 
-<p>every one of these is an exact integer a rerun reproduces on any machine,
-which is what lets them be diffed rather than eyeballed. it is also their
-limit, and the limit is worth stating plainly: <strong>none of them counts
-instructions.</strong> a change that allocates identically and does more work
-per allocation moves nothing here. that is not hypothetical — between
-2026-07-27 and 2026-08-07 the decoder's retired instructions went 2,545,249,871
-to 2,762,364,162, eight and a half per cent, with every counter above
-byte-identical. the work a process does is measurable to a few tenths of a per
-cent with callgrind, and until it is on this chart the chart cannot see that
-class of regression at all.</p>
+<p>every one of these is an exact integer a rerun reproduces, which is what
+lets them be diffed rather than eyeballed. the allocation and memory lines
+reproduce on any machine; the instruction line reproduces on one compiler,
+because instruction count is what an optimiser's inlining choices move most,
+and a toolchain change steps every row of it at once.</p>
+
+<p>the instruction line is here because its absence hid a real regression.
+between 2026-07-27 and 2026-08-07 the decoder went 2,545,249,871 retired
+instructions to 2,762,364,162 — eight and a half per cent, matching a
+wall-clock slowdown measured separately — while every allocation counter on
+this chart stayed byte-identical. two of these lines used to be called run
+speed and compile speed, and neither counted an instruction, so nothing on the
+page could say so.</p>
 
 <p>the counts rise across the span because the corpus does: the basket gained a hundred-thousand-element accumulator and a fifty-kilobyte text workload, the encode vein gained lib/json, and each widening was re-baselined so the score read the same either side. these are the cost of the work as it stands each day, not of a frozen file — the question worth asking of a compiler still growing what it can compile.</p>
 

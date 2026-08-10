@@ -258,11 +258,16 @@ jobs:
       # counts the work itself, exactly and reproducibly: callgrind counts
       # rather than samples, so three runs give the same digits and no other
       # process on the box can reach it. Forty-four seconds for all four.
+      #
+      # The environment is emptied because the kernel copies it onto the new
+      # process's stack and libc walks it before main, so a run id that gained
+      # a digit reads as fourteen instructions of work that nobody wrote.
       - name: how much work
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
           for b in jsonbench encodebench oneshot basket; do
-            valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
+            env -i PATH=/usr/bin:/bin \
+              valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
               >/dev/null 2>/tmp/ir.$b
             printf '%s %s\n' "$b" "$(grep -o 'I   refs:.*' /tmp/ir.$b | tr -dc 0-9)"
           done > work.txt
