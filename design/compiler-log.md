@@ -2394,3 +2394,38 @@ differently cost more. Declined and reverted.
 That the size is unchanged while the time is not is the useful part: it says
 the cost being chased here is arrangement, not volume, and a change that only
 reorders is enough to move it in either direction.
+
+## 2026-08-09 — the whole slowdown fits inside what a profile can arrange
+
+Profile-guided optimisation, as a ceiling measurement rather than a proposal:
+build with `-fprofile-generate`, decode with it, merge, rebuild with
+`-fprofile-use`. Five randomised layouts a side, one sitting:
+
+    today, plain     2.071 2.099 2.123 2.142 2.156   mean 2.1182
+    today, with PGO  1.917 1.924 1.934 1.954 1.957   mean 1.9372
+    07-27, plain     1.979 1.988 2.009 1.993 1.994   mean 1.9926
+
+Faster in every layout, by 8.5% — and 2.8% faster than the build the 7.6%
+regression is measured against. The machine code also shrinks, 79,192 to
+75,852 bytes.
+
+THE CAVEAT IS THE WHOLE CAVEAT: the profile was taken from the benchmark it
+was then measured on. That is overfitting by construction, and 8.5% is a
+ceiling rather than anything shippable. A real profile would come from the
+corpus and buy less.
+
+What it establishes is the shape rather than the size. Eleven days of diffuse
+slowdown, none of it visible in any deterministic counter, all of it inside
+what arrangement and profile-driven inlining can undo — and undo past the
+starting point. So this is not accumulated algorithmic cost that has to be
+found and removed one commit at a time. It is a compiler making worse guesses
+as the code it is guessing about grows, which is consistent with everything
+else measured today: the guards that cost when present but not when reached,
+the never-executed padding that costs 1.6%, and `hot` markers that cost 2.6%
+without changing a byte of size.
+
+A decision follows and it is not the compiler's to make. Building kanso's
+releases with PGO would need a profile in the repository, a job to regenerate
+it, and an answer for what happens on a host that has no profile — and it
+changes what the published numbers mean, because the number would then depend
+on a workload chosen in advance. That belongs to Clay.
