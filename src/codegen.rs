@@ -276,6 +276,7 @@ declare %KValue @k_b_append_mut(%KValue, %KValue)
 declare %KValue @k_b_put(%KValue, %KValue, %KValue)
 declare %KValue @k_b_put_mut(%KValue, %KValue, %KValue)
 declare %KValue @k_b_slice(%KValue, %KValue, %KValue)
+declare %KValue @k_b_utf8_slice(%KValue, %KValue, %KValue, ptr)
 declare %KValue @k_b_find2(%KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_find2_below(%KValue, %KValue, %KValue, %KValue, %KValue)
 declare %KValue @k_b_append(%KValue, %KValue)
@@ -3617,6 +3618,16 @@ impl<'a> Backend<'a> {
         self.emit_call_rest(f, head, args, None, span)
     }
 
+    /// The builtin a name stands for at a call site: itself with the
+    /// `builtin_` prefix off, or whatever the forwarder map says a plain
+    /// wrapper of this arity forwards to.
+    fn builtin_named(&self, name: &str, arity: usize) -> String {
+        match self.forwarders.get(&(name.to_string(), arity)) {
+            Some(target) => target.clone(),
+            None => name.strip_prefix("builtin_").unwrap_or(name).to_string(),
+        }
+    }
+
     fn emit_call_rest(
         &mut self,
         f: &mut FnEmit,
@@ -3783,6 +3794,39 @@ impl<'a> Backend<'a> {
             ));
             f.record(&t, f.set_of(&then_value) | f.set_of(&else_value) | (f.set_of(&cond) & FAIL));
             return Ok(t);
+        }
+        // utf8 of a slice reads a byte view for a pointer and a length and
+        // drops it, three million times in a decode. The wrapper inlining
+        // above has already turned `text/utf8` and `text/slice` into their
+        // builtins, so the pair is visible here as written, before either
+        // argument is emitted.
+        // A std wrapper keeps its qualified spelling here: `text/utf8` becomes
+        // `utf8` through the forwarder map a few lines below, at the emit
+        // site. Resolving the same way is what makes the pair visible — the
+        // first cut of this matched the bare names and never once fired.
+        if first.is_none() && args.len() == 1 && self.builtin_named(name, 1) == "utf8" {
+            if let Expr::App { head: inner_head, args: inner_args, piped: false, .. } = &args[0] {
+                if let Expr::Ident(inner, _) = &**inner_head {
+                    if self.builtin_named(inner, inner_args.len()) == "slice" && inner_args.len() == 3
+                    {
+                        let mut parts = Vec::new();
+                        for a in inner_args {
+                            let v = self.emit_expr(f, a)?;
+                            parts.push(self.maybe_force(f, v));
+                        }
+                        let sets: Vec<Set> = parts.iter().map(|e| f.set_of(e)).collect();
+                        let sliced = infer::builtin_set("slice", &sets);
+                        let origin = self.origin_arg(f, span);
+                        let t = f.tmp();
+                        f.line(&format!(
+                            "{t} = call %KValue @k_b_utf8_slice(%KValue {}, %KValue {}, %KValue {}, {origin})",
+                            parts[0], parts[1], parts[2]
+                        ));
+                        f.record(&t, infer::builtin_set("utf8", &[sliced]));
+                        return Ok(t);
+                    }
+                }
+            }
         }
         let mut emitted = Vec::new();
         let mut iter = args.iter();

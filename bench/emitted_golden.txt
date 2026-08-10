@@ -31,6 +31,6 @@
 # The binary does not change — -flto already internalised and stripped these,
 # __TEXT is 114,688 either way. What is saved is writing them and reading them.
 defines=154
-calls=1660
+calls=1659
 branches=1018
-lines=10529
+lines=10531
