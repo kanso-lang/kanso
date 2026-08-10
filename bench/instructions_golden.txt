@@ -13,10 +13,18 @@
 #
 # Exact, not a band. Three consecutive runs give the same digits, because
 # callgrind counts rather than samples and no other process can reach it. A
-# rise is a regression to explain and a fall is a win to bank; a toolchain
-# bump moves every row at once and is regenerated in one go, with a sentence
-# in design/compiler-log.md saying which and why.
-jsonbench 2762364313
-encodebench 8724969189
-oneshot 59757493
-basket 51930408
+# rise is a regression to explain and a fall is a win to bank.
+#
+# These rows belong to the linux runner's compiler, and they belong to it more
+# tightly than any other vein here: the same sources measured under Debian's
+# clang read 2,762,364,313 for the decoder against ubuntu's 3,266,971,711,
+# eighteen per cent apart, where the machine-code size of the same two builds
+# differs by well under one. Instruction count is what an optimiser's inlining
+# choices move most. So a toolchain bump will look like an enormous regression
+# here and will not be one — regenerate every row in one go and say so in
+# design/compiler-log.md, and never read a row against a number measured
+# somewhere else.
+jsonbench 3266971711
+encodebench 9283849540
+oneshot 64630634
+basket 56793158
