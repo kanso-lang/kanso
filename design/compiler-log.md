@@ -2592,5 +2592,11 @@ local pair of runs differing only in environment length read 51,930,665 and
 environment emptied, and every benchmark came down by about seventy-five
 thousand — the startup walk leaving the measurement.
 
+It happened twice. The pull request carrying this very log entry — a markdown
+file and nothing else — failed the same gate, on a tree whose instruction count
+could not have moved. Two occurrences in two runs is the rate, and a
+performance gate that a documentation change can fail is a gate nobody will
+believe when it fires for a real reason.
+
 The pin stays exact. A gate needing a tolerance to survive its own second run
 is measuring the runner.
