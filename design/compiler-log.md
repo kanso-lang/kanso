@@ -2429,3 +2429,65 @@ releases with PGO would need a profile in the repository, a job to regenerate
 it, and an answer for what happens on a host that has no profile — and it
 changes what the published numbers mean, because the number would then depend
 on a workload chosen in advance. That belongs to Clay.
+
+## 2026-08-09 — what a counter cannot see, and two gates for it
+
+Clay, on being shown the decode slowdown: the whole point of welfare and the
+counters feeding it is to prevent exactly this. His guess was that the
+benchmark lacked the realism of a real json workload. It did not. The workload
+that regressed IS the benchmark — decode_allocs, decode_peak_bytes and
+decode_arena_blocks are welfare terms — and every one of them was byte
+identical across the eleven days: 7,577,414 allocations before and after, the
+same arena blocks, the same peak. So were the two kernels' call counts,
+1,254,150 puts and 1,459,800 pushes. A broader benchmark would have regressed
+just as silently.
+
+The reason is written in this repository's own rules and was known when the
+model was built: wall time is absent because it cannot be made deterministic,
+and what a model leaves out it implicitly weights at zero. The regression lived
+in per-call guard work and in code size. Nothing counted either.
+
+### Two gates, and what each is worth
+
+The machine code now has a golden. `__TEXT` is page-granular — 98,304 and
+114,688 are six and seven sixteen-kilobyte pages — so the "16.7% growth" this
+log quoted on the same day was noise dressed as a figure. Section `__text` went
+54,708 to 79,192 bytes, forty-five per cent, and padding an old build to that
+size with functions it never calls costs 1.6% of decode by itself.
+
+The two in-place writers now have presence counters, by path rather than by
+call. A doubling of either was invisible: the fast path allocates nothing, so
+`allocs` could not see it. The counter earned itself immediately — the ch10
+sample reads push_mut_slow=1000, meaning a beat-carried accumulator takes the
+guarded fast path zero times in a thousand, because a list that crossed a beat
+boundary is not born this beat. That guard is one of the three costing 36% of
+the regression and nothing had ever shown it never fires.
+
+Neither gate is the answer Clay wants. Both catch causes somebody enumerated.
+
+### A time term was proposed, tested, and is weaker than it sounds
+
+kq races itself against jq interleaved because a ratio holds where an absolute
+wobbles, so the same shape was tried here against serde_json. Three sittings:
+
+    kanso  0.8452 0.8480 0.8512 ms/decode   spread 0.71%
+    serde  0.8494 0.8594 0.8616             spread 1.4%
+    ratio  0.9951 0.9867 0.9880             spread 0.85%
+
+The ratio is WORSE than kanso's own number, because serde's harness varies more
+than kanso's and dividing by it adds that variance rather than cancelling it.
+The trick works for kq, where contention against jq is the dominant and common
+noise; it does not transfer.
+
+What remains is that kanso's own per-decode time is stable to about 0.7% on a
+quiet box, against a regression that arrived in one to three per cent steps. A
+gate at that resolution catches the larger steps and passes the rest. Worth
+having, not worth calling a guarantee.
+
+The same day, kq's published table was found to be regenerated on a shared
+runner: two consecutive runs of identical code moved every row by nine to
+twenty-two per cent and reversed the largest, publishing an 18% regression
+where a head-to-head on one box measured the new compiler 4.2% faster.
+Interleaving cancels noise within a run; the machine itself is the variable and
+one run is one sample of it. Ruled: the race goes, the counters stay, the
+timings go back to being a dated hand sitting.
