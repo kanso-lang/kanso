@@ -4839,6 +4839,36 @@ static KValue k_utf8_bad(const char* data, long long len, const char* origin);
 static KValue k_utf8_check(char* data, long long len, const char* origin);
 static KValue k_utf8_finish(KValue bv, const char* origin);
 
+/* utf8 of a slice, without the slice. A byte view is twenty-four bytes built
+   to be read for a pointer and a length and dropped: k_utf8_finish takes a
+   buffer without copying only when the view owns capacity, and a view carved
+   out of somebody else's bytes owns none, so it always copies anyway. The
+   decoder does this three million times, once per scalar token.
+
+   Any shape this cannot answer for goes back through both calls, so the
+   out-of-range window, the failing argument and the wrong type all behave
+   exactly as they did. */
+KValue k_b_slice(KValue container, KValue fromv, KValue tov);
+KValue k_b_utf8(KValue lv, const char* origin);
+
+KValue k_b_utf8_slice(KValue container, KValue fromv, KValue tov, const char* origin) {
+    if (container.tag == K_BYTES && fromv.tag == K_INT && tov.tag == K_INT) {
+        KBytes* b = k_as_bytes(container);
+        long long from = fromv.payload, to = tov.payload;
+        const char* data = (const char*)b->data;
+        long long len = 0;
+        if (!(from < 1 || from > to || to > b->len)) {
+            data += from - 1;
+            len = to - from + 1;
+        }
+        KValue bad = k_utf8_bad(data, len, origin);
+        if (bad.tag == K_ERR) return bad;
+        return k_str_n(data, len);
+    }
+    KValue sliced = k_b_slice(container, fromv, tov);
+    return k_b_utf8(sliced, origin);
+}
+
 KValue k_b_utf8(KValue lv, const char* origin) {
     if (!k_not_failure(lv)) return lv;
     if (lv.tag == K_BYTES) {

@@ -2623,3 +2623,60 @@ call taking a pointer and a length would skip the header entirely, which is
 worth about two per cent of decode if the rest of the path is unchanged.
 
 Not built. Recorded because the number is measured and the shape is specific.
+## 2026-08-10 — utf8 of a slice, and two ways to be green and wrong
+
+The decoder built one byte view per scalar token: 3,091,200 of them, 83.5
+million instructions, every call from k_b_slice. The view could never pay for
+itself, because k_utf8_finish takes a buffer without copying only when the view
+owns capacity and a view carved out of another's bytes owns none.
+
+Lowering the pair as one call: decode 2,762,362,598 retired instructions to
+2,699,946,398 (-2.26%) and 7,577,414 allocations to 6,272,114 (-17.2%), 41.8 MB
+less asked for. oneshot -0.69%. Encode and basket barely move, which is right —
+neither reads text this way. Machine code grows 112 bytes per binary for the
+kernel, and one emitted call replaces two.
+
+Two defects on the way, both green through every check.
+
+The first fired zero times. It matched the bare name `utf8`, and a std wrapper
+keeps its qualified spelling until the forwarder map resolves it at the emit
+site. Byte-identical counters caught it; correctness tests could not, because
+the code was correct and dead.
+
+The second broke the differential law. An err records the frame it was born in,
+and `text/utf8` is a wrapper the oracle really calls, so fusing past it moved
+the birthplace to the caller's file. The suite, the book samples and the
+diagnostics differential all passed: nothing in the corpus reads an invalid
+byte through a slice. Found by hand-building one. The fused call now interns
+the origin from the wrapper's declaration; tests/golden/runtime pins it.
+
+The intermediate repair is the one to remember. Fusing only the already-inlined
+spelling removed the divergence and fired zero times — the first bug wearing a
+correctness argument. A divergence going away is not evidence the code runs.
+
+Checked and clear: to_int, to_float and from_code are the other builtins that
+birth an err through a wrapper, and all three name the same origin on both
+engines. The bypass this fusion introduced was the only one of its kind.
+
+## 2026-08-10 — the stopwatch cannot see the fusion, and that is the point
+
+Randomised-layout timing of the utf8-of-slice fusion, five neutral paddings per
+tree, nine runs each, floor per padding, median of the five floors:
+
+    base    137562 132535 136214 132672 133191   median 133191 us
+    fused   129935 130662 133797 133226 133496   median 133226 us
+
+Delta +0.03%. The spread inside one tree is 3.79% and 2.97%, comfortably larger
+than the 2.26% the instruction count measures exactly. The decode board does
+not move, and no millisecond figure on any page is touched by this change.
+
+The first harness said the fused build was 0.75% SLOWER, which is how the flaw
+was found: a 17% allocation cut and a 2.26% instruction cut do not produce a
+slowdown, so the instrument was wrong before the code was. Each timestamp was
+its own `python3 -c`, putting an interpreter startup inside every measured
+interval — about thirty milliseconds on a benchmark that runs in a hundred and
+twenty. Timing all nine runs inside one process removed it.
+
+This is the case the counter veins were built for. Two exact numbers moved, the
+clock could not say anything, and a per-commit claim in milliseconds would have
+been an artefact of where the linker happened to put things.
