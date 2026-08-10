@@ -910,6 +910,9 @@ time ./jsonbench                                  <span class="c"># less ~3 ms s
        ? null
        : Math.round((r.instructions + r.encode_instructions) / 1000))],
     ['#a78bfa', 'run memory', (r) => r.oneshot_arena_peak_bytes],
+    // The decoder's machine code. Only its own, because every binary links
+    // the same runtime and summing them would count it four times.
+    ['#facc15', 'binary size', (r) => r.text_bytes],
     ['#ffd166', 'compile work',
      (r) => sum(sum(r.compile_rounds, r.compile_visits), r.emitted_lines)],
     ['#f472b6', 'compile memory', (r) => r.compile_peak_bytes],
@@ -1216,7 +1219,10 @@ instructions for the decode and encode veins, counted under callgrind and
 pinned in <code>bench/instructions_golden.txt</code>. It is the only line here
 that counts the work a process did rather than what it allocated.
 <strong>run memory</strong> is <code>oneshot_arena_peak_bytes</code>, the
-high-water mark of the one-shot vein's arena. <strong>compile work</strong> is
+high-water mark of the one-shot vein's arena. <strong>binary size</strong> is
+the decoder's <code>.text</code> section in bytes, from
+<code>bench/text_golden.txt</code> — its own only, since every binary links
+the same runtime and summing them would count it four times. <strong>compile work</strong> is
 <code>compile_rounds + compile_visits + emitted_lines</code> — fixpoint rounds,
 expressions the fixpoint looked at, and lines the emitter wrote.
 <strong>compile memory</strong> is <code>compile_peak_bytes</code>. <strong>welfare</strong>

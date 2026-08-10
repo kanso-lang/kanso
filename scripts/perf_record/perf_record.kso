@@ -163,6 +163,22 @@ fn instructions text
   counts = list/map ir_benches (n -> ir_line text n)
   list/to_list (list/zip ir_fields (list/to_list counts))
 
+# The text golden is `name text=count`: the machine code each benchmark
+# carries. Only the decoder's is charted — every binary links the same runtime,
+# so summing them would count it four times.
+fn size_of text
+  wanted = list/select (text/split text "\n") (l -> ir_starts? l "jsonbench")
+  size_in (list/to_list wanted)
+
+fn size_in ls
+  size_amount ls (length ls == 0)
+
+fn size_amount _ true
+  0
+
+fn size_amount ls false
+  text/to_int (text/split (text/split ls[1]! " ")[2]! "=")[2]!
+
 # The compile golden is many fields to a line, one line per sample, and the
 # published number is the total across them.
 fn total_for lines key
@@ -238,9 +254,14 @@ fn assembled line d e o bk c cc w
   measured = text/concat own scored
   tail = text/concat rest measured
   rows = text/concat (described line) (text/concat veins tail)
-  io/read_file "bench/instructions_golden.txt" . (w -> written rows w)
+  io/read_file "bench/instructions_golden.txt" . (w -> with_work rows w)
 
-fn written pairs w
-  io/write "{json/encode (list/to_h (text/concat pairs (instructions w)))}\n"
+fn with_work rows w
+  io/read_file "bench/text_golden.txt" . (t -> written rows w t)
+
+fn written pairs w t
+  sized = [["text_bytes" (size_of t)]]
+  worked = text/concat (instructions w) sized
+  io/write "{json/encode (list/to_h (text/concat pairs worked))}\n"
 
 pub play = asked ["log" "-1" "--format=%h %cI %s"] . stamped
