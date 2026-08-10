@@ -16,6 +16,6 @@
 # with a sentence in design/compiler-log.md saying so. A number that changes
 # without a sentence is the thing to catch.
 jsonbench text=82194
-encodebench text=100226
-oneshot text=99522
-basket text=91682
+encodebench text=100194
+oneshot text=99490
+basket text=91650
