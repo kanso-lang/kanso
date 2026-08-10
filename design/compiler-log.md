@@ -2491,3 +2491,32 @@ where a head-to-head on one box measured the new compiler 4.2% faster.
 Interleaving cancels noise within a run; the machine itself is the variable and
 one run is one sample of it. Ruled: the race goes, the counters stay, the
 timings go back to being a dated hand sitting.
+
+## 2026-08-09 — the profile that had not seen the program
+
+The 8.5% recorded above was measured with a profile taken from the benchmark it
+was then timing, which is overfitting by construction and was labelled as such.
+Here is the honest number.
+
+A profile gathered from encodebench, oneshot and basket — never from decode —
+and applied to decode. Five randomised layouts a side, one sitting:
+
+    plain        2.320 2.305 2.329 2.300 2.348   mean 2.3204
+    with profile 2.234 2.283 2.308 2.278 2.298   mean 2.2802
+
+1.7%, lower in every layout. A fifth of what the circular profile claimed.
+
+It transfers at all because the hot set is entirely runtime: sampling jsonbench
+finds twenty-three `k_*` frames on CPU out of 749 symbols, so profiling the
+runtime through other programs still profiles the code decode spends itself in.
+It transfers no better than that because a program's own emitted IR gets no
+useful profile from a different program.
+
+So the earlier claim wants narrowing. "The whole slowdown fits inside what
+arrangement can undo" is true about what a perfectly-informed compiler can
+reach and misleading about what a real build can. The ceiling is large and a
+fifth of it is available.
+
+Recommended and not adopted: 1.7% does not pay for a profile in the repository,
+a job to regenerate it, an answer for a host that has none, and a published
+decode figure that would then depend on a workload chosen in advance.
