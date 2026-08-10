@@ -77,7 +77,16 @@ d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.28
 
 d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
 
-run_speed_counters = ["decode_allocs" "encode_allocs" "basket_allocs"]
+# Retired instructions, which is what a run costs. Allocation counts sat here
+# until a decode regression of eight and a half per cent scored zero: the
+# allocator was called exactly as often and the work rose anyway, because a
+# guard that runs per element allocates nothing. An allocation executes
+# instructions, so this sees what the counts saw and the rest besides.
+decode_work = ["decode_instructions" "encode_instructions"]
+
+held_work = ["oneshot_instructions" "basket_instructions"]
+
+run_speed_counters = text/concat decode_work held_work
 
 decode_memory = ["decode_peak_bytes" "decode_arena_blocks"]
 
@@ -146,6 +155,14 @@ fn total_for lines key
 
 # The compile golden is many fields to a line, one line per sample, and the
 # term is the total across them.
+fn work_pair l
+  parts = text/split l " "
+  [parts[1]! (text/to_int parts[2]!)]
+
+fn work_of text
+  lines = list/to_list (list/select (text/split text "\n") body?)
+  list/to_h (list/to_list (list/map lines work_pair))
+
 fn compile_totals text
   lines = list/to_list (list/select (text/split text "\n") body?)
   rounds = total_for lines "rounds"
@@ -156,7 +173,7 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]!
 
-fn measured decode encode oneshot basket comp held
+fn measured decode encode oneshot basket comp held work
   d = [["decode_allocs" decode["allocs"]!]]
   db = [["decode_arena_blocks" decode["arena_blocks"]!]]
   dp = [["decode_peak_bytes" (peak_of decode)]]
@@ -170,7 +187,15 @@ fn measured decode encode oneshot basket comp held
   v = [["front_end_visits" held["front_end_visits"]!]]
   l = [["emitted_lines" comp["lines"]!]]
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]!]]
-  gathered d db dp e eb ep o b bp c v (text/concat l cm)
+  ins = worked work
+  gathered d db dp e eb ep o b bp c v (text/concat (text/concat l cm) ins)
+
+fn worked work
+  di = [["decode_instructions" work["jsonbench"]!]]
+  ei = [["encode_instructions" work["encodebench"]!]]
+  oi = [["oneshot_instructions" work["oneshot"]!]]
+  bi = [["basket_instructions" work["basket"]!]]
+  text/concat (text/concat di ei) (text/concat oi bi)
 
 fn gathered d db dp e eb ep o b bp c v l
   head = text/concat (text/concat d db) (text/concat dp e)
@@ -291,10 +316,13 @@ fn filled s width false
 fn asked path
   io/read_file path
 
-fn gauge d e o b c held
+fn gauge d e o b c held w
   comp = compile_totals c
   cm = counters held
-  now = measured (counters d) (counters e) (counters o) (counters b) comp cm
+  work = work_of w
+  dc = counters d
+  ec = counters e
+  now = measured dc ec (counters o) (counters b) comp cm work
   io/read_file floor_path . (held -> against now (json/decode held))
 
 # A term new to the model enters at ratio one: its own introduction is never a
@@ -517,6 +545,9 @@ fn with_basket d e o b
   asked "bench/compile_golden.txt" . (c -> with_compile d e o b c)
 
 fn with_compile d e o b c
-  asked "bench/compile_memory_golden.txt" . (held -> gauge d e o b c held)
+  asked "bench/compile_memory_golden.txt" . (held -> with_held d e o b c held)
+
+fn with_held d e o b c held
+  asked "bench/instructions_golden.txt" . (w -> gauge d e o b c held w)
 
 pub play = asked "bench/cost_golden.txt" . (d -> with_decode d)
