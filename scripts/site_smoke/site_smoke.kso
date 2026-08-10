@@ -111,7 +111,7 @@ fn body_for "/book-play.js" set
 fn body_for "/book/ch04.html" set
   set.chapter
 
-fn body_for "/compiler.html" set
+fn body_for "/numbers.html" set
   set.chart
 
 fn body_for "/play.js" set
@@ -205,12 +205,12 @@ story = """
 # a fixture the pipeline would never produce, asserting a fiction. The values
 # vary so a flat series cannot pass for a drawn one.
 history = """
-  \{"commit": "c0ffee0", "subject": "a change that moved something (0)", "date": "2026-08-01T12:00:00-07:00", "allocs": 7577414, "alloc_bytes": 334437312, "arena_blocks": 3, "beat_iters": 151, "encode_allocs": 16259950, "oneshot_arena_peak_bytes": 7340032, "compile_rounds": 40, "compile_visits": 9000, "compile_peak_bytes": 819173, "emitted_lines": 1500, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1024, "perm_allocs": 9, "welfare": 75.6}
-  \{"commit": "c0ffee1", "subject": "a change that moved something (1)", "date": "2026-08-02T12:00:00-07:00", "allocs": 7578414, "alloc_bytes": 334441408, "arena_blocks": 3, "beat_iters": 152, "encode_allocs": 16261950, "oneshot_arena_peak_bytes": 7344128, "compile_rounds": 41, "compile_visits": 9010, "compile_peak_bytes": 819685, "emitted_lines": 1501, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1025, "perm_allocs": 9, "welfare": 75.61}
-  \{"commit": "c0ffee2", "subject": "a change that moved something (2)", "date": "2026-08-03T12:00:00-07:00", "allocs": 7579414, "alloc_bytes": 334445504, "arena_blocks": 3, "beat_iters": 153, "encode_allocs": 16263950, "oneshot_arena_peak_bytes": 7348224, "compile_rounds": 42, "compile_visits": 9020, "compile_peak_bytes": 820197, "emitted_lines": 1502, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1026, "perm_allocs": 9, "welfare": 75.62}
-  \{"commit": "c0ffee3", "subject": "a change that moved something (3)", "date": "2026-08-04T12:00:00-07:00", "allocs": 7580414, "alloc_bytes": 334449600, "arena_blocks": 3, "beat_iters": 154, "encode_allocs": 16265950, "oneshot_arena_peak_bytes": 7352320, "compile_rounds": 43, "compile_visits": 9030, "compile_peak_bytes": 820709, "emitted_lines": 1503, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1027, "perm_allocs": 9, "welfare": 75.63}
-  \{"commit": "c0ffee4", "subject": "a change that moved something (4)", "date": "2026-08-05T12:00:00-07:00", "allocs": 7581414, "alloc_bytes": 334453696, "arena_blocks": 3, "beat_iters": 155, "encode_allocs": 16267950, "oneshot_arena_peak_bytes": 7356416, "compile_rounds": 44, "compile_visits": 9040, "compile_peak_bytes": 821221, "emitted_lines": 1504, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1028, "perm_allocs": 9, "welfare": 75.64}
-  \{"commit": "c0ffee5", "subject": "a change that moved something (5)", "date": "2026-08-06T12:00:00-07:00", "allocs": 7582414, "alloc_bytes": 334457792, "arena_blocks": 3, "beat_iters": 156, "encode_allocs": 16269950, "oneshot_arena_peak_bytes": 7360512, "compile_rounds": 45, "compile_visits": 9050, "compile_peak_bytes": 821733, "emitted_lines": 1505, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1029, "perm_allocs": 9, "welfare": 75.65}
+  \{"commit": "c0ffee0", "subject": "a change that moved something (0)", "date": "2026-08-01T12:00:00-07:00", "allocs": 7577414, "alloc_bytes": 334437312, "arena_blocks": 3, "beat_iters": 151, "encode_allocs": 16259950, "oneshot_arena_peak_bytes": 7340032, "compile_rounds": 40, "compile_visits": 9000, "compile_peak_bytes": 819173, "emitted_lines": 1500, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1024, "perm_allocs": 9, "instructions": 3266896510, "encode_instructions": 9283777698, "text_bytes": 82194, "welfare": 75.6}
+  \{"commit": "c0ffee1", "subject": "a change that moved something (1)", "date": "2026-08-02T12:00:00-07:00", "allocs": 7578414, "alloc_bytes": 334441408, "arena_blocks": 3, "beat_iters": 152, "encode_allocs": 16261950, "oneshot_arena_peak_bytes": 7344128, "compile_rounds": 41, "compile_visits": 9010, "compile_peak_bytes": 819685, "emitted_lines": 1501, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1025, "perm_allocs": 9, "instructions": 3266897510, "encode_instructions": 9283779698, "text_bytes": 82202, "welfare": 75.61}
+  \{"commit": "c0ffee2", "subject": "a change that moved something (2)", "date": "2026-08-03T12:00:00-07:00", "allocs": 7579414, "alloc_bytes": 334445504, "arena_blocks": 3, "beat_iters": 153, "encode_allocs": 16263950, "oneshot_arena_peak_bytes": 7348224, "compile_rounds": 42, "compile_visits": 9020, "compile_peak_bytes": 820197, "emitted_lines": 1502, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1026, "perm_allocs": 9, "instructions": 3266898510, "encode_instructions": 9283781698, "text_bytes": 82210, "welfare": 75.62}
+  \{"commit": "c0ffee3", "subject": "a change that moved something (3)", "date": "2026-08-04T12:00:00-07:00", "allocs": 7580414, "alloc_bytes": 334449600, "arena_blocks": 3, "beat_iters": 154, "encode_allocs": 16265950, "oneshot_arena_peak_bytes": 7352320, "compile_rounds": 43, "compile_visits": 9030, "compile_peak_bytes": 820709, "emitted_lines": 1503, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1027, "perm_allocs": 9, "instructions": 3266899510, "encode_instructions": 9283783698, "text_bytes": 82218, "welfare": 75.63}
+  \{"commit": "c0ffee4", "subject": "a change that moved something (4)", "date": "2026-08-05T12:00:00-07:00", "allocs": 7581414, "alloc_bytes": 334453696, "arena_blocks": 3, "beat_iters": 155, "encode_allocs": 16267950, "oneshot_arena_peak_bytes": 7356416, "compile_rounds": 44, "compile_visits": 9040, "compile_peak_bytes": 821221, "emitted_lines": 1504, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1028, "perm_allocs": 9, "instructions": 3266900510, "encode_instructions": 9283785698, "text_bytes": 82226, "welfare": 75.64}
+  \{"commit": "c0ffee5", "subject": "a change that moved something (5)", "date": "2026-08-06T12:00:00-07:00", "allocs": 7582414, "alloc_bytes": 334457792, "arena_blocks": 3, "beat_iters": 156, "encode_allocs": 16269950, "oneshot_arena_peak_bytes": 7360512, "compile_rounds": 45, "compile_visits": 9050, "compile_peak_bytes": 821733, "emitted_lines": 1505, "el_parses": 0, "utf8_bytes": 0, "held_peak_bytes": 1029, "perm_allocs": 9, "instructions": 3266901510, "encode_instructions": 9283787698, "text_bytes": 82234, "welfare": 75.65}
 """
 
 # A stub answering in a microtask is no stand-in for the network: it resolves
@@ -403,7 +403,7 @@ fn read_book set chrome failures report
 
 fn visiting_chart set chrome failures
   on = (report -> charted failures report)
-  visiting set chrome chart_port "/compiler.html" on
+  visiting set chrome chart_port "/numbers.html" on
 
 fn charted failures report
   on = (_ -> read_chart failures report)
@@ -413,18 +413,18 @@ fn read_chart failures report
   read = json/decode report
   finished (missing_series read failures) report
 
-# Five series, six points each, because six rows were fed to it. A presence
+# Six series, six points each, because six rows were fed to it. A presence
 # check would pass on an empty canvas, which is the failure this exists to
 # catch.
 fn missing_series read acc
-  why = "the chart did not draw five series of six points"
+  why = "the chart did not draw six series of six points"
   noted acc why (drew? read["series"])
 
 fn drew? none
   false
 
 fn drew? series
-  series == [6 6 6 6 6]
+  series == [6 6 6 6 6 6]
 
 fn missing_panels read acc
   why = "no panel in chapter 04 became runnable"
@@ -491,7 +491,7 @@ page_files = ["docs/_includes/site-header.html" "docs/index.html"]
 
 more_pages = ["docs/playground.html" "docs/book-play.js"]
 
-last_pages = ["docs/book/ch04.html" "docs/compiler.html"]
+last_pages = ["docs/book/ch04.html" "docs/numbers.html"]
 
 early_files = text/concat engine_files hero_files
 
