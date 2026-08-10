@@ -2491,3 +2491,72 @@ where a head-to-head on one box measured the new compiler 4.2% faster.
 Interleaving cancels noise within a run; the machine itself is the variable and
 one run is one sample of it. Ruled: the race goes, the counters stay, the
 timings go back to being a dated hand sitting.
+
+## 2026-08-10 — the work a program does, and the instrument that was already named
+
+Clay, on being told the metrics could not see a 7.6% decode regression: he had
+said repeatedly that he meant CPU operations as deterministic code analysis,
+not wall clock, and believed that was what compile speed and run speed
+measured. He was right on every count, and finding out took reading the page
+rather than arguing from memory.
+
+This page already names the instrument: "retired instructions as the third
+instrument — the work a process did, reproducible to a few tenths of a percent
+and immune to whatever else the box is doing." Counting them settles it.
+Callgrind, both builds printing the same checksum:
+
+    2026-07-27   2,545,249,871
+    2026-08-07   2,762,364,162     +8.5%
+
+The wall-clock regression was 7.6 to 9.2 per cent. The decoder is doing eight
+and a half per cent more work, and every allocation counter was byte-identical
+the whole way. Three consecutive runs give identical digits, so this pins like
+any other golden and needs no band.
+
+Where the work went, by function, from the same run:
+
+    k_str_alloc        0 -> 40,464,393   (k_str_n fell 20,884,830)
+    k_map_view_insert  0 -> 22,574,700
+    k_b_put_mut                +21,683,400
+    k_eq_rec                   +21,562,500
+    k_b_push_mut               +21,398,550
+    k_viewreg_migrate  0 -> 16,446,300
+
+The runtime accounts for +127.4M of the +217.1M; the rest is in emitted user
+code, which cannot be matched by name across the two trees because the older
+one used flat module names.
+
+### What this retracts
+
+Two claims made this week go, and one survives.
+
+Gone: that the slowdown is arrangement rather than volume. Volume rose 8.5%.
+The padding experiment is real — 24 KB of never-executed code costs 1.6% — but
+it is a small term beside the work itself.
+
+Gone: that the model excludes time because time cannot be made deterministic.
+That conflates wall clock with work done, which this project already separates
+and I did not check. Work done is deterministic to the digit.
+
+Survives: the three per-call guards. put_mut, push_mut and map_view_insert
+together are about 66M instructions, roughly 30% of the rise, close to the 36%
+the wall-clock removal measured.
+
+### What was wrong on the chart
+
+Two of its five lines were called "run speed" and "compile speed". They are
+`allocs + encode_allocs`, and `compile_rounds + compile_visits + emitted_lines`.
+Neither counts an instruction, so this regression was invisible to them by
+construction. They are named for what they count now, and a legend gives every
+line's derivation.
+
+### PGO, measured and declined
+
+Instrumenting the decode gauntlet and rebuilding against its own profile moves
+it 8.5% — a number produced by profiling the program being timed, which is
+overfitting by construction. A profile taken from encodebench, oneshot and
+basket, never from decode, moves it 1.7%, lower in every one of five randomised
+layouts. That reproduces the roughly one per cent this page already recorded
+years of measurement ago, and it does not pay for a profile in the repository,
+a job to regenerate it, and a published figure that depends on a workload
+chosen in advance.

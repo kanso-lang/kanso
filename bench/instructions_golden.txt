@@ -1,0 +1,30 @@
+# Retired instructions per benchmark, counted under callgrind. This is the
+# work a process does, and it is the dimension every other vein here is blind
+# to: allocation counters say how often the allocator was called, the emitted
+# golden says how many lines the compiler wrote, the text golden says how big
+# the machine code is. None of them counts an instruction.
+#
+# It exists because between 2026-07-27 and 2026-08-07 the decoder went
+# 2,545,249,871 instructions to 2,762,364,162 — eight and a half per cent,
+# matching the wall-clock regression almost exactly — with every allocation
+# counter byte-identical the whole way. The chart called two of its lines
+# "run speed" and "compile speed" and neither counted an instruction, so
+# nothing anywhere could see it.
+#
+# Exact, not a band. Three consecutive runs give the same digits, because
+# callgrind counts rather than samples and no other process can reach it. A
+# rise is a regression to explain and a fall is a win to bank.
+#
+# These rows belong to the linux runner's compiler, and they belong to it more
+# tightly than any other vein here: the same sources measured under Debian's
+# clang read 2,762,364,313 for the decoder against ubuntu's 3,266,971,711,
+# eighteen per cent apart, where the machine-code size of the same two builds
+# differs by well under one. Instruction count is what an optimiser's inlining
+# choices move most. So a toolchain bump will look like an enormous regression
+# here and will not be one — regenerate every row in one go and say so in
+# design/compiler-log.md, and never read a row against a number measured
+# somewhere else.
+jsonbench 3266971711
+encodebench 9283849540
+oneshot 64630634
+basket 56793158

@@ -250,6 +250,32 @@ jobs:
             echo "::error::anyway. 17% of the last regression lived here."
             exit 1
           }
+      # The dimension none of the veins above can see. Allocation counters say
+      # how often the allocator ran, the emitted golden how many lines were
+      # written, the text golden how big the code is — a decode that allocates
+      # identically and executes eight per cent more instructions moves none of
+      # them, which is exactly what happened over eleven days in August. This
+      # counts the work itself, exactly and reproducibly: callgrind counts
+      # rather than samples, so three runs give the same digits and no other
+      # process on the box can reach it. Forty-four seconds for all four.
+      - name: how much work
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
+          for b in jsonbench encodebench oneshot basket; do
+            valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
+              >/dev/null 2>/tmp/ir.$b
+            printf '%s %s\n' "$b" "$(grep -o 'I   refs:.*' /tmp/ir.$b | tr -dc 0-9)"
+          done > work.txt
+          grep -v '^#' bench/instructions_golden.txt > work_want.txt
+          diff work_want.txt work.txt || {
+            echo "::error::the work the benchmarks do changed. A rise is a"
+            echo "::error::regression to explain and a fall is a win to bank —"
+            echo "::error::say which in the PR and regenerate"
+            echo "::error::bench/instructions_golden.txt. This is the counter"
+            echo "::error::that would have caught the 8.5% decode regression"
+            echo "::error::that every allocation counter slept through."
+            exit 1
+          }
       - name: decode counters
         run: |
           KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null
