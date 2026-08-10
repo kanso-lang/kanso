@@ -88,21 +88,62 @@ fn served l handler carried
   net/accept l . (c -> asked c handler carried) . (next -> more l handler next)
 
 fn asked c handler carried
-  net/read c . (raw -> heard c handler carried raw (whole? raw))
+  net/read c . (raw -> gathering c handler carried raw)
 
 # A browser opens connections it may never use, and sends nothing down them
 # until it does. Such a connection is not a request and gets no answer: the
-# door closes and the next one is accepted. A head split across two reads is
-# dropped the same way, which is the price of not waiting on a client that may
-# have nothing more to say.
-fn whole? raw
-  length (text/split raw "\r\n\r\n") > 1
+# door closes and the next one is accepted.
+fn gathering c _ carried ""
+  net/close_conn c . (_ -> carried)
+
+fn gathering c handler carried raw
+  heard c handler carried raw (whole? raw)
 
 fn heard c handler carried raw true
   answered_with c handler carried raw
 
-fn heard c _ carried _ false
+# A read is a segment, not a request. Both the head and the body arrive in as
+# many pieces as the network chose, so a short one is read again rather than
+# dropped; a client with nothing more to say sends an empty read and the door
+# closes on it, which is what stops this waiting forever.
+fn heard c handler carried raw false
+  net/read c . (nxt -> joined c handler carried raw nxt)
+
+fn joined c _ carried _ ""
   net/close_conn c . (_ -> carried)
+
+fn joined c handler carried raw nxt
+  gathering c handler carried "{raw}{nxt}"
+
+# Whole means the head has landed AND as many body bytes as the client
+# promised. Measuring the body by subtraction rather than by taking a split's
+# second part keeps a body that itself contains a blank line intact.
+fn whole? raw
+  parts = text/split raw "\r\n\r\n"
+  complete? raw parts[1]! (length parts > 1)
+
+fn complete? _ _ false
+  false
+
+fn complete? raw head true
+  arrived = length (text/bytes raw) - length (text/bytes head) - 4
+  arrived >= promised head
+
+# No content-length is no body to wait for, which is every GET a browser makes.
+# Header names are case-insensitive, and a browser writes Content-Length where
+# a program writes content-length: splitting on one spelling and joining with
+# the other folds them into one before the search.
+fn promised head
+  folded = text/join (text/split head "Content-Length:") "content-length:"
+  parts = text/split folded "content-length:"
+  counted parts (length parts > 1)
+
+fn counted _ false
+  0
+
+fn counted parts true
+  digits = text/split parts[2]! "\r\n"
+  text/to_int (text/trim digits[1]!)
 
 fn answered_with c handler carried raw
   took = handler (parsed raw) carried

@@ -207,6 +207,47 @@ fn a_silent_visitor_then_a_report(port: u16) {
     let _ = asking.read_to_string(&mut answer);
 }
 
+/// Sends a head and then the body in two writes with a pause between them,
+/// which is what a report large enough to cross a segment boundary looks like
+/// from the server's side. Watched red on both engines: the handler saw only
+/// the first chunk, and the browser differential's own json decode said
+/// "unexpected end of input" on exactly this in CI.
+fn a_report_that_arrives_in_two_chunks(port: u16) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let mut asking = loop {
+        match TcpStream::connect(("127.0.0.1", port)) {
+            Ok(open) => break open,
+            Err(e) if Instant::now() > deadline => panic!("the door never opened: {e}"),
+            Err(_) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    asking
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .expect("a read that cannot outlast the test");
+    asking
+        .write_all(b"POST /report HTTP/1.1\r\nhost: x\r\nContent-Length: 10\r\n\r\ngre")
+        .expect("the head and the first chunk go out");
+    asking.flush().expect("the first chunk is not held back");
+    std::thread::sleep(Duration::from_millis(300));
+    asking.write_all(b"enenough").expect("the rest of the body goes out");
+    let mut answer = String::new();
+    let _ = asking.read_to_string(&mut answer);
+}
+
+#[test]
+fn a_body_split_across_two_reads_arrives_whole_on_both_engines() {
+    for (slot, engine) in [(6u16, &[][..]), (7, &["--interp"][..])] {
+        let said = printed(
+            "sockets-chunked",
+            A_CONNECTION_THAT_SAYS_NOTHING,
+            engine,
+            slot,
+            a_report_that_arrives_in_two_chunks,
+        );
+        assert_eq!(said, "the report says: greenenough\nwaited\n", "engine {engine:?}");
+    }
+}
+
 #[test]
 fn a_silent_connection_does_not_end_the_server_on_both_engines() {
     for (slot, engine) in [(4u16, &[][..]), (5, &["--interp"][..])] {

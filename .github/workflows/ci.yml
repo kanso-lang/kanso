@@ -481,7 +481,16 @@ jobs:
       - run: |
           rustup target add wasm32-unknown-unknown
           bash scripts/browser_differential.sh || {
-            echo "::error::the browser wasm engine diverged from the oracle."
+            # A nonzero exit is not automatically a divergence: the harness
+            # can fall over before it has compared anything, and a red that
+            # names the wrong thing teaches everyone to re-run instead of
+            # read. The harness prints its own verdict; this only says which
+            # kind of failure it was.
+            echo "::error::the browser differential failed. If the log shows"
+            echo "::error::a per-program disagreement, the engines diverged."
+            echo "::error::If it shows the harness itself erroring, that is a"
+            echo "::error::defect in the harness and the engines were never"
+            echo "::error::compared — do not re-run past it."
             exit 1
           }
 
