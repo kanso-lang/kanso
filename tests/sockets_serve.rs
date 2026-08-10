@@ -124,6 +124,15 @@ fn printed(
     slot: u16,
     drive: impl FnOnce(u16),
 ) -> String {
+    // One server at a time. The port is chosen by asking the os and letting
+    // go, so anything that binds between the asking and the program's own
+    // listen takes it — and the likeliest such thing is this file's other
+    // tests. Serialising removes the contention this suite inflicts on
+    // itself; it does not remove the race against the rest of the machine,
+    // which wants `listen 0` and a program that reports the port it got.
+    static SERIAL: Mutex<()> = Mutex::new(());
+    let _one_at_a_time = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+
     let dir = std::env::temp_dir().join(format!("kanso-{name}-{slot}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to run in");

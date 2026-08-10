@@ -310,6 +310,14 @@ static long long k_stat_perm_allocs = 0;
 static long long k_stat_beat_iters = 0;
 static long long k_stat_evac_bytes = 0;
 static long long k_stat_evac_allocs = 0;
+/* The two in-place writers are the decode kernels, and neither had a presence
+   counter: a doubling of either is invisible to `allocs`, because the fast
+   path allocates nothing. Counted by PATH, so the diff also says when a write
+   stops taking the fast one. */
+static long long k_stat_put_mut_fast = 0;
+static long long k_stat_put_mut_grow = 0;
+static long long k_stat_push_mut_fast = 0;
+static long long k_stat_push_mut_slow = 0;
 
 static void k_stats_dump(void) {
     fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
@@ -321,6 +329,10 @@ static void k_stats_dump(void) {
     fprintf(stderr, "beat_iters=%lld\n", k_stat_beat_iters);
     fprintf(stderr, "evac_allocs=%lld\nevac_bytes=%lld\n",
             k_stat_evac_allocs, k_stat_evac_bytes);
+    fprintf(stderr,
+        "put_mut_fast=%lld\nput_mut_grow=%lld\npush_mut_fast=%lld\npush_mut_slow=%lld\n",
+        k_stat_put_mut_fast, k_stat_put_mut_grow,
+        k_stat_push_mut_fast, k_stat_push_mut_slow);
     fprintf(stderr,
         "thunk_allocs=%lld\nthunk_forces=%lld\nthunk_evals=%lld\n"
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
@@ -4685,12 +4697,14 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         m->pairs[m->len * 2 + 1] = val;
         buf->used += 2;
         m->len++;
+        k_stat_put_mut_fast++;
         k_map_view_insert(m, key, val);
         return mv;
     }
     /* growth at a proven-unique site: the map keeps its header, the pairs
        move to a bigger buffer, and the outgrown one goes to the shelf */
     {
+        k_stat_put_mut_grow++;
         long long need = 2 * (m->len + 1);
         long long cap = 4;
         while (cap < need) cap <<= 1;
@@ -5305,8 +5319,10 @@ KValue k_b_push_mut(KValue lv, KValue item) {
         l->items[l->len] = item;
         buf->used++;
         l->len++;
+        k_stat_push_mut_fast++;
         return lv;
     }
+    k_stat_push_mut_slow++;
     return k_b_push_into_proven(lv, item, 1, 1);
 }
 
