@@ -1,0 +1,22 @@
+# Retired instructions per benchmark, counted under callgrind. This is the
+# work a process does, and it is the dimension every other vein here is blind
+# to: allocation counters say how often the allocator was called, the emitted
+# golden says how many lines the compiler wrote, the text golden says how big
+# the machine code is. None of them counts an instruction.
+#
+# It exists because between 2026-07-27 and 2026-08-07 the decoder went
+# 2,545,249,871 instructions to 2,762,364,162 — eight and a half per cent,
+# matching the wall-clock regression almost exactly — with every allocation
+# counter byte-identical the whole way. The chart called two of its lines
+# "run speed" and "compile speed" and neither counted an instruction, so
+# nothing anywhere could see it.
+#
+# Exact, not a band. Three consecutive runs give the same digits, because
+# callgrind counts rather than samples and no other process can reach it. A
+# rise is a regression to explain and a fall is a win to bank; a toolchain
+# bump moves every row at once and is regenerated in one go, with a sentence
+# in design/compiler-log.md saying which and why.
+jsonbench 2762364313
+encodebench 8724969189
+oneshot 59757493
+basket 51930408
