@@ -1,3 +1,5 @@
 import "std/text"
 
-print "parsed {text/to_int "seven"}"
+word = text/trim " seven "
+
+print "parsed {text/to_int word}"

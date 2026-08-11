@@ -1,2 +1,3 @@
-ratio = 10 / 0
+steeps = []
+ratio = 10 / length steeps
 print "ratio: {ratio}"
