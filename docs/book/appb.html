@@ -129,7 +129,9 @@ to_float-int 5.0</code></pre>
   <div class="code-panel-title">parse_fail.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="f">print</span> <span class="s">"parsed <span class="i">{text/to_int </span>"</span>seven<span class="s">"}"</span></code></pre>
+word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" seven "</span>
+
+<span class="f">print</span> <span class="s">"parsed <span class="i">{text/to_int word}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run parse_fail.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""seven" is not an integer"

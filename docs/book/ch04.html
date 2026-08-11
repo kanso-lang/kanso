@@ -13,12 +13,13 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">ratio.kso</div>
-  <pre><code>ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+  <pre><code>steeps <span class="o">=</span> []
+ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> length steeps
 <span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at ratio.kso:1</code></pre>
+  born in the entry at ratio.kso:2</code></pre>
   </div>
 </div>
 
@@ -66,12 +67,13 @@ extra_css: /book/book.css
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+steeps <span class="o">=</span> []
+bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> length steeps
 <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play unhandled.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at unhandled.kso:7
+  born in the entry at unhandled.kso:8
   passed through describe</code></pre>
   </div>
 </div>
@@ -308,8 +310,11 @@ not a flag</code></pre>
   <div class="code-panel-title">teas.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
-<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int </span>"</span>two<span class="s">"} steeps left"</span>
+steeps <span class="o">=</span> []
+word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
+
+<span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / length steeps}</span> steeps left"</span>
+<span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int word}</span> steeps left"</span>
 <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teas.kso</div>
@@ -323,12 +328,15 @@ not a flag</code></pre>
   <div class="code-panel-title">seq.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
 
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / 0}</span> steeps left"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int </span>"</span>two<span class="s">"} steeps left"</span></code></pre>
+steeps <span class="o">=</span> []
+word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
+
+<span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / length steeps}</span> steeps left"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int word}</span> steeps left"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at seq.kso:3</code></pre>
+  born in the entry at seq.kso:6</code></pre>
   </div>
 </div>
 
