@@ -2680,3 +2680,29 @@ twenty. Timing all nine runs inside one process removed it.
 This is the case the counter veins were built for. Two exact numbers moved, the
 clock could not say anything, and a per-commit claim in milliseconds would have
 been an artefact of where the linker happened to put things.
+
+## 2026-08-11 — GAVELED: as-patterns, `r@(rect w h)`
+
+Clay asked whether kanso could use Ruby's `@`. Its Ruby meaning — mutable
+per-object state — names a hazard kanso does not have, so importing it would be
+decoration. The use that fits is the as-pattern: bind the whole value while
+destructuring its parts, the spelling Haskell, Rust and Scala share. Ruled in.
+
+It is not sugar. An arm that dispatches on shape loses the value it matched, so
+returning that value means rebuilding it:
+
+    pub fn rebuilt (rect w h) n
+      stepped (rect w h) n
+
+Passing the record through instead costs two allocations over a hundred
+thousand iterations. Rebuilding it segfaults at a hundred thousand and survives
+at fifty — the tail call is lost when an argument is a constructor application,
+so recursion depth becomes stack depth. `@` removes the reason to write that
+shape.
+
+The lost tail call is a separate defect and is being fixed on its own terms; a
+language feature that lets careful authors avoid a compiler bug is not a fix for
+the bug.
+
+Scope for the first cut: function arms, hugging spelling, no nesting until a
+second real case asks for it.
