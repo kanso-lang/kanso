@@ -2754,3 +2754,21 @@ to 97,380, basket 90,340 to 90,604. `bench/text_golden.txt` and
 OPEN: the miscompilation itself is not diagnosed, only bounded. A reduced case
 against upstream LLVM would be worth having, and until then the cap is a
 measured workaround rather than an explanation.
+
+## 2026-08-12 — the guaranteed tail call is worth 2.96% of decode
+
+The runner's callgrind numbers for the change above, which was written to fix a
+stack overflow and turned out to buy speed:
+
+    jsonbench    3,187,436,860 -> 3,092,945,560   -2.96%
+    encodebench  9,283,433,083 -> 9,284,549,883   +0.01%
+    oneshot         64,031,111 ->    63,411,063   -0.97%
+    basket          56,717,877 ->    56,638,584   -0.14%
+
+The decoder's arms are narrow — two or three values — so nearly all of them
+cross back under the register cap and get the jump instead of a frame. Encode is
+flat, and the code grew 0.37% on the decoder, which is the frame setup the
+convention writes where the C one wrote a call.
+
+Welfare 66.65 -> 66.72, banked. This is 2.96 of the 8.5% decode regression
+recovered, on top of the 2.43% the utf8-of-slice fusion returned.
