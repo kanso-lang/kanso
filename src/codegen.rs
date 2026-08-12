@@ -1237,7 +1237,7 @@ impl<'a> Backend<'a> {
                         // an err arm ranks as its reason pattern does: a
                         // named leaf with the concretes, a typeset with the
                         // typesets, a bare binder just above the generics
-                        Pattern::Ctor { ty, fields } if ty == "err" && fields.len() == 1 => {
+                        Pattern::Ctor { ty, fields, .. } if ty == "err" && fields.len() == 1 => {
                             match &fields[0] {
                                 Pattern::Annotated { ty: rty, .. } => {
                                     match self.typesets.contains_key(rty) {
@@ -1989,7 +1989,7 @@ impl<'a> Backend<'a> {
         fail: &str,
         ty: &str,
     ) -> Result<(), String> {
-        if let Pattern::Ctor { ty: pty, fields } = pattern {
+        if let Pattern::Ctor { ty: pty, fields, whole } = pattern {
             if pty == ty {
                 let ok = inline_not_failure(f, status);
                 let cont = f.label();
@@ -2015,6 +2015,9 @@ impl<'a> Backend<'a> {
                 let vkv = f.tmp();
                 f.line(&format!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
                 self.emit_pattern(f, &vkv, &fields[1], fail)?;
+                if let Some((name, _)) = whole {
+                    f.bind(name, status);
+                }
                 return Ok(());
             }
         }
@@ -2261,12 +2264,16 @@ impl<'a> Backend<'a> {
                 check(self, f, call);
                 f.bind(name, value);
             }
-            Pattern::Ctor { ty, fields } => {
+            Pattern::Ctor { ty, fields, whole } => {
                 if ty == "err" {
                     check(self, f, format!("call i64 @k_check_tag(%KValue {value}, i64 {K_ERR})"));
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
-                    return self.emit_pattern(f, &inner, &fields[0], fail);
+                    self.emit_pattern(f, &inner, &fields[0], fail)?;
+                    if let Some((name, _)) = whole {
+                        f.bind(name, value);
+                    }
+                    return Ok(());
                 }
                 let id = *self
                     .type_ids
@@ -2284,6 +2291,11 @@ impl<'a> Backend<'a> {
                     let fv = f.tmp();
                     f.line(&format!("{fv} = call %KValue @k_field(%KValue {value}, i64 {i})"));
                     self.emit_pattern(f, &fv, field, fail)?;
+                }
+                // the as-pattern's name takes the value that matched, so an
+                // arm answering it hands back what it was given
+                if let Some((name, _)) = whole {
+                    f.bind(name, value);
                 }
             }
             Pattern::Keyed { .. } => {
@@ -2428,7 +2440,7 @@ impl<'a> Backend<'a> {
                     };
                     match pattern {
                         Pattern::Var(name, _) => f.bind(name, &value),
-                        Pattern::Ctor { ty, fields } => {
+                        Pattern::Ctor { ty, fields, .. } => {
                             let id = *self
                                 .type_ids
                                 .get(ty.as_str())

@@ -80,7 +80,12 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
                 continue;
             }
             for (i, p) in f.params.iter().enumerate() {
-                if matches!(p, Pattern::Ctor { ty: pty, .. } if pty == ty) {
+                // An as-pattern wants the value, and the by-value convention
+                // passes a record's words rather than the record: there is
+                // nothing to hand the name that would not have to be built.
+                // The parameter stays boxed, which is still cheaper than the
+                // rebuild the as-pattern exists to remove.
+                if matches!(p, Pattern::Ctor { ty: pty, whole: None, .. } if pty == ty) {
                     carries.insert((f.name.clone(), f.params.len(), i), ty.clone());
                 }
             }
@@ -93,13 +98,24 @@ fn analyze_inner(program: &Program, inference: &crate::infer::Inference) -> Esca
     // instead of testing it — every call answered from whichever arm was
     // written last. This is the reason a getter is skipped above, generalized:
     // a parameter reachable with more than one record has to be looked at.
+    // The convention is a property of the position, not of one arm: if any arm
+    // there names the whole value, every arm at that position is passed boxed,
+    // or the arm that named it would be handed two words and no record.
+    carries.retain(|(name, arity, at), _| {
+        let as_bound = program
+            .fns
+            .iter()
+            .filter(|f| f.name == *name && f.params.len() == *arity)
+            .any(|f| matches!(f.params.get(*at), Some(Pattern::Ctor { whole: Some(_), .. })));
+        !as_bound
+    });
     carries.retain(|(name, arity, at), _| {
         let mut named = program
             .fns
             .iter()
             .filter(|f| f.name == *name && f.params.len() == *arity && !f.is_getter())
             .filter_map(|f| match f.params.get(*at) {
-                Some(Pattern::Ctor { ty, .. }) if ty != "err" => Some(ty.as_str()),
+                Some(Pattern::Ctor { ty, whole: None, .. }) if ty != "err" => Some(ty.as_str()),
                 _ => None,
             });
         let first = named.next();

@@ -496,7 +496,11 @@ fn synthesize_getters(program: &mut ast::Program) {
                 name: ast::getter_name(field),
                 is_pub: true,
                 span: *span,
-                params: vec![ast::Pattern::Ctor { ty: ty.name.clone(), fields: bound }],
+                params: vec![ast::Pattern::Ctor {
+                    ty: ty.name.clone(),
+                    fields: bound,
+                    whole: None,
+                }],
                 body: vec![ast::Stmt::Expr(ast::Expr::Ident(
                     ast::GETTER_BINDER.to_string(),
                     *span,
@@ -628,7 +632,10 @@ fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String
         ast::Pattern::Annotated { name, .. } => {
             out.insert(name.clone());
         }
-        ast::Pattern::Ctor { fields, .. } => {
+        ast::Pattern::Ctor { fields, whole, .. } => {
+            if let Some((name, _)) = whole {
+                out.insert(name.clone());
+            }
             for f in fields {
                 bound_in_pattern(f, out);
             }
@@ -881,7 +888,7 @@ pub fn canonicalize_types(program: &mut ast::Program) {
     }
     fn walk_pattern(p: &mut ast::Pattern, aliases: &std::collections::HashMap<String, String>) {
         match p {
-            ast::Pattern::Ctor { ty, fields } => {
+            ast::Pattern::Ctor { ty, fields, .. } => {
                 fix(ty, aliases);
                 for f in fields {
                     walk_pattern(f, aliases);
@@ -1658,7 +1665,10 @@ fn mentions_in_expr(e: &ast::Expr, out: &mut std::collections::HashSet<String>) 
 fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
     match p {
         ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => out.push(name.clone()),
-        ast::Pattern::Ctor { fields, .. } => {
+        ast::Pattern::Ctor { fields, whole, .. } => {
+            if let Some((name, _)) = whole {
+                out.push(name.clone());
+            }
             for f in fields {
                 pattern_binds(f, out);
             }
@@ -1672,7 +1682,7 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
 
 fn rewrite_pattern(p: &mut ast::Pattern, qual: &str, owned: &std::collections::HashSet<String>) {
     match p {
-        ast::Pattern::Ctor { ty, fields } => {
+        ast::Pattern::Ctor { ty, fields, .. } => {
             if owned.contains(ty.as_str()) {
                 *ty = format!("{qual}/{ty}");
             }
@@ -2139,7 +2149,7 @@ fn used_quals(program: &ast::Program, quals: &mut std::collections::HashSet<Stri
     }
     fn walk_pattern(p: &ast::Pattern, quals: &mut std::collections::HashSet<String>) {
         match p {
-            ast::Pattern::Ctor { ty, fields } => {
+            ast::Pattern::Ctor { ty, fields, .. } => {
                 mark(ty, quals);
                 for f in fields {
                     walk_pattern(f, quals);
@@ -2200,7 +2210,7 @@ fn unused_imports(
 /// nullary arm) is free; opening its structure is the owner's privilege.
 fn foreign_destructures(program: &ast::Program, diags: &mut Vec<diag::Diagnostic>) {
     fn walk(p: &ast::Pattern, diags: &mut Vec<diag::Diagnostic>, span: diag::Span) {
-        if let ast::Pattern::Ctor { ty, fields } = p {
+        if let ast::Pattern::Ctor { ty, fields, .. } = p {
             if ty.contains('/') && !fields.is_empty() {
                 diags.push(diag::Diagnostic::new(
                     "opacity",

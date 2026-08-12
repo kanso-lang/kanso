@@ -258,7 +258,7 @@ impl<'a> WasmBackend<'a> {
                         }
                         // an err arm ranks as its reason pattern does —
                         // mirrors the native sort and the interp's scores
-                        Pattern::Ctor { ty, fields } if ty == "err" && fields.len() == 1 => {
+                        Pattern::Ctor { ty, fields, .. } if ty == "err" && fields.len() == 1 => {
                             match &fields[0] {
                                 Pattern::Annotated { ty: rty, .. } => {
                                     match typeset_names.contains(rty.as_str()) {
@@ -450,7 +450,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.br_if(0);
                 ctx.scope.insert(name.clone(), value_local);
             }
-            Pattern::Ctor { ty, fields } if ty == "err" => {
+            Pattern::Ctor { ty, fields, whole } if ty == "err" => {
                 ctx.body.local_get(value_local);
                 ctx.body.call(RT_CHECK_ERR);
                 ctx.body.eqz();
@@ -460,8 +460,11 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_ERR_INNER);
                 ctx.body.local_set(inner);
                 self.emit_pattern(ctx, inner, &fields[0])?;
+                if let Some((name, _)) = whole {
+                    ctx.scope.insert(name.clone(), value_local);
+                }
             }
-            Pattern::Ctor { ty, fields } => {
+            Pattern::Ctor { ty, fields, whole } => {
                 let tid = *self
                     .type_ids
                     .get(ty.as_str())
@@ -479,6 +482,9 @@ impl<'a> WasmBackend<'a> {
                     ctx.body.call(RT_FIELD);
                     ctx.body.local_set(fv);
                     self.emit_pattern(ctx, fv, field)?;
+                }
+                if let Some((name, _)) = whole {
+                    ctx.scope.insert(name.clone(), value_local);
                 }
             }
             Pattern::Keyed { .. } => {
@@ -556,7 +562,7 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.local_set(local);
                 ctx.scope.insert(name.clone(), local);
             }
-            Pattern::Ctor { ty, fields } => {
+            Pattern::Ctor { ty, fields, .. } => {
                 let tid = *self
                     .type_ids
                     .get(ty.as_str())

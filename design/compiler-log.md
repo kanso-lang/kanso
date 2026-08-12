@@ -2835,3 +2835,32 @@ allocation counters and welfare are unmoved.
     encodebench 101,538 -> 101,618
     oneshot     100,722 -> 100,802
     basket       92,082 -> 92,162
+
+## 2026-08-12 — the whole and its parts from one match
+
+`r@(rect w h)` binds the value that matched while its fields are destructured,
+spelled the way Haskell, Rust and Scala spell it. Gaveled 2026-08-11.
+
+An arm that dispatches on shape otherwise loses the value it matched, so
+answering with it means building it again from the fields — and a rebuilt
+argument is a constructor application rather than a value, which is a shape the
+compiler will not tail-call.
+
+The pattern grew a field rather than a variant: `Ctor { ty, fields, whole }`,
+so every pass that only cares about the shape reads `..` and is untouched. As-
+patterns are constructor-only, which the type now states. `@` hugs both sides,
+and `_@` is refused — an as-pattern names what it matched and `_` names
+nothing.
+
+**An as-bound parameter gives up the by-value register convention.** That
+convention passes a two-field record's words rather than the record, so there
+is nothing to hand the name that would not have to be built, which is the cost
+the pattern exists to remove. The opt-out is a property of the position rather
+than of one arm: if any arm there names the whole, every arm at that position
+is boxed. Getting that wrong does not produce a wrong answer — it emits
+`call void @k_carry_stage(%KValue )`, an operand that is not there, and the
+verifier says so.
+
+Three engines agree on `tests/golden/micro/an_as_pattern_binds_the_whole.kso`.
+Open, and waiting for a second real case rather than a guess: whether `@` binds
+in `=` bindings, and whether it nests.

@@ -187,7 +187,7 @@ fn accepted_types<'a>(
 
 fn pattern_type_names<'a>(pattern: &'a Pattern, out: &mut HashSet<&'a str>) {
     match pattern {
-        Pattern::Ctor { ty, fields } => {
+        Pattern::Ctor { ty, fields, .. } => {
             out.insert(ty.as_str());
             for f in fields {
                 pattern_type_names(f, out);

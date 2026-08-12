@@ -1,0 +1,21 @@
+type rect
+  w
+  h
+
+# The arm needs the parts to decide and the whole to answer. Without `@` the
+# only way to hand back what it matched is to build it again from the fields,
+# and a rebuilt argument is a constructor application rather than a value, so
+# the arm stops being a tail call and depth becomes stack.
+fn landscape r@(rect w h)
+  if (w > h) r (rect h w)
+
+fn grown r:rect 0
+  r
+
+fn grown (rect w h) n
+  grown (rect (w + 1) h) (n - 1)
+
+pub play =
+  r = grown (rect 3 9) 200000
+  print "{r.w} by {r.h}"
+  >> print "{(landscape r).w}"

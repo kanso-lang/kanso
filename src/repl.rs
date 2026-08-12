@@ -334,7 +334,7 @@ fn pattern_shape(p: &crate::ast::Pattern) -> String {
         Pattern::Nullary(n, _) => n.clone(),
         Pattern::Var(..) | Pattern::Wildcard(_) => "_".to_string(),
         Pattern::Annotated { ty, .. } => format!("_:{ty}"),
-        Pattern::Ctor { ty, fields } => {
+        Pattern::Ctor { ty, fields, .. } => {
             let inner: Vec<String> = fields.iter().map(pattern_shape).collect();
             format!("{ty}({})", inner.join(" "))
         }
