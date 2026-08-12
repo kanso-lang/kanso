@@ -3002,7 +3002,15 @@ only when some arm names `math_failure` or `divide_by_zero`, or a type is
 declared under one. Where nothing names them, `10 / 0` answers the bare string —
 same text, same output, and nothing in such a program can tell the difference.
 
-The result is that a program which does not ask is compiled exactly as before.
+One golden does move, and not because of the compiler: the machine-code row
+falls 864 bytes on encodebench, oneshot and basket, and holds on jsonbench. The
+emitted IR is byte-identical for all four, so the fall is entirely in the
+runtime — division and modulo used to raise, building a string and carrying an
+origin pointer at each of five call sites, and now they answer a value from one
+argument. jsonbench links neither `k_div` nor `k_mod`, so the linker never
+brings the smaller code in and its row does not move.
+
+The rest is that a program which does not ask is compiled exactly as before.
 All four benchmarks, the five compile samples and the module sample are
 byte-identical to main; encodebench measures 8.746 billion again. Every golden
 here reverts rather than moves, and welfare reads 66.75, the floor. The feature
