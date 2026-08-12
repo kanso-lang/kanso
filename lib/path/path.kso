@@ -17,6 +17,11 @@ pub fn extension p
 # was spelled — which is what a caller joining a name it did not choose
 # wants. Rust and Python let an absolute right-hand side win outright; go
 # does not, and neither does this.
+# Both empty matches the two arms below equally, so the pair needs the arm
+# that is most specific in both positions or a call could take either.
+pub fn join "" ""
+  ""
+
 pub fn join "" right
   right
 

@@ -136,13 +136,16 @@ fn finished drift write
   io/write "{drift} golden-quoting number(s) drifted\n"
     . (_ -> stopped drift write)
 
-fn stopped 0 _
+# No drift and an unchanged corpus are the same answer, and asked as two
+# positions the arms below tie: `stopped 0 false` matched both a write and an
+# exit, and which one ran was the order they were written in.
+fn stopped drift wrote
+  quiet (drift == 0 or wrote)
+
+fn quiet true
   io/write ""
 
-fn stopped _ true
-  io/write ""
-
-fn stopped _ false
+fn quiet false
   io/exit 1
 
 fn walked j dir names drift

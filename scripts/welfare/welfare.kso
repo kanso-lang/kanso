@@ -507,6 +507,9 @@ fn dimension_of name
 fn verdict value floor
   ruling value floor (value < floor - 0.001) (value > floor + 0.001)
 
+fn ruling value floor true true
+  fell (floor - value) . (_ -> io/exit 1)
+
 fn ruling value floor true _
   fell (floor - value) . (_ -> io/exit 1)
 
