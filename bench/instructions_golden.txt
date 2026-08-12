@@ -29,7 +29,13 @@
 # here and will not be one — regenerate every row in one go and say so in
 # design/compiler-log.md, and never read a row against a number measured
 # somewhere else.
+#
+# 2026-08-12 (later): basket 56,597,311 to 56,597,316, the other three unmoved.
+# Five instructions, and they are the compare that stops `k_b_str_builder`
+# re-seeding a header with room to spare. That guard takes an accumulator handed
+# through one intermediate function from 752,908,406 instructions to 16,519,843
+# at eight thousand appends. Five here.
 jsonbench 3080294561
 encodebench 9229327520
 oneshot 63188854
-basket 56597311
+basket 56597316
