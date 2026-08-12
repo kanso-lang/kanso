@@ -281,7 +281,16 @@ fn proven list at acc false
   made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
   io/run "git" made . (_ -> after_worktree list at acc r dir)
 
+# Every row's build lands in one directory, so the first is cold and the rest
+# are incremental. A dozen rows each paying a full release build is an hour
+# that buys nothing: cargo already rebuilds exactly what the mutation touched.
+shared_target = "/tmp/kanso-ratchet-target"
+
 fn after_worktree list at acc r dir
+  linking = "ln -s {shared_target} target"
+  shell dir linking . (_ -> after_target list at acc r dir)
+
+fn after_target list at acc r dir
   shell dir r.mutation . (m -> after_mutation list at acc r dir m.status)
 
 fn after_mutation list at acc r dir 0
