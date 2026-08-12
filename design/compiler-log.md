@@ -2836,6 +2836,36 @@ allocation counters and welfare are unmoved.
     oneshot     100,722 -> 100,802
     basket       92,082 -> 92,162
 
+## 2026-08-12 — the sorted view a decode never asks for
+
+A temporary counter in the map runtime, one run of the decode benchmark:
+
+    view insertions attempted   1,254,150
+    with a view to insert into          0
+    sorted views built                  0
+    beat pops migrating a view    632,550
+    maps carried on any of them         0
+
+So a decode builds maps and never asks one for a sorted view, and both
+functions were being called only to answer a load and a branch. That divides
+out to 18.0 instructions per insertion and 26.0 per pop, which is the frame
+rather than the work, and it accounts for the whole 39M the 2026-08-07 profile
+attributed to two functions that had not existed a fortnight earlier.
+
+Each guard moves to its caller. The instruction vein, measured on the runner:
+
+    jsonbench    3,092,945,560 -> 3,080,294,561   -0.41%
+    encodebench  9,284,549,883 -> 9,229,327,520   -0.59%
+    oneshot         63,411,063 ->    63,188,854   -0.35%
+    basket          56,638,584 ->    56,597,311   -0.07%
+
+The cost is 1,024 bytes of machine code on each of the four, the guard copied
+to every call site. Allocation counters are byte-identical. Welfare 66.72 ->
+66.75, banked.
+
+Encode falls furthest, which is the part the profile did not predict — the
+encode path writes maps too, and it was paying the same toll.
+
 ## 2026-08-12 — the whole and its parts from one match
 
 `r@(rect w h)` binds the value that matched while its fields are destructured,
