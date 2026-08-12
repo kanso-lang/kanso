@@ -1,3 +1,3 @@
 error[endpoint]: unhandled err reached the entry: "division by zero"
-  born in the entry at unhandled.kso:7
+  born in the entry at unhandled.kso:8
   passed through describe

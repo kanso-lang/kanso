@@ -282,6 +282,13 @@ fn open_start? "" _ _
 fn open_start? _ true _
   true
 
+# There is no character here to test, so the starter set cannot rule the
+# position out. The past-the-end flag above says the same thing, but only for
+# the position one past the end; a slice can answer nothing while the flag is
+# false, and then the set was being asked whether it holds no character at all.
+fn open_start? _ _ ""
+  true
+
 fn open_start? set _ c
   in? set c
 

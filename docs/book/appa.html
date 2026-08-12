@@ -791,12 +791,13 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
-  <pre><code>n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> <span class="n">0</span>
+  <pre><code>steeps <span class="o">=</span> []
+n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> length steeps
 <span class="f">print</span> <span class="s">"<span class="i">{n}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at divzero.kso:1</code></pre>
+  born in the entry at divzero.kso:2</code></pre>
   </div>
 </div>
 

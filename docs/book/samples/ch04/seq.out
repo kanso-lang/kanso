@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the entry: "division by zero"
-  born in the entry at seq.kso:3
+  born in the entry at seq.kso:6
