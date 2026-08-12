@@ -27,7 +27,7 @@ pub fn compile(file: &str, source: &str, require_entry: bool) -> Result<ast::Pro
         phase::watched("lex", || lexer::lex(source)).map_err(|d| diag::render(&d, file, source))?;
     let mut program = phase::watched("parse", || parser::parse(&lexed))
         .map_err(|d| diag::render(&d, file, source))?;
-    phase::watched("synthesize_getters", || synthesize_getters(&mut program));
+    phase::watched("finish_program", || finish_program(&mut program));
     stamp_file(&mut program, file);
     let diags = check::check(&mut program, require_entry);
     desugar_field_reads(&mut program);
@@ -90,7 +90,7 @@ fn compile_parsed_entry(
     file: &str,
     source: &str,
 ) -> Result<ast::Program, String> {
-    synthesize_getters(&mut program);
+    finish_program(&mut program);
     stamp_file(&mut program, file);
     let base = std::path::Path::new(file).parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let ownership_diags = phase::watched("merge_ambient_arms", || merge_ambient_arms(&mut program));
@@ -150,7 +150,7 @@ fn compile_parsed_entry(
     merged.types.extend(program.types);
     merged.fns.extend(program.fns);
     let merged_diags = check::check_merged(&merged, true);
-    synthesize_getters(&mut merged);
+    finish_program(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
@@ -161,7 +161,7 @@ fn compile_parsed_entry(
             phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
             phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
             phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
-            synthesize_getters(&mut merged);
+            finish_program(&mut merged);
             phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
             phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
             trmc::rewrite(&mut merged);
@@ -237,7 +237,7 @@ pub fn compile_repl(file: &str, source: &str) -> Result<ast::Program, String> {
 fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
-    synthesize_getters(&mut program);
+    finish_program(&mut program);
     stamp_file(&mut program, file);
     let ownership_diags = merge_ambient_arms(&mut program);
     if !ownership_diags.is_empty() {
@@ -305,7 +305,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
-    synthesize_getters(&mut program);
+    finish_program(&mut program);
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
@@ -319,7 +319,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
 pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String> {
     let lexed = lexer::lex(source).map_err(|d| diag::render(&d, file, source))?;
     let mut program = parser::parse(&lexed).map_err(|d| diag::render(&d, file, source))?;
-    synthesize_getters(&mut program);
+    finish_program(&mut program);
     stamp_file(&mut program, file);
     let ownership_diags = merge_ambient_arms(&mut program);
     if !ownership_diags.is_empty() {
@@ -378,7 +378,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     canonicalize_bare_aliases(&mut program);
     hoist_repeated_strings(&mut program);
     fuse_enumerable(&mut program);
-    synthesize_getters(&mut program);
+    finish_program(&mut program);
     desugar_field_reads(&mut program);
     prune_unused_getters(&mut program);
     trmc::rewrite(&mut program);
@@ -456,6 +456,47 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
 /// own fields prunes every getter it should have handed to its importers, and
 /// the importer is a later program. Declaring one twice is harmless by
 /// construction: a field already carrying a getter is left alone.
+/// The two types division answers with. They are the compiler's because `/`
+/// is: an arm of an operator may only match a type its own module defines, so
+/// no library could name what a primitive division produces. Declaring them
+/// here puts them in every program's scope the way `err` is, and everything
+/// downstream — subtype dispatch, rendering, the type checks — reads ordinary
+/// declarations and needs to know nothing about arithmetic.
+///
+/// `divide_by_zero` under `math_failure` under `string`, so a handler may ask
+/// for whichever it wants: the specific failure, any math failure, or the
+/// reason as text.
+pub const MATH_FAILURE: &str = "math_failure";
+pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
+
+fn install_prelude(program: &mut ast::Program) {
+    // Every compilation unit is finished, and merging two of them would
+    // otherwise carry two copies of each declaration into one program — which
+    // reads downstream as two types sharing a name and emits a switch with the
+    // same case twice. Dropping any that are already there makes this
+    // idempotent under merge.
+    program.types.retain(|t| t.name != MATH_FAILURE && t.name != DIVIDE_BY_ZERO);
+    let at = diag::Span { line: 0, col: 0 };
+    for (name, parent) in [(MATH_FAILURE, "string"), (DIVIDE_BY_ZERO, MATH_FAILURE)] {
+        program.types.push(ast::TypeDecl {
+            name: name.to_string(),
+            is_pub: true,
+            span: at,
+            synthetic: false,
+            origin: None,
+            parent: Some(parent.to_string()),
+            members: Vec::new(),
+            fields: Vec::new(),
+        });
+    }
+}
+
+/// Everything the compiler adds to a parsed program before anything reads it.
+fn finish_program(program: &mut ast::Program) {
+    install_prelude(program);
+    synthesize_getters(program);
+}
+
 fn synthesize_getters(program: &mut ast::Program) {
     // Keyed by the type as well as the field. One getter group holds an arm
     // per type that has the field, and skipping on the name alone would let
@@ -2710,7 +2751,7 @@ fn compile_module_loaded(
             .map_err(|d| diag::render(&d, &file, &source))?;
         let mut program = phase::watched("parse", || parser::parse(&lexed))
             .map_err(|d| diag::render(&d, &file, &source))?;
-        phase::watched("synthesize_getters", || synthesize_getters(&mut program));
+        phase::watched("finish_program", || finish_program(&mut program));
         stamp_file(&mut program, &file);
         parsed.push((file, source, program));
     }
@@ -2902,7 +2943,7 @@ fn compile_module_loaded(
     }
     let mut diags = phase::watched("check_merged", || check::check_merged(&merged, require_entry));
     check::check_unused_private(&merged, &used, &mut diags);
-    synthesize_getters(&mut merged);
+    finish_program(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);
@@ -2919,7 +2960,7 @@ fn compile_module_loaded(
     phase::watched("canonicalize_bare_aliases", || canonicalize_bare_aliases(&mut merged));
     phase::watched("hoist_repeated_strings", || hoist_repeated_strings(&mut merged));
     phase::watched("fuse_enumerable", || fuse_enumerable(&mut merged));
-    synthesize_getters(&mut merged);
+    finish_program(&mut merged);
     phase::watched("desugar_field_reads", || desugar_field_reads(&mut merged));
     phase::watched("prune_unused_getters", || prune_unused_getters(&mut merged));
     trmc::rewrite(&mut merged);

@@ -3048,9 +3048,18 @@ fn cmp_int_float(x: &BigInt, y: f64) -> std::cmp::Ordering {
     }
 }
 
+/// `10 / 0` answers a value rather than a failure: a `divide_by_zero` under a
+/// `math_failure` under a string, so a handler may ask for the specific
+/// failure, for any math failure, or read the reason as text.
+fn math_failure(reason: &str) -> Value {
+    let text = Value::Str(reason.to_string());
+    let root = Value::Sub { ty: Rc::from(crate::MATH_FAILURE), inner: Rc::new(text) };
+    Value::Sub { ty: Rc::from(crate::DIVIDE_BY_ZERO), inner: Rc::new(root) }
+}
+
 fn div_float(a: f64, b: f64, frame: &Frame, span: Span) -> EvalResult {
     match b == 0.0 {
-        true => Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span))),
+        true => Ok(math_failure("division by zero")),
         false => Ok(Value::Float(a / b)),
     }
 }
@@ -3179,13 +3188,11 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
         ("-", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
         ("*", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
         ("/", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => {
-                Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span)))
-            }
+            true => Ok(math_failure("division by zero")),
             false => Ok(Value::Int(a / b)),
         },
         ("%", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
+            true => Ok(math_failure("modulo by zero")),
             false => Ok(Value::Int(a % b)),
         },
         // Bitwise, over whole numbers only. Native's ints are 64 bits wide by
@@ -3217,13 +3224,11 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
         ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
         ("/", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => {
-                Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span)))
-            }
+            true => Ok(math_failure("division by zero")),
             false => Ok(Value::Float(a / b)),
         },
         ("%", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
+            true => Ok(math_failure("modulo by zero")),
             false => Ok(Value::Float(a % b)),
         },
         // int meets float: the int widens (as if cast `x:float`), result float

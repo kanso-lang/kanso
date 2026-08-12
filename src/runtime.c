@@ -3201,12 +3201,31 @@ KValue k_mul(KValue a, KValue b) {
     return k_none();
 }
 
+/* Division answers a value, not a failure, and the value's type is declared
+   like any other — so its id is the compiler's to assign and this has to be
+   told. The emitter calls this once before main. */
+static long long k_math_dz = -1;
+static long long k_math_mf = -1;
+
+void k_math_ids(long long divide_by_zero, long long math_failure) {
+    k_math_dz = divide_by_zero;
+    k_math_mf = math_failure;
+}
+
+KValue k_sub_wrap(long long type_id, KValue inner);
+
+static KValue k_math_failure(const char* reason) {
+    KValue text = k_str(reason);
+    KValue root = k_sub_wrap(k_math_mf, text);
+    return k_sub_wrap(k_math_dz, root);
+}
+
 KValue k_div(KValue a, KValue b, const char* origin) {
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
-        if (b.payload == 0) return k_err(k_str("division by zero"), origin);
+        if (b.payload == 0) return k_math_failure("division by zero");
         /* the one signed division that overflows: the least integer over -1
            is one past the greatest, which C leaves undefined and this machine
            answers by wrapping. Every other overflow here is loud, and a wrong
@@ -3216,13 +3235,13 @@ KValue k_div(KValue a, KValue b, const char* origin) {
         return k_int(a.payload / b.payload);
     }
     if (a.tag == K_FLOAT && b.tag == K_FLOAT) {
-        if (k_as_f(b) == 0.0) return k_err(k_str("division by zero"), origin);
+        if (k_as_f(b) == 0.0) return k_math_failure("division by zero");
         return k_float(k_as_f(a) / k_as_f(b));
     }
     if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
         double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
         double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
-        if (y == 0.0) return k_err(k_str("division by zero"), origin);
+        if (y == 0.0) return k_math_failure("division by zero");
         return k_float(x / y);
     }
     k_die("`/` is not defined for these values");
@@ -3234,7 +3253,7 @@ KValue k_mod(KValue a, KValue b, const char* origin) {
     if (b.tag == K_SUB) b = k_sub_base(b);
     if (!k_not_failure(a) || !k_not_failure(b)) return k_both_or_either(a, b);
     if (a.tag == K_INT && b.tag == K_INT) {
-        if (b.payload == 0) return k_err(k_str("modulo by zero"), origin);
+        if (b.payload == 0) return k_math_failure("modulo by zero");
         /* the least integer modulo -1 is zero, and zero fits — but the
            quotient it is computed from does not, and x86's division traps
            on the pair. ARM answers without trapping, which is why this
@@ -3245,7 +3264,7 @@ KValue k_mod(KValue a, KValue b, const char* origin) {
     if ((a.tag == K_INT || a.tag == K_FLOAT) && (b.tag == K_INT || b.tag == K_FLOAT)) {
         double x = a.tag == K_INT ? (double)a.payload : k_as_f(a);
         double y = b.tag == K_INT ? (double)b.payload : k_as_f(b);
-        if (y == 0.0) return k_err(k_str("modulo by zero"), origin);
+        if (y == 0.0) return k_math_failure("modulo by zero");
         return k_float(fmod(x, y));
     }
     k_die("`%` is not defined for these values");
