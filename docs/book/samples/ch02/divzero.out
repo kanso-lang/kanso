@@ -1,2 +1,1 @@
-error[endpoint]: unhandled err reached the entry: "division by zero"
-  born in the entry at divzero.kso:3
+division by zero

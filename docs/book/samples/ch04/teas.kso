@@ -3,6 +3,6 @@ import "std/text"
 steeps = []
 word = text/trim " two "
 
-print "sencha: {3 / length steeps} steeps left"
+print "sencha: {steeps[1]!} steeps left"
 print "hojicha: {text/to_int word} steeps left"
 >> print "serving"

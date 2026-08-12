@@ -644,7 +644,7 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
         22 => "^",
         other => die(format!("no operator for code {other}")),
     };
-    match eval_binop(op, val(a), val(b), SPAN0, &None) {
+    match eval_binop(op, val(a), val(b), SPAN0) {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }

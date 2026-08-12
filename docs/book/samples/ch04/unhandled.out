@@ -1,3 +1,3 @@
-error[endpoint]: unhandled err reached the entry: "division by zero"
-  born in the entry at unhandled.kso:8
+error[endpoint]: unhandled err reached the entry: "nothing steeped"
+  born in steeped at unhandled.kso:8
   passed through describe

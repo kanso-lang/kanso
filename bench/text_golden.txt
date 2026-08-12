@@ -15,7 +15,18 @@
 # bank; a toolchain bump moves every row at once and is regenerated in one go,
 # with a sentence in design/compiler-log.md saying so. A number that changes
 # without a sentence is the thing to catch.
+#
+# 2026-08-12: encodebench 102,642 to 101,778, oneshot 101,826 to 100,962,
+# basket 93,186 to 92,322 — the same 864 bytes off each — and jsonbench
+# unmoved. A fall, and the emitted IR is byte-identical to the previous
+# revision for all four, so none of it comes from the compiler. It is the
+# runtime: division and modulo used to raise, building a string and carrying an
+# origin pointer at each of five call sites, and now they answer a value from
+# one argument. jsonbench holds still because it links neither `k_div` nor
+# `k_mod` — it decodes and prints, and the linker drops what it cannot reach.
+# The other three link both, which is why they move together and by the same
+# amount.
 jsonbench text=83714
-encodebench text=102642
-oneshot text=101826
-basket text=93186
+encodebench text=101778
+oneshot text=100962
+basket text=92322

@@ -1,1 +1,1 @@
-error[endpoint]: unhandled err reached the entry: ["division by zero" ""two" is not an integer"]
+error[endpoint]: unhandled err reached the entry: ["missing index 1" ""two" is not an integer"]

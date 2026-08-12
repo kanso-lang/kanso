@@ -1354,7 +1354,7 @@ impl<'a> Interp<'a> {
                 {
                     return self.call_named(op, vec![left, right], *span, frame);
                 }
-                eval_binop(op, sub_base(left), sub_base(right), *span, frame)
+                eval_binop(op, sub_base(left), sub_base(right), *span)
             }
             Expr::Guard { cond, early, rest, span } => {
                 let c = self.eval(cond, env, frame)?;
@@ -3048,9 +3048,18 @@ fn cmp_int_float(x: &BigInt, y: f64) -> std::cmp::Ordering {
     }
 }
 
-fn div_float(a: f64, b: f64, frame: &Frame, span: Span) -> EvalResult {
+/// `10 / 0` answers a value rather than a failure: a `divide_by_zero` under a
+/// `math_failure` under a string, so a handler may ask for the specific
+/// failure, for any math failure, or read the reason as text.
+fn math_failure(reason: &str) -> Value {
+    let text = Value::Str(reason.to_string());
+    let root = Value::Sub { ty: Rc::from(crate::MATH_FAILURE), inner: Rc::new(text) };
+    Value::Sub { ty: Rc::from(crate::DIVIDE_BY_ZERO), inner: Rc::new(root) }
+}
+
+fn div_float(a: f64, b: f64) -> EvalResult {
     match b == 0.0 {
-        true => Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span))),
+        true => Ok(math_failure("division by zero")),
         false => Ok(Value::Float(a / b)),
     }
 }
@@ -3143,7 +3152,7 @@ fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
     Ok(Value::Int(bits.into()))
 }
 
-pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame) -> EvalResult {
+pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
     // Two failures in one operation merge, exactly as two failures in a
     // parallel group do (Clay, 2026-08-05): neither side caused the other, so
     // neither deserves top billing, and the one that loses would otherwise be
@@ -3179,13 +3188,11 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
         ("-", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a - b)),
         ("*", Value::Int(a), Value::Int(b)) => Ok(Value::Int(a * b)),
         ("/", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => {
-                Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span)))
-            }
+            true => Ok(math_failure("division by zero")),
             false => Ok(Value::Int(a / b)),
         },
         ("%", Value::Int(a), Value::Int(b)) => match b.is_zero() {
-            true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
+            true => Ok(math_failure("modulo by zero")),
             false => Ok(Value::Int(a % b)),
         },
         // Bitwise, over whole numbers only. Native's ints are 64 bits wide by
@@ -3217,13 +3224,11 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
         ("-", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a - b)),
         ("*", Value::Float(a), Value::Float(b)) => Ok(Value::Float(a * b)),
         ("/", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => {
-                Ok(err_value(Value::Str("division by zero".to_string()), origin_at(frame, span)))
-            }
+            true => Ok(math_failure("division by zero")),
             false => Ok(Value::Float(a / b)),
         },
         ("%", Value::Float(a), Value::Float(b)) => match *b == 0.0 {
-            true => Ok(err_value(Value::Str("modulo by zero".to_string()), origin_at(frame, span))),
+            true => Ok(math_failure("modulo by zero")),
             false => Ok(Value::Float(a % b)),
         },
         // int meets float: the int widens (as if cast `x:float`), result float
@@ -3233,8 +3238,8 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span, frame: &Frame
         ("-", Value::Float(a), Value::Int(b)) => Ok(Value::Float(a - int_f(b))),
         ("*", Value::Int(a), Value::Float(b)) => Ok(Value::Float(int_f(a) * b)),
         ("*", Value::Float(a), Value::Int(b)) => Ok(Value::Float(a * int_f(b))),
-        ("/", Value::Int(a), Value::Float(b)) => div_float(int_f(a), *b, frame, span),
-        ("/", Value::Float(a), Value::Int(b)) => div_float(*a, int_f(b), frame, span),
+        ("/", Value::Int(a), Value::Float(b)) => div_float(int_f(a), *b),
+        ("/", Value::Float(a), Value::Int(b)) => div_float(*a, int_f(b)),
         ("<" | "<=" | ">" | ">=", _, _) => match compare(&left, &right) {
             Some(ord) => Ok(bool_value(match op {
                 "<" => ord.is_lt(),
@@ -3795,14 +3800,17 @@ mod tests {
 
     #[test]
     fn err_propagates_through_a_generic_function_unhandled() {
-        let source = "fn double x\n  x * 2\n\nmain = double (1 / 0)\n";
+        // Raised rather than divided: division by zero answers a math failure
+        // value now, and a generic function is meant to pass it through the
+        // way it passes anything else. What this pins is the err path.
+        let source = "fn double x\n  x * 2\n\nmain = double (err \"no\")\n";
 
         assert!(matches!(run_main(source), Value::ErrV(_)));
     }
 
     #[test]
     fn errs_carry_their_origin_and_dispatcher_hops() {
-        let source = "fn grade outcome\n  \"grade {outcome}\"\n\nmain = grade (1 / 0)\n";
+        let source = "fn grade outcome\n  \"grade {outcome}\"\n\nmain = grade (err \"no\")\n";
         let program = crate::compile("spec.kso", source, false).expect("compiles");
         let interp = Interp::new(&program);
         let value = interp

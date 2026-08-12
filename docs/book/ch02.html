@@ -62,7 +62,7 @@ days <span class="o">=</span> <span class="n">365000000</span>
   </div>
 </div>
 
-<p>division by zero is handled the same way. there is no answer to give, so the failure becomes a value that travels to the program's endpoint (chapter 04 is entirely about this rail):</p>
+<p>division by zero takes a different route. arithmetic has no answer to give, so the division answers a <code>math_failure</code>—an ordinary value whose text is the reason. print it and you see the reason; chapter 04 shows how an arm asks for it by name:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">divzero.kso</div>
@@ -71,8 +71,7 @@ steeps <span class="o">=</span> []
 <span class="f">print</span> <span class="s">"<span class="i">{n / length steeps}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run divzero.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at divzero.kso:3</code></pre>
+    <pre><code>division by zero</code></pre>
   </div>
 </div>
 

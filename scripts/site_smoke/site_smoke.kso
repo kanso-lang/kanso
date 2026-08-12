@@ -438,7 +438,7 @@ fn any_live? live
 
 fn missing_run read acc
   why = "the chapter's first panel did not run"
-  noted acc why (said_in? read "ran" "division by zero")
+  noted acc why (said_in? read "ran" "is not an integer")
 
 fn missing_reader read acc
   why = "a book panel did not run edited source"

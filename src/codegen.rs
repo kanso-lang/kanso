@@ -173,6 +173,7 @@ define internal i64 @k_check_bool(%KValue %v) alwaysinline {
 declare i64 @k_truthy_bad(%KValue)
 
 declare %KValue @k_caf_freeze(%KValue)
+declare void @k_math_ids(i64, i64)
 declare %KValue @k_caf_blackhole()
 declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
@@ -1384,8 +1385,21 @@ impl<'a> Backend<'a> {
             let _ = writeln!(fills, "  %f{i} = call %KValue @k_caf_freeze(%KValue %v{i})");
             let _ = writeln!(fills, "  store %KValue %f{i}, ptr @{cell}");
         }
-        let _ =
-            writeln!(self.body, "define void @k_caf_init() {{\nentry:\n{fills}  ret void\n}}\n");
+        // Division answers a declared type, so the runtime has to be told which
+        // id the compiler gave it. Before the constants, because a constant may
+        // divide. A program that cannot reach a math failure never declares the
+        // pair and never builds one, so it has nothing to tell.
+        let ids = match (
+            self.type_ids.get(crate::DIVIDE_BY_ZERO),
+            self.type_ids.get(crate::MATH_FAILURE),
+        ) {
+            (Some(dz), Some(mf)) => format!("  call void @k_math_ids(i64 {dz}, i64 {mf})\n"),
+            _ => String::new(),
+        };
+        let _ = writeln!(
+            self.body,
+            "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"
+        );
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {

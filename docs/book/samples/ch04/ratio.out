@@ -1,2 +1,2 @@
-error[endpoint]: unhandled err reached the entry: "division by zero"
-  born in the entry at ratio.kso:2
+error[endpoint]: unhandled err reached the entry: ""many" is not an integer"
+  born in text/to_int at std/text/text.kso:84

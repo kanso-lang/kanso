@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the entry: "missing index 1"
-  born in the entry at seq.kso:6
+  born in the entry at endpoint.kso:2

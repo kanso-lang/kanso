@@ -13,17 +13,19 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">ratio.kso</div>
-  <pre><code>steeps <span class="o">=</span> []
-ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> length steeps
+  <pre><code><span class="k">import</span> <span class="s">"std/text"</span>
+
+word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" many "</span>
+ratio <span class="o">=</span> <span class="f">text/to_int</span> word
 <span class="f">print</span> <span class="s">"ratio: <span class="i">{ratio}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run ratio.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at ratio.kso:2</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ""many" is not an integer"
+  born in text/to_int at std/text/text.kso:84</code></pre>
   </div>
 </div>
 
-<p>this is not a crash. division by zero produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, and we will read longer versions of that receipt shortly.</p>
+<p>this is not a crash. <code>to_int</code> produced an <code>err</code> value, the value flowed to <code>main</code>, and the <em>endpoint rule</em> fired: an err reaching the top of the program is an error in its own right. nothing was thrown and nothing unwound; a value arrived somewhere that had no plan for it, and kanso considers arriving unplanned-for the bug worth reporting. the second line is part of the value itself—every err carries its birthplace, here a line of the standard library, and we will read longer versions of that receipt shortly.</p>
 
 <h2>the railway</h2>
 
@@ -37,21 +39,27 @@ ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span
 <span class="k">fn</span> <span class="f">receipt</span> total
   <span class="s">"order total: <span class="i">{total}</span>"</span>
 
+<span class="k">fn</span> <span class="f">share_of</span> _ <span class="n">0</span>
+  <span class="f">err</span> <span class="s">"no one to share the bill with"</span>
+
+<span class="k">fn</span> <span class="f">share_of</span> cents people
+  cents <span class="o">/</span> people
+
 <span class="k">fn</span> <span class="f">subtotal</span> cents people
-  share <span class="o">=</span> cents <span class="o">/</span> people
+  share <span class="o">=</span> <span class="f">share_of</span> cents people
   <span class="f">with_tip</span> share
 
 <span class="k">fn</span> <span class="f">with_tip</span> share
   share <span class="o">+</span> share <span class="o">/</span> <span class="n">10</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play railway.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in subtotal at railway.kso:8
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "no one to share the bill with"
+  born in share_of at railway.kso:8
   passed through receipt ← with_tip</code></pre>
   </div>
 </div>
 
-<p>count the lines of error handling in this program: zero. the division by zero happens inside <code>subtotal</code>; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and no station on the line can flag the train down. functions state their happy-path logic and nothing else, ever.</p>
+<p>count the lines of error handling in this program: zero. <code>share_of</code> decides that a bill split no ways is a failure and says so; the err flows into <code>with_tip</code>, which never runs; back out to <code>main</code>; into <code>receipt</code>, which never runs; through <code>print</code>; and off the end of the program, where the endpoint rule files the report. this is the railway: the sad track runs parallel to the happy one, and no station on the line can flag the train down. functions state their happy-path logic and nothing else, ever.</p>
 
 <p>the err built the report as it traveled. the first line is the reason. the second is the birthplace—function, file, line—baked in at the moment of failure. the third is the trace: every function the err rode past, newest on the left, so <code>receipt ← with_tip</code> reads "past <code>with_tip</code> first, then past <code>receipt</code>." in a language where failure never unwinds a stack, the trace is how the stack story survives—carried on the value itself, printed only if the err makes it all the way out.</p>
 
@@ -67,13 +75,18 @@ ratio <span class="o">=</span> <span class="n">10</span> <span class="o">/</span
 <span class="k">fn</span> <span class="f">describe</span> x
   <span class="s">"got <span class="i">{x}</span>"</span>
 
-steeps <span class="o">=</span> []
-bad <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> length steeps
+<span class="k">fn</span> <span class="f">steeped</span> <span class="n">0</span>
+  <span class="f">err</span> <span class="s">"nothing steeped"</span>
+
+<span class="k">fn</span> <span class="f">steeped</span> n
+  <span class="f">n</span>
+
+bad <span class="o">=</span> <span class="f">steeped</span> <span class="n">0</span>
 <span class="f">print</span> (<span class="f">describe</span> bad)</code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play unhandled.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at unhandled.kso:8
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "nothing steeped"
+  born in steeped at unhandled.kso:8
   passed through describe</code></pre>
   </div>
 </div>
@@ -313,12 +326,12 @@ not a flag</code></pre>
 steeps <span class="o">=</span> []
 word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
 
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / length steeps}</span> steeps left"</span>
+<span class="f">print</span> <span class="s">"sencha: <span class="i">{steeps[1]!}</span> steeps left"</span>
 <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int word}</span> steeps left"</span>
 <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"serving"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run teas.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ["division by zero" ""two" is not an integer"]</code></pre>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: ["missing index 1" ""two" is not an integer"]</code></pre>
   </div>
 </div>
 
@@ -331,11 +344,11 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
 steeps <span class="o">=</span> []
 word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">" two "</span>
 
-<span class="f">print</span> <span class="s">"sencha: <span class="i">{3 / length steeps}</span> steeps left"</span>
+<span class="f">print</span> <span class="s">"sencha: <span class="i">{steeps[1]!}</span> steeps left"</span>
 <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"hojicha: <span class="i">{text/to_int word}</span> steeps left"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run seq.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index 1"
   born in the entry at seq.kso:6</code></pre>
   </div>
 </div>
