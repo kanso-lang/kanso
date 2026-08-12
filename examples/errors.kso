@@ -1,9 +1,14 @@
-fn describe (err reason)
-  "failed: {reason}"
+# Division by zero answers a value you dispatch on rather than a failure you
+# catch. The specific type is `divide_by_zero`; its parent `math_failure` is
+# there for a handler that does not care which kind it was.
+fn describe f:divide_by_zero
+  "no divisor: {f}"
+
+fn describe f:math_failure
+  "some math failure: {f}"
 
 fn describe n
   "result: {n}"
-
 
 fn safe_ratio a b
   a / b

@@ -1497,8 +1497,15 @@ fn qualify(
     // the importer's build asked for a group nothing declares.
     let getters: std::collections::HashSet<String> =
         dep.fns.iter().filter(|f| f.is_getter()).map(|f| f.name.clone()).collect();
-    let owned: std::collections::HashSet<String> =
-        check::declared_names(dep).into_iter().filter(|n| !getters.contains(n)).collect();
+    // The prelude's types belong to the compiler, not to whichever module is
+    // being qualified. Renaming them per module would leave every module with
+    // its own `math_failure`, and the one division builds would match none of
+    // them.
+    let owned: std::collections::HashSet<String> = check::declared_names(dep)
+        .into_iter()
+        .filter(|n| !getters.contains(n))
+        .filter(|n| n != MATH_FAILURE && n != DIVIDE_BY_ZERO)
+        .collect();
     // A subtype names its parent, and that name is a type this module owns —
     // so it moves with the rest of them. Gathered before the loop renames
     // anything, because after the first rename the set would not match.

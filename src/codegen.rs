@@ -1391,8 +1391,10 @@ impl<'a> Backend<'a> {
         let dz = self.type_ids[crate::DIVIDE_BY_ZERO];
         let mf = self.type_ids[crate::MATH_FAILURE];
         let ids = format!("  call void @k_math_ids(i64 {dz}, i64 {mf})\n");
-        let _ =
-            writeln!(self.body, "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n");
+        let _ = writeln!(
+            self.body,
+            "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"
+        );
         // A library has no entry to call, and a stub calling one that is not
         // there is a symbol the linker would ask about.
         if self.program.fns.iter().any(|d| d.name == crate::ast::ENTRY) {

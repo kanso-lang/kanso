@@ -1,1 +1,1 @@
-10 / length []
+err "nothing to divide by"

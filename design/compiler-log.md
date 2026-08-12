@@ -2944,3 +2944,37 @@ and then the state that made the arms tie cannot be written. `swapped` asks
 written as three arms and reads as one `or`. Where the shape is genuinely two
 independent conditions, the arm the diagnostic names is the fix, and it says in
 one line what the arm order used to say silently.
+
+## 2026-08-12 — division by zero is a value
+
+Gaveled 2026-08-10, and it took the tie-check fix above to land.
+
+`math_failure` under `string` and `divide_by_zero` under that are installed in
+every program, because `/` is the compiler's and an arm of an operator may only
+match a type its own module defines — no library could name what a primitive
+division produces. A handler asks for whichever it wants: the specific failure,
+any math failure, or the reason as text.
+
+    fn told f:divide_by_zero    specifically: division by zero
+    fn told f:math_failure      some math failure: ...
+    fn told n                   a number: 2
+
+A computed zero divisor answers the value on all three engines. A literal one
+is still refused where it is written: that check is named `decidable_walk` and
+fires only when no input was involved, which makes it a provable mistake rather
+than a state a program can reach.
+
+Two things the build turned up.
+
+The name is per-compiler, not per-module. Qualification renames the types a
+module owns, so every module was getting its own `math_failure` and the one
+division builds matched none of them. The prelude is excluded from that rename.
+
+The declarations cost compile work: the module benchmark's emitted lines go
+4,430 to 4,528 and its calls 748 to 749, the second being the call that tells
+the runtime which ids the compiler assigned. Two type declarations in every
+program is what that buys, and there is no cheaper way to let a primitive
+operator answer a declared type.
+
+Two interpreter unit tests used `1 / 0` as a convenient err and now raise one,
+which is what they were always about.

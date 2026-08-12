@@ -1,0 +1,21 @@
+# Division by zero answers a value rather than raising. The value is a
+# `divide_by_zero` under a `math_failure` under a string, so a handler asks for
+# whichever it wants: the specific failure, any math failure, or the reason as
+# text. A literal zero divisor is still refused where it is written, because
+# that is decidable and no input made it happen.
+fn over a b
+  a / b
+
+fn told f:divide_by_zero
+  "specifically: {f}"
+
+fn told f:math_failure
+  "some math failure: {f}"
+
+fn told n
+  "a number: {n}"
+
+pub play =
+  print (told (over 10 0))
+  >> print (told (over 10 5))
+  >> print "the reason reads as text: {over 7 0}"

@@ -1,2 +1,2 @@
-error[endpoint]: unhandled err reached the entry: "division by zero"
+error[endpoint]: unhandled err reached the entry: "nothing to divide by"
   born in the entry at endpoint_err.kso:1
