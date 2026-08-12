@@ -1,0 +1,4 @@
+error[dispatch]: these `open_start?` arms tie: each is the more specific one somewhere, and a call could match both — write the arm that is most specific in every position
+  --> an_arm_set_with_no_settling_arm.kso:7:4
+   7 | fn open_start? _ true
+          ^

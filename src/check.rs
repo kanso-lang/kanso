@@ -766,9 +766,6 @@ pub fn check_arm_ties(program: &Program, diags: &mut Vec<Diagnostic>) {
         .iter()
         .filter_map(|t| t.parent.as_deref().map(|p| (t.name.as_str(), p)))
         .collect();
-    if parents.is_empty() {
-        return;
-    }
     let relation = |a: &str, b: &str| -> Option<i64> {
         if a == b {
             return Some(0);

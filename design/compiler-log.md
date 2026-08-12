@@ -2906,3 +2906,41 @@ the diagnostic corpus said so.
 Three engines agree on `tests/golden/micro/an_as_pattern_binds_the_whole.kso`.
 Open, and waiting for a second real case rather than a guess: whether `@` binds
 in `=` bindings, and whether it nests.
+
+## 2026-08-12 — the tie check ran on almost nothing
+
+`check_arm_ties` opened with a guard:
+
+    if parents.is_empty() {
+        return;
+    }
+
+so a program declaring no subtype was never checked at all — and almost no
+program declares one. The rest of the check does not need parents: `compare`
+falls back to pattern rank, which is the whole of the answer for literal and
+binder arms. The guard was reading "we only care about subtype chains" into a
+function that had grown past that.
+
+It surfaced sideways. Division answering a `math_failure` puts a string
+subtype in every program, which switched the check on everywhere at once, and
+lib/regexp stopped compiling. The first reading was that a subtype had changed
+an unrelated verdict. It had not: the verdict had simply never been asked for.
+
+With the guard gone, the sweep over lib, examples and scripts names eight arm
+sets. Every one is a genuine tie by the rule, and two are order-dependent with
+different answers on the ambiguous call:
+
+    fn other code true _        code - 32
+    fn other code _ true        code + 32
+
+`other 65 true true` matches both. It is unreachable — the caller asks
+`lower?` and `upper?` of one code — but nothing said so, and the arms were
+settled by the order they were written in. `stopped 0 false` in golden_prose
+is the same shape and reachable: one arm writes nothing, the other exits 1.
+
+Where the two flags encode one three-way answer, the fix is one discriminator,
+and then the state that made the arms tie cannot be written. `swapped` asks
+`case_of` for "lower", "upper" or neither; `open_start?` had three alternatives
+written as three arms and reads as one `or`. Where the shape is genuinely two
+independent conditions, the arm the diagnostic names is the fix, and it says in
+one line what the arm order used to say silently.
