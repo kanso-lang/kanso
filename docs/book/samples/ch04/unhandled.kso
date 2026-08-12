@@ -4,6 +4,11 @@ fn describe none
 fn describe x
   "got {x}"
 
-steeps = []
-bad = 10 / length steeps
+fn steeped 0
+  err "nothing steeped"
+
+fn steeped n
+  n
+
+bad = steeped 0
 print (describe bad)

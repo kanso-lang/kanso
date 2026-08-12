@@ -1387,10 +1387,15 @@ impl<'a> Backend<'a> {
         }
         // Division answers a declared type, so the runtime has to be told which
         // id the compiler gave it. Before the constants, because a constant may
-        // divide.
-        let dz = self.type_ids[crate::DIVIDE_BY_ZERO];
-        let mf = self.type_ids[crate::MATH_FAILURE];
-        let ids = format!("  call void @k_math_ids(i64 {dz}, i64 {mf})\n");
+        // divide. A program that cannot reach a math failure never declares the
+        // pair and never builds one, so it has nothing to tell.
+        let ids = match (
+            self.type_ids.get(crate::DIVIDE_BY_ZERO),
+            self.type_ids.get(crate::MATH_FAILURE),
+        ) {
+            (Some(dz), Some(mf)) => format!("  call void @k_math_ids(i64 {dz}, i64 {mf})\n"),
+            _ => String::new(),
+        };
         let _ = writeln!(
             self.body,
             "define void @k_caf_init() {{\nentry:\n{ids}{fills}  ret void\n}}\n"

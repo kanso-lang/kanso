@@ -787,17 +787,17 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <h2>error[endpoint]—the failures compilation can't catch</h2>
 
-<p>the six families above are all settled before the program runs. some failures cannot be: whether a divisor is zero, or a lookup finds nothing, is a fact about values that only exist at runtime. kanso represents those outcomes as ordinary values—<code>err</code> for a genuine failure, <code>none</code> for a legitimate absence—and lets them flow. chapter four is the full story; the catalog entry is what happens when such a value is never handled and reaches the edge of the program. a division by zero produces an <code>err</code>, and an unhandled <code>err</code> that reaches <code>main</code> ends the program with a report of where it was born:</p>
+<p>the six families above are all settled before the program runs. some failures cannot be: whether a lookup finds nothing, or a parse meets garbage, is a fact about values that only exist at runtime. kanso represents those outcomes as ordinary values—<code>err</code> for a genuine failure, <code>none</code> for a legitimate absence—and lets them flow. chapter four is the full story; the catalog entry is what happens when such a value is never handled and reaches the edge of the program. a strict index that misses produces an <code>err</code>, and an unhandled <code>err</code> that reaches <code>main</code> ends the program with a report of where it was born:</p>
 
 <div class="code-panel">
-  <div class="code-panel-title">divzero.kso</div>
+  <div class="code-panel-title">endpoint.kso</div>
   <pre><code>steeps <span class="o">=</span> []
-n <span class="o">=</span> <span class="n">10</span> <span class="o">/</span> length steeps
+n <span class="o">=</span> steeps[<span class="n">1</span>]!
 <span class="f">print</span> <span class="s">"<span class="i">{n}</span>"</span></code></pre>
   <div class="code-output">
-    <div class="code-panel-title">kanso run divzero.kso</div>
-    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "division by zero"
-  born in the entry at divzero.kso:2</code></pre>
+    <div class="code-panel-title">kanso run endpoint.kso</div>
+    <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the entry: "missing index 1"
+  born in the entry at endpoint.kso:2</code></pre>
   </div>
 </div>
 

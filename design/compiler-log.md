@@ -2978,3 +2978,43 @@ operator answer a declared type.
 
 Two interpreter unit tests used `1 / 0` as a convenient err and now raise one,
 which is what they were always about.
+
+## 2026-08-12 — the prelude only where a program can reach it, and the book relearns failure
+
+The first draft of #159 installed `math_failure` and `divide_by_zero` into every
+compilation unit and let qualification rename them, so jsonbench shipped six
+copies — `io/math_failure`, `render/math_failure`, `jsonbench/list/…` — and each
+took a case in every type-metadata table the emitter writes. Emitted lines rose
+10,529 to 10,676 and the module benchmark rose 4,430 to 4,528. Welfare fell 0.19
+under the floor and CI refused the merge, which is the gate doing its job.
+
+Two changes. Qualification drops the pair rather than renaming it, and the merged
+program gets one bare copy back. And the copy is installed only when the program
+can reach a math failure: a `/` or `%` anywhere, a pattern annotated with either
+name, or a type declared under `math_failure`. A program that does none of those
+pays nothing.
+
+What is left is the honest price. jsonbench divides, so it keeps the pair: calls
+1,659 to 1,660, branches 1,018 to 1,020, lines 10,529 to 10,556 — the constructor
+and the branch that reaches it, plus two cases in the tables. The five samples in
+the compile golden do not divide and are byte-identical to before. The module
+benchmark divides through the standard library and pays 4,430 to 4,456. Welfare
+reads 66.75, the floor exactly.
+
+The book had built chapter 04 on division by zero as its running err, and that is
+no longer what division answers. Seven samples moved. Chapter 02 keeps the
+division and teaches the new thing: the value reads as its reason. Chapter 04
+needs a failure a caller genuinely cannot handle, so `share_of` says `err "no one
+to share the bill with"` and the railway runs unchanged — born in the reader's own
+code, trace through `receipt ← with_tip`, past a catch-all arm that never sees it.
+The merge-and-short-circuit pair take a strict index miss beside the parse
+failure, which are two distinct errs where there was one. Appendix A's endpoint
+entry is now `endpoint.kso`, a strict index rather than a division.
+
+Regenerating those panels turned up something older. `book_panels --write` is
+killed on native after 3.9 trillion instructions and a 579 GB peak, where the
+oracle finishes in a moment; origin/main does the same, so it predates this work.
+The read path is fine because `keeping path text (not write or text == raw)`
+short-circuits and never forces the chapter it built — which is also why no gate
+has ever exercised the write path. Recorded as its own thread with the CI gap
+beside it.

@@ -469,6 +469,44 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
 pub const MATH_FAILURE: &str = "math_failure";
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
+/// Whether anything in the program could meet a math failure: a division or a
+/// remainder builds one, and naming either type is how an arm asks for one.
+/// A program that does neither would otherwise pay for two types it cannot
+/// reach — a case in every metadata table the emitter writes, for every
+/// compilation.
+fn wants_prelude(program: &ast::Program) -> bool {
+    fn in_pattern(p: &ast::Pattern) -> bool {
+        match p {
+            ast::Pattern::Annotated { ty, .. } => ty == MATH_FAILURE || ty == DIVIDE_BY_ZERO,
+            ast::Pattern::Ctor { ty, fields, .. } => {
+                ty == MATH_FAILURE || ty == DIVIDE_BY_ZERO || fields.iter().any(in_pattern)
+            }
+            _ => false,
+        }
+    }
+    fn in_expr(e: &ast::Expr) -> bool {
+        match e {
+            ast::Expr::BinOp { op, .. } if *op == "/" || *op == "%" => true,
+            ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
+                name == MATH_FAILURE || name == DIVIDE_BY_ZERO
+            }
+            ast::Expr::Block(stmts, _) | ast::Expr::Build(stmts, _) => stmts.iter().any(in_stmt),
+            ast::Expr::Guard { cond, early, rest, .. } => {
+                in_expr(cond) || in_expr(early) || rest.iter().any(in_stmt)
+            }
+            _ => expr_children(e).into_iter().any(in_expr),
+        }
+    }
+    fn in_stmt(s: &ast::Stmt) -> bool {
+        match s {
+            ast::Stmt::Bind { expr, .. } | ast::Stmt::Expr(expr) => in_expr(expr),
+            ast::Stmt::Set { value, .. } => in_expr(value),
+        }
+    }
+    program.types.iter().any(|t| t.parent.as_deref() == Some(MATH_FAILURE))
+        || program.fns.iter().any(|f| f.params.iter().any(in_pattern) || f.body.iter().any(in_stmt))
+}
+
 fn install_prelude(program: &mut ast::Program) {
     // Every compilation unit is finished, and merging two of them would
     // otherwise carry two copies of each declaration into one program — which
@@ -476,6 +514,9 @@ fn install_prelude(program: &mut ast::Program) {
     // same case twice. Dropping any that are already there makes this
     // idempotent under merge.
     program.types.retain(|t| t.name != MATH_FAILURE && t.name != DIVIDE_BY_ZERO);
+    if !wants_prelude(program) {
+        return;
+    }
     let at = diag::Span { line: 0, col: 0 };
     for (name, parent) in [(MATH_FAILURE, "string"), (DIVIDE_BY_ZERO, MATH_FAILURE)] {
         program.types.push(ast::TypeDecl {
@@ -1506,6 +1547,11 @@ fn qualify(
         .filter(|n| !getters.contains(n))
         .filter(|n| n != MATH_FAILURE && n != DIVIDE_BY_ZERO)
         .collect();
+    // The prelude's own declarations go, rather than travelling under this
+    // module's name: `install_prelude` puts one bare pair back on the merged
+    // program, so six modules do not each carry their own `math_failure` for
+    // the emitter to write out.
+    dep.types.retain(|t| t.name != MATH_FAILURE && t.name != DIVIDE_BY_ZERO);
     // A subtype names its parent, and that name is a type this module owns —
     // so it moves with the rest of them. Gathered before the loop renames
     // anything, because after the first rename the set would not match.
