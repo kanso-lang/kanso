@@ -469,11 +469,13 @@ fn stamp_file(program: &mut ast::Program, file: &str) {
 pub const MATH_FAILURE: &str = "math_failure";
 pub const DIVIDE_BY_ZERO: &str = "divide_by_zero";
 
-/// Whether anything in the program could meet a math failure: a division or a
-/// remainder builds one, and naming either type is how an arm asks for one.
-/// A program that does neither would otherwise pay for two types it cannot
-/// reach — a case in every metadata table the emitter writes, for every
-/// compilation.
+/// Whether the program ever asks which failure it has. Naming either type is
+/// the only way to tell a math failure from the text it carries: a program
+/// that never names one cannot distinguish `10 / 0` from the string it reads
+/// as, so division answers the bare string there and the two declarations are
+/// not made at all. Dividing is not enough on its own — a benchmark that only
+/// renders numbers divides in its innermost loop and asks nothing, and the
+/// distinction it cannot observe cost it 3.5%.
 fn wants_prelude(program: &ast::Program) -> bool {
     fn in_pattern(p: &ast::Pattern) -> bool {
         match p {
@@ -486,7 +488,6 @@ fn wants_prelude(program: &ast::Program) -> bool {
     }
     fn in_expr(e: &ast::Expr) -> bool {
         match e {
-            ast::Expr::BinOp { op, .. } if *op == "/" || *op == "%" => true,
             ast::Expr::Ident(name, _) | ast::Expr::Partial(name, _) => {
                 name == MATH_FAILURE || name == DIVIDE_BY_ZERO
             }

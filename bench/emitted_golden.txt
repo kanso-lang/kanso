@@ -35,15 +35,7 @@
 # A library keeps everything, because its callers are outside the module.
 # The binary does not change — -flto already internalised and stripped these,
 # __TEXT is 114,688 either way. What is saved is writing them and reading them.
-#
-# 2026-08-12: calls 1659 -> 1660, branches 1018 -> 1020, lines 10529 -> 10556.
-# A rise, and the price of the feature: division by zero answers a value now,
-# so each division site carries the constructor and the branch that reaches it,
-# and the two prelude types each take a case in the type-metadata tables. The
-# prelude is installed only where a program can reach a math failure, which is
-# why the five samples in the compile golden — none of which divide — did not
-# move at all.
 defines=154
-calls=1660
-branches=1020
-lines=10556
+calls=1659
+branches=1018
+lines=10529

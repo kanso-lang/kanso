@@ -2988,18 +2988,26 @@ took a case in every type-metadata table the emitter writes. Emitted lines rose
 10,529 to 10,676 and the module benchmark rose 4,430 to 4,528. Welfare fell 0.19
 under the floor and CI refused the merge, which is the gate doing its job.
 
-Two changes. Qualification drops the pair rather than renaming it, and the merged
-program gets one bare copy back. And the copy is installed only when the program
-can reach a math failure: a `/` or `%` anywhere, a pattern annotated with either
-name, or a type declared under `math_failure`. A program that does none of those
-pays nothing.
+Qualification now drops the pair rather than renaming it, and the merged program
+gets one bare copy back. The first rule for installing it was "the program can
+reach a math failure" — a `/` or `%` anywhere. That was wrong, and the gate said
+so: encodebench came out 4.2% slower, 9.23 to 9.62 billion instructions, and
+oneshot 1.5%, while jsonbench and basket moved by about thirty instructions each.
+An asymmetry that large is not layout noise, which moves every row.
 
-What is left is the honest price. jsonbench divides, so it keeps the pair: calls
-1,659 to 1,660, branches 1,018 to 1,020, lines 10,529 to 10,556 — the constructor
-and the branch that reaches it, plus two cases in the tables. The five samples in
-the compile golden do not divide and are byte-identical to before. The module
-benchmark divides through the standard library and pays 4,430 to 4,456. Welfare
-reads 66.75, the floor exactly.
+encodebench renders numbers, digit extraction divides by ten in its innermost
+loop, and it never once asks which failure it has. It was paying for a
+distinction it cannot observe. So the rule is observability: the pair is declared
+only when some arm names `math_failure` or `divide_by_zero`, or a type is
+declared under one. Where nothing names them, `10 / 0` answers the bare string —
+same text, same output, and nothing in such a program can tell the difference.
+
+The result is that a program which does not ask is compiled exactly as before.
+All four benchmarks, the five compile samples and the module sample are
+byte-identical to main; encodebench measures 8.746 billion again. Every golden
+here reverts rather than moves, and welfare reads 66.75, the floor. The feature
+costs what it costs only where it is used, which is the honest place to charge
+it.
 
 The book had built chapter 04 on division by zero as its running err, and that is
 no longer what division answers. Seven samples moved. Chapter 02 keeps the

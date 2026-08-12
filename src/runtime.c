@@ -3216,6 +3216,9 @@ KValue k_sub_wrap(long long type_id, KValue inner);
 
 static KValue k_math_failure(const char* reason) {
     KValue text = k_str(reason);
+    /* A program that never names either type was not given their ids, because
+       it cannot tell the wrapped value from the text it reads as. */
+    if (k_math_dz < 0) return text;
     KValue root = k_sub_wrap(k_math_mf, text);
     return k_sub_wrap(k_math_dz, root);
 }
