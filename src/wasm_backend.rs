@@ -460,8 +460,8 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.call(RT_ERR_INNER);
                 ctx.body.local_set(inner);
                 self.emit_pattern(ctx, inner, &fields[0])?;
-                if let Some((name, _)) = whole {
-                    ctx.scope.insert(name.clone(), value_local);
+                if let Some(named) = whole {
+                    ctx.scope.insert(named.0.clone(), value_local);
                 }
             }
             Pattern::Ctor { ty, fields, whole } => {
@@ -483,8 +483,8 @@ impl<'a> WasmBackend<'a> {
                     ctx.body.local_set(fv);
                     self.emit_pattern(ctx, fv, field)?;
                 }
-                if let Some((name, _)) = whole {
-                    ctx.scope.insert(name.clone(), value_local);
+                if let Some(named) = whole {
+                    ctx.scope.insert(named.0.clone(), value_local);
                 }
             }
             Pattern::Keyed { .. } => {

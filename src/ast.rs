@@ -119,7 +119,7 @@ pub enum Pattern {
     Ctor {
         ty: String,
         fields: Vec<Pattern>,
-        whole: Option<(String, Span)>,
+        whole: Option<Box<(String, Span)>>,
     },
     Keyed {
         entries: Vec<KeyedEntry>,

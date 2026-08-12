@@ -2015,8 +2015,8 @@ impl<'a> Backend<'a> {
                 let vkv = f.tmp();
                 f.line(&format!("{vkv} = insertvalue %KValue {va}, i64 {w1}, 1"));
                 self.emit_pattern(f, &vkv, &fields[1], fail)?;
-                if let Some((name, _)) = whole {
-                    f.bind(name, status);
+                if let Some(named) = whole {
+                    f.bind(&named.0, status);
                 }
                 return Ok(());
             }
@@ -2270,8 +2270,8 @@ impl<'a> Backend<'a> {
                     let inner = f.tmp();
                     f.line(&format!("{inner} = call %KValue @k_err_inner(%KValue {value})"));
                     self.emit_pattern(f, &inner, &fields[0], fail)?;
-                    if let Some((name, _)) = whole {
-                        f.bind(name, value);
+                    if let Some(named) = whole {
+                        f.bind(&named.0, value);
                     }
                     return Ok(());
                 }
@@ -2294,8 +2294,8 @@ impl<'a> Backend<'a> {
                 }
                 // the as-pattern's name takes the value that matched, so an
                 // arm answering it hands back what it was given
-                if let Some((name, _)) = whole {
-                    f.bind(name, value);
+                if let Some(named) = whole {
+                    f.bind(&named.0, value);
                 }
             }
             Pattern::Keyed { .. } => {

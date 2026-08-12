@@ -1759,24 +1759,15 @@ impl<'a> P<'a> {
         }
     }
 
-    /// `r@(rect w h)` — the whole and its parts from one match. The sigil
-    /// hugs both sides, so a name and a shape are never separated by air.
+    /// `r@(rect w h)` — the whole and its parts from one match. Air around
+    /// the sigil is the lexer's to refuse, which it does before this runs.
     fn parse_as_pattern(&mut self, name: String, span: Span) -> Result<Pattern, Diagnostic> {
         let at_span = self.span_here();
-        let tight_before = at_span.col == span.col + name.len();
         self.pos += 1;
-        let shape_span = self.span_here();
-        let tight_after = shape_span.col == at_span.col + 1;
-        if !tight_before || !tight_after {
-            return Err(Diagnostic::new(
-                "formatting",
-                format!("an as-pattern hugs its sigil: `{name}@(type parts)`"),
-                at_span,
-            ));
-        }
         match self.parse_pattern()? {
             Pattern::Ctor { ty, fields, whole: None } => {
-                Ok(Pattern::Ctor { ty, fields, whole: Some((name, span)) })
+                let named = Box::new((name, span));
+                Ok(Pattern::Ctor { ty, fields, whole: Some(named) })
             }
             Pattern::Ctor { .. } => Err(Diagnostic::new(
                 "syntax",

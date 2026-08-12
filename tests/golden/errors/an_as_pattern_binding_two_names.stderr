@@ -1,0 +1,4 @@
+error[syntax]: an as-pattern binds one name, and this shape already has one
+  --> an_as_pattern_binding_two_names.kso:7:10
+   7 | fn area a@b@(rect w h)
+                ^

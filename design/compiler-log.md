@@ -2861,6 +2861,18 @@ is boxed. Getting that wrong does not produce a wrong answer — it emits
 `call void @k_carry_stage(%KValue )`, an operand that is not there, and the
 verifier says so.
 
+The name is boxed, and that is not a detail. Held inline, an
+`Option<(String, Span)>` costs every constructor pattern in every program forty
+bytes for a field that is `None` almost everywhere: the front end's peak on
+lib/json went 819,217 bytes to 868,507, a 6% rise the compile-memory gate
+refused. Behind a box it is one word, and the peak reads 815,619 — slightly
+under where it started, because the option now fits in the padding the variant
+already had.
+
+Air around the sigil belongs to the lexer, which refuses it before the parser
+runs. The parser had grown its own copy of that check; it could never fire, and
+the diagnostic corpus said so.
+
 Three engines agree on `tests/golden/micro/an_as_pattern_binds_the_whole.kso`.
 Open, and waiting for a second real case rather than a guess: whether `@` binds
 in `=` bindings, and whether it nests.

@@ -633,8 +633,8 @@ fn bound_in_pattern(p: &ast::Pattern, out: &mut std::collections::HashSet<String
             out.insert(name.clone());
         }
         ast::Pattern::Ctor { fields, whole, .. } => {
-            if let Some((name, _)) = whole {
-                out.insert(name.clone());
+            if let Some(named) = whole {
+                out.insert(named.0.clone());
             }
             for f in fields {
                 bound_in_pattern(f, out);
@@ -1666,8 +1666,8 @@ fn pattern_binds(p: &ast::Pattern, out: &mut Vec<String>) {
     match p {
         ast::Pattern::Var(name, _) | ast::Pattern::Annotated { name, .. } => out.push(name.clone()),
         ast::Pattern::Ctor { fields, whole, .. } => {
-            if let Some((name, _)) = whole {
-                out.push(name.clone());
+            if let Some(named) = whole {
+                out.push(named.0.clone());
             }
             for f in fields {
                 pattern_binds(f, out);

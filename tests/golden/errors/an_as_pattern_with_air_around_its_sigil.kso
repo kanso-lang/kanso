@@ -1,0 +1,11 @@
+# The as-pattern's sigil hugs, the way the partial's `&` does: a name, the
+# sigil, and the shape are one token to the reader, and air between them
+# would read as three parameters.
+type rect
+  w
+  h
+
+fn area r @(rect w h)
+  w * h
+
+pub play = print "{area (rect 3 4)}"

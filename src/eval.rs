@@ -2777,9 +2777,9 @@ fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)>
 
 /// The as-pattern's name takes the value the shape matched — the same value
 /// the caller passed, not one rebuilt from the parts.
-fn bind_whole(whole: &Option<(String, crate::diag::Span)>, arg: &Value, binds: &mut Bindings) {
-    if let Some((name, _)) = whole {
-        binds.push((name.clone(), arg.clone()));
+fn bind_whole(whole: &Option<Box<(String, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
+    if let Some(named) = whole {
+        binds.push((named.0.clone(), arg.clone()));
     }
 }
 

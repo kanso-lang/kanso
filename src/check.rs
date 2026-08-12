@@ -216,8 +216,8 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut std::collections::HashSet
             out.insert(name.as_str());
         }
         Pattern::Ctor { fields, whole, .. } => {
-            if let Some((name, _)) = whole {
-                out.insert(name.as_str());
+            if let Some(named) = whole {
+                out.insert(named.0.as_str());
             }
             for f in fields {
                 collect_pattern_names(f, out);
@@ -1360,7 +1360,7 @@ fn param_names(p: &Pattern) -> Vec<&str> {
         Pattern::Ctor { fields, whole, .. } => {
             let parts: Vec<&str> = fields.iter().flat_map(param_names).collect();
             match whole {
-                Some((name, _)) => std::iter::once(name.as_str()).chain(parts).collect(),
+                Some(named) => std::iter::once(named.0.as_str()).chain(parts).collect(),
                 None => parts,
             }
         }
@@ -2385,8 +2385,8 @@ impl Resolver<'_> {
             Pattern::Var(name, span) => self.push_local(name, *span),
             Pattern::Annotated { name, span, .. } => self.push_local(name, *span),
             Pattern::Ctor { fields, whole, .. } => {
-                if let Some((name, at)) = whole {
-                    self.push_local(name, *at);
+                if let Some(named) = whole {
+                    self.push_local(&named.0, named.1);
                 }
                 for field in fields {
                     self.bind_pattern(field);
