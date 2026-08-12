@@ -42,3 +42,12 @@ bench/history_series.jsonl
 /overlapped
 /profbench
 /twosleep
+
+# what the gate scripts write while they compare
+/counters*.txt
+/emitted.txt
+/emitted_want.txt
+/text.txt
+/text_want.txt
+/work.txt
+/work_want.txt

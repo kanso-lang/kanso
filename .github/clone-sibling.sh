@@ -39,8 +39,24 @@ into="$2"
 branch="${GITHUB_HEAD_REF:-}"
 url="https://github.com/kanso-lang/$repo"
 
+# Three attempts, because github's TLS handshake fails from the runner often
+# enough to have taken a gating job down over a change it had no opinion about.
+# A gate that goes red for a reason unrelated to the diff is a gate people
+# learn to re-run without reading.
+tried() {
+  for attempt in 1 2 3; do
+    if git clone "$@"; then
+      return 0
+    fi
+    echo "$repo: clone attempt $attempt failed"
+    rm -rf "$into"
+    sleep 5
+  done
+  return 1
+}
+
 if [ -n "$branch" ] && git ls-remote --exit-code --heads "$url" "$branch" >/dev/null 2>&1; then
-  git clone --depth 1 --branch "$branch" "$url" "$into"
+  tried --depth 1 --branch "$branch" "$url" "$into"
   if [ -f sibling-goldens-move ]; then
     set +e
     sh .github/goldens-move-licenses.sh sibling-goldens-move "$branch"
@@ -66,5 +82,5 @@ if [ -n "$branch" ] && git ls-remote --exit-code --heads "$url" "$branch" >/dev/
   fi
 else
   echo "$repo: main"
-  git clone --depth 1 "$url" "$into"
+  tried --depth 1 "$url" "$into"
 fi
