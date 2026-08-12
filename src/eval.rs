@@ -3810,8 +3810,7 @@ mod tests {
 
     #[test]
     fn errs_carry_their_origin_and_dispatcher_hops() {
-        let source =
-            "fn grade outcome\n  \"grade {outcome}\"\n\nmain = grade (err \"no\")\n";
+        let source = "fn grade outcome\n  \"grade {outcome}\"\n\nmain = grade (err \"no\")\n";
         let program = crate::compile("spec.kso", source, false).expect("compiles");
         let interp = Interp::new(&program);
         let value = interp
