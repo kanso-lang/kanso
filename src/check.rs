@@ -1,7 +1,7 @@
 use crate::ast::*;
 use crate::diag::{Diagnostic, Span};
-use std::collections::{HashMap, HashSet};
 use num_traits::Zero;
+use std::collections::{HashMap, HashSet};
 
 pub const BUILTINS: [&str; 53] = [
     "append",
