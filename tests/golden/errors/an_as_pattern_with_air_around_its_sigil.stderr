@@ -1,0 +1,4 @@
+error[formatting]: canonical form requires no space here
+  --> an_as_pattern_with_air_around_its_sigil.kso:8:11
+   8 | fn area r @(rect w h)
+                 ^

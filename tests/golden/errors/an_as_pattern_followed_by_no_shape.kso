@@ -1,0 +1,11 @@
+# The sigil names what a shape matched, so a shape is what has to follow it.
+# A name or a literal on the right binds nothing the left side does not
+# already bind.
+type rect
+  w
+  h
+
+fn area r@n
+  r.w * n
+
+pub play = print "{area (rect 3 4)}"

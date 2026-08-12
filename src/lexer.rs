@@ -27,6 +27,10 @@ pub enum Tok {
     SeqOp,
     Op(&'static str),
     Underscore,
+    /// The as-pattern's sigil: `r@(rect w h)` binds the whole while its
+    /// parts are destructured. It hugs both sides, so it can never be
+    /// mistaken for anything else.
+    At,
     KwFn,
     KwReturn,
     KwType,
@@ -606,6 +610,7 @@ fn lex_line(content: &str, line: usize, col_offset: usize) -> Result<LexedLine, 
             // Followed by `=` it is the comparison instead, the same way a
             // bare `=` binds only when it does not head an `==`.
             '!' if s.peek(1) != Some('=') => Some(Tok::Bang),
+            '@' => Some(Tok::At),
             '{' => Some(Tok::LBrace),
             '}' => Some(Tok::RBrace),
             ':' => Some(Tok::Colon),
@@ -897,6 +902,8 @@ fn required_gap(prev: &Tok, next: &Tok) -> usize {
         (Tok::RBracket, Tok::Bang) => 0,
         // the partial sigil hugs its name: &add 2
         (Tok::Op("&"), Tok::Ident(_)) => 0,
+        // the as-pattern's sigil hugs both sides: r@(rect w h)
+        (_, Tok::At) | (Tok::At, _) => 0,
         // A map's braces hold their contents apart — `{ "a":1 "b":2 }` — but
         // the empty pair has no contents to hold, so it closes on itself and
         // `{ }` is the non-canonical spelling of it.

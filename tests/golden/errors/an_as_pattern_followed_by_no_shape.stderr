@@ -1,0 +1,4 @@
+error[syntax]: `r@` names what a shape matched, so a shape is what follows it: `r@(type parts)`
+  --> an_as_pattern_followed_by_no_shape.kso:8:10
+   8 | fn area r@n
+                ^

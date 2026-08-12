@@ -108,9 +108,23 @@ pub enum Pattern {
     Nullary(String, Span),
     Var(String, Span),
     Wildcard(Span),
-    Annotated { name: String, ty: String, span: Span },
-    Ctor { ty: String, fields: Vec<Pattern> },
-    Keyed { entries: Vec<KeyedEntry>, span: Span },
+    Annotated {
+        name: String,
+        ty: String,
+        span: Span,
+    },
+    /// `whole` is the as-pattern's name: `r@(rect w h)` destructures into `w`
+    /// and `h` and binds `r` to the value that matched, so an arm can answer
+    /// what it was given without building it again.
+    Ctor {
+        ty: String,
+        fields: Vec<Pattern>,
+        whole: Option<Box<(String, Span)>>,
+    },
+    Keyed {
+        entries: Vec<KeyedEntry>,
+        span: Span,
+    },
 }
 
 #[derive(Clone, Debug)]

@@ -1,0 +1,4 @@
+error[syntax]: an as-pattern names what it matched, and `_` is the spelling for naming nothing
+  --> an_as_pattern_naming_nothing.kso:7:10
+   7 | fn area _@(rect w h)
+                ^

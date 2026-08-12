@@ -2865,3 +2865,44 @@ to every call site. Allocation counters are byte-identical. Welfare 66.72 ->
 
 Encode falls furthest, which is the part the profile did not predict — the
 encode path writes maps too, and it was paying the same toll.
+
+## 2026-08-12 — the whole and its parts from one match
+
+`r@(rect w h)` binds the value that matched while its fields are destructured,
+spelled the way Haskell, Rust and Scala spell it. Gaveled 2026-08-11.
+
+An arm that dispatches on shape otherwise loses the value it matched, so
+answering with it means building it again from the fields — and a rebuilt
+argument is a constructor application rather than a value, which is a shape the
+compiler will not tail-call.
+
+The pattern grew a field rather than a variant: `Ctor { ty, fields, whole }`,
+so every pass that only cares about the shape reads `..` and is untouched. As-
+patterns are constructor-only, which the type now states. `@` hugs both sides,
+and `_@` is refused — an as-pattern names what it matched and `_` names
+nothing.
+
+**An as-bound parameter gives up the by-value register convention.** That
+convention passes a two-field record's words rather than the record, so there
+is nothing to hand the name that would not have to be built, which is the cost
+the pattern exists to remove. The opt-out is a property of the position rather
+than of one arm: if any arm there names the whole, every arm at that position
+is boxed. Getting that wrong does not produce a wrong answer — it emits
+`call void @k_carry_stage(%KValue )`, an operand that is not there, and the
+verifier says so.
+
+The name is boxed, and that is not a detail. Held inline, an
+`Option<(String, Span)>` costs every constructor pattern in every program forty
+bytes for a field that is `None` almost everywhere: the front end's peak on
+lib/json went 819,217 bytes to 868,507, a 6% rise the compile-memory gate
+refused. Behind a box it is one word, and the peak reads 815,619 — slightly
+under where it started, because the option now fits in the padding the variant
+already had.
+
+Air around the sigil belongs to the lexer, which refuses it before the parser
+runs. The parser had grown its own copy of that check; it could never fire, and
+the diagnostic corpus said so.
+
+Three engines agree on `tests/golden/micro/an_as_pattern_binds_the_whole.kso`.
+Open, and waiting for a second real case rather than a guess: whether `@` binds
+in `=` bindings, and whether it nests.

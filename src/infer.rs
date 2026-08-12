@@ -230,7 +230,7 @@ fn bind_pattern<'a>(
         // destructuring a declared type refines each field to the join of what
         // construction sites stored there — so `_parsed p v` gives p its real
         // int-ness instead of TOP, which is what unblocks the scanner's hot path
-        Pattern::Ctor { ty, fields } => {
+        Pattern::Ctor { ty, fields, .. } => {
             let field_sets = type_names.get(ty.as_str()).map(|i| &type_fields[*i]);
             for (fi, field) in fields.iter().enumerate() {
                 let s = field_sets.and_then(|fs| fs.get(fi)).copied().unwrap_or(TOP & !FAIL);

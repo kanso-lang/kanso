@@ -215,7 +215,10 @@ fn collect_pattern_names<'a>(p: &'a Pattern, out: &mut std::collections::HashSet
         Pattern::Annotated { name, .. } => {
             out.insert(name.as_str());
         }
-        Pattern::Ctor { fields, .. } => {
+        Pattern::Ctor { fields, whole, .. } => {
+            if let Some(named) = whole {
+                out.insert(named.0.as_str());
+            }
             for f in fields {
                 collect_pattern_names(f, out);
             }
@@ -898,9 +901,9 @@ fn resolve_marker_pattern(
 ) {
     match pattern {
         Pattern::Var(name, _) if markers.contains(name.as_str()) => {
-            *pattern = Pattern::Ctor { ty: name.clone(), fields: Vec::new() };
+            *pattern = Pattern::Ctor { ty: name.clone(), fields: Vec::new(), whole: None };
         }
-        Pattern::Ctor { ty, fields } => {
+        Pattern::Ctor { ty, fields, .. } => {
             if markers.contains(ty.as_str()) && !fields.is_empty() {
                 diags.push(Diagnostic::new(
                     "signature",
@@ -1294,7 +1297,7 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
             continue;
         }
         for stmt in &decl.body {
-            let Stmt::Bind { pattern: Pattern::Ctor { ty, fields }, .. } = stmt else {
+            let Stmt::Bind { pattern: Pattern::Ctor { ty, fields, .. }, .. } = stmt else {
                 continue;
             };
             if declared.contains(ty.as_str()) || fields.is_empty() {
@@ -1354,7 +1357,13 @@ fn param_names(p: &Pattern) -> Vec<&str> {
     match p {
         Pattern::Var(n, _) => vec![n.as_str()],
         Pattern::Annotated { name, .. } => vec![name.as_str()],
-        Pattern::Ctor { fields, .. } => fields.iter().flat_map(param_names).collect(),
+        Pattern::Ctor { fields, whole, .. } => {
+            let parts: Vec<&str> = fields.iter().flat_map(param_names).collect();
+            match whole {
+                Some(named) => std::iter::once(named.0.as_str()).chain(parts).collect(),
+                None => parts,
+            }
+        }
         Pattern::Keyed { entries, .. } => entries.iter().map(|e| e.bind_name.as_str()).collect(),
         _ => Vec::new(),
     }
@@ -2251,7 +2260,7 @@ fn same_shape(a: &[Pattern], b: &[Pattern]) -> bool {
         (Pattern::StrLit(x, _), Pattern::StrLit(y, _)) => x == y,
         (Pattern::Nullary(x, _), Pattern::Nullary(y, _)) => x == y,
         (Pattern::Annotated { ty: x, .. }, Pattern::Annotated { ty: y, .. }) => x == y,
-        (Pattern::Ctor { ty: x, fields: fa }, Pattern::Ctor { ty: y, fields: fb }) => {
+        (Pattern::Ctor { ty: x, fields: fa, .. }, Pattern::Ctor { ty: y, fields: fb, .. }) => {
             x == y && fa.len() == fb.len() && same_shape(fa, fb)
         }
         (Pattern::Var(..) | Pattern::Wildcard(..), Pattern::Var(..) | Pattern::Wildcard(..)) => {
@@ -2375,7 +2384,10 @@ impl Resolver<'_> {
         match pattern {
             Pattern::Var(name, span) => self.push_local(name, *span),
             Pattern::Annotated { name, span, .. } => self.push_local(name, *span),
-            Pattern::Ctor { fields, .. } => {
+            Pattern::Ctor { fields, whole, .. } => {
+                if let Some(named) = whole {
+                    self.push_local(&named.0, named.1);
+                }
                 for field in fields {
                     self.bind_pattern(field);
                 }

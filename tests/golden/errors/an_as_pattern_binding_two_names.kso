@@ -1,0 +1,10 @@
+# One value, one name. A second sigil asks for two names on one shape, and
+# the shape it destructures has already been spoken for.
+type rect
+  w
+  h
+
+fn area a@b@(rect w h)
+  w * h
+
+pub play = print "{area (rect 3 4)}"

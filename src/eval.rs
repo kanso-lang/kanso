@@ -2775,6 +2775,14 @@ fn match_params(params: &[Pattern], args: &[Value]) -> Option<(Score, Bindings)>
     Some((score, binds))
 }
 
+/// The as-pattern's name takes the value the shape matched — the same value
+/// the caller passed, not one rebuilt from the parts.
+fn bind_whole(whole: &Option<Box<(String, crate::diag::Span)>>, arg: &Value, binds: &mut Bindings) {
+    if let Some(named) = whole {
+        binds.push((named.0.clone(), arg.clone()));
+    }
+}
+
 fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8> {
     match (pattern, arg) {
         (Pattern::IntLit(n, _), Value::Int(v)) if n == v => Some(0),
@@ -2801,10 +2809,11 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
             None => None,
         },
         (Pattern::Keyed { .. }, _) => None,
-        (Pattern::Ctor { ty, fields }, Value::ErrV(info)) if ty == "err" => {
+        (Pattern::Ctor { ty, fields, whole }, Value::ErrV(info)) if ty == "err" => {
             match fields.len() == 1 {
                 true => {
                     let inner = match_one(&fields[0], &info.reason, binds)?;
+                    bind_whole(whole, arg, binds);
                     // a bare reason binder demands err-ness but names
                     // nothing: it ranks below every named reason — leaf
                     // and typeset alike — and just above the plain
@@ -2817,12 +2826,13 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
                 false => None,
             }
         }
-        (Pattern::Ctor { ty, fields }, Value::Record { ty: vty, fields: vfields })
+        (Pattern::Ctor { ty, fields, whole }, Value::Record { ty: vty, fields: vfields })
             if ty.as_str() == &**vty && fields.len() == vfields.borrow().len() =>
         {
             for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
                 match_one(fp, fv, binds)?;
             }
+            bind_whole(whole, arg, binds);
             Some(0)
         }
         // A pattern naming a type takes a subtype of it, the same way an
@@ -2830,7 +2840,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
         // before the named type is the one in hand, zero when it names the
         // subtype itself. So an arm naming the child still beats one naming
         // the parent, and the fields bound are the base record's either way.
-        (Pattern::Ctor { ty, fields }, Value::Sub { .. }) => {
+        (Pattern::Ctor { ty, fields, whole }, Value::Sub { .. }) => {
             let mut depth: u8 = 0;
             let mut cur = arg;
             let names_it = loop {
@@ -2855,6 +2865,7 @@ fn match_one(pattern: &Pattern, arg: &Value, binds: &mut Bindings) -> Option<u8>
                     for (fp, fv) in fields.iter().zip(vfields.borrow().iter()) {
                         match_one(fp, fv, binds)?;
                     }
+                    bind_whole(whole, arg, binds);
                     Some(depth)
                 }
                 _ => None,

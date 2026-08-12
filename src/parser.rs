@@ -1693,6 +1693,15 @@ impl<'a> P<'a> {
                     let ty = self.parse_type_expr()?;
                     return Ok(Pattern::Annotated { name: "_".to_string(), ty, span });
                 }
+                if matches!(self.peek(), Some(Tok::At)) {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "an as-pattern names what it matched, and `_` is the \
+                         spelling for naming nothing"
+                            .to_string(),
+                        self.span_here(),
+                    ));
+                }
                 Ok(Pattern::Wildcard(span))
             }
             Some(Tok::Ident(name)) => {
@@ -1712,6 +1721,9 @@ impl<'a> P<'a> {
                     }
                     let ty = self.parse_type_expr()?;
                     return Ok(Pattern::Annotated { name, ty, span });
+                }
+                if matches!(self.peek(), Some(Tok::At)) {
+                    return self.parse_as_pattern(name, span);
                 }
                 match NULLARY.contains(&name.as_str()) {
                     true => Ok(Pattern::Nullary(name, span)),
@@ -1739,11 +1751,37 @@ impl<'a> P<'a> {
                             fields.push(self.parse_pattern()?);
                         }
                         self.expect_rparen()?;
-                        Ok(Pattern::Ctor { ty: name, fields })
+                        Ok(Pattern::Ctor { ty: name, fields, whole: None })
                     }
                 }
             }
             _ => Err(self.err("expected a parameter pattern".to_string())),
+        }
+    }
+
+    /// `r@(rect w h)` — the whole and its parts from one match. Air around
+    /// the sigil is the lexer's to refuse, which it does before this runs.
+    fn parse_as_pattern(&mut self, name: String, span: Span) -> Result<Pattern, Diagnostic> {
+        let at_span = self.span_here();
+        self.pos += 1;
+        match self.parse_pattern()? {
+            Pattern::Ctor { ty, fields, whole: None } => {
+                let named = Box::new((name, span));
+                Ok(Pattern::Ctor { ty, fields, whole: Some(named) })
+            }
+            Pattern::Ctor { .. } => Err(Diagnostic::new(
+                "syntax",
+                "an as-pattern binds one name, and this shape already has one".to_string(),
+                at_span,
+            )),
+            _ => Err(Diagnostic::new(
+                "syntax",
+                format!(
+                    "`{name}@` names what a shape matched, so a shape is what \
+                     follows it: `{name}@(type parts)`"
+                ),
+                at_span,
+            )),
         }
     }
 
@@ -1791,7 +1829,7 @@ impl<'a> P<'a> {
                 while !self.done() {
                     fields.push(self.parse_pattern()?);
                 }
-                Ok(Pattern::Ctor { ty: first, fields })
+                Ok(Pattern::Ctor { ty: first, fields, whole: None })
             }
         }
     }

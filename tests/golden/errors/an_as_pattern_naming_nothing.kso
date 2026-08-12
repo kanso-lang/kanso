@@ -1,0 +1,10 @@
+# `_` is already the spelling for naming nothing, so `_@` asks to bind the
+# whole under a name that does not exist.
+type rect
+  w
+  h
+
+fn area _@(rect w h)
+  w * h
+
+pub play = print "{area (rect 3 4)}"
