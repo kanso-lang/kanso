@@ -3322,9 +3322,35 @@ KValue k_b_read_file(KValue path) {
    hands out, so a program that prints one reads the same on both engines. */
 #define K_SOCKETS 64
 static struct { int used; int fd; } k_sockets[K_SOCKETS];
-static struct { int used; pid_t pid; int out; int err;
+static struct { int used; pid_t pid; int out; int err; int started;
                 char* obuf; long long olen; long long ocap;
                 char* ebuf; long long elen; long long ecap; } k_kids[K_SOCKETS];
+
+/* A child that could not be executed and a child that ran and answered 127
+   are different answers, and an exit status cannot tell them apart: 127 is
+   what a shell reports for not-found, and it is also a status a program may
+   choose. So the child keeps a pipe the exec closes for it — nothing arrives
+   and the parent reads end-of-file — and writes its errno through when exec
+   comes back instead. Bytes on that pipe are the only evidence that the
+   command never started. */
+static int k_exec_pipe(int fds[2]) {
+    if (pipe(fds)) return -1;
+    fcntl(fds[1], F_SETFD, fcntl(fds[1], F_GETFD, 0) | FD_CLOEXEC);
+    return 0;
+}
+
+static void k_exec_failed(int wfd) {
+    int why = errno;
+    ssize_t wrote = write(wfd, &why, sizeof why);
+    (void)wrote;
+}
+
+static int k_started(int rfd) {
+    int why = 0;
+    ssize_t got = read(rfd, &why, sizeof why);
+    close(rfd);
+    return got <= 0;
+}
 static long long k_handles = 0;
 
 /* A handle names its slot by `h % K_SOCKETS`, so a new one has to land on a
@@ -3772,8 +3798,8 @@ static KValue k_exec(KDesc* d) {
                 argv[i + 1] = k_as_str(item)->data;
             }
             argv[argc + 1] = NULL;
-            int outp[2], errp[2];
-            if (pipe(outp) || pipe(errp)) {
+            int outp[2], errp[2], gonep[2];
+            if (pipe(outp) || pipe(errp) || k_exec_pipe(gonep)) {
                 free(argv);
                 return k_err(k_concat(k_str("cannot start "), d->x), NULL);
             }
@@ -3781,20 +3807,23 @@ static KValue k_exec(KDesc* d) {
             if (kid < 0) {
                 free(argv);
                 close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+                close(gonep[0]); close(gonep[1]);
                 return k_err(k_concat(k_str("cannot start "), d->x), NULL);
             }
             if (kid == 0) {
                 dup2(outp[1], 1);
                 dup2(errp[1], 2);
                 close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+                close(gonep[0]);
                 execvp(argv[0], argv);
-                /* exec only returns on failure, and the status the parent reads
-                   is how it learns: 127 is what a shell reports for not-found */
+                k_exec_failed(gonep[1]);
                 _exit(127);
             }
             free(argv);
             close(outp[1]);
             close(errp[1]);
+            close(gonep[1]);
+            int started = k_started(gonep[0]);
             char* buf[2] = {NULL, NULL};
             long long len[2] = {0, 0}, cap[2] = {0, 0};
             int fds[2] = {outp[0], errp[0]};
@@ -3815,9 +3844,7 @@ static KValue k_exec(KDesc* d) {
             int status = 0;
             waitpid(kid, &status, 0);
             long long code = WIFEXITED(status) ? WEXITSTATUS(status) : 128;
-            /* a process that could not be executed is a failure, not a status:
-               the child's 127 is the only way the parent hears about it */
-            if (code == 127) {
+            if (!started) {
                 free(buf[0]);
                 free(buf[1]);
                 return k_err(k_concat(k_str("cannot start "), d->x), NULL);
@@ -3963,8 +3990,8 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
         argv[i + 1] = k_as_str(item)->data;
     }
     argv[argc + 1] = NULL;
-    int outp[2], errp[2];
-    if (pipe(outp) || pipe(errp)) {
+    int outp[2], errp[2], gonep[2];
+    if (pipe(outp) || pipe(errp) || k_exec_pipe(gonep)) {
         free(argv);
         return -1;
     }
@@ -3972,24 +3999,30 @@ static long long k_fork_kid(KValue cmd, KValue argv_list) {
     if (kid < 0) {
         free(argv);
         close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+        close(gonep[0]); close(gonep[1]);
         return -1;
     }
     if (kid == 0) {
         dup2(outp[1], 1);
         dup2(errp[1], 2);
         close(outp[0]); close(outp[1]); close(errp[0]); close(errp[1]);
+        close(gonep[0]);
         execvp(argv[0], argv);
+        k_exec_failed(gonep[1]);
         _exit(127);
     }
     free(argv);
     close(outp[1]);
     close(errp[1]);
+    close(gonep[1]);
+    int started = k_started(gonep[0]);
     fcntl(outp[0], F_SETFL, fcntl(outp[0], F_GETFL, 0) | O_NONBLOCK);
     fcntl(errp[0], F_SETFL, fcntl(errp[0], F_GETFL, 0) | O_NONBLOCK);
     long long h = k_free_handle(k_kid_free);
     if (h < 0) k_die("too many processes at once");
     long long slot = h % K_SOCKETS;
     k_kids[slot].used = 1;
+    k_kids[slot].started = started;
     k_kids[slot].pid = kid;
     k_kids[slot].out = outp[0];
     k_kids[slot].err = errp[0];
@@ -4090,7 +4123,7 @@ static KStep k_step(KDesc* d) {
             close(k_kids[slot].err);
             k_kids[slot].used = 0;
             long long code = WIFEXITED(status) ? WEXITSTATUS(status) : 128;
-            if (code == 127) {
+            if (!k_kids[slot].started) {
                 free(k_kids[slot].obuf);
                 free(k_kids[slot].ebuf);
                 KStep s = {0, 0, k_none(), k_err(k_str("cannot start that"), NULL)};

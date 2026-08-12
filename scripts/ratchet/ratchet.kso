@@ -18,6 +18,10 @@ import "std/text"
 #   kanso run scripts/ratchet -- prove        every row turns its gate red
 #   kanso run scripts/ratchet -- prove cheap  the rows that need no build
 #
+# `prove` is authoritative on linux, where every gate can run. A gate needing
+# a tool the host lacks says so and exits non-zero, which reads here as red
+# and is not evidence: the nightly runs where ci does.
+#
 # `setup` prepares what the gate reads and is allowed to fail — a build that
 # breaks because of the mutation is the gate going red early, and `prove`
 # counts that as red. `dear` marks a row that builds the compiler.
