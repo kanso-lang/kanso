@@ -1,7 +1,8 @@
 #!/bin/sh
-# Native says something the oracle does not, which is the divergence the
-# differential exists to refuse.
+# Native words a refusal the oracle words differently. The map-key message is
+# written once in src/eval.rs and once in src/runtime.c, and only the second is
+# touched here, so the two engines answer the same program with two sentences.
 set -e
-sed -i.bak 's/a lazy binding demands its own value/a lazy binding wants itself/' src/runtime.c
+sed -i.bak 's/%.\*s is not usable as a map key/%.*s cannot be a map key/' src/runtime.c
 rm -f src/runtime.c.bak
-grep -q 'a lazy binding wants itself' src/runtime.c
+grep -q 'cannot be a map key' src/runtime.c

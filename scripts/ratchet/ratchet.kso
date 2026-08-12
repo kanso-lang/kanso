@@ -114,10 +114,10 @@ welfare_floor = row
   release
 
 grammar = row
-  "an editor grammar that stops painting a construct"
+  "an editor grammar that stops naming a type as a type"
   true
   "./target/release/kanso run scripts/grammar_check"
-  "editor grammar (types, strings and comments still painted)"
+  "editor grammar (every type still painted)"
   (breaking "grammar_stops_painting")
   release
 

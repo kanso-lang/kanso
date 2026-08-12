@@ -151,7 +151,7 @@ jobs:
         run: ./target/release/kanso run scripts/golden_prose
 
   grammar:
-    name: editor grammar (types, strings and comments still painted)
+    name: editor grammar (every type still painted)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
