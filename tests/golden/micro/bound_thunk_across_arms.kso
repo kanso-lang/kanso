@@ -7,6 +7,9 @@ counts = { "a":1 "b":2 }
 fn found? name group
   name == group[1]!
 
+fn ruled? true true before after
+  after > before
+
 fn ruled? true _ before after
   after > before
 

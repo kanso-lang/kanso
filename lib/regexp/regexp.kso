@@ -276,21 +276,16 @@ fn skipping prog s at true
 fn worth_trying? prog s at
   open_start? prog.starters (at > length s) (text/slice s at at)
 
-fn open_start? "" _ _
-  true
-
-fn open_start? _ true _
-  true
-
-# There is no character here to test, so the starter set cannot rule the
-# position out. The past-the-end flag above says the same thing, but only for
-# the position one past the end; a slice can answer nothing while the flag is
-# false, and then the set was being asked whether it holds no character at all.
-fn open_start? _ _ ""
-  true
-
-fn open_start? set _ c
-  in? set c
+# Any one of three conditions opens the position, and written as three arms
+# each was the most specific one somewhere and none was most specific
+# everywhere. They are alternatives rather than cases, so they read as one.
+#
+# An empty slice has no character to test, so the starter set cannot rule the
+# position out. The past-the-end flag says the same thing for the position one
+# past the end; a slice can answer nothing while the flag is false, and then
+# the set was being asked whether it holds no character at all.
+fn open_start? set past_end c
+  set == "" or past_end or c == "" or in? set c
 
 fn landed prog s at none
   scanned prog s (at + 1)
@@ -590,15 +585,24 @@ fn folded s at acc false
 
 fn swapped c
   code = text/char_code c
-  other code (code >= 97 and code <= 122) (code >= 65 and code <= 90)
+  other code (case_of code)
 
-fn other code true _
+# One answer rather than two flags. Asked as `lower?` and `upper?` the arms
+# below each won a position and neither won both, and the state that made them
+# tie — a code claiming to be lower and upper at once — cannot be written.
+fn case_of code
+  if (code >= 97 and code <= 122) "lower" (upper_or_neither code)
+
+fn upper_or_neither code
+  if (code >= 65 and code <= 90) "upper" ""
+
+fn other code "lower"
   text/from_code (code - 32)
 
-fn other code _ true
+fn other code "upper"
   text/from_code (code + 32)
 
-fn other _ _ _
+fn other _ _
   ""
 
 fn numbered (group node _) at

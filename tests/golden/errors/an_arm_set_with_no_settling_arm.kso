@@ -1,0 +1,13 @@
+# Two arms that each win a position and no arm that wins both. A call of
+# `open_start? "" true` matches the first two and nothing says which, so the
+# set is refused until the arm the diagnostic names is written.
+fn open_start? "" _
+  true
+
+fn open_start? _ true
+  true
+
+fn open_start? set c
+  set == c
+
+pub play = print "{open_start? "a" false}"

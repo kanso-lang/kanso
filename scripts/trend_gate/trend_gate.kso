@@ -150,6 +150,9 @@ fn found? name group
 fn worsened? bare before after
   ruled? (found? bare lower) (found? bare higher) before after
 
+fn ruled? true true before after
+  after > before
+
 fn ruled? true _ before after
   after > before
 
