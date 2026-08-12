@@ -2706,3 +2706,51 @@ the bug.
 
 Scope for the first cut: function arms, hugging spelling, no nesting until a
 second real case asks for it.
+
+## 2026-08-12 — DONE: tailcc kept wherever the arguments fit the registers
+
+The rebuild that segfaults at a hundred thousand hops was not the beat carry and
+not a lost tail call in the emitter. The IR holds a `musttail` for it. The
+release build deletes it: `--release` stripped `musttail` and `tailcc` from every
+line before handing the IR to clang, so the optimized build relied on -O3 to make
+the jump on its own, and here it declined. A hand-built `-O3 -flto` binary of the
+same IR with the two words left in runs the hundred thousand hops and prints 3.
+
+The strip was there because `tailcc` is miscompiled on arm64 at -O1 and above.
+That claim still holds — retaining it everywhere leaves ten of the ninety-five
+micro samples segfaulting, nine through std/regexp. What was never measured is
+where the miscompilation starts. Sweeping the corpus against a cap on how many
+argument registers a parameter list may want:
+
+    cap 8   0 of 95 fail
+    cap 9   1 of 95
+    cap 10  9
+    cap 11  9
+    cap 12  10
+
+The boundary is exactly the arm64 argument register file, x0 through x7. A
+%KValue and a %parsed are two registers each, so an arm of five or more values
+spills, and regexp's hot arms take seven. Below the line the optimized build and
+the unoptimized one agree.
+
+So `--release` now strips the convention only from an arm whose arguments
+overflow x7, and from the calls into it. Everything narrower keeps the guarantee
+the optimized build used to give up — including every arm the beat machinery
+brackets. `tests/golden/micro/a_record_rebuilt_at_depth.kso` runs two hundred
+thousand hops through a pair of arms passing a rebuilt record; it segfaults on
+the old rule and prints `w: 3` on the new one, on all three engines and under a
+release build.
+
+What a wide arm still gives up is the jump. It spends a frame per hop, which is
+what it did before this change, and a deep recursion through one overflows the
+stack — loud, where the convention's own defect is a binary that jumps to an
+address that was a value.
+
+Machine code moves slightly and in both directions on the measuring host:
+jsonbench 79,488 to 79,364 bytes, encodebench 97,236 to 98,040, oneshot 96,668
+to 97,380, basket 90,340 to 90,604. `bench/text_golden.txt` and
+`bench/instructions_golden.txt` are regenerated from the runner in this PR.
+
+OPEN: the miscompilation itself is not diagnosed, only bounded. A reduced case
+against upstream LLVM would be worth having, and until then the cap is a
+measured workaround rather than an explanation.

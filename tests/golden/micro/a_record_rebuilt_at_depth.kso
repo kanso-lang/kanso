@@ -1,0 +1,21 @@
+# An arm that dispatches on a record's shape loses the value it matched, so
+# answering it means writing the constructor again. That rebuild is still a
+# tail call, and it has to stay one: two hundred thousand hops through a pair
+# of arms that pass a rebuilt record, a depth that overflows any engine
+# spending a frame per hop.
+type rect
+  w
+  h
+
+fn rebuilt (rect w h) n
+  stepped (rect w h) n
+
+fn stepped r 0
+  r
+
+fn stepped r n
+  rebuilt r (n - 1)
+
+pub play =
+  r = rebuilt (rect 3 4) 200000
+  print "w: {r.w}"

@@ -574,7 +574,7 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
     let stem = built_as.unwrap_or(named);
     let ll_path = format!("{stem}.ll");
     let ir = match release {
-        true => without_tailcc(ir),
+        true => narrow_tailcc(ir),
         false => ir,
     };
     if let Err(io) = std::fs::write(&ll_path, ir) {
@@ -601,25 +601,78 @@ fn build(program: &ast::Program, file: &str, release: bool, built_as: Option<Str
     }
 }
 
-/// The guaranteed tail call, dropped for the optimized build.
+/// arm64's argument registers, x0 through x7.
+const ARGUMENT_REGISTERS: usize = 8;
+
+/// How many argument registers a parameter list wants: a %KValue and a %parsed
+/// are each two i64s, everything else is one.
+fn arg_registers(params: &str) -> usize {
+    params
+        .split(", ")
+        .filter(|p| !p.trim().is_empty())
+        .map(|p| match p.starts_with("%KValue") || p.starts_with("%parsed") {
+            true => 2,
+            false => 1,
+        })
+        .sum()
+}
+
+fn defined_symbol(line: &str) -> Option<(String, usize)> {
+    let open = line.find('(')?;
+    let close = line.rfind(')')?;
+    let name = line[..open].rsplit('@').next()?.trim().trim_matches('"').to_string();
+    Some((name, arg_registers(&line[open + 1..close])))
+}
+
+fn called_symbol(line: &str) -> Option<String> {
+    let at = line.find(" @")?;
+    let rest = &line[at + 2..];
+    let end = rest.find('(')?;
+    Some(rest[..end].trim().trim_matches('"').to_string())
+}
+
+/// tailcc kept wherever the arguments fit the argument registers.
 ///
-/// `tailcc` is what the beat machinery's `musttail` needs, and at -O0 it is
-/// both correct and necessary: nothing there turns an ordinary call into a
-/// jump, so without it a tail-recursive arm spends a frame per hop and two
-/// hundred thousand hops overflow. At -O1 and above the reverse holds on
-/// arm64. The convention is miscompiled — ten of the eighty-five sample
-/// programs segfault, arriving at an address that was a value — and the
-/// optimizer performs the tail call itself, including across an arity, which
-/// is the case plain sibling-call optimization is not obliged to take.
+/// `tailcc` is what the beat machinery's `musttail` needs, and at -O1 and above
+/// on arm64 the convention is miscompiled for an arm whose arguments spill past
+/// x7 — the binary jumps to an address that was a value. The boundary is exactly
+/// the register file: the micro corpus is clean at eight and one sample
+/// segfaults at nine, growing to ten samples by twelve. So a wide arm keeps the
+/// C convention and every call into it becomes ordinary, and everything narrow
+/// enough keeps the guarantee the optimized build used to give up.
 ///
-/// So each profile gets the convention exactly where it is the one that
-/// works. What release gives up is the GUARANTEE: -O0 promises the jump in the
-/// IR, where -O3 is observed to make it. Measured at two hundred thousand hops
-/// through arms of equal and of differing arity; a future LLVM that declines
-/// would show up as a stack overflow, which is loud, where today's defect is a
-/// binary that jumps to address 11.
-fn without_tailcc(ir: String) -> String {
-    ir.replace("musttail ", "").replace("tailcc ", "")
+/// What a wide arm gives up is the jump: it spends a frame per hop, and a deep
+/// recursion through one overflows the stack, which is loud.
+fn narrow_tailcc(ir: String) -> String {
+    let wide: std::collections::HashSet<String> = ir
+        .lines()
+        .filter(|l| l.starts_with("define tailcc ") || l.starts_with("declare tailcc "))
+        .filter_map(defined_symbol)
+        .filter(|(_, regs)| *regs > ARGUMENT_REGISTERS)
+        .map(|(name, _)| name)
+        .collect();
+    let mut here = String::new();
+    let mut out = String::new();
+    for line in ir.lines() {
+        let mut line = line.to_string();
+        if line.starts_with("define ") || line.starts_with("declare ") {
+            here = defined_symbol(&line).map(|(n, _)| n).unwrap_or_default();
+            if wide.contains(&here) {
+                line = line.replacen("tailcc ", "", 1);
+            }
+        } else if line.contains(" call ") {
+            let callee = called_symbol(&line).unwrap_or_default();
+            if wide.contains(&here) {
+                line = line.replace("musttail ", "");
+            }
+            if wide.contains(&callee) {
+                line = line.replace("musttail ", "").replace("tailcc ", "");
+            }
+        }
+        out.push_str(&line);
+        out.push('\n');
+    }
+    out
 }
 
 /// Release: whole-program LTO across the program and a freshly compiled
