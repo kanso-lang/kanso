@@ -2825,3 +2825,13 @@ end-of-file; when exec comes back instead, the child writes its errno through,
 and those bytes are the only evidence that nothing ever ran. Both paths carry
 it — the blocking run and the fork the scheduler waits on. Counters unmoved,
 welfare 66.72 held.
+
+The machine-code golden moved for it: +80 bytes on all four benchmarks, the
+same number on each because the exec pipe lives in the runtime every program
+links. Nothing on a hot path — the benchmarks start no processes — and the
+allocation counters and welfare are unmoved.
+
+    jsonbench    82,610 -> 82,690
+    encodebench 101,538 -> 101,618
+    oneshot     100,722 -> 100,802
+    basket       92,082 -> 92,162
