@@ -15,7 +15,17 @@
 # bank; a toolchain bump moves every row at once and is regenerated in one go,
 # with a sentence in design/compiler-log.md saying so. A number that changes
 # without a sentence is the thing to catch.
+#
+# 2026-08-12: encodebench 102,642 to 102,450, oneshot 101,826 to 101,634,
+# basket 93,186 to 92,738, jsonbench unmoved. A fall, and not one to take
+# credit for: every one of these four divides through the standard library, so
+# every one gained the two prelude types and about 26 lines of IR. The machine
+# code went the other way on three of them because two more cases in the
+# type-metadata tables moved the inliner's decisions and the linker dropped
+# more than the feature added. Under a per cent, in the direction that flatters
+# the change, from a change that only adds code — read it as the noise this
+# dimension carries, not as a win.
 jsonbench text=83714
-encodebench text=102642
-oneshot text=101826
-basket text=93186
+encodebench text=102450
+oneshot text=101634
+basket text=92738
