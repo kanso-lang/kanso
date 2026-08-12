@@ -3034,3 +3034,80 @@ The read path is fine because `keeping path text (not write or text == raw)`
 short-circuits and never forces the chapter it built — which is also why no gate
 has ever exercised the write path. Recorded as its own thread with the CI gap
 beside it.
+
+## 2026-08-12 (later) — a 580 GB write, and a builder re-seeded every iteration
+
+`book_panels --write` is killed on native after 3.9 trillion instructions and a
+580 GB peak, where the oracle finishes in a moment. It predates the math-failure
+work; origin/main does the same. Regenerating panels with `--interp` is the
+workaround until this closes.
+
+The trigger looked absurd. Holding the chapter prefix fixed and growing the
+trailing text, the same six panel rewrites finish at +562 bytes and run away at
++563. A `sample` profile ended the guessing: every stack sits in
+stitching → fixed → no_recorded → settled_out → outing → escaped →
+regexp/rebuilding. `escaped` is the three `replace_all` calls that turn `&`, `<`
+and `>` into entities, reached only down `no_recorded` — the branch for a panel
+whose recorded output cannot be found. One byte decides whether any panel reaches
+that branch at all.
+
+`replace_all` is quadratic in subject length wherever it matches: 1,020
+characters cost about 5M instructions and 32,640 cost 1,554M, with a 448 MB peak.
+The shape is the cause. Two loops doing identical appends:
+
+    fn direct acc n
+      direct "{acc}…" (n - 1)
+
+    fn laundered acc n
+      kept = "{acc}…"
+      handed kept n
+
+    direct     2000 →  15,457,481   4000 →  17,081,656   8000 →  19,027,210
+    laundered  2000 →  67,489,554   4000 → 207,241,899   8000 → 752,908,406
+
+Direct is linear; handing the accumulator through one intermediate function is
+quadratic. `replace_all` is written the second way — `swapped` computes
+`kept = "{acc}{before}{repl}"` and hands it to `stepped_over`, which recurses.
+
+The mechanism is in `call_arg`. A string a group builds by joining onto itself
+needs its seed converted where it enters from outside, because a builder writes
+into the header it was given and an interned literal cannot be written through.
+The self-recursive call is exempt, since it already carries the builder made
+here. Nothing else is: `entering` is true for any call that is not the group's
+own, so `handed` calling `laundered` re-seeds. `k_b_str_builder` mallocs
+`2 * len + 32` and memcpys the whole string, so the accumulator is copied once
+per iteration — the copy the analysis exists to remove, reintroduced by one hop.
+
+The guard: `k_b_str_builder` returns its argument when the header it arrived in
+still has room. Seeding again would copy the whole string, and a group whose
+parameter is flagged has every caller handing it over uniquely, so that header is
+ours to write. When the buffer is full the seed still happens, which is the
+growth the append would have paid anyway.
+
+    laundered, n=8000      752,908,406 -> 16,519,843
+    the fatal fixture   3.96e12 instr, 582 GB -> 120M instr, 8.9 MB
+    book_panels --write            killed -> completes
+
+`tests/golden/mem/a_builder_handed_on_is_still_a_builder` pins it, and it was
+watched red first: without the guard its 40 appends cost 40 mallocs, one per
+iteration. It costs 25 now. The same appends written without the hop cost one,
+because that shape never reaches the builder path at all — closing that gap is a
+separate thread, and the golden says so rather than implying this is the floor.
+
+The first version of that golden proved nothing. It used `text/append`, which
+does not go through the seed at all, and its counters were identical with the
+guard and without it. A spec that cannot fail is worse than none, and the only
+reason this one was caught is that reverting the fix is a step rather than a
+formality.
+
+Worth recording that the first reading of this was wrong. `string_builders`
+looked like an analysis nothing called, because `grep` returns nothing on
+codegen.rs — a quirk already written down in this repo and not applied. It is
+called, at codegen.rs:442, and its two sets are consulted at 2637 and 921. The
+analysis is fine and flags both shapes; what fails is the exemption being keyed
+on self-recursion rather than on whether the value handed over is already a
+builder.
+
+Second gap, separate: no gate exercises the write path at all. `book_check.sh`
+runs book_panels read-only, and the read path never forces the chapter it built,
+because `keeping path text (not write or text == raw)` short-circuits.

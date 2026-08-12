@@ -26,7 +26,14 @@
 # `k_mod` — it decodes and prints, and the linker drops what it cannot reach.
 # The other three link both, which is why they move together and by the same
 # amount.
+#
+# 2026-08-12 (later): basket 92,322 to 92,354, the other three unmoved. A rise
+# of 32 bytes, and it is the compare-and-branch that stops `k_b_str_builder`
+# re-seeding a header that still has room. That guard takes an accumulator
+# handed through one intermediate function from 752,908,406 instructions to
+# 16,519,843 at eight thousand appends, and takes book_panels --write from
+# killed to finished. Thirty-two bytes.
 jsonbench text=83714
 encodebench text=101778
 oneshot text=100962
-basket text=92322
+basket text=92354

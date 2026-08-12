@@ -1,0 +1,24 @@
+# A string joined onto itself is a builder, and the seed is converted where it
+# enters the group from outside, because a builder writes into the header it
+# was given. The group's own recursive call is exempt: it already holds one.
+# A call arriving from anywhere else re-seeded, and seeding copies the whole
+# string — so passing the accumulator through one intermediate function cost a
+# copy every iteration. bytes_malloc was 40 for these 40 appends; it is 25 now,
+# because seeding is skipped wherever the header still has room and happens
+# only when the buffer is full, which is the growth it would have paid anyway.
+#
+# The same appends without the hop cost one malloc, not 25: written that way
+# the loop never reaches the builder path at all. Closing that gap is a
+# separate thread; what this pins is that the hop no longer charges per
+# iteration.
+fn build_onto acc 0
+  acc
+
+fn build_onto acc n
+  grown = "{acc}xx"
+  handed grown n
+
+fn handed grown n
+  build_onto grown (n - 1)
+
+pub play = print (build_onto "" 40)

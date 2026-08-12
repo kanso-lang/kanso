@@ -1778,6 +1778,10 @@ KValue k_b_str_builder(KValue sv) {
     if (!k_not_failure(sv)) return sv;
     if (sv.tag != K_STR) k_die("a string builder starts from a string");
     KStr* src = k_as_str(sv);
+    /* Already a builder with room to write. Seeding one again would copy the
+       whole string, and a group whose parameter is flagged has every caller
+       handing it over uniquely — so the header this arrived in is ours. */
+    if (src->cap > src->len) return sv;
     long long cap = (long long)src->len * 2 + 32;
     char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
     if (!base) { fputs("out of memory\n", stderr); exit(1); }
