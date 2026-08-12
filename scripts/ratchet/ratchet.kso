@@ -1,0 +1,366 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# A gate nobody has watched fail has no evidence it works. Five checks went
+# green in one day while checking nothing: a book gate whose writer was never
+# run, a fusion that fired zero times, a corpus that crossed no err-provenance
+# seam, an instruction count measuring the length of a run id. Each of them
+# passed, and each of them was blind.
+#
+# So every job in .github/workflows/ci.yml carries at least one row here: a
+# defect to introduce and the command that must then go red. `cover` checks
+# that correspondence and costs nothing, so it runs on every change and a new
+# job cannot land without its row. `prove` applies each mutation in a scratch
+# worktree and refuses a gate that stayed green.
+#
+#   kanso run scripts/ratchet                 every job has a row
+#   kanso run scripts/ratchet -- prove        every row turns its gate red
+#   kanso run scripts/ratchet -- prove cheap  the rows that need no build
+#
+# `prove` is authoritative on linux, where every gate can run. A gate needing
+# a tool the host lacks says so and exits non-zero, which reads here as red
+# and is not evidence: the nightly runs where ci does.
+#
+# `setup` prepares what the gate reads and is allowed to fail — a build that
+# breaks because of the mutation is the gate going red early, and `prove`
+# counts that as red. `dear` marks a row that builds the compiler.
+type row
+  claim
+  dear
+  gate
+  job
+  mutation
+  setup
+
+type unproven
+  job
+  why
+
+type finding
+  line
+  ok
+
+no_setup = "true"
+
+release = "cargo build --release"
+
+benchmarks = "sh scripts/gates/build_benchmarks.sh"
+
+fn breaking name
+  "sh scripts/ratchet/mutations/{name}.sh"
+
+fn gating name
+  "sh scripts/gates/{name}.sh"
+
+formatting = row
+  "a file rustfmt would rewrite"
+  false
+  "cargo fmt --check"
+  "format (rustfmt, checked not applied)"
+  (breaking "misformatted_source")
+  no_setup
+
+linting = row
+  "a borrow clippy refuses"
+  true
+  "cargo clippy --all-targets -- -D warnings"
+  "lint (clippy, all targets)"
+  (breaking "clippy_bait")
+  no_setup
+
+goldens = row
+  "a micro sample answering something else"
+  true
+  "cargo test --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "drifted_micro_golden")
+  no_setup
+
+release_profile = row
+  "a release build that gives up the guaranteed tail call"
+  true
+  "cargo test --test golden micro_corpus_survives_a_release_build"
+  "specs (unit, golden, differential)"
+  (breaking "tail_call_given_up")
+  no_setup
+
+decode_counters = row
+  "a decode allocation the golden does not know about"
+  true
+  (gating "decode_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "decode_allocation")
+  benchmarks
+
+emitted_code = row
+  "the decoder's emitted line count moving"
+  true
+  (gating "emitted_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "emitted_lines_moved")
+  benchmarks
+
+machine_code = row
+  "the machine code changing size"
+  true
+  (gating "machine_code")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "machine_code_moved")
+  benchmarks
+
+welfare_floor = row
+  "a run-speed term falling below the ratcheted floor"
+  true
+  "./target/release/kanso run scripts/welfare"
+  "welfare (one number over runtime and compile cost, ratcheted)"
+  (breaking "welfare_term_worsens")
+  release
+
+grammar = row
+  "an editor grammar that stops naming a type as a type"
+  true
+  "./target/release/kanso run scripts/grammar_check"
+  "editor grammar (every type still painted)"
+  (breaking "grammar_stops_painting")
+  release
+
+book_outputs = row
+  "a recorded sample output the sample no longer produces"
+  true
+  "sh scripts/book_check.sh"
+  "book samples (every panel executed, outputs verified)"
+  (breaking "drifted_book_output")
+  release
+
+diagnostics = row
+  "one engine wording a failure the other does not"
+  true
+  "./target/release/kanso run scripts/diagnostic_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "one_engine_reworded")
+  release
+
+itself = row
+  "a gating job nobody said how to prove"
+  true
+  "./target/release/kanso run scripts/ratchet"
+  "the ratchet (every gate has a mutation that turns it red)"
+  (breaking "unrowed_ci_job")
+  release
+
+rows_a = [formatting linting goldens release_profile]
+
+rows_b = [decode_counters emitted_code machine_code]
+
+rows_c = [welfare_floor grammar book_outputs diagnostics itself]
+
+rows = text/concat rows_a (text/concat rows_b rows_c)
+
+# A job with no row and no reason is the thing this refuses. A reason is a
+# sentence, not a flag: it has to say what would prove the job, so the debt is
+# readable rather than a name on a list.
+no_row_a = unproven
+  "the other host (macos, arm)"
+  "the mutations are `specs`'s; what this adds is a second machine"
+
+no_row_b = unproven
+  "playground examples (every engine)"
+  "the same corpus and engines as `specs`, so a row proves the corpus"
+
+no_row_c = unproven
+  "json decoder end-to-end (native, 150 decodes)"
+  "wants a decoder answering a wrong checksum, so a mutation to lib/json"
+
+no_row_d = unproven
+  "utf-8 validator (differential vs an independent reference)"
+  "wants a validator the independent reference disagrees with"
+
+no_row_e = unproven
+  "asset digests (every reference rewritten, site still runs)"
+  "needs a jekyll build the scratch worktree does not have"
+
+no_row_f = unproven
+  "kq specs (a real program, gating)"
+  "needs kq checked out beside this repository"
+
+no_row_g = unproven
+  "site (landing sample and playground run in a browser)"
+  "needs headless chrome in the scratch worktree"
+
+no_row_h = unproven
+  "browser differential (three engines, byte-identical, headless chrome)"
+  "needs headless chrome in the scratch worktree"
+
+no_row_i = unproven
+  "perf history (appended to the history branch)"
+  "writes to a branch, and red means writing there from a mutated tree"
+
+unproven_a = [no_row_a no_row_b no_row_c]
+
+unproven_b = [no_row_d no_row_e no_row_f]
+
+unproven_c = [no_row_g no_row_h no_row_i]
+
+unproven_jobs = text/concat unproven_a (text/concat unproven_b unproven_c)
+
+workflow = ".github/workflows/ci.yml"
+
+# A job's display name sits at four spaces; a step's at six behind a dash, so
+# the two cannot be confused by their indentation.
+fn job_line? l
+  text/slice l 1 10 == "    name: "
+
+fn job_name l
+  text/slice l 11 (length l)
+
+fn jobs_in text
+  lines = list/select (text/split text "\n") job_line?
+  list/to_list (list/map lines job_name)
+
+fn job_of r
+  r.job
+
+fn named? name group
+  list/any? group (g -> g == name)
+
+fn covered? name
+  rowed = list/to_list (list/map rows job_of)
+  excused = list/to_list (list/map unproven_jobs job_of)
+  named? name rowed or named? name excused
+
+fn known? declared name
+  named? name declared
+
+fn missing declared
+  list/to_list (list/select declared (n -> not covered? n))
+
+fn stale declared
+  claimed = list/to_list (list/map rows job_of)
+  excused = list/to_list (list/map unproven_jobs job_of)
+  both = text/concat claimed excused
+  list/to_list (list/select both (n -> not known? declared n))
+
+cover = io/read_file workflow . (text -> against (jobs_in text))
+
+fn against declared
+  gaps = missing declared
+  ghosts = stale declared
+  verdict gaps ghosts (length gaps == 0 and length ghosts == 0)
+
+fn verdict _ _ true
+  io/write "ratchet: every ci job carries a mutation or a stated reason\n"
+
+fn verdict gaps ghosts false
+  said = list/to_list (list/map gaps (n -> "  no row and no reason: {n}\n"))
+  gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
+  body = text/join (text/concat said gone) ""
+  saying = "ratchet: the table and ci.yml disagree\n{body}"
+  io/write_err saying . (_ -> io/exit 1)
+
+# Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the
+# author is working in and two rows cannot see each other's damage.
+fn shell dir cmd
+  io/run "sh" ["-c" "cd {dir} && {cmd}"]
+
+fn prove_all scope
+  picked = list/to_list (list/select rows (r -> asked? scope r.dear))
+  proving picked 1 []
+
+fn asked? "cheap" true
+  false
+
+fn asked? _ _
+  true
+
+fn proving list at acc
+  proven list at acc (at > length list)
+
+fn proven list _ acc true
+  reported list acc
+
+fn proven list at acc false
+  r = list[at]!
+  dir = "/tmp/kanso-ratchet-{at}"
+  made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
+  io/run "git" made . (_ -> after_worktree list at acc r dir)
+
+# Every row's build lands in one directory, so the first is cold and the rest
+# are incremental. A dozen rows each paying a full release build is an hour
+# that buys nothing: cargo already rebuilds exactly what the mutation touched.
+shared_target = "/tmp/kanso-ratchet-target"
+
+fn after_worktree list at acc r dir
+  linking = "ln -s {shared_target} target"
+  shell dir linking . (_ -> after_target list at acc r dir)
+
+fn after_target list at acc r dir
+  shell dir r.mutation . (m -> after_mutation list at acc r dir m.status)
+
+fn after_mutation list at acc r dir 0
+  shell dir r.setup . (_ -> after_setup list at acc r dir)
+
+fn after_mutation list at acc r dir _
+  cleaned dir . (_ -> proving list (at + 1) (push acc (broke r)))
+
+fn after_setup list at acc r dir
+  shell dir r.gate . (g -> after_gate list at acc r dir g.status)
+
+fn after_gate list at acc r dir 0
+  cleaned dir . (_ -> proving list (at + 1) (push acc (blind r)))
+
+fn after_gate list at acc r dir _
+  cleaned dir . (_ -> proving list (at + 1) (push acc (red r)))
+
+fn cleaned dir
+  io/run "git" ["worktree" "remove" "--force" dir]
+
+fn red r
+  finding "  red   {r.job} — {r.claim}\n" true
+
+fn blind r
+  finding "  BLIND {r.job} — {r.claim}: the gate stayed green\n" false
+
+fn broke r
+  finding "  BROKE {r.job} — {r.claim}: the mutation would not apply\n" false
+
+fn reported list acc
+  lines = list/to_list (list/map acc (f -> f.line))
+  body = text/join lines ""
+  bad = list/to_list (list/select acc (f -> not f.ok))
+  io/write "ratchet: {length list} rows\n{body}" . (_ -> settled bad)
+
+fn settled bad
+  told bad (length bad == 0)
+
+fn told _ true
+  io/write "ratchet: every row turned its gate red\n"
+
+fn told bad false
+  io/write_err "ratchet: {length bad} rows proved nothing\n" . (_ -> io/exit 1)
+
+fn asked given
+  verb given (length given > 0)
+
+fn verb given true
+  chosen given[1]! given
+
+fn verb _ false
+  cover
+
+fn chosen "prove" given
+  prove_all (scope_of given)
+
+fn chosen _ _
+  cover
+
+fn scope_of given
+  narrowed given (length given > 1)
+
+fn narrowed given true
+  given[2]!
+
+fn narrowed _ false
+  "all"
+
+pub play = io/args . (given -> asked given)

@@ -1,0 +1,13 @@
+import "std/io"
+
+# 127 is a status a program may choose, and it is also what a shell reports
+# for a command it could not find. Reading it off the exit code alone cannot
+# tell the two apart, so a process that ran and answered 127 was reported as
+# one that never started — on native only, where the oracle read it correctly.
+fn report a
+  "status {a.status} said {a.stdout}"
+
+fn told a
+  print (report a)
+
+pub play = io/run "sh" ["-c" "printf gone; exit 127"] . told

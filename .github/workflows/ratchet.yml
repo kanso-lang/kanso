@@ -1,0 +1,30 @@
+name: ratchet
+
+# Every gate in ci.yml claims to catch something. This applies the defect each
+# one claims to catch and refuses a gate that stayed green — the rule the repo
+# already applies to specs ("never trust a test you have not seen fail"),
+# lifted to the gates themselves.
+#
+# Nightly rather than per-PR because a row costs a build and there are a dozen
+# of them. What runs on every change is the cheap half, `scripts/ratchet` with
+# no argument, which only checks that every job has a row.
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  prove:
+    name: every mutation turns its gate red
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo build --release
+      - name: apply each mutation and read the gate
+        run: ./target/release/kanso run scripts/ratchet -- prove

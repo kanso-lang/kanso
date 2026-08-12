@@ -2772,3 +2772,66 @@ convention writes where the C one wrote a call.
 
 Welfare 66.65 -> 66.72, banked. This is 2.96 of the 8.5% decode regression
 recovered, on top of the 2.43% the utf8-of-slice fusion returned.
+
+## 2026-08-12 — every gate now ships a defect it must catch
+
+Five checks went green in one day while checking nothing, which is what the
+ratchet is for: each of the twelve gating jobs in ci.yml carries a mutation —
+a defect to introduce and the command that must then go red — or a written
+reason it cannot have one. `kanso run scripts/ratchet` checks that
+correspondence on every change and costs nothing; `-- prove` applies each
+mutation in a scratch worktree nightly and refuses a gate that stayed green.
+
+The first prove run found three of its own rows unfit, which is the point:
+
+    BROKE  decode allocation      the golden's key was misspelled
+    BROKE  grammar stops painting the file it named is not there
+    BLIND  one engine reworded    the differential never reaches that message
+
+The decode row had been editing the golden's number, which exercises the diff
+and not the counter behind it — a counter reading a constant passes an edited
+golden, and that is exactly the failure the ratchet exists to catch. It now
+turns off the uniqueness fixpoint, which doubles the decode benchmark's
+allocations, 6,272,114 to 12,539,564.
+
+The engine-divergence row reworded a blackhole message the diagnostics
+differential never asks about; that harness probes std functions and language
+paths for the wrong type. It now rewords the map-key refusal, which an existing
+probe hits and which is written once in each engine.
+
+The grammar row, with its path fixed, still left the gate green. The check
+asserts one scope, entity.name.type, where the job was titled "types, strings
+and comments still painted". The title now says what it checks and the
+coverage gap is a task.
+
+Twelve of twelve red on the second run. The machine-code row is red on macOS
+for the wrong reason — Apple's size takes no --format, and the gate now says so
+rather than reporting section sizes it could not read — so prove is
+authoritative on linux, where the nightly runs.
+
+## 2026-08-12 — a 127 exit is a status, and native called it a failure
+
+Found by the ratchet's own prove pass, where a gate whose binary the mutation
+had removed reported "cannot start sh" and stopped the run.
+
+127 is what a shell reports for a command it cannot find, and it is also a
+status a program may choose. The exit code alone cannot tell them apart, so
+native took every 127 for a failure to start. The oracle spawns through a
+library that keeps a close-on-exec pipe for exactly this and reported the
+status, so one program had two answers.
+
+The child keeps that pipe here now. Exec closes it and the parent reads
+end-of-file; when exec comes back instead, the child writes its errno through,
+and those bytes are the only evidence that nothing ever ran. Both paths carry
+it — the blocking run and the fork the scheduler waits on. Counters unmoved,
+welfare 66.72 held.
+
+The machine-code golden moved for it: +80 bytes on all four benchmarks, the
+same number on each because the exec pipe lives in the runtime every program
+links. Nothing on a hot path — the benchmarks start no processes — and the
+allocation counters and welfare are unmoved.
+
+    jsonbench    82,610 -> 82,690
+    encodebench 101,538 -> 101,618
+    oneshot     100,722 -> 100,802
+    basket       92,082 -> 92,162

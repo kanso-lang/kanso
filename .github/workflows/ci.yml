@@ -8,6 +8,7 @@ on:
 # One job per kind of check, so a red run names what broke on the PR page
 # instead of hiding it inside a single "test" job.
 jobs:
+
   format:
     name: format (rustfmt, checked not applied)
     runs-on: ubuntu-latest
@@ -92,14 +93,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: |
-          cargo build --release
-          ./target/release/kanso run bench/make_jsonbench
-          ./target/release/kanso build bench/jsonbench --release
-          out=$(./jsonbench)
-          echo "$out"
-          echo "$out" | grep -q "checksum 24000" \
-            || { echo "::error::native json decoder produced the wrong checksum"; exit 1; }
+      - name: the checksum the decoder owes
+        run: sh scripts/gates/native_checksum.sh
 
   utf8:
     name: utf-8 validator (differential vs an independent reference)
@@ -125,13 +120,7 @@ jobs:
       - run: cargo build --release
       - run: ./target/release/kanso run scripts/fingerprint -- ./_site
       - name: no undigested reference survives
-        run: |
-          if grep -rEn 'src="/(kanso-engine|play|landing-play)\.js"' ./_site --include=*.html; then
-            echo "::error::an undigested script reference survived"; exit 1
-          fi
-          if grep -rn "fetch('kanso.wasm')" ./_site --include=*.js; then
-            echo "::error::the engine still fetches the undigested module"; exit 1
-          fi
+        run: sh scripts/gates/undigested_references.sh
 
   welfare:
     name: welfare (one number over runtime and compile cost, ratcheted)
@@ -162,7 +151,7 @@ jobs:
         run: ./target/release/kanso run scripts/golden_prose
 
   grammar:
-    name: editor grammar (types, strings and comments still painted)
+    name: editor grammar (every type still painted)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -193,103 +182,17 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - name: build the benchmarks
-        run: |
-          cargo build --release
-          ./target/release/kanso run bench/make_jsonbench
-          ./target/release/kanso build bench/jsonbench --release
-          ./target/release/kanso build bench/encodebench --release >/dev/null
-          ./target/release/kanso build bench/oneshot --release >/dev/null
-          ./target/release/kanso build bench/basket --release >/dev/null
-      # The decode counters below say what the program ALLOCATES. This says what
-      # the compiler WROTE for it, counted from the IR before the linker runs —
-      # deterministic, and blind to code layout in a way no timing can be.
-      #
-      # It exists because 7.6% of decode speed leaked away between 2026-07-27
-      # and 2026-08-07 with every allocation counter byte-identical: the
-      # decoder gained 20% more calls and 23% more branches for the same work,
-      # one or two per cent at a time, and nothing was watching the dimension
-      # that moved. A diffuse regression can only be caught where it happens.
+        run: sh scripts/gates/build_benchmarks.sh
       - name: what the decoder emits
-        run: |
-          {
-            grep -c '^define' jsonbench.ll | sed 's/^/defines=/'
-            grep -c 'call ' jsonbench.ll | sed 's/^/calls=/'
-            grep -c '^  br \|^  switch' jsonbench.ll | sed 's/^/branches=/'
-            wc -l < jsonbench.ll | tr -d ' ' | sed 's/^/lines=/'
-          } > emitted.txt
-          grep -v '^#' bench/emitted_golden.txt > emitted_want.txt
-          diff emitted_want.txt emitted.txt || {
-            echo "::error::the decoder's emitted code moved. A rise is a"
-            echo "::error::regression to explain and a fall is a win to bank —"
-            echo "::error::say which in the PR and regenerate"
-            echo "::error::bench/emitted_golden.txt. Allocation counters cannot"
-            echo "::error::see this: 7.6% of decode speed leaked away with all"
-            echo "::error::of them flat."
-            exit 1
-          }
-      # The counters below say what a program ALLOCATES and the step above
-      # says what the compiler WROTE. Neither sees the machine code, and that
-      # is the dimension that carried a measured 17% of the 7.6% decode
-      # regression: 54,708 bytes of .text to 79,192 over eleven days, with
-      # every allocation counter byte-identical the whole way. Padding an old
-      # build up to that size with functions it never calls costs 1.6% of
-      # decode time by itself, so this is watched now.
+        run: sh scripts/gates/emitted_code.sh
       - name: how much machine code
-        run: |
-          for b in jsonbench encodebench oneshot basket; do
-            printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
-          done > text.txt
-          grep -v '^#' bench/text_golden.txt > text_want.txt
-          diff text_want.txt text.txt || {
-            echo "::error::the machine code changed size. A rise is a"
-            echo "::error::regression to explain and a fall is a win to bank —"
-            echo "::error::say which in the PR and regenerate"
-            echo "::error::bench/text_golden.txt. Allocation counters cannot"
-            echo "::error::see this, and neither can the emitted-line count:"
-            echo "::error::a fifth of those lines were dropped by the linker"
-            echo "::error::anyway. 17% of the last regression lived here."
-            exit 1
-          }
-      # The dimension none of the veins above can see. Allocation counters say
-      # how often the allocator ran, the emitted golden how many lines were
-      # written, the text golden how big the code is — a decode that allocates
-      # identically and executes eight per cent more instructions moves none of
-      # them, which is exactly what happened over eleven days in August. This
-      # counts the work itself, exactly and reproducibly: callgrind counts
-      # rather than samples, so three runs give the same digits and no other
-      # process on the box can reach it. Forty-four seconds for all four.
-      #
-      # The environment is emptied because the kernel copies it onto the new
-      # process's stack and libc walks it before main, so a run id that gained
-      # a digit reads as fourteen instructions of work that nobody wrote.
+        run: sh scripts/gates/machine_code.sh
       - name: how much work
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
-          for b in jsonbench encodebench oneshot basket; do
-            env -i PATH=/usr/bin:/bin \
-              valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
-              >/dev/null 2>/tmp/ir.$b
-            printf '%s %s\n' "$b" "$(grep -o 'I   refs:.*' /tmp/ir.$b | tr -dc 0-9)"
-          done > work.txt
-          grep -v '^#' bench/instructions_golden.txt > work_want.txt
-          diff work_want.txt work.txt || {
-            echo "::error::the work the benchmarks do changed. A rise is a"
-            echo "::error::regression to explain and a fall is a win to bank —"
-            echo "::error::say which in the PR and regenerate"
-            echo "::error::bench/instructions_golden.txt. This is the counter"
-            echo "::error::that would have caught the 8.5% decode regression"
-            echo "::error::that every allocation counter slept through."
-            exit 1
-          }
+          sh scripts/gates/instructions.sh
       - name: decode counters
-        run: |
-          KANSO_COUNTERS=1 ./jsonbench 2>counters.txt >/dev/null
-          diff bench/cost_golden.txt counters.txt || {
-            echo "::error::cost counters diverged from bench/cost_golden.txt — a"
-            echo "::error::performance-relevant change (allocs, arena blocks, beat"
-            echo "::error::iterations). If intentional, update the golden in this PR."
-            exit 1
-          }
+        run: sh scripts/gates/decode_counters.sh
       - name: nothing worsens unless something improves
         run: |
           git fetch origin main --depth 1
@@ -314,63 +217,13 @@ jobs:
           git fetch origin main --depth 1 || true
           ./target/release/kanso run scripts/page_drift
       - name: one-shot counters
-        run: |
-          KANSO_COUNTERS=1 ./oneshot 2>counters_oneshot.txt >/dev/null
-          diff bench/cost_golden_oneshot.txt counters_oneshot.txt || {
-            echo "::error::one-shot counters diverged — the peak-footprint"
-            echo "::error::term's input moved. If intentional, update the"
-            echo "::error::golden in this PR."
-            exit 1
-          }
+        run: sh scripts/gates/oneshot_counters.sh
       - name: basket counters
-        run: |
-          KANSO_COUNTERS=1 ./basket 2>counters_basket.txt >/dev/null
-          diff bench/cost_golden_basket.txt counters_basket.txt || {
-            echo "::error::basket counters diverged — the welfare index reads"
-            echo "::error::this vein, and it samples a spread of what the"
-            echo "::error::language does rather than one shelf of it. If"
-            echo "::error::intentional, update the golden in this PR."
-            exit 1
-          }
-
+        run: sh scripts/gates/basket_counters.sh
       - name: compile memory
-        run: |
-          KANSO_COUNTERS=1 ./target/release/kanso check lib/json 2>counters_compile.txt >/dev/null
-          for k in rounds visits; do
-            got=$(grep "^compile_${k}=" counters_compile.txt | cut -d= -f2)
-            want=$(grep "^front_end_${k}=" bench/compile_memory_golden.txt | cut -d= -f2)
-            if [ "$got" != "$want" ]; then
-              echo "::error::the front end's ${k} on lib/json moved: ${want} -> ${got}."
-              echo "::error::that is a welfare term. if intentional, regenerate"
-              echo "::error::bench/compile_memory_golden.txt and say which way it"
-              echo "::error::went in design/compiler-log.md."
-              exit 1
-            fi
-          done
-          got=$(grep '^compile_peak_bytes=' counters_compile.txt | cut -d= -f2)
-          want=$(grep '^compile_peak_bytes=' bench/compile_memory_golden.txt | cut -d= -f2)
-          margin=$((want / 50))
-          low=$((want - margin))
-          high=$((want + margin))
-          echo "front end holds ${got} bytes; golden ${want}, band ${low}..${high}"
-          if [ "$got" -lt "$low" ] || [ "$got" -gt "$high" ]; then
-            echo "::error::what the front end holds while checking lib/json moved"
-            echo "::error::more than two per cent: ${want} -> ${got}. that is a"
-            echo "::error::welfare term. if intentional, regenerate"
-            echo "::error::bench/compile_memory_golden.txt in this PR and say which"
-            echo "::error::way it went in design/compiler-log.md."
-            exit 1
-          fi
+        run: sh scripts/gates/compile_memory.sh
       - name: encode counters
-        run: |
-          KANSO_COUNTERS=1 ./encodebench 2>counters_encode.txt >/dev/null
-          diff bench/cost_golden_encode.txt counters_encode.txt || {
-            echo "::error::encode counters diverged from cost_golden_encode.txt."
-            echo "::error::A kernel's presence counter moved — a fast path was"
-            echo "::error::dropped, rerouted, or intentionally changed. If"
-            echo "::error::intentional, update the golden in this PR."
-            exit 1
-          }
+        run: sh scripts/gates/encode_counters.sh
 
   downstream:
     name: kq specs (a real program, gating)
@@ -536,6 +389,21 @@ jobs:
   # on a bot commit waits for a human to approve it, so nothing goes green
   # unattended. Drawing in the browser costs no commit, and the series extends
   # the moment a row lands rather than the next time somebody publishes.
+
+  ratchet:
+    name: the ratchet (every gate has a mutation that turns it red)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release
+      # Costs one compile and no builds: it only reads this file against the
+      # table. Proving each mutation actually reddens its gate is the nightly
+      # workflow, which is expensive; this is what makes a new job impossible
+      # to add without saying how it would be proven.
+      - name: every ci job carries a mutation or a stated reason
+        run: ./target/release/kanso run scripts/ratchet
+
   perf-history:
     name: perf history (appended to the history branch)
     runs-on: ubuntu-latest
