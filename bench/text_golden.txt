@@ -45,9 +45,11 @@
 # kept slot in `k_beat_iter_carry`, and the promotion that moves a kept header
 # off the arena. Every program linking the beat carry pays for them; basket pays
 # most because it carries most. Nothing else moves — the allocation counters for
-# all four benchmarks are byte-identical to what they were, and the win is
-# elsewhere: an accumulator handed round a cycle goes from 82 allocations to 3.
-jsonbench text=83794
-encodebench text=101874
-oneshot text=101042
-basket text=92690
+# 2026-08-13: every benchmark shrinks, by 2,112 to 2,416 bytes. k_str_alloc is
+# made inline, and the call sequences it removes at forty-eight sites are larger
+# than the body they duplicate — a few stores, a branch on the stats flag, and
+# lengths the optimiser can fold once the body is in front of it.
+jsonbench text=81458
+encodebench text=99474
+oneshot text=98626
+basket text=90578

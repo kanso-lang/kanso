@@ -1593,7 +1593,7 @@ static char k_ascii_ready[128];
    and `data` points at it. Callers that adopt storage they did not make —
    the zero-copy finish, a deep copy that shares — assign `data` themselves
    and are unaffected. */
-static KStr* k_str_alloc(long long len) {
+static inline __attribute__((always_inline)) KStr* k_str_alloc(long long len) {
     if (__builtin_expect(k_stats_on > 0, 0))
         k_stat_sh_str += (long long)((sizeof(KStr) + (size_t)len + 1 + 15) & ~(size_t)15);
     if (len > 2147483647LL) k_die("string too long");
