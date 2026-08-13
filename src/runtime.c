@@ -623,6 +623,13 @@ typedef struct { char* data; size_t cap; size_t used; } KCarryBuf;
 typedef struct { KCarryBuf from; KCarryBuf to; int used_flag; } KCarry;
 static KCarry k_carries[K_BEAT_MAX];
 static KValue k_carry_slots[K_CARRY_MAX];
+/* Slots the compiler proved hold a string builder this cycle owns. The copy
+   below strips a positive cap on purpose — the copy owns no room — so an
+   accumulator that crossed a beat used to arrive roomless and be re-seeded,
+   which copies the whole string once a lap. A kept slot crosses by identity
+   instead. Only a slot `builder_params` names is kept, so nothing that merely
+   happens to have capacity is aliased. */
+static unsigned char k_carry_kept[K_CARRY_MAX];
 static long long k_carry_n = 0;
 
 /* Does p survive the innermost rewind — is it inside the live chain at or
@@ -1364,7 +1371,10 @@ KValue k_cohort_pop(KValue r) {
     return r;
 }
 
-void k_carry_reset(void) { k_carry_n = 0; }
+void k_carry_reset(void) {
+    k_carry_n = 0;
+    memset(k_carry_kept, 0, sizeof(k_carry_kept));
+}
 
 void k_carry_stage(KValue v) {
     if (k_carry_n < K_CARRY_MAX) k_carry_slots[k_carry_n] = v;
@@ -1372,6 +1382,28 @@ void k_carry_stage(KValue v) {
 }
 
 KValue k_carry_take(long long i) { return k_carry_slots[i]; }
+
+/* Stage a slot the compiler proved is this cycle's own builder. */
+/* Stage a slot the compiler proved is this cycle's own builder, and move its
+   header off the arena if the rewind about to happen would reclaim it. A seed is
+   an arena bump like every other allocation, which is what seeds want; the one
+   carried by identity is the exception, and this is the only place that knows
+   which one that is. It happens at most once per builder — a promoted header
+   survives the mark from then on. */
+void k_carry_stage_kept(KValue v) {
+    if (k_carry_n < K_CARRY_MAX) k_carry_kept[k_carry_n] = 1;
+    if (v.tag == K_STR && k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+        KStr* h = (KStr*)(intptr_t)v.payload;
+        KMark* m = &k_beat_stack[k_beat_depth - 1];
+        if (!k_survives(h, m)) {
+            KStr* out = malloc(sizeof(KStr));
+            if (!out) { fputs("out of memory\n", stderr); exit(1); }
+            *out = *h;
+            v.payload = k_ptr(out);
+        }
+    }
+    k_carry_stage(v);
+}
 
 
 void k_beat_iter_carry(void) {
@@ -1386,7 +1418,8 @@ void k_beat_iter_carry(void) {
     size_t need = 0;
     k_ptrmap_begin(&k_copy_seen);
     k_copy_seen_live = 0;
-    for (long long i = 0; i < k_carry_n; i++) need += k_copy_size(k_carry_slots[i], m);
+    for (long long i = 0; i < k_carry_n; i++)
+        if (!k_carry_kept[i]) need += k_copy_size(k_carry_slots[i], m);
     if (c->to.cap < need) {
         free(c->to.data);
         c->to.data = malloc(need ? need : 16);
@@ -1399,7 +1432,7 @@ void k_beat_iter_carry(void) {
     k_copy_map_live = 0;
     k_repaired_n = 0;
     for (long long i = 0; i < k_carry_n; i++)
-        k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
+        if (!k_carry_kept[i]) k_carry_slots[i] = k_deep_copy(k_carry_slots[i], &cp);
     k_beat_rewind(m);
     k_repaired_settle(m);
     KCarryBuf swap = c->from;
@@ -1798,6 +1831,7 @@ KValue k_b_str_builder(KValue sv) {
     KValue v; v.tag = K_STR; v.payload = k_ptr(out);
     return v;
 }
+
 
 /* Joining into a builder. This only ever writes into the header it was given
    and never makes a new one, because the shelf carries that header across a
