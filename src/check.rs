@@ -2354,6 +2354,9 @@ fn check_fn_body_shadow(
                 }
                 resolver.bind_target(pattern);
             }
+            // a `build` is not a line whose value goes unused — it has none.
+            // What it built is in scope below it, under the names it gave.
+            Stmt::Expr(expr @ Expr::Build(..)) => resolver.resolve_expr(expr),
             Stmt::Expr(expr) => {
                 resolver.resolve_expr(expr);
                 if i != last {
@@ -2496,6 +2499,9 @@ impl Resolver<'_> {
             Expr::Int(..) | Expr::Float(..) => {}
             // `&f` reads f exactly as a bare mention does
             Expr::Partial(name, span) => self.resolve_name(name, *span),
+            // A block's names are its own and go when it ends. A `build`'s do
+            // not: what it built is in scope after it, under the names it gave,
+            // which is the whole of how a construction leaves the site.
             Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
                 let from = self.locals.len();
                 for stmt in stmts {
@@ -2511,7 +2517,9 @@ impl Resolver<'_> {
                         }
                     }
                 }
-                self.locals.truncate(from);
+                if matches!(expr, Expr::Block(..)) {
+                    self.locals.truncate(from);
+                }
             }
             Expr::Field { base, .. } => self.resolve_expr(base),
             Expr::Upcast { expr, .. } => self.resolve_expr(expr),

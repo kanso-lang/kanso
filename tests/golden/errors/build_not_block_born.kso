@@ -6,7 +6,7 @@ fn mutate n
   build
     a = node 9 []
     n.peers = [a]
-    a
+  a
 
 pub play =
   outer = node 1 []

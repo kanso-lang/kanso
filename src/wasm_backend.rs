@@ -623,8 +623,23 @@ impl<'a> WasmBackend<'a> {
                 ctx.body.i32_const(code);
                 ctx.body.call(RT_UPCAST);
             }
-            Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            Expr::Block(stmts, _) => {
                 self.emit_body(ctx, stmts, tail)?;
+            }
+            // A `build` answers nothing — its last statement is as likely to be
+            // a field write as anything, and the names it bound are already in
+            // this scope. It still has to leave a word behind, because every
+            // expression site expects one, and the statement above it drops it.
+            Expr::Build(stmts, _) => {
+                for stmt in stmts {
+                    self.emit_body(ctx, std::slice::from_ref(stmt), false)?;
+                    if matches!(stmt, Stmt::Bind { .. } | Stmt::Set { .. }) {
+                        continue;
+                    }
+                    ctx.body.drop_();
+                }
+                let lit = self.nullary_lit("none");
+                ctx.body.i32_const(lit as i64);
             }
             Expr::Int(n, _) => {
                 let lit = self.lit(LitKey::Int(n.clone()), || Lit::Int(n.clone()));

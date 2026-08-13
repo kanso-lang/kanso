@@ -876,6 +876,11 @@ impl<'a> Interp<'a> {
         for (index, stmt) in lead.iter().enumerate() {
             match stmt {
                 Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
+                // the names a `build` binds are in scope for the rest of the
+                // body, so its statements run on this environment
+                Stmt::Expr(Expr::Build(inner, _)) => {
+                    self.run_stmts(inner, &mut env, &frame)?;
+                }
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
                 {
@@ -1002,19 +1007,30 @@ impl<'a> Interp<'a> {
     /// block, or the tail a fired guard skipped past.
     fn eval_stmts(&self, stmts: &[Stmt], env: &Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         let mut env = env.clone();
+        self.run_stmts(stmts, &mut env, frame)
+    }
+
+    /// The statements of a block, threading the environment they build.
+    ///
+    /// A `build` runs through here on the caller's own environment rather than
+    /// a copy, because the names it binds are in scope after it.
+    fn run_stmts(&self, stmts: &[Stmt], env: &mut Option<Rc<Env>>, frame: &Frame) -> EvalResult {
         let mut result = Value::NoneV;
         for stmt in stmts {
             match stmt {
+                Stmt::Expr(Expr::Build(inner, _)) => {
+                    result = self.run_stmts(inner, env, frame)?;
+                }
                 Stmt::Bind { pattern, expr } => {
-                    let mut value = self.eval(expr, &env, frame)?;
+                    let mut value = self.eval(expr, env, frame)?;
                     if !matches!(pattern, Pattern::Var(..)) {
                         value = self.force_thunk(value)?;
                     }
-                    env = self.destructure(pattern, value, env, expr.span())?;
+                    *env = self.destructure(pattern, value, env.clone(), expr.span())?;
                 }
-                Stmt::Expr(expr) => result = self.eval(expr, &env, frame)?,
+                Stmt::Expr(expr) => result = self.eval(expr, env, frame)?,
                 Stmt::Set { target, field, value, span } => {
-                    let current = lookup(&env, target).ok_or_else(|| RuntimeError {
+                    let current = lookup(env, target).ok_or_else(|| RuntimeError {
                         message: format!("`set` target `{target}` is not bound"),
                         span: *span,
                     })?;
@@ -1041,7 +1057,7 @@ impl<'a> Interp<'a> {
                             span: *span,
                         });
                     };
-                    let new = self.eval(value, &env, frame)?;
+                    let new = self.eval(value, env, frame)?;
                     if is_failure(&new) {
                         return Ok(new);
                     }
@@ -1063,6 +1079,11 @@ impl<'a> Interp<'a> {
         for (index, stmt) in body.iter().enumerate() {
             match stmt {
                 Stmt::Set { .. } => unreachable!("`set` parses only inside `build`"),
+                // the names a `build` binds are in scope for the rest of the
+                // body, so its statements run on this environment
+                Stmt::Expr(Expr::Build(inner, _)) => {
+                    result = self.run_stmts(inner, &mut env, frame)?;
+                }
                 Stmt::Bind { pattern: Pattern::Var(name, _), expr }
                     if self.demand.is_lazy_bind(&decl.name, decl.params.len(), index) =>
                 {

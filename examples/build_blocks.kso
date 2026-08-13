@@ -7,13 +7,13 @@ fn pair_of first second
     a = node first []
     b = node second [a]
     a.peers = [b]
-    [a b]
+  [a b]
 
 fn ring_of name
   build
     base = node name []
     base.peers = [base]
-    base
+  base
 
 graph = pair_of "a" "b"
 

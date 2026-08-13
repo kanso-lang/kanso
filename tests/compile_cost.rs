@@ -112,13 +112,12 @@ fn shift (point x y)
   peer
 
 main =
-  ring = build
+  build
     a = node 1 0
     b = node 2 0
     a.peer = b
     b.peer = a
-    a
-  print \"{ring}\"
+  print \"{a}\"
 ",
     ),
 ];

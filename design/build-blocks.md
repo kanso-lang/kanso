@@ -8,15 +8,16 @@ proposed. Implementation is next in the ratified build order
 ## The surface
 
 ```
-graph = build
+build
   a = node "a" []
   b = node "b" [a]
   a.peers = [b]          # closes the cycle; a keeps its identity
-  [a b]
+
+graph = [a b]
 ```
 
-- `build` opens a block expression; its last expression is the result,
-  frozen to an ordinary immutable value at the boundary.
+- `build` opens a block statement; it answers nothing, and the names it
+  bound are in scope after it, frozen to ordinary immutable values.
 - `target.field = value` is the single write form. It is an
   identity-preserving field write: `a` stays the same node while its
   field changes, so `b`'s existing reference to `a` sees the update.

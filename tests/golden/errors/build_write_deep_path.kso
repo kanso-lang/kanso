@@ -7,13 +7,12 @@ fn attack old
     wrapper = cell "w" old
     young = cell "young" none
     wrapper.link.link = young
-    young
+  young
 
 fn go _
-  old = build
+  build
     c = cell "old" none
-    c
-  a = attack old
+  a = attack c
   a.tag
 
 pub play = print "{go 0}"

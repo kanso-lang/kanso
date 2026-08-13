@@ -8,7 +8,7 @@ fn tie label
     there = node "pong" none
     here.peer = there
     there.peer = here
-    here
+  here
 
 fn round_trip n
   n.peer.peer.name

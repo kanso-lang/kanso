@@ -3,9 +3,8 @@ type node
   peer
 
 pub play =
-  collapsed = build
+  build
     a = node 1 (err "no id")
     b = node 2 0
     a.peer = b
-    a
-  print "{collapsed}"
+  print "{a}"

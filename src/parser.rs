@@ -965,6 +965,9 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
     }
     let has_surface = units.iter().enumerate().any(|(i, u)| match u {
         Unit::Wall(_) => true,
+        // a `build` is a construction site, not a line of the effect surface:
+        // it binds names for what follows rather than joining a group
+        Unit::Parsed(Stmt::Expr(Expr::Build(..))) => false,
         Unit::Parsed(Stmt::Expr(_)) => i + 1 < units.len(),
         Unit::Parsed(_) => false,
     });
@@ -1004,6 +1007,22 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                             ));
                         }
                         binds.push(Stmt::Bind { pattern, expr });
+                    }
+                    // a `build` binds names for the rest of the body, so it
+                    // keeps its place among the bindings rather than joining a
+                    // group of effects — where it would be an expression again
+                    // and the names it gave would go with it
+                    Stmt::Expr(e @ Expr::Build(..)) => {
+                        if !segments[0].is_empty() || segments.len() > 1 {
+                            return Err(Diagnostic::new(
+                                "formatting",
+                                "a `build` binds, and bindings precede the effects in a \
+                                 body: move it above the chain"
+                                    .to_string(),
+                                expr_span(&e),
+                            ));
+                        }
+                        binds.push(Stmt::Expr(e));
                     }
                     Stmt::Expr(e) => {
                         if closed_by_fuse {
@@ -1202,7 +1221,7 @@ fn span_of_stmt_head(line: &Line) -> Span {
     head_span(line)
 }
 
-/// The body runs top to bottom and its last expression is the result.
+/// The body runs top to bottom, and the names it binds are in scope after it.
 fn parse_build(
     head: &Line,
     children: &[Line],
@@ -1216,22 +1235,17 @@ fn parse_build(
         ));
     }
     let stmts = parse_build_body(children)?;
-    if !matches!(stmts.last(), Some(Stmt::Expr(_))) {
+    if let [(Tok::Ident(name), nspan), (Tok::Bind, _), _] = head.tokens.as_slice() {
         return Err(Diagnostic::new(
             "syntax",
-            "a `build` ends with its result expression — the value that \
-             freezes and leaves the block"
-                .to_string(),
-            head_span(children.last().unwrap_or(head)),
+            format!(
+                "`build` answers nothing to bind `{name}` to — what it builds is \
+                 in scope after it, under the names it gave"
+            ),
+            *nspan,
         ));
     }
-    let build = Expr::Build(stmts, head_span(head));
-    match head.tokens.as_slice() {
-        [(Tok::Ident(name), nspan), (Tok::Bind, _), _] => {
-            Ok(Stmt::Bind { pattern: Pattern::Var(name.clone(), *nspan), expr: build })
-        }
-        _ => Ok(Stmt::Expr(build)),
-    }
+    Ok(Stmt::Expr(Expr::Build(stmts, head_span(head))))
 }
 
 fn parse_build_body(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {

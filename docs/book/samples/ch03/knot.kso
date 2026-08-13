@@ -2,10 +2,10 @@ type person
   name
   partner
 
-couple = build
+build
   ada = person "ada" none
   bob = person "bob" ada
   ada.partner = bob
-  ada
-print "{couple.name} and {couple.partner.name}"
->> print "back where we started: {couple.partner.partner.name}"
+
+print "{ada.name} and {ada.partner.name}"
+>> print "back where we started: {ada.partner.partner.name}"

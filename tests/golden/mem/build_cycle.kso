@@ -3,14 +3,13 @@ type node
   peers
 
 pub play =
-  graph = build
+  build
     a = node "a" []
     b = node "b" [a]
     a.peers = [b]
-    [a b]
-  ring = build
+  graph = [a b]
+  build
     base = node "seed" []
     base.peers = [base]
-    base
   print "{graph}"
-  >> print "{ring}"
+  >> print "{base}"
