@@ -17,6 +17,21 @@ for b in jsonbench encodebench oneshot basket; do
     >/dev/null 2>/tmp/ir.$b
   printf '%s %s\n' "$b" "$(grep -o 'I   refs:.*' /tmp/ir.$b | tr -dc 0-9)"
 done > work.txt
+# The profile is already on disk — the loop above threw away everything but the
+# total. Where the work sits is the question every one of these regressions has
+# turned on, and it cost a bespoke run to answer each time. It costs nothing to
+# print it here.
+# Printed, not only summarised. A step summary cannot be read back from the
+# job log or the API, so a diagnostic that only goes there is one nobody can
+# fetch afterwards.
+if command -v callgrind_annotate >/dev/null; then
+  for b in jsonbench oneshot; do
+    echo "=== where the work is: $b"
+    callgrind_annotate --threshold=90 /tmp/cg.$b 2>&1 | head -40
+  done
+else
+  echo "=== no callgrind_annotate on this host, so no breakdown"
+fi
 grep -v '^#' bench/instructions_golden.txt > work_want.txt
 diff work_want.txt work.txt || {
   echo "::error::the work the benchmarks do changed. A rise is a"
