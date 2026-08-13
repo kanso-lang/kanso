@@ -85,23 +85,20 @@ for out in docs/book/samples/*/*.out; do
 done
 # The write path, on a copy. Everything above runs book_panels read-only, and
 # the read path never forces the chapter text it built — `keeping` short-
-# circuits on `not write` — so until now nothing exercised the one command that
-# edits the shipped book, and a runaway lived there long enough to reach 580 GB
-# before anybody ran it by hand.
+# circuits on `not write` — so nothing exercised the one command that edits the
+# shipped book.
 #
-# The assertion is the right one: that runaway ended in a SIGKILL, which is a
-# non-zero exit, which is what the first branch below catches. What is missing
-# is a fixture that provokes it. This one was measured against a compiler with
-# the bug restored and finished in 18 MB, because the escaping the runaway
-# lived in is quadratic in the body it escapes and no recorded output in the
-# book is larger than 598 bytes. The reduced chapter from that investigation
-# belongs in the corpus, and until it is there this watches that the write path
-# runs and puts a drifted panel back, which is more than nothing watched it
-# before.
+# Both panel shapes are staled. A source panel is regenerated from the .kso; a
+# recorded-output panel is compared against the .out and rewritten from it,
+# which is the branch that escapes a recorded body into html. The two reach
+# different code, and a chapter carrying both is what this needs.
 #
-# A recorded output is removed as well as a body staled, because `no_recorded`
-# is the branch that reaches the escaping, and staling a body alone leaves it
-# untaken.
+# What this does not catch is the runaway that put 580 GB through the write
+# path. Measured against a compiler with that bug restored, book_panels --write
+# peaks at 16 to 19 MB here — over the staled book, over a chapter truncated
+# mid-panel, and over recorded bodies grown to 10, 20, 43 and 82 KB. The
+# escaping is not where that bug bites: it is an accumulator handed through an
+# intermediate function, and that shape is pinned in tests/golden/mem.
 #
 # Native, deliberately: the oracle never had the runaway, so asking it would
 # watch the one engine that was fine.
@@ -109,22 +106,21 @@ here=$(pwd)
 scratch=$(mktemp -d)
 mkdir -p "$scratch/docs/book"
 (cd docs/book && tar cf - .) | (cd "$scratch/docs/book" && tar xf -)
-python3 scripts/stale_a_panel.py "$scratch/docs/book/ch03.html" \
-  "$scratch/docs/book/samples/ch03"
+python3 scripts/stale_a_panel.py "$scratch/docs/book/ch04.html"
 if ! (cd "$scratch" && "$KANSO" run "$here/scripts/book_panels" -- --write \
       >"$scratch/log" 2>&1); then
   echo "WRITE PATH: book_panels --write did not finish"
   tail -5 "$scratch/log"
   fail=1
-elif ! grep -q 'panel(s) rewritten' "$scratch/log"; then
-  echo "WRITE PATH: nothing was rewritten, so the fixture proved nothing"
+elif ! grep -q '2 panel(s) rewritten' "$scratch/log"; then
+  echo "WRITE PATH: both staled panels were not rewritten"
   tail -3 "$scratch/log"
   fail=1
-elif grep -q STALE "$scratch/docs/book/ch03.html"; then
-  echo "WRITE PATH: the staled panel was not rewritten"
+elif grep -q STALE "$scratch/docs/book/ch04.html"; then
+  echo "WRITE PATH: a staled panel was not put back"
   fail=1
 else
-  echo "book panels: the write path rewrites a staled panel back"
+  echo "book panels: the write path rewrites both staled panels back"
 fi
 rm -rf "$scratch"
 
