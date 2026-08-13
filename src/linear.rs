@@ -886,13 +886,6 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Sites) -> 
             break;
         }
     }
-    if std::env::var_os("KANSO_SHOW_CARRIERS").is_some() {
-        let mut v: Vec<_> = carrying.iter().collect();
-        v.sort();
-        for c in v {
-            eprintln!("CARRIER {} /{} index {}", c.0, c.1, c.2);
-        }
-    }
     let mut out = HashSet::new();
     for decl in real_fns(program) {
         let built = built_locals(joins, decl);

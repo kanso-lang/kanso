@@ -935,23 +935,12 @@ impl<'a> Backend<'a> {
         // the accumulator's header across the rewind, so the seed has to happen
         // inside the bracket: converted outside it, the header sits below the
         // mark and the join finds a string that is not a builder.
-        let beat_bound = false;
-        let carried = !beat_bound
-            && match arg {
-                Some(Expr::Ident(_, span)) => {
-                    self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
-                }
-                _ => false,
-            };
-        if std::env::var_os("KANSO_SHOW_CARRIERS").is_some()
-            && self.builder_params.contains(&(callee.to_string(), arity, i))
-        {
-            let self_call = f.group == callee && f.arity == arity;
-            eprintln!(
-                "SEED-SITE in {}/{} -> {callee}/{arity} index {i} self={self_call} carried={carried}",
-                f.group, f.arity
-            );
-        }
+        let carried = match arg {
+            Some(Expr::Ident(_, span)) => {
+                self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
+            }
+            _ => false,
+        };
         let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
             && !(f.group == callee && f.arity == arity)
             && !carried;

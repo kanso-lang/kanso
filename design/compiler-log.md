@@ -3268,3 +3268,49 @@ it predates the guard, and nothing measured since reproduces it.
 
 The corrected write-path gate goes red with the guard and green without it,
 which is the first time anything in CI has had an opinion about this code.
+
+## 2026-08-13 — a builder carried through a hop needs no seed
+
+An accumulator handed round a cycle was re-seeded on every hop, and seeding copies
+the whole string. The exemption at codegen recognised only a group's own
+self-call as staying inside the cycle, so `build_onto -> handed -> build_onto`,
+`walked -> walking -> walked` and `stitched -> stitching -> stitched` each paid a
+copy per iteration. #860 tried to buy that back with a runtime `cap > len` test,
+which was unsound and cost 88 GB on the write path before it was withdrawn.
+
+Nothing about it needs a runtime test. `callers_hand_over` already proves, whole
+program, that every call site passes a uniquely-owned value at a position. What
+was missing is the same question asked one hop further out: a parameter a group
+forwards straight into a carrying position is carrying one too, when every arm of
+the group forwards it, every caller hands it over, the arm mentions it nowhere
+else, and some call site actually names the group. Carriers join the set whose
+callers convert a seed, so the conversion moves out to where a value enters the
+cycle rather than happening on every lap.
+
+That alone dies in a beat loop, and the reason is worth recording. The carry copy
+strips builder-ness on purpose — `ns->cap = s->cap < 0 ? s->cap : 0`, "a builder's
+positive cap does not travel: the copy owns no room" — so a seed made once and
+carried across a rewind arrived at the next join as a string with no room, and
+`k_concat_arr_mut` said so. Two changes make seed-once true. The builder's header
+is malloc'd like the storage it already pointed at, so a rewind reaches neither.
+And a string with a positive cap is carried by identity rather than copied, which
+is what `k_b_str_builder`'s own comment has claimed since it was written: its own
+header, outside the loop that will grow it, storage the arena's rewinds cannot
+reach.
+
+Three mem goldens fall. allocs 82 to 1, 10 to 2, 10 to 3; alloc_bytes 5,304 to 48,
+22,557 to 80, 8,246 to 112; bytes_malloc 40, 7 and 6 all to zero. One malloc was
+what the same appends cost written without the hop, so the hop is now free. basket
+follows: allocs 28,192 to 28,184, alloc_bytes 4,890,672 to 4,882,522, bytes_malloc
+16 to 10. Welfare holds at 66.75 — this vein reads instructions, and the
+allocations it removes were not the ones it weighs.
+
+Two dead ends are recorded so they are not walked again. Mallocing the header
+alone does not work: the copy still strips the cap, so the builder arrives roomless
+whatever its header is made of. And guarding the exemption on `beat.ids` — leaving
+beat loops to re-seed — is correct and costs 80 mallocs against main's 40, because
+the boundary seed then buys nothing and adds one.
+
+The smallest failing program was tests/golden/micro/walking_multibyte_forward run
+through an import, which is the plain `walked/walking` shape and reached the
+corpus check before anything larger did.

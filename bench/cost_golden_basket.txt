@@ -1,5 +1,5 @@
-allocs=28192
-alloc_bytes=4890672
+allocs=28184
+alloc_bytes=4882522
 arena_blocks=2
 arena_peak_bytes=2097152
 cohort_frees=0
@@ -26,7 +26,7 @@ append_fast=0
 append_grow=0
 utf8_zerocopy=0
 carry_dedup=0
-bytes_malloc=16
+bytes_malloc=10
 bytes_freed=0
 str_scans=2009
 str_scan_bytes=58574
