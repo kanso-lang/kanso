@@ -1807,9 +1807,36 @@ KValue k_b_str_builder(KValue sv) {
     }
     memcpy(room, src->data, (size_t)src->len);
     room[src->len] = 0;
-    /* The header is malloc'd like the storage it points at, so a seed made once
-       outside the loop survives every rewind and the carry can hand it on by
-       identity. An arena header would be reclaimed under the accumulator. */
+    KStr* out = k_alloc(sizeof(KStr));
+    out->len = src->len;
+    out->data = room;
+    out->cap = (int)cap;
+    k_str_count(out) = k_str_chars(src);
+    KValue v; v.tag = K_STR; v.payload = k_ptr(out);
+    return v;
+}
+
+/* The same seed, with its header malloc'd so a rewind cannot reach it. Used
+   where the value enters a cycle whose carry hands it on by identity: an arena
+   header would be reclaimed under the accumulator between iterations. Everywhere
+   else the header is an arena bump, which is what most seeds want and what
+   `basket` pays 2.9% of its instructions for when it is not. */
+KValue k_b_str_builder_kept(KValue sv) {
+    if (!k_not_failure(sv)) return sv;
+    if (sv.tag != K_STR) k_die("a string builder starts from a string");
+    KStr* src = k_as_str(sv);
+    long long cap = (long long)src->len * 2 + 32;
+    char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
+    if (!base) { fputs("out of memory\n", stderr); exit(1); }
+    char* room = base + K_STR_HEAD;
+    if (__builtin_expect(k_stats_on > 0, 0)) {
+        k_stat_allocs++;
+        k_stat_alloc_bytes += cap + 1;
+        k_stat_bytes_malloc++;
+        k_stat_sh_str += (long long)sizeof(KStr);
+    }
+    memcpy(room, src->data, (size_t)src->len);
+    room[src->len] = 0;
     KStr* out = malloc(sizeof(KStr));
     if (!out) { fputs("out of memory\n", stderr); exit(1); }
     out->len = src->len;
