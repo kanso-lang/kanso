@@ -42,7 +42,13 @@
 # rewritten panels of a book chapter to 88 GB. The 752,908,406 figure above is
 # withdrawn with it rather than disproven: nothing re-measured it against the
 # shape that matters.
-jsonbench 3080294561
-encodebench 9229327520
-oneshot 63188854
-basket 56597311
+# 2026-08-13: basket 56,597,311 to 55,987,313, a fall of 609,998 and 1.08%.
+# jsonbench +5 and oneshot +10 are noise; encodebench rises 4,414. An accumulator
+# handed round a cycle is no longer re-seeded on every hop, and seeding copies the
+# whole string, so the work removed is larger than the carry's new flag and
+# branches cost. The allocation counters for all four benchmarks are unmoved —
+# this is the same work done without the copies.
+jsonbench 3080294566
+encodebench 9229331934
+oneshot 63188864
+basket 55987313
