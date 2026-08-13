@@ -155,20 +155,18 @@ print "four lookups fanned out, one answer fanned in: {cheapest} yen"
   build: `# two objects that point at each other. in most languages this needs a
 # nullable field you check forever after, or a second pass that patches the
 # link once both halves exist. a build block lets the knot be tied, then
-# freezes the whole cohort -- once the block ends nothing can be rewritten, so
-# the cycle is ordinary immutable data.
+# freezes what it named -- once the block ends nothing can be rewritten, so
+# the cycle is ordinary immutable data, in scope under the names it gave.
 type person
   name
   partner
 
-couple = build
+build
   ada = person "ada" none
   bob = person "bob" ada
   ada.partner = bob
-  [ada bob]
 
-a = couple[1]!
-print "{a.name} <-> {a.partner.name} <-> {a.partner.partner.name}"
+print "{ada.name} <-> {ada.partner.name} <-> {ada.partner.partner.name}"
 `,
   contained: `# the same knot, but crossing call boundaries and then thrown away in
 # bulk. tie hands the cycle out as an ordinary return value, round_trip
@@ -186,7 +184,7 @@ fn tie label
     there = node "pong" none
     here.peer = there
     there.peer = here
-    here
+  here
 
 fn round_trip n
   n.peer.peer.name

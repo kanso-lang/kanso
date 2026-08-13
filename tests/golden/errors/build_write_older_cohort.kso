@@ -6,13 +6,12 @@ fn attack old
   build
     young = cell "young" none
     old.link = young
-    young
+  young
 
 fn go _
-  old = build
+  build
     c = cell "old" none
-    c
-  a = attack old
+  a = attack c
   a.tag
 
 pub play = print "{go 0}"

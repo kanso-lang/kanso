@@ -2,8 +2,7 @@ type cell
   n
 
 pub play =
-  c = build
+  build
     x = cell 1
     set x n 2
-    x
-  print "{c.n}"
+  print "{x.n}"

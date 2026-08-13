@@ -1,4 +1,0 @@
-error[syntax]: a `build` ends with its result expression — the value that freezes and leaves the block
-  --> build_ends_with_its_result.kso:3:5
-   3 |     x = 1
-           ^

@@ -3111,3 +3111,53 @@ builder.
 Second gap, separate: no gate exercises the write path at all. `book_check.sh`
 runs book_panels read-only, and the read path never forces the chapter it built,
 because `keeping path text (not write or text == raw)` short-circuits.
+
+## 2026-08-12 (later still) — a build block binds into the scope around it
+
+design/build-blocks.md has carried an amendment since 2026-08-01: "build blocks
+don't return anything. their result is just present in the outer scope." Half of
+it shipped. The compiler went on requiring a result expression as the block's
+last line, so every build block in the tree was written to the surface the
+amendment overrode — that was the only form that compiled. Clay found it by
+reading examples/build_cyclic_eq.kso and asking why the block ends in `a`.
+
+The first attempt read the problem as scoping and was wrong in an instructive
+way. The parser requirement is one `matches!`. The checker keeps a block's names
+by not truncating its locals. The interpreter threads the environment through its
+three statement loops rather than cloning it. All three were written, and `a`
+was still unknown, because `build` is an expression and the entry's statement
+grouping folds consecutive statements into `Join` and `Seq` — so the block
+arrived at `eval()` as a value and no statement loop ever saw it. Instrumenting
+the arms printed nothing; instrumenting `eval` printed it.
+
+Making `build` a `Stmt` variant produces non-exhaustive matches at 104 sites
+across twelve files. The smaller lever is where the burial happens: `has_surface`
+decides which bodies get the grouping machinery, and it counted a build as a line
+of the effect surface. A construction site is not surface. Excluding it there
+leaves the build a plain statement in the body, which the three threading loops
+already handle, and no AST change is needed at all.
+
+Two rules followed from that. The unused-expression check exempts a build,
+because it has no value to go unused. And `x = build` is refused on its own
+terms rather than by the removed rule — "`build` answers nothing to bind `x` to".
+
+The cohort question the amendment left open is answered by counting. A block can
+only reclaim what it allocated and did not bind, and across every build block in
+the tree nothing is allocated that is not either bound or reachable from
+something bound: `a.peers = [b]` allocates a list that lives on through `a`, and
+the records are all named. So the boundary reclaims zero, which is what a
+construction site is — you name the parts to wire them together. It still cannot
+dissolve: build_write_enclosing_block refuses a write from an inner block to a
+name bound in the enclosing one, and that diagnostic needs the block to have an
+identity. So the block keeps its identity for legality and does no reclamation.
+
+The wasm backend needed the matching change: a build leaves no word on the stack
+when its last statement is a field write, which the validator caught as "expected
+a type but nothing on stack". It now emits the statements and answers a none the
+caller drops.
+
+Sixteen fixtures moved to the amended surface, plus both examples, the ch03 knot
+sample and its prose, the two playground examples, the design doc's own surface
+section, and the compile-cost sample — whose visits fell 26 to 24, two fewer
+expression visits because the block no longer has a result to type. Every other
+counter is unmoved and welfare holds at 66.75.

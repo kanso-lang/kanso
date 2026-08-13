@@ -8,7 +8,7 @@ fn ring_of first second
     b = node second 0
     a.peer = b
     b.peer = a
-    a
+  a
 
 ring1 = ring_of 1 2
 

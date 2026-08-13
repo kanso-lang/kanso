@@ -122,20 +122,20 @@ song <span class="o">=</span> <span class="f">track</span> <span class="s">"fish
   <span class="f">name</span>
   <span class="f">partner</span>
 
-couple <span class="o">=</span> <span class="f">build</span>
+<span class="f">build</span>
   ada <span class="o">=</span> <span class="f">person</span> <span class="s">"ada"</span> none
   bob <span class="o">=</span> <span class="f">person</span> <span class="s">"bob"</span> ada
   <span class="f">ada</span><span class="o">.</span>partner <span class="o">=</span> <span class="f">bob</span>
-  <span class="f">ada</span>
-<span class="f">print</span> <span class="s">"<span class="i">{couple.name}</span> and <span class="i">{couple.partner.name}</span>"</span>
-<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{couple.partner.partner.name}</span>"</span></code></pre>
+
+<span class="f">print</span> <span class="s">"<span class="i">{ada.name}</span> and <span class="i">{ada.partner.name}</span>"</span>
+<span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"back where we started: <span class="i">{ada.partner.partner.name}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code></code></pre>
   </div>
 </div>
 
-<p><code>none</code> holds ada's place while she waits for bob, and the assignment on the fourth line closes the loop. when the block ends the whole group freezes: nothing in it can be assigned again. what leaves the block is ordinary immutable data that happens to contain a cycle, so you can walk the ring as far as you like—<code>((couple.partner).partner)</code> is ada again—and no code downstream has to defend against a half-built record, because a half-built record never leaves.</p>
+<p><code>none</code> holds ada's place while she waits for bob, and the assignment on the fourth line closes the loop. when the block ends the whole group freezes: nothing in it can be assigned again. the block answers nothing—what it built is in scope below it, under the names it gave, as ordinary immutable data that happens to contain a cycle. so you can walk the ring as far as you like—<code>((ada.partner).partner)</code> is ada again—and no code downstream has to defend against a half-built record, because a half-built record never leaves.</p>
 
 <p>the freeze buys two things. it is what lets the type say <code>partner:person</code> instead of some nullable stand-in, and it is what keeps the memory model simple, which ch10 returns to: everything a block creates is born together and released together, so a cycle costs the runtime no more than a straight line.</p>
 

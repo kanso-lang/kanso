@@ -4,11 +4,10 @@ type cell
 
 fn tie n
   return none if n < 1
-  pair = build
+  build
     a = cell "a" none
     b = cell "b" a
     a.link = b
-    a
-  pair.link.tag
+  a.link.tag
 
 pub play = print "{tie 1}"

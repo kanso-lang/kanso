@@ -7,7 +7,7 @@ fn ring_from head tail
     a = node head none
     b = node tail 0
     a.peer = b
-    a
+  a
 
 ring = ring_from 1 2
 

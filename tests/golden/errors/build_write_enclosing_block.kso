@@ -3,13 +3,11 @@ type cell
   link
 
 fn go _
-  outer = build
+  build
     a = cell "outer" none
-    inner = build
+    build
       b = cell "inner" none
       a.link = b
-      b
-    a
-  outer.tag
+  a.tag
 
 pub play = print "{go 0}"
