@@ -3442,3 +3442,39 @@ One caution for the next reader of a profile: the attribution predicted about
 twenty million on the decoder and twelve and a half arrived. It named the right
 function and oversold the size, because attribution counts what a function was
 charged, not what removing it gives back.
+
+## 2026-08-13 (later still) — the keyword, spelled straight
+
+Target 2, second attempt, and the measurement that the first one earned. The
+scanner sliced bytes out of the input and compared the slice against a keyword
+held as a list of codes: an allocation per literal, then two collections walked
+element by element with a tag check on each.
+
+The first attempt matched character by character in kanso and cost decode 12.2%.
+This one is straight-line. The first byte already chose the arm, so what is left
+is the tail of one known keyword — three or four comparisons and a single
+dispatch on the answer. Reading past the end answers none, which matches
+nothing, so a truncated literal needs no length test.
+
+    decode      3,067,580,067 -> 2,900,220,537   -5.46%
+    oneshot        63,049,215 ->    47,548,171  -24.59%
+
+Same idea, two spellings, eighteen points apart. What separates them is not the
+algorithm but how much dispatch stands between the comparison and the bytes:
+three groups per character against none. Written in kanso, at this granularity,
+dispatch is the whole cost.
+
+Allocations follow: decode 6,272,114 -> 5,334,608, arena blocks 3 -> 2, peak a
+third lower, alloc_bytes down 30 MB, sh_bytes 50.4M -> 28.0M, and three fewer
+permanent allocations now the keyword lists are gone. oneshot's evacuation
+collapses, 63,967 copies to 5, and its carry_dedup goes to zero. The emitted
+decoder grows 522 lines for three predicates, and 560 bytes of machine code per
+binary; the front end visits 600 more expressions. Welfare 66.79 -> 67.37.
+
+oneshot's cohort flips from freeing to keeping, as it did under the first
+attempt: the construction garbage that filled a second arena block is gone, so
+nearly all of one block survives and the guard's keep arm is right.
+
+This is also the first change scored under the repaired gate. The counters were
+red, and the instruction vein reported anyway — six veins each said their piece
+in one run, which is what the first attempt's 12.2% needed and did not get.
