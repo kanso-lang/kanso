@@ -6,7 +6,7 @@ import "std/io"
 import "std/json"
 
 fn pick n
-  source = if (n > 0) (io/read_file "../../../bench/large.json") io/stdin
+  source = if (n > 0) (io/read_file "escapes.json") io/stdin
   source . report
 
 fn report text
