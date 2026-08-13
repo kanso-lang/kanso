@@ -3417,3 +3417,28 @@ disk does not win, so swapping a lib/*.kso between refs without rebuilding reads
 the old stdlib. And `survivor` at the guard is bounded by
 `k_copy_size_budget = min(cap, grown/2)` and abandoned as soon as it exceeds it —
 a reading near grown/2 is the budget, not a size.
+
+## 2026-08-13 (later) — the string header is made inline
+
+Target 3 of the decode regression, and the cheapest of the four. When a string's
+header and its bytes became one allocation the work moved into `k_str_alloc`, and
+the caller attribution taken during the regression hunt shows what that cost:
+40,464,393 instructions in the new function against 20,884,830 that `k_str_n` gave
+up. The body is a few stores and a branch on the stats flag, small enough that the
+call around it is a fair share of the work.
+
+Forced inline, the symbol leaves the binary entirely — `nm ./jsonbench` no longer
+finds it — and every benchmark falls: decode 3,080,294,566 to 3,067,580,067
+(0.41%), encode 9,229,331,934 to 9,207,299,438 (0.24%), oneshot 0.22%, basket
+0.30%. Allocation counters are byte-identical, which is what inlining owes them.
+
+The machine code falls too, which was the outcome least expected: jsonbench 83,794
+bytes to 81,458, and 2,112 to 2,416 off each of the other three. Forty-eight call
+sequences are larger than forty-eight copies of a body the optimiser can fold once
+it can see the length it is called with. Both veins moved the same way, so there
+was no trade to argue.
+
+One caution for the next reader of a profile: the attribution predicted about
+twenty million on the decoder and twelve and a half arrived. It named the right
+function and oversold the size, because attribution counts what a function was
+charged, not what removing it gives back.

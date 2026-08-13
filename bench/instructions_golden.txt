@@ -48,7 +48,13 @@
 # whole string, so the work removed is larger than the carry's new flag and
 # branches cost. The allocation counters for all four benchmarks are unmoved —
 # this is the same work done without the copies.
-jsonbench 3080294566
-encodebench 9229331934
-oneshot 63188864
-basket 55987313
+# 2026-08-13 (later): every row falls, and so does every .text size. k_str_alloc
+# is made inline: jsonbench -12,714,499 (0.41%), encodebench -22,032,496 (0.24%),
+# oneshot -139,649 (0.22%), basket -169,500 (0.30%). The caller attribution that
+# found this predicted about twenty million on the decoder against the twelve and
+# a half measured, so it pointed at the right function and oversold the size —
+# attribution counts what a function was charged, not what removing it returns.
+jsonbench 3067580067
+encodebench 9207299438
+oneshot 63049215
+basket 55817813
