@@ -125,6 +125,13 @@ jobs:
   welfare:
     name: welfare (one number over runtime and compile cost, ratcheted)
     runs-on: ubuntu-latest
+    # Welfare's run-speed terms are read out of bench/instructions_golden.txt,
+    # and nothing in this job re-measures them. cost-goldens is what proves that
+    # file describes this commit, so the score waits for it: a number computed
+    # from a vein nobody has checked carries the gate's authority without its
+    # evidence. On 2026-08-13 that reported a gain for a change that made the
+    # decoder 12.2% slower, and the floor was ratcheted on the reading.
+    needs: cost-goldens
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -183,17 +190,34 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: build the benchmarks
         run: sh scripts/gates/build_benchmarks.sh
+      # Each vein reports even when a sibling is red. They measure independent
+      # dimensions, so stopping at the first disagreement hides the rest: a
+      # stale machine-code golden kept the instruction counts from being
+      # measured at all for two runs, and the decoder was 12.2% slower the
+      # whole time with nothing able to say so.
       - name: what the decoder emits
+        id: emitted
+        continue-on-error: true
         run: sh scripts/gates/emitted_code.sh
       - name: how much machine code
+        id: text
+        if: always()
+        continue-on-error: true
         run: sh scripts/gates/machine_code.sh
       - name: how much work
+        id: work
+        if: always()
+        continue-on-error: true
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq valgrind
           sh scripts/gates/instructions.sh
       - name: decode counters
+        id: decode
+        if: always()
+        continue-on-error: true
         run: sh scripts/gates/decode_counters.sh
       - name: nothing worsens unless something improves
+        if: always()
         run: |
           git fetch origin main --depth 1
           set +e
@@ -213,17 +237,50 @@ jobs:
       # second used to follow the first by memory, and memory let ten shipped
       # optimisations land in a day without the page moving once
       - name: the page keeps up with the log
+        if: always()
         run: |
           git fetch origin main --depth 1 || true
           ./target/release/kanso run scripts/page_drift
       - name: one-shot counters
+        id: oneshot
+        if: always()
+        continue-on-error: true
         run: sh scripts/gates/oneshot_counters.sh
       - name: basket counters
+        id: basket
+        if: always()
+        continue-on-error: true
         run: sh scripts/gates/basket_counters.sh
       - name: compile memory
+        id: compile_memory
+        if: always()
+        continue-on-error: true
         run: sh scripts/gates/compile_memory.sh
       - name: encode counters
+        id: encode
+        if: always()
+        continue-on-error: true
         run: sh scripts/gates/encode_counters.sh
+      - name: every vein had its say
+        if: always()
+        run: |
+          fail=0
+          for vein in "emitted:${{ steps.emitted.outcome }}" \
+                      "machine code:${{ steps.text.outcome }}" \
+                      "work:${{ steps.work.outcome }}" \
+                      "decode counters:${{ steps.decode.outcome }}" \
+                      "one-shot counters:${{ steps.oneshot.outcome }}" \
+                      "basket counters:${{ steps.basket.outcome }}" \
+                      "compile memory:${{ steps.compile_memory.outcome }}" \
+                      "encode counters:${{ steps.encode.outcome }}"; do
+            case "$vein" in
+              *:failure)
+                echo "::error::${vein%:*} disagrees with its golden"
+                fail=1
+                ;;
+            esac
+          done
+          exit $fail
 
   downstream:
     name: kq specs (a real program, gating)
