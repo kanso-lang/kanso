@@ -931,12 +931,27 @@ impl<'a> Backend<'a> {
         // carrying the builder made here.
         // A parameter forwarded round the same cycle is carrying the builder
         // already, and seeding it again copies the whole string once per hop.
-        let carried = match arg {
-            Some(Expr::Ident(_, span)) => {
-                self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
-            }
-            _ => false,
-        };
+        // A beat loop rewinds the arena between iterations and the shelf carries
+        // the accumulator's header across the rewind, so the seed has to happen
+        // inside the bracket: converted outside it, the header sits below the
+        // mark and the join finds a string that is not a builder.
+        let beat_bound = self.beat.ids.contains_key(&(callee.to_string(), arity));
+        let carried = !beat_bound
+            && match arg {
+                Some(Expr::Ident(_, span)) => {
+                    self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
+                }
+                _ => false,
+            };
+        if std::env::var_os("KANSO_SHOW_CARRIERS").is_some()
+            && self.builder_params.contains(&(callee.to_string(), arity, i))
+        {
+            let self_call = f.group == callee && f.arity == arity;
+            eprintln!(
+                "SEED-SITE in {}/{} -> {callee}/{arity} index {i} self={self_call} carried={carried}",
+                f.group, f.arity
+            );
+        }
         let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
             && !(f.group == callee && f.arity == arity)
             && !carried;
