@@ -39,7 +39,15 @@
 # path it was said to rescue is the one it broke, to 88 GB and a SIGKILL. The
 # claim above about book_panels --write is wrong in both directions and the
 # instruction figure was never re-measured against the shape that matters.
-jsonbench text=83714
-encodebench text=101778
-oneshot text=100962
-basket text=92322
+# 2026-08-13: jsonbench 83,714 to 83,794, encodebench 101,778 to 101,874, oneshot
+# 100,962 to 101,042, basket 92,322 to 92,306. Three rise by eighty-odd bytes and
+# one falls by sixteen. The rise is `k_carry_stage_kept`, the flag array it sets,
+# and the two branches in `k_beat_iter_carry` that skip a kept slot — every
+# program that links the beat carry pays for them. basket falls because it emits
+# fewer seed conversions: an accumulator carried round a cycle is converted where
+# it enters now, not on every hop. The allocation counters say what that buys —
+# allocs 82 to 3 on the shape it was written for.
+jsonbench text=83794
+encodebench text=101874
+oneshot text=101042
+basket text=92306
