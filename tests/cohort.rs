@@ -4,9 +4,22 @@ use std::process::Command;
 /// still proves its argument a string, and the construction garbage dies
 /// at the pop. Watched red (cohort_frees=0) with the yield tracking
 /// stashed.
+///
+/// The input is written here rather than committed, because what this needs
+/// is a large text with a small tree and that runs to a megabyte — six times
+/// the largest data file in the repo. Escapes give the ratio: six bytes of
+/// `\u0041` decode to one, so the region grows on scanning while the survivor
+/// stays a fifth of it. A document with a big tree cannot pin the freeing side
+/// any more, because a decode is nearly all live tree and the survivor-ratio
+/// guard keeps the region rather than copying it — which is the guard working,
+/// not failing.
 #[test]
 fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort");
+    let escapes = "\\u0041".repeat(200_000);
+    std::fs::write(format!("{dir}/escapes.json"), format!("\"{escapes}\""))
+        .expect("the input writes");
+
     let output = Command::new(env!("CARGO_BIN_EXE_kanso"))
         .arg("play")
         .arg("cohort_bound.kso")
@@ -17,7 +30,7 @@ fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stdout, "held 160\n", "stdout mismatch: {stderr}");
+    assert_eq!(stdout, "held 200000\n", "stdout mismatch: {stderr}");
     assert!(stderr.contains("cohort_frees=1"), "the cohort never fired: {stderr}");
     assert!(output.status.success());
 }

@@ -3335,3 +3335,85 @@ the boundary seed then buys nothing and adds one.
 The smallest failing program was tests/golden/micro/walking_multibyte_forward run
 through an import, which is the plain `walked/walking` shape and reached the
 corpus check before anything larger did.
+
+## 2026-08-13 — matching a keyword in kanso costs more than the slice it saves
+
+Target 2 of the decode regression. `word` in lib/json/value.kso sliced bytes out
+of the input and compared the slice to the keyword, and the keyword was a list of
+codes — `bytes_null = [110 117 108 108]`. Comparing bytes to a list walks the two
+element by element with a tag check on each. Probed on jsonbench: about 900,000
+comparisons, every one an equality, every one K_BYTES against K_LIST, not one
+failing on length, 3,900,672 elements walked. That is the 96,257,700 instructions
+the caller attribution put under k_eq_rec'k_cmp.
+
+Matching the keyword where it sits removes the walk and the slice together, and on
+every counter this project keeps it read as a win: decode allocs 6,272,114 to
+5,334,614, alloc_bytes 292,667,712 to 262,667,712, sh_bytes 50,450,400 to
+27,950,400, arena_blocks 3 to 2, arena_peak_bytes 3,145,728 to 2,097,152, oneshot
+allocs 119,826 to 81,598.
+
+Retired instructions say the opposite, and they are the measure that matters here:
+decode 3,080,294,566 to 3,454,549,280, a rise of 374,254,714 and 12.2%. Against
+940,000 allocations removed that is about four hundred instructions added per
+keyword. Recognising one character now walks three dispatch groups — `word_at?`
+into `word_step?` into `word_more?` and back — where the slice form made one call
+and one comparison, so the per-character machinery costs more than the allocation
+and the list walk it replaced. Written in kanso, at this granularity, dispatch is
+the expensive part. The win is still there to take; it needs a runtime compare of
+a byte range against a literal, one call and no allocation, rather than a
+character loop spelled in the language. Reverted, target 2 reopened.
+
+oneshot falls the other way over the same change, 63,188,864 to 51,301,180. Four
+new functions moved the emitted decoder — defines 154 to 159, lines 10,529 to
+10,807 — and this page already holds a measurement that a no-op change moves
+decode about three per cent by layout alone. An 18.8% move on the smallest
+benchmark from four added functions is not a result to bank on one sitting.
+
+### The gate that should have caught this, and did not
+
+Welfare scored the change 66.77 to 66.97 and the floor was ratcheted on that
+reading. The reading was of a stale vein: welfare's four run-speed terms are read
+out of bench/instructions_golden.txt, and that file still held the previous
+change's numbers because the instruction gate runs behind the machine-code gate,
+which was red for an unrelated reason for two runs. So the model was shown a
+decoder that had not moved and an oneshot that had not moved, and reported a gain
+on the memory terms alone. With the measured numbers written in, welfare reads
+66.97 for real — the model genuinely prefers this trade, because oneshot's 25.8%
+outweighs decode's 5.4% at their weights. That is a second thing to settle, and it
+is not settled here: the model would have banked a 12% decode regression on the
+strength of a benchmark move that layout can explain.
+
+Welfare must not be able to score a golden it has not seen regenerated. A number
+computed from a stale input is worse than no number, because it carries the
+authority of the gate.
+
+The obvious spelling was tried first and refused by measurement. Writing the
+keywords `text/bytes "null"` makes every comparison a memcmp, and costs one
+allocation per comparison: decode allocs rise to 7,209,608. `Backend::is_constant_body`
+(codegen.rs:1872) gives a constant a CAF cell when its body is a literal, and a
+call is not a literal, so the bytes constant is rebuilt at every use where the list
+literal is built once at k_caf_init and frozen. That gap is worth closing on its
+own — any module-scope constant computed by a call is rebuilt per use, language
+wide — but it is a language question, because a frozen constant is built before
+main and a body that can fail would fail earlier. Left for a gavel.
+
+The cohort fixture was rebuilt along the way and is kept, because what it found
+outlives the change that exposed it. tests/cohort.rs pins that a bound,
+branch-chosen, piped decode frees its construction garbage, and under the
+keyword rewrite it kept instead. Probed at the guard with the survivor budget
+lifted: the survivor is 995,504 either way — it is the
+decoded document, which is what the cohort's region returns — while `grown` halves
+from 2,097,152 to 1,048,576, because the garbage that filled the second arena
+block is gone. Nearly all of a one-block region surviving is exactly the case the
+guard's comment names, "a decode that is nearly all live tree", and keeping it is
+right. So a document with a big tree can no longer pin the freeing side at all.
+The fixture now decodes a long JSON string of `\u` escapes, where six bytes become
+one and the survivor stays a fifth of what grew; the test writes that input rather
+than committing a megabyte. Watched red at 50,000 escapes, where the region never
+trips the threshold and the cohort does not fire.
+
+Two harness lessons paid for twice each. The stdlib is include_str!-embedded and
+disk does not win, so swapping a lib/*.kso between refs without rebuilding reads
+the old stdlib. And `survivor` at the guard is bounded by
+`k_copy_size_budget = min(cap, grown/2)` and abandoned as soon as it exceeds it —
+a reading near grown/2 is the budget, not a size.
