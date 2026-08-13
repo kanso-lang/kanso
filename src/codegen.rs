@@ -255,6 +255,7 @@ declare void @k_beat_push()
 declare void @k_beat_iter()
 declare void @k_carry_reset()
 declare void @k_carry_stage(%KValue)
+declare void @k_carry_stage_kept(%KValue)
 declare %KValue @k_carry_take(i64)
 declare void @k_beat_iter_carry()
 declare %KValue @k_beat_pop(%KValue)
@@ -3187,7 +3188,18 @@ impl<'a> Backend<'a> {
                                 f.line("call void @k_carry_reset()");
                                 for &j in positions {
                                     let a = &emitted[j];
-                                    f.line(&format!("call void @k_carry_stage(%KValue {a})"));
+                                    // The accumulator crosses by identity: the
+                                    // copy strips the room it was seeded with,
+                                    // and the next join would re-seed. Only a
+                                    // slot builder_params names is kept, so
+                                    // nothing that merely has capacity is
+                                    // aliased.
+                                    let kept = self.builder_params.contains(&(name.clone(), n, j));
+                                    let stage = match kept {
+                                        true => "k_carry_stage_kept",
+                                        false => "k_carry_stage",
+                                    };
+                                    f.line(&format!("call void @{stage}(%KValue {a})"));
                                 }
                                 f.line("call void @k_beat_iter_carry()");
                                 for (slot, &j) in positions.iter().enumerate() {

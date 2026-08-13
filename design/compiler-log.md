@@ -3305,6 +3305,15 @@ follows: allocs 28,192 to 28,184, alloc_bytes 4,890,672 to 4,882,522, bytes_mall
 16 to 10. Welfare holds at 66.75 — this vein reads instructions, and the
 allocations it removes were not the ones it weighs.
 
+The first cut of that carried ANY string with room by identity, written straight
+into `k_deep_copy`, and kq caught what this repo's corpus did not:
+`unicode_identity` came back as 267 NUL bytes, the right length of freed storage.
+Capacity is not ownership — two references could alias one builder, and the next
+growth reallocs and frees what the other is still reading. The compiler knows
+which slot it proved, so the carry is told: `k_carry_stage_kept` marks the
+accumulator's slot and only that slot crosses by identity. kq is green on it,
+specs, its own cost goldens and the scale gate.
+
 Two dead ends are recorded so they are not walked again. Mallocing the header
 alone does not work: the copy still strips the cap, so the builder arrives roomless
 whatever its header is made of. And guarding the exemption on `beat.ids` — leaving
