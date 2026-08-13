@@ -16,7 +16,7 @@ use std::process::Command;
 #[test]
 fn a_bound_branch_chosen_pipe_still_fires_the_cohort() {
     let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/cohort");
-    let escapes: String = std::iter::repeat("\\u0041").take(200_000).collect();
+    let escapes = "\\u0041".repeat(200_000);
     std::fs::write(format!("{dir}/escapes.json"), format!("\"{escapes}\""))
         .expect("the input writes");
 
