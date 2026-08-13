@@ -1000,6 +1000,10 @@ static KValue k_deep_copy(KValue v, KCopy* cp) {
     switch (v.tag) {
         case K_STR: {
             KStr* s = (KStr*)p;
+            /* A builder travels by identity: its header and its room are both
+               malloc'd, so the rewind cannot reach either, and copying would
+               drop the room and leave the next join without a builder. */
+            if (s->cap > 0) return v;
             KStr* ns = k_copy_alloc(cp, sizeof(KStr));
             k_copy_map_put(p, ns);
             ns->len = s->len;
@@ -1790,7 +1794,11 @@ KValue k_b_str_builder(KValue sv) {
     }
     memcpy(room, src->data, (size_t)src->len);
     room[src->len] = 0;
-    KStr* out = k_alloc(sizeof(KStr));
+    /* The header is malloc'd like the storage it points at, so a seed made once
+       outside the loop survives every rewind and the carry can hand it on by
+       identity. An arena header would be reclaimed under the accumulator. */
+    KStr* out = malloc(sizeof(KStr));
+    if (!out) { fputs("out of memory\n", stderr); exit(1); }
     out->len = src->len;
     out->data = room;
     out->cap = (int)cap;

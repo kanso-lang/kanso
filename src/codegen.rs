@@ -935,7 +935,7 @@ impl<'a> Backend<'a> {
         // the accumulator's header across the rewind, so the seed has to happen
         // inside the bracket: converted outside it, the header sits below the
         // mark and the join finds a string that is not a builder.
-        let beat_bound = self.beat.ids.contains_key(&(callee.to_string(), arity));
+        let beat_bound = false;
         let carried = !beat_bound
             && match arg {
                 Some(Expr::Ident(_, span)) => {
