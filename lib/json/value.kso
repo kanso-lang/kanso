@@ -127,7 +127,24 @@ fn value_for c cs p
   numeric = number_start? c
   if numeric (parse_number cs p) (bad_value_char c p)
 
+# Matched against the input where it sits. Slicing first built a byte string to
+# throw away, and comparing it to the list of codes walked the two element by
+# element, tag-checking each one — a hundred instructions to recognise `null`.
 fn word cs p expected v
   n = length expected
-  seg = text/slice cs p (p + n - 1)
-  if (seg == expected) (parsed (p + n) v) (fail p "invalid literal")
+  if (word_at? cs p expected 1 n) (parsed (p + n) v) (fail p "invalid literal")
+
+fn word_at? cs p expected i n
+  word_step? cs p expected i n (i > n)
+
+fn word_step? _ _ _ _ _ true
+  true
+
+fn word_step? cs p expected i n false
+  word_more? cs p expected i n (cs[p + i - 1] == expected[i]!)
+
+fn word_more? _ _ _ _ _ false
+  false
+
+fn word_more? cs p expected i n true
+  word_at? cs p expected (i + 1) n
