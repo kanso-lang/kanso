@@ -875,7 +875,8 @@ fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Sites) -> 
                 // names, and these sites are keyed by source position, which the
                 // twins share — so a grant made to the clone would reach the code
                 // the real name emits.
-                if all && called_somewhere(program, &decl.name, arity)
+                if all
+                    && called_somewhere(program, &decl.name, arity)
                     && a.callers_hand_over(&decl.name, arity, j)
                 {
                     carrying.insert((decl.name.clone(), arity, j));
@@ -905,9 +906,9 @@ fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
     decl.body
         .iter()
         .filter_map(|s| match s {
-            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => joins
-                .contains(&(decl.file.clone(), span.line, span.col))
-                .then(|| name.clone()),
+            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => {
+                joins.contains(&(decl.file.clone(), span.line, span.col)).then(|| name.clone())
+            }
             _ => None,
         })
         .collect()
@@ -1000,8 +1001,7 @@ fn collect_carried(
                 if let Expr::Ident(n, span) = arg {
                     let holds = built.contains(n)
                         || param_names(decl).into_iter().any(|(j, p)| {
-                            &p == n
-                                && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
+                            &p == n && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
                         });
                     if holds {
                         out.insert((decl.file.clone(), span.line, span.col));

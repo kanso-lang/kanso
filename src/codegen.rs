@@ -4017,12 +4017,11 @@ impl<'a> Backend<'a> {
         let declared = |d: &FnDecl| d.name == *name && d.params.len() == emitted.len();
         if !was_builtin && self.program.fns.iter().any(declared) {
             let n = emitted.len();
-            let args_ir: Vec<String> =
-                emitted
-                    .iter()
-                    .enumerate()
-                    .map(|(i, e)| self.call_arg(f, name, n, i, e, args.get(i)))
-                    .collect();
+            let args_ir: Vec<String> = emitted
+                .iter()
+                .enumerate()
+                .map(|(i, e)| self.call_arg(f, name, n, i, e, args.get(i)))
+                .collect();
             let callee_ret = self.ret_ty(name, n);
             // A register-returned record comes back as two raw field words,
             // not a tagged value, and both pops read a KValue. Reinterpreting
