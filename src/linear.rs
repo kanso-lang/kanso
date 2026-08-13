@@ -820,7 +820,7 @@ pub type Sites = HashSet<(String, usize, usize)>;
 ///
 /// Returns the join sites, and the (name, arity, index) of each accumulator so
 /// the emitter can convert the seed where a caller hands one in from outside.
-pub fn string_builders(program: &Program) -> (Sites, Sites) {
+pub fn string_builders(program: &Program) -> (Sites, Sites, Sites) {
     let analysis = Analysis::new(program);
     let mut sites = HashSet::new();
     let mut accs = HashSet::new();
@@ -833,7 +833,186 @@ pub fn string_builders(program: &Program) -> (Sites, Sites) {
             walk_for_builder(&analysis, decl, e, &mut sites, &mut accs);
         }
     }
-    (sites, accs)
+    // A parameter that forwards the accumulator on is carrying one too, so it
+    // joins the set whose callers convert a seed — the conversion moves out to
+    // where the value enters the cycle, rather than happening on every hop.
+    let (accs, carried) = carried_args(&analysis, program, &sites, accs);
+    (sites, accs, carried)
+}
+
+/// Where a call argument is already carrying the builder, so converting a seed
+/// at that site would copy a string this component already owns.
+///
+/// `build_onto -> handed -> build_onto` is one accumulator passed round a
+/// cycle, and only the self-call is recognised as staying inside it. Every
+/// other hop looks like a caller from outside and re-seeds, which copies the
+/// whole string once per iteration. A parameter a group forwards straight into
+/// a carrying position is carrying one too, on the same terms the accumulator
+/// itself was granted: every caller hands it over, and the arm mentions it
+/// nowhere but that call.
+fn carried_args(a: &Analysis, program: &Program, joins: &Sites, accs: Sites) -> (Sites, Sites) {
+    let mut carrying = accs;
+    loop {
+        let before = carrying.len();
+        for decl in real_fns(program) {
+            let arity = decl.params.len();
+            for (j, _) in param_names(decl) {
+                if carrying.contains(&(decl.name.clone(), arity, j)) {
+                    continue;
+                }
+                // Every arm of the group, not just this one: the set is keyed by
+                // group, so an arm that aliases the parameter or answers it as a
+                // plain string would inherit an exemption it cannot honour.
+                let arms: Vec<&FnDecl> = real_fns(program)
+                    .filter(|d| d.name == decl.name && d.params.len() == arity)
+                    .collect();
+                let all = arms.iter().all(|d| match d.params.get(j) {
+                    Some(Pattern::Var(n, _)) => forwards_into(&carrying, d, n),
+                    _ => false,
+                });
+                // A group nothing calls answers every call-site question yes for
+                // free. An import enrols a bare-named clone that no call site
+                // names, and these sites are keyed by source position, which the
+                // twins share — so a grant made to the clone would reach the code
+                // the real name emits.
+                if all && called_somewhere(program, &decl.name, arity)
+                    && a.callers_hand_over(&decl.name, arity, j)
+                {
+                    carrying.insert((decl.name.clone(), arity, j));
+                }
+            }
+        }
+        if carrying.len() == before {
+            break;
+        }
+    }
+    let mut out = HashSet::new();
+    for decl in real_fns(program) {
+        let built = built_locals(joins, decl);
+        for stmt in &decl.body {
+            let e = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            collect_carried(&carrying, &built, decl, e, &mut out);
+        }
+    }
+    (carrying, out)
+}
+
+/// Names this arm binds to the join itself — the builder made right here.
+fn built_locals(joins: &Sites, decl: &FnDecl) -> HashSet<String> {
+    decl.body
+        .iter()
+        .filter_map(|s| match s {
+            Stmt::Bind { pattern: Pattern::Var(name, _), expr: Expr::Str(_, span) } => joins
+                .contains(&(decl.file.clone(), span.line, span.col))
+                .then(|| name.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Does any call site in the program name this group?
+fn called_somewhere(program: &Program, name: &str, arity: usize) -> bool {
+    fn in_expr(e: &Expr, name: &str, arity: usize) -> bool {
+        if let Expr::App { head, args, .. } = e {
+            if matches!(head.as_ref(), Expr::Ident(n, _) if n == name) && args.len() == arity {
+                return true;
+            }
+        }
+        child_exprs(e).into_iter().any(|c| in_expr(c, name, arity))
+    }
+    program.fns.iter().any(|d| {
+        d.body.iter().any(|s| {
+            let e = match s {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            in_expr(e, name, arity)
+        })
+    })
+}
+
+fn param_names(decl: &FnDecl) -> Vec<(usize, String)> {
+    decl.params
+        .iter()
+        .enumerate()
+        .filter_map(|(j, p)| match p {
+            Pattern::Var(n, _) => Some((j, n.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Does this arm hand `name` on into a carrying position, and mention it
+/// nowhere else?
+fn forwards_into(carrying: &Sites, decl: &FnDecl, name: &str) -> bool {
+    let everywhere: usize = decl
+        .body
+        .iter()
+        .map(|s| match s {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => count_in_expr(name, expr),
+            Stmt::Set { value, .. } => count_in_expr(name, value),
+        })
+        .sum();
+    let mut found = false;
+    for stmt in &decl.body {
+        let e = match stmt {
+            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+            Stmt::Set { value, .. } => value,
+        };
+        walk_forwards(carrying, e, name, &mut found);
+    }
+    found && everywhere == 1
+}
+
+fn walk_forwards(carrying: &Sites, e: &Expr, name: &str, found: &mut bool) {
+    if let Expr::App { head, args, .. } = e {
+        if let Expr::Ident(callee, _) = head.as_ref() {
+            for (i, arg) in args.iter().enumerate() {
+                if matches!(arg, Expr::Ident(n, _) if n == name)
+                    && carrying.contains(&(callee.clone(), args.len(), i))
+                {
+                    *found = true;
+                }
+            }
+        }
+    }
+    for child in child_exprs(e) {
+        walk_forwards(carrying, child, name, found);
+    }
+}
+
+fn collect_carried(
+    carrying: &Sites,
+    built: &HashSet<String>,
+    decl: &FnDecl,
+    e: &Expr,
+    out: &mut Sites,
+) {
+    if let Expr::App { head, args, .. } = e {
+        if let Expr::Ident(callee, _) = head.as_ref() {
+            for (i, arg) in args.iter().enumerate() {
+                if !carrying.contains(&(callee.clone(), args.len(), i)) {
+                    continue;
+                }
+                if let Expr::Ident(n, span) = arg {
+                    let holds = built.contains(n)
+                        || param_names(decl).into_iter().any(|(j, p)| {
+                            &p == n
+                                && carrying.contains(&(decl.name.clone(), decl.params.len(), j))
+                        });
+                    if holds {
+                        out.insert((decl.file.clone(), span.line, span.col));
+                    }
+                }
+            }
+        }
+    }
+    for child in child_exprs(e) {
+        collect_carried(carrying, built, decl, child, out);
+    }
 }
 
 fn walk_for_builder(

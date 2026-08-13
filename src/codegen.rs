@@ -439,7 +439,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
     let byte_disc = crate::dispatch::byte_dispatched(program, &inference);
     let in_place_pushes = crate::linear::in_place_pushes(program);
     let reusable_records = crate::linear::reusable_records(program);
-    let (builder_joins, builder_params) = crate::linear::string_builders(program);
+    let (builder_joins, builder_params, builder_carried) = crate::linear::string_builders(program);
     // Beat loops rewind the arena between iterations. Groups returning the
     // by-value %parsed are excluded: k_beat_pop judges heap-ness from the
     // returned tag word, and the packed representation would mislead it.
@@ -467,6 +467,7 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         reusable_records,
         builder_joins,
         builder_params,
+        builder_carried,
         beat,
         type_ids,
         strings: Vec::new(),
@@ -514,6 +515,8 @@ struct Backend<'a> {
     reusable_records: std::collections::HashMap<(String, usize, usize), String>,
     builder_joins: std::collections::HashSet<(String, usize, usize)>,
     builder_params: std::collections::HashSet<(String, usize, usize)>,
+    /// Argument positions already carrying the builder, so no seed is needed.
+    builder_carried: std::collections::HashSet<(String, usize, usize)>,
     beat: crate::beat::Beats,
     type_ids: HashMap<&'a str, i64>,
     strings: Vec<(String, Vec<u8>)>,
@@ -912,14 +915,31 @@ impl<'a> Backend<'a> {
         }
     }
 
-    fn call_arg(&self, f: &mut FnEmit, callee: &str, arity: usize, i: usize, e: &str) -> String {
+    fn call_arg(
+        &self,
+        f: &mut FnEmit,
+        callee: &str,
+        arity: usize,
+        i: usize,
+        e: &str,
+        arg: Option<&Expr>,
+    ) -> String {
         // A string this group builds by joining onto itself needs its seed
         // converted where it enters from outside: a builder writes into the
         // header it was given, and an interned literal cannot be written
         // through. The recursive call is not converted — it is already
         // carrying the builder made here.
+        // A parameter forwarded round the same cycle is carrying the builder
+        // already, and seeding it again copies the whole string once per hop.
+        let carried = match arg {
+            Some(Expr::Ident(_, span)) => {
+                self.builder_carried.contains(&(f.file.clone(), span.line, span.col))
+            }
+            _ => false,
+        };
         let entering = self.builder_params.contains(&(callee.to_string(), arity, i))
-            && !(f.group == callee && f.arity == arity);
+            && !(f.group == callee && f.arity == arity)
+            && !carried;
         let seeded;
         let e = match entering {
             true => {
@@ -3186,7 +3206,7 @@ impl<'a> Backend<'a> {
                         .enumerate()
                         .map(|(i, e)| match &packed[i] {
                             Some(p) => format!("%parsed {p}"),
-                            None => self.call_arg(f, name, n, i, e),
+                            None => self.call_arg(f, name, n, i, e, args.get(i)),
                         })
                         .collect();
                     let t = f.tmp();
@@ -3994,7 +4014,11 @@ impl<'a> Backend<'a> {
         if !was_builtin && self.program.fns.iter().any(declared) {
             let n = emitted.len();
             let args_ir: Vec<String> =
-                emitted.iter().enumerate().map(|(i, e)| self.call_arg(f, name, n, i, e)).collect();
+                emitted
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| self.call_arg(f, name, n, i, e, args.get(i)))
+                    .collect();
             let callee_ret = self.ret_ty(name, n);
             // A register-returned record comes back as two raw field words,
             // not a tagged value, and both pops read a KValue. Reinterpreting
