@@ -1384,8 +1384,24 @@ void k_carry_stage(KValue v) {
 KValue k_carry_take(long long i) { return k_carry_slots[i]; }
 
 /* Stage a slot the compiler proved is this cycle's own builder. */
+/* Stage a slot the compiler proved is this cycle's own builder, and move its
+   header off the arena if the rewind about to happen would reclaim it. A seed is
+   an arena bump like every other allocation, which is what seeds want; the one
+   carried by identity is the exception, and this is the only place that knows
+   which one that is. It happens at most once per builder — a promoted header
+   survives the mark from then on. */
 void k_carry_stage_kept(KValue v) {
     if (k_carry_n < K_CARRY_MAX) k_carry_kept[k_carry_n] = 1;
+    if (v.tag == K_STR && k_beat_depth > 0 && k_beat_depth <= K_BEAT_MAX) {
+        KStr* h = (KStr*)(intptr_t)v.payload;
+        KMark* m = &k_beat_stack[k_beat_depth - 1];
+        if (!k_survives(h, m)) {
+            KStr* out = malloc(sizeof(KStr));
+            if (!out) { fputs("out of memory\n", stderr); exit(1); }
+            *out = *h;
+            v.payload = k_ptr(out);
+        }
+    }
     k_carry_stage(v);
 }
 
@@ -1816,36 +1832,6 @@ KValue k_b_str_builder(KValue sv) {
     return v;
 }
 
-/* The same seed, with its header malloc'd so a rewind cannot reach it. Used
-   where the value enters a cycle whose carry hands it on by identity: an arena
-   header would be reclaimed under the accumulator between iterations. Everywhere
-   else the header is an arena bump, which is what most seeds want and what
-   `basket` pays 2.9% of its instructions for when it is not. */
-KValue k_b_str_builder_kept(KValue sv) {
-    if (!k_not_failure(sv)) return sv;
-    if (sv.tag != K_STR) k_die("a string builder starts from a string");
-    KStr* src = k_as_str(sv);
-    long long cap = (long long)src->len * 2 + 32;
-    char* base = malloc((size_t)(K_STR_HEAD + cap + 1));
-    if (!base) { fputs("out of memory\n", stderr); exit(1); }
-    char* room = base + K_STR_HEAD;
-    if (__builtin_expect(k_stats_on > 0, 0)) {
-        k_stat_allocs++;
-        k_stat_alloc_bytes += cap + 1;
-        k_stat_bytes_malloc++;
-        k_stat_sh_str += (long long)sizeof(KStr);
-    }
-    memcpy(room, src->data, (size_t)src->len);
-    room[src->len] = 0;
-    KStr* out = malloc(sizeof(KStr));
-    if (!out) { fputs("out of memory\n", stderr); exit(1); }
-    out->len = src->len;
-    out->data = room;
-    out->cap = (int)cap;
-    k_str_count(out) = k_str_chars(src);
-    KValue v; v.tag = K_STR; v.payload = k_ptr(out);
-    return v;
-}
 
 /* Joining into a builder. This only ever writes into the header it was given
    and never makes a new one, because the shelf carries that header across a

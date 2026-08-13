@@ -256,7 +256,6 @@ declare void @k_beat_iter()
 declare void @k_carry_reset()
 declare void @k_carry_stage(%KValue)
 declare void @k_carry_stage_kept(%KValue)
-declare %KValue @k_b_str_builder_kept(%KValue)
 declare %KValue @k_carry_take(i64)
 declare void @k_beat_iter_carry()
 declare %KValue @k_beat_pop(%KValue)
@@ -950,14 +949,7 @@ impl<'a> Backend<'a> {
         let e = match entering {
             true => {
                 let t = f.tmp();
-                // Only a seed entering a cycle whose carry keeps it needs a
-                // header the rewind cannot reach; everywhere else the arena
-                // one is cheaper and does.
-                let seed = match self.beat.ids.contains_key(&(callee.to_string(), arity)) {
-                    true => "k_b_str_builder_kept",
-                    false => "k_b_str_builder",
-                };
-                f.line(&format!("{t} = call %KValue @{seed}(%KValue {e})"));
+                f.line(&format!("{t} = call %KValue @k_b_str_builder(%KValue {e})"));
                 f.record(&t, f.set_of(e));
                 seeded = t;
                 seeded.as_str()

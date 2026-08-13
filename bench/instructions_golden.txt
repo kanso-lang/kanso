@@ -42,20 +42,7 @@
 # rewritten panels of a book chapter to 88 GB. The 752,908,406 figure above is
 # withdrawn with it rather than disproven: nothing re-measured it against the
 # shape that matters.
-# 2026-08-13: jsonbench +5, oneshot +10 — noise. encodebench 9,229,327,520 to
-# 9,229,331,934. basket 56,597,311 to 58,253,675, a rise of 1,656,364 and 2.9%,
-# and that one is a cost to state plainly. A kept carry slot costs a call at the
-# staging site and two branches per slot per iteration in k_beat_iter_carry, and
-# basket carries often. What it buys there is small — allocs 28,192 to 28,184,
-# bytes_malloc 16 to 10 — so on this benchmark alone the trade is a poor one.
-#
-# It is taken because welfare is the objective and welfare holds: the shape this
-# was written for goes from 82 allocations to 3, which is the difference between
-# an accumulator that copies itself round a cycle and one that does not. The
-# terms are diagnostics and this term got worse. If the weights say that is the
-# wrong call, the argument is about the weights and this change is what it
-# settles.
-jsonbench 3080294566
-encodebench 9229331934
-oneshot 63188864
-basket 58253675
+jsonbench 3080294561
+encodebench 9229327520
+oneshot 63188854
+basket 56597311

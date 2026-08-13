@@ -3305,6 +3305,18 @@ follows: allocs 28,192 to 28,184, alloc_bytes 4,890,672 to 4,882,522, bytes_mall
 16 to 10. Welfare holds at 66.75 — this vein reads instructions, and the
 allocations it removes were not the ones it weighs.
 
+Where the durable header comes from went four ways before one of them was free.
+Mallocing it at every seed buys the whole win and costs basket 2.9% of its
+instructions, and welfare refused that. Choosing the seed by whether the callee
+is a beat loop, or by whether the position is one it carries, puts basket's
+evacuation copies back — 0 to 8,012 — because the seed and the staging are
+different call sites and a predicate at one can disagree with the other. What
+works is to stop predicating at the seed at all: every seed stays an arena bump,
+and `k_carry_stage_kept` moves the header off the arena when `k_survives` says
+the rewind would reach it. The staging site is the only place that knows which
+header is carried by identity, and it is the place that already knows it. At most
+once per builder, because a promoted header survives the mark from then on.
+
 The first cut of that carried ANY string with room by identity, written straight
 into `k_deep_copy`, and kq caught what this repo's corpus did not:
 `unicode_identity` came back as 267 NUL bytes, the right length of freed storage.
