@@ -3224,3 +3224,47 @@ in 18.7 MB.
 
 The corrected gate stales both shapes in ch04 and asserts both come back. It
 turns red on #204, so it lands with the fix rather than before it.
+
+## 2026-08-12 — the builder guard is withdrawn: spare capacity is not sole ownership
+
+#860 added one line to `k_b_str_builder`:
+
+    if (src->cap > src->len) return sv;
+
+with the reasoning that a group whose parameter is flagged has every caller
+handing the accumulator over uniquely, so a header arriving with room to write
+is ours. The second half does not follow from the first. Spare capacity is a
+property of how a string was allocated, not of who holds it. `text/join`
+over-allocates, so its result arrives with room while the parts it was built
+from are still live, and a builder that trusts the header writes into a buffer
+somebody else is holding.
+
+What that costs, measured on ch04 of the book with two panels staled and
+`book_panels --write` run over a copy:
+
+    guard in    SIGKILL, 83,283,951,616 bytes resident
+    guard out   2 panels rewritten, 265,682,944 bytes, chapter byte-identical
+
+Bisected to it by ablation, one substitution at a time, each against the same
+fixture: keeping the old body for an output panel is fine; splicing the recorded
+body in unrendered is fine; `render_output` with the escaping removed is fine;
+the `tagged` true-arm replaced by `escaped line` is fine, while the same
+substitution in `pointed` or `carets` still runs away. Inside that arm, `rest =
+parts[1]!` is fine and `rest = text/join parts ":"` is not. A join, feeding a
+builder, through a header the join did not own.
+
+So #860 fixed a real cost and bought it with an unsound test. The cost is real:
+40 mallocs for 40 appends through one intermediate function against one without
+the hop, and the mem golden goes back to pinning 40. What a builder needs before
+claiming a header is a uniqueness it can prove. That is a piece of work, not a
+comparison of two integers, and it is task #203's to do.
+
+Three things this corrects in the #860 record. The claim that the guard took
+`book_panels --write` from killed to finished is backwards — it is what killed
+it. The 45x instruction figure in `bench/text_golden.txt` was measured on a
+shape nothing re-tested here, and is withdrawn with the guard rather than
+disproven. And the 580 GB runaway that started all of this is still unexplained:
+it predates the guard, and nothing measured since reproduces it.
+
+The corrected write-path gate goes red with the guard and green without it,
+which is the first time anything in CI has had an opinion about this code.
