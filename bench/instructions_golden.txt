@@ -35,7 +35,14 @@
 # re-seeding a header with room to spare. That guard takes an accumulator handed
 # through one intermediate function from 752,908,406 instructions to 16,519,843
 # at eight thousand appends. Five here.
+#
+# 2026-08-12 (later still): basket 56,597,316 back to 56,597,311, the same five.
+# The guard is withdrawn — spare capacity is not sole ownership, and a builder
+# that trusts it writes into a buffer somebody else holds, which took two
+# rewritten panels of a book chapter to 88 GB. The 752,908,406 figure above is
+# withdrawn with it rather than disproven: nothing re-measured it against the
+# shape that matters.
 jsonbench 3080294561
 encodebench 9229327520
 oneshot 63188854
-basket 56597316
+basket 56597311
