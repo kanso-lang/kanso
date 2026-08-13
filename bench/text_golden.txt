@@ -33,7 +33,13 @@
 # handed through one intermediate function from 752,908,406 instructions to
 # 16,519,843 at eight thousand appends, and takes book_panels --write from
 # killed to finished. Thirty-two bytes.
+#
+# 2026-08-12 (later still): basket 92,354 back to 92,322, the same 32 bytes.
+# The guard is withdrawn — spare capacity is not sole ownership, and the write
+# path it was said to rescue is the one it broke, to 88 GB and a SIGKILL. The
+# claim above about book_panels --write is wrong in both directions and the
+# instruction figure was never re-measured against the shape that matters.
 jsonbench text=83714
 encodebench text=101778
 oneshot text=100962
-basket text=92354
+basket text=92322

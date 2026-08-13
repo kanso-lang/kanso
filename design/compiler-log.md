@@ -3161,3 +3161,110 @@ sample and its prose, the two playground examples, the design doc's own surface
 section, and the compile-cost sample — whose visits fell 26 to 24, two fewer
 expression visits because the block no longer has a result to type. Every other
 counter is unmoved and welfare holds at 66.75.
+
+## 2026-08-12 — the write path gate reached the wrong branch, and there is still a runaway
+
+The gate #862 added watches `book_panels --write` on a copy of the book. It stales
+ch03 and deletes a recorded output. Neither reaches the code it was written for.
+
+A missing `.out` takes `no_recorded`'s first arm, which leaves the panel alone —
+the reading being that a chapter may quote something the book does not own. The
+comparison that escapes a recorded body into html only runs when the `.out` is
+present and disagrees with the chapter. And ch03 carries no output panel at all:
+every one of its panel titles is a bare `.kso` name, so the output shape has
+nothing to match there. The gate exercised one path, the source panel, and its
+comment claimed the other.
+
+Staling both shapes in ch04, which carries both, ends in SIGKILL at 83 GB
+resident. On current main, with #860's guard in place. Isolated:
+
+    one source panel                     1 rewritten,    249 MB
+    one output panel                     1 rewritten,    248 MB
+    two source panels                    2 rewritten,    249 MB
+    one output in ch04 + one in ch03     2 rewritten,    248 MB
+    two output panels, one chapter       SIGKILL,   88,200,871,936 bytes
+    source + output, same sample         SIGKILL,   83,283,951,616 bytes
+
+Two rewrites in one chapter, at least one of them an output panel. Two in
+different chapters are fine, which puts it in the per-chapter accumulator rather
+than anything a chapter does on its way in. It is not a quadratic: the smallest
+case so far is a chapter of 3,896 bytes reaching 52.8 GB, and the same two panels
+inside a twelve-panel chapter finish in 246 MB. What separates them is what
+follows the second rewrite, not how much precedes it.
+
+This is almost certainly the original 580 GB runaway, which means #860 fixed a
+contributor and not the cause. Recorded as task #204.
+
+Three claims from that investigation are corrected here.
+
+The escaping is not where the bug bites. With the #860 guard removed, the same
+write path peaks at 16 to 19 MB over the staled book, over a chapter truncated
+mid-panel, and over recorded bodies grown to 10, 20, 43 and 82 KB — the escaping
+reads its subject from a file, where cap equals len and the guard has nothing to
+answer. What #860 fixes is an accumulator handed through an intermediate
+function, which is the shape its mem golden already pins.
+
+That guard is a constant factor on the allocation counters, not an order of
+growth. Both sides are quadratic in `alloc_bytes` for a hop-carried accumulator,
+at a steady ratio across sizes:
+
+    n=200    4,229,649 fixed    6,300,049 buggy      809 / 1,409 mallocs
+    n=800   58,435,913 fixed   91,197,513 buggy    3,209 / 5,609 mallocs
+    n=3200 898,049,513 fixed 1,420,775,913 buggy  12,809 / 22,409 mallocs
+
+The 45x figure in `bench/text_golden.txt` is an instruction count, and these are
+allocation counters; `alloc_bytes` reserves where instructions copy, so the two
+do not contradict. Nothing here re-measures instructions, and that claim stands
+as it was recorded.
+
+And the reading that a truncated chapter reproduced the runaway was wrong. It
+came from a run that printed nothing, which was taken for a kill. Rebuilt from
+the same 7,717-byte prefix against a compiler with the bug restored, it finishes
+in 18.7 MB.
+
+The corrected gate stales both shapes in ch04 and asserts both come back. It
+turns red on #204, so it lands with the fix rather than before it.
+
+## 2026-08-12 — the builder guard is withdrawn: spare capacity is not sole ownership
+
+#860 added one line to `k_b_str_builder`:
+
+    if (src->cap > src->len) return sv;
+
+with the reasoning that a group whose parameter is flagged has every caller
+handing the accumulator over uniquely, so a header arriving with room to write
+is ours. The second half does not follow from the first. Spare capacity is a
+property of how a string was allocated, not of who holds it. `text/join`
+over-allocates, so its result arrives with room while the parts it was built
+from are still live, and a builder that trusts the header writes into a buffer
+somebody else is holding.
+
+What that costs, measured on ch04 of the book with two panels staled and
+`book_panels --write` run over a copy:
+
+    guard in    SIGKILL, 83,283,951,616 bytes resident
+    guard out   2 panels rewritten, 265,682,944 bytes, chapter byte-identical
+
+Bisected to it by ablation, one substitution at a time, each against the same
+fixture: keeping the old body for an output panel is fine; splicing the recorded
+body in unrendered is fine; `render_output` with the escaping removed is fine;
+the `tagged` true-arm replaced by `escaped line` is fine, while the same
+substitution in `pointed` or `carets` still runs away. Inside that arm, `rest =
+parts[1]!` is fine and `rest = text/join parts ":"` is not. A join, feeding a
+builder, through a header the join did not own.
+
+So #860 fixed a real cost and bought it with an unsound test. The cost is real:
+40 mallocs for 40 appends through one intermediate function against one without
+the hop, and the mem golden goes back to pinning 40. What a builder needs before
+claiming a header is a uniqueness it can prove. That is a piece of work, not a
+comparison of two integers, and it is task #203's to do.
+
+Three things this corrects in the #860 record. The claim that the guard took
+`book_panels --write` from killed to finished is backwards — it is what killed
+it. The 45x instruction figure in `bench/text_golden.txt` was measured on a
+shape nothing re-tested here, and is withdrawn with the guard rather than
+disproven. And the 580 GB runaway that started all of this is still unexplained:
+it predates the guard, and nothing measured since reproduces it.
+
+The corrected write-path gate goes red with the guard and green without it,
+which is the first time anything in CI has had an opinion about this code.
