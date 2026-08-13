@@ -47,13 +47,7 @@
 # most because it carries most. Nothing else moves — the allocation counters for
 # all four benchmarks are byte-identical to what they were, and the win is
 # elsewhere: an accumulator handed round a cycle goes from 82 allocations to 3.
-# 2026-08-13 (later): jsonbench 83,794 to 84,850 and oneshot 101,042 to 101,522;
-# encodebench and basket unmoved, because neither decodes. The json scanner
-# matches a keyword against the input where it sits instead of slicing a byte
-# string and comparing it to a list of codes, which is three small predicates
-# where there was one call. What it buys is on the allocation vein: decode allocs
-# 6,272,114 to 5,334,614, sh_bytes 50.4M to 28.0M, arena peak a third lower.
-jsonbench text=84850
+jsonbench text=83794
 encodebench text=101874
-oneshot text=101522
+oneshot text=101042
 basket text=92690

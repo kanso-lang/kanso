@@ -35,13 +35,7 @@
 # A library keeps everything, because its callers are outside the module.
 # The binary does not change — -flto already internalised and stripped these,
 # __TEXT is 114,688 either way. What is saved is writing them and reading them.
-# 2026-08-13: defines 154 -> 159, calls 1659 -> 1704, branches 1018 -> 1047,
-# lines 10529 -> 10807. A rise, and a deliberate one: the json scanner matches a
-# keyword against the input where it sits instead of slicing a byte string out
-# and comparing that to a list of codes. Three small predicates where there was
-# one call, and the decode stops walking four elements with a tag check on each
-# — allocs 6,272,114 to 5,334,614 and the arena peak a third lower.
-defines=159
-calls=1704
-branches=1047
-lines=10807
+defines=154
+calls=1659
+branches=1018
+lines=10529
