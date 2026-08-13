@@ -83,5 +83,50 @@ for out in docs/book/samples/*/*.out; do
     fail=1
   fi
 done
+# The write path, on a copy. Everything above runs book_panels read-only, and
+# the read path never forces the chapter text it built — `keeping` short-
+# circuits on `not write` — so until now nothing exercised the one command that
+# edits the shipped book, and a runaway lived there long enough to reach 580 GB
+# before anybody ran it by hand.
+#
+# The assertion is the right one: that runaway ended in a SIGKILL, which is a
+# non-zero exit, which is what the first branch below catches. What is missing
+# is a fixture that provokes it. This one was measured against a compiler with
+# the bug restored and finished in 18 MB, because the escaping the runaway
+# lived in is quadratic in the body it escapes and no recorded output in the
+# book is larger than 598 bytes. The reduced chapter from that investigation
+# belongs in the corpus, and until it is there this watches that the write path
+# runs and puts a drifted panel back, which is more than nothing watched it
+# before.
+#
+# A recorded output is removed as well as a body staled, because `no_recorded`
+# is the branch that reaches the escaping, and staling a body alone leaves it
+# untaken.
+#
+# Native, deliberately: the oracle never had the runaway, so asking it would
+# watch the one engine that was fine.
+here=$(pwd)
+scratch=$(mktemp -d)
+mkdir -p "$scratch/docs/book"
+(cd docs/book && tar cf - .) | (cd "$scratch/docs/book" && tar xf -)
+python3 scripts/stale_a_panel.py "$scratch/docs/book/ch03.html" \
+  "$scratch/docs/book/samples/ch03"
+if ! (cd "$scratch" && "$KANSO" run "$here/scripts/book_panels" -- --write \
+      >"$scratch/log" 2>&1); then
+  echo "WRITE PATH: book_panels --write did not finish"
+  tail -5 "$scratch/log"
+  fail=1
+elif ! grep -q 'panel(s) rewritten' "$scratch/log"; then
+  echo "WRITE PATH: nothing was rewritten, so the fixture proved nothing"
+  tail -3 "$scratch/log"
+  fail=1
+elif grep -q STALE "$scratch/docs/book/ch03.html"; then
+  echo "WRITE PATH: the staled panel was not rewritten"
+  fail=1
+else
+  echo "book panels: the write path rewrites a staled panel back"
+fi
+rm -rf "$scratch"
+
 [ "$fail" = 0 ] && echo "book samples: all outputs verified"
 exit $fail
