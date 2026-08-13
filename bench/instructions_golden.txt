@@ -54,7 +54,7 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 3067580067
+jsonbench 2900220537
 encodebench 9207299438
-oneshot 63049215
+oneshot 47548171
 basket 55817813

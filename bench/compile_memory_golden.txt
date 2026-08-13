@@ -13,5 +13,5 @@
 # CI asserts only that reality has not drifted two per cent from it. Bucketing
 # to kibibytes was tried and does not work: the two values straddle a boundary.
 front_end_rounds=31
-front_end_visits=25874
+front_end_visits=26474
 compile_peak_bytes=819217

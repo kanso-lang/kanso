@@ -33,12 +33,6 @@ fn array_step cs (parsed p v) acc
 fn bad_value_char c p
   fail p "unexpected character `{text/utf8 [c]}`"
 
-bytes_false = [102 97 108 115 101]
-
-bytes_null = [110 117 108 108]
-
-bytes_true = [116 114 117 101]
-
 fn obj_colon cs p k acc
   obj_value cs (parse_value cs p) k acc
 
@@ -109,13 +103,16 @@ fn value_for 91 cs p
   parse_array cs (p + 1)
 
 fn value_for 102 cs p
-  word cs p bytes_false false
+  matched = alse? cs p
+  word matched p 5 false
 
 fn value_for 110 cs p
-  word cs p bytes_null json_null
+  matched = ull? cs p
+  word matched p 4 json_null
 
 fn value_for 116 cs p
-  word cs p bytes_true true
+  matched = rue? cs p
+  word matched p 4 true
 
 fn value_for 123 cs p
   parse_object cs (p + 1)
@@ -127,7 +124,22 @@ fn value_for c cs p
   numeric = number_start? c
   if numeric (parse_number cs p) (bad_value_char c p)
 
-fn word cs p expected v
-  n = length expected
-  seg = text/slice cs p (p + n - 1)
-  if (seg == expected) (parsed (p + n) v) (fail p "invalid literal")
+# The first byte chose the arm, so what is left is the tail of one known
+# keyword, compared where it sits. Slicing it out built a byte string to throw
+# away, and comparing that to a list of codes walked both element by element
+# with a tag check on each. Reading past the end answers none, which matches
+# nothing, so a truncated literal needs no length test of its own.
+fn alse? cs p
+  cs[p + 1] == 97 and cs[p + 2] == 108 and cs[p + 3] == 115 and cs[p + 4] == 101
+
+fn ull? cs p
+  cs[p + 1] == 117 and cs[p + 2] == 108 and cs[p + 3] == 108
+
+fn rue? cs p
+  cs[p + 1] == 114 and cs[p + 2] == 117 and cs[p + 3] == 101
+
+fn word true p n v
+  parsed (p + n) v
+
+fn word false p _ _
+  fail p "invalid literal"

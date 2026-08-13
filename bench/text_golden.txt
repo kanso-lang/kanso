@@ -49,7 +49,7 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=81458
+jsonbench text=82018
 encodebench text=99474
-oneshot text=98626
+oneshot text=99186
 basket text=90578
