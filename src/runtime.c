@@ -662,7 +662,16 @@ typedef struct { KPtrSlot* slots; size_t cap; unsigned long long gen; } KPtrMap;
    because stack slots are reused and a rewound arena returns to the position
    it started from. Lists only — in-place list growth demands
    k_born_this_beat, which puts the list above the mark where the scan never
-   runs, while k_b_put_mut grows a map in place with no such guard. */
+   runs, while k_b_put_mut grows a map in place with no such guard.
+
+   A short list is not worth a hash probe. The memo earns its keep by turning
+   many scans of one list into one, so the shorter the list the less there is
+   to save and the closer the probe comes to costing more than the scan it
+   replaces. Sixteen: below it the four benchmarks run the instruction counts
+   they ran without the memo at all, and above it lies every list this was
+   written for. */
+#define K_ISV_MEMO_MIN 16
+
 static KPtrMap k_isv_list;
 static size_t k_isv_live;
 static const char* k_isv_base;
@@ -772,7 +781,7 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
         case K_LIST: {
             KList* l = (KList*)p;
             if (!k_survives(l->items, m)) return 0;
-            if (k_beat_depth > 0) {
+            if (l->len >= K_ISV_MEMO_MIN && k_beat_depth > 0) {
                 KMark* outer = &k_beat_stack[0];
                 if (k_isv_base != outer->ptr) {
                     k_ptrmap_begin(&k_isv_list);
