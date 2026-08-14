@@ -5288,6 +5288,10 @@ KValue k_b_chars(KValue sv) {
 KValue k_b_split(KValue sv, KValue sepv) {
     if (!k_not_failure(sv)) return sv;
     if (!k_not_failure(sepv)) return sepv;
+    /* Both are demanded — the subject to walk and the separator to compare
+       against — so both are forced. */
+    sv = k_force(sv);
+    sepv = k_force(sepv);
     if (sv.tag != K_STR || sepv.tag != K_STR) k_die("split takes two strings");
     KStr* s = k_as_str(sv);
     KStr* sep = k_as_str(sepv);
@@ -6000,6 +6004,10 @@ KValue k_b_from_code(KValue nv, const char* origin) {
    allocate per number. */
 KValue k_b_to_int(KValue sv, const char* origin) {
     if (!k_not_failure(sv)) return sv;
+    /* Reading a number out of it demands the string, so a cell is forced
+       rather than refused. Native defers where the oracle does not, and an
+       element taken out of a list arrives unforced. */
+    sv = k_force(sv);
     if (sv.tag == K_INT) return sv;
     if (sv.tag != K_STR && sv.tag != K_BYTES) k_die("to_int takes a string");
     const char* data;
