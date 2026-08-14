@@ -3569,3 +3569,58 @@ does not perturb the pinned instruction counts, so emitting debug info later is
 safe from the goldens' side.
 
 What worked was the cheapest thing available, asked last.
+
+## 2026-08-13 — value_for is not overhead, and the decode campaign closes
+
+The 22% attributed to `value_for` is parsing, inlined. Two facts settle it,
+and both were a shell command away the whole time.
+
+`nm` finds exactly ONE `value_for` symbol in the binary. So the profile's
+`value_for_3'2` is callgrind's recursion-depth notation, not an LLVM clone,
+and the 642M is genuinely that function's own instructions.
+
+That symbol spans **3,076 bytes of machine code**, for a kanso function that
+is a switch and eight arms. LLVM has folded the parse routines into it. So
+"value_for is 22% of the decoder" reads "parsing a value is 22%", which is
+unremarkable for a json decoder, and there is nothing there to remove.
+
+Everything structural around it was already optimal, read off the emitted IR:
+
+    define tailcc %parsed @"d_jsonbench/value_for_3"(i64 %x0r, %KValue %x1, i64 %x2r)
+    entry:
+      %t1 = icmp eq i64 %x0r, 256
+      ...
+    L2:
+      switch i64 %t4, label %arm7 [ i64 34 ... i64 123 ]
+
+The dispatch byte and the position both cross as raw `i64`; only `cs` is a
+tagged pair, and it cannot be otherwise. The `none` case rides as sentinel 256
+in that raw i64 — which is the "widen unboxing with a sentinel" idea written up
+here as future work, already built. The entry rebox is the documented one SROA
+folds against the switch.
+
+Target 4 asked where ~90M of instructions in emitted user code go. The answer
+is that they are not overhead, so the campaign that opened with an 8.5%
+regression closes here:
+
+    decode instructions   3,080,294,566 -> 2,900,219,722   (-5.8%)
+    decode allocations        6,272,114 ->     5,334,608   (-15%)
+    arena blocks                      3 ->             2
+    welfare                       66.75 ->         67.37
+
+If decode is attacked again, the honest starting points from the same profile
+are the runtime kernels, which are inlined into nothing and are plainly
+themselves: `k_b_append_mut` 6.96%, `k_b_put_mut` 4.61%, `k_b_push_mut` 3.52%,
+`memcpy` 3.52%, `k_b_find2` 3.09%. About 21% together.
+
+### Seven wrong predictions, and what they have in common
+
+The keyword rewrite, the dispatch lowering, `k_utf8_bad` as an error path,
+which file holds the emitter, opcode counts as machine cost, INT|NONE forcing a
+box, and an LLVM clone. Every one died to reading or measuring rather than to
+argument.
+
+Two lessons that generalise past this decoder. The obvious optimisation is
+usually already implemented here — the sentinel was in the code before it was
+in the plan. And the profile rarely points where the code shape suggests, which
+is the entire reason `bench/instructions_golden.txt` exists.
