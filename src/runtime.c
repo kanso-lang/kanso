@@ -655,6 +655,18 @@ static int k_survives(const void* p, KMark* m) {
 typedef struct { const void* key; void* val; unsigned long long gen; } KPtrSlot;
 typedef struct { KPtrSlot* slots; size_t cap; unsigned long long gen; } KPtrMap;
 
+/* A rewind frees only above its mark, so a list whose slots all lie below the
+   OUTERMOST mark outlives every rewind and its verdict never changes. That is
+   the only verdict worth keeping: keying a cache by a mark's address or by its
+   arena position both hand back an answer computed for a different boundary,
+   because stack slots are reused and a rewound arena returns to the position
+   it started from. Lists only — in-place list growth demands
+   k_born_this_beat, which puts the list above the mark where the scan never
+   runs, while k_b_put_mut grows a map in place with no such guard. */
+static KPtrMap k_isv_list;
+static size_t k_isv_live;
+static const char* k_isv_base;
+
 static KPtrMap k_copy_seen;   /* size pass: key visited, val unused */
 static KPtrMap k_copy_map;    /* copy pass: old node -> its one copy */
 
@@ -759,7 +771,26 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
         }
         case K_LIST: {
             KList* l = (KList*)p;
-            return k_survives(l->items, m) && k_slots_survive(l->items, l->len, m);
+            if (!k_survives(l->items, m)) return 0;
+            if (k_beat_depth > 0) {
+                KMark* outer = &k_beat_stack[0];
+                if (k_isv_base != outer->ptr) {
+                    k_ptrmap_begin(&k_isv_list);
+                    k_isv_live = 0;
+                    k_isv_base = outer->ptr;
+                }
+                KPtrSlot* memo = k_ptrmap_at(&k_isv_list, p, &k_isv_live);
+                if (memo->gen == k_isv_list.gen && memo->key == p)
+                    return memo->val != NULL ? 1 : k_slots_survive(l->items, l->len, m);
+                int deep = k_survives(l->items, outer)
+                        && k_slots_survive(l->items, l->len, outer);
+                k_isv_live++;
+                memo->gen = k_isv_list.gen;
+                memo->key = p;
+                memo->val = deep ? (void*)1 : NULL;
+                if (deep) return 1;
+            }
+            return k_slots_survive(l->items, l->len, m);
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
