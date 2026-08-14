@@ -15,13 +15,14 @@
 //! else is running on the machine."
 
 use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpStream;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const SERVER_AND_CLIENT: &str = r#"import "std/io"
 import "std/net"
+import "std/time"
 
 fn answered l c
   net/read c
@@ -35,12 +36,17 @@ fn page body
 fn said r
   print "the page says: {r.stdout}"
 
-url = "http://127.0.0.1:PORT/"
+fn serving_at l p
+  io/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
 
-flags = ["-s" "--retry" "5" "--retry-connrefused" url]
+asked = time/sleep 400 . (_ -> io/read_file "port.txt") . fetched
 
-net/listen PORT . (l -> net/accept l . (c -> answered l c))
-io/run "curl" flags . said
+fn fetched p
+  url = "http://127.0.0.1:{p}/"
+  io/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . said
+
+net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+asked
 "#;
 
 /// The shape every browser harness needs, and the one thing the socket test
@@ -49,7 +55,9 @@ io/run "curl" flags . said
 /// what the page posts back, so a server that answers `none` when it stops
 /// leaves the harness with nothing to assert on.
 const SERVE_UNTIL_A_REPORT: &str = r#"import "std/io"
+import "std/net"
 import "std/net/http"
+import "std/time"
 
 fn handled req carried
   answered req.path req carried
@@ -60,14 +68,21 @@ fn answered "/report" req _
 fn answered _ _ carried
   http/turn (http/ok "the page") carried
 
-url = "http://127.0.0.1:PORT"
+fn serving_at l p
+  io/write_file "port.txt" "{p}"
+    . (_ -> http/serving l handled "open")
+    . (r -> print "the report says: {r}")
 
-get = ["-s" "--retry" "5" "--retry-connrefused" "{url}/"]
+asked = time/sleep 400 . (_ -> io/read_file "port.txt") . visited
 
-post = ["-s" "-d" "green" "{url}/report"]
+fn visited p
+  url = "http://127.0.0.1:{p}"
+  get = ["-s" "--retry" "5" "--retry-connrefused" "{url}/"]
+  post = ["-s" "-d" "green" "{url}/report"]
+  io/run "curl" get . (_ -> io/run "curl" post)
 
-http/serve_until PORT handled "open" . (r -> print "the report says: {r}")
-io/run "curl" get . (_ -> io/run "curl" post)
+net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+asked
 "#;
 
 /// A browser opens speculative connections and sends nothing down them, and
@@ -76,6 +91,7 @@ io/run "curl" get . (_ -> io/run "curl" post)
 /// this one itself, and the program keeps a second statement running to give
 /// the scheduler something to do while it waits.
 const A_CONNECTION_THAT_SAYS_NOTHING: &str = r#"import "std/io"
+import "std/net"
 import "std/net/http"
 
 fn handled req carried
@@ -87,31 +103,14 @@ fn answered "/report" req _
 fn answered _ _ carried
   http/turn (http/ok "the page") carried
 
-http/serve_until PORT handled "open" . (r -> print "the report says: {r}")
+fn serving_at l p
+  io/write_file "port.txt" "{p}"
+    . (_ -> http/serving l handled "open")
+    . (r -> print "the report says: {r}")
+
+net/listen 0 . (l -> net/port l . (p -> serving_at l p))
 io/run "sleep" ["3"] . (_ -> print "waited")
 "#;
-
-/// A port nothing else on the machine is using. The os chooses it, and this
-/// only declines to hand the same one out twice, because two halves of one run
-/// that land on one port wedge each other.
-///
-/// Offsetting a free port was the old way of keeping them apart, and it lands
-/// on a port nobody ever checked: "cannot listen on that port" reached CI on
-/// the macos host as soon as a third test made the collision likely.
-fn free_port() -> u16 {
-    static ISSUED: Mutex<Vec<u16>> = Mutex::new(Vec::new());
-    for _ in 0..100 {
-        let taken = TcpListener::bind(("127.0.0.1", 0)).expect("the os hands out a port");
-        let port = taken.local_addr().expect("a bound listener has an address").port();
-        drop(taken);
-        let mut issued = ISSUED.lock().expect("the ports handed out so far");
-        if !issued.contains(&port) {
-            issued.push(port);
-            return port;
-        }
-    }
-    panic!("the os kept offering ports this run had already used");
-}
 
 /// Runs one program on one engine and answers what it printed. `drive` runs
 /// against the port once the program is up, for the tests whose client is this
@@ -136,8 +135,6 @@ fn printed(
     let dir = std::env::temp_dir().join(format!("kanso-{name}-{slot}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("a directory to run in");
-    let port = free_port();
-    let source = source.replace("PORT", &port.to_string());
     std::fs::write(dir.join("serve.kso"), source).expect("the program writes");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_kanso"))
@@ -150,6 +147,26 @@ fn printed(
         .spawn()
         .expect("kanso binary runs");
 
+    // The program binds 0 and writes back what it was given, so nothing is
+    // bound, read and dropped — there is no gap for anything else to take.
+    // It must arrive by file: a piped stdout is block-buffered, so a port
+    // announced there does not appear until the program exits, and the program
+    // will not exit until this drive has run. That circular wait is the
+    // ten-minute hang this file used to carry a note about.
+    let announced = dir.join("port.txt");
+    let by = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let port = loop {
+        if let Ok(text) = std::fs::read_to_string(&announced) {
+            if let Ok(n) = text.trim().parse::<u16>() {
+                break n;
+            }
+        }
+        if std::time::Instant::now() > by {
+            let _ = child.kill();
+            panic!("engine {engine:?}: the program never announced its port");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
     drive(port);
 
     // A wedged run must fail rather than hang: this test hung the whole suite
