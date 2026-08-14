@@ -682,6 +682,7 @@ fn release_clang(stem: &str, ll_path: &str) -> std::io::Result<std::process::Exi
     std::process::Command::new("clang")
         .arg("-O3")
         .arg("-flto")
+        .arg("-g")
         .args(if cfg!(target_arch = "x86_64") { &["-mssse3"][..] } else { &[][..] })
         .arg("-Wno-override-module")
         .arg("-o")
