@@ -2056,3 +2056,60 @@ capacity doubles and the survivor-ratio guard begins refusing the evacuation
 and keeping the region, so a fixture on that side of the line exercises none of
 this — the benchmark could not fail without the fix. On the new fixture the
 unfixed compiler runs 11,627,314,301 instructions against 130,337,917.
+
+## 2026-08-14 — kq's headline row re-sat, and the gate that could not see it
+
+kq's pin was fourteen commits behind, and the commits it was missing were the
+two written because of kq. Bumping it (kq#66) and re-racing against jq 1.7.1 on
+an M4 Max:
+
+| workload | kq | jq | | work |
+|---|---:|---:|---|---|
+| path query, 188 KB | 2.6 ms | 4.5 ms | kq 1.7x | 1.98x less |
+| path query, 1.9 MB | 11.6 ms | 24.4 ms | kq 2.1x | 1.92x less |
+| full print, 188 KB | 5.0 ms | 12.2 ms | kq 2.4x | 2.94x less |
+| full print, 1.9 MB | 39.8 ms | 103.4 ms | kq 2.6x | 3.07x less |
+
+The last row read 147 ms on 2026-08-09 and was the one workload jq won. It is
+now the widest of the four. Two sittings an hour apart agreed on every wall
+figure to within 1.3% and on every instruction ratio exactly, which is why the
+instruction column is now published: load average was 2.35 and the wall clock
+alone would not have been worth much. Peak footprint 28.0 MB against 30.7.
+
+### Every gate kq owns stayed green
+
+Both cost goldens, the scale gate and the published-numbers stamp passed
+without regeneration, across a 3.7x move in the number the README publishes.
+
+That is correct and it is a hole. `bench/numbers_gate` exists to notice that
+the compiler the numbers were measured against has left the tree — it was
+written after #639 let kq claim a three-times-faster row that had become ten
+times slower — and it fingerprints `bench/cost_golden.txt`. Neither quadratic
+touches an allocator counter: one is a survival check that allocates nothing,
+the other a copy into a buffer that already exists. So the gate answers whether
+the allocations are the same and is read as whether the published numbers still
+hold. Here those came apart in the favourable direction. Task #216 is the vein
+that would have caught it, following `bench/instructions_golden.txt` rather
+than inventing a second harness.
+
+### #210 closed, and one thing in it is a decision
+
+The laziness divergence is gone: #892 taught the strict index to force what it
+hands back, and the program recorded in the task now answers identically on
+both engines. Four shapes checked before calling it closed rather than moved.
+The task's title was wrong about why the render-forces fix was declined — a
+golden killed it, not a measurement, which matters because a cost-based decline
+is what Clay's correctness ruling of 2026-08-12 voids.
+
+PR #900 adds the golden #892 shipped without, watched red by putting
+`return found;` back at runtime.c:5581.
+
+What is left is that all three engines print `[<thunk>]` for a list whose
+element was never demanded. The law is satisfied and the author still sees a
+word about the implementation where they computed a string. Forcing inside
+render terminates if the cycle guard's path is extended from records to thunk
+cells — `runtime.c:3363` claims every cycle passes through a record, and a
+self-naming constant is the counterexample — at the cost of
+`a_constant_that_holds_itself` recording `[<cycle>]`. That is a display
+decision about self-naming constants, so it is gavel 20b rather than a runtime
+PR.
