@@ -747,9 +747,11 @@ static long long k_carry_n = 0;
    be copied, and the test is skipped. */
 static int k_ten_any = 0;
 static int k_ten_holds(const void* p);
+static int k_perm_holds(const void* p);
 
 static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
+    if (k_perm_holds(p)) return 1;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
     for (; b; b = b->next) {
@@ -1732,11 +1734,53 @@ void k_beat_iter_carry(void) {
    bump pointer, so caching arena storage and reusing it after a pop hands
    back reclaimed, since-reused memory. Permanent storage is the only cache
    that is sound across beats. */
+/* Permanent storage lives in its own bump region so a pointer into it can be
+   recognised. It used to be bare malloc, which made it invisible: k_survives
+   walks arena blocks and answers 0 for anything outside them, so a string
+   literal read every iteration was deep-copied at every beat boundary it
+   crossed — the same pointer, 384,000 times, measured. A rewind cannot free
+   any of this, so the honest answer is that it always survives, and the range
+   test is what lets k_survives say so.
+
+   Everything reachable from a permanent object must itself be permanent, or
+   the copy walk finds a surviving node with a non-surviving interior and
+   repairs it in place — writing through a pointer into a shared immortal
+   cache. That is why the character data below is allocated here too. */
+typedef struct KPermBlock { struct KPermBlock* next; char* data; size_t cap, used; } KPermBlock;
+#define K_PERM_BLOCK (64u << 10)
+static KPermBlock* k_perm_blocks = NULL;
+static const char* k_perm_lo = NULL;
+static const char* k_perm_hi = NULL;
+
 static void* k_alloc_perm(size_t n) {
     k_stat_perm_allocs++;
-    void* p = malloc(n);
-    if (!p) { fputs("out of memory\n", stderr); exit(1); }
+    n = (n + 15) & ~(size_t)15;
+    KPermBlock* b = k_perm_blocks;
+    if (!b || b->cap - b->used < n) {
+        size_t cap = n > K_PERM_BLOCK ? n : K_PERM_BLOCK;
+        KPermBlock* nb = (KPermBlock*)malloc(sizeof(KPermBlock));
+        if (!nb) { fputs("out of memory\n", stderr); exit(1); }
+        nb->data = (char*)malloc(cap);
+        if (!nb->data) { fputs("out of memory\n", stderr); exit(1); }
+        nb->cap = cap;
+        nb->used = 0;
+        nb->next = k_perm_blocks;
+        k_perm_blocks = nb;
+        if (!k_perm_lo || nb->data < k_perm_lo) k_perm_lo = nb->data;
+        if (!k_perm_hi || nb->data + cap > k_perm_hi) k_perm_hi = nb->data + cap;
+        b = nb;
+    }
+    void* p = b->data + b->used;
+    b->used += n;
     return p;
+}
+
+static int k_perm_holds(const void* p) {
+    const char* q = (const char*)p;
+    if (q < k_perm_lo || q >= k_perm_hi) return 0;
+    for (KPermBlock* b = k_perm_blocks; b; b = b->next)
+        if (q >= b->data && q < b->data + b->cap) return 1;
+    return 0;
 }
 /* Freeze a constant so it is built once instead of per call. A zero mark
    makes k_survives answer no for everything, which is what forces a full
@@ -1752,8 +1796,7 @@ KValue k_caf_freeze(KValue v) {
     k_copy_seen_live = 0;
     size_t need = k_copy_size(v, &none);
     KCarryBuf* buf = k_alloc_perm(sizeof(KCarryBuf));
-    buf->data = malloc(need ? need : 16);
-    if (!buf->data) { fputs("out of memory\n", stderr); exit(1); }
+    buf->data = k_alloc_perm(need ? need : 16);
     buf->cap = need ? need : 16;
     buf->used = 0;
     KCopy cp = { buf, &none, 0, 0 };
@@ -1915,7 +1958,7 @@ KValue k_str_n(const char* data, long long len) {
                 KStr* s = k_alloc_perm(sizeof(KStr));
                 s->len = 1;
                 s->cap = 0;
-                s->data = malloc(2);
+                s->data = k_alloc_perm(2);
                 s->data[0] = (char)b;
                 s->data[1] = 0;
                 KValue v; v.tag = K_STR; v.payload = k_ptr(s);
