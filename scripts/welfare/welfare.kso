@@ -34,6 +34,19 @@ import "std/text"
 # change is worse by the weights as written — the argument to have is whether
 # the weights are right, not whether this term deserves a pass.
 #
+# WITH ONE EXCEPTION, AND IT IS NOT A TERM. A change that makes the engines
+# agree is not weighed here at all. Correctness comes first and this number
+# comes second: an incorrect calculation is not worth having at any performance
+# benefit, so a fix for a differential-law violation ships and the floor moves
+# to whatever it costs. Nothing in the sum can veto it, and there is no weight
+# that would express it — a term would imply a price, and there is none.
+#
+# The gate cannot tell such a change from any other, so this is a rule for
+# whoever reads a red run, not something the script enforces. It exists because
+# the model spent a day looking like it could refuse a fix that cost the
+# decoder four hundredths of a per cent to make native and the oracle answer
+# the same thing.
+#
 # Each term carries two numbers, because weight alone cannot say what a second
 # is worth here. `weight` is how much the dimension matters at all: runtime
 # carries two thirds because that is the claim the front page makes, and
