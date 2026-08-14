@@ -1843,3 +1843,66 @@ A real fix belongs where the cell is made, not where it is shown — most likely
 by widening the strictness rule so a parameter an arm ignores is still passed
 evaluated when it is cheap and non-recursive. That decision meets the
 self-naming constant question from the other side, and that one is Clay's.
+
+## 2026-08-14 — a survival check that walks the whole document, once per element
+
+kq prints a flat JSON array quadratically. 646 KB of numbers takes 5.52 s
+against jq's 0.02, and the gap doubles every time the array does.
+
+    n        kq instructions      jq
+    10,000    14,878,229,442      73,377,031
+    20,000    12,140,556,591     121,039,691
+    40,000    48,294,076,532     213,710,753
+    80,000   192,602,610,421     402,225,238
+
+Decode is clean; it is all in the print. And every counter kq owns stays
+linear across those rows — allocations, appends, evacuated bytes, pushes,
+shares. A gate watching any of them sees nothing.
+
+### What it is
+
+`k_interior_survives` answers whether a value's interior outlives a mark, and
+for a container it answers by walking:
+
+    case K_LIST:  return k_survives(l->items, m)
+                      && k_slots_survive(l->items, l->len, m);
+
+The value it is asked about is the beat's carried slot, which is a description
+whose payload reaches the decoded document. So each check walks the whole
+array. It is called three times per element — 60,000 at n=20,000 and 120,000
+at n=40,000, exactly linear — and each call is O(n). The work per call is
+counted nowhere, which is why the counters all looked healthy.
+
+### The regime break
+
+Below about twenty thousand elements a second quadratic dominates instead: the
+accumulator is arena-allocated, the rewind evacuates it whole, and
+`k_copy_size` runs two hundred million times — 20,016 per element, against
+300,045 at twice the size. Crossing the threshold moves the buffer to malloc
+below the mark and that cost disappears, which is why n=20,000 retires fewer
+instructions than n=10,000. Two quadratics, one per regime, and the crossover
+hides both from anyone reading a single pair of sizes.
+
+### Reading the profiler
+
+The first eight readings of the sample output ranked `k_copy_size` first. That
+came from the section headed "Total number in stack (recursive counted
+multiple)", where a node's count includes its children — it ranks callers above
+the leaf they call, and summing across occurrences double-counts every path.
+The section to read is "Sort by top of stack", which names one function.
+
+Arithmetic would have caught it sooner: `k_copy_size` runs 600,045 times at
+n=40,000, which cannot fill a multi-second profile.
+
+### What did not find it
+
+Eight reductions in kanso, none reproducing. Five structural hypotheses, each
+killed by building and measuring: that the beat bracket itself was at fault,
+that the nesting of the element step mattered, that the element type mattered,
+that the container's age against the accumulator mattered, that appending and
+beating in one frame mattered. The builder analysis really does recognise only
+`"{acc}suffix"` interpolation and really does miss `text/append` — a genuine
+narrowness, and not this bug.
+
+None of the reductions carried a description that reached a large list, which
+is the one ingredient that matters.
