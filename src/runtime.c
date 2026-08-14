@@ -751,7 +751,6 @@ static int k_perm_holds(const void* p);
 
 static int k_survives(const void* p, KMark* m) {
     const char* q = (const char*)p;
-    if (k_perm_holds(p)) return 1;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
     for (; b; b = b->next) {
@@ -760,7 +759,12 @@ static int k_survives(const void* p, KMark* m) {
         if (q >= start && q < end) return 1;
         frontier = NULL;
     }
-    return 0;
+    /* Asked last. Nearly every pointer reaching here is an arena pointer that
+       answers on the walk above, and making those pay a range test first cost
+       decode 0.81%, the wide print 1.26% and one-shot 0.64% — more than the
+       copies it spared them, because they hold almost no literals across a
+       boundary. Only a pointer the arena disowns gets this far. */
+    return k_perm_holds(p);
 }
 
 /* Does this outlive the rewind, counting storage the carry tenured? Asked by
