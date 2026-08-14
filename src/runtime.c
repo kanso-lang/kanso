@@ -3457,6 +3457,16 @@ KValue k_b_listen(KValue port) {
     return k_mkdesc(20, port, k_none());
 }
 
+/* Port 0 asks the operating system for a free one, and this reads back what it
+   gave. Without it a caller binds 0, reads the port from a listener it then
+   drops, and hands the number to something that binds it again — anything that
+   binds in that gap takes it. */
+KValue k_b_net_port(KValue listener) {
+    if (!k_not_failure(listener)) return listener;
+    if (listener.tag != K_INT) k_die("port takes a listener");
+    return k_mkdesc(28, listener, k_none());
+}
+
 KValue k_b_accept(KValue listener) {
     if (!k_not_failure(listener)) return listener;
     if (listener.tag != K_INT) k_die("accept takes a listener");
@@ -3846,6 +3856,16 @@ static KValue k_exec(KDesc* d) {
             long long h = k_fork_kid(d->x, d->y);
             if (h < 0) return k_err(k_concat(k_str("cannot start "), d->x), NULL);
             return k_int(h);
+        }
+        case 28: {
+            long long h = d->x.payload;
+            int fd = k_socket_of(h);
+            if (fd < 0) return k_err(k_str("that is not an open socket"), NULL);
+            struct sockaddr_in addr;
+            socklen_t len = sizeof addr;
+            if (getsockname(fd, (struct sockaddr*)&addr, &len) < 0)
+                return k_err(k_str("cannot read the port of that socket"), NULL);
+            return k_int(ntohs(addr.sin_port));
         }
         case 27: return k_kill_kid(d->x);
         case 17: {

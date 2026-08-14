@@ -704,7 +704,8 @@ pub fn builtin_set(name: &str, args: &[Set]) -> Set {
         "round" => INT | fails,
         "read_file" | "write" | "write_err" | "write_file" | "make_dir" | "sleep" | "random"
         | "env" | "exists" | "is_dir" | "list_dir" | "now" | "run" | "start" | "kill"
-        | "listen" | "accept" | "net_read" | "net_write" | "net_close" => DESC | fails,
+        | "listen" | "net_port" | "accept" | "net_read" | "net_write"
+        | "net_close" => DESC | fails,
         _ => TOP,
     }
 }

@@ -243,6 +243,7 @@ declare %KValue @k_b_run(%KValue, %KValue)
 declare %KValue @k_b_start(%KValue, %KValue)
 declare %KValue @k_b_kill(%KValue)
 declare %KValue @k_b_listen(%KValue)
+declare %KValue @k_b_net_port(%KValue)
 declare %KValue @k_b_accept(%KValue)
 declare %KValue @k_b_net_read(%KValue)
 declare %KValue @k_b_net_write(%KValue, %KValue)
@@ -308,7 +309,8 @@ declare %KValue @k_force(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 51] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
+    ("net_port", 1),
     ("start", 2),
     ("kill", 1),
     ("at", 2),
