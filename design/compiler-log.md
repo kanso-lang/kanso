@@ -2286,3 +2286,45 @@ so the wording could drift with nothing to say so. The new text says what a
 cluster IS rather than asserting what it does, which stays accurate whether or
 not a cluster entered from inside its own tail cycle behaves differently. That
 remains unmeasured, as does `CarryBeat`, whose text contains the same phrase.
+## 2026-08-14 (last) — a fifth shelf, and the same absence twice
+
+`bench/deepbench` was built to answer the welfare question on #903: the corpus
+had no program with the shape that made a survival memo cost 39% of vse, and
+three attempts to write one moved zero instructions. The fourth works, and what
+the three missed was the io bind. vse's trials fold binds an effect per element
+and the lambda captures the structure it just built, which is what puts many
+list nodes in front of the copy walk. Binding a plain value instead compiles,
+runs, and produces `evac_allocs=0` — the effect is load-bearing rather than
+incidental. It is deterministic without an environment, which the instruction
+gate requires: `io/write ""` is a real description with nothing to write, so
+the bind stands while the values come from arithmetic.
+
+    without the guard   2,591,215,700 instructions
+    with the guard      2,553,005,144      1.50%
+
+Then its allocation profile turned out to answer a different question.
+
+    shelf        evac_allocs          allocs      evac_bytes
+    decode                11       7,577,414             464
+    encode                19               —               —
+    basket                 0               —               0
+    one-shot          63,967         128,528       ~1.99 MB
+    deepbench      3,619,987       2,840,006     155,647,536
+
+It evacuates more objects than it allocates, and copies 83.5% of every byte it
+allocates, while holding one arena block.
+
+Task #149 concluded from the first four rows that "on three of the four shelves
+the beat model is very close to optimal in what it retains, and a refcounting
+runtime would pay count traffic on 7.5M, 16.2M and 28k allocations to improve
+on almost nothing." That reading holds for those four programs and does not
+generalise. Where a program builds a structure per trial and consumes it before
+the next, evacuation is the dominant cost and the Perceus trade is open rather
+than closed.
+
+Two wrong conclusions this week rest on the same absence: the corpus could not
+see the memo regression, and it flattered the beat model against RC. One
+missing shape.
+
+The number that would settle the second one is the live-at-boundary probe run
+on this shelf, which has not been done.
