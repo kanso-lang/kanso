@@ -53,14 +53,15 @@ jsonbench text=82034
 encodebench text=99490
 oneshot text=99202
 basket text=91410
+widebench text=100722
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
-# 2026-08-14: basket rises 640 bytes and nothing else moves. A getter group
-# that matched nothing now forces the value and reads the field rather than
-# printing and exiting, so the group returns where it used to end — a call and
-# a return in place of a void call, in every getter group that can be reached
-# with a cell. basket is the only benchmark here that links one.
-# 2026-08-14: basket rises 176 bytes and nothing else moves. join forces each
-# element while it sizes the output and writes the answer back, so the copying
-# pass reads a plain string; basket is the only benchmark here that joins.
+# 2026-08-14: a fifth row. widebench decodes a flat array of twenty thousand
+# floats and streams it back through a chained io bind, which is how kq prints
+# a top-level array. No existing row moves — nothing about the other four
+# changed — so this is the corpus growing rather than the code.
+# 2026-08-14: basket rises 640 bytes for the getter group that forces before it
+# reads, and 176 more for the join that forces before it sizes. basket is the
+# only one of the original four that reaches either; widebench's row was
+# measured before both and is the runner's to confirm.
