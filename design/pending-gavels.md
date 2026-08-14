@@ -449,9 +449,80 @@ readable from the expression. Raised, not argued.
 - **Dot chains route around accessor privacy** (Demeter): a chain can
   reach a field the owning module would not expose directly. Low
   priority, and a real hole in the privacy story.
-- **A one-line function form**, `fn agreed _ _ true = ""`: sugar for
-  arms whose body is a single expression.
 
+
+
+## 25. A one-line function form, `fn foo a = print a`
+
+Clay proposed it, asked what the committee thought, and was told nothing
+for weeks. This is the deliberation that was owed.
+
+The question: may an arm whose body is a single expression be written on
+one line, `fn agreed _ _ true = ""`, as a constant already is?
+
+### The fact that decides most of it
+
+Kanso already enforces exactly this rule, for constants. Writing
+
+    pub two =
+      one + 1
+
+is refused:
+
+    error[formatting]: a single-expression constant is written inline:
+    `two = ...`
+
+So the language's existing position is that a single-expression body goes
+on the line that names it, and the multi-line spelling is not a style
+choice — it is an error. Functions are the half of that rule nobody
+wrote.
+
+That reframes the strongest objection. The worry about a second spelling
+is that kanso has no formatter by gavel, and no formatter is defensible
+only because the grammar decides every question a formatter would ask.
+A second way to write one arm reintroduces the question. But the
+constant rule shows the resolution the language already prefers: not two
+spellings, one — inline when the body is one expression, indented when
+it is more, and a diagnostic on the wrong one.
+
+### How much of the code it touches
+
+622 of the 733 arms in `lib/` have a single-expression body. Eighty-five
+per cent of the standard library is currently spending two lines on one
+idea.
+
+### The lenses
+
+- Hickey: this is not complecting — nothing is braided, one concern keeps
+  one construct. The real question is whether it adds choice without
+  meaning, and under the constant rule it does not: each arm has exactly
+  one legal spelling, decided by whether the body is one expression.
+  Simple, and the uniformity argument runs toward the change rather than
+  away from it, because today the language has one rule for constants and
+  no rule for functions.
+- Bernhardt: the arms this affects are the pure decision-making core —
+  predicates, projections, one-expression answers. Those read as a table
+  when each is a line and as a list of paragraphs when each is two. The
+  form makes the core look like what it is.
+- Beck: reveals-intent is the test, and it cuts both ways at different
+  sizes. `fn agreed _ _ true = ""` is clearer than the same thing over
+  two lines. A long single expression pushed onto one line is not, and
+  the 80-column cap the width gavel already sets is what stops that —
+  over the cap it wraps, and wrapping means the body is no longer one
+  line, which the rule already covers.
+
+### Recommendation
+
+Adopt, with the constant rule extended rather than a new rule invented:
+an arm whose body is a single expression is written inline, an arm whose
+body is more than one expression is written indented, and the diagnostic
+that already exists for constants speaks for functions too. That keeps
+exactly one spelling per arm, which is what lets kanso keep having no
+formatter.
+
+What it costs: a parser change, the diagnostic widened, and a migration
+of the 622 arms that would then be written the wrong way. The migration
+is mechanical and large, which is an argument about when, not whether.
 
 ## 24. the relaxed program file (single-file programs with declarations)
 
