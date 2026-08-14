@@ -32,6 +32,16 @@ if command -v callgrind_annotate >/dev/null; then
 else
   echo "=== no callgrind_annotate on this host, so no breakdown"
 fi
+# THROWAWAY PROBE — not for merge. --dump-instr collects per-instruction costs
+# and --auto=yes is what renders them, against objdump's disassembly, which
+# needs no source mapping (every kanso frame reads `???:`). The previous probe
+# collected without rendering and printed the flat list it already had.
+echo "=== per-instruction probe: value_for"
+env -i PATH=/usr/bin:/bin \
+  valgrind --tool=callgrind --dump-instr=yes --callgrind-out-file=/tmp/cgi.jsonbench \
+  ./jsonbench >/dev/null 2>&1
+callgrind_annotate --auto=yes --threshold=60 /tmp/cgi.jsonbench 2>&1 |
+  grep -B3 -A45 'value_for_3' | head -70
 grep -v '^#' bench/instructions_golden.txt > work_want.txt
 diff work_want.txt work.txt || {
   echo "::error::the work the benchmarks do changed. A rise is a"
