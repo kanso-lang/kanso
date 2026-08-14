@@ -304,8 +304,7 @@ fn a_listener_answers_the_port_it_was_given_on_both_engines() {
     const ENTRY: &str = "import \"announce\"\nimport \"std/net\"\n\nnet/listen 0 . (l -> net/port l . (p -> announce/announced l p))\n";
 
     for (tag, engine) in [("native", &[][..]), ("interp", &["--interp"][..])] {
-        let dir = std::env::temp_dir()
-            .join(format!("kanso-netport-{}-{tag}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("kanso-netport-{}-{tag}", std::process::id()));
         std::fs::remove_dir_all(&dir).ok();
         std::fs::create_dir_all(&dir).expect("the scratch directory is made");
         std::fs::write(dir.join("announce.kso"), ANNOUNCE).expect("the library is written");

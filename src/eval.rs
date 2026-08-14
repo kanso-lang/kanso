@@ -1989,9 +1989,7 @@ impl<'a> Interp<'a> {
                         span,
                     });
                 };
-                Ok(Value::Desc(Rc::new(Desc::SocketPort(
-                    listener.to_i64().unwrap_or(-1),
-                ))))
+                Ok(Value::Desc(Rc::new(Desc::SocketPort(listener.to_i64().unwrap_or(-1)))))
             }
             "accept" => {
                 let [listener] = arity(args, name, span)?;
