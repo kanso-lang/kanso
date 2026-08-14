@@ -1,0 +1,23 @@
+import "std/text"
+
+type want
+  why
+
+w1 = want "a parent"
+
+wants = [w1]
+
+fn noted acc _ true
+  acc
+
+fn noted acc why false
+  text/concat acc [why]
+
+fn gathered acc at
+  one = wants[at]!
+  why = "the site did not paint {one.why}"
+  noted acc why false
+
+joined = text/join (gathered [] 1) ", "
+
+pub play = print joined

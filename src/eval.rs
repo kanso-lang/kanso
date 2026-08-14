@@ -2266,9 +2266,14 @@ impl<'a> Interp<'a> {
                 };
                 let mut parts = Vec::new();
                 for item in items.iter() {
-                    match item {
+                    // A list stores what it was given, so an element built by a
+                    // binding arrives as a pending computation. Joining demands
+                    // the string, so ask for it rather than blaming the caller
+                    // for what it never sent.
+                    let item = self.force(item.clone())?;
+                    match &item {
                         Value::Str(s) => parts.push(s.clone()),
-                        bad if is_failure(bad) => return Ok(bad.clone()),
+                        bad if is_failure(bad) => return Ok(item.clone()),
                         _ => {
                             return Err(RuntimeError {
                                 message: "join takes a list of strings".to_string(),

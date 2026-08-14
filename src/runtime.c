@@ -5882,6 +5882,11 @@ KValue k_b_join(KValue lv, KValue sep) {
     KStr* ss = k_as_str(sep);
     long total = 0;
     for (long long i = 0; i < l->len; i++) {
+        /* Joining demands each string, so a cell is forced here — and the
+           answer is written back, because the copying loop below reads the
+           slot again. Forcing twice would run the computation twice, and
+           k_alloc for the output buffer runs between the two passes. */
+        l->items[i] = k_force(l->items[i]);
         if (!k_not_failure(l->items[i])) return l->items[i];
         if (l->items[i].tag != K_STR) k_die("join takes a list of strings");
         total += k_as_str(l->items[i])->len;
