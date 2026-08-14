@@ -32,6 +32,17 @@ if command -v callgrind_annotate >/dev/null; then
 else
   echo "=== no callgrind_annotate on this host, so no breakdown"
 fi
+# THROWAWAY PROBE — not for merge. value_for is 22% of the decoder and nothing
+# says why beyond "runs once per value". The frames carry no source file, so
+# per-line annotation is unavailable; per-instruction against the disassembly
+# needs no source. Collected for the decoder alone because --dump-instr costs
+# real time and output size.
+echo "=== per-instruction probe: value_for"
+env -i PATH=/usr/bin:/bin \
+  valgrind --tool=callgrind --dump-instr=yes --callgrind-out-file=/tmp/cgi.jsonbench \
+  ./jsonbench >/dev/null 2>&1
+callgrind_annotate --threshold=99 --show-percs=yes /tmp/cgi.jsonbench 2>&1 |
+  grep -A40 'value_for' | head -50
 grep -v '^#' bench/instructions_golden.txt > work_want.txt
 diff work_want.txt work.txt || {
   echo "::error::the work the benchmarks do changed. A rise is a"
