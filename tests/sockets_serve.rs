@@ -55,7 +55,9 @@ asked
 /// what the page posts back, so a server that answers `none` when it stops
 /// leaves the harness with nothing to assert on.
 const SERVE_UNTIL_A_REPORT: &str = r#"import "std/io"
+import "std/net"
 import "std/net/http"
+import "std/time"
 
 fn handled req carried
   answered req.path req carried
@@ -66,14 +68,21 @@ fn answered "/report" req _
 fn answered _ _ carried
   http/turn (http/ok "the page") carried
 
-url = "http://127.0.0.1:PORT"
+fn serving_at l p
+  io/write_file "port.txt" "{p}"
+    . (_ -> http/serving l handled "open")
+    . (r -> print "the report says: {r}")
 
-get = ["-s" "--retry" "5" "--retry-connrefused" "{url}/"]
+asked = time/sleep 400 . (_ -> io/read_file "port.txt") . visited
 
-post = ["-s" "-d" "green" "{url}/report"]
+fn visited p
+  url = "http://127.0.0.1:{p}"
+  get = ["-s" "--retry" "5" "--retry-connrefused" "{url}/"]
+  post = ["-s" "-d" "green" "{url}/report"]
+  io/run "curl" get . (_ -> io/run "curl" post)
 
-http/serve_until PORT handled "open" . (r -> print "the report says: {r}")
-io/run "curl" get . (_ -> io/run "curl" post)
+net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+asked
 "#;
 
 /// A browser opens speculative connections and sends nothing down them, and
