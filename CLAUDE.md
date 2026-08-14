@@ -96,31 +96,55 @@ payoff. These are the four shapes it takes here, and what to do instead.
   reads JSON on stdin — `echo '{}' | ...` or it hangs in `cat` and never makes
   a sound.)
 
-- **Never name work you are about to defer.** A reply containing "next tick I
-  will do X" is a stop wearing a plan's clothes: X was specified, nothing
-  blocked it, and the turn ended anyway. If the next step is known well enough
-  to write down, it is known well enough to start, and the sentence describing
-  it costs more than beginning it would have. Clay has had to say this more
-  than once — "never tell me something you're going to start doing in the next
-  tick just start working on whatever the next thing is." The wakeup's `reason`
-  field is where a cadence is explained; the reply is not.
-- **The tell is the phrase itself.** "Next tick", "next session", "I'll pick
-  this up when" — beside a task that could start now, each is the same stop.
-  Treat writing one as the signal to delete the sentence and make the tool call
-  instead.
-- **CALLING ScheduleWakeup IS THE STOP.** This is the move the rules above kept
-  missing, because scheduling reads as diligence rather than as ending a turn.
-  It ends the turn the moment it returns, so reaching for it while work remains
-  is exactly the deferral the rest of this section forbids — the loop skill's
-  "call it as the last action" describes where it goes in a turn that is
-  genuinely over, not permission to end one. Clay, on the fifth occurrence:
-  "there you go again saying you're going to wait till the loop ticks again
-  instead of just continuing to work."
-- **Before scheduling, name what is left.** If the task list holds anything
-  startable, the answer is a tool call, not a wakeup. Schedule only when the
-  honest answer is "nothing here can move without Clay", and say which decision
-  and why in the reply. A wakeup whose reason describes work I could do now is
-  a wakeup that should not have been written.
+#### The naming test
+
+**If I can write down the next action, that is proof it can start now, so I
+start it. Naming it instead is the whole failure.**
+
+Every stop in this log took the same form: finish a thing, name what comes
+next, end the turn. The naming is not incidental to the failure — it IS the
+failure, and it is also a perfect detector, because a sentence describing the
+next step is evidence the step was available. There is no case where I could
+specify the work and could not begin it.
+
+So: before ending a turn, try to write the sentence "next I will X". If the
+sentence forms, delete it and do X. The turn ends only when that sentence
+cannot be written at all.
+
+#### ScheduleWakeup is the stop
+
+It ends the turn the moment it returns. Reaching for it is never
+diligence. Two hard constraints:
+
+- **A wakeup's `reason` may not contain a next action.** If the reason names
+  work — "next tick I'll read X", "then merge Y" — that work was startable and
+  the wakeup is forbidden. The reason may describe only cadence and what is
+  being watched.
+- **The reply may not contain one either.** No "next tick", "next session",
+  "when this lands I'll", "picking this up after". Writing one is the signal to
+  delete the sentence and make the tool call.
+
+#### Excuses that are void
+
+Each of these was used to justify a stop and none of them is a reason:
+
+- *"I'm waiting on CI."* CI runs without me. The task list has other items.
+  Work one. If a monitor is armed it will wake me; that is what it is for.
+- *"Everything I started is merged."* Then start the next task. A clean tree
+  is the condition for beginning work, not for ending a turn.
+- *"This next piece is large / uncertain / a fresh investigation."* That is the
+  step. Take its first concrete action — the smallest command that produces
+  evidence — and keep going.
+- *"My context is nearly gone."* Then do the smallest useful piece now rather
+  than none. A partial measurement recorded beats a plan handed forward.
+- *"It needs a decision from Clay."* Send it to him THIS TURN (task marked
+  CLAY'S CALL / BLOCKING, `PushNotification`, first line of the reply) and then
+  work something else while he reads.
+
+The one legitimate ending is that no next action can be named — every thread is
+either merged, or blocked on a decision already sent to Clay, or blocked on a
+measurement already running with a monitor on it, AND no other task on the list
+can start. That is rare. Assume it is not the case.
 
 The `/loop` is a last resort that restarts the work after a stop. It is not a
 schedule to hand work to, and needing it means something already went wrong.
