@@ -5595,7 +5595,12 @@ static int k_born_this_beat(const void* p) {
     const char* q = (const char*)p;
     if (q >= (const char*)(k_blocks + 1) && q < k_arena)
         return k_blocks != m->block || q >= (const char*)m->ptr;
-    return !k_survives_x(p, m);
+    /* Written out rather than asked through k_survives_x, which is a call where
+       k_survives inlines. This runs once per append, which is the difference
+       between a branch and five and a half per cent on a fold that builds a
+       string. */
+    if (k_survives(p, m)) return 0;
+    return !(k_ten_any && k_ten_holds(p));
 }
 
 /* `proven` says the call site is one the linearity analysis licensed, so the
