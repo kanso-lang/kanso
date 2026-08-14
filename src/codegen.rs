@@ -1752,7 +1752,7 @@ impl<'a> Backend<'a> {
         f.line(&format!("{hopped} = call %KValue @k_err_hop(%KValue {dv}, ptr @{hop_name})"));
         self.emit_ret_failure(&mut f, name, arity, &hopped);
         f.start_block(&die);
-        let msg = format!("no overload of `{name}` matches these arguments ");
+        let msg = format!("no overload of `{name}` matches these arguments\0");
         let (m, _len) = self.intern(&msg);
         f.line(&format!("call void @k_die(ptr @{m})"));
         f.line("unreachable");
@@ -3390,7 +3390,7 @@ impl<'a> Backend<'a> {
                     f.line(&format!("br i1 {overflow}, label %{trap}, label %{ok}"));
                     f.start_block(&trap);
                     let (m, _) = self.intern(
-                        "integer overflow (int64 native build; spec int is arbitrary precision) ",
+                        "integer overflow (int64 native build; spec int is arbitrary precision)\0",
                     );
                     f.line(&format!("call void @k_die(ptr @{m})"));
                     f.line("unreachable");
