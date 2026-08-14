@@ -3529,3 +3529,43 @@ jsonbench.ll is byte-identical either way, which is the check that matters
 
 The general form is worth keeping beside the harness lessons already on this
 page: a tool that cannot answer looks exactly like a tool answering no.
+
+## 2026-08-13 (last) — value_for's cost is per call, and the number to beat
+
+Target 4 had a profile and no account of it. `value_for` is 22% of the decoder
+at 642,319,500 instructions and the only thing anyone could say was that it runs
+once per json value. Call counts settle it — they come from the profile already
+collected and need neither source mapping nor an instruction dump.
+
+    value_for called 1,188,150x from obj_key_start alone
+    self cost 642,319,500
+    => 400 to 540 retired instructions of SELF cost per call
+
+For a function that switches on one byte and hands off, that is enormous, and
+the switch is not where it goes: the dispatch is one `switch` and eight
+comparisons. The body is the target, and it now has a number. A hundred
+instructions per call is about 120M, four per cent of the decoder.
+
+The same probe measured the workload: 1,188,150 object keys — `string_at`,
+`k_b_put_mut` and `k_b_find2` are each called exactly that many times from
+`obj_key_start` — with 412,650 array opens and 348,150 object opens.
+
+### Four ways not to ask this question
+
+Written down because each cost a run or a retraction.
+
+Opcode counts in the emitted IR are not machine cost. A theory of value_for
+built on counting its `extractvalue`s was retracted; SSA aggregate ops are
+plumbing the backend folds into registers.
+
+`callgrind_annotate` cannot render `--dump-instr` data at all — that needs
+KCachegrind. Two probes spent proving it, the second by adding `--auto=yes`,
+which does something else entirely.
+
+`--auto=yes` annotates SOURCE, and every kanso frame in a profile reads `???`
+because the emitted IR carries no debug metadata. No clang flag invents that;
+the `!dbg` records would have to come from codegen. Worth knowing anyway: `-g`
+does not perturb the pinned instruction counts, so emitting debug info later is
+safe from the goldens' side.
+
+What worked was the cheapest thing available, asked last.
