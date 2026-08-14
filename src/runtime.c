@@ -655,7 +655,21 @@ static long long k_carry_n = 0;
 /* Does p survive the innermost rewind — is it inside the live chain at or
    below the mark? mark == NULL means "the whole live chain", the test the
    pop's copy-out wants. */
+/* Tenured storage lies below every mark by construction — it is malloc'd, and
+   a rewind cannot reach it. Saying so here rather than at the two walks is
+   what keeps the repair path working: a tenured node whose field was later
+   made to point at fresh arena still fails k_interior_survives and is
+   repaired, where an early return would have shared a node holding a pointer
+   the next rewind frees.
+
+   A null mark means the whole live chain, which is the copy-out at the pop.
+   Tenured storage is released immediately after that walk, so there it must
+   be copied, and the test is skipped. */
+static int k_ten_any = 0;
+static int k_ten_holds(const void* p);
+
 static int k_survives(const void* p, KMark* m) {
+    if (k_ten_any && m && k_ten_holds(p)) return 1;
     const char* q = (const char*)p;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
@@ -777,6 +791,7 @@ static void* k_ten_alloc(size_t n) {
     void* out = b->data + b->used;
     b->used += n;
     k_ten_bytes[d] += n;
+    k_ten_any = 1;
     if (!k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
     KPtrSlot* slot = k_ptrmap_at(&k_ten_set[d], out, &k_ten_live[d]);
     k_ten_live[d]++;
@@ -795,6 +810,8 @@ static void k_ten_release(long long d) {
     }
     k_ten_blocks[d] = NULL;
     k_ten_bytes[d] = 0;
+    k_ten_any = 0;
+    for (long long i = 0; i < K_BEAT_MAX; i++) if (k_ten_blocks[i]) k_ten_any = 1;
     if (k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
 }
 
@@ -934,7 +951,6 @@ static size_t k_copy_size_1(KValue v, KMark* m);
 
 static size_t k_copy_size(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
-    if (m && k_ten_holds((const void*)(intptr_t)v.payload)) return 0;
     int save = k_size_in_ten;
     if (!save && k_carry_holds((const void*)(intptr_t)v.payload)) k_size_in_ten = 1;
     size_t out = k_copy_size_1(v, m);
@@ -1125,7 +1141,6 @@ static KValue k_deep_copy_1(KValue v, KCopy* cp);
 
 static KValue k_deep_copy(KValue v, KCopy* cp) {
     if (!k_is_heap(v.tag)) return v;
-    if (cp->mark && k_ten_holds((const void*)(intptr_t)v.payload)) return v;
     int save = cp->in_ten;
     if (!save && k_carry_holds((const void*)(intptr_t)v.payload)) cp->in_ten = 1;
     KValue out = k_deep_copy_1(v, cp);
