@@ -1,0 +1,69 @@
+import "std/list"
+import "std/text"
+
+# pretty printer: two-space indent, sorted keys (maps iterate sorted),
+# one byte builder threaded through the whole tree
+fn elem_row acc x depth
+  pretty_onto (indent_onto (text/append acc ",\n") (depth + 1)) x (depth + 1)
+
+fn indent_onto acc 0
+  acc
+
+fn indent_onto acc n
+  indent_onto (text/append acc "  ") (n - 1)
+
+fn pair_row acc e depth
+  pretty_entry (text/append acc ",\n") e depth
+
+fn pretty v depth
+  text/utf8 (pretty_onto (text/bytes "") v depth)
+
+fn pretty_elems acc xs i depth
+  return acc if length xs < i
+  pretty_elems (elem_row acc xs[i] depth) xs (i + 1) depth
+
+fn pretty_entry acc (entry k v) depth
+  opened = text/append (indent_onto acc (depth + 1)) 34
+  keyed = text/append (escape_onto opened k) "\": "
+  pretty_onto keyed v (depth + 1)
+
+fn pretty_list acc xs depth
+  opened = indent_onto (text/append acc "[\n") (depth + 1)
+  first = pretty_onto opened xs[1] (depth + 1)
+  rest = text/append (pretty_elems first xs 2 depth) "\n"
+  text/append (indent_onto rest depth) 93
+
+fn pretty_map acc m depth
+  es = entries m
+  first = pretty_entry (text/append acc "\{\n") es[1] depth
+  rest = text/append (pretty_pairs first es 2 depth) "\n"
+  text/append (indent_onto rest depth) 125
+
+fn pretty_onto acc true _
+  text/append acc "true"
+
+fn pretty_onto acc false _
+  text/append acc "false"
+
+fn pretty_onto acc json_null _
+  text/append acc "null"
+
+fn pretty_onto acc n:int _
+  text/append acc "{n}"
+
+fn pretty_onto acc x:float64 _
+  text/append acc "{x}"
+
+fn pretty_onto acc s:string _
+  closed = escape_onto (text/append acc 34) s
+  text/append closed 34
+
+fn pretty_onto acc xs:[]some depth
+  if (length xs == 0) (text/append acc "[]") (pretty_list acc xs depth)
+
+fn pretty_onto acc m:map[string some] depth
+  if (length m == 0) (text/append acc "\{}") (pretty_map acc m depth)
+
+fn pretty_pairs acc es i depth
+  return acc if length es < i
+  pretty_pairs (pair_row acc es[i] depth) es (i + 1) depth

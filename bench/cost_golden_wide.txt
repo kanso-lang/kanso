@@ -1,0 +1,55 @@
+# Allocator counters for the wide-array print, the shape none of the four
+# benchmarks beside it has. They carry deeply nested documents whose widest
+# array holds ten elements, and they render one string; this one streams a
+# twenty-thousand element array the way kq does — each element into its own
+# builder, written, and dead before the next — so the recursion carries the
+# whole list and a write chain that grows with it.
+#
+#
+# That shape is what makes kq's flat-array print quadratic: the survival check
+# on the carried description walks the list once per element, so the work grows
+# with the square of the array's length while every counter below holds still.
+# The counters are blind to it by construction — a check that allocates nothing
+# moves none of them — which is the reason this benchmark also has a row in
+# bench/instructions_golden.txt, where the cost is visible.
+allocs=180026
+alloc_bytes=7892464
+arena_blocks=2
+arena_peak_bytes=2097152
+cohort_frees=0
+cohort_kept=0
+perm_allocs=11
+beat_iters=20001
+evac_allocs=120011
+evac_bytes=3840432
+put_mut_fast=0
+put_mut_grow=0
+push_mut_fast=19993
+push_mut_slow=7
+thunk_allocs=0
+thunk_forces=0
+thunk_evals=0
+thunk_frees=0
+thunk_escaped=0
+thunk_live_exit=0
+el_parses=20000
+ryu_renders=10000
+utf8_bytes=212590
+find2_calls=0
+append_fast=20000
+append_grow=20000
+utf8_zerocopy=20000
+carry_dedup=0
+bytes_malloc=0
+bytes_freed=0
+str_scans=0
+str_scan_bytes=0
+buf_reuse=0
+held_peak_bytes=0
+view_allocs=0
+view_frees=0
+sh_str=792624
+sh_rec=0
+sh_buf=699312
+sh_map=0
+sh_bytes=960024

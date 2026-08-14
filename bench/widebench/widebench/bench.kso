@@ -1,0 +1,20 @@
+import "std/io"
+import "std/text"
+
+fn elem_chunk v lead
+  text/utf8 (pretty_onto (text/append (text/bytes lead) "  ") v 1)
+
+fn sep 1
+  ""
+
+fn sep _
+  ",\n"
+
+fn stream_one xs i
+  io/write (elem_chunk xs[i] (sep i)) . (_ -> stream_elems xs (i + 1))
+
+fn stream_elems xs i
+  if (length xs < i) (io/write "\n]\n") (stream_one xs i)
+
+pub fn stream_list xs
+  io/write "[\n" . (_ -> stream_elems xs 1)
