@@ -189,6 +189,7 @@ pub enum Desc {
     Bind(Rc<Desc>, Value),
     Await(i64),
     Listen(i64),
+    SocketPort(i64),
     Accept(i64),
     Receive(i64),
     Send(i64, String),
@@ -389,6 +390,12 @@ pub trait Executor {
     fn listen(&mut self, _port: i64) -> Result<i64, String> {
         Err("this engine has no sockets".to_string())
     }
+    /// The port a listener was actually given. Binding port 0 asks the
+    /// operating system for a free one, and this reads back its answer, so a
+    /// caller never has to drop the listener and re-bind the number.
+    fn socket_port(&mut self, _listener: i64) -> Result<i64, String> {
+        Err("this engine has no sockets".to_string())
+    }
     /// Asks whether a connection is waiting. `None` means not yet, and the
     /// scheduler puts the fiber back — a server is one statement of a
     /// parallel group and must not hold the runtime while it waits.
@@ -522,6 +529,20 @@ impl Executor for RealExecutor {
             let handle = s.hand();
             s.listeners.insert(handle, socket);
             Ok(handle)
+        })
+    }
+
+    fn socket_port(&mut self, listener: i64) -> Result<i64, String> {
+        SOCKETS.with(|s| {
+            let s = s.borrow();
+            let found = s
+                .listeners
+                .get(&listener)
+                .ok_or_else(|| "that is not an open listener".to_string())?;
+            let addr = found
+                .local_addr()
+                .map_err(|e| format!("cannot read the port of that listener: {e}"))?;
+            Ok(i64::from(addr.port()))
         })
     }
 
@@ -1959,6 +1980,16 @@ impl<'a> Interp<'a> {
                     });
                 };
                 Ok(Value::Desc(Rc::new(Desc::Listen(port.to_i64().unwrap_or(-1)))))
+            }
+            "net_port" => {
+                let [listener] = arity(args, name, span)?;
+                let Value::Int(listener) = &listener else {
+                    return Err(RuntimeError {
+                        message: "port takes a listener".to_string(),
+                        span,
+                    });
+                };
+                Ok(Value::Desc(Rc::new(Desc::SocketPort(listener.to_i64().unwrap_or(-1)))))
             }
             "accept" => {
                 let [listener] = arity(args, name, span)?;
@@ -3555,6 +3586,10 @@ impl<'a> Interp<'a> {
                 Ok(handle) => Value::Int(handle.into()),
                 Err(reason) => err_value(Value::Str(reason), None),
             }),
+            Desc::SocketPort(listener) => Ok(match executor.socket_port(*listener) {
+                Ok(port) => Value::Int(port.into()),
+                Err(reason) => err_value(Value::Str(reason), None),
+            }),
             Desc::Accept(listener) => Ok(match executor.accept(*listener) {
                 Ok(Some(handle)) => Value::Int(handle.into()),
                 // Reached only outside a parallel group, where no other fiber
@@ -3752,6 +3787,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::MakeDir(path) => out.push_str(&format!("  make_dir {path:?}\n")),
         Desc::WriteFile(path, _) => out.push_str(&format!("  write_file {path:?}\n")),
         Desc::Listen(port) => out.push_str(&format!("  listen {port}\n")),
+        Desc::SocketPort(l) => out.push_str(&format!("  port {l}\n")),
         Desc::Accept(listener) => out.push_str(&format!("  accept {listener}\n")),
         Desc::Receive(conn) => out.push_str(&format!("  receive {conn}\n")),
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),

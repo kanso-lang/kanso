@@ -54,7 +54,12 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2900220537
-encodebench 9207299438
-oneshot 47548171
-basket 55817813
+jsonbench 2900219722
+encodebench 9207299685
+oneshot 47548418
+basket 55817123
+# 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
+# -690, all under a thousandth of a per cent. net/port adds a function to the
+# runtime object that none of these four call; what moves is the layout around
+# it. Recorded rather than waved at, because a number that changes without a
+# sentence is the thing this file exists to catch.

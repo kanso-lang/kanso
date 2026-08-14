@@ -11,11 +11,14 @@ pub type conn
 # Port 0 asks the operating system for a free one, and `port` reads back
 # what it gave — a program that pinned a number would collide with whatever
 # else the machine is running.
-pub fn listen port
-  builtin_listen port . held
+pub fn listen at
+  builtin_listen at . held
 
 fn held h
   listener h
+
+pub fn port l
+  builtin_net_port l.handle
 
 pub fn accept l
   builtin_accept l.handle . taken
