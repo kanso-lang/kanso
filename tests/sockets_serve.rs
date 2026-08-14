@@ -280,3 +280,67 @@ fn a_served_report_reaches_the_program_on_both_engines() {
         assert_eq!(said, "the report says: green\n", "engine {engine:?}");
     }
 }
+
+/// The port a listener was actually given, read back off the listener itself.
+///
+/// The assertion is not that the number is positive — it is that a client
+/// reaches the listener AT that number, which is what makes it the bound port
+/// rather than a plausible integer.
+///
+/// That closes the gap `free_port` leaves: bind 0, read the port, drop the
+/// listener, hand the number on, and whatever binds in between takes it. A
+/// program reading the port off the listener it already holds never lets go.
+///
+/// Two things this shape is working around, both learned by watching it fail.
+/// The program is held open by a sleep rather than an `accept`, because a lone
+/// statement waiting on accept has no sibling fiber to yield to: the scheduler
+/// calls it deadlocked, the program exits, and the socket closes before any
+/// client arrives. And the port travels by file rather than stdout, because a
+/// piped stdout is block-buffered — the line does not appear until the process
+/// ends, by which time there is nothing to connect to.
+#[test]
+fn a_listener_answers_the_port_it_was_given_on_both_engines() {
+    const ANNOUNCE: &str = "import \"std/io\"\nimport \"std/net\"\nimport \"std/time\"\n\npub fn announced l p\n  io/write_file \"port.txt\" \"{p}\"\n    . (_ -> time/sleep 3000)\n    . (_ -> net/close_listener l)\n";
+    const ENTRY: &str = "import \"announce\"\nimport \"std/net\"\n\nnet/listen 0 . (l -> net/port l . (p -> announce/announced l p))\n";
+
+    for (tag, engine) in [("native", &[][..]), ("interp", &["--interp"][..])] {
+        let dir = std::env::temp_dir()
+            .join(format!("kanso-netport-{}-{tag}", std::process::id()));
+        std::fs::remove_dir_all(&dir).ok();
+        std::fs::create_dir_all(&dir).expect("the scratch directory is made");
+        std::fs::write(dir.join("announce.kso"), ANNOUNCE).expect("the library is written");
+        std::fs::write(dir.join("main.kso"), ENTRY).expect("the entry is written");
+
+        let mut child = Command::new(env!("CARGO_BIN_EXE_kanso"))
+            .arg("run")
+            .arg(".")
+            .args(engine)
+            .current_dir(&dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("the program starts");
+
+        let announced = dir.join("port.txt");
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let port = loop {
+            if let Ok(text) = std::fs::read_to_string(&announced) {
+                if let Ok(n) = text.trim().parse::<u16>() {
+                    break Some(n);
+                }
+            }
+            if Instant::now() > deadline {
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        let port = port.unwrap_or_else(|| panic!("no port announced on {tag}"));
+
+        // Only the bound port has the listener behind it.
+        let reached = TcpStream::connect(("127.0.0.1", port));
+        let _ = child.kill();
+        let _ = child.wait();
+        std::fs::remove_dir_all(&dir).ok();
+        assert!(reached.is_ok(), "nothing listening on {port} for {tag}");
+    }
+}
