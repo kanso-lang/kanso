@@ -3478,3 +3478,54 @@ nearly all of one block survives and the guard's keep arm is right.
 This is also the first change scored under the repaired gate. The counters were
 red, and the instruction vein reported anyway — six veins each said their piece
 in one run, which is what the first attempt's 12.2% needed and did not get.
+
+## 2026-08-13 (later still) — where the decoder's work actually is
+
+Target 4 needed a profile and the profile already existed: the instruction gate
+runs callgrind over all four benchmarks, reads one number out of stderr and
+discards the rest. Every previous time this page asked where the work went,
+somebody stood up a bespoke run to recover what that file already held. The
+gate prints it now (#869), for the decoder and the one-shot.
+
+The decoder, 2,900,220,537 instructions:
+
+    642,319,500 (22.15%)  value_for
+    281,591,550 ( 9.71%)  obj_key_start
+    201,726,450 ( 6.96%)  k_b_append_mut
+    150,691,950 ( 5.20%)  array_delim
+    133,687,650 ( 4.61%)  k_b_put_mut
+    119,519,100 ( 4.12%)  array_step
+    118,048,650 ( 4.07%)  k_utf8_bad
+    115,818,750 ( 3.99%)  str_char
+    102,122,570 ( 3.52%)  memcpy
+    102,067,050 ( 3.52%)  k_b_push_mut
+     94,880,250 ( 3.27%)  string_at
+     89,752,050 ( 3.09%)  k_b_find2
+     73,770,450 ( 2.54%)  obj_delim
+
+Emitted user code is about half the decoder and value_for alone is a fifth of
+it. Two things it is NOT: the dispatch, which already lowers to one switch and
+eight comparisons, and k_utf8_bad, which despite the name is the validator
+rather than an error path — Keiser & Lemire with an ascii fast path, and four
+per cent to validate a document is honest. Why value_for costs what it does,
+beyond running once per json value, is not yet established. Per-line
+annotation, not opcode counting, is what will answer it.
+
+### The reason five readings in a row were wrong
+
+src/codegen.rs held two NUL bytes, in the diagnostic literals interned as C
+strings. A NUL makes grep call the file binary and print nothing, and nothing
+is indistinguishable from no-match. Searching 4,433 lines of the emitter for
+`Index`, `tailcc`, `extractvalue` and `insertvalue` returned empty every time.
+All four are present — 2, 32, 41 and 29 occurrences.
+
+From that silence came the conclusions that codegen.rs was not the emitter,
+that the aggregate opcodes must come from somewhere else, and a whole theory
+that value_for's cost was tagged values marshalled across the call boundary.
+The theory was written down as a finding before python counted the same file
+and disagreed with grep. Escaped as `\0` the string is the same string, and
+jsonbench.ll is byte-identical either way, which is the check that matters
+(#870).
+
+The general form is worth keeping beside the harness lessons already on this
+page: a tool that cannot answer looks exactly like a tool answering no.
