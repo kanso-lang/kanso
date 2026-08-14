@@ -669,7 +669,6 @@ static int k_ten_any = 0;
 static int k_ten_holds(const void* p);
 
 static int k_survives(const void* p, KMark* m) {
-    if (k_ten_any && m && k_ten_holds(p)) return 1;
     const char* q = (const char*)p;
     KBlock* b = m ? m->block : k_blocks;
     const char* frontier = m ? m->ptr : k_arena;
@@ -679,7 +678,10 @@ static int k_survives(const void* p, KMark* m) {
         if (q >= start && q < end) return 1;
         frontier = NULL;
     }
-    return 0;
+    /* Asked last, not first. Tenured storage is never inside an arena block, so
+       the order cannot change the answer, and every pointer the arena does hold
+       — which is nearly all of them — then pays nothing for the question. */
+    return k_ten_any && m && k_ten_holds(p);
 }
 
 /* Sorted-view caches filled during a beat point above the mark; a rewind
