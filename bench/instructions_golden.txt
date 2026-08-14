@@ -61,6 +61,11 @@ basket 55937643
 widebench 134061218
 basket 55817123
 widebench 15730176374
+jsonbench 2903068903
+encodebench 9712917539
+oneshot 49185014
+basket 57367469
+widebench 130337917
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -89,3 +94,20 @@ widebench 15730176374
 # for the hash probe that keeps it, and jsonbench and oneshot do not move. That
 # is the trade, stated: two programs give up a fifth of a per cent so that wide
 # documents stop being unusable.
+# 2026-08-14 (later): the carry tenures a value that has lived a lap, so the
+# document threaded through a streaming loop is copied once instead of once
+# per element. widebench's row is not comparable with the one above it — the
+# fixture moves from twenty thousand elements to sixteen thousand, because
+# above 16,384 the survivor-ratio guard refuses the evacuation and keeps the
+# region, so a fixture on that side of the line exercises none of this. On the
+# new fixture the unfixed compiler runs 11,627,314,301 instructions against
+# 130,337,917 here, and takes 1.42 s against 0.00.
+#
+# The other four rise: jsonbench 0.10%, oneshot 3.44%, basket 2.59%,
+# encodebench 5.49%. Ten variants were measured and encodebench read 5.49% in
+# every one, including two isolations that removed the tenured answer and the
+# shape of the walk separately. What is left is a branch in k_copy_alloc, the
+# funnel every evacuated byte passes through, and a field in the struct that
+# carries it — neither removable while tenuring exists. The trade is stated
+# rather than hidden: the encoder pays five and a half per cent so that a wide
+# document stops being quadratic.
