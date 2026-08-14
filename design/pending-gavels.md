@@ -649,3 +649,58 @@ type error about an operator they did not write.
 **What it unblocks.** Task #176, task #178 (a constant naming itself needs
 passing as an argument to work, same root), and one line of
 `tests/golden/wasm_gaps.txt`.
+
+## 20b. What a pending cell shows when it reaches output
+
+Same surface as 20, found 2026-08-14 while closing task #210. Independent
+enough to be ruled separately, close enough that ruling 20 first may decide it.
+
+    fn noted acc _ true
+      acc
+
+    fn noted acc why false
+      text/concat acc [why]
+
+    fn gathered acc at
+      one = wants[at]!
+      why = "did not paint {one.why}"
+      noted acc why false
+
+    pub first = gathered [] 1
+
+    print "{first}"
+
+All three engines answer `[<thunk>]`. The differential law is satisfied. The
+author computed a string and the program shows them a word about the
+implementation instead.
+
+The `_` arm is what defers: a parameter crosses already-evaluated only when
+every arm demands it. Every demanding site that has learned to force closed one
+form of this — the field read (#889), `text/join` (#890), the strict index
+(#892) — and rendering a list is the one left.
+
+**Why rendering has not learned.** Forcing at the top of `k_render` was built on
+2026-08-13 and recurses forever on `ring = [ring]`: forcing the cell answers a
+list holding the same cell. `<thunk>` is what terminates it today.
+
+**Why that is fixable.** Rendering already has a cycle guard. It prints
+`<cycle>` and it is keyed on records — `eval.rs:3491`, `runtime.c:3185`. The
+comment at `runtime.c:3363` says every cycle passes through a record, and a
+self-naming constant is the counterexample: its cycle passes through a thunk
+cell. Extending the guard's path to cells terminates by the same argument the
+record path already relies on.
+
+**The cost of doing it.** `a_constant_that_holds_itself` currently records
+`[<thunk>]` and would record `[<cycle>]`. That is the whole user-visible
+consequence, and it is a question about what a self-naming constant displays —
+which is why it belongs beside 20 rather than in a runtime PR.
+
+**One obstacle if it is ruled yes.** `render_seen` in `eval.rs` is a free
+function with no interpreter handle, so the oracle cannot force from inside it
+without restructuring. Native and the browser can. Whoever builds it starts
+there.
+
+**The third answer.** Neither engine renders, and the demanding sites keep
+being taught one at a time as programs find them. That is where the last three
+fixes landed and it has no end condition — nothing says which site is next
+except a user hitting it.
