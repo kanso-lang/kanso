@@ -1,0 +1,27 @@
+# The string form of the same shape: an arm that ignores its argument makes
+# native defer the interpolation, and the strict index that pulls the element
+# back out is what demands it. Sibling to
+# a_deferred_record_answers_its_field, which reads a field instead.
+import "std/text"
+
+type want
+  why
+
+w1 = want "a parent"
+
+wants = [w1]
+
+fn noted acc _ true
+  acc
+
+fn noted acc why false
+  text/concat acc [why]
+
+fn gathered acc at
+  one = wants[at]!
+  why = "did not paint {one.why}"
+  noted acc why false
+
+first = (gathered [] 1)[1]!
+
+pub play = print first
