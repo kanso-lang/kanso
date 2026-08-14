@@ -22,6 +22,7 @@ use std::time::{Duration, Instant};
 
 const SERVER_AND_CLIENT: &str = r#"import "std/io"
 import "std/net"
+import "std/time"
 
 fn answered l c
   net/read c
@@ -35,12 +36,17 @@ fn page body
 fn said r
   print "the page says: {r.stdout}"
 
-url = "http://127.0.0.1:PORT/"
+fn serving_at l p
+  io/write_file "port.txt" "{p}" . (_ -> net/accept l) . (c -> answered l c)
 
-flags = ["-s" "--retry" "5" "--retry-connrefused" url]
+asked = time/sleep 400 . (_ -> io/read_file "port.txt") . fetched
 
-net/listen PORT . (l -> net/accept l . (c -> answered l c))
-io/run "curl" flags . said
+fn fetched p
+  url = "http://127.0.0.1:{p}/"
+  io/run "curl" ["-s" "--retry" "5" "--retry-connrefused" url] . said
+
+net/listen 0 . (l -> net/port l . (p -> serving_at l p))
+asked
 "#;
 
 /// The shape every browser harness needs, and the one thing the socket test
