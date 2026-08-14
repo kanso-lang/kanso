@@ -49,10 +49,10 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=82034
-encodebench text=99490
-oneshot text=99202
-basket text=91410
+jsonbench text=82082
+encodebench text=99538
+oneshot text=99250
+basket text=91490
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -64,3 +64,6 @@ basket text=91410
 # 2026-08-14: basket rises 176 bytes and nothing else moves. join forces each
 # element while it sizes the output and writes the answer back, so the copying
 # pass reads a plain string; basket is the only benchmark here that joins.
+# 2026-08-14: every binary rises 48 bytes, basket 80. to_int and split force
+# what they are handed before they read it, and split forces both arguments —
+# a test apiece, in the runtime every program links.
