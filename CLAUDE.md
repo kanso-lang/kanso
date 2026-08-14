@@ -282,6 +282,20 @@ Only Clay arms, disarms or retimes it.
   way it went and why, and record it in the log beside the number. A number
   that changes without a sentence is the thing to catch.
 
+### At release: re-sit the published timings
+
+The decode board and kq's wall-clock rows are a dated sitting on a QUIET box,
+moved by hand. Re-sit them at each release, and only then.
+
+They cannot be re-sat on demand. Randomised-layout timing put the spread WITHIN
+a single tree at 3.79% and 2.97% — larger than most per-change effects — so a
+sitting taken on a machine that has been compiling all day publishes the
+linker's luck rather than the compiler's speed. An idle box is a condition, not
+an effort, which is why this is a release step and not a task.
+
+kq's rows are in the same position: kq#63 re-stamped the counters and
+deliberately left the timings, with the reason in the commit.
+
 ### Performance-PR definition of done
 1. Benchmarks re-run; **same-sitting interleaved numbers published
    immediately** — dated, conditions named — in the site docs and every
