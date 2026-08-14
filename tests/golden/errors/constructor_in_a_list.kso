@@ -1,0 +1,7 @@
+type point
+  x
+  y
+
+places = [point 3 4]
+
+pub play = print (length places)
