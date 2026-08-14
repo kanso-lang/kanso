@@ -1973,3 +1973,86 @@ n=10,000 the instruction count is byte-for-byte the pre-fix figure, and the
 hot function differs by regime: `k_copy_size` and `k_deep_copy` below,
 `k_interior_survives` above. It makes a cliff — 109 KB takes 0.98 s where
 149 KB is instant.
+
+## 2026-08-14 (later) — the second quadratic, and ten measurements of what it costs
+
+The wide-array print had two quadratics, not one. The memo fixed the survival
+check that walked the carried list once per element; this is the evacuation
+that deep-copied the same list once per element.
+
+### The arithmetic that named it
+
+`evac_bytes` is `16 * n * n` to the digit — 4,099,840,640 at n=16,000 against
+16 · 16,000² = 4,096,000,000. Sixteen bytes is a KValue, and the array is the
+decoded document's items buffer.
+
+The copy never stabilised because `k_survives` walks the arena's blocks and
+answers 1 only for a pointer below the frontier inside one of them. The carry
+buffer is malloc'd and in no block, so last iteration's copy answered 0 —
+"must be evacuated" — and was copied again, forever.
+
+### Tenure on survival, not on size
+
+A value found inside the previous iteration's buffer has lived a whole lap, so
+it is promoted into storage the pair never overwrites, and every later
+iteration shares it. A value the loop built fresh this lap is not there and
+goes to the pair as before. That is what keeps a loop building a megabyte an
+iteration from accumulating megabytes — the shape behind the 83 GB runaway —
+and it is why a size threshold is the wrong signal.
+
+1.42 s to 0.00 s at n=16,000, output byte-identical, `evac_bytes` linear.
+
+### Declined by measurement: the same idea as an arena block
+
+Appending a KBlock at the tail of the chain would be recognised by the walk
+already there, with no second question asked anywhere. Built three times.
+Every time the output stayed byte-identical, four of five counter gates stayed
+green and the wide benchmark stayed at 0.00 s; every time it failed
+`mem_corpus_pins_native_allocator_counters` on `effect_push_shape.kso` and
+killed `book_panels --write`. The third attempt measured that: **91,241,398,272
+bytes of maximum resident set.**
+
+Positional membership recognises every pointer *inside* a block, where a hash
+set recognises only allocation bases. A string's data pointer then reads as
+surviving and is shared rather than copied, and a write path built from a
+string accumulator handed through an intermediate function is exactly the shape
+that turns aliasing into unbounded growth. Recognising a region is not
+recognising the objects in it, and the difference is not conservative.
+
+### What the cost is, after ten variants
+
+                                  jsonbench  encodebench  oneshot  basket
+    tenured test in k_survives      +1.24%      +5.49%     +3.46%   +2.10%
+    test after the arena walk       +1.24%      +5.49%     +3.68%   +2.06%
+    wrappers always_inline          +1.24%      +5.49%     +3.46%   +2.10%
+    the question split              +0.12%      +5.49%     +3.02%   +2.61%
+    k_survives_x always_inline      +0.72%      +5.47%     +3.06%   +6.10%
+    the window hoisted              +0.12%      +5.49%     +3.04%   +2.67%
+    no tenured answer at all        +0.72%      +5.46%     +2.62%   +5.75%
+    the walk collapsed              +0.10%      +5.49%     +3.44%   +2.59%
+    k_born_this_beat written out    +0.69%      +5.49%     +3.70%   +6.17%
+
+Encodebench read 5.49% in every one, including the isolation that removed the
+tenured answer from the copy walk entirely and the one that removed the shape
+it was asked through. Neither is the cause. Three of the nine made other rows
+worse and were withdrawn.
+
+Two worked and are in. Splitting the question — `k_survives` the pure arena
+walk, `k_survives_x` the wider one, asked only by the copy machinery and
+`k_born_this_beat` — took jsonbench from 1.24% to 0.10%. Collapsing each walk
+to one function, with the tenure flag set where a lived-a-lap node is found and
+never unset within an evacuation, left every binary 4,976 bytes smaller than
+baseline.
+
+What remains is a branch in `k_copy_alloc`, the funnel every evacuated byte
+passes through, and a field in the struct that carries it. Neither can go while
+tenuring exists. Whether quadratic-to-linear on wide arrays is worth five and a
+half per cent on the encoder is welfare's question, not a counter's.
+
+### The fixture moved
+
+Twenty thousand elements to sixteen thousand. Above 16,384 the items buffer's
+capacity doubles and the survivor-ratio guard begins refusing the evacuation
+and keeping the region, so a fixture on that side of the line exercises none of
+this — the benchmark could not fail without the fix. On the new fixture the
+unfixed compiler runs 11,627,314,301 instructions against 130,337,917.

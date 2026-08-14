@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=82738
-encodebench text=100194
-oneshot text=99906
-basket text=92114
-widebench text=101426
+jsonbench text=77762
+encodebench text=95218
+oneshot text=94930
+basket text=87122
+widebench text=96450
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -73,3 +73,10 @@ widebench text=101426
 # every program links the runtime whether or not it prints a wide array. It is
 # the memo that stops k_interior_survives rescanning a list once per element:
 # a pointer map, its lookup, and the outermost-mark test.
+# 2026-08-14 (later): every binary falls 4,976 bytes. The carry learns to
+# tenure a value that has lived a lap, and the two copy walks are rewritten
+# around it: one function each rather than a wrapper and a body, with the
+# tenure flag set where a lived-a-lap node is found and never unset within an
+# evacuation. The flag removes a save and a restore from every node of the
+# hottest recursion in the runtime, and the code that goes with it is smaller
+# than what the split cost.
