@@ -33,7 +33,7 @@ expressions the fixpoint looked at, and lines the emitter wrote.
 
 <p>every one of these is an exact integer a rerun reproduces, which is what lets them be diffed rather than eyeballed. the memory and size lines reproduce on any machine; the instruction line reproduces on one compiler, because instruction count is what an optimiser's inlining choices move most, and a toolchain change steps every row of it at once.</p>
 
-<p>the instruction line is here because its absence hid a real regression. between 2026-07-27 and 2026-08-07 the decoder went 2,545,249,871 retired instructions to 2,762,364,162 — eight and a half per cent, matching a wall-clock slowdown measured separately — while every allocation counter stayed byte-identical. the chart used to carry an allocation line named for speed, and it could not say so.</p>
+<p>retired instructions are the line to read for speed, and allocation counts answer a different question: how often the allocator was called. the two come apart, because a guard that runs per element allocates nothing. a decoder measured at 2,545,249,871 instructions and later at 2,762,364,162 — eight and a half per cent more work, tracking wall clock — reported byte-identical allocation counters across the same span. counting the work directly is what makes that difference visible.</p>
 
 <h2 id="counters"><span class="sec-num">counters</span>what every commit costs</h2>
 
@@ -104,11 +104,11 @@ expressions the fixpoint looked at, and lines the emitter wrote.
     ['beat_iters', 'rewind iterations',
      'How many times the arena wound back to a mark. One per decode plus one for the program itself is 151. This is the mechanism behind flat memory: an analysis proves an iteration keeps nothing across the line, so freeing is a pointer reset rather than a walk. A drop here means loops stopped being recognised and memory grows.'],
     ['el_parses', 'eisel\u2013lemire parses',
-     'Floats parsed by the fast integer path rather than by fallback. It is a presence counter: the algorithm either ran 318,450 times or it silently vanished in a merge, and a zero fails the build. This exists because a conflict resolution once deleted it from main and nothing noticed.'],
+     'Floats parsed by the fast integer path rather than by fallback. It is a presence counter: the algorithm either ran 318,450 times or it is not running at all, and a zero fails the build. A kernel that stops being reached is invisible to a timing average and obvious here.'],
     ['utf8_bytes', 'bytes utf-8 validated',
      'Every byte the validator looked at. kanso is strict about utf-8, so this is work every decode pays; what it costs fell by a tenth of total decode time once short ascii stopped paying for a sixteen-wide vector setup.'],
     ['find2_calls', 'simd two-byte scans',
-     'Calls into the vectorised scanner that finds a quote or a backslash sixteen bytes at a time. Another presence counter — if the string scanner regressed to a byte loop this would collapse, and the decode board would follow it down.'],
+     'Calls into the vectorised scanner that finds a quote or a backslash sixteen bytes at a time. Another presence counter: a string scanner that fell back to a byte loop would collapse this count, and the decode board would follow it down.'],
     ['encoding the same document, 400 times', null, null],
     ['encode_allocs', 'allocations',
      'The write path\u2019s allocation count. Encoding allocates more than decoding because it builds output as well as reading input; the number to watch is the ratio to append_fast below, which says how much of that building happened in place.'],
