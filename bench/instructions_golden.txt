@@ -58,16 +58,19 @@ jsonbench 2900219722
 encodebench 9207299685
 oneshot 47548418
 basket 55833610
+widebench 15730176374
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
 # it. Recorded rather than waved at, because a number that changes without a
 # sentence is the thing this file exists to catch.
-# 2026-08-14: basket rises 405 instructions, four millionths, and the other
-# three hold. That is the getter group's no-match path forcing its value
-# instead of exiting — the cost is the branch, paid where a getter is called
-# and the arms miss.
-# 2026-08-14: basket rises 16,082 instructions, three hundredths of a per
-# cent. That is join forcing every element it is handed rather than asking its
-# type and refusing — a cheap test per element, on the one benchmark here that
-# joins.
+# 2026-08-14: a fifth row, and it is the largest number in this file by a
+# factor of one and a half over the decoder — for a hundred and fifty
+# kilobytes of input against jsonbench's several megabytes. That is the whole
+# reason the benchmark exists: the work is quadratic in the array's length,
+# and every counter in bench/cost_golden_wide.txt holds still while it grows,
+# because the check that does the work allocates nothing.
+# 2026-08-14: basket rises 405 instructions for the getter group's forcing
+# no-match path and 16,082 for join's forcing, three hundredths of a per cent
+# between them. widebench's row above predates both, so the runner has the last
+# word on it.

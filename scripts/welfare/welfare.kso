@@ -84,7 +84,7 @@ d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
 # instructions, so this sees what the counts saw and the rest besides.
 decode_work = ["decode_instructions" "encode_instructions"]
 
-held_work = ["oneshot_instructions" "basket_instructions"]
+held_work = ["oneshot_instructions" "basket_instructions" "wide_instructions"]
 
 run_speed_counters = text/concat decode_work held_work
 
@@ -195,7 +195,8 @@ fn worked work
   ei = [["encode_instructions" work["encodebench"]!]]
   oi = [["oneshot_instructions" work["oneshot"]!]]
   bi = [["basket_instructions" work["basket"]!]]
-  text/concat (text/concat di ei) (text/concat oi bi)
+  wi = [["wide_instructions" work["widebench"]!]]
+  text/concat (text/concat di ei) (text/concat oi (text/concat bi wi))
 
 fn gathered d db dp e eb ep o b bp c v l
   head = text/concat (text/concat d db) (text/concat dp e)

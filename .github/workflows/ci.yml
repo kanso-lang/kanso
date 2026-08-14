@@ -261,6 +261,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/encode_counters.sh
+      - name: wide counters
+        id: wide
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/wide_counters.sh
       - name: every vein had its say
         if: always()
         run: |
@@ -272,7 +277,8 @@ jobs:
                       "one-shot counters:${{ steps.oneshot.outcome }}" \
                       "basket counters:${{ steps.basket.outcome }}" \
                       "compile memory:${{ steps.compile_memory.outcome }}" \
-                      "encode counters:${{ steps.encode.outcome }}"; do
+                      "encode counters:${{ steps.encode.outcome }}" \
+                      "wide counters:${{ steps.wide.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"
