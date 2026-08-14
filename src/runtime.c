@@ -795,6 +795,13 @@ typedef struct { KPtrSlot* slots; size_t cap; unsigned long long gen; } KPtrMap;
    it started from. Lists only — in-place list growth demands
    k_born_this_beat, which puts the list above the mark where the scan never
    runs, while k_b_put_mut grows a map in place with no such guard. */
+/* Below this the walk is cheaper than the hash that would spare it. The memo
+   pays when one list is asked about again and again, which is the streaming
+   shape: the carry holds the whole remaining document and every element asks
+   the same question of it. A loop over many small lists asks a different
+   question each time, so every lookup is a miss and the map is pure cost —
+   measured at 39% of a simulator that builds one short list per iteration. */
+#define K_ISV_MIN 64
 static KPtrMap k_isv_list;
 static size_t k_isv_live;
 static const char* k_isv_base;
@@ -997,7 +1004,7 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
         case K_LIST: {
             KList* l = (KList*)p;
             if (!k_survives_x(l->items, m)) return 0;
-            if (k_beat_depth > 0) {
+            if (k_beat_depth > 0 && l->len >= K_ISV_MIN) {
                 KMark* outer = &k_beat_stack[0];
                 if (k_isv_base != outer->ptr) {
                     k_ptrmap_begin(&k_isv_list);
