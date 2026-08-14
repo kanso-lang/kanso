@@ -695,8 +695,7 @@ static int k_survives(const void* p, KMark* m) {
    is shared. */
 static int k_ten_holds(const void* p);
 
-__attribute__((always_inline))
-static inline int k_survives_x(const void* p, KMark* m) {
+static int k_survives_x(const void* p, KMark* m) {
     if (k_survives(p, m)) return 1;
     return k_ten_any && m && k_ten_holds(p);
 }
@@ -784,12 +783,29 @@ static int k_ten_holds(const void* p) {
 
 /* Is this pointer inside the buffer the previous iteration copied into? That
    is the whole test for "has lived a lap". */
+/* The range the previous iteration copied into, hoisted. Everything this test
+   needs but the pointer is the same for every node of one evacuation — the
+   depth, the cap, the buffer — and the walk asks it per node, so the loop reads
+   two globals and compares rather than indexing two arrays and dereferencing.
+   Both are zero whenever tenuring is off, which is every program but the
+   wide-array one. */
+static const char* k_from_lo = NULL;
+static const char* k_from_hi = NULL;
+
 static int k_carry_holds(const void* p) {
-    if (!k_ten_on || k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 0;
-    if (k_ten_bytes[k_beat_depth - 1] > K_TEN_CAP) return 0;
-    KCarryBuf* b = &k_carries[k_beat_depth - 1].from;
     const char* q = (const char*)p;
-    return b->data && q >= b->data && q < b->data + b->cap;
+    return q >= k_from_lo && q < k_from_hi;
+}
+
+static void k_from_window(int on) {
+    k_from_lo = NULL;
+    k_from_hi = NULL;
+    if (!on || k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return;
+    if (k_ten_bytes[k_beat_depth - 1] > K_TEN_CAP) return;
+    KCarryBuf* b = &k_carries[k_beat_depth - 1].from;
+    if (!b->data) return;
+    k_from_lo = b->data;
+    k_from_hi = b->data + b->cap;
 }
 
 static void* k_ten_alloc(size_t n) {
@@ -1610,6 +1626,7 @@ void k_beat_iter_carry(void) {
     KCarry* c = &k_carries[k_beat_depth - 1];
     size_t need = 0;
     k_ten_on = 1;
+    k_from_window(1);
     k_ptrmap_begin(&k_copy_seen);
     k_copy_seen_live = 0;
     for (long long i = 0; i < k_carry_n; i++)
@@ -1634,6 +1651,7 @@ void k_beat_iter_carry(void) {
     c->to = swap;
     c->used_flag = 1;
     k_ten_on = 0;
+    k_from_window(0);
 }
 
 /* A permanent object: malloc'd, so it lives outside the beat arena and
