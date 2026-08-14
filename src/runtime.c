@@ -632,6 +632,26 @@ static KValue k_carry_slots[K_CARRY_MAX];
 static unsigned char k_carry_kept[K_CARRY_MAX];
 static long long k_carry_n = 0;
 
+/* Tenured carry storage. A carried value is deep-copied into the pair above on
+   every iteration, and the copy lands in malloc'd memory that k_survives — which
+   knows only about arena blocks — answers no for, so the next iteration copies
+   it again. A document threaded through a loop is therefore copied once per
+   iteration, which is quadratic in its length.
+
+   The discrimination that fixes it is survival, not size. A value found inside
+   the previous iteration's buffer has already lived a whole lap, so it is
+   promoted here, where nothing overwrites it, and every later iteration shares
+   it. A value the loop built fresh this lap is not there and goes to the pair
+   as before — which is what keeps a loop that builds a megabyte per iteration
+   from accumulating megabytes, the shape that produced the 83 GB runaway.
+
+   Blocks are appended and never realloc'd, so growth cannot move what they
+   hold. Membership is a hash set rather than a walk of the block list: the
+   walk would be linear in the blocks and asked once per node, which is the
+   quadratic again by another road. Both are released at the pop, after the
+   result has been copied out into the caller's arena. */
+
+
 /* Does p survive the innermost rewind — is it inside the live chain at or
    below the mark? mark == NULL means "the whole live chain", the test the
    pop's copy-out wants. */
@@ -706,6 +726,78 @@ static KPtrSlot* k_ptrmap_at(KPtrMap* t, const void* key, size_t* live) {
     return &t->slots[i];
 }
 
+typedef struct KTenBlock { struct KTenBlock* next; size_t cap; size_t used; char* data; } KTenBlock;
+static KTenBlock* k_ten_blocks[K_BEAT_MAX];
+static KPtrMap k_ten_set[K_BEAT_MAX];
+static size_t k_ten_live[K_BEAT_MAX];
+static size_t k_ten_bytes[K_BEAT_MAX];
+/* Past this a program stops tenuring and behaves as it did before, so no loop
+   can grow without bound on storage that is only freed at the pop. */
+#define K_TEN_CAP (64u << 20)
+#define K_TEN_BLOCK (64u << 10)
+static int k_ten_on = 0;
+
+/* Is this pointer tenured, at this beat depth or any outer one? A value
+   promoted by an outer loop is outside the arena for an inner one too. */
+static int k_ten_holds(const void* p) {
+    for (long long d = 0; d < k_beat_depth && d < K_BEAT_MAX; d++) {
+        KPtrMap* t = &k_ten_set[d];
+        if (!t->slots) continue;
+        size_t i = k_ptrmap_probe(t, p);
+        if (t->slots[i].gen == t->gen && t->slots[i].key == p) return 1;
+    }
+    return 0;
+}
+
+/* Is this pointer inside the buffer the previous iteration copied into? That
+   is the whole test for "has lived a lap". */
+static int k_carry_holds(const void* p) {
+    if (!k_ten_on || k_beat_depth <= 0 || k_beat_depth > K_BEAT_MAX) return 0;
+    if (k_ten_bytes[k_beat_depth - 1] > K_TEN_CAP) return 0;
+    KCarryBuf* b = &k_carries[k_beat_depth - 1].from;
+    const char* q = (const char*)p;
+    return b->data && q >= b->data && q < b->data + b->cap;
+}
+
+static void* k_ten_alloc(size_t n) {
+    long long d = k_beat_depth - 1;
+    KTenBlock* b = k_ten_blocks[d];
+    if (!b || b->cap - b->used < n) {
+        size_t cap = n > K_TEN_BLOCK ? n : K_TEN_BLOCK;
+        KTenBlock* nb = malloc(sizeof(KTenBlock));
+        if (!nb) { fputs("out of memory\n", stderr); exit(1); }
+        nb->data = malloc(cap);
+        if (!nb->data) { fputs("out of memory\n", stderr); exit(1); }
+        nb->cap = cap;
+        nb->used = 0;
+        nb->next = k_ten_blocks[d];
+        k_ten_blocks[d] = nb;
+        b = nb;
+    }
+    void* out = b->data + b->used;
+    b->used += n;
+    k_ten_bytes[d] += n;
+    if (!k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
+    KPtrSlot* slot = k_ptrmap_at(&k_ten_set[d], out, &k_ten_live[d]);
+    k_ten_live[d]++;
+    slot->gen = k_ten_set[d].gen;
+    slot->key = out;
+    slot->val = NULL;
+    return out;
+}
+
+static void k_ten_release(long long d) {
+    for (KTenBlock* b = k_ten_blocks[d]; b; ) {
+        KTenBlock* next = b->next;
+        free(b->data);
+        free(b);
+        b = next;
+    }
+    k_ten_blocks[d] = NULL;
+    k_ten_bytes[d] = 0;
+    if (k_ten_set[d].slots) { k_ptrmap_begin(&k_ten_set[d]); k_ten_live[d] = 0; }
+}
+
 static size_t k_copy_seen_live;
 static size_t k_copy_map_live;
 
@@ -720,7 +812,7 @@ static int k_copy_seen_check(const void* p) {
     return 0;
 }
 
-typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; } KCopy;
+typedef struct { KCarryBuf* buf; KMark* mark; int to_arena; int in_ten; } KCopy;
 
 static void* k_copy_alloc(KCopy* cp, size_t n) {
     n = (n + 15) & ~(size_t)15;
@@ -732,6 +824,7 @@ static void* k_copy_alloc(KCopy* cp, size_t n) {
     k_stat_evac_bytes += (long long)n;
     k_stat_evac_allocs++;
     if (cp->to_arena) return k_alloc(n);
+    if (cp->in_ten) return k_ten_alloc(n);
     void* p = cp->buf->data + cp->buf->used;
     cp->buf->used += n;
     return p;
@@ -825,16 +918,31 @@ static int k_shareable(KValue v, const void* p, KMark* m) {
 static size_t k_copy_size_budget = 0;
 static size_t k_copy_size_spent = 0;
 
+static int k_size_in_ten = 0;
+
 static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
     (void)p;
     size_t rounded = (n + 15) & ~(size_t)15;
     k_copy_size_spent += rounded;
+    if (k_size_in_ten) return 0;
     return rounded;
 }
 
 static size_t k_repair_size(KValue v, const void* p, KMark* m);
 
+static size_t k_copy_size_1(KValue v, KMark* m);
+
 static size_t k_copy_size(KValue v, KMark* m) {
+    if (!k_is_heap(v.tag)) return 0;
+    if (k_ten_on && k_ten_holds((const void*)(intptr_t)v.payload)) return 0;
+    int save = k_size_in_ten;
+    if (!save && k_carry_holds((const void*)(intptr_t)v.payload)) k_size_in_ten = 1;
+    size_t out = k_copy_size_1(v, m);
+    k_size_in_ten = save;
+    return out;
+}
+
+static size_t k_copy_size_1(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
     if (k_copy_size_budget && k_copy_size_spent > k_copy_size_budget) return 0;
     const void* p = (const void*)(intptr_t)v.payload;
@@ -1010,7 +1118,22 @@ static void k_repaired_note(KValue v) {
     k_repaired[k_repaired_n++] = v;
 }
 
+/* Tenuring is sticky down the walk. A promoted node's fresh descendants must
+   land beside it: leave one in the pair and the pair overwrites it two laps
+   later while the tenured parent still points at it. */
+static KValue k_deep_copy_1(KValue v, KCopy* cp);
+
 static KValue k_deep_copy(KValue v, KCopy* cp) {
+    if (!k_is_heap(v.tag)) return v;
+    if (k_ten_on && k_ten_holds((const void*)(intptr_t)v.payload)) return v;
+    int save = cp->in_ten;
+    if (!save && k_carry_holds((const void*)(intptr_t)v.payload)) cp->in_ten = 1;
+    KValue out = k_deep_copy_1(v, cp);
+    cp->in_ten = save;
+    return out;
+}
+
+static KValue k_deep_copy_1(KValue v, KCopy* cp) {
     if (!k_is_heap(v.tag)) return v;
     void* p = (void*)(intptr_t)v.payload;
     if (k_survives(p, cp->mark)) {
@@ -1309,7 +1432,7 @@ KValue k_beat_pop(KValue r) {
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
             } else {
                 if (c->used_flag) {
-                    KCopy cp = { NULL, NULL, 1 };
+                    KCopy cp = { NULL, NULL, 1, 0 };
                     k_ptrmap_begin(&k_copy_map);
                     k_copy_map_live = 0;
                     r = k_deep_copy(r, &cp);
@@ -1317,6 +1440,7 @@ KValue k_beat_pop(KValue r) {
                 k_chunkreg_migrate(k_beat_depth);
                 k_viewreg_migrate(k_beat_depth);
             }
+            k_ten_release(k_beat_depth);
             c->used_flag = 0;
         }
     }
@@ -1447,6 +1571,7 @@ void k_beat_iter_carry(void) {
     KMark* m = &k_beat_stack[k_beat_depth - 1];
     KCarry* c = &k_carries[k_beat_depth - 1];
     size_t need = 0;
+    k_ten_on = 1;
     k_ptrmap_begin(&k_copy_seen);
     k_copy_seen_live = 0;
     for (long long i = 0; i < k_carry_n; i++)
@@ -1458,7 +1583,7 @@ void k_beat_iter_carry(void) {
         c->to.cap = need ? need : 16;
     }
     c->to.used = 0;
-    KCopy cp = { &c->to, m, 0 };
+    KCopy cp = { &c->to, m, 0, 0 };
     k_ptrmap_begin(&k_copy_map);
     k_copy_map_live = 0;
     k_repaired_n = 0;
@@ -1470,6 +1595,7 @@ void k_beat_iter_carry(void) {
     c->from = c->to;
     c->to = swap;
     c->used_flag = 1;
+    k_ten_on = 0;
 }
 
 /* A permanent object: malloc'd, so it lives outside the beat arena and
@@ -1502,7 +1628,7 @@ KValue k_caf_freeze(KValue v) {
     if (!buf->data) { fputs("out of memory\n", stderr); exit(1); }
     buf->cap = need ? need : 16;
     buf->used = 0;
-    KCopy cp = { buf, &none, 0 };
+    KCopy cp = { buf, &none, 0, 0 };
     k_ptrmap_begin(&k_copy_map);
     k_copy_map_live = 0;
     return k_deep_copy(v, &cp);
