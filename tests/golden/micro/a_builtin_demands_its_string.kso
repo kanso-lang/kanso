@@ -1,0 +1,23 @@
+import "std/text"
+
+type want
+  why
+
+s1 = want "42"
+
+strs = [s1]
+
+fn noted acc _ true
+  acc
+
+fn noted acc one false
+  text/concat acc [one]
+
+fn gathered acc at
+  seen = strs[at]!
+  made = "{seen.why}"
+  noted acc made false
+
+texts = gathered [] 1
+
+pub play = print "{text/to_int texts[1]!} {length (text/split texts[1]! "4")}"
