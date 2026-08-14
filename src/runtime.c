@@ -695,7 +695,8 @@ static int k_survives(const void* p, KMark* m) {
    is shared. */
 static int k_ten_holds(const void* p);
 
-static int k_survives_x(const void* p, KMark* m) {
+__attribute__((always_inline))
+static inline int k_survives_x(const void* p, KMark* m) {
     if (k_survives(p, m)) return 1;
     return k_ten_any && m && k_ten_holds(p);
 }
