@@ -1985,6 +1985,21 @@ KValue k_b_field(KValue v, const char* name) {
 }
 
 
+/* A getter group matched nothing and the value is a cell. Reading a field
+   DEMANDS the record, so this forces and reads rather than refusing — and
+   unlike rendering it cannot recur, because the force answers a record and the
+   read hands back whatever the field holds, forced or not. Native defers where
+   the oracle does not, and without this the two disagree on the ordinary
+   conditional accumulator.
+
+   It can only turn an error into a value or into a different error: the path
+   is reached when nothing matched, so today it exits. A forced value that a
+   user-defined arm would have matched is read structurally instead, which is
+   still better than stopping. */
+KValue k_field_forced(KValue v, const char* name) {
+    return k_b_field(k_force(v), name);
+}
+
 KValue k_set_field(KValue target, const char* name, KValue v) {
     if (!k_not_failure(target)) return target;
     if (!k_not_failure(v)) return v;

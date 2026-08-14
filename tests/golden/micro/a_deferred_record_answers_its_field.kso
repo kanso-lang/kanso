@@ -1,0 +1,23 @@
+import "std/text"
+
+type want
+  why
+
+w1 = want "a parent"
+
+wants = [w1]
+
+fn noted acc _ true
+  acc
+
+fn noted acc one false
+  text/concat acc [one]
+
+fn gathered acc at
+  seen = wants[at]!
+  made = want "did not paint {seen.why}"
+  noted acc made false
+
+first = (gathered [] 1)[1]!
+
+pub play = print first.why
