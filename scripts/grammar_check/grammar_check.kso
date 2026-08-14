@@ -18,6 +18,7 @@ type rule
   pattern
   paints
   captures
+  ends
 
 type painted
   text
@@ -26,24 +27,39 @@ type painted
 type expectation
   line
   wanted
+  scope
 
 grammar_path = "editors/kanso/syntaxes/kanso.tmLanguage.json"
 
+comment_scope = "comment.line"
+
+operator_scope = "keyword.operator"
+
+string_scope = "string.quoted.double"
+
 type_scope = "entity.name.type"
 
-e1 = expectation "type person" ["person"]
+e1 = expectation "type person" ["person"] type_scope
 
-e2 = expectation "  name:string" ["string"]
+e2 = expectation "  name:string" ["string"] type_scope
 
-e3 = expectation "  partner:person" ["person"]
+e3 = expectation "  partner:person" ["person"] type_scope
 
-e4 = expectation "  peers:person[]" ["person[]"]
+e4 = expectation "  peers:person[]" ["person[]"] type_scope
 
-e5 = expectation "fn shout s:string" ["string"]
+e5 = expectation "fn shout s:string" ["string"] type_scope
 
-e6 = expectation "type post_body:string" ["post_body" "string"]
+e6 = expectation "type post_body:string" ["post_body" "string"] type_scope
 
-wanted_types = [e1 e2 e3 e4 e5 e6]
+e7 = expectation "# who they are" ["# who they are"] comment_scope
+
+# Two strings, so a closer that stops working swallows the gap between them
+# and paints one run where a reader sees two.
+e8 = expectation "x = \"hi\" \"yo\"" ["\"hi\"" "\"yo\""] string_scope
+
+e9 = expectation "  shout s . print" ["."] operator_scope
+
+expectations = [e1 e2 e3 e4 e5 e6 e7 e8 e9]
 
 fn read_grammar raw
   checked (json/decode raw)
@@ -56,9 +72,9 @@ fn checked grammar
   faults = over_lines rules 1 []
   reported faults
 
-# The repository entries the top-level pattern list names, in that order,
-# keeping only the ones that match text. A rule this engine cannot compile is
-# not this check's business, and neither is one that only includes others.
+# The repository entries the top-level pattern list names, in that order.
+# Three shapes reach a reader: a rule that matches text, a rule that opens and
+# closes around it, and a rule that is only a list of the other two.
 fn rules_of grammar
   named = grammar["patterns"]!
   repo = grammar["repository"]!
@@ -79,13 +95,37 @@ fn carried named repo at acc _ true
 
 fn carried named repo at acc one false
   found = repo[without_hash one["include"]!]!
-  gathered named repo (at + 1) (kept acc found (found["match"] == none))
+  gathered named repo (at + 1) (kept acc found)
 
-fn kept acc _ true
+fn kept acc found
+  as_match acc found (found["match"] == none)
+
+fn as_match acc found false
+  push acc (rule found["match"]! found["name"] found["captures"] none)
+
+fn as_match acc found true
+  as_span acc found (found["begin"] == none)
+
+fn as_span acc found false
+  push acc (rule found["begin"]! found["name"] none found["end"]!)
+
+fn as_span acc found true
+  as_group acc found (found["patterns"] == none)
+
+fn as_group acc _ true
   acc
 
-fn kept acc found false
-  push acc (rule found["match"]! found["name"] found["captures"])
+fn as_group acc found false
+  each_sub acc found["patterns"]! 1
+
+fn each_sub acc subs at
+  subbing acc subs at (at > length subs)
+
+fn subbing acc _ _ true
+  acc
+
+fn subbing acc subs at false
+  each_sub (kept acc subs[at]!) subs (at + 1)
 
 fn without_hash name
   bare name (text/slice name 1 1 == "#")
@@ -123,9 +163,34 @@ fn landed line rules i at acc _ none
   tried line rules (i + 1) at acc
 
 fn landed line rules _ at acc one m
+  spanned line rules at acc one m (one.ends == none)
+
+fn spanned line rules at acc one m true
   whole = text/slice line at (m.to - 1)
   grown = with_captures (with_whole acc one whole) one m
   paint line rules (past at m) grown
+
+# A span paints from its opener through its closer, which is what a reader
+# sees. Where the closer never arrives the line ends the run.
+fn spanned line rules at acc one m false
+  stop = closing one.ends line m.to
+  whole = text/slice line at (stop - 1)
+  paint line rules stop (push acc (painted whole one.paints))
+
+fn closing ends line at
+  seeking ends line at (at > length line)
+
+fn seeking _ _ at true
+  at
+
+fn seeking ends line at false
+  reached ends line at (regexp/match_at ends line at)
+
+fn reached ends line at none
+  closing ends line (at + 1)
+
+fn reached _ _ _ m
+  m.to
 
 fn past at m
   bigger m.to (at + 1)
@@ -177,49 +242,49 @@ fn named_capture acc caps groups at text found false
   each_capture grown caps groups (at + 1)
 
 fn over_lines rules at acc
-  walking rules at acc (at > length wanted_types)
+  walking rules at acc (at > length expectations)
 
 fn walking _ _ acc true
   acc
 
 fn walking rules at acc false
-  one = wanted_types[at]!
+  one = expectations[at]!
   out = paint one.line rules 1 []
-  types = list/to_list (list/map (typed_only out) (p -> p.text))
-  gaps = missing one types 1 []
+  seen = list/to_list (list/map (in_scope out one.scope) (p -> p.text))
+  gaps = missing one seen 1 []
   over_lines rules (at + 1) (list/to_list (text/concat acc gaps))
 
-fn typed_only out
-  list/to_list (list/select out (p -> in? p.scope type_scope))
+fn in_scope out scope
+  list/to_list (list/select out (p -> in? p.scope scope))
 
 fn in? hay needle
   length (text/split hay needle) > 1
 
-fn missing one types at acc
-  checking one types at acc (at > length one.wanted)
+fn missing one seen at acc
+  checking one seen at acc (at > length one.wanted)
 
 fn checking _ _ _ acc true
   acc
 
-fn checking one types at acc false
+fn checking one seen at acc false
   want = one.wanted[at]!
-  missing one types (at + 1) (noted acc one want types (has? types want))
+  missing one seen (at + 1) (noted acc one want seen (has? seen want))
 
-fn has? types want
-  length (list/to_list (list/select types (t -> t == want))) > 0
+fn has? seen want
+  length (list/to_list (list/select seen (t -> t == want))) > 0
 
 fn noted acc _ _ _ true
   acc
 
-fn noted acc one want types false
-  said = "'{one.line}': '{want}' is not painted as a type"
-  push acc "{said} (types: {types})"
+fn noted acc one want seen false
+  said = "'{one.line}': '{want}' is not painted {one.scope}"
+  push acc "{said} (painted: {seen})"
 
 fn reported faults
   clean faults (length faults == 0)
 
 fn clean _ true
-  io/write "PASS  every type in {length wanted_types} lines is painted as one\n"
+  io/write "PASS  {length expectations} lines paint the way a reader expects\n"
 
 fn clean faults false
   io/write (spelled faults 1 "") . (_ -> io/exit 1)
