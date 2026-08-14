@@ -96,8 +96,15 @@ function highlightLine(line) {
         html += span('f', name);
         afterFn = false;
       } else if (afterType) {
-        html += span('t', name);
         afterType = false;
+        if (ascription) {
+          const parent = line.slice(i + name.length + 1)
+            .match(/^[a-z0-9_\[\]]*/)[0];
+          html += span('t', name) + span('o', ':') + span('t', parent);
+          i += name.length + 1 + parent.length;
+          continue;
+        }
+        html += span('t', name);
       } else if (ascription) {
         const type = line.slice(i + name.length + 1).match(/^[a-z0-9_\[\]]*/)[0];
         html += esc(name) + span('o', ':') + span('t', type);

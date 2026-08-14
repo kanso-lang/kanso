@@ -19,8 +19,14 @@ type pages
   engine
   hero
   index
+  painting
   play_js
   wasm
+
+type paint_want
+  at
+  needle
+  why
 
 # Each visit gets its own port: a listener closed a moment ago is not
 # immediately available again, and the second visit met "cannot listen on
@@ -48,6 +54,8 @@ board_port = 8750
 book_port = 8751
 
 chart_port = 8752
+
+paint_port = 8753
 
 assets = ["kanso-engine.js" "kanso.wasm" "landing-play.js" "play.js"]
 
@@ -113,6 +121,9 @@ fn body_for "/book/ch04.html" set
 
 fn body_for "/numbers.html" set
   set.chart
+
+fn body_for "/paint.html" set
+  set.painting
 
 fn body_for "/play.js" set
   set.play_js
@@ -262,6 +273,52 @@ trend = """
   </script>
 """
 
+engine_tag = "<script src=\"/kanso-engine.js\"></script>"
+
+# The site's tokenizer is the second implementation of what the grammar check
+# asks of the editor grammar, and the two drift silently: a rule stops matching,
+# the colour goes away, and the reader weeks later is who finds out. These are
+# the grammar check's own lines, asked of the site. `highlight` is a plain
+# function that does not wait on the wasm module, so this probe needs no ready
+# handshake.
+paint = """
+  <script>
+  window.PAGE_PROBE = async () => \{
+    const lines = ['type person', '  name:string', 'type post_body:string',
+                   '# who they are', 'x = "hi" "yo"', '  shout s . print'];
+    return \{painted: lines.map((l) => window.KansoEngine.highlight(l))};
+  };
+  </script>
+"""
+
+t_person = "<span class=\"t\">person</span>"
+
+t_string = "<span class=\"t\">string</span>"
+
+t_subtype = "<span class=\"t\">post_body</span>"
+
+s_hi = "<span class=\"s\">\"hi\"</span>"
+
+s_yo = "<span class=\"s\">\"yo\"</span>"
+
+w1 = paint_want 1 t_person "the site did not paint a type name"
+
+w2 = paint_want 2 t_string "the site did not paint an ascribed type"
+
+w3 = paint_want 3 t_subtype "the site did not paint a subtype's name"
+
+w4 = paint_want 3 t_string "the site did not paint a subtype's parent"
+
+w5 = paint_want 4 "<span class=\"c\">" "the site did not paint a comment"
+
+w6 = paint_want 5 s_hi "the site did not paint the first string"
+
+w7 = paint_want 5 s_yo "the site did not paint the second string"
+
+w8 = paint_want 6 "<span class=\"o\">.</span>" "the site did not paint a pipe"
+
+paint_wants = [w1 w2 w3 w4 w5 w6 w7 w8]
+
 fn replaced text from to
   text/join (text/split text from) to
 
@@ -369,7 +426,19 @@ fn landed set chrome report
 fn after_landing set chrome report
   why = "the landing sample did not run: {report}"
   told = noted [] why (saw? report "hello, kanso")
-  visiting_board set chrome told
+  visiting_paint set chrome told
+
+fn visiting_paint set chrome failures
+  on = (report -> painted_page set chrome failures report)
+  visiting set chrome paint_port "/paint.html" on
+
+fn painted_page set chrome failures report
+  on = (_ -> read_paint set chrome failures report)
+  stopping on
+
+fn read_paint set chrome failures report
+  read = json/decode report
+  visiting_board set chrome (missing_paint read failures)
 
 fn visiting_board set chrome failures
   on = (report -> boarded set chrome failures report)
@@ -443,6 +512,23 @@ fn missing_run read acc
 fn missing_reader read acc
   why = "a book panel did not run edited source"
   noted acc why (said_in? read "edited" "the reader edited this: 42")
+
+fn missing_paint read acc
+  paint_faults read["painted"] acc 1
+
+fn paint_faults none acc _
+  text/concat acc ["the paint page reported no painting at all"]
+
+fn paint_faults painted acc at
+  paint_step painted acc at (at > length paint_wants)
+
+fn paint_step _ acc _ true
+  acc
+
+fn paint_step painted acc at false
+  one = paint_wants[at]!
+  grown = noted acc one.why (saw? painted[one.at]! one.needle)
+  paint_faults painted grown (at + 1)
 
 fn missing_first read acc
   why = "the playground's first example did not run"
@@ -522,9 +608,13 @@ fn with_all bodies
   assembled bodies shown read drawn index
 
 fn assembled bodies shown read drawn index
+  engine = bodies[1]!
+  wasm = bodies[2]!
   hero = bodies[3]!
   js = bodies[4]!
-  set = pages shown bodies[8]! read drawn bodies[1]! hero index js bodies[2]!
+  book = bodies[8]!
+  painted = document "" "" "" engine_tag paint
+  set = pages shown book read drawn engine hero index painted js wasm
   wanted set
 
 fn wanted set
