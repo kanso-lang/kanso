@@ -57,7 +57,7 @@
 jsonbench 2900219722
 encodebench 9207299685
 oneshot 47548418
-basket 55817528
+basket 55833610
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -67,3 +67,7 @@ basket 55817528
 # three hold. That is the getter group's no-match path forcing its value
 # instead of exiting — the cost is the branch, paid where a getter is called
 # and the arms miss.
+# 2026-08-14: basket rises 16,082 instructions, three hundredths of a per
+# cent. That is join forcing every element it is handed rather than asking its
+# type and refusing — a cheap test per element, on the one benchmark here that
+# joins.
