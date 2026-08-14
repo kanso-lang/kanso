@@ -82,7 +82,13 @@ fn replied c handler raw
 # whole of what one needs: serve the page, serve its assets, and answer the
 # report.
 pub fn serve_until port handler seed
-  net/listen port . (l -> served l handler seed)
+  net/listen port . (l -> serving l handler seed)
+
+# The same server, handed a listener rather than a number. A caller that binds
+# port 0 and reads back what it was given never has to drop the listener and
+# name the port again, which is the gap anything else can bind into.
+pub fn serving l handler seed
+  served l handler seed
 
 fn served l handler carried
   net/accept l . (c -> asked c handler carried) . (next -> more l handler next)
