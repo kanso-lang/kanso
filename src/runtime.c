@@ -5576,7 +5576,9 @@ KValue k_index(KValue container, KValue key, const char* origin) {
     if (found.tag == K_NONE) {
         return k_err(k_concat(k_str("missing index "), k_render(key, 1)), origin);
     }
-    return found;
+    /* `!` says demand, so the element is forced here rather than at each
+       builtin that later inspects it. */
+    return k_force(found);
 }
 
 /* A header allocated before the current beat mark survives the rewind that

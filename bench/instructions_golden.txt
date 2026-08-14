@@ -55,9 +55,9 @@
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
 jsonbench 2903068903
-encodebench 9712917539
-oneshot 49185014
-basket 57383956
+encodebench 9712917543
+oneshot 49221200
+basket 57425982
 widebench 130337917
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
@@ -104,3 +104,9 @@ widebench 130337917
 # carries it — neither removable while tenuring exists. The trade is stated
 # rather than hidden: the encoder pays five and a half per cent so that a wide
 # document stops being quadratic.
+# 2026-08-14 (last): the decoder does not move at all, encodebench by four,
+# oneshot 36,186 and basket 42,026. Forcing inside to_int and split instead
+# costs 1,273,192, of which 1,256,400 falls on the decoder alone because it
+# calls to_int on every integer token. This is the correctness fix at the
+# cheaper site: native and the oracle now agree where a computed string
+# reaches either builtin.
