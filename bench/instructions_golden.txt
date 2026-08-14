@@ -55,10 +55,10 @@
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
 jsonbench 2900219722
-encodebench 9207299685
+encodebench 9207704515
 oneshot 47548418
-basket 55833610
-widebench 15730176374
+basket 55937643
+widebench 134061218
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -74,3 +74,16 @@ widebench 15730176374
 # no-match path and 16,082 for join's forcing, three hundredths of a per cent
 # between them. widebench's row above predates both, so the runner has the last
 # word on it.
+# 2026-08-14: basket rises 405 instructions, four millionths. That is the
+# getter group's no-match path forcing its value instead of exiting — the cost
+# is the branch, paid where a getter is called and the arms miss. widebench's
+# row above was measured before that landed, so the runner has the last word
+# on it.
+# 2026-08-14: widebench 15,730,176,374 to 134,061,218 — a hundred and seventeen
+# times, and quadratic to linear. A list whose slots all lie below the outermost
+# beat mark outlives every rewind, so its survival verdict cannot change and is
+# worth keeping; the check used to walk all twenty thousand elements once per
+# element printed. encodebench pays 404,830 (0.0044%) and basket 104,033 (0.19%)
+# for the hash probe that keeps it, and jsonbench and oneshot do not move. That
+# is the trade, stated: two programs give up a fifth of a per cent so that wide
+# documents stop being unusable.
