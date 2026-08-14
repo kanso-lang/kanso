@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=82034
-encodebench text=99490
-oneshot text=99202
-basket text=91410
-widebench text=100722
+jsonbench text=82738
+encodebench text=100194
+oneshot text=99906
+basket text=92114
+widebench text=101426
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -65,3 +65,11 @@ widebench text=100722
 # reads, and 176 more for the join that forces before it sizes. basket is the
 # only one of the original four that reaches either; widebench's row was
 # measured before both and is the runner's to confirm.
+# 2026-08-14: basket rises 640 bytes. A getter group that matched nothing now
+# forces the value and reads the field rather than printing and exiting, so the
+# group returns where it used to end. basket is the only one of the original
+# four that links such a group; widebench's row is the runner's to confirm.
+# 2026-08-14: +704 bytes on every binary, the same figure five times, because
+# every program links the runtime whether or not it prints a wide array. It is
+# the memo that stops k_interior_survives rescanning a list once per element:
+# a pointer map, its lookup, and the outermost-mark test.
