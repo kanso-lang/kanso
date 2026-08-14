@@ -678,9 +678,25 @@ static int k_survives(const void* p, KMark* m) {
         if (q >= start && q < end) return 1;
         frontier = NULL;
     }
-    /* Asked last, not first. Tenured storage is never inside an arena block, so
-       the order cannot change the answer, and every pointer the arena does hold
-       — which is nearly all of them — then pays nothing for the question. */
+    return 0;
+}
+
+/* Does this outlive the rewind, counting storage the carry tenured? Asked by
+   the copy machinery and by k_born_this_beat, and by nothing else.
+   k_survives itself stays the pure arena walk, because the mutation fast paths
+   ask it per append and putting a second test inside it cost between 1.2 and
+   5.5 per cent on four benchmarks that tenure nothing at all.
+   The other callers are safe without it, and each for its own reason:
+   k_memo_outlives and k_carry_stage_kept answer no and copy, which is extra
+   work rather than wrong; k_outlives_beat answers no and takes the general
+   path; k_b_append_mut's `dies` answers no and mallocs, which is what a header
+   below the mark wants anyway. k_born_this_beat is the one that would be
+   wrong — answering yes there licenses growing a tenured list in place, and it
+   is shared. */
+static int k_ten_holds(const void* p);
+
+static int k_survives_x(const void* p, KMark* m) {
+    if (k_survives(p, m)) return 1;
     return k_ten_any && m && k_ten_holds(p);
 }
 
@@ -862,7 +878,7 @@ static size_t k_copy_size(KValue v, KMark* m);
 static int k_slots_survive(const KValue* slots, long long n, KMark* m) {
     for (long long i = 0; i < n; i++) {
         if (!k_is_heap(slots[i].tag)) continue;
-        if (!k_survives((const void*)(intptr_t)slots[i].payload, m)) return 0;
+        if (!k_survives_x((const void*)(intptr_t)slots[i].payload, m)) return 0;
     }
     return 1;
 }
@@ -875,15 +891,15 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
            builder. */
         case K_STR: {
             KStr* st = (KStr*)p;
-            return st->cap > 0 || k_survives(st->data, m);
+            return st->cap > 0 || k_survives_x(st->data, m);
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
-            return b->cap > 0 || k_survives(b->data, m);
+            return b->cap > 0 || k_survives_x(b->data, m);
         }
         case K_LIST: {
             KList* l = (KList*)p;
-            if (!k_survives(l->items, m)) return 0;
+            if (!k_survives_x(l->items, m)) return 0;
             if (k_beat_depth > 0) {
                 KMark* outer = &k_beat_stack[0];
                 if (k_isv_base != outer->ptr) {
@@ -894,7 +910,7 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
                 KPtrSlot* memo = k_ptrmap_at(&k_isv_list, p, &k_isv_live);
                 if (memo->gen == k_isv_list.gen && memo->key == p)
                     return memo->val != NULL ? 1 : k_slots_survive(l->items, l->len, m);
-                int deep = k_survives(l->items, outer)
+                int deep = k_survives_x(l->items, outer)
                         && k_slots_survive(l->items, l->len, outer);
                 k_isv_live++;
                 memo->gen = k_isv_list.gen;
@@ -906,15 +922,15 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
-            return k_survives(mp->pairs, m) && k_slots_survive(mp->pairs, 2 * mp->len, m);
+            return k_survives_x(mp->pairs, m) && k_slots_survive(mp->pairs, 2 * mp->len, m);
         }
         case K_REC: {
             KRec* r = (KRec*)p;
-            return k_survives(r->fields, m) && k_slots_survive(r->fields, r->nfields, m);
+            return k_survives_x(r->fields, m) && k_slots_survive(r->fields, r->nfields, m);
         }
         case K_CLOSURE: {
             KClosure* cl = (KClosure*)p;
-            return k_survives(cl->env, m) && k_slots_survive((KValue*)cl->env, cl->ncaps, m);
+            return k_survives_x(cl->env, m) && k_slots_survive((KValue*)cl->env, cl->ncaps, m);
         }
         case K_DESC: {
             KDesc* d = (KDesc*)p;
@@ -927,7 +943,7 @@ static int k_interior_survives(KValue v, const void* p, KMark* m) {
 
 /* Shareable: the node and its interior both outlive the rewind. */
 static int k_shareable(KValue v, const void* p, KMark* m) {
-    return k_survives(p, m) && k_interior_survives(v, p, m);
+    return k_survives_x(p, m) && k_interior_survives(v, p, m);
 }
 
 /* The cohort guard sizes a survivor only until the verdict is settled: a
@@ -966,7 +982,7 @@ static size_t k_copy_size_1(KValue v, KMark* m) {
     if (!k_is_heap(v.tag)) return 0;
     if (k_copy_size_budget && k_copy_size_spent > k_copy_size_budget) return 0;
     const void* p = (const void*)(intptr_t)v.payload;
-    if (k_survives(p, m)) {
+    if (k_survives_x(p, m)) {
         if (k_interior_survives(v, p, m)) return 0;
         if (k_copy_seen_check(p)) return 0;
         return k_repair_size(v, p, m);
@@ -977,13 +993,13 @@ static size_t k_copy_size_1(KValue v, KMark* m) {
         case K_STR: {
             KStr* s = (KStr*)p;
             n += k_copy_size_ptr(s, sizeof(KStr), m);
-            if (!k_survives(s->data, m)) n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
+            if (!k_survives_x(s->data, m)) n += k_copy_size_ptr(s->data, (size_t)s->len + 1, m);
             break;
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
             n += k_copy_size_ptr(b, sizeof(KBytes), m);
-            if (!k_survives(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
+            if (!k_survives_x(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
             break;
         }
         case K_LIST: {
@@ -1031,7 +1047,7 @@ static size_t k_copy_size_1(KValue v, KMark* m) {
             KErrBox* e = (KErrBox*)p;
             n += k_copy_size_ptr(e, sizeof(KErrBox), m);
             n += k_copy_size(e->reason, m);
-            for (KHop* h = e->hops; h && !k_survives(h, m); h = h->prev)
+            for (KHop* h = e->hops; h && !k_survives_x(h, m); h = h->prev)
                 n += k_copy_size_ptr(h, sizeof(KHop), m);
             break;
         }
@@ -1056,38 +1072,38 @@ static size_t k_repair_size(KValue v, const void* p, KMark* m) {
     switch (v.tag) {
         case K_STR: {
             KStr* st = (KStr*)p;
-            if (!k_survives(st->data, m)) n += k_copy_size_ptr(st->data, (size_t)st->len + 1, m);
+            if (!k_survives_x(st->data, m)) n += k_copy_size_ptr(st->data, (size_t)st->len + 1, m);
             break;
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
-            if (!k_survives(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
+            if (!k_survives_x(b->data, m)) n += k_copy_size_ptr(b->data, (size_t)b->len, m);
             break;
         }
         case K_LIST: {
             KList* l = (KList*)p;
-            if (!k_survives(l->items, m))
+            if (!k_survives_x(l->items, m))
                 n += k_copy_size_ptr(l->items, sizeof(KBuf) + sizeof(KValue) * (size_t)(l->len ? l->len : 1), m);
             for (long long i = 0; i < l->len; i++) n += k_copy_size(l->items[i], m);
             break;
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
-            if (!k_survives(mp->pairs, m))
+            if (!k_survives_x(mp->pairs, m))
                 n += k_copy_size_ptr(mp->pairs, sizeof(KBuf) + sizeof(KValue) * (size_t)(2 * (mp->len ? mp->len : 1)), m);
             for (long long i = 0; i < 2 * mp->len; i++) n += k_copy_size(mp->pairs[i], m);
             break;
         }
         case K_REC: {
             KRec* r = (KRec*)p;
-            if (!k_survives(r->fields, m))
+            if (!k_survives_x(r->fields, m))
                 n += k_copy_size_ptr(r->fields, sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1), m);
             for (long long i = 0; i < r->nfields; i++) n += k_copy_size(r->fields[i], m);
             break;
         }
         case K_CLOSURE: {
             KClosure* cl = (KClosure*)p;
-            if (!k_survives(cl->env, m))
+            if (!k_survives_x(cl->env, m))
                 n += k_copy_size_ptr(cl->env, sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1), m);
             for (long long i = 0; i < cl->ncaps; i++) n += k_copy_size(((KValue*)cl->env)[i], m);
             break;
@@ -1157,7 +1173,7 @@ static inline KValue k_deep_copy(KValue v, KCopy* cp) {
 static KValue k_deep_copy_1(KValue v, KCopy* cp) {
     if (!k_is_heap(v.tag)) return v;
     void* p = (void*)(intptr_t)v.payload;
-    if (k_survives(p, cp->mark)) {
+    if (k_survives_x(p, cp->mark)) {
         if (k_interior_survives(v, p, cp->mark)) return v;
         KPtrSlot* slot = k_ptrmap_at(&k_copy_map, p, &k_copy_map_live);
         if (slot->gen == k_copy_map.gen && slot->key == p) {
@@ -1190,7 +1206,7 @@ static KValue k_deep_copy_1(KValue v, KCopy* cp) {
                string, which is the quadratic the count exists to remove. A
                builder's positive cap does not travel: the copy owns no room. */
             ns->cap = s->cap < 0 ? s->cap : 0;
-            if (k_survives(s->data, cp->mark)) {
+            if (k_survives_x(s->data, cp->mark)) {
                 ns->data = s->data;
             } else {
                 ns->data = k_copy_alloc(cp, (size_t)s->len + 1);
@@ -1205,7 +1221,7 @@ static KValue k_deep_copy_1(KValue v, KCopy* cp) {
             k_copy_map_put(p, nb);
             nb->len = b->len;
             nb->cap = 0;
-            if (k_survives(b->data, cp->mark)) {
+            if (k_survives_x(b->data, cp->mark)) {
                 nb->data = b->data;
             } else {
                 unsigned char* d = k_copy_alloc(cp, (size_t)b->len);
@@ -1297,7 +1313,7 @@ static KValue k_deep_copy_1(KValue v, KCopy* cp) {
             ne->origin = e->origin;
             KHop** tail = &ne->hops;
             KHop* h = e->hops;
-            for (; h && !k_survives(h, cp->mark); h = h->prev) {
+            for (; h && !k_survives_x(h, cp->mark); h = h->prev) {
                 KHop* nh = k_copy_alloc(cp, sizeof(KHop));
                 nh->fn = h->fn;
                 *tail = nh;
@@ -1320,7 +1336,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
     switch (v.tag) {
         case K_STR: {
             KStr* st = (KStr*)p;
-            if (k_survives(st->data, cp->mark)) break;
+            if (k_survives_x(st->data, cp->mark)) break;
             char* d = k_copy_alloc(cp, (size_t)st->len + 1);
             memcpy(d, st->data, (size_t)st->len + 1);
             st->data = d;
@@ -1329,7 +1345,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_BYTES: {
             KBytes* b = (KBytes*)p;
-            if (k_survives(b->data, cp->mark)) break;
+            if (k_survives_x(b->data, cp->mark)) break;
             unsigned char* d = k_copy_alloc(cp, (size_t)b->len);
             memcpy(d, b->data, (size_t)b->len);
             b->data = d;
@@ -1338,7 +1354,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_LIST: {
             KList* l = (KList*)p;
-            if (!k_survives(l->items, cp->mark)) {
+            if (!k_survives_x(l->items, cp->mark)) {
                 long long cap = l->len ? l->len : 1;
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
                 nb->cap = cap;
@@ -1351,7 +1367,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_MAP: {
             KMap* mp = (KMap*)p;
-            if (!k_survives(mp->pairs, cp->mark)) {
+            if (!k_survives_x(mp->pairs, cp->mark)) {
                 long long cap = 2 * (mp->len ? mp->len : 1);
                 KBuf* nb = k_copy_alloc(cp, sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
                 nb->cap = cap;
@@ -1367,7 +1383,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_REC: {
             KRec* r = (KRec*)p;
-            if (!k_survives(r->fields, cp->mark)) {
+            if (!k_survives_x(r->fields, cp->mark)) {
                 size_t n = sizeof(KValue) * (size_t)(r->nfields ? r->nfields : 1);
                 KValue* nf = k_copy_alloc(cp, n);
                 memcpy(nf, r->fields, n);
@@ -1378,7 +1394,7 @@ static void k_repair_interior(KValue v, void* p, KCopy* cp) {
         }
         case K_CLOSURE: {
             KClosure* cl = (KClosure*)p;
-            if (!k_survives(cl->env, cp->mark)) {
+            if (!k_survives_x(cl->env, cp->mark)) {
                 size_t n = sizeof(KValue) * (size_t)(cl->ncaps ? cl->ncaps : 1);
                 KValue* ne = k_copy_alloc(cp, n);
                 memcpy(ne, cl->env, n);
@@ -5578,7 +5594,7 @@ static int k_born_this_beat(const void* p) {
     const char* q = (const char*)p;
     if (q >= (const char*)(k_blocks + 1) && q < k_arena)
         return k_blocks != m->block || q >= (const char*)m->ptr;
-    return !k_survives(p, m);
+    return !k_survives_x(p, m);
 }
 
 /* `proven` says the call site is one the linearity analysis licensed, so the
