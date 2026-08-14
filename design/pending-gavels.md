@@ -877,3 +877,53 @@ and resumes continuation descriptions, and `accept` yields by handing one back.
 Those are internal and unaffected in principle — representation and surface
 semantics are different questions — but nobody has checked that the internal
 form survives untouched when the surface one goes.
+
+## 20. When is a self-naming constant's cell complete
+
+    type cell
+      v
+
+    ring = cell ring
+
+    fn plus x
+      x + 1
+
+    print "{plus ring.v}"
+
+The oracle and native answer `a lazy binding demands its own value`. The
+browser answers `` `+` is not defined for these values ``. Both are honest
+accounts of what each engine did, which is why this is a fork rather than a
+bug: the engines disagree about when the cell `ring` names is finished, not
+about how to force it.
+
+Native blackholes. The cell is still being computed while the record it builds
+is read, so reading `.v` reaches a demand in progress and the demand is what
+gets reported. The browser completes. Forcing `ring` memoises it as the record
+it built, so `ring.v` hands back a record and `record + 1` is genuinely
+undefined.
+
+**Interim state.** Recorded in `tests/golden/wasm_gaps.txt:49`, so all three
+harnesses tolerate the disagreement and the differential law is suspended for
+this one program. It has been tolerated since 2026-08-09.
+
+**What was already ruled out.** This is not a missing force at the operator.
+Making `rt_binop` force its operands changed nothing — the wasm tests passed
+and the browser's answer was unchanged, because memoisation had already
+happened by then. That change was reverted and nothing of it shipped.
+
+**The two answers, and what each costs.**
+
+*Demand is the truth.* The browser needs a blackhole with native's reach: the
+cell marked RUNNING for the whole of its own construction, not only while the
+closure body runs. `wasm_rt.rs:127` `forced` already carries RUNNING and
+DEFERRED; what differs is when a record the cell built stops counting as still
+running. This keeps the three engines byte-identical and keeps the diagnostic
+pointed at the author's actual mistake.
+
+*Completing is the truth.* Native is over-eager, the golden's recorded output is
+wrong, and the message a user sees for a self-referential constant becomes a
+type error about an operator they did not write.
+
+**What it unblocks.** Task #176, task #178 (a constant naming itself needs
+passing as an argument to work, same root), and one line of
+`tests/golden/wasm_gaps.txt`.
