@@ -1792,3 +1792,54 @@ Two lessons that generalise past this decoder. The obvious optimisation is
 usually already implemented here — the sentinel was in the code before it was
 in the plan. And the profile rarely points where the code shape suggests, which
 is the entire reason `bench/instructions_golden.txt` exists.
+
+## 2026-08-13 — the renderer is right to demand nothing, and one sentence of it is wrong
+
+Native prints `<thunk>` where the oracle prints the value:
+
+    fn noted acc _ true
+      acc
+
+    fn noted acc why false
+      text/concat acc [why]
+
+Neither engine has a missing force. They defer at different points. The oracle
+barely defers at all — `stored()` builds a cell only for an expression that
+awaits a knot, so an interpolated string binding is evaluated eagerly and no
+cell ever reaches the list. Native defers on strictness: a parameter crosses
+already-evaluated only when every arm demands it, and the `_` arm means one
+does not. The emitted IR shows the dispatcher storing its parameter with no
+force and no release, which is correct for that policy.
+
+So native is lazier than the oracle, and the difference escapes as a word no
+program meant to print.
+
+### Making the renderer force, declined
+
+The obvious repair is one line in `k_render`:
+
+    if (v.tag == K_THUNK) return k_render(k_force(v), quote);
+
+It makes the reduced program agree on both engines. It also turns
+
+    ring = [ring]
+
+from `[<thunk>]` into `error[runtime]: the program ran out of stack`. Once the
+constant finishes, its cell is forced to a list holding that same cell, so
+forcing inside rendering recurses forever. The micro corpus catches it twice,
+across-engines and release-built. Reverted.
+
+Which settles what `<thunk>` is for. It is not a marker that somebody forgot a
+force — it is the terminating display for a cell that cannot be demanded,
+and rendering must not demand or a cyclic value has no printable form.
+
+The comment above that branch is therefore right about the design and wrong
+about the fact it cites: it says the oracle answers the same way, and the
+oracle prints the value, never having built a cell. A load-bearing comment
+asserting agreement where the engines diverge is how the next reader gets this
+backwards.
+
+A real fix belongs where the cell is made, not where it is shown — most likely
+by widening the strictness rule so a parameter an arm ignores is still passed
+evaluated when it is cheap and non-recursive. That decision meets the
+self-naming constant question from the other side, and that one is Clay's.
