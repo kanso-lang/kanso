@@ -189,6 +189,7 @@ declare %KValue @k_keyed_check(%KValue, i64)
 declare %KValue @k_keyed_field(%KValue, ptr)
 declare %KValue @k_b_field(%KValue, ptr)
 declare void @k_no_field(%KValue, ptr)
+declare %KValue @k_field_forced(%KValue, ptr)
 declare %KValue @k_set_field(%KValue, ptr, %KValue)
 declare i64 @k_check_some(%KValue)
 declare %KValue @k_err_inner(%KValue)
@@ -1994,7 +1995,15 @@ impl<'a> Backend<'a> {
                 let (lit, _len) = self.intern(&format!("{field}\0"));
                 // a getter never takes the by-value convention, so its
                 // parameter is already an ordinary value here
-                f.line(&format!("call void @k_no_field(%KValue %x0, ptr @{lit})"));
+                if self.ret_ty(name, arity) == "%parsed" {
+                    f.line(&format!("call void @k_no_field(%KValue %x0, ptr @{lit})"));
+                } else {
+                    let got = f.tmp();
+                    f.line(&format!(
+                        "{got} = call %KValue @k_field_forced(%KValue %x0, ptr @{lit})"
+                    ));
+                    self.emit_ret(&mut f, &got);
+                }
             }
             _ => {
                 let msg = format!("no overload of `{name}` matches these arguments");
