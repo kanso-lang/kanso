@@ -1906,3 +1906,70 @@ narrowness, and not this bug.
 
 None of the reductions carried a description that reached a large list, which
 is the one ingredient that matters.
+
+## 2026-08-14 — the memo, the benchmark the corpus lacked, and a threshold that measured worse
+
+The survival check diagnosed the day before is fixed, and the fix ships behind
+a benchmark built to see it.
+
+### The fix
+
+A beat's rewind frees only what lies above its mark. A list whose slots all
+lie below the OUTERMOST mark therefore outlives every rewind that can happen,
+and its verdict cannot change — which makes it the one verdict worth keeping.
+`k_interior_survives` now memoises that, keyed by the list pointer, with the
+generation reset whenever the outermost mark's arena pointer changes.
+
+Two earlier keyings were both unsound and both looked like triumphs: keyed by
+the mark's stack address, because slots are reused, and keyed by its arena
+position, because a rewound arena returns to where it started. Each collapsed
+the timings to nothing and each printed wrong output, caught only by diffing
+against jq. A perf change that looks too good is a correctness question first.
+
+Lists only. In-place list growth demands `k_born_this_beat`, which puts the
+list above the mark where the scan never runs; `k_b_put_mut` grows a map in
+place with no such guard, so maps are excluded.
+
+### The numbers, on the runner
+
+    widebench   15,730,176,374 -> 134,061,218 instructions   117x
+    encodebench  9,207,299,685 -> 9,207,704,515              +0.0044%
+    basket          55,817,123 -> 55,921,156                 +0.19%
+    jsonbench, oneshot                                       unmoved
+    .text                                                    +704 bytes, all five
+
+Quadratic to linear, for a hash probe on two programs.
+
+### The corpus could not see either half
+
+All four benchmarks carry deeply nested documents whose widest array holds ten
+elements, and all four render one string. A cost that grows with a container's
+length is invisible to every vein they feed — which is how this reached kq's
+headline row with every counter green.
+
+`widebench` decodes a flat array of twenty thousand floats and streams it back
+one element at a time through a chained io bind, the shape kq prints a
+top-level array with. On the same fixture its counters and kq's agree:
+`beat_iters` 20,001 against 20,002, `evac_allocs` 120,011 against 120,021,
+`append_grow` 20,000 both. It joins all three linux veins, and
+`bench/cost_golden_wide.txt` gets a gate of its own, having had none.
+
+The allocator counters will not move when this cost does. A check that walks a
+list allocates nothing, which is the whole reason the instruction vein exists.
+
+### Declined by measurement: a length threshold on the memo
+
+A hash probe costs more than scanning a short list, so the memo was gated to
+lists of sixteen or more. Measured against the memo without it: encodebench
+-16,232 instructions, basket +8,001, widebench +100,012. Ninety-two thousand
+worse in total and spent in the worst place. The lists these benchmarks check
+are simply not short, so the skip almost never fires and every check pays a
+length compare to learn that. Withdrawn.
+
+### Still open
+
+A second quadratic below the arena-to-malloc crossover, untouched by this. At
+n=10,000 the instruction count is byte-for-byte the pre-fix figure, and the
+hot function differs by regime: `k_copy_size` and `k_deep_copy` below,
+`k_interior_survives` above. It makes a cliff — 109 KB takes 0.98 s where
+149 KB is instant.
