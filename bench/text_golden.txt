@@ -50,10 +50,10 @@
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
 jsonbench text=77762
-encodebench text=95218
-oneshot text=94930
-basket text=87122
-widebench text=96450
+encodebench text=95266
+oneshot text=94978
+basket text=87218
+widebench text=96498
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -80,3 +80,6 @@ widebench text=96450
 # evacuation. The flag removes a save and a restore from every node of the
 # hottest recursion in the runtime, and the code that goes with it is smaller
 # than what the split cost.
+# 2026-08-14 (last): 48 bytes on three binaries and 96 on basket; jsonbench
+# does not move. The strict index forces the element it hands back, so `!`
+# costs what it has always claimed to mean.
