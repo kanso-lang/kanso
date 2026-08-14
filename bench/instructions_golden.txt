@@ -59,6 +59,8 @@ encodebench 9207704515
 oneshot 47548418
 basket 55937643
 widebench 134061218
+basket 55817123
+widebench 15730176374
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around

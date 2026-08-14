@@ -54,6 +54,11 @@ encodebench text=100194
 oneshot text=99906
 basket text=92114
 widebench text=101426
+jsonbench text=82034
+encodebench text=99490
+oneshot text=99202
+basket text=90594
+widebench text=100722
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
