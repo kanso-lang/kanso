@@ -183,6 +183,22 @@ fn check_call_shaped_list(program: &Program, diags: &mut Vec<Diagnostic>) {
         let widest = arities.entry(decl.name.as_str()).or_insert(0);
         *widest = (*widest).max(decl.params.len());
     }
+    // A constructor applies like anything else, so `[point 3 4]` is the same
+    // ambiguity as `[f x]` and wants the same sentence. Without this the map
+    // holds only functions, the arity reads zero, and the check walks past —
+    // which is why `[want 7]` answered a list of two rather than a diagnostic.
+    // A typeset never constructs, and a subtype takes exactly its one value.
+    for decl in &program.types {
+        if !decl.members.is_empty() {
+            continue;
+        }
+        let takes = match decl.parent {
+            Some(_) => 1,
+            None => decl.fields.len(),
+        };
+        let widest = arities.entry(decl.name.as_str()).or_insert(0);
+        *widest = (*widest).max(takes);
+    }
     for decl in &program.fns {
         if decl.synthetic {
             continue;
