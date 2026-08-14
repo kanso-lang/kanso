@@ -49,7 +49,10 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=82018
-encodebench text=99474
-oneshot text=99186
-basket text=90578
+jsonbench text=82034
+encodebench text=99490
+oneshot text=99202
+basket text=90594
+# 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
+# the runtime object, and every program links the runtime whether or not it
+# opens a socket.
