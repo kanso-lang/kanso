@@ -52,7 +52,7 @@
 jsonbench text=82034
 encodebench text=99490
 oneshot text=99202
-basket text=91234
+basket text=91410
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -61,3 +61,6 @@ basket text=91234
 # printing and exiting, so the group returns where it used to end — a call and
 # a return in place of a void call, in every getter group that can be reached
 # with a cell. basket is the only benchmark here that links one.
+# 2026-08-14: basket rises 176 bytes and nothing else moves. join forces each
+# element while it sizes the output and writes the answer back, so the copying
+# pass reads a plain string; basket is the only benchmark here that joins.
