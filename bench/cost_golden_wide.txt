@@ -1,30 +1,34 @@
 # Allocator counters for the wide-array print, the shape none of the four
 # benchmarks beside it has. They carry deeply nested documents whose widest
 # array holds ten elements, and they render one string; this one streams a
-# twenty-thousand element array the way kq does — each element into its own
+# sixteen-thousand element array the way kq does — each element into its own
 # builder, written, and dead before the next — so the recursion carries the
 # whole list and a write chain that grows with it.
 #
+# That shape is what made kq's flat-array print quadratic, twice over. The
+# survival check on the carried description walked the list once per element,
+# and the evacuation deep-copied the same list once per element — two costs
+# with the same square and no counter here that can see either, because a check
+# that allocates nothing and a copy that lands in a buffer both leave these
+# figures alone. The row that sees them is in bench/instructions_golden.txt.
 #
-# That shape is what makes kq's flat-array print quadratic: the survival check
-# on the carried description walks the list once per element, so the work grows
-# with the square of the array's length while every counter below holds still.
-# The counters are blind to it by construction — a check that allocates nothing
-# moves none of them — which is the reason this benchmark also has a row in
-# bench/instructions_golden.txt, where the cost is visible.
-allocs=180026
-alloc_bytes=7892464
+# Sixteen thousand elements, not twenty. The evacuation cost stops at 16,384,
+# where the items buffer's capacity doubles and the survivor-ratio guard starts
+# refusing the dance and keeping the region instead — so a fixture above that
+# line exercises none of it. This one sits below.
+allocs=144026
+alloc_bytes=6452464
 arena_blocks=2
 arena_peak_bytes=2097152
 cohort_frees=0
 cohort_kept=0
 perm_allocs=11
-beat_iters=20001
-evac_allocs=120011
-evac_bytes=3840432
+beat_iters=16002
+evac_allocs=96021
+evac_bytes=3584672
 put_mut_fast=0
 put_mut_grow=0
-push_mut_fast=19993
+push_mut_fast=15993
 push_mut_slow=7
 thunk_allocs=0
 thunk_forces=0
@@ -32,13 +36,13 @@ thunk_evals=0
 thunk_frees=0
 thunk_escaped=0
 thunk_live_exit=0
-el_parses=20000
-ryu_renders=10000
-utf8_bytes=212590
+el_parses=16000
+ryu_renders=8000
+utf8_bytes=168590
 find2_calls=0
-append_fast=20000
-append_grow=20000
-utf8_zerocopy=20000
+append_fast=16000
+append_grow=16000
+utf8_zerocopy=16000
 carry_dedup=0
 bytes_malloc=0
 bytes_freed=0
@@ -48,8 +52,8 @@ buf_reuse=0
 held_peak_bytes=0
 view_allocs=0
 view_frees=0
-sh_str=792624
+sh_str=632624
 sh_rec=0
 sh_buf=699312
 sh_map=0
-sh_bytes=960024
+sh_bytes=768024
