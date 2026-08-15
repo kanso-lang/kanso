@@ -54,11 +54,11 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2903069138
-encodebench 9712917341
-oneshot 49221002
-basket 57426162
-widebench 130337737
+jsonbench 2903335088
+encodebench 9712917741
+oneshot 49222776
+basket 57426164
+widebench 130353737
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -115,3 +115,10 @@ widebench 130337737
 # signs disagree. The registration itself is one getenv and one signal call at
 # startup; what moves each row differently is the layout around the handler
 # the linker now places in every binary. Recorded rather than waved at.
+# 2026-08-15: jsonbench +265,950 (0.0092%), widebench +16,000 (0.012%),
+# oneshot +1,774, encodebench +400, basket +2. join and the utf8 zero-copy
+# path now set the output string's cap, which they never did — the header
+# comes from the bump allocator and held whatever was last in that slot. A
+# zero cap sends k_str_chars down the walk, where a positive one sent it to a
+# cached count that was never written, so what rises here is the walk that
+# always should have run. The old numbers were cheaper and wrong.
