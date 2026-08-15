@@ -97,7 +97,11 @@ d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
 # instructions, so this sees what the counts saw and the rest besides.
 decode_work = ["decode_instructions" "encode_instructions"]
 
-held_work = ["oneshot_instructions" "basket_instructions" "wide_instructions"]
+held_small = ["oneshot_instructions" "basket_instructions"]
+
+held_shapes = ["wide_instructions" "deep_instructions"]
+
+held_work = text/concat held_small held_shapes
 
 run_speed_counters = text/concat decode_work held_work
 
@@ -209,7 +213,9 @@ fn worked work
   oi = [["oneshot_instructions" work["oneshot"]!]]
   bi = [["basket_instructions" work["basket"]!]]
   wi = [["wide_instructions" work["widebench"]!]]
-  text/concat (text/concat di ei) (text/concat oi (text/concat bi wi))
+  pi = [["deep_instructions" work["deepbench"]!]]
+  rest = text/concat oi (text/concat bi (text/concat wi pi))
+  text/concat (text/concat di ei) rest
 
 fn gathered d db dp e eb ep o b bp c v l
   head = text/concat (text/concat d db) (text/concat dp e)
@@ -339,13 +345,40 @@ fn gauge d e o b c held w
   now = measured dc ec (counters o) (counters b) comp cm work
   io/read_file floor_path . (held -> against now (json/decode held))
 
-# A term new to the model enters at ratio one: its own introduction is never a
-# score move, and only improvement from here pays.
+# A term new to the model enters where its dimension already stands, so its
+# introduction is never a score move and only improvement from here pays.
+#
+# Entering at a ratio of one against ITSELF does not achieve that, which is
+# what this used to do. A dimension scores the mean of its counters' ratios,
+# and the run-speed counters sit far above one — wide alone is a factor of
+# eighty — so a newcomer at one drags the mean down and a benchmark costs
+# welfare on the day it lands, however healthy. The reference is a choice, not
+# a measurement, so it is chosen to mean what the rule above says: the ratio
+# the dimension already has. Once the counter has real history that reference
+# is behind it and improvement pays from there.
 fn baseline_of held now
   base = held["baseline"]!
-  missing = list/select counter_names (c -> base[c] == none)
-  fresh = list/map (list/to_list missing) (c -> [c now[c]!])
-  merged base (list/to_list fresh)
+  fresh = list/fold terms [] (acc t -> text/concat acc (entering base now t))
+  merged base fresh
+
+fn entering base now t
+  known = list/to_list (list/select t.counters (c -> base[c] != none))
+  missing = list/to_list (list/select t.counters (c -> base[c] == none))
+  at = standing now base known
+  list/to_list (list/map missing (c -> [c (math/round (now[c]! * at))]))
+
+# Where the dimension already stands: the mean ratio of the counters that have
+# a baseline. A dimension whose counters are all new has nowhere to stand and
+# enters at one, which is the old rule and right for that case alone.
+fn standing now base known
+  stood now base known (length known == 0)
+
+fn stood _ _ _ true
+  1.0
+
+fn stood now base known false
+  ratios = list/to_list (list/map known (c -> ratio_of now base c))
+  list/sum ratios / (1.0 * length ratios)
 
 fn merged base fresh
   carried base fresh (length fresh == 0)
