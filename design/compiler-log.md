@@ -2732,3 +2732,41 @@ measurement.
 15 (should `>>` defer its right side — recommended yes on the
 wire-is-the-demand principle, awaiting Clay), 3, 5, 6, 16, 18, 19, the
 err-gavel riders, and the also-open list.
+
+## 2026-08-15 (last) — the escaped peak went flat, and not the way it was queued
+
+Task #226 held that #912's registry fixed retention but not peak: the outer
+loop of the escape probe rewound once, so every round's accumulator header sat
+at depth 0 and its buffer was freed only at exit. Measured then, `perm_peak`
+doubled with the round count — 4,106,064 at five hundred, 8,210,064 at a
+thousand, 16,418,064 at two thousand.
+
+It queued a design question with it: should a cluster rewind per iteration
+rather than bracket at entry, since that is what would make escaped storage die
+each round. Re-measured on main after #920:
+
+    rounds   arena_peak   perm_allocs   perm_peak
+       500    1,048,576             1      10,272
+     1,000    1,048,576             1      10,272
+     2,000    1,048,576             1      10,272
+     4,000    1,048,576             1      10,272
+
+Flat across an eightfold range, and one permanent allocation where there were
+four thousand. The cluster still brackets at entry — nothing changed about
+that — so the queued question was answered without being asked. What #920 did
+was let the outer pair bracket at all: it is a mutual tail recursion entered by
+a tail call from a caller the cycle cannot reach, which is exactly the pairing
+the old rule refused and the new one admits. Once that loop rewinds, its
+accumulator never escapes, so there is nothing for the registry to hold.
+
+The per-iteration cluster rewind is therefore not queued behind this. If it
+comes back it will be for a different program, and it will still owe a
+measurement of what the extra rewinds cost.
+
+A note on how this was nearly mis-measured, because it is the second time
+today. `kanso build .` writes `./main`, and the probe directory still held a
+`./scale` binary from an earlier sitting. Sweeping the round count and running
+`./scale` gave the same figure four times, and that constant read as "flat"
+when it was a stale binary answering. The tell was that the constant equalled
+the OLD two-thousand-round reading exactly. Delete the old artifact, or run
+what the build just wrote.
