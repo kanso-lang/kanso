@@ -57,10 +57,10 @@
 jsonbench 2913614152
 encodebench 9725270943
 oneshot 49321994
-basket 57562217
+basket 57564331
 widebench 88147467
 deepbench 833453343
-escapebench 258128058
+escapebench 258541096
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -175,3 +175,8 @@ escapebench 258128058
 # (0.037%). jsonbench, oneshot, basket and escapebench do not move at all —
 # they ask about lists on the short side of the threshold, where the memo was
 # a hash insert with no payoff.
+# 2026-08-15: basket +2,114 (0.0037%) and escapebench +413,038 (0.16%); the
+# other five do not move at all. A cluster entered by a tail call is demoted
+# to a plain call so the cycle can bracket, and these two hold such a cycle.
+# escapebench pays most because its cycle runs 6,001 more rewinds, and it is
+# the row that collects: its perm_peak_bytes falls from 24,626,064 to 10,272.
