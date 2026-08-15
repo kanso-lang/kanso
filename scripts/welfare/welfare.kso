@@ -187,8 +187,15 @@ fn compile_totals text
   emitted = total_for lines "lines"
   list/to_h [["rounds" rounds] ["visits" visits] ["lines" emitted]]
 
+# Three pools, and a peak that names two of them is not a peak. The arena is
+# the one the beat design is about; `held` is string chunks, added when the
+# same gap was found the first time; `perm` is accumulator storage pushed
+# outside the arena, which had no owner at all until #912 and which every
+# memory term here was blind to while a real program went from 3.88 GB to
+# 3.88 MB. Any pool added after this belongs in this sum on the day it gets a
+# counter, not on the day something big enough to notice moves it.
 fn peak_of m
-  m["arena_peak_bytes"]! + m["held_peak_bytes"]!
+  m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
 fn measured decode encode oneshot basket comp held work
   d = [["decode_allocs" decode["allocs"]!]]
