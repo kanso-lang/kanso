@@ -54,6 +54,7 @@ encodebench text=95330
 oneshot text=95042
 basket text=87282
 widebench text=96562
+deepbench text=60930
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -92,3 +93,7 @@ widebench text=96562
 # reached exit — the shape this was built to diagnose — printed nothing at
 # all, and forty-five seconds of a hang looked identical to a healthy short
 # run.
+# 2026-08-15: a sixth row. deepbench carries a short accumulator across an io
+# bind whose lambda captures the structure it built, which is what a simulator
+# folding over trials does and what the other five never did. No existing row
+# moves — this is the corpus growing rather than the code.

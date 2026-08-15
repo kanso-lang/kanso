@@ -1,0 +1,4 @@
+import "deepbench"
+import "std/io"
+
+total 4000 . (t -> io/write "{t}\n")
