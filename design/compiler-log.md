@@ -2554,19 +2554,39 @@ with allocs, alloc_bytes and stdout byte-identical either way. The report said
 nothing about that loop before, because it only lists self-recursive groups and
 neither member of the cycle recurses on itself.
 
-Nineteen clusters bracket where six did in that program, and every counter vein
-is byte-identical: decode, encode, basket, one-shot, wide, escape, emitted code,
-compile memory. Welfare reads 84.51 against a floor of 84.51 — the change is
-flat on the corpus, which is the honest reading of a widening that no benchmark
-has the shape to use. The one golden that moved is `builder_transient`, where
-the newly bracketed `assemble`/`step` pair sends its byte builder to held
-storage instead of the arena: 40 mallocs, 40 frees, an 80-byte held peak, one
-arena block either way.
+A demoted entry buys a plain beat and never a carried one. The first cut did
+not say so, and the wide-print benchmark answered: the json string scanner's
+cycle became a carry beat and evacuated 8,196,352,640 bytes against the
+golden's 1,032,688, at 160,019 evacuations against 272. A carried slot is
+copied at every rewind, and a cluster reached only by a tail call is one whose
+carry nobody has priced, so the rule refuses that pairing outright.
 
-Three loops in lib/json joined too — `str_chars`, `str_unicode`, `string_scan` —
-on the licence the two encoders already held, a byte accumulator threaded by
-pointer identity through `text/append`. The conservatism test that pinned the
-old set now pins the new one and says why.
+Two goldens then moved, both from clusters the rule newly admits:
+
+    escape   perm_peak_bytes  24,626,064 ->     10,272    cohort_frees 1 -> 0
+             beat_iters        1,200,000 ->  1,206,001
+    basket   allocs               28,192 ->     28,196    buf_reuse  104 -> 100
+             alloc_bytes       4,890,672 ->  4,901,616    sh_buf  +10,944
+
+The escape row is the change paying for itself — a benchmark that held 24 MB
+of permanent storage to the end now holds ten kilobytes. Basket pays four
+allocations and eleven kilobytes for twenty extra rewinds. Decode, encode,
+one-shot, wide, emitted code and compile memory are byte-identical, and
+welfare reads 84.51 against a floor of 84.51.
+
+`builder_transient` in the mem vein also moved: the newly bracketed
+`assemble`/`step` pair sends its byte builder to held storage instead of the
+arena — 40 mallocs, 40 frees, an 80-byte held peak, one arena block either way.
+
+A note on how the wide regression was nearly missed. The counter gates run
+PREBUILT benchmark binaries; running them without `scripts/gates/build_benchmarks.sh`
+first compares the golden against a binary the old compiler produced, and all
+six pass for no reason at all. They did here, and the claim "every vein is
+byte-identical" was made on that. Rebuild the benchmarks, then run the gates.
+
+No loop in lib/json joined: its string scanners are reached by a tail call and
+carry their accumulator, which is exactly the pairing the rule refuses. The
+conservatism test that pins the two encoders still pins them alone.
 
 What this does NOT do is reach task #228. `regexp/walked` has two refusals and
 this clears neither: its cluster is refused for the second reason, and the walk's

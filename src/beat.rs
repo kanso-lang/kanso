@@ -541,6 +541,13 @@ fn eligible_clusters(
         if let Some(carried) =
             cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges)
         {
+            // A demoted entry buys a plain beat and nothing more. A carried
+            // slot is evacuated at every rewind, and a cluster reached only
+            // by a tail call is one whose cost nobody has measured — the
+            // json string scanner pays 8 GB of copies for the licence.
+            if !entries.is_empty() && !carried.is_empty() {
+                continue;
+            }
             out.push(Cluster {
                 members: scc.iter().map(|&g| groups[g].clone()).collect(),
                 carried,
@@ -1956,10 +1963,9 @@ mod tests {
         // list accumulators — those stay out. The two encoders thread a byte
         // builder by pointer identity, which is exactly what the chain
         // license admits: raw bytes hold no pointers, so nothing in the
-        // accumulator can dangle across a rewind. The string scanners hold
-        // the same licence for the same reason: their accumulator is a byte
-        // builder too, threaded by `text/append` from the one `string_at`
-        // seeds, and the rest of what they thread is an int.
+        // accumulator can dangle across a rewind. The string scanners share
+        // the licence but not the entry: they are reached by a tail call,
+        // and a demoted entry buys a plain beat, never a carried one.
         let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
@@ -1967,14 +1973,8 @@ mod tests {
         licensed.sort();
         assert_eq!(
             licensed,
-            vec![
-                ("encode_items".to_string(), 3),
-                ("encode_pairs".to_string(), 3),
-                ("str_chars".to_string(), 3),
-                ("str_unicode".to_string(), 3),
-                ("string_scan".to_string(), 3),
-            ],
-            "only byte-builder loops may rewind; scanners threading \
+            vec![("encode_items".to_string(), 3), ("encode_pairs".to_string(), 3)],
+            "only the byte-builder encoders may rewind; scanners threading \
              records or lists stay on the grow-only arena"
         );
     }
