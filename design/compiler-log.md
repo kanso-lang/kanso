@@ -2770,3 +2770,55 @@ today. `kanso build .` writes `./main`, and the probe directory still held a
 when it was a stale binary answering. The tell was that the constant equalled
 the OLD two-thousand-round reading exactly. Delete the old artifact, or run
 what the build just wrote.
+
+## 2026-08-15 — the dispatch architecture, and the wall goes lazy
+
+Two more gavels from the walkthrough, the first the largest of the
+sitting.
+
+### 3 + 5: groups are global objects, extension is licensed by type ownership
+
+The dependency-to_string entry and the orphan-rule entry closed as one
+ruling, reached through a long comparison of Haskell and Julia. The
+route mattered: Clay asked how Haskell resolves `foo a b`, discovered
+type classes are a one-name-one-class funnel with no ad-hoc
+overloading at all ("the amount of ceremony seems staggering to the
+point of being unusable"), then asked what full globality would lose,
+and Julia turned out to be the natural experiment — global multiple
+dispatch, survivable only under the community's type-piracy taboo,
+which is the same own-the-function-or-own-a-type rule Rust hardened
+and Clay had independently arrived at ("this is exactly what I had
+been thinking").
+
+The five clauses, recorded in the entry: arms define or extend groups
+with the defining file's imports deciding which; extending a foreign
+group requires owning a dispatching argument type, and the arm is then
+ambient program-wide (subtypes count — that is the clause working, not
+an escape); independent same-named groups merge per-file in the
+consumer's view, ties refusing per gavel 7; interfaces without a
+shared group cross as closures carrying their home scope (dictionary
+passing — "the lambda just contains its scope"); module-less surfaces
+see ambient arms plus the qualified default.
+
+Declined with reasons: name-global pooling (permanent ties on common
+words, dependency upgrades changing existing programs — Julia's
+method-invalidation pathology), Haskell's class ceremony (the fee for
+global inference kanso already declined at the nullary gavel), and
+scoped third-party arms (subsumed by per-file merging). A money hako
+now renders money everywhere; user sequences join std's machinery as
+data, not dispatch.
+
+### 15: `>>` defers its right side
+
+"Yes, you want to defer and avoid strictness." Under the
+wire-is-the-demand principle, `>>`'s eager right operand was the last
+strict position in the language. Deferred, a recursive `>>` loop is
+productive and the operator-naming diagnostic retires. The wall's laws
+are untouched.
+
+### Remaining open
+
+6 (tail-call promise wording), 16 (block-born as dataflow), 18+19
+(pure as record / io lifting — now reshaped by the three-combinator
+gavel and this one), the err riders, 9b is closed (spread), and the
+also-open list.

@@ -71,22 +71,47 @@ around it.
   canon for local imports, the subtype declaration spelling, the
   into-subtype spelling.
 
-## 3. Dependency to_string arms
+## 3 + 5. Dispatch architecture — GAVELED 2026-08-15: groups are global objects, extension is licensed by type ownership
 
-Should a dependency module's `to_string` arms join the importing
-program's render group? Today only the root module's arms merge; a
-dep's stay qualified and never join (recorded in
-`design/render-plan.md`). A library exporting a money type today cannot
-also ship its rendering. Surface question: whether rendering is part of
-a module's exportable surface or a root privilege.
+One ruling closes both entries (Clay, 2026-08-15 dialog; converged
+through the Haskell/Julia comparison — Julia's module-owned generic
+functions with the type-piracy taboo made structural):
 
-## 5. Open dispatch groups
+1. **Arms define or extend groups; the defining file's imports decide
+   which.** A bare-imported name means the arm extends that group;
+   otherwise it mints the hako's own new group — built-in argument
+   types unrestricted, since the group is yours.
+2. **Extending a foreign group requires owning a dispatching argument
+   type.** The arm then attaches to the group-object and is ambient
+   program-wide — every call site, err reasons, the wire — with no
+   import needed by anyone. Coherence is by construction (a type has
+   one owner) and the reader has one place to look: the type's hako.
+   Owning a subtype counts (type slug:string, arm on slug) — that is
+   clause 2 working, not an escape hatch.
+3. **Independent same-named groups merge per-file in the consumer's
+   view** via bare imports; first-place ties refuse (gavel 7);
+   qualified names always bypass. Local restyling of rendering falls
+   out of ordinary imports — interpolation is a call site in the file
+   that contains the string.
+4. **Interfaces without a shared group cross boundaries as closures
+   carrying their scope** — a closure's body dispatches against its
+   home file's view forever, so a hako ships a piece of its scope
+   inside the value (dictionary passing; a lazy sequence is its next
+   function plus state; the stdlib's pred/key style already works
+   this way).
+5. **Module-less surfaces** (an err reason at the top, harness output)
+   see ambient arms plus the qualified default.
 
-The coherence/orphan rule for user-extensible groups — who may add arms
-to a group they did not define, and what keeps two libraries' arms from
-colliding. Unlocks user-defined sequences joining std's enumerable
-machinery. The annotated-arm split was judged the five-minute half; the
-orphan rule is the real question.
+Consequences: a dependency's to_string arm for its own type renders
+that type everywhere (entry 3 answered); the orphan rule IS clause 2
+(entry 5 answered); Julia's social taboo becomes a compile refusal;
+Haskell's class ceremony is declined knowingly — kanso keeps dispatch
+as the foundation and pays with closed-world value-set inference,
+already the plan of record. What was weighed and declined: name-global
+pooling (common words become permanent ties; a dependency upgrade can
+change existing programs — Julia's method-invalidation pathology),
+and scoped third-party arms attached to foreign groups (subsumed by
+clause 3's per-file merging with less machinery).
 
 ## 6. Tail-call promise wording
 
@@ -108,21 +133,16 @@ value cannot be covered at compile time without the annotations the
 no-needless-annotations gavel declines. The entanglement with the
 orphan rule (5) evaporates: closedness is not declared either.
 
-## 15. Should `>>` defer its right side
+## 15. `>>` defers its right side — GAVELED 2026-08-15
 
-`a . f` hands the continuation over as a closure, so nothing past the
-current link exists until the link runs. `a >> b` takes `b` as an
-already evaluated description, so building the first link requires
-evaluating the second, which requires the third: the whole chain is
-constructed before any of it runs, and the construction is what
-exhausts the stack. A loop written with `>>` dies where the same loop
-written with `.` does not.
-
-INTERIM SHIPPED: all three engines now name the operator in the
-diagnostic rather than blaming the recursion, since a function calling
-itself in the right operand of `>>` is visible in the source and the
-runtime cannot work the cause out at the moment it reports. That makes
-the failure legible; it does not make the loop run.
+Yes: defer, avoid strictness. Under "the wire is the demand" (17/20b),
+`>>` evaluating its right operand at construction was the last strict
+position in the language. Deferred, `fn control_loop = step >>
+control_loop` is productive — one link per demand, the robotics idiom —
+and the interim diagnostic (all three engines naming the operator)
+retires because the failure it named stops existing. The wall's laws
+(associativity, first-failure-absorbs, not overloadable) are
+untouched: laziness changes when links exist, not what they mean.
 
 ## 16. Should block-born widen to a dataflow property
 
