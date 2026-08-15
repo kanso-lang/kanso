@@ -556,7 +556,23 @@ static void k_viewreg_add(KMap* m) {
 static KValue*** k_permreg[K_BEAT_MAX];
 static long long k_permreg_n[K_BEAT_MAX];
 static long long k_permreg_cap[K_BEAT_MAX];
-static void k_permreg_flush(int d);
+/* Every rewind asks this and almost every rewind finds it empty — a decode
+   registers nothing at all and still pops 632,550 times — so the empty test
+   is worth more inline than the call that would find it empty. The view
+   registry's migrate is split for the same reason and measured the same way. */
+static void k_permreg_flush_held(int d);
+
+static inline void k_permreg_flush(int d) {
+    if (k_permreg_n[d] == 0) return;
+    k_permreg_flush_held(d);
+}
+
+static void k_permreg_migrate_held(int d);
+
+static inline void k_permreg_migrate(int d) {
+    if (d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
+    k_permreg_migrate_held(d);
+}
 
 static void k_permreg_push(int d, KValue** slot) {
     if (k_permreg_n[d] == k_permreg_cap[d]) {
@@ -569,8 +585,7 @@ static void k_permreg_push(int d, KValue** slot) {
     k_permreg[d][k_permreg_n[d]++] = slot;
 }
 
-static void k_permreg_migrate(int d) {
-    if (d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
+static void k_permreg_migrate_held(int d) {
     if (d > 0) {
         for (long long i = 0; i < k_permreg_n[d]; i++) k_permreg_push(d - 1, k_permreg[d][i]);
     }
@@ -4757,7 +4772,7 @@ static KBuf* k_buf_of(KValue* items) { return ((KBuf*)items) - 1; }
    still readable. A field that no longer holds escaped storage — the list was
    copied out onto the arena, or a second registration of the same field got
    here first — is passed over. */
-static void k_permreg_flush(int d) {
+static void k_permreg_flush_held(int d) {
     for (long long i = 0; i < k_permreg_n[d]; i++) {
         KValue** slot = k_permreg[d][i];
         if (!*slot) continue;
