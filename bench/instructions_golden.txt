@@ -55,11 +55,11 @@
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
 jsonbench 2913614152
-encodebench 9725287718
+encodebench 9725270943
 oneshot 49321994
 basket 57562217
-widebench 88115215
-deepbench 833503295
+widebench 88147467
+deepbench 833453343
 escapebench 258128058
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
@@ -170,3 +170,8 @@ escapebench 258128058
 # arena, and the only row here whose escaped-storage figure is bounded by its
 # input rather than by its text. The other six read zero or a fixed handful, so
 # this is the corpus growing rather than the code.
+# 2026-08-15: the memo is only consulted for a list long enough to be worth
+# walking. encodebench -16,775 and deepbench -49,952; widebench +32,252
+# (0.037%). jsonbench, oneshot, basket and escapebench do not move at all —
+# they ask about lists on the short side of the threshold, where the memo was
+# a hash insert with no payoff.

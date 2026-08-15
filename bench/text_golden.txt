@@ -49,13 +49,13 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=79778
-encodebench text=97234
-oneshot text=96978
-basket text=89314
-widebench text=98498
-deepbench text=61010
-escapebench text=48002
+jsonbench text=79634
+encodebench text=97090
+oneshot text=96834
+basket text=89170
+widebench text=98354
+deepbench text=60866
+escapebench text=47858
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -123,3 +123,5 @@ escapebench text=48002
 # 2026-08-15: a seventh row, and the smallest binary in the file by a wide
 # margin — escapebench links no decoder, no encoder and no io beyond one
 # write, so what it carries is the runtime and the loop. No existing row moves.
+# 2026-08-15: -144 bytes on every binary, the same figure seven times. The
+# memo's unconditional path goes away and a length test takes its place.
