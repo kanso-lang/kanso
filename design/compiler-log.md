@@ -2533,14 +2533,24 @@ the entering edge each time: `fold` into `bounded_flat`, `span` into `merge`,
 library looks like — a public entry that hands the loop its work in tail
 position — so refusing it refuses most library loops.
 
-Clusters now demote the same way, with one condition the self-loop rule does not
-need: the entering caller must be unreachable from the cluster. Reachability is
+Clusters now demote the same way, with two conditions the self-loop rule does
+not need. The first: the entering caller must be unreachable from the cluster. Reachability is
 taken over every mention, a lambda body as readily as a call head, because a
 caller the cycle re-enters is entered once per iteration rather than once per
 loop, and demoting there would trade a constant arena for a stack that grows
 with the input. `regexp/moved_on` is that case exactly — it tail-enters `repeat`
 and the cycle reaches it back through the continuation `another` builds — and it
 stays refused.
+
+The second condition is what the wide-print benchmark taught, below: the
+cluster must need no carry.
+
+Together they leave the regexp probe exactly where it started — six clusters
+bracket, the same six as before, because every cycle the first condition frees
+is one the second refuses. The measured wins are elsewhere: the escape shelf's
+permanent storage, and the two fixtures. The thirty-cluster count is a
+diagnosis of how library code is shaped, not a tally of what this change
+unblocks.
 
 The new fixture holds at one arena block where it took nine without the rule:
 
