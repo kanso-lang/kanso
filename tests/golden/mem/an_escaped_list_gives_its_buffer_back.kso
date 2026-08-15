@@ -1,0 +1,28 @@
+# Two hundred lists, each built in a frame of its own and none kept. Every one
+# escapes the beat it was grown in, so its storage goes outside the arena where
+# a rewind cannot reach it — and the last buffer of each is abandoned there.
+#
+# One list that GROWS does not show this: the buffers it outgrows are released
+# correctly. The leak is per list, not per growth, which is why four earlier
+# fixtures missed it and why the accumulator here is allocated a frame out,
+# where it predates the beat that k_outlives_beat asks about.
+fn filled acc 0
+  acc
+
+fn filled acc n
+  filled (push acc n) (n - 1)
+
+fn one_list _
+  base = push [] 1
+  length (filled base 8)
+
+fn many at stop tally
+  more at stop tally (at > stop)
+
+fn more _ _ tally true
+  tally
+
+fn more at stop tally false
+  many (at + 1) stop (tally + one_list at)
+
+pub play = print "{many 1 200 0}"

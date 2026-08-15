@@ -54,12 +54,12 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2903335097
-encodebench 9712917750
-oneshot 49222785
-basket 57683168
-widebench 87954682
-deepbench 833502567
+jsonbench 2913614152
+encodebench 9725287718
+oneshot 49321994
+basket 57562217
+widebench 88115215
+deepbench 833503295
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -143,3 +143,24 @@ deepbench 833502567
 # it is the one that pays the increment and the decrement; the other four do
 # not move at all. That asymmetry is the counter working: it costs where the
 # thing it counts happens.
+# 2026-08-15: every row moves, and the direction is the point. A registry
+# frees escaped accumulator storage at the rewind that reclaims its owner,
+# where nothing freed it before. Three shapes were measured, each on the
+# runner:
+#
+#   first     jsonbench +0.68%  encodebench +0.89%  oneshot +0.70%
+#             basket +0.83%  widebench +0.73%  deepbench +0.05%
+#   inlined   jsonbench +0.38%  encodebench +0.35%  oneshot +0.32%
+#             basket +0.19%  widebench +0.22%  deepbench -0.06%
+#   here      jsonbench +0.35%  encodebench +0.13%  oneshot +0.20%
+#             basket -0.21%  widebench +0.18%  deepbench +0.0001%
+#
+# The first shape called a flush on every rewind and cost most on jsonbench,
+# whose perm_peak_bytes is zero — a program that registers nothing was paying
+# for the call that would find nothing. Splitting the empty test inline halved
+# it; a single hot int, set once anything registers, took the remainder off the
+# programs that never escape an accumulator. basket ends below where it began,
+# and deepbench moves by 728 instructions out of 833 million.
+#
+# What is left on jsonbench is the growth site itself, which now records what
+# regime it chose instead of asking twice.

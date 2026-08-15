@@ -536,6 +536,69 @@ static void k_viewreg_add(KMap* m) {
     k_viewreg_push(d, m);
 }
 
+/* An accumulator whose storage was pushed outside the arena had, until now,
+   nobody to release it. The growth path frees each buffer it outgrows, so a
+   single list costs nothing; what leaked was the LAST buffer of every escaped
+   list, once per list. A loop building one list per iteration therefore leaked
+   linearly — 200 lists, 200 final buffers, and vse grew at 355 MB/s.
+
+   The owner's FIELD is registered rather than the buffer, the same choice the
+   view registry made and for the same two reasons: a buffer that is outgrown
+   is followed with no fixup, so the growth path keeps its free untouched, and
+   freeing through the field nulls it, so a field registered once per growth is
+   freed once.
+
+   The depth is the innermost mark the owning header does not survive — the
+   beat whose rewind reclaims the header itself, which is exactly when nothing
+   can reach the storage any more. A header that predates every live mark
+   belongs to no beat and finds no depth; it is left alone, and leaks as it
+   always did. */
+static KValue*** k_permreg[K_BEAT_MAX];
+static long long k_permreg_n[K_BEAT_MAX];
+static long long k_permreg_cap[K_BEAT_MAX];
+/* Every rewind and every pop asks whether there is anything here, and for most
+   programs the answer is no forever — a decode registers nothing at all and
+   still pops 632,550 times. Two tests rather than one: `any` is a single hot
+   int that stays set once a program has registered anything, so a program that
+   never does pays a register-resident branch and never reads the per-depth
+   array at all; `n[d]` is the second, for programs that do. Splitting the call
+   away from its empty test is what the view registry's migrate does, and this
+   is that measured one step further — the first shape cost 0.68% on a
+   benchmark whose perm_peak_bytes is zero. */
+static int k_permreg_any = 0;
+static void k_permreg_flush_held(int d);
+
+static inline void k_permreg_flush(int d) {
+    if (!k_permreg_any || k_permreg_n[d] == 0) return;
+    k_permreg_flush_held(d);
+}
+
+static void k_permreg_migrate_held(int d);
+
+static inline void k_permreg_migrate(int d) {
+    if (!k_permreg_any || d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
+    k_permreg_migrate_held(d);
+}
+
+static void k_permreg_push(int d, KValue** slot) {
+    if (k_permreg_n[d] == k_permreg_cap[d]) {
+        long long grown = k_permreg_cap[d] ? k_permreg_cap[d] * 2 : 64;
+        KValue*** wider = realloc(k_permreg[d], sizeof(KValue**) * (size_t)grown);
+        if (!wider) { fputs("out of memory\n", stderr); exit(1); }
+        k_permreg[d] = wider;
+        k_permreg_cap[d] = grown;
+    }
+    k_permreg_any = 1;
+    k_permreg[d][k_permreg_n[d]++] = slot;
+}
+
+static void k_permreg_migrate_held(int d) {
+    if (d > 0) {
+        for (long long i = 0; i < k_permreg_n[d]; i++) k_permreg_push(d - 1, k_permreg[d][i]);
+    }
+    k_permreg_n[d] = 0;
+}
+
 static KBuf* k_chunkreg[K_BEAT_MAX][256];
 static int k_chunkreg_n[K_BEAT_MAX];
 static long long k_chunkreg_spill[K_BEAT_MAX];
@@ -577,6 +640,7 @@ static void k_beat_rewind(KMark* m) {
     if (d >= 0 && d < K_BEAT_MAX) {
         k_chunkreg_flush((int)d);
         k_viewreg_flush((int)d);
+        k_permreg_flush((int)d);
     }
     while (k_blocks != m->block) {
         KBlock* b = k_blocks;
@@ -1489,6 +1553,7 @@ KValue k_beat_pop(KValue r) {
                 }
                 k_chunkreg_migrate(k_beat_depth);
                 k_viewreg_migrate(k_beat_depth);
+                k_permreg_migrate(k_beat_depth);
             }
             k_ten_release(k_beat_depth);
             c->used_flag = 0;
@@ -1522,6 +1587,7 @@ KValue k_cohort_pop(KValue r) {
         k_beat_depth--;
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
+        k_permreg_migrate(k_beat_depth);
         return r;
     }
     if (!k_is_heap(r.tag)) {
@@ -1553,6 +1619,7 @@ KValue k_cohort_pop(KValue r) {
         k_beat_depth--;
         k_chunkreg_migrate(k_beat_depth);
         k_viewreg_migrate(k_beat_depth);
+        k_permreg_migrate(k_beat_depth);
         return r;
     }
     k_carry_reset();
@@ -4257,6 +4324,7 @@ static KValue k_exec(KDesc* d) {
                     k_beat_depth--;
                     k_chunkreg_migrate(k_beat_depth);
                     k_viewreg_migrate(k_beat_depth);
+                    k_permreg_migrate(k_beat_depth);
                     k_beat_push();
                     cur = next;
                 } else if (nsz <= 4096
@@ -4707,6 +4775,35 @@ static KValue* k_buf(long long cap) {
 
 static KBuf* k_buf_of(KValue* items) { return ((KBuf*)items) - 1; }
 
+/* Called before the arena pointer is restored, so the owning headers are
+   still readable. A field that no longer holds escaped storage — the list was
+   copied out onto the arena, or a second registration of the same field got
+   here first — is passed over. */
+static void k_permreg_flush_held(int d) {
+    for (long long i = 0; i < k_permreg_n[d]; i++) {
+        KValue** slot = k_permreg[d][i];
+        if (!*slot) continue;
+        KBuf* b = k_buf_of(*slot);
+        if (b->cap >= 0) continue;
+        if (__builtin_expect(k_stats_on > 0, 0)) {
+            k_stat_bytes_freed++;
+            k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-b->cap));
+        }
+        free(b);
+        *slot = NULL;
+    }
+    k_permreg_n[d] = 0;
+}
+
+/* The beat whose rewind reclaims this header, or -1 for a header older than
+   every live mark. */
+static void k_permreg_add(const void* header, KValue** slot) {
+    for (int d = k_beat_depth - 1; d >= 0; d--) {
+        if (d >= K_BEAT_MAX) continue;
+        if (!k_survives(header, &k_beat_stack[d])) { k_permreg_push(d, slot); return; }
+    }
+}
+
 /* Take ownership of an already-filled k_buf-backed item buffer as a list, with
    no copy: set its `used` to the length and wrap it. Callers that can build
    straight into a k_buf use this instead of k_mklist, whose job is to copy a
@@ -5084,7 +5181,8 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         /* An accumulator's pairs go outside the arena for the same reason a
            list's items do: the loop's rewind reclaims the iteration's garbage
            without reaching what the iteration was building. */
-        KValue* np = k_outlives_beat(m) ? k_buf_perm(cap) : k_buf(cap);
+        int perm = k_outlives_beat(m);
+        KValue* np = perm ? k_buf_perm(cap) : k_buf(cap);
         memcpy(np, m->pairs, sizeof(KValue) * 2 * m->len);
         np[m->len * 2] = key;
         np[m->len * 2 + 1] = val;
@@ -5096,6 +5194,7 @@ KValue k_b_put_mut(KValue mv, KValue key, KValue val) {
         }
         m->pairs = np;
         m->len++;
+        if (perm) k_permreg_add(m, &m->pairs);
         k_map_view_insert(m, key, val);
         return mv;
     }
@@ -5685,7 +5784,8 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
        reclaims the iteration's garbage without reaching what the iteration
        was building. A transient's stays in the arena, where the rewind is
        exactly what should free it. */
-    KValue* items = (mutate && k_outlives_beat(l)) ? k_buf_perm(cap) : k_buf(cap);
+    int perm = mutate && k_outlives_beat(l);
+    KValue* items = perm ? k_buf_perm(cap) : k_buf(cap);
     memcpy(items, l->items, sizeof(KValue) * l->len);
     items[l->len] = item;
     k_buf_of(items)->used = l->len + 1;
@@ -5701,6 +5801,7 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
         k_buf_donate(l->items);
         l->items = items;
         l->len++;
+        if (perm) k_permreg_add(l, &l->items);
         return lv;
     }
     KList* out = k_alloc(sizeof(KList));
