@@ -2186,3 +2186,42 @@ caches the build when the source has not changed, so the figure moves
 depending on whether a compile happened at all. The first numbers reported for
 this fix were that mistake, and the 95x they showed was really 998x. Build to
 a binary, then time the binary.
+
+### The corpus could not hold the shape it was being asked about (#913)
+
+Every benchmark allocates a handful of buffers outside the arena and holds
+them to exit, bounded by the program text. None was bounded by its INPUT. So
+the fix that stopped an accumulator leaking priced as pure cost — each
+benchmark paid for the check and none could collect — and, worse, the reverse
+change would have priced as a win.
+
+escapebench builds three thousand accumulators and drops each. Before the
+registry it held 24,624,000 bytes at exit and freed none; after, it holds
+nothing and frees three thousand. Its gate is the only one here that can see
+storage the arena never held, and its mutation removes the registration line:
+watched red at exactly the pre-fix numbers, then green.
+
+The first draft of the benchmark measured ZERO, which is how the next entry
+was found. It pushed `mixed k n` rather than arithmetic.
+
+### A model that sees less scores higher (#914)
+
+`peak_of` summed the arena and the string chunks. Escaped accumulator storage
+is a third malloc pool, in the goldens since #911 and in no term, so all four
+memory terms understated what a program holds — and a program going from 3.88
+GB to 3.88 MB scored exactly zero.
+
+Only basket has any: its term goes 2,168,288 to 4,920,848, and its baseline is
+rebased by the same factor so the ratio holds at 82.50025 either side. That is
+the rule for a new counter applied to a widened one, and it means the
+definition change costs nothing while everything after it is measured against
+the fuller sum.
+
+The number worth keeping is what the reverse showed. With the rebased baseline
+in place, dropping the pool back out reports 84.58 against a floor of 84.51.
+**Welfare catches falls, so it cannot catch a change that makes the objective
+blinder** — a blinder objective scores higher and the gate banks it. #122
+closed this hole for the string pool and it reopened for the next one, so the
+comment on peak_of now says any pool added later joins the sum on the day it
+gets a counter rather than on the day something large enough to notice moves
+it.
