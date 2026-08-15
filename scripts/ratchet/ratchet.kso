@@ -93,6 +93,14 @@ decode_counters = row
   (breaking "decode_allocation")
   benchmarks
 
+escape_counters = row
+  "escaped accumulator storage that nobody frees"
+  true
+  (gating "escape_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "escaped_storage_kept")
+  benchmarks
+
 emitted_code = row
   "the decoder's emitted line count moving"
   true
@@ -151,7 +159,7 @@ itself = row
 
 rows_a = [formatting linting goldens release_profile]
 
-rows_b = [decode_counters emitted_code machine_code]
+rows_b = [decode_counters escape_counters emitted_code machine_code]
 
 rows_c = [welfare_floor grammar book_outputs diagnostics itself]
 

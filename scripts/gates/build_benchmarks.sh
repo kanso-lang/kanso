@@ -9,3 +9,4 @@ cargo build --release
 ./target/release/kanso build bench/basket --release >/dev/null
 ./target/release/kanso build bench/widebench --release >/dev/null
 ./target/release/kanso build bench/deepbench --release >/dev/null
+./target/release/kanso build bench/escapebench --release >/dev/null

@@ -15,7 +15,7 @@ size --format=sysv ./jsonbench >/dev/null 2>&1 || {
   echo "::error::host running it does not have. The linux runner does."
   exit 1
 }
-for b in jsonbench encodebench oneshot basket widebench deepbench; do
+for b in jsonbench encodebench oneshot basket widebench deepbench escapebench; do
   printf '%s text=%s\n' "$b" "$(size --format=sysv ./$b | awk '/^\.text/{print $2}')"
 done > text.txt
 grep -v '^#' bench/text_golden.txt > text_want.txt

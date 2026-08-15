@@ -1,0 +1,45 @@
+# The shape no other benchmark has: one accumulator per iteration of an outer
+# loop, each grown inside an inner loop and none kept. deepbench carries a
+# short accumulator ACROSS a bind and widebench carries one long list for the
+# whole run; both allocate a handful of buffers outside the arena and hold them
+# to exit, which is bounded by the program text. Here the count is bounded by
+# the input, which is what a simulator does — vse builds an electorate per
+# trial and drops it.
+#
+# It exists because the fix that stopped this leaking priced as pure cost:
+# every benchmark in the corpus paid for the check and none could collect,
+# because none leaked. A corpus that cannot represent a failure mode licenses
+# trading it away.
+#
+# The accumulator is seeded ONE FRAME OUT and that is the whole trick. A header
+# born inside the inner loop dies with its rewind and never escapes; a header
+# that predates the beat IS the loop's accumulator, and its storage has to go
+# where a rewind cannot reach.
+#
+# The element pushed is arithmetic rather than a call, and that is not a
+# stylistic choice: a call in this position removes the beat bracket
+# altogether, so the loop stops sweeping and this benchmark measures nothing.
+# See task #225.
+span = 400
+
+fn filled acc _ 0
+  acc
+
+fn filled acc k n
+  filled (push acc ((k * 31 + n * 7 + 3) % 997)) k (n - 1)
+
+fn one_list k
+  base = push [] 1
+  length (filled base k span)
+
+fn many at stop tally
+  more at stop tally (at > stop)
+
+fn more _ _ tally true
+  tally
+
+fn more at stop tally false
+  many (at + 1) stop (tally + one_list at)
+
+pub fn total n
+  many 1 n 0

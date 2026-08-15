@@ -216,6 +216,15 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/decode_counters.sh
+      # The only vein that can see storage the arena never held: escapebench
+      # builds one accumulator per round and drops it, so its
+      # perm_live_bytes is bounded by the input where every other benchmark's
+      # is bounded by its text.
+      - name: escape counters
+        id: escape
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/escape_counters.sh
       - name: nothing worsens unless something improves
         if: always()
         run: |
@@ -274,6 +283,7 @@ jobs:
                       "machine code:${{ steps.text.outcome }}" \
                       "work:${{ steps.work.outcome }}" \
                       "decode counters:${{ steps.decode.outcome }}" \
+                      "escape counters:${{ steps.escape.outcome }}" \
                       "one-shot counters:${{ steps.oneshot.outcome }}" \
                       "basket counters:${{ steps.basket.outcome }}" \
                       "compile memory:${{ steps.compile_memory.outcome }}" \
