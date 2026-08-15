@@ -556,21 +556,27 @@ static void k_viewreg_add(KMap* m) {
 static KValue*** k_permreg[K_BEAT_MAX];
 static long long k_permreg_n[K_BEAT_MAX];
 static long long k_permreg_cap[K_BEAT_MAX];
-/* Every rewind asks this and almost every rewind finds it empty — a decode
-   registers nothing at all and still pops 632,550 times — so the empty test
-   is worth more inline than the call that would find it empty. The view
-   registry's migrate is split for the same reason and measured the same way. */
+/* Every rewind and every pop asks whether there is anything here, and for most
+   programs the answer is no forever — a decode registers nothing at all and
+   still pops 632,550 times. Two tests rather than one: `any` is a single hot
+   int that stays set once a program has registered anything, so a program that
+   never does pays a register-resident branch and never reads the per-depth
+   array at all; `n[d]` is the second, for programs that do. Splitting the call
+   away from its empty test is what the view registry's migrate does, and this
+   is that measured one step further — the first shape cost 0.68% on a
+   benchmark whose perm_peak_bytes is zero. */
+static int k_permreg_any = 0;
 static void k_permreg_flush_held(int d);
 
 static inline void k_permreg_flush(int d) {
-    if (k_permreg_n[d] == 0) return;
+    if (!k_permreg_any || k_permreg_n[d] == 0) return;
     k_permreg_flush_held(d);
 }
 
 static void k_permreg_migrate_held(int d);
 
 static inline void k_permreg_migrate(int d) {
-    if (d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
+    if (!k_permreg_any || d < 0 || d >= K_BEAT_MAX || k_permreg_n[d] == 0) return;
     k_permreg_migrate_held(d);
 }
 
@@ -582,6 +588,7 @@ static void k_permreg_push(int d, KValue** slot) {
         k_permreg[d] = wider;
         k_permreg_cap[d] = grown;
     }
+    k_permreg_any = 1;
     k_permreg[d][k_permreg_n[d]++] = slot;
 }
 
