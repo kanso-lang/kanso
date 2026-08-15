@@ -1177,10 +1177,18 @@ fn scalar_elem(
                         set != 0 && set & !FAIL & !SCALAR == 0
                     })
         }
+        // A builtin answers from its own table; a function the program
+        // defines answers from the inference's, where a name is scalar only
+        // when every arm of it is. Both are the same question — can what
+        // comes back hold a pointer — and the second one was missing, so
+        // `push xs (mixed k n)` lost the bracket that `push xs n` keeps and
+        // the loop stopped sweeping: 1,048,576 bytes of arena became
+        // 33,554,432 at four thousand rounds.
         Expr::App { head, args, .. } => match head.as_ref() {
             Expr::Ident(n, _) => {
                 let set = infer::builtin_set(n, &vec![infer::TOP; args.len()]);
-                set != 0 && set & !FAIL & !SCALAR == 0
+                (set != 0 && set & !FAIL & !SCALAR == 0)
+                    || inference.scalar_returns.contains(&(n.clone(), args.len()))
             }
             _ => false,
         },
