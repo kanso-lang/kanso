@@ -964,6 +964,10 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>the rule that declines the bracket is sound as written — rewinding would free an accumulator allocated mid-cycle. the accumulator in that shape is not allocated mid-cycle, because the in-place mutators hand back the same object, and the fix is to give a threaded container storage outside the rewound region the way a byte builder already has. that is the open item, and the retention is a pinned counter in the memory vein until it closes, so the day it moves the diff is the evidence.</p>
 
+<p>the sharpest version of that edge is a count that measures the corpus rather than the language. a survival check learned to memoise its answer, which took a sixteen-thousand element array from 11.6 billion retired instructions to 130 million — the streaming shape asks the same question of the same carried list once per element, so caching it is nearly free. the voting simulator asks a different question every iteration, and went from 14.2 seconds to 25.0. every allocator counter held still through it. so did the emitted-line count, the machine-code size and the welfare score, because the simulator is not one of the five programs the corpus runs. the memo now applies above sixty-four elements, which returns the simulator to 15.1 seconds and costs the array benchmark a tenth of a per cent.</p>
+
+<p>three attempts to write a benchmark that fails without that guard moved not one instruction between them. the shape that reproduces it is not "a loop over small lists" — that was attempt two — and the difference is something about how deeply the carried value nests. until a program in the corpus has that shape, the guard is held in place by a measurement of a program outside it, which is a weaker thing than every other number here and is written down as such.</p>
+
 <p>every counter this page names is recorded on every merged commit and drawn on <a href="/numbers.html">the long view</a>, one row each — what a run costs, what compiling costs, and the welfare score they roll up into.</p>
 
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
