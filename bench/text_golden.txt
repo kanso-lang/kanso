@@ -55,6 +55,7 @@ oneshot text=96978
 basket text=89314
 widebench text=98498
 deepbench text=61010
+escapebench text=48002
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -119,3 +120,6 @@ deepbench text=61010
 # flag in front of the cold array doubled the code and took the instruction
 # cost to 0.35%. deepbench holds at 61,010 across all three shapes — it links
 # least of the runtime, and the section's alignment absorbs what it does link.
+# 2026-08-15: a seventh row, and the smallest binary in the file by a wide
+# margin — escapebench links no decoder, no encoder and no io beyond one
+# write, so what it carries is the runtime and the loop. No existing row moves.

@@ -60,6 +60,7 @@ oneshot 49321994
 basket 57562217
 widebench 88115215
 deepbench 833503295
+escapebench 258128058
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -164,3 +165,8 @@ deepbench 833503295
 #
 # What is left on jsonbench is the growth site itself, which now records what
 # regime it chose instead of asking twice.
+# 2026-08-15: a seventh row, and no existing one moves. escapebench builds one
+# accumulator per round and drops it — the shape whose storage goes outside the
+# arena, and the only row here whose escaped-storage figure is bounded by its
+# input rather than by its text. The other six read zero or a fixed handful, so
+# this is the corpus growing rather than the code.
