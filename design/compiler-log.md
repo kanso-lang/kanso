@@ -2611,3 +2611,68 @@ this clears neither: its cluster is refused for the second reason, and the walk'
 cost is a CPS continuation per position rather than a loop's garbage. Bracketing
 around the per-position walk is a call-site bracket, which is a different
 mechanism from a loop's.
+
+## 2026-08-15 — gavel 1: the err rule collapses into three combinators
+
+Clay gaveled the err rule, and the shape that landed is not the one the
+July dialog converged on. Walking the arm rule one clause at a time, he
+asked what Haskell does as the error analog of bind, then proposed
+handling through explicit callbacks, then noticed bind does not need a
+failure callback at all — in Haskell a failed chain just carries the
+same failure object through every subsequent bind. That observation
+un-braided the design.
+
+### The model
+
+Three combinators over the effect's two channels, one callback each:
+`bind effect ok` maps success and passes failure through; `annotate
+effect fail` (name open) maps failure to failure, re-wrapping the
+callback's return as an err with the original as cause; `rescue effect
+fail` maps failure to success and is the single licensed door — legal
+only where the failure is foreign to the caller's hako, checked at
+rescue call sites by requiring every reason type the callback's arms
+name to originate in a foreign hako. The default arm re-raises for
+free: an err returned into the success wrap is still an err.
+
+### What this buys
+
+bind and annotate need nothing checked, ever — they are structurally
+incapable of absorbing a failure, so the invariant the arm rule policed
+("a function that receives an err raised in its own package must return
+an err") holds by construction wherever they are the surface. The
+provenance fixpoint built in July (src/provenance.rs) keeps its job but
+its surface shrinks from every err-matching arm in the program to
+rescue call sites alone. Laundering stays caught: provenance names the
+raiser, so a borrowed foreign reason type buys nothing. The one-bind
+clause "an err arm must answer an err" dissolves — the machinery
+re-wraps, so nothing has to obey it.
+
+### What was sharpened on the way
+
+The universe boundary is the hako, not the module: local subdirectory
+modules are one universe however the author lays them out (Clay,
+correcting a loose use of "package"). And the July settlements all
+survive: trapping is naming, subtype matching, unstoppable = no pub
+ancestor, wrap_err, re-export follows the door while trapping follows
+the leaf, siblings foreign-with-advisory, vendored code owned.
+
+### Precedent, and the one novel piece
+
+The trio is the bifunctor algebra of Either, found independently by
+Haskell (>>= / withExceptT / catchError), Rust (map / map_err /
+or_else, with anyhow's .context as the annotate idiom of a whole
+ecosystem), ZIO (flatMap / mapError / catchSome), and Wlaschin's
+railway-oriented programming. None of them restricts who may rescue.
+The foreign-only license is kanso's thesis; the rest is consensus
+arranged around it.
+
+### Open riders, recorded in the entry
+
+Spelling for annotate and rescue (the chain's value and err arms are
+already bind's and annotate's callbacks, spelled as dispatch arms;
+rescue needs a surface); construction enforcement (unneeded for
+soundness, still doctrine, still unenforced); the test surface
+(file-scope exemption vs toolchain assertions); ch08's pedagogy; the
+migration of the arm-based advisory onto the combinator surface; and
+the small July spellings (dot-prefix canon, subtype declaration,
+into-subtype).

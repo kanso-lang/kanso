@@ -5,219 +5,71 @@ question is, where it came from, what the interim state is, and what it
 unblocks. Nothing here is urgent in the sense of broken; everything here
 is a fork the project has deliberately not taken without a ruling.
 
-## 1. The err-arm rule — PROPOSED RULING (dialog converged 2026-07-27; awaiting Clay's final read)
+## 1. The err rule — GAVELED 2026-08-15: the three-combinator model
 
-The two-universes rule, mechanized without provenance tracking:
+The enforcement question dissolved into structure (Clay, 2026-08-15
+dialog). Failure handling is three combinators over the effect's two
+channels — one callback, one concern each:
 
-**PROVENANCE, and why the shipped proxy is not it (Clay, 2026-07-28).**
-Clay: the criterion is where the err *stack originated*, not which
-package the receiving function sits in — "package A can't rescue an
-err from package B by passing it into a function defined in B", and
-he adds that he cannot see the simplest way to hand that to a
-compiler. He is right, and the advisory built here uses a proxy for
-it: the reason type's qualifier. Two measurements, both against the
-current tree:
+- **`bind effect ok`** — maps the success channel; a failure passes
+  through untouched, Haskell's `>>=`. Infectiousness is bind with the
+  function as its callback. Nothing to check.
+- **`annotate effect fail`** (name open) — maps failure to failure: the
+  callback reads the reason and returns context; the result re-wraps as
+  err with the original as cause (`wrap_err` in flow position,
+  `withExceptT` / Rust's `map_err`). Universal — annotating your own
+  failure never changes channel. Nothing to check.
+- **`rescue effect fail`** — maps failure to success (`catchError`). The
+  one licensed door: legal only where the failure is foreign, checked at
+  rescue call sites — every reason type the callback's arms name must
+  originate in a hako foreign to the caller's; the default arm re-raises
+  for free, since an err returned into the success wrap is still an err.
+  `src/provenance.rs` already computes the reachable-raiser set; the
+  check relocates from every err arm to rescue sites alone.
 
-1. **The proxy has a reachable hole.** A package can raise an err
-   whose reason is a foreign type and then rescue it, because the
-   qualifiers differ and the advisory sees a foreign reason:
-   `err (json/parse_failure 1 "mine")` raised in user code, then
-   matched by `(err _:json/parse_failure)` and turned into a string.
-   Runs today, advisory silent. Provenance says illegal; the proxy
-   says fine.
-2. **Foreign construction is not enforced at all.** The doctrine says
-   "construction is module-private; importers build through pub
-   factories" (modules-plan). It is not: user code builds
-   `json/parse_failure 99 "I made this"` and prints it. That is an
-   independent gap, and it is also what makes (1) reachable.
+The July settlements survive unchanged: trapping is naming (pub reason
+types are the catchable surface), subtype matching with the
+specificity rung, unstoppable = no pub ancestor, `wrap_err` carries the
+original, re-export follows the door while trapping follows the leaf,
+workspace siblings foreign-with-advisory, vendored code owned. Sharpened
+2026-08-15: **the universe boundary is the hako** — local subdirectory
+modules are one universe however the author lays them out; splitting
+your code buys nothing. What dissolves: the one-bind clause "an err arm
+must answer an err" stops being a rule anyone obeys — under
+bind/annotate the machinery re-wraps, so it holds by construction.
 
-**BUILT (2026-07-28, Clay: "build it correctly"). Provenance is
-computed, not proxied.** `src/provenance.rs` gives each dispatch group
-the set of packages whose errs it may hand back and takes a fixpoint
-over the call graph, the way inference already does for value sets —
-Clay's observation that one hop suffices is what makes it cheap: an
-err can only reach a function through a pattern that matches err, so
-every step of a failure's travel is a call whose callee names it. The
-rule reads off it directly: a group that may receive an err raised in
-its own package must return an err. A pub group is seeded with its
-own package, because its callers are not all in view and anyone may
-hand a package its own failure back. Cost, measured A/B on one
-binary: 0.6 ms on `kanso check` (KANSO_NO_PROV switches it off, as
-KANSO_NO_FUSE does for fusion).
+Precedent (recorded so the novelty stays visible): the trio is the
+bifunctor algebra of Either — Haskell `>>=`/`withExceptT`/`catchError`,
+Rust `map`/`map_err`/`or_else` with anyhow's `.context` as the annotate
+idiom, ZIO `flatMap`/`mapError`/`catchSome`, Wlaschin's railway-oriented
+programming. The foreign-only license on rescue has no precedent; it is
+kanso's thesis, and everything else is the field's consensus arranged
+around it.
 
-The laundering case is caught: raise `err (json/parse_failure …)` in
-your own code, rescue it with a foreign-reason arm, and provenance
-names the raiser — the borrowed name buys nothing. Rescuing a
-genuinely foreign err stays silent. Both pinned.
+### Riders still open under this gavel
 
-Construction enforcement is therefore no longer needed for soundness,
-though the doctrine still says it and it is still unenforced — a
-separate gap, recorded above.
-
-If construction were enforced, the proxy would have been exact rather than
-approximate — only json can build a json reason, so a json-reasoned
-err can only have been raised by json. That is the cheapest route to
-a compiler-checkable provenance: **enforce the construction rule the
-doctrine already states, and the reason type becomes a sound witness
-for the raiser.** The alternatives are a whole-program dataflow that
-tracks which functions could have raised the err reaching a site, or
-a runtime check against the origin the err already carries — exact,
-but a runtime failure mode for a rule the language wants static.
-
-Recommendation: enforce construction first, then the proxy needs no
-argument. Clay's call, since it is a language rule with its own
-migration (every `json/parse_failure` built outside json becomes a
-call to a json factory).
-
-- **The rule, in one line (Clay's phrasing, 2026-07-28): a function
-  that receives an err raised in its own package must return an err.**
-  Everything else follows. Inspection inside that function is
-  unrestricted — read the reason's fields, compute with them, build
-  what you like — because the constraint is on what comes back out,
-  not on what may be looked at. The transitive case falls out too:
-  hand your own err to a helper that returns an int and the helper is
-  the violation, since it is the one that received it. What
-  *converting* costs is therefore a foreign reason: an arm may turn
-  an err into a value only by naming a reason type owned by a
-  different published package.
-- **Trapping is naming.** Since patterns can only name pub types, a
-  package's catchable surface is exactly its pub reason types —
-  catchability is pub-ness.
-- **Unstoppable = private.** An err whose reason type is not exported
-  cannot be named downstream, so it bubbles with no way to stop it.
-  Both original motives (no err control flow within a party; forcible
-  bubbling) come from type visibility alone.
-- **Bare `err reason` arms may only return err-or-subtype** —
-  annotation and wrapping on the way through, never absorption.
-- **Local subdirectory modules are one universe** (no license).
-  Workspace siblings — separately published packages in one repo — are
-  licensed (treat them as potentially two teams) with a `kanso check`
-  advisory naming the smell. Vendored code is owned code: its errs
-  stop being trappable.
-- **Construction stays module-private**, which also prevents forging a
-  foreign failure to launder control flow.
-- The cheat (splitting your own code to trap your own errs) is
-  self-defeating: making a failure trappable requires publishing the
-  reason type, which makes it catchable by every client forever —
-  there is no "handleable by me only" state, which is exactly the
-  state the rule exists to ban.
-
-SETTLED (Clay, 2026-07-27): (a) std is foreign to user code — std
-exceptions are absolutely rescuable. And **subtype matching** (Clay's
-ruling, the Ruby rescue model made order-independent): an arm naming a
-reason type catches every descendant, and the dispatch ladder gains
-one rung — a subtype ascription is more specific than its ancestor's.
-A value's ancestor chain is a line, so matching ascriptions are
-totally ordered and subtype matching can never tie (shrinks the
-tie-rejection gavel's surface). Consequence, accepted into the
-proposal: **unstoppable refines to "no pub ancestor"** — a private
-leaf under a pub root is trappable through the root, so a package can
-publish one coarse root ("everything of mine you may handle") while
-keeping leaves private and refinable; a truly unstoppable failure
-gets a reason chain that is private top to bottom. This structurally
-reproduces Ruby's StandardError/Exception split — handleable things
-under a published root, defects rooted outside it — with pub doing
-the work Ruby's inheritance convention does.
-
-SETTLED (Clay, 2026-07-27, second round): (b) wrapping carries the
-original — mechanized as the only two legal spellings. err stays
-opaque magic (reason + origin + hop trace, runtime-maintained, never
-record fields); infectiousness makes `err some_err` inert, so the
-annotate-nothing case is the identity re-raise (`fn handle e:err`,
-return `e` — trace intact; canon prefers this over reconstruction,
-which would mint a new birth site), and wrapping is the builtin
-factory `wrap_err new_reason original` — the one deliberate hole in
-infectiousness, attaching the original as cause in the magic layer,
-rendered nested at the endpoint. Discard-while-wrapping has no
-spelling. (c) re-export follows the door, trapping follows the leaf:
-a re-exported type is the re-exporter's as a *name* (the ultimate
-caller neither knows nor cares), but the conversion license compares
-the arm's package against the type's *origin* package — where the err
-stack leafs out. Everyone but the origin may trap it, including the
-re-exporter.
-
-**CORRECTED (Clay, 2026-07-28).** An earlier entry here said a package
-cannot inspect its own errs. It can, all day. The rule constrains the
-*return*, not the look: an arm may match its own err, read every field
-of the reason, and build whatever it likes from them — it must hand
-back an err. "Any function it passes its own err to must also return
-err." The advisory built for this already draws exactly that line
-(an arm reading both fields and re-raising is silent; only conversion
-to a value is flagged), so the code was right and the description was
-not.
-
-What survives the correction is narrower and still real: **a package
-cannot get a non-err value out of its own err**, and an assertion
-needs a value. Measured — a test constant that touches an err
-propagates it, and the harness reports `FAILED (returned err …)`, so
-equality, interpolation and every other route are closed alike. That
-is why the test-file exemption below is still wanted: not because
-inspection is blocked, but because an assertion is a value and a
-package may not produce one about its own failure.
-
-Consequences measured against the current tree:
-
-- std/json's `failure_position` and `failure_reason` become illegal
-  (std trapping std's own `parse_failure`). They are also unnecessary
-  under the structure-access amendment — foreign clients trap and read
-  fields directly — so they migrate away, taking
-  examples/json_failure_door.kso and the ch08 suite with them.
-- std's other own-err arms are all legal: `number_ok`, `string_ok`,
-  and `must` match err and *return* err. The discipline was already
-  being followed where it matters.
-- **Now measured, not predicted (2026-07-28).** The rule is built as
-  `advisory[license]`, sound-by-under-approximation: it flags only an
-  arm whose reason type carries the arm's own qualifier, where same
-  module means same universe with no plumbing needed. The fleet's
-  entire violation set is two functions — std/json's
-  `failure_position` and `failure_reason`, plus kq's vendored copies
-  of them. Everything else is silent, including kq's
-  `render_result (err reason)`, which re-raises. `*_test.kso` files
-  are exempt per the recommendation below.
-- **A package can no longer assert about its own failure paths.**
-  json_test's position assertions and its `defect?` predicate both
-  convert an err to a value, which is the one thing the rule forbids.
-  Two ways out (Clay, 2026-07-28, on why tests need this at all — an
-  assertion is a value, and a package may not produce one from its own
-  err): a **file-scope exemption for `*_test.kso`**, which is one line
-  and crude, a hole in a language rule at file granularity; or
-  **assertions get a toolchain surface** — the harness is not the
-  package, so a builtin that reads a failure is a foreign party
-  rescuing, legal under the rule as written, needing no exemption and
-  not leaking into shipped code. The exemption is what ships behind
-  the advisory today; the surface is the cleaner design and wants a
-  small amount of shaping. See design/testing.md.
-- **The pedagogy consequence needs Clay's eye.** ch08's teaching
-  program (`positions.kso`) has a decoder and a `show` arm that
-  dispatches on its own `parse_failure` — legal today, illegal under
-  the rule, and *unfixable within one program*, since local modules
-  share a universe. The chapter teaches "an err a caller might
-  reasonably handle is a value to dispatch on" (ch04's line), which
-  the rule narrows to "across a package boundary." Either the chapter
-  restructures around std/json as the foreign library, or the book
-  teaches that within one program handleable outcomes are `none` and
-  values, and err-dispatch belongs at library boundaries. This is a
-  real narrowing of the failure story the book currently tells.
-
-Still open, smaller: the dot-prefix canon for local imports (nested
-local paths spelled `./a/b`, bare multi-segment = hako name — makes
-every import's universe readable in its spelling); the subtype
-declaration spelling (`type foo string` vs `type post_body:string`);
-the into-subtype spelling (ctor-form `foo ""`, previously ruled, vs
-the sketch's postfix `"":foo`); positional destructuring of foreign
-types (recommended: named access only crosses).
-`design/err-migration.md` holds the migration plan.
-
-**PREREQUISITE SATISFIED: 1b is GAVELED (Clay, 2026-08-14).** Named
-structure reads cross packages — dot access and keyed patterns on pub
-types, one level — with pub granted per field; positional
-destructuring stays module-local; construction stays factory-only.
-This supersedes "types are opaque outside their module, always" and
-retires projection boilerplate like std/json's failure_position. The
-measured trap-but-cannot-read gap (a foreign type NAME crosses an
-import, so `(err e:json/parse_failure)` dispatches, while the opacity
-rule banned reading its fields) is thereby closed, and the license
-below is shippable.
+- **Spelling**: names and syntax for annotate and rescue — combinator
+  call vs marked arm on a chain — and whether the existing chain err-arm
+  syntax is annotate's surface (the chain's value arm and err arm are
+  bind's and annotate's callbacks already, spelled as dispatch arms).
+- **Construction enforcement** (reason building module-private): no
+  longer needed for soundness since provenance is computed, still stated
+  by the doctrine, still unenforced.
+- **The test surface**: a package cannot produce a value about its own
+  failure, and an assertion is a value. Either the `*_test.kso`
+  file-scope exemption (shipped, crude) or a toolchain assertion surface
+  (cleaner, wants shaping — design/testing.md).
+- **ch08 pedagogy**: positions.kso dispatches on its own parse_failure —
+  unfixable within one program since local modules share a universe. The
+  chapter restructures around std/json as the foreign library, or the
+  book narrows its failure story to the package boundary.
+- **Migration**: the arm-based advisory and the fleet's two violations
+  (std/json's failure_position/failure_reason, retired by 1b, plus kq's
+  vendored copies) move onto the combinator surface;
+  design/err-migration.md updates to this shape.
+- **Smaller spellings** carried from the July entry: the dot-prefix
+  canon for local imports, the subtype declaration spelling, the
+  into-subtype spelling.
 
 ## 3. Dependency to_string arms
 
