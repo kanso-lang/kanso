@@ -52,10 +52,10 @@
 jsonbench text=79634
 encodebench text=97090
 oneshot text=96834
-basket text=89170
+basket text=89314
 widebench text=98354
 deepbench text=60866
-escapebench text=47858
+escapebench text=47922
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -125,3 +125,8 @@ escapebench text=47858
 # write, so what it carries is the runtime and the loop. No existing row moves.
 # 2026-08-15: -144 bytes on every binary, the same figure seven times. The
 # memo's unconditional path goes away and a length test takes its place.
+# 2026-08-15: basket +144 bytes and escapebench +64; the other five do not
+# move. A cluster of groups in one tail cycle may now be entered by a plain
+# call and bracketed, and these two are the benchmarks holding such a cycle —
+# the push and pop around the entry, and the rewind in the loop, are code
+# their binaries did not carry before.

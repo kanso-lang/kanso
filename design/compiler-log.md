@@ -2516,3 +2516,98 @@ deleted rather than re-answered.
 Gavel 1 (the err-arm rule) was next on the table when this was
 recorded. Behind it: 3, 5, 6, 8, 15, 16, 17, 18, 19, 20b, and the
 also-open list.
+
+## 2026-08-15 — a cluster's entry, and the thirty loops it kept grow-only
+
+The beat analysis licenses two shapes: a self-recursive loop, and a cluster of
+groups in one tail cycle. Both refuse an entry the bracket cannot see. For a
+self-loop that refusal has an escape hatch — `demotable_entries` turns an
+entering tail call into a plain call, which costs the caller one frame and buys
+the loop its rewind. A cluster had no such hatch: any tail edge from outside its
+own cycle disqualified it outright.
+
+Running the report over one regexp-using program, thirty multi-group tail cycles
+were found and twenty-four of them were refused for exactly that reason, naming
+the entering edge each time: `fold` into `bounded_flat`, `span` into `merge`,
+`read_class` into `members`, `matches` into `spotting`. The shape is what a
+library looks like — a public entry that hands the loop its work in tail
+position — so refusing it refuses most library loops.
+
+Clusters now demote the same way, with two conditions the self-loop rule does
+not need. The first: the entering caller must be unreachable from the cluster. Reachability is
+taken over every mention, a lambda body as readily as a call head, because a
+caller the cycle re-enters is entered once per iteration rather than once per
+loop, and demoting there would trade a constant arena for a stack that grows
+with the input. `regexp/moved_on` is that case exactly — it tail-enters `repeat`
+and the cycle reaches it back through the continuation `another` builds — and it
+stays refused.
+
+The second condition is what the wide-print benchmark taught, below: the
+cluster must need no carry.
+
+Together they leave the regexp probe exactly where it started — six clusters
+bracket, the same six as before, because every cycle the first condition frees
+is one the second refuses. The measured wins are elsewhere: the escape shelf's
+permanent storage, and the two fixtures. The thirty-cluster count is a
+diagnosis of how library code is shaped, not a tally of what this change
+unblocks.
+
+The new fixture holds at one arena block where it took nine without the rule:
+
+    tests/golden/mem/a_cluster_entered_by_a_tail_call_sweeps
+
+    arena_blocks              9 ->          1
+    arena_peak_bytes  9,437,184 ->  1,048,576
+    beat_iters                0 ->    400,001
+
+with allocs, alloc_bytes and stdout byte-identical either way. The report said
+nothing about that loop before, because it only lists self-recursive groups and
+neither member of the cycle recurses on itself.
+
+A demoted entry buys a plain beat and never a carried one. The first cut did
+not say so, and the wide-print benchmark answered: the json string scanner's
+cycle became a carry beat and evacuated 8,196,352,640 bytes against the
+golden's 1,032,688, at 160,019 evacuations against 272. A carried slot is
+copied at every rewind, and a cluster reached only by a tail call is one whose
+carry nobody has priced, so the rule refuses that pairing outright.
+
+Two goldens then moved, both from clusters the rule newly admits:
+
+    escape   perm_peak_bytes  24,626,064 ->     10,272    cohort_frees 1 -> 0
+             beat_iters        1,200,000 ->  1,206,001
+    basket   allocs               28,192 ->     28,196    buf_reuse  104 -> 100
+             alloc_bytes       4,890,672 ->  4,901,616    sh_buf  +10,944
+
+The escape row is the change paying for itself — a benchmark that held 24 MB
+of permanent storage to the end now holds ten kilobytes. Basket pays four
+allocations and eleven kilobytes for twenty extra rewinds. Decode, encode,
+one-shot, wide, emitted code and compile memory are byte-identical, and
+welfare reads 84.51 against a floor of 84.51.
+
+`builder_transient` in the mem vein also moved: the newly bracketed
+`assemble`/`step` pair sends its byte builder to held storage instead of the
+arena — 40 mallocs, 40 frees, an 80-byte held peak, one arena block either way.
+
+A note on how the wide regression was nearly missed. The counter gates run
+PREBUILT benchmark binaries; running them without `scripts/gates/build_benchmarks.sh`
+first compares the golden against a binary the old compiler produced, and all
+six pass for no reason at all. They did here, and the claim "every vein is
+byte-identical" was made on that. Rebuild the benchmarks, then run the gates.
+
+No loop in lib/json joined: its string scanners are reached by a tail call and
+carry their accumulator, which is exactly the pairing the rule refuses. The
+conservatism test that pins the two encoders still pins them alone.
+
+Two things the change turned up that are not about clusters at all. The mem
+vein had no ratchet row — every memory-shape fixture in the corpus lives there
+and nothing had ever proved that gate could go red — so it gets one, breaking
+by restoring the blanket refusal rather than by editing a golden. And the
+reachability map was being rebuilt once per cycle inside the SCC loop, which
+Copilot caught; it is built once now, the first time a cluster has an entry to
+judge.
+
+What this does NOT do is reach task #228. `regexp/walked` has two refusals and
+this clears neither: its cluster is refused for the second reason, and the walk's
+cost is a CPS continuation per position rather than a loop's garbage. Bracketing
+around the per-position walk is a call-site bracket, which is a different
+mechanism from a loop's.

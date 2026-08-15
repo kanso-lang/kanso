@@ -101,6 +101,14 @@ escape_counters = row
   (breaking "escaped_storage_kept")
   benchmarks
 
+mem_shapes = row
+  "a memory shape the fixture's counters no longer describe"
+  true
+  "cargo test --release --test golden mem_corpus_pins_native_allocator_counters"
+  "specs (unit, golden, differential)"
+  (breaking "cluster_entry_not_demoted")
+  release
+
 emitted_code = row
   "the decoder's emitted line count moving"
   true
@@ -157,7 +165,7 @@ itself = row
   (breaking "unrowed_ci_job")
   release
 
-rows_a = [formatting linting goldens release_profile]
+rows_a = [formatting linting goldens mem_shapes release_profile]
 
 rows_b = [decode_counters escape_counters emitted_code machine_code]
 

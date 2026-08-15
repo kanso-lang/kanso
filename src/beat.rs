@@ -35,8 +35,14 @@ use std::collections::{HashMap, HashSet};
 /// A function group: its name and arity.
 pub type Group = (String, usize);
 
-/// A cluster's members plus each member's carried argument positions.
-type ClusterCarry = (Vec<Group>, HashMap<Group, Vec<usize>>);
+/// A cluster that may rewind: its members, each member's carried argument
+/// positions, and the tail edges from outside that must be emitted as plain
+/// calls so the cluster's bracket has a frame to sit in.
+struct Cluster {
+    members: Vec<Group>,
+    carried: HashMap<Group, Vec<usize>>,
+    entries: Vec<(Group, Group)>,
+}
 
 const SCALAR: Set = INT | FLOAT | BOOL;
 /// Sets an entry-threaded bare parameter may carry across a rewind. A value
@@ -120,16 +126,19 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
             next += 1;
         }
     }
-    for (cluster, cluster_carried) in eligible_clusters(program, inference, mut_sites, &chains) {
-        for member in cluster {
+    let mut demoted = HashSet::new();
+    for cluster in eligible_clusters(program, inference, mut_sites, &chains) {
+        for member in cluster.members {
             ids.insert(member, next);
         }
         next += 1;
-        for (group, positions) in cluster_carried {
+        for (group, positions) in cluster.carried {
             carried.insert(group, positions);
         }
+        for entry in cluster.entries {
+            demoted.insert(entry);
+        }
     }
-    let mut demoted = HashSet::new();
     for (callee, callers, positions) in demotable_entries(program, inference, mut_sites, &chains) {
         ids.insert(callee.clone(), next);
         next += 1;
@@ -475,7 +484,7 @@ fn eligible_clusters(
     inference: &infer::Inference,
     mut_sites: &MutSites,
     chains: &HashSet<Group>,
-) -> Vec<ClusterCarry> {
+) -> Vec<Cluster> {
     let groups: Vec<(String, usize)> = {
         let set: HashSet<(String, usize)> =
             program.fns.iter().map(|d| (d.name.clone(), d.params.len())).collect();
@@ -499,16 +508,31 @@ fn eligible_clusters(
     }
     let sccs = tail_sccs(groups.len(), &edges);
     let allocating = alloc_groups(program);
+    let mut mentions: Option<HashMap<&str, HashSet<String>>> = None;
     let mut out = Vec::new();
     for scc in sccs {
         if scc.len() < 2 {
             continue; // self-loops stay on the proven path
         }
         let members: HashSet<usize> = scc.iter().copied().collect();
-        let tail_entry =
-            edges.iter().any(|(from, to, _, _)| members.contains(to) && !members.contains(from));
-        if tail_entry {
-            continue;
+        let entries: Vec<(usize, usize)> = edges
+            .iter()
+            .filter(|(from, to, _, _)| members.contains(to) && !members.contains(from))
+            .map(|(from, to, _, _)| (*from, *to))
+            .collect();
+        // An entering tail call is demotable when the caller cannot be
+        // reached from the cluster again: the entry then happens once per
+        // cluster entry, and the frame demotion retains is one. A caller the
+        // cluster reaches — through a lambda as readily as through a call —
+        // is entered once per iteration, and demoting there trades a
+        // constant arena for a stack that grows with the input.
+        if !entries.is_empty() {
+            let map = mentions.get_or_insert_with(|| mention_map(program));
+            let seeds = scc.iter().map(|&g| groups[g].0.as_str());
+            let inside = reachable_names(map, seeds);
+            if entries.iter().any(|(from, _)| inside.contains(groups[*from].0.as_str())) {
+                continue;
+            }
         }
         if scc.iter().any(|&g| used_as_value(program, &groups[g].0)) {
             continue;
@@ -519,7 +543,21 @@ fn eligible_clusters(
         if let Some(carried) =
             cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges)
         {
-            out.push((scc.iter().map(|&g| groups[g].clone()).collect(), carried));
+            // A demoted entry buys a plain beat and nothing more. A carried
+            // slot is evacuated at every rewind, and a cluster reached only
+            // by a tail call is one whose cost nobody has measured — the
+            // json string scanner pays 8 GB of copies for the licence.
+            if !entries.is_empty() && !carried.is_empty() {
+                continue;
+            }
+            out.push(Cluster {
+                members: scc.iter().map(|&g| groups[g].clone()).collect(),
+                carried,
+                entries: entries
+                    .into_iter()
+                    .map(|(from, to)| (groups[from].clone(), groups[to].clone()))
+                    .collect(),
+            });
         }
     }
     out
@@ -752,7 +790,7 @@ pub fn report(
         .collect();
     let clustered: HashSet<Group> = eligible_clusters(program, inference, mut_sites, &chains)
         .into_iter()
-        .flat_map(|(members, _)| members)
+        .flat_map(|cluster| cluster.members)
         .collect();
     let mut rows: Vec<(String, usize, Verdict)> =
         classify_all(program, inference, mut_sites, &chains)
@@ -1420,6 +1458,96 @@ fn group_param_set(
 
 /// Does `name` appear as a function value — an identifier outside call-head
 /// position — anywhere in the program?
+/// Every name each declaration mentions — a call head, an argument, a lambda
+/// body, a guard, alike. Built once per analysis and read by every cluster
+/// that has an entry to judge.
+fn mention_map(program: &Program) -> HashMap<&str, HashSet<String>> {
+    let mut mentions: HashMap<&str, HashSet<String>> = HashMap::new();
+    for decl in &program.fns {
+        let entry = mentions.entry(decl.name.as_str()).or_default();
+        for stmt in &decl.body {
+            collect_names(guard_stmt_expr(stmt), entry);
+        }
+    }
+    mentions
+}
+
+/// Every name reachable from `seeds`. Arity is ignored and a mention is taken
+/// for a call, so the answer over-approximates the call graph. That is the
+/// safe direction here: a caller wrongly judged reachable costs a cluster its
+/// bracket, where one wrongly judged unreachable costs a bounded stack.
+fn reachable_names<'a>(
+    mentions: &HashMap<&str, HashSet<String>>,
+    seeds: impl Iterator<Item = &'a str>,
+) -> HashSet<String> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut queue: Vec<String> = seeds.map(str::to_string).collect();
+    while let Some(name) = queue.pop() {
+        for next in mentions.get(name.as_str()).into_iter().flatten() {
+            if seen.insert(next.clone()) {
+                queue.push(next.clone());
+            }
+        }
+    }
+    seen
+}
+
+fn collect_names(e: &Expr, out: &mut HashSet<String>) {
+    match e {
+        Expr::Ident(n, _) | Expr::Partial(n, _) => {
+            out.insert(n.clone());
+        }
+        Expr::Block(stmts, _) | Expr::Build(stmts, _) => {
+            for st in stmts {
+                collect_names(guard_stmt_expr(st), out);
+            }
+        }
+        Expr::App { head, args, .. } => {
+            collect_names(head, out);
+            for a in args {
+                collect_names(a, out);
+            }
+        }
+        Expr::Field { base, .. } => collect_names(base, out),
+        Expr::Upcast { expr, .. } => collect_names(expr, out),
+        Expr::Index { base, index, .. } => {
+            collect_names(base, out);
+            collect_names(index, out);
+        }
+        Expr::BinOp { lhs, rhs, .. } | Expr::Join { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) => {
+            collect_names(lhs, out);
+            collect_names(rhs, out);
+        }
+        Expr::Guard { cond, early, rest, .. } => {
+            collect_names(cond, out);
+            collect_names(early, out);
+            for s in rest {
+                collect_names(guard_stmt_expr(s), out);
+            }
+        }
+        Expr::Lambda { body, .. } => collect_names(body, out),
+        Expr::List(items, _) => {
+            for i in items {
+                collect_names(i, out);
+            }
+        }
+        Expr::MapLit(pairs, _) => {
+            for (k, v) in pairs {
+                collect_names(k, out);
+                collect_names(v, out);
+            }
+        }
+        Expr::Str(parts, _) => {
+            for p in parts {
+                if let TemplatePart::Interp(inner) = p {
+                    collect_names(inner, out);
+                }
+            }
+        }
+        Expr::Int(..) | Expr::Float(..) => {}
+    }
+}
+
 fn used_as_value(program: &Program, name: &str) -> bool {
     program.fns.iter().any(|d| {
         d.body.iter().any(|stmt| {
@@ -1673,6 +1801,31 @@ mod tests {
     }
 
     #[test]
+    fn a_cluster_entered_by_an_acyclic_tail_call_is_a_beat() {
+        // counted hands the cycle its frame and is never entered again, so
+        // that one edge becomes a plain call and the cycle gets its bracket.
+        let src = "fn stepping n tally\n  more n tally (n <= 0)\n\nfn more _ tally true\n  tally\n\nfn more n tally false\n  junk = \"k{n}\"\n  stepping (n - 1) (tally + length junk)\n\nfn counted n\n  stepping n 0\n\nmain = print \"{counted 5}\"\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(beats.ids.contains_key(&("stepping".to_string(), 2)));
+    }
+
+    #[test]
+    fn a_cluster_the_entering_caller_is_reached_from_stays_grow_only() {
+        // counted enters the cycle by a tail call and the cycle reaches it
+        // back, so the entry recurs: demoting it would retain a frame per
+        // iteration and trade the arena for the stack.
+        let src = "fn stepping n tally\n  more n tally (n <= 0)\n\nfn more _ tally true\n  tally\n\nfn more n tally false\n  junk = \"k{n}\"\n  stepping (n - 1) (tally + length junk + tiny n)\n\nfn tiny 0\n  counted 0\n\nfn tiny _\n  0\n\nfn counted n\n  stepping n 0\n\nmain = print \"{counted 5}\"\n";
+        let (program, inference) = compiled(src);
+        let beats =
+            super::beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
+
+        assert!(!beats.ids.contains_key(&("stepping".to_string(), 2)));
+    }
+
+    #[test]
     fn list_threaded_loop_is_a_beat() {
         // the list is handed onward unchanged every iteration: below the
         // mark, header never mutated, safe across the rewind.
@@ -1821,7 +1974,9 @@ mod tests {
         // list accumulators — those stay out. The two encoders thread a byte
         // builder by pointer identity, which is exactly what the chain
         // license admits: raw bytes hold no pointers, so nothing in the
-        // accumulator can dangle across a rewind.
+        // accumulator can dangle across a rewind. The string scanners share
+        // the licence but not the entry: they are reached by a tail call,
+        // and a demoted entry buys a plain beat, never a carried one.
         let program = crate::compile_module(std::path::Path::new("lib/json"), false).unwrap();
         let inference = infer::infer(&program);
         let loops = beat_loops(&program, &inference, &crate::linear::in_place_pushes(&program));
