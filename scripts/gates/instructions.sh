@@ -11,7 +11,7 @@
 # process's stack and libc walks it before main, so a run id that gained a
 # digit reads as fourteen instructions of work that nobody wrote.
 set -e
-for b in jsonbench encodebench oneshot basket widebench; do
+for b in jsonbench encodebench oneshot basket widebench deepbench; do
   env -i PATH=/usr/bin:/bin \
     valgrind --tool=callgrind --callgrind-out-file=/tmp/cg.$b ./$b \
     >/dev/null 2>/tmp/ir.$b

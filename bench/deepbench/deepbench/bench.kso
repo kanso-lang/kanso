@@ -1,0 +1,45 @@
+# The shape the corpus has never had, and the one three earlier attempts
+# missed. widebench carries one long list and asks the same question of it
+# every element; this carries a short accumulator across an io bind whose
+# lambda captures a list of lists, which is what a simulator folding over
+# trials does — vse builds an electorate per trial and reads it through six
+# scoring passes before the next.
+#
+# The cost it exists to price allocates nothing. A survival memo keyed on the
+# list pointer hits when one list is asked about repeatedly and misses when
+# every iteration asks about a fresh one, and the miss is a hash insert with
+# no payoff. No allocator counter, emitted line or byte of machine code moves
+# either way.
+import "std/io"
+import "std/list"
+
+wide = 12
+
+deep = 8
+
+fn mixed a b
+  (a * 37 + b * 11 + 5) % 1000
+
+fn row 0 _ acc
+  acc
+
+fn row d k acc
+  io/write "" . (_ -> row (d - 1) k (push acc (mixed d k)))
+
+fn grid 0 _ acc
+  acc
+
+fn grid n k acc
+  row deep (n + k) [] . (r -> grid (n - 1) k (push acc r))
+
+fn scored g
+  list/fold g 0 (m r -> m + list/fold r 0 (a v -> a + v))
+
+fn trials 0 acc
+  acc
+
+fn trials k acc
+  grid wide k [] . (g -> trials (k - 1) (acc + scored g))
+
+pub fn total n
+  trials n 0
