@@ -1138,6 +1138,7 @@ fn expand_tail<'a>(e: &'a Expr, out: &mut Vec<&'a Expr>) {
 /// costs a bracket and never correctness.
 fn scalar_elem(
     e: &Expr,
+    program: &Program,
     own: &str,
     decl: &crate::ast::FnDecl,
     inference: &infer::Inference,
@@ -1152,8 +1153,8 @@ fn scalar_elem(
         // the recursion is what keeps the rule honest rather than the list of
         // operators.
         Expr::BinOp { lhs, rhs, .. } => {
-            scalar_elem(lhs, own, decl, inference, decl_index)
-                && scalar_elem(rhs, own, decl, inference, decl_index)
+            scalar_elem(lhs, program, own, decl, inference, decl_index)
+                && scalar_elem(rhs, program, own, decl, inference, decl_index)
         }
         // Reading the accumulator being licensed. This is the same
         // co-inductive step the linearity fixpoint already takes: assume the
@@ -1177,10 +1178,34 @@ fn scalar_elem(
                         set != 0 && set & !FAIL & !SCALAR == 0
                     })
         }
+        // A builtin answers from its own table; a function the program
+        // defines answers from the inference's, where a name is scalar only
+        // when every arm of it is. Both are the same question — can what
+        // comes back hold a pointer — and the second one was missing, so
+        // `push xs (mixed k n)` lost the bracket that `push xs n` keeps and
+        // the loop stopped sweeping: 1,048,576 bytes of arena became
+        // 33,554,432 at four thousand rounds.
         Expr::App { head, args, .. } => match head.as_ref() {
             Expr::Ident(n, _) => {
                 let set = infer::builtin_set(n, &vec![infer::TOP; args.len()]);
-                set != 0 && set & !FAIL & !SCALAR == 0
+                if set != 0 && set & !FAIL & !SCALAR == 0 {
+                    return true;
+                }
+                // The declarations are walked rather than indexed by a map the
+                // inference would have to carry: a map of owned names costs
+                // 24,212 bytes of front-end peak on lib/json, and this is asked
+                // only of a call standing where an accumulator's element goes.
+                let mut named = false;
+                for (i, d) in program.fns.iter().enumerate() {
+                    if d.name == *n && d.params.len() == args.len() {
+                        named = true;
+                        let r = inference.returns[i];
+                        if r == 0 || r & !FAIL & !SCALAR != 0 {
+                            return false;
+                        }
+                    }
+                }
+                named
             }
             _ => false,
         },
@@ -1202,8 +1227,10 @@ fn scalar_elem(
 /// recursion, because that is where the accumulator arrived from — but on its
 /// own it means a map merely passed through and read, which is the case the
 /// carry exists to evacuate and must not be licensed out of it.
+#[allow(clippy::too_many_arguments)]
 fn is_scalar_map_chain(
     e: &Expr,
+    program: &Program,
     own: &str,
     decl: &crate::ast::FnDecl,
     inference: &infer::Inference,
@@ -1214,11 +1241,13 @@ fn is_scalar_map_chain(
     let Expr::App { head, .. } = e else { return false };
     let Expr::Ident(n, _) = head.as_ref() else { return false };
     matches!(n.as_str(), "put" | "builtin_put")
-        && map_chain_rest(e, own, decl, inference, decl_index, locals, mut_sites)
+        && map_chain_rest(e, program, own, decl, inference, decl_index, locals, mut_sites)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn map_chain_rest(
     e: &Expr,
+    program: &Program,
     own: &str,
     decl: &crate::ast::FnDecl,
     inference: &infer::Inference,
@@ -1230,7 +1259,7 @@ fn map_chain_rest(
         Expr::Ident(p, _) => {
             p == own
                 || locals.get(p.as_str()).is_some_and(|e2| {
-                    map_chain_rest(e2, own, decl, inference, decl_index, locals, mut_sites)
+                    map_chain_rest(e2, program, own, decl, inference, decl_index, locals, mut_sites)
                 })
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
@@ -1240,8 +1269,10 @@ fn map_chain_rest(
                     && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
             {
                 literal_key(&args[1])
-                    && scalar_elem(&args[2], own, decl, inference, decl_index)
-                    && map_chain_rest(&args[0], own, decl, inference, decl_index, locals, mut_sites)
+                    && scalar_elem(&args[2], program, own, decl, inference, decl_index)
+                    && map_chain_rest(
+                        &args[0], program, own, decl, inference, decl_index, locals, mut_sites,
+                    )
             }
             _ => false,
         },
@@ -1264,8 +1295,10 @@ fn literal_key(e: &Expr) -> bool {
 /// pushes a scalar. The bytes license below rests on raw bytes holding no
 /// pointers; this rests on the same fact reached a different way, so the two
 /// are the same rule and not a widening of it.
+#[allow(clippy::too_many_arguments)]
 fn is_scalar_list_chain(
     e: &Expr,
+    program: &Program,
     own: &str,
     decl: &crate::ast::FnDecl,
     inference: &infer::Inference,
@@ -1277,7 +1310,9 @@ fn is_scalar_list_chain(
         Expr::Ident(p, _) => {
             p == own
                 || locals.get(p.as_str()).is_some_and(|e2| {
-                    is_scalar_list_chain(e2, own, decl, inference, decl_index, locals, mut_sites)
+                    is_scalar_list_chain(
+                        e2, program, own, decl, inference, decl_index, locals, mut_sites,
+                    )
                 })
         }
         Expr::App { head, args, span, .. } => match head.as_ref() {
@@ -1286,9 +1321,9 @@ fn is_scalar_list_chain(
                     && args.len() == 2
                     && mut_sites.contains(&(decl.file.clone(), span.line, span.col)) =>
             {
-                scalar_elem(&args[1], own, decl, inference, decl_index)
+                scalar_elem(&args[1], program, own, decl, inference, decl_index)
                     && is_scalar_list_chain(
-                        &args[0], own, decl, inference, decl_index, locals, mut_sites,
+                        &args[0], program, own, decl, inference, decl_index, locals, mut_sites,
                     )
             }
             _ => false,
@@ -1347,13 +1382,17 @@ fn arg_ok(
         let locals = local_binds(decl);
         if set != 0
             && set & !FAIL & !LIST == 0
-            && is_scalar_list_chain(arg, own, decl, inference, decl_index, &locals, mut_sites)
+            && is_scalar_list_chain(
+                arg, program, own, decl, inference, decl_index, &locals, mut_sites,
+            )
         {
             return true;
         }
         if set != 0
             && set & !FAIL & !MAP == 0
-            && is_scalar_map_chain(arg, own, decl, inference, decl_index, &locals, mut_sites)
+            && is_scalar_map_chain(
+                arg, program, own, decl, inference, decl_index, &locals, mut_sites,
+            )
         {
             return true;
         }

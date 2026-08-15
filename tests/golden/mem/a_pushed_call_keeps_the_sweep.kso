@@ -1,0 +1,34 @@
+# The element pushed is a call rather than arithmetic, and that used to be the
+# difference between a loop that sweeps and one that does not. `push acc n` and
+# `push acc ((k * 31 + n * 7 + 3) % 997)` both kept their bracket; `push acc
+# (mixed k n)` lost it, because the rule that asks whether a pushed element can
+# hold a pointer consulted the builtin table and nothing else.
+#
+# beat_iters is the number to read: 241,201 here against 1,201 without the
+# rule, which is the inner loop's rewind appearing and disappearing. The arena
+# holds at one block either way at this size — the shape where the loss shows
+# up as memory is the io-driven one, where four hundred rounds took the arena
+# from 1,048,576 bytes to 4,194,304 and four thousand took it to 33,554,432.
+fn mixed a b
+  (a * 31 + b * 7 + 3) % 997
+
+fn filled acc _ 0
+  acc
+
+fn filled acc k n
+  filled (push acc (mixed k n)) k (n - 1)
+
+fn one_list k
+  base = push [] 1
+  length (filled base k 400)
+
+fn many at stop tally
+  more at stop tally (at > stop)
+
+fn more _ _ tally true
+  tally
+
+fn more at stop tally false
+  many (at + 1) stop (tally + one_list at)
+
+pub play = print "{many 1 600 0}"
