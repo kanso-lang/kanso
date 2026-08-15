@@ -2225,3 +2225,64 @@ closed this hole for the string pool and it reopened for the next one, so the
 comment on peak_of now says any pool added later joins the sum on the day it
 gets a counter rather than on the day something large enough to notice moves
 it.
+
+### A call answers the same question a builtin does (#915)
+
+The rule that decides whether a pushed element can hold a pointer consulted
+the builtin table and nothing else. `push xs n` kept its beat bracket and
+`push xs (mixed k n)` lost it, and a loop without its bracket never sweeps:
+the arena holds at 1,048,576 bytes for a self-loop and reaches 33,554,432 at
+four thousand rounds for the same loop written with a call.
+
+Arithmetic is what a toy loop pushes and a call is what a real one pushes, so
+the shape getting the memory model's full benefit was the shape nobody writes.
+
+The suspicion that had to clear first was laziness — a thunked call stores an
+arena pointer that a rewind frees, which would have made the refusal correct.
+Measured on both variants: `thunk_allocs` and `thunk_forces` are 0 either way.
+The strictness analyser had already made the call strict, so the refusal was
+costing brackets for nothing.
+
+All six counter veins are byte-identical, which is also the evidence that no
+benchmark in the corpus pushes a call.
+
+### The cheapest form of a fact is not to store it
+
+The first shape put a set of scalar-returning names on the inference. It cost
+24,212 bytes of front-end peak on lib/json — 2.96%, outside the gate's band —
+and took welfare below its floor for a benefit the corpus cannot show. A
+sorted `Vec` instead of a `HashSet` measured IDENTICALLY, which is the finding:
+the container was never the cost, the owned names were.
+
+`arg_ok` already holds the program and is the single entry point into these
+rules, so the four analysis functions take it too and the callee is resolved by
+walking the declarations. The question is asked only of a call standing where
+an accumulator's element goes, so a rare walk replaced a permanent map:
+819,217 to 823,379 bytes, 0.51%, inside the band with the golden untouched.
+
+`welfare --set` refuses a fall by design — "Clay's call to make, in
+conversation — not a flag's" — and that guard is what made the cheaper shape
+worth finding rather than routing around.
+
+### A cluster says what it is (#917)
+
+The beat report said `beat: rewinds every iteration (also an unbracketed
+entry)` for a loop measured rewinding once, contradicting itself in one line.
+
+`report` drops clustered and demoted groups from the classifier's answer and
+re-adds them with a hardcoded `Verdict::Beat`, whose words are "rewinds every
+iteration". That is right for a demoted entry — demoting the entry is exactly
+what lets the loop bracket — and wrong for a cluster, which brackets as a
+unit. Instrumenting the report confirmed which path the pair took: clustered,
+with the demoted set empty.
+
+It also explains an inconsistency that had looked unaccountable. `classify`
+checks `outside_tails` second and would have returned `OutsideTailCall`, so it
+never said `Beat` here; the hardcoded push did, and `blockers` then truthfully
+appended the contradicting parenthetical.
+
+The report had no gate of any kind — nothing in tests, scripts or CI ran it —
+so the wording could drift with nothing to say so. The new text says what a
+cluster IS rather than asserting what it does, which stays accurate whether or
+not a cluster entered from inside its own tail cycle behaves differently. That
+remains unmeasured, as does `CarryBeat`, whose text contains the same phrase.
