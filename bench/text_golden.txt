@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=78066
-encodebench text=95538
-oneshot text=95266
-basket text=87522
-widebench text=96786
+jsonbench text=79778
+encodebench text=97234
+oneshot text=96978
+basket text=89314
+widebench text=98498
 deepbench text=61010
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
@@ -106,3 +106,16 @@ deepbench text=61010
 # decrement where one is released. Every program links the runtime, so every
 # program carries them whether or not it ever grows an accumulator that
 # outlives its beat.
+# 2026-08-15: +1,712 bytes on jsonbench, +1,696 on encodebench and oneshot,
+# +1,792 on basket, +1,712 on widebench, and deepbench does not move at all.
+# The registry that frees escaped accumulator storage: three arrays, the push
+# that grows one, the flush and the migrate, and the beat-stack walk that
+# decides which depth owns a buffer. Every program links the runtime, so every
+# program carries it whether or not it grows an accumulator past its beat.
+#
+# About half of that is bought deliberately. The first shape was 848 bytes and
+# cost 0.68% of the decoder's instructions on a program whose
+# perm_peak_bytes is zero; splitting the empty test inline and putting a hot
+# flag in front of the cold array doubled the code and took the instruction
+# cost to 0.35%. deepbench holds at 61,010 across all three shapes — it links
+# least of the runtime, and the section's alignment absorbs what it does link.
