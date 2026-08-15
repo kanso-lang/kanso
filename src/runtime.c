@@ -329,6 +329,10 @@ static void k_stats_on_signal(int sig) {
     k_stats_dump();
 }
 
+/* Live and peak bytes of malloc-backed accumulator storage — the dimension
+   every counter here was blind to while a real workload held 3.6 GB. */
+static long long k_perm_live = 0, k_perm_peak = 0;
+
 static void k_stats_dump(void) {
     fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
     fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
@@ -348,13 +352,15 @@ static void k_stats_dump(void) {
         "thunk_frees=%lld\nthunk_escaped=%lld\nthunk_live_exit=%lld\n"
         "el_parses=%lld\nryu_renders=%lld\nutf8_bytes=%lld\n"
         "find2_calls=%lld\nappend_fast=%lld\nappend_grow=%lld\n"
-        "utf8_zerocopy=%lld\ncarry_dedup=%lld\nbytes_malloc=%lld\nbytes_freed=%lld\n",
+        "utf8_zerocopy=%lld\ncarry_dedup=%lld\nbytes_malloc=%lld\nbytes_freed=%lld\n"
+        "perm_live_bytes=%lld\nperm_peak_bytes=%lld\n",
         k_stat_thunk_allocs, k_stat_thunk_forces, k_stat_thunk_evals,
         k_stat_thunk_frees, k_stat_thunk_escaped,
         k_stat_thunk_allocs - k_stat_thunk_frees, k_stat_el_parses,
         k_stat_ryu_renders, k_stat_utf8_bytes, k_stat_find2_calls,
         k_stat_append_fast, k_stat_append_grow, k_stat_utf8_zerocopy,
-        k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed);
+        k_stat_carry_dedup, k_stat_bytes_malloc, k_stat_bytes_freed,
+        k_perm_live, k_perm_peak);
     fprintf(stderr, "str_scans=%lld\nstr_scan_bytes=%lld\n",
             k_stat_str_scans, k_stat_str_scan_bytes);
     fprintf(stderr, "buf_reuse=%lld\nheld_peak_bytes=%lld\n", k_stat_buf_reuse, k_stat_held_peak);
@@ -4662,6 +4668,8 @@ static void k_die_not_callable(KValue f) {
    k_buf_donate refuses a negative one to the arena's shelf. */
 static KValue* k_buf_perm(long long cap) {
     KBuf* b = malloc(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+    k_perm_live += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+    if (k_perm_live > k_perm_peak) k_perm_peak = k_perm_live;
     if (!b) { fputs("out of memory\n", stderr); exit(1); }
     if (__builtin_expect(k_stats_on > 0, 0)) {
         k_stat_allocs++;
@@ -5685,7 +5693,11 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
         /* uniqueness is proven at mut sites, so the outgrown buffer has no
            other holder: an arena buffer goes to the shelf for the next
            collection, and one of ours is released outright. */
-        if (k_buf_of(l->items)->cap < 0) free(k_buf_of(l->items)); else
+        if (k_buf_of(l->items)->cap < 0) {
+            KBuf* ob = k_buf_of(l->items);
+            k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
+            free(ob);
+        } else
         k_buf_donate(l->items);
         l->items = items;
         l->len++;
