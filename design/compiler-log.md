@@ -2598,6 +2598,14 @@ No loop in lib/json joined: its string scanners are reached by a tail call and
 carry their accumulator, which is exactly the pairing the rule refuses. The
 conservatism test that pins the two encoders still pins them alone.
 
+Two things the change turned up that are not about clusters at all. The mem
+vein had no ratchet row — every memory-shape fixture in the corpus lives there
+and nothing had ever proved that gate could go red — so it gets one, breaking
+by restoring the blanket refusal rather than by editing a golden. And the
+reachability map was being rebuilt once per cycle inside the SCC loop, which
+Copilot caught; it is built once now, the first time a cluster has an entry to
+judge.
+
 What this does NOT do is reach task #228. `regexp/walked` has two refusals and
 this clears neither: its cluster is refused for the second reason, and the walk's
 cost is a CPS continuation per position rather than a loop's garbage. Bracketing
