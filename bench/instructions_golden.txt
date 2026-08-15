@@ -59,6 +59,7 @@ encodebench 9712917741
 oneshot 49222776
 basket 57426164
 widebench 130353737
+deepbench 2716802224
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -122,3 +123,8 @@ widebench 130353737
 # zero cap sends k_str_chars down the walk, where a positive one sent it to a
 # cached count that was never written, so what rises here is the walk that
 # always should have run. The old numbers were cheaper and wrong.
+# 2026-08-15: a sixth row, and the point of it. The cost deepbench prices
+# allocates nothing — a survival memo keyed on a list pointer hits when one
+# list is asked about repeatedly and misses when every iteration asks about a
+# fresh one — so this vein and the machine-code one are the only two that can
+# see it. No existing row moves.
