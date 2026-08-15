@@ -2328,3 +2328,45 @@ missing shape.
 
 The number that would settle the second one is the live-at-boundary probe run
 on this shelf, which has not been done.
+
+### Declined by measurement: a permanent region for literals (#904)
+
+A pointer into permanent storage cannot be recognised, so `k_survives` answers
+0 for it and a string literal read every iteration is deep-copied at every
+beat boundary it crosses — the same pointer, 384,000 times. Giving that
+storage its own bump region and a range test fixes it, and the branch was
+built, rebased twice, and measured on two different baselines.
+
+    basket       -438,202   -0.76%      encodebench  -2,566,583  -0.026%
+    deepbench      -353,364 -0.042%      jsonbench   +12,424,202 +0.43%
+    widebench      +430,883 +0.49%       oneshot        +254,182 +0.52%
+    escapebench    +120,386 +0.047%
+
+Machine code +480 bytes on most binaries.
+
+welfare 84.50 against a floor of 84.51, the same verdict before and after #903
+landed — five of the seven rows were byte-identical across the two baselines,
+so the fall belongs to the change rather than to what it was measured against.
+
+The three that rise hold almost no literals across a boundary: they pay the
+range test and collect nothing. Only basket holds enough to profit. The
+corpus can SEE the win — basket is the second-largest single improvement in
+the table — and still prices the whole thing negative. That is the objective
+working, not a gap in it, which is what separates this from #912, where the
+benefit was invisible because nothing in the corpus had the shape.
+
+So there is no weights argument to make, and the rule applies as written: the
+change goes. Recorded here rather than left open so the idea stays declined.
+
+What was already spent optimising it, so nobody re-derives it: the range test
+is asked LAST, after the arena walk. Asked first it cost decode 0.81%, the
+wide print 1.26% and one-shot 0.64% — more than the copies it spared them.
+Asking it last is what halved the remaining cost. The residual looks structural
+to the idea rather than to its placement.
+
+A thread this leaves open rather than closes: #228 found that regexp's scan
+driver is refused a beat bracket partly because its first argument, the parsed
+node tree, reads as heap crossing the iteration — and that tree is parsed once
+and never mutated. Whether something like this region could make such a tree
+recognisable is untested, and the region as built here takes compile-time
+literals, not runtime-parsed structures.
