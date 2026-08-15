@@ -769,6 +769,15 @@ pub fn report(
     rows.iter()
         .map(|(name, arity, v)| {
             let fate = match v {
+                // A cluster is bracketed as a unit, and saying it "rewinds
+                // every iteration" claims something measured false: the mark
+                // of a cluster entered from outside its own tail cycle is
+                // pushed once and rewound once, while the loop runs. Demoted
+                // entries are not this — demoting the entry is what lets the
+                // loop bracket — so only the clustered rows are re-worded.
+                Verdict::Beat if clustered.contains(&(name.clone(), *arity)) => {
+                    "beat: bracketed with its cluster".to_string()
+                }
                 Verdict::Beat => "beat: rewinds every iteration".to_string(),
                 Verdict::PureLoop => {
                     "pure loop: no iteration allocates, nothing to rewind".to_string()
@@ -1464,6 +1473,30 @@ mod tests {
         assert!(
             step.contains("unbracketed entry") && step.contains("also carries heap"),
             "the report named one blocker and hid the other: {step}"
+        );
+    }
+
+    /// A cluster is bracketed as a unit, so the report must not borrow the
+    /// self-loop's words for it. Measured on a mutual pair entered from
+    /// outside its own tail cycle: the mark is pushed once and rewound once
+    /// while the loop runs a thousand times, so "rewinds every iteration"
+    /// describes something that did not happen.
+    ///
+    /// The pair is asserted rather than a single name because a cluster is
+    /// only a cluster with both halves, and the report reaches them by a
+    /// different path from every other row — they are dropped from the
+    /// classifier's answer and re-added, which is where the wrong words came
+    /// from.
+    #[test]
+    fn a_cluster_is_not_described_as_rewinding_every_iteration() {
+        let src = "fn filled acc 0\n  acc\n\nfn filled acc n\n  filled (push acc n) (n - 1)\n\nfn one_list _\n  base = push [] 1\n  length (filled base 8)\n\nfn many at stop tally\n  more at stop tally (at > stop)\n\nfn more _ _ tally true\n  tally\n\nfn more at stop tally false\n  many (at + 1) stop (tally + one_list at)\n\nmain = print \"{many 1 20 0}\"\n";
+        let (program, inference) = compiled(src);
+        let lines = super::report(&program, &inference, &crate::linear::in_place_pushes(&program));
+        let many = lines.iter().find(|l| l.starts_with("many/3")).expect("many is reported");
+
+        assert!(
+            many.contains("bracketed with its cluster") && !many.contains("every iteration"),
+            "the report gave a cluster the self-loop's words: {many}"
         );
     }
 
