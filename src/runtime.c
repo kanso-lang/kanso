@@ -309,6 +309,8 @@ static long long k_stat_blocks = 0;
 static long long k_stat_perm_allocs = 0;
 static long long k_stat_beat_iters = 0;
 static long long k_stat_evac_bytes = 0;
+static const char* k_arena_at_carry = NULL;
+static const void* k_blocks_at_carry = NULL;
 static long long k_stat_evac_allocs = 0;
 /* The two in-place writers are the decode kernels, and neither had a presence
    counter: a doubling of either is invisible to `allocs`, because the fast
@@ -4251,7 +4253,29 @@ static KValue k_exec(KDesc* d) {
                     k_viewreg_migrate(k_beat_depth);
                     k_beat_push();
                     cur = next;
+                } else if (nsz <= 4096
+                           && k_blocks_at_carry == (const void*)k_blocks
+                           && k_arena_at_carry
+                           && (size_t)(k_arena - k_arena_at_carry) < (size_t)(1 << 18)) {
+                    /* A step whose live value is small enough to be cheaper to
+                       leave than to stage, in a region that has not drifted far
+                       enough to matter. Staging costs a size walk, a copy and a
+                       rewind at every step; a chain of small steps pays that
+                       hundreds of thousands of times for a value of a few
+                       hundred bytes.
+
+                       Both tests are load-bearing and for different reasons.
+                       The size test excludes the shape that carries a large
+                       value forward, which must keep being evacuated or the
+                       size walk re-reads it every step. The drift test keeps
+                       the beat mark inside its block: the mark advances
+                       whenever the copy walk repairs an interior, a rewind can
+                       only return the arena to the mark, and a mark that
+                       crosses a block leaves everything behind it stranded. */
+                    cur = next;
                 } else {
+                    k_arena_at_carry = k_arena;
+                    k_blocks_at_carry = (const void*)k_blocks;
                     k_carry_reset();
                     k_carry_stage(next);
                     k_beat_iter_carry();
