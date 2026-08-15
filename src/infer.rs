@@ -1,5 +1,5 @@
 use crate::ast::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Propagable type sets as tag bitsets — the single monotone inference
 /// fixpoint (the story is told in about.html part 03), coarse to start:
@@ -35,13 +35,6 @@ pub struct Inference {
     pub returns: Vec<Set>,
     /// per type index, per field: joined set seen at construction sites
     pub type_fields: Vec<Vec<Set>>,
-    /// name and arity of every function whose every arm returns a scalar.
-    /// The beat rules ask this of a pushed element: a call whose answer holds
-    /// no pointer cannot put one in an accumulator, which is the whole
-    /// question a rewind cares about. Kept here rather than recomputed at the
-    /// asking site because the name-to-decl grouping already exists here and
-    /// nowhere else.
-    pub scalar_returns: HashSet<(String, usize)>,
 }
 
 struct Ctx<'a> {
@@ -204,26 +197,7 @@ pub fn infer(program: &Program) -> Inference {
             false => std::mem::take(&mut ctx.dirty_next),
         };
     }
-    let mut by_name: HashMap<(&str, usize), Vec<usize>> = HashMap::new();
-    for (i, decl) in program.fns.iter().enumerate() {
-        by_name.entry((decl.name.as_str(), decl.params.len())).or_default().push(i);
-    }
-    let scalar_returns = by_name
-        .into_iter()
-        .filter(|(_, is)| {
-            is.iter().all(|&i| {
-                let set = ctx.returns[i];
-                set != 0 && set & !FAIL & !(INT | FLOAT | BOOL) == 0
-            })
-        })
-        .map(|((n, a), _)| (n.to_string(), a))
-        .collect();
-    Inference {
-        params: ctx.params,
-        returns: ctx.returns,
-        type_fields: ctx.type_fields,
-        scalar_returns,
-    }
+    Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
 }
 
 fn bind_pattern<'a>(
