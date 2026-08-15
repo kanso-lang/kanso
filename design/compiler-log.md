@@ -2113,3 +2113,76 @@ self-naming constant is the counterexample — at the cost of
 `a_constant_that_holds_itself` recording `[<cycle>]`. That is a display
 decision about self-naming constants, so it is gavel 20b rather than a runtime
 PR.
+
+### The escaped buffer had one owner and it was not enough (#912)
+
+A list that outlives the beat it is being appended in gets its storage from
+`k_buf_perm`, outside the arena, so the loop's rewind cannot reach it. Exactly
+one thing ever freed that storage: the growth path, when the list outgrew the
+buffer. The last buffer of every escaped list was therefore held until the
+process exited.
+
+For a program with one accumulator that is one buffer, bounded, invisible. For
+a loop that builds a list per iteration it is one buffer per iteration. vse is
+that loop, and its peak was a straight line in the trial count — both sides
+built to a binary and timed as a binary, same box, same sitting, same seed,
+byte-identical table:
+
+    trials    main               #912
+    10,000      972,324,864       3,932,160
+    20,000    1,939,095,552       3,883,008
+    40,000    3,875,864,576       3,883,008
+
+The fix registers the owning FIELD rather than the buffer, which is what
+`k_viewreg` already does for sorted views. That choice is what makes the
+growth path need no change at all: a buffer that is outgrown is followed
+without a fixup, so its free stays exactly where it was, and freeing through
+the field nulls it, so a field registered once per growth is freed once. The
+depth is the innermost mark the owning header does not survive — the beat
+whose rewind reclaims the header itself, which is when nothing can reach the
+storage any more.
+
+An earlier attempt did the opposite and removed the growth-path free on the
+assumption that registration had taken ownership. Instrumenting it said
+`placed=0, homeless=6` on a mem fixture: every escaped buffer registered
+nowhere, live equalled peak, and nothing was freed at all. The lesson is
+narrow and worth keeping — a change that moves who frees a thing must not
+remove one free before the replacement is proven to fire on the same inputs.
+
+What remains is a header older than every live mark, which finds no depth and
+is left alone. That class is one buffer per accumulator, bounded by the
+program text rather than by its input: basket allocates 25, the growth path
+frees 11, and the 14 that remain are unchanged. vse places 24,013,471 and
+leaves none. kq allocates none at all.
+
+Two veins moved, both because the runtime gained code: the instruction counts
+and the machine-code size. Neither is measurable on a darwin host, so both
+came from the runner and are regenerated in the PR.
+
+### Welfare cannot see any of that
+
+The score is 84.51 before and after — the floor exactly. Every memory term
+welfare has reads the arena: `decode_peak_bytes`, `encode_peak_bytes`,
+`oneshot_peak_bytes`, `basket_peak_bytes`, `decode_arena_blocks`,
+`encode_arena_blocks`. Escaped storage is malloc'd, so a real program going
+from 3.88 GB to 3.88 MB registers as nothing.
+
+`perm_live_bytes` and `perm_peak_bytes` exist in the goldens since #911 and
+are not in the objective. Two questions decide what to do, and both are
+arguments about the weights rather than about this change: whether a memory
+term should read the process peak instead of the arena peak — the arena peak
+is the number the beat design is about, and it is also the number that held
+flat through a 3.88 GB leak, and a term that cannot go wrong is not a term —
+and, if escaped storage becomes its own term, what satiation it takes, given
+that unbounded growth is exactly the failure it would exist to catch. Filed
+as task #223 rather than settled here.
+
+### A measurement trap, recorded because it cost one
+
+`/usr/bin/time -l kanso run .` reports the maximum resident size of the
+compiler and the program together, and the compiler peaks near 40 MB. Read
+that way, a program whose own peak is 3.9 MB reads as 40.8 MB — and `run`
+caches the build when the source has not changed, so the figure moves
+depending on whether a compile happened at all. The first numbers reported for
+this fix were that mistake, and the 95x they showed was really 998x. Build to
+a binary, then time the binary.
