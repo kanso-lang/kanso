@@ -57,7 +57,7 @@
 jsonbench 2903335097
 encodebench 9712917750
 oneshot 49222785
-basket 57426164
+basket 57683168
 widebench 87954682
 deepbench 833502567
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
@@ -138,3 +138,8 @@ deepbench 833502567
 # The numbers this replaces were measured against a compiler that could hand a
 # scan a garbage length, and the run that produced them never finished. That
 # was #907's uninitialised cap, not this policy.
+# 2026-08-15: basket alone, 57,426,164 to 57,683,168 — 257,004 instructions,
+# 0.45%. It is the one benchmark that grows an accumulator past its beat, so
+# it is the one that pays the increment and the decrement; the other four do
+# not move at all. That asymmetry is the counter working: it costs where the
+# thing it counts happens.

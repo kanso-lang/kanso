@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=77954
-encodebench text=95442
-oneshot text=95170
-basket text=87394
-widebench text=96690
+jsonbench text=78066
+encodebench text=95538
+oneshot text=95266
+basket text=87522
+widebench text=96786
 deepbench text=61010
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
@@ -100,3 +100,9 @@ deepbench text=61010
 # 2026-08-15: 128 bytes on four binaries, 112 on encodebench, 80 on
 # deepbench. That is the size test, the drift test and the two globals they
 # read, linked into every program whether or not it ever carries a small step.
+# 2026-08-15: 112 bytes on jsonbench, 96 on encodebench and oneshot, 128 on
+# basket, 96 on widebench. Two counters watching malloc-backed accumulator
+# storage: the globals, the increment where such a buffer is taken and the
+# decrement where one is released. Every program links the runtime, so every
+# program carries them whether or not it ever grows an accumulator that
+# outlives its beat.
