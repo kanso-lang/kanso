@@ -2370,3 +2370,149 @@ node tree, reads as heap crossing the iteration — and that tree is parsed once
 and never mutated. Whether something like this region could make such a tree
 recognisable is untested, and the region as built here takes compile-time
 literals, not runtime-parsed structures.
+
+## 2026-08-14 — a sitting of gavels
+
+Clay walked the pending-gavels file in one sitting and ruled on eleven
+entries. Each ruling is recorded here with what it changes and what it
+queues; the entries leave design/pending-gavels.md in the same commit.
+Nothing below is built yet unless it says so.
+
+### 7. Tie rejection, ratified with the first-place wording
+
+A call is refused only when the arms tying on specificity are the
+maximal ones for that call; a tie between dominated arms is no tie at
+all, since a strictly more specific arm wins regardless. One qualifier
+resolves a refusal. The interim shipped in #370 becomes the rule.
+
+### 9. Maps: last-write-wins, the bang family, and `spread`
+
+Collisions resolve last-write-wins uniformly — `put`, literals at
+runtime, and every builder (`to_h`, `index_by`, `transform_keys`,
+`tally`, `group_by`), because the builders are folds of `put` and one
+carrier gets one collision law. `merge` is n-entry `put` under the same
+law. Two riders: a *statically* duplicate key in a map literal refuses
+at compile time (Clojure's own line — literals throw, functions
+last-win), and strict bang variants (`put!` raising on a key already
+present, `index_by!` raising on collision) are licensed but unbuilt
+until real demand. The committee's earlier objection that a collision
+err would be unhandleable was wrong and Clay corrected it: the err is
+raised in std, std is foreign to every caller, so it is rescuable by
+the settled half of the err-arm rule.
+
+The `range` name goes to nobody. The statistic is `spread coll`
+(`max - min`); integer sequences stay `naturals . take n`; `range` is
+unbound so it can never mislead, and if a generator verb is ever
+minted the obvious name is sitting free.
+
+### 10. The suffix grammar, with teeth
+
+Any identifier — user or std — may end in a single trailing `?` or
+`!`; neither character appears anywhere else in a name. Both suffixes
+are checked contracts, not conventions: a `?` function must answer
+bool, and a `!` function's answer typeset must include an err type.
+The checker refuses violations of either.
+
+### 11. Map keys are the comparable values
+
+Go's rule, stated in kanso's vocabulary: a value keys a map iff `==`
+answers on it — starting with int, str, and bool (bool ordering for
+the sorted view is false < true), symmetric between put and lookup.
+Today the write side refuses a bool while `m[true]` silently answers
+none — a category error dressed as an absence, measured this sitting.
+Reading with a valid-typed key that is absent stays none; an
+un-keyable type refuses on both sides with the same diagnostic.
+Records and lists have the equality to qualify someday; they wait for
+demand because the sorted view would need an order `<` refuses to
+define. Floats stay excluded (one_number_two_spellings records why).
+
+### 12. `==` repaired and refused
+
+`1 == 1.0` is true. Three of the four ordering operators already
+implement one numeric domain (`1 <= 1.0` and `1.0 >= 1` both answer
+true), so equality was the lone dissenter from a shipped rule, and
+false alongside those answers violated trichotomy. And `==` refuses on
+closures and descriptions: extensional function equality is
+undecidable, and every decidable substitute (identity, structural)
+answers a question nobody asked. `1 == "a"` stays false — different
+structural types is a well-formed question. Queued: the mixed-numeric
+arm (exact comparison, not a lossy cast) and the opaque-refusal arm in
+both engines plus wasm, with goldens.
+
+### 14. Bytes are a type in all three engines
+
+A bare list of ints is not bytes. The interpreter gains a real bytes
+value and refuses where native's K_BYTES already refuses; the four
+diverging builtins agree everywhere. The committee was unanimous:
+the convention braids two meanings into one construct (Hickey), bytes
+are the currency of the io boundary and deserve their name in
+signatures (Bernhardt), and the 0-255 invariant holds by construction
+only if construction is the only way in (Beck). Un-ignores the pinned
+half of tests/a_bare_list_is_or_is_not_bytes.rs.
+
+### 20. Completing is the truth — the knot ties
+
+`ring = cell ring` is legal: a guarded self-reference stores the name
+behind a lazy constructor slot, the cell memoises at the constructor,
+and the knot ties, Haskell-style — Clay's framing: a null-object-like
+value that answers itself indefinitely is useful. The browser had the
+right semantics; the oracle and native are over-eager and learn to
+complete a value binding's cell at the constructor instead of
+blackholing through the whole construction. The blackhole survives for
+strict-position self-reference (`x = x + 1` still answers `a lazy
+binding demands its own value`). The #20 golden re-pins to the
+operator diagnostic, wasm_gaps.txt:49 comes out when all three agree,
+and tasks #176/#178 dissolve. The committee recommended refusing
+(one door for cycles); Clay ruled the other way with eyes open, so the
+open cycle-license work now covers knots born through `=` alongside
+build-block cycles — that consequence is the compiler's to settle by
+measurement.
+
+### 24. Struck: the relaxed program file already exists
+
+`kanso play` is built (compile_play_file): a single file holding
+declarations and statements, unimportable, unbuildable. The pending
+entry predated the build and is deleted, not ruled.
+
+### 25. The one-liner form, mandatory, and the width canon amended
+
+An arm whose body is a single expression and fits within the line
+limit is written inline with `=` — mandatorily, with the diagnostic
+the constant rule already has. A single-expression body over the limit
+wraps to the indented form; multi-expression bodies have no one-line
+spelling because the grammar has no statement separator. The width cap
+moves from a hard 80 to a default of 100, settable in a local config
+file — the language's first per-project config key, to be kept its
+only one as long as possible. One exception: a single unbreakable
+token in a comment (chiefly a URL) may overrun, formalized as "the
+limit binds where a break is possible." The standing doctrine behind
+all of it, stated by Clay this sitting: the language obviates linting
+at every possible turn, ruthlessly — one legal spelling everywhere,
+decided by the grammar. Queued: the parser change, the widened
+diagnostic, the 622-arm lib migration, and re-sitting any golden
+pinned against 80.
+
+### 1b. Foreign structure access, gaveled — per-field pub
+
+Named structure reads cross packages: dot access and keyed patterns on
+pub types, one level, the Demeter-legal read of a value in hand. pub
+is granted per field — "pub is name-level surface" is the doctrine's
+own sentence and a field is a name — so authors keep computed private
+fields without shell-around-a-core ceremony. Positional destructuring
+stays module-local; construction stays factory-only. Supersedes
+"types are opaque outside their module, always"; retires
+failure_position-style projections; makes the err-arm license (gavel
+1, still open) shippable.
+
+### Struck as already gaveled
+
+The "two composition operators" entry re-asked whether `>>` becomes
+overloadable; that was gaveled 2026-08-07 (no meaningful overload
+exists, `>>` stays a special form, the laws stand) and the entry is
+deleted rather than re-answered.
+
+### Still open
+
+Gavel 1 (the err-arm rule) was next on the table when this was
+recorded. Behind it: 3, 5, 6, 8, 15, 16, 17, 18, 19, 20b, and the
+also-open list.

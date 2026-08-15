@@ -105,7 +105,7 @@ law* on every Enumerable signature, not a style preference.
 | `last` | `last coll` | last element, or `none` (never terminates on an infinite source — by design) |
 | `max` / `min` | `max coll` | largest / smallest by natural order, or `none` |
 | `argmax` / `argmin` | `argmax coll key` | the *element* maximizing / minimizing `key` |
-| `range` | `range coll` | statistical spread, `max - min` (**name-collides with an int generator — see §6**) |
+| `spread` | `spread coll` | statistical spread, `max - min` |
 | `sort` | `sort coll` | ascending natural order |
 | `to_list` | `to_list coll` | force to a concrete list |
 | `to_h` | `to_h coll` | list of pairs → map |
@@ -138,9 +138,13 @@ question: **what happens when two keys land on the same slot?**
 - `transform_keys` and `index_by` *can* — e.g.
   `transform_keys {"Name": a, "name": b} downcase` → both keys become `"name"`.
 
-Answer it **once**, apply everywhere. INTERIM RULING (committee, 2026-07-27,
-awaiting Clay): plain `put` semantics — last-write-wins, matching what the map
-itself already does (measured: a duplicate `put` replaces and length holds).
+Answer it **once**, apply everywhere. RATIFIED (Clay, 2026-08-14): plain `put`
+semantics — last-write-wins, matching what the map itself already does
+(measured: a duplicate `put` replaces and length holds). Two riders from the
+same ruling: a *statically* duplicate key in a map literal refuses at compile
+time, and strict bang variants (`put!`, `index_by!`, …) that raise
+`map/duplicate_key` on collision are licensed by the suffix grammar but
+unbuilt until real demand.
 Hickey: a raise is a second, stricter map semantic living in three verbs.
 Beck: matching the runtime adds zero new behavior. Bernhardt: a raise makes
 core vocabulary partial; injectivity is the caller's boundary assertion.
@@ -179,9 +183,11 @@ fusion (no side effects to reorder); closed-world + monomorphization erase the
 
 ## 9. Open items (not gaveled)
 
-1. **`range` collision** — RESOLVED (interim, 2026-07-27, awaiting Clay):
-   `range coll` is the stat spread; the generator stays `naturals . take n`
-   with no dedicated verb until real demand (Beck's razor).
+1. **`range` collision** — RESOLVED (Clay, 2026-08-14): the statistic is
+   named `spread`; `range` is unbound entirely, so it can never mislead. The
+   generator stays `naturals . take n` with no dedicated verb until real
+   demand (Beck's razor); if one is ever minted, `range` is free and would
+   mean what a newcomer guesses.
 2. **`transform_keys` / `index_by` collision** — RESOLVED (interim, §6).
 3. **`first n` vs `take n . to_list`** — is there a `first coll n` consumer
    convenience, or only `take` (adapter) + `to_list`? One-right-way says pick
