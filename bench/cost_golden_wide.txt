@@ -22,10 +22,10 @@ arena_blocks=2
 arena_peak_bytes=2097152
 cohort_frees=0
 cohort_kept=0
-perm_allocs=11
+perm_allocs=15
 beat_iters=43
-evac_allocs=272
-evac_bytes=1032688
+evac_allocs=268
+evac_bytes=1032608
 put_mut_fast=0
 put_mut_grow=0
 push_mut_fast=15993
@@ -59,3 +59,8 @@ sh_rec=0
 sh_buf=699312
 sh_map=0
 sh_bytes=768024
+# 2026-08-15: perm_allocs 11 to 15 and evac_allocs 272 to 268, evac_bytes
+# 1,032,688 to 1,032,608. Four literals move into the permanent region, and
+# four evacuation copies stop happening because a pointer into that region now
+# answers the survival test instead of reading as arena the rewind will take.
+# The counters move in opposite directions on purpose: that is the trade.
