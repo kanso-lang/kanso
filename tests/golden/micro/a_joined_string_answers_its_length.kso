@@ -1,0 +1,26 @@
+# A joined string read inside a bind chain. join left the output's cap field
+# uninitialised, so it held whatever the arena last put there, and a positive
+# one sent the character count to a header that was never written.
+import "std/io"
+import "std/list"
+import "std/regexp"
+import "std/text"
+
+part = "one panel here and another panel there. "
+
+copies = list/to_list (list/take (list/repeat part) 200)
+
+subject = text/join copies ""
+
+fn going _ _ true
+  io/write "done\n"
+
+fn going at n false
+  hits = regexp/matches "panel [a-z]+" subject
+  on = (_ -> spin (at + 1) n)
+  io/write "{length hits}\n" . on
+
+pub fn spin at n
+  going at n (at >= n)
+
+pub play = spin 0 6

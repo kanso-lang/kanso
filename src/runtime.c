@@ -5460,6 +5460,7 @@ static KValue k_utf8_finish(KValue bv, const char* origin) {
             KStr* s = k_alloc(sizeof(KStr));
             s->len = (long)b->len;
             s->data = (char*)b->data;
+            s->cap = 0;
             k_stat_utf8_zerocopy++;
             KValue v; v.tag = K_STR; v.payload = k_ptr(s); return v;
         }
@@ -6108,6 +6109,7 @@ KValue k_b_join(KValue lv, KValue sep) {
     KStr* os = k_alloc(sizeof(KStr));
     os->len = total;
     os->data = data;
+    os->cap = 0;
     data[total] = 0;
     KValue out; out.tag = K_STR; out.payload = k_ptr(os);
     return out;
