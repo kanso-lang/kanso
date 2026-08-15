@@ -96,11 +96,17 @@ makes some non-tail shapes loop as well, and the interpreter refuses
 unlicensed recursion at 10,000 frames while native's ceiling is the OS
 stack. The book currently describes behavior without promising it.
 
-## 8. Exhaustive ratification
+## 8. Exhaustive ratification — RULED 2026-08-15: per-call coverage, no annotation
 
-Whether dispatch groups may be declared exhaustive (a call with no
-matching arm becomes a compile error instead of a runtime one), and
-what the annotation looks like.
+Exhaustiveness is not a group property anyone declares; it is a
+question the closed-world compiler answers at each call site: does
+every value in the call's inferred value set have an unambiguously
+matching arm? Unambiguous is the ratified tie rule (first-place ties
+refuse). A provable gap is a compile diagnostic; a call inference
+cannot prove keeps the runtime no-match err, honestly, since a decoded
+value cannot be covered at compile time without the annotations the
+no-needless-annotations gavel declines. The entanglement with the
+orphan rule (5) evaporates: closedness is not declared either.
 
 ## 15. Should `>>` defer its right side
 
@@ -126,15 +132,17 @@ it to a dataflow property is the unblock. It is a language-surface
 question rather than an allocator one, which is why it sits here rather
 than being settled by measurement.
 
-## 17. Does printing a lazy sequence force it
+## 17. Printing a lazy sequence — GAVELED 2026-08-15: the wire is the demand
 
-`print "{list/map [1 2 3] (x -> x * 2)}"` shows the adapter chain rather
-than the elements. Rendering the elements means forcing, and `cycled`
-is infinite — so the question is whether print forces, forces a bounded
-prefix, or keeps showing the chain and makes the user ask for
-`to_list`. Route A (an arm in `lib/render`) was unblocked by #723, so
-the mechanism exists whichever way this goes; what is missing is the
-semantics.
+Print forces, fully. In a fully lazy language demand originates at the
+boundary, and the wire is the final boundary: a value reaching output
+IS its demand, so showing adapter machinery (or `<thunk>`) is the
+demand chain stopping one step short. An infinite sequence therefore
+never finishes printing — honest, and already the spec's answer for
+`last` on an infinite source. Bounded viewing is spelled `take n`.
+Build note: prefer streaming emission (elements print as they force,
+Haskell-style), so an accidental `print naturals` is visibly growing
+and interruptible rather than a silent hang.
 
 ## 18. `pure` as a record type (Clay's proposal)
 
@@ -176,57 +184,17 @@ readable from the expression. Raised, not argued.
   reach a field the owning module would not expose directly. Low
   priority, and a real hole in the privacy story.
 
-## 20b. What a pending cell shows when it reaches output
+## 20b. Pending cells at output — GAVELED 2026-08-15: render forces
 
-Same surface as 20, found 2026-08-14 while closing task #210. Independent
-enough to be ruled separately, close enough that ruling 20 first may decide it.
-
-    fn noted acc _ true
-      acc
-
-    fn noted acc why false
-      text/concat acc [why]
-
-    fn gathered acc at
-      one = wants[at]!
-      why = "did not paint {one.why}"
-      noted acc why false
-
-    pub first = gathered [] 1
-
-    print "{first}"
-
-All three engines answer `[<thunk>]`. The differential law is satisfied. The
-author computed a string and the program shows them a word about the
-implementation instead.
-
-The `_` arm is what defers: a parameter crosses already-evaluated only when
-every arm demands it. Every demanding site that has learned to force closed one
-form of this — the field read (#889), `text/join` (#890), the strict index
-(#892) — and rendering a list is the one left.
-
-**Why rendering has not learned.** Forcing at the top of `k_render` was built on
-2026-08-13 and recurses forever on `ring = [ring]`: forcing the cell answers a
-list holding the same cell. `<thunk>` is what terminates it today.
-
-**Why that is fixable.** Rendering already has a cycle guard. It prints
-`<cycle>` and it is keyed on records — `eval.rs:3491`, `runtime.c:3185`. The
-comment at `runtime.c:3363` says every cycle passes through a record, and a
-self-naming constant is the counterexample: its cycle passes through a thunk
-cell. Extending the guard's path to cells terminates by the same argument the
-record path already relies on.
-
-**The cost of doing it.** `a_constant_that_holds_itself` currently records
-`[<thunk>]` and would record `[<cycle>]`. That is the whole user-visible
-consequence, and it is a question about what a self-naming constant displays —
-which is why it belongs beside 20 rather than in a runtime PR.
-
-**One obstacle if it is ruled yes.** `render_seen` in `eval.rs` is a free
-function with no interpreter handle, so the oracle cannot force from inside it
-without restructuring. Native and the browser can. Whoever builds it starts
-there.
-
-**The third answer.** Neither engine renders, and the demanding sites keep
-being taught one at a time as programs find them. That is where the last three
-fixes landed and it has no end condition — nothing says which site is next
-except a user hitting it.
+Same principle as 17: output demands everything it emits. Render (the
+value-to-text machinery: interpolation, print, err reasons, harness
+output) forces any thunk it meets, with the cycle guard extended from
+records to thunk cells so a self-naming knot — legal under gavel 20 —
+terminates as `<cycle>`. `a_constant_that_holds_itself` re-pins from
+`[<thunk>]` to `[<cycle>]`; the per-site alternative (teaching
+demanding sites one at a time: #889, #890, #892) is retired as having
+no end condition. Build note: the oracle's `render_seen` is a free
+function with no interpreter handle and needs restructuring to force —
+whoever builds it starts there (eval.rs:3491, runtime.c:3185, the
+runtime.c:3363 comment's every-cycle-passes-through-a-record claim is
+the thing being corrected).
