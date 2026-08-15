@@ -49,13 +49,13 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=79634
-encodebench text=97090
-oneshot text=96834
-basket text=89170
-widebench text=98354
-deepbench text=60866
-escapebench text=47858
+jsonbench text=80114
+encodebench text=97570
+oneshot text=97314
+basket text=89554
+widebench text=98834
+deepbench text=60994
+escapebench text=48434
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -125,3 +125,6 @@ escapebench text=47858
 # write, so what it carries is the runtime and the loop. No existing row moves.
 # 2026-08-15: -144 bytes on every binary, the same figure seven times. The
 # memo's unconditional path goes away and a length test takes its place.
+# 2026-08-15: +480 bytes on most binaries, +384 on basket, +576 on escapebench,
+# +128 on deepbench. The permanent bump region, its block list and the range
+# test, linked into every program because every program links the runtime.

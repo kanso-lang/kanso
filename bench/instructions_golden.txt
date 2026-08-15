@@ -54,13 +54,13 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2913614152
-encodebench 9725270943
-oneshot 49321994
-basket 57562217
-widebench 88147467
-deepbench 833453343
-escapebench 258128058
+jsonbench 2926038354
+encodebench 9722704360
+oneshot 49576176
+basket 57124015
+widebench 88578350
+deepbench 833099979
+escapebench 258248444
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -175,3 +175,13 @@ escapebench 258128058
 # (0.037%). jsonbench, oneshot, basket and escapebench do not move at all —
 # they ask about lists on the short side of the threshold, where the memo was
 # a hash insert with no payoff.
+# 2026-08-15: a permanent region a pointer can be recognised in, re-measured on
+# top of #903. basket -438,202 (0.76%), deepbench -353,364, encodebench
+# -2,566,583; jsonbench +12,424,202 (0.43%), widebench +430,883 (0.49%),
+# oneshot +254,182 (0.52%), escapebench +120,386.
+#
+# The three that rise hold almost no literals across a boundary, so they pay
+# the range test and collect nothing; basket holds many and stops copying them.
+# Asking the test LAST is what keeps the rises to about half what they were —
+# the branch's own comment records decode 0.81%, wide 1.26% and one-shot 0.64%
+# when it was asked first.
