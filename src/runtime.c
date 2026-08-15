@@ -319,6 +319,14 @@ static long long k_stat_put_mut_grow = 0;
 static long long k_stat_push_mut_fast = 0;
 static long long k_stat_push_mut_slow = 0;
 
+static void k_stats_dump(void);
+
+static void k_stats_on_signal(int sig) {
+    (void)sig;
+    fprintf(stderr, "--- counters on request ---\n");
+    k_stats_dump();
+}
+
 static void k_stats_dump(void) {
     fprintf(stderr, "allocs=%lld\n", k_stat_allocs);
     fprintf(stderr, "alloc_bytes=%lld\n", k_stat_alloc_bytes);
@@ -7160,7 +7168,17 @@ int main(int argc, char** argv) {
     /* constants are built once, before any user code runs, so reading one is
        a load rather than a check */
     k_caf_init();
-    if (getenv("KANSO_COUNTERS")) atexit(k_stats_dump);
+    if (getenv("KANSO_COUNTERS")) {
+        atexit(k_stats_dump);
+        /* Counters print at exit, so a program that has to be killed reports
+           nothing at all — which is how a run that takes minutes ends up
+           telling you less than one that takes seconds. SIGUSR1 asks for them
+           now. fprintf is not async-signal-safe and this is a diagnostic
+           handler, not a production path: it is armed only when the counters
+           are, and the alternative was two investigations that produced a
+           zero-byte file. */
+        signal(SIGUSR1, k_stats_on_signal);
+    }
     KValue v = k_user_main();
     if (v.tag == K_DESC) {
         KValue y = k_exec(k_as_desc(v));
