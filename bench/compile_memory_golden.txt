@@ -14,4 +14,10 @@
 # to kibibytes was tried and does not work: the two values straddle a boundary.
 front_end_rounds=31
 front_end_visits=26474
-compile_peak_bytes=819217
+compile_peak_bytes=843429
+# 2026-08-15: 819,217 to 843,429, up 24,212 bytes and 2.96%. rounds and visits
+# do not move at all — the fixpoint does no extra work — so what this is, is
+# the set of scalar-returning names the beat rules now consult, held once per
+# compile. It buys a loop whose pushed element is a call the bracket it was
+# being refused, and with it an arena that stays at one block instead of
+# doubling with the round count.
