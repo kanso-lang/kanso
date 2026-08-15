@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=77762
-encodebench text=95266
-oneshot text=94978
-basket text=87218
-widebench text=96498
+jsonbench text=77826
+encodebench text=95330
+oneshot text=95042
+basket text=87282
+widebench text=96562
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -83,3 +83,12 @@ widebench text=96498
 # 2026-08-14 (last): 48 bytes on three binaries and 96 on basket; jsonbench
 # does not move. The strict index forces the element it hands back, so `!`
 # costs what it has always claimed to mean.
+# 2026-08-15: +64 bytes on every binary, the same figure five times. Under
+# KANSO_COUNTERS the runtime now installs a SIGUSR1 handler that dumps the
+# counters where the program stands, so a run that has to be killed can still
+# be read. Every program links the runtime, so every program carries the
+# handler and the registration whether or not it is ever signalled. The
+# counters used to print at exit only, which meant a program that never
+# reached exit — the shape this was built to diagnose — printed nothing at
+# all, and forty-five seconds of a hang looked identical to a healthy short
+# run.
