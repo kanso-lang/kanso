@@ -2676,3 +2676,59 @@ soundness, still doctrine, still unenforced); the test surface
 migration of the arm-based advisory onto the combinator surface; and
 the small July spellings (dot-prefix canon, subtype declaration,
 into-subtype).
+
+## 2026-08-15 — three more rulings: the wire is the demand, and coverage is per call
+
+The walkthrough continued past the err gavel and Clay ruled three more
+entries; the principle that decides two of them arrived in his words:
+in a fully lazy language, everything is potentially deferred until the
+last possible moment before it goes over the wire — so the wire IS the
+demand, and output demands everything it emits.
+
+### 20b: render forces (gaveled)
+
+Render — interpolation, print, err reasons, harness output — forces
+any thunk it meets, with the cycle guard extended from records to
+thunk cells so a gavel-20 knot terminates as `<cycle>`.
+`a_constant_that_holds_itself` re-pins from `[<thunk>]` to
+`[<cycle>]`. The per-site teaching of demanding sites (#889, #890,
+#892) is retired: Clay's words, "if the per-site whack-a-mole
+alternative has no end condition then it seems untenable." Build
+obstacle recorded in the entry: the oracle's render_seen has no
+interpreter handle.
+
+### 17: print forces lazy sequences, fully (gaveled)
+
+Same principle one level up. An infinite sequence never finishes
+printing, which is already the spec's answer for `last` on an infinite
+source; bounded viewing is spelled `take n`. Streaming emission
+preferred at build time so an accidental `print naturals` grows
+visibly instead of hanging silently.
+
+### 8: exhaustiveness dissolves into per-call coverage (ruled)
+
+Clay: "you just care if there is any call made that doesn't have an
+unambiguous matching arm." No group-level annotation; the closed-world
+compiler checks each call's inferred value set for an unambiguously
+matching arm (first-place ties refuse, per gavel 7). Provable gaps are
+compile diagnostics; unprovable calls keep the runtime err. The
+orphan-rule entanglement evaporates.
+
+### For the mined queue: budget-triggered speculative forcing
+
+Clay's riff, recorded as a perf-lane technique to measure, not a
+gavel: you only force prematurely to maintain a memory budget — when
+the budget is hit, speculatively force thunks likely needed soon,
+because a thunk often retains more than its value (the 71.9 MB
+accumulator that collapses to 1.5 MB forced is the motivating
+number). Precedent: Ennals & Peyton Jones' optimistic evaluation —
+the fuel/abortion mechanism is load-bearing, since an undemanded
+thunk is allowed to be infinite. Complements the strictness analyzer
+at runtime for cases proof cannot reach. Mine to settle by
+measurement.
+
+### Still pending from the sitting
+
+15 (should `>>` defer its right side — recommended yes on the
+wire-is-the-demand principle, awaiting Clay), 3, 5, 6, 16, 18, 19, the
+err-gavel riders, and the also-open list.
