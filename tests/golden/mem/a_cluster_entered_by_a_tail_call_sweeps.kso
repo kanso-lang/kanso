@@ -1,0 +1,23 @@
+# Two groups in one tail cycle, allocating a string each time round and
+# threading only integers. Nothing crosses the boundary, so the cycle may
+# rewind — but `counted` reaches it by a tail call, and the mark a rewind
+# needs is pushed by the frame the tail call gives away.
+#
+# `counted` cannot be entered again from inside the cycle, so emitting that
+# one edge as a plain call costs one frame for the whole loop and buys the
+# bracket. beat_iters below is that bracket; the arena holds at one block
+# where it took twelve without it.
+fn stepping n tally
+  more n tally (n <= 0)
+
+fn more _ tally true
+  tally
+
+fn more n tally false
+  junk = "k{n % 17}"
+  stepping (n - 1) (tally + length junk)
+
+fn counted n
+  stepping n 0
+
+pub play = print "{counted 200000}"

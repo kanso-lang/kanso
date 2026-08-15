@@ -2516,3 +2516,60 @@ deleted rather than re-answered.
 Gavel 1 (the err-arm rule) was next on the table when this was
 recorded. Behind it: 3, 5, 6, 8, 15, 16, 17, 18, 19, 20b, and the
 also-open list.
+
+## 2026-08-15 — a cluster's entry, and the thirty loops it kept grow-only
+
+The beat analysis licenses two shapes: a self-recursive loop, and a cluster of
+groups in one tail cycle. Both refuse an entry the bracket cannot see. For a
+self-loop that refusal has an escape hatch — `demotable_entries` turns an
+entering tail call into a plain call, which costs the caller one frame and buys
+the loop its rewind. A cluster had no such hatch: any tail edge from outside its
+own cycle disqualified it outright.
+
+Running the report over one regexp-using program, thirty multi-group tail cycles
+were found and twenty-four of them were refused for exactly that reason, naming
+the entering edge each time: `fold` into `bounded_flat`, `span` into `merge`,
+`read_class` into `members`, `matches` into `spotting`. The shape is what a
+library looks like — a public entry that hands the loop its work in tail
+position — so refusing it refuses most library loops.
+
+Clusters now demote the same way, with one condition the self-loop rule does not
+need: the entering caller must be unreachable from the cluster. Reachability is
+taken over every mention, a lambda body as readily as a call head, because a
+caller the cycle re-enters is entered once per iteration rather than once per
+loop, and demoting there would trade a constant arena for a stack that grows
+with the input. `regexp/moved_on` is that case exactly — it tail-enters `repeat`
+and the cycle reaches it back through the continuation `another` builds — and it
+stays refused.
+
+The new fixture holds at one arena block where it took nine without the rule:
+
+    tests/golden/mem/a_cluster_entered_by_a_tail_call_sweeps
+
+    arena_blocks              9 ->          1
+    arena_peak_bytes  9,437,184 ->  1,048,576
+    beat_iters                0 ->    400,001
+
+with allocs, alloc_bytes and stdout byte-identical either way. The report said
+nothing about that loop before, because it only lists self-recursive groups and
+neither member of the cycle recurses on itself.
+
+Nineteen clusters bracket where six did in that program, and every counter vein
+is byte-identical: decode, encode, basket, one-shot, wide, escape, emitted code,
+compile memory. Welfare reads 84.51 against a floor of 84.51 — the change is
+flat on the corpus, which is the honest reading of a widening that no benchmark
+has the shape to use. The one golden that moved is `builder_transient`, where
+the newly bracketed `assemble`/`step` pair sends its byte builder to held
+storage instead of the arena: 40 mallocs, 40 frees, an 80-byte held peak, one
+arena block either way.
+
+Three loops in lib/json joined too — `str_chars`, `str_unicode`, `string_scan` —
+on the licence the two encoders already held, a byte accumulator threaded by
+pointer identity through `text/append`. The conservatism test that pinned the
+old set now pins the new one and says why.
+
+What this does NOT do is reach task #228. `regexp/walked` has two refusals and
+this clears neither: its cluster is refused for the second reason, and the walk's
+cost is a CPS continuation per position rather than a loop's garbage. Bracketing
+around the per-position walk is a call-site bracket, which is a different
+mechanism from a loop's.
