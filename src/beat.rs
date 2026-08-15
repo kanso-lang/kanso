@@ -508,6 +508,7 @@ fn eligible_clusters(
     }
     let sccs = tail_sccs(groups.len(), &edges);
     let allocating = alloc_groups(program);
+    let mut mentions: Option<HashMap<&str, HashSet<String>>> = None;
     let mut out = Vec::new();
     for scc in sccs {
         if scc.len() < 2 {
@@ -526,8 +527,9 @@ fn eligible_clusters(
         // is entered once per iteration, and demoting there trades a
         // constant arena for a stack that grows with the input.
         if !entries.is_empty() {
+            let map = mentions.get_or_insert_with(|| mention_map(program));
             let seeds = scc.iter().map(|&g| groups[g].0.as_str());
-            let inside = reachable_names(program, seeds);
+            let inside = reachable_names(map, seeds);
             if entries.iter().any(|(from, _)| inside.contains(groups[*from].0.as_str())) {
                 continue;
             }
@@ -1456,12 +1458,10 @@ fn group_param_set(
 
 /// Does `name` appear as a function value — an identifier outside call-head
 /// position — anywhere in the program?
-/// Every name reachable from `seeds` by mention — a call head, an argument,
-/// a lambda body, a guard, alike. Arity is ignored and a mention is taken for
-/// a call, so the answer over-approximates the call graph. That is the safe
-/// direction here: a caller wrongly judged reachable costs a cluster its
-/// bracket, where one wrongly judged unreachable costs a bounded stack.
-fn reachable_names<'a>(program: &Program, seeds: impl Iterator<Item = &'a str>) -> HashSet<String> {
+/// Every name each declaration mentions — a call head, an argument, a lambda
+/// body, a guard, alike. Built once per analysis and read by every cluster
+/// that has an entry to judge.
+fn mention_map(program: &Program) -> HashMap<&str, HashSet<String>> {
     let mut mentions: HashMap<&str, HashSet<String>> = HashMap::new();
     for decl in &program.fns {
         let entry = mentions.entry(decl.name.as_str()).or_default();
@@ -1469,6 +1469,17 @@ fn reachable_names<'a>(program: &Program, seeds: impl Iterator<Item = &'a str>) 
             collect_names(guard_stmt_expr(stmt), entry);
         }
     }
+    mentions
+}
+
+/// Every name reachable from `seeds`. Arity is ignored and a mention is taken
+/// for a call, so the answer over-approximates the call graph. That is the
+/// safe direction here: a caller wrongly judged reachable costs a cluster its
+/// bracket, where one wrongly judged unreachable costs a bounded stack.
+fn reachable_names<'a>(
+    mentions: &HashMap<&str, HashSet<String>>,
+    seeds: impl Iterator<Item = &'a str>,
+) -> HashSet<String> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut queue: Vec<String> = seeds.map(str::to_string).collect();
     while let Some(name) = queue.pop() {
