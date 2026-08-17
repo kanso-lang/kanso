@@ -35,17 +35,6 @@ tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
 # ask a deferral what it is, which reaches into the interpreter's own render.
 tests/golden/micro/a_constant_that_holds_itself.kso	<fn>
 
-# The guarded shape that cannot be tied: `x = (cell x).v`. Native and the
-# oracle refuse with "a lazy binding demands its own value" — the demand for x
-# arrives while x's right-hand side is running, from a cell that has produced
-# nothing. The browser has no blackhole to reach, so it follows the deferral
-# round and round until the stack ends the program.
-#
-# Both engines say the program is wrong. Only one says why. This closes with
-# the same work as the entry above: give the browser the blackhole the
-# interpreter keys by name.
-tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso	the program ran out of stack: recursion went deeper than the stack holds
-
 # Two constants naming each other. All three engines tie the knot and agree
 # on the values it holds — `2 1` here. They part on how a deferral RENDERS:
 # the browser keeps the closure that would answer the field and says `<fn>`,

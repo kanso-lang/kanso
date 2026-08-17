@@ -135,7 +135,7 @@ fn forced(v: Value) -> Value {
     match slot(h) {
         Slot::C { tidx, env, arity } => {
             match arity {
-                RUNNING => die("a constant that names itself has no value yet".to_string()),
+                RUNNING => die("a lazy binding demands its own value".to_string()),
                 DEFERRED => {}
                 _ => return v,
             }
