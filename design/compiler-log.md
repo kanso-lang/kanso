@@ -2865,3 +2865,44 @@ operator: "steal from the best." Retiring the wall as derivable
 Still open: 6 (tail-call promise wording, recommendation on the
 table), 16 (block-born as dataflow), the remaining err riders (the
 `.>` ruling absorbs the chain-spelling rider), and the also-open list.
+
+## 2026-08-16 — the blackhole gets the fixture it never had
+
+Gavel 20 rules that a guarded self-reference completes at its constructor, and
+says the blackhole survives for strict-position self-reference, quoting
+`x = x + 1` answering "a lazy binding demands its own value". Measured, it does
+not: `x = x + 1` is refused by the name check at src/check.rs:2074 — "`x` is
+defined in terms of itself, so it has no value" — and never reaches the
+runtime. Two mechanisms, and the ruling's example belongs to the compile-time
+one. That is an illustration slip rather than a semantic claim; the ruled
+semantics is guarded against strict, mechanism unspecified.
+
+It matters because of what it leaves uncovered. Grepping the corpus for the
+runtime message finds it in exactly two places: wasm_gaps.txt, and the .stderr
+of `a_constant_that_names_itself_is_demanded` — which gavel 20 re-pins to the
+operator diagnostic. Build the gavel and the runtime blackhole has no fixture
+at all, and nothing turns red if it is deleted.
+
+The shape that still reaches it:
+
+    type cell
+      v
+
+    x = (cell x).v
+
+The constructor is present, so the name check lets it through. It still cannot
+be tied: `cell x` is an anonymous intermediate rather than x's own value, so
+reading its field demands x while x's right-hand side is running, from a cell
+that has produced nothing. There is no slot to complete. Beside it,
+`a_constant_that_names_itself_is_demanded` ties because the name sits IN the
+constructor's slot, which is what a guard means. This one only wears the shape.
+
+Watched red both ways rather than assumed. Removing the native guard takes the
+program from a clean diagnostic to exit 133 with nothing said; rewording the
+oracle's turns the fixture red on the message. Restored, both engines answer
+in the same words.
+
+That the completion semantics are already in-tree for one container is
+`a_constant_that_names_itself`: the map knot `graph = { "a":(node "a"
+[graph["b"]!]) … }` ties today and prints `b a`. Maps' lazy slots complete;
+records are the laggard gavel 20's build fixes.
