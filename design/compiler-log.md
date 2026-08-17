@@ -3033,3 +3033,26 @@ teaches everything but return early, return late, monad never.
 Still open after this sitting: 6 (tail-call promise), 16 (block-born
 as dataflow), the err riders, and the also-open list. Twenty-five
 entries ruled across three days.
+
+## 2026-08-17 — the last two numbered entries: the promise and the widened license
+
+Clay took both recommendations and the numbered portion of the
+pending-gavels file is finished.
+
+6: a call in tail position consumes no stack — promised, in the book,
+for all three engines, as a contract programs may lean on. TRMC is
+explicitly unpromised (an optimization, free to change); the
+10,000-frame guard and the OS ceiling are the documented limits on
+unpromised shapes. The mechanism was settled long ago; this makes
+"recursion is kanso's only loop" a guarantee rather than an
+observation. The book owes the promise paragraph.
+
+16: block-born widens from a syntactic to a dataflow property — a
+value qualifies when every path to it provably originates inside the
+block. Unblocks ledger 4.4's in-place graph algorithms; enforcement is
+the existing escape analysis; the mem vein pins it at build time.
+
+What remains in the file: the err riders (construction enforcement,
+the test surface, ch08 pedagogy, migration, the small July
+spellings) and the also-open list. Twenty-seven rulings across three
+days, every one recorded on main the day it was made.
