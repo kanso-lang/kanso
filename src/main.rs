@@ -388,8 +388,8 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
                 Ok(eval::Value::ErrV(info)) => {
                     eprint!(
                         "error[endpoint]: unhandled err reached the executor: {}\n{}",
-                        eval::render(&info.reason, true),
-                        eval::trace_lines(&info)
+                        eval::render(&interp, &info.reason, true),
+                        eval::trace_lines(&interp, &info)
                     );
                     ExitCode::FAILURE
                 }
@@ -406,8 +406,8 @@ fn run_interpreted_on_stack(program: &ast::Program, args: Vec<String>) -> ExitCo
         eval::Value::ErrV(info) => {
             eprint!(
                 "error[endpoint]: unhandled err reached the entry: {}\n{}",
-                eval::render(&info.reason, true),
-                eval::trace_lines(&info)
+                eval::render(&interp, &info.reason, true),
+                eval::trace_lines(&interp, &info)
             );
             ExitCode::FAILURE
         }
@@ -767,7 +767,7 @@ fn run_tests(
             Ok(eval::Value::True) => println!("{name} ... ok"),
             Ok(other) => {
                 failed += 1;
-                println!("{name} ... FAILED (returned {})", eval::render(&other, true));
+                println!("{name} ... FAILED (returned {})", eval::render(&interp, &other, true));
             }
             Err(runtime) => {
                 failed += 1;
