@@ -138,9 +138,6 @@ pub struct WasmBackend<'a> {
     wrappers: HashMap<String, u32>,
     /// Zero-arity names that reach themselves through other constants.
     knotted: std::collections::HashSet<String>,
-    /// One table entry per knotted constant, so every mention of the name
-    /// reaches the same cell and the cycle has somewhere to stop.
-    const_tidx: HashMap<String, u32>,
     tailcalls: bool,
 }
 
@@ -214,7 +211,6 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         dispatchers: HashMap::new(),
         wrappers: HashMap::new(),
         knotted: crate::codegen::knotted_constants(program),
-        const_tidx: HashMap::new(),
         tailcalls,
     };
     backend.run()
@@ -343,12 +339,7 @@ impl<'a> WasmBackend<'a> {
         if !self.knotted.contains(name) {
             return None;
         }
-        if let Some(tidx) = self.const_tidx.get(name).copied() {
-            return Some(tidx);
-        }
-        let tidx = self.fn_wrapper(name).ok()?;
-        self.const_tidx.insert(name.to_string(), tidx);
-        Some(tidx)
+        self.fn_wrapper(name).ok()
     }
 
     fn emit_dispatcher(
@@ -1307,7 +1298,7 @@ impl<'a> WasmBackend<'a> {
                 self.emit_expr(ctx, arg, false)?;
                 ctx.body.call(RT_ARG);
             }
-            match self.const_cell(&name) {
+            match self.const_cell(name) {
                 Some(tidx) => {
                     ctx.body.i32_const(tidx as i64);
                     ctx.body.call(RT_CONST);
