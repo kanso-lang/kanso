@@ -175,13 +175,13 @@ rulings, in dependency order:
   expression cannot say when or how many times the effect runs. The
   bind lambda is the access path to the produced value, and the purity
   boundary holds because narrowing has no other spelling.
-- **18: `pure x` is the trivial description** — executes as nothing,
+- **18: `return x` (named 2026-08-17; was `pure` in the first record) is the trivial description** — executes as nothing,
   answers x — spelled as an ordinary record with one executor arm per
   engine. The carrier is data, not compiler magic.
 - **A combinator owns its output channel and wraps whatever its
   callback answers into it** (Clay's phrasing): bind wraps plain
   answers into the effect, annotate into err, rescue into success. So
-  `pure` is only ever written in non-callback positions (holding a
+  `return` is only ever written in non-callback positions (holding a
   trivial effect, seeding a fold, handing a known answer to an
   effect-shaped interface).
 - **Dot is application, always.** `x . f args` = `f x args` for every
@@ -209,11 +209,10 @@ rulings, in dependency order:
   value-free sequencing is common enough for a dedicated glyph, and
   the wall's laws are gaveled, taught, and fuzzed under this spelling.
 
-## 21. The effect block — GAVELED 2026-08-16 (keyword awaiting Clay)
+## 21. The effect block — GAVELED 2026-08-16; keyword `do` CONFIRMED 2026-08-17
 
 The do-notation analog, ruled the same hour the `.>` operator landed.
-Inside an explicitly-opened block (keyword candidate: `do`, stolen from
-the best; Clay confirms or replaces), statements sequence via bind and
+Inside an explicitly-opened block (keyword: `do`, confirmed), statements sequence via bind and
 `=` means one uniform thing: **name the answer**. An effect RHS binds
 the produced value; a pure RHS binds the value itself — the same
 behavior, by left-identity, so pure lines don't notice the block.
@@ -236,25 +235,40 @@ for colliding with the lambda arrow.
   semantics. Closes the also-open "sequencing more than two binds
   prettily" item (multiplyTwoRandoms).
 
-## 22. The lifting fork — PENDING (parked overnight 2026-08-16, decide rested)
+## 22. The lifting fork — RESOLVED 2026-08-16/17: uniform explicitness
 
-Which side of the effect surface wears the mark. Two coherent corners,
-one gavel:
+The morning corner is ratified; the Koka corner is declined, and the
+deciding argument outranks the trilemma: **the failure channel forces
+explicitness anyway.** Handling a failure is a decision — which
+failures, whose, converting to what — so rescue and annotate can never
+be ambient. The Koka corner therefore ships TWO visibility regimes in
+one surface: success invisible (lifted), failure explicit. A user
+skates on ambient lifting until the day something fails, then meets
+the whole channel machinery at once with no scaffolding. Uniform
+explicitness is one mental model. (Clay: monads are confusing as
+hell, and the fix is that kanso has no monads-in-general — one effect
+type, a handful of ordinary functions, a block — not hidden ones.)
 
-- **Morning corner (currently gaveled):** plans are values everywhere;
-  lifting is spelled (`bind`, `.>`, the effect block). Mark on the
-  common side.
-- **Koka corner (evening draft, Clay leaning):** lifting is ambient
-  and unconditional — an effect in a value position always lifts; `&`
-  suspends (and `&value` IS pure). Mark on the rare side. Supersedes
-  `.>`, the effect block, and the #19 decline if sworn; failure triad,
-  `>>`/adjacency, dot-as-application survive. Pins: lambda capture,
-  `&expr` grammar, naming-as-sharing (one node, runs once).
+## 23. The effects vocabulary — GAVELED 2026-08-17
 
-The log's two 2026-08-16 entries carry the full argument (trilemma,
-then its reframe). Also queued behind this: the block keyword (`do`?,
-moot under the Koka corner), gavel 6 (tail-call promise), gavel 16
-(block-born as dataflow).
+`bind`, `rescue`, `annotate`, `return`, `do`, `skip`.
+
+- The block keyword is **do**.
+- The unit is named **return**, Clay's call with Haskell's regret
+  (the 2014 pure migration, "return doesn't return") considered and
+  overruled: familiarity and descriptiveness for the Go/Ruby/JS
+  audience outweigh the early-exit misread, and kanso has no return
+  statement to collide with. `answer` was offered and declined.
+- **return is deliberately a rare word.** The combinator-owns-its-
+  output-channel rule auto-wraps plain answers in every callback and
+  block position, so everyday code never writes it. Its residue:
+  mixed conditionals (`if cached (return cached_value) (fetch url)`),
+  collections of effects, seeding folds.
+- **skip** is the no-op effect constant (`return none` under the
+  hood) for the conditional-do-nothing branch, so the commonest
+  residue case has a word that says what it means.
+- The book teaches bind/rescue/annotate/do/skip early and return
+  late; the word "monad" appears nowhere.
 
 ## Also open, not blocking any current work
 
