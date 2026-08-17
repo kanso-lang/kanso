@@ -233,6 +233,17 @@ KValue k_force(KValue v) {
     return t->result;
 }
 
+/* A constructor slot is where a knot ties, so a field still being computed is
+   stored rather than demanded. Every other site demands: reaching a blackhole
+   anywhere else is the error the blackhole exists to report. */
+KValue k_force_unless_black(KValue v) {
+    if (v.tag == K_THUNK) {
+        KThunk* t = (KThunk*)v.payload;
+        if (!t->forced && t->site == K_SITE_BLACKHOLE) return v;
+    }
+    return k_force(v);
+}
+
 typedef struct { long long len; KValue* items; } KList;
 /* A map is built by appending pairs to a frontier-shared buffer in O(1) (like
    lists), leaving them unsorted with possible duplicate keys. The canonical

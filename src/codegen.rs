@@ -308,6 +308,7 @@ declare %KValue @k_thunk_new(i64, i32, ...)
 declare %KValue @k_thunk_release_unless(%KValue, %KValue)
 declare void @k_thunk_note_escape(%KValue)
 declare %KValue @k_force(%KValue)
+declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
@@ -1122,6 +1123,20 @@ impl<'a> Backend<'a> {
     /// analysis deferred nothing in can hold no thunk anywhere — every site
     /// vanishes, not just the set-proven ones (conservative TOP widenings
     /// carry the THUNK bit into code no thunk can reach).
+    /// Force unless the value is a cell still being computed. Only a
+    /// constructor's fields take this path; everywhere else a blackhole
+    /// reached is the error it exists to report.
+    fn force_unless_knot(&self, f: &mut FnEmit, value: String) -> String {
+        if f.set_of(&value) & crate::infer::THUNK == 0 {
+            return value;
+        }
+        let post = f.set_of(&value) & !crate::infer::THUNK;
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_force_unless_black(%KValue {value})"));
+        f.record(&t, if post == 0 { crate::infer::TOP } else { post | crate::infer::THUNK });
+        t
+    }
+
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
         // A deferred self-reference is a thunk that no lazy-bind count knows
         // about, so the cheap exit has to admit it too.
@@ -4007,9 +4022,18 @@ impl<'a> Backend<'a> {
                 f.record(&t, crate::infer::TOP);
                 return Ok(t);
             }
-            // constructors store fields; records never hold thunks in v1
-            let emitted: Vec<String> =
-                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
+            // A constructor slot is where a knot ties: a field still being
+            // computed is stored, so the cell completes here and the field
+            // resolves against it afterwards. Whether a cell is mid-flight is
+            // a runtime fact, so the emitter cannot decide it — the helper
+            // asks, and only programs that defer a self-reference pay for it.
+            let emitted: Vec<String> = emitted
+                .into_iter()
+                .map(|e| match self.defers_self_reference {
+                    true => self.force_unless_knot(f, e),
+                    false => self.maybe_force(f, e),
+                })
+                .collect();
             self.emit_typeset_checks(f, name, &emitted)?;
             let n = emitted.len();
             let arr = f.tmp();
