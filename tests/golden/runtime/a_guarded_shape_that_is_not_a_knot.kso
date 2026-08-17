@@ -1,0 +1,14 @@
+# The constructor is here, so the name check lets this through — and it still
+# cannot be tied. `cell x` is an anonymous intermediate rather than x's own
+# value, so reading its field demands x while x's right-hand side is still
+# running, from a cell that has produced nothing. There is no slot to complete.
+#
+# Beside it, a_constant_that_names_itself_is_demanded ties: there the name
+# sits IN the constructor's slot, which is what a guard means. This one only
+# wears the shape.
+type cell
+  v
+
+x = (cell x).v
+
+pub play = print "{x}"
