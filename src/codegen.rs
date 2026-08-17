@@ -175,6 +175,7 @@ declare i64 @k_truthy_bad(%KValue)
 declare %KValue @k_caf_freeze(%KValue)
 declare void @k_math_ids(i64, i64)
 declare %KValue @k_caf_blackhole()
+declare %KValue @k_caf_complete(%KValue, %KValue)
 declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
@@ -1410,7 +1411,10 @@ impl<'a> Backend<'a> {
         }
         for (i, (cell, build)) in self.caf_fills.iter().enumerate() {
             let _ = writeln!(fills, "  %v{i} = call tailcc %KValue @{build}()");
-            let _ = writeln!(fills, "  %f{i} = call %KValue @k_caf_freeze(%KValue %v{i})");
+            let _ = writeln!(
+                fills,
+                "  %f{i} = call %KValue @k_caf_complete(%KValue %v{i}, %KValue %b{i})"
+            );
             let _ = writeln!(fills, "  store %KValue %f{i}, ptr @{cell}");
         }
         // Division answers a declared type, so the runtime has to be told which

@@ -1762,6 +1762,18 @@ KValue k_caf_freeze(KValue v) {
     return k_deep_copy(v, &cp);
 }
 
+/* A constant whose builder answered the very cell it was seeded with has
+   computed nothing: freezing it would tie the knot to itself and every later
+   demand would chase the loop rather than find a value. The blackhole is the
+   answer, and a name sitting in a constructor's slot never reaches here —
+   that one answers the record it helped build. */
+KValue k_caf_complete(KValue built, KValue seeded) {
+    if (built.tag == K_THUNK && seeded.tag == K_THUNK && built.payload == seeded.payload) {
+        k_die("a lazy binding demands its own value");
+    }
+    return k_caf_freeze(built);
+}
+
 
 static int k_is_heap(long long tag) {
     switch (tag) {
