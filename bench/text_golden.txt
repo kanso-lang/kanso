@@ -137,7 +137,12 @@ escapebench text=48050
 # prints `<cycle>` rather than walking a ring forever. Every program links the
 # renderer, so every program carries the test.
 #
-# basket holding still across BOTH linux veins is the row to explain, not to
-# wave at — the same change moves the other six in code size and in
-# instructions, and a benchmark that links the renderer should pay the test
-# whether or not it ever meets a cell.
+# basket holds still in BOTH linux veins where the other six move. It is built
+# by the same script and its binary links k_render like the rest, so the two
+# zeros want two different answers, and both have precedent here rather than
+# being one anomaly: a section's alignment can absorb what a binary links —
+# deepbench held at 61,010 across three shapes above for exactly that — and an
+# instruction count only moves for code a run reaches, so a program that
+# renders no forced cell pays nothing. Neither is confirmed; darwin's `size`
+# is page-granular and cannot see a 150-byte delta, so the runner has the last
+# word. Recorded as open rather than as understood.
