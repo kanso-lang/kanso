@@ -3501,8 +3501,11 @@ static long long k_eq_rec(KValue a, KValue b) {
             KRec* rb = k_as_rec(b);
             if (ra == rb) return 1;
             if (ra->type_id != rb->type_id) return 0;
-            /* every cycle passes through a record, so assuming this pair
-               equal is what makes the walk terminate */
+            /* A cycle passes through a record or through a CELL — `x = [x]`
+               closes through neither a record nor anything this switch
+               follows, since there is no K_THUNK case and a cell answers
+               unequal and stops. Assuming this pair equal is what makes the
+               walk terminate for the record half. */
             if (k_eq_assume(ra, rb)) return 1;
             for (long long i = 0; i < ra->nfields; i++) {
                 if (!k_eq_rec(ra->fields[i], rb->fields[i])) return 0;
