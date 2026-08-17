@@ -113,13 +113,17 @@ change existing programs — Julia's method-invalidation pathology),
 and scoped third-party arms attached to foreign groups (subsumed by
 clause 3's per-file merging with less machinery).
 
-## 6. Tail-call promise wording
+## 6. The tail-call promise — GAVELED 2026-08-17
 
-How the language documents its tail-call guarantee (what is promised
-semantics vs what is an optimization), now sharper-edged because TRMC
-makes some non-tail shapes loop as well, and the interpreter refuses
-unlicensed recursion at 10,000 frames while native's ceiling is the OS
-stack. The book currently describes behavior without promising it.
+One sentence becomes semantics, promised in the book for all three
+engines: **a call in tail position consumes no stack.** A program may
+lean on it forever — recursion is kanso's only loop, now as a contract
+(Scheme's position). Explicitly NOT promised: TRMC — some non-tail
+shapes loop today, gratefully, as an optimization the compiler is free
+to change. The interpreter's 10,000-frame guard and native's OS
+ceiling are documented as engine limits on the unpromised shapes. The
+mechanism was already settled (#373 trampoline, #393 diagnostics);
+this ruling is the contract. Queued: the book's promise paragraph.
 
 ## 8. Exhaustive ratification — RULED 2026-08-15: per-call coverage, no annotation
 
@@ -144,13 +148,16 @@ retires because the failure it named stops existing. The wall's laws
 (associativity, first-failure-absorbs, not overloadable) are
 untouched: laziness changes when links exist, not what they mean.
 
-## 16. Should block-born widen to a dataflow property
+## 16. Block-born — GAVELED 2026-08-17: a dataflow property
 
-Today `block-born` is a syntactic property, which is why in-place graph
-algorithms inside build blocks stay out of reach (ledger 4.4). Widening
-it to a dataflow property is the unblock. It is a language-surface
-question rather than an allocator one, which is why it sits here rather
-than being settled by measurement.
+Widened. A value is block-born if the analysis proves every path to it
+originates inside the block — not only if its allocation is literally
+written there. The syntactic rule was the conservative first cut; the
+dataflow property is the semantics the license always meant, and it
+unblocks in-place graph algorithms built through helper functions
+(ledger 4.4). Enforcement is the escape analysis already running;
+correctness gets pinned by goldens and the mem vein when built —
+the compiler's lane.
 
 ## 17. Printing a lazy sequence — GAVELED 2026-08-15: the wire is the demand
 
