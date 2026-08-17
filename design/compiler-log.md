@@ -3285,3 +3285,38 @@ form is refused at compile time ("defined in terms of itself"), and the
 guarded forms `d = print "x" >> use (box d)` and `d = print "x" >> tail [d]`
 both run correctly. Recorded rather than closed, because four shapes failing
 to reproduce is not a proof that none can.
+
+## Render asks a browser cell what it settled on (#936)
+
+The other half of gavel 20b, and the thing worth keeping is why it could not
+be built before. This exact hook was tried and abandoned: a resolver the
+browser installs so the interpreter's render can ask what a table handle holds.
+It failed then because every mention of a constant minted a fresh deferral, so
+the cycle guard had nothing stable to key on and the walk never terminated.
+#934 gave the browser one cell per knotted constant, and the hook needed no
+change at all once identity existed. The render half was never a render
+problem, which is the sort of thing only the second attempt can tell you.
+
+The resolver mirrors `set_foreign_call`, a plain fn pointer installed at load,
+so the interpreter installs nothing and pays nothing. It answers three ways: a
+cell nobody has demanded is demanded here, which is what "the wire is the
+demand" means; a cell still BUILDING answers nothing, so a render never
+reports a program error from inside itself; an ordinary closure answers
+nothing and still renders `<fn>`. A handle now sits in the render path beside
+the `Rc` pointers the guard already tracks, and pointers are aligned, so the
+handle is keyed with the low bit set and cannot collide. `1 << 63` overflows
+on wasm32; the shift-and-set form is the portable one.
+
+ALL FOUR CYCLIC-VALUE GAPS CLOSE. What remains in `tests/golden/wasm_gaps.txt`
+is capability alone — a tab has no filesystem and cannot start a process —
+rather than any disagreement about what a program means. The tab reads 296
+agree, 7 known gaps, 0 disagree, from 292 and 11 before it and from four
+different failures including two crashes a day earlier.
+
+The fixture worth naming is `a_knot_inside_an_err_reason`, because it reaches
+render through the TRACE rather than through print, and it now shows the ring
+and stops at `<cycle>` exactly as native does. A trace is the path nobody
+thinks to cover, which is why it was written.
+
+COUNTERS: unmoved. `deferral_value` runs only where render reaches a function
+value, and every cost golden passed untouched, so no sibling pin needs a bump.
