@@ -1543,9 +1543,15 @@ fn qualify(
     // being qualified. Renaming them per module would leave every module with
     // its own `math_failure`, and the one division builds would match none of
     // them.
+    // GAVEL 51, Clay 2026-08-17: "one module". A name that already carries a
+    // qualification came from this module's own dependency and holds its
+    // canonical spelling. Prefixing it again mints a second `shape/blank`
+    // under every route that reaches it, and a value built by one matches no
+    // arm compiled against the other.
     let owned: std::collections::HashSet<String> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(n))
+        .filter(|n| !n.contains('/'))
         .filter(|n| n != MATH_FAILURE && n != DIVIDE_BY_ZERO)
         .collect();
     // The prelude's own declarations go, rather than travelling under this
@@ -1559,6 +1565,10 @@ fn qualify(
     let own_types: std::collections::HashSet<String> =
         dep.types.iter().map(|t| t.name.clone()).collect();
     for ty in &mut dep.types {
+        if ty.name.contains('/') {
+            exports.insert(ty.name.clone(), ty.is_pub);
+            continue;
+        }
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
         ty.name = format!("{qual}/{}", ty.name);
         if let Some(o) = &mut ty.origin {
@@ -1597,7 +1607,13 @@ fn qualify(
             // which is the clone whenever the loader reached the import
             // first — so the module's own `pub` read as private from outside.
             // The claim is remembered so the refusal can say what happened.
-            let key = format!("{qual}/{}", f.name);
+            // GAVEL 51: an already-qualified name enrolls under the spelling
+            // it already has. Composing `{qual}/` onto it would register the
+            // route rather than the identity.
+            let key = match f.name.contains('/') {
+                true => f.name.clone(),
+                false => format!("{qual}/{}", f.name),
+            };
             let taken = exports.get(&key).copied();
             match (taken, f.synthetic) {
                 (Some(false), false) if f.is_pub => {
@@ -1608,7 +1624,13 @@ fn qualify(
                     exports.insert(key.clone(), f.is_pub);
                 }
             }
-            f.name = format!("{qual}/{}", f.name);
+            // GAVEL 51: a name that already carries a qualification came
+            // from this module's own dependency and keeps its canonical
+            // spelling — it still enrolls, it just does not get a second
+            // prefix.
+            if !f.name.contains('/') {
+                f.name = format!("{qual}/{}", f.name);
+            }
         }
         let mut bound = Vec::new();
         for p in &mut f.params {
@@ -2000,6 +2022,28 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
     }
 }
 
+/// GAVEL 51, Clay 2026-08-17: "one module". A module reached by two import
+/// paths contributes its declarations twice, and after qualification both
+/// copies carry the same canonical name and the same source position — so
+/// they are one declaration, and the second is dropped.
+///
+/// The key deliberately excludes `file`. That field is the display path an
+/// err origin prints, and the two routes spell it differently
+/// (`mid/../shape/shape.kso` against `shape/shape.kso`) — normalising it to
+/// make the keys agree would put a temporary directory in front of a user.
+///
+/// It includes `synthetic`, because a bare-enrollment clone carries the span
+/// of the declaration it was cloned from: dropping one as a duplicate of its
+/// own original cost a million-frame accumulating recursion its loop.
+fn collapse_diamonds(program: &mut ast::Program) {
+    let mut fns = std::collections::HashSet::new();
+    program.fns.retain(|f| {
+        fns.insert((f.name.clone(), f.params.len(), f.span.line, f.span.col, f.synthetic))
+    });
+    let mut types = std::collections::HashSet::new();
+    program.types.retain(|t| types.insert((t.name.clone(), t.span.line, t.span.col)));
+}
+
 /// Load and qualify every imported module, recursively.
 fn load_dependencies(
     base: &std::path::Path,
@@ -2181,6 +2225,7 @@ fn load_dependencies(
             }
         }
     }
+    collapse_diamonds(&mut dep_program);
     Ok((dep_program, exports, shadowed))
 }
 

@@ -1,0 +1,9 @@
+import "mid"
+import "shape"
+
+b = shape/blank
+f = shape/filled 3
+
+print "entry:    {shape/describe b}"
+print "imported: {mid/via b}"
+print "fielded:  {mid/via f}"

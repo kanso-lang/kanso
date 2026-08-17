@@ -1,3 +1,3 @@
 error[endpoint]: unhandled err reached the entry: ""oops" is not an integer"
-  born in endpoint_trace/text/to_int at std/text/text.kso:84
+  born in text/to_int at std/text/text.kso:84
   passed through endpoint_trace/report ← endpoint_trace/grade
