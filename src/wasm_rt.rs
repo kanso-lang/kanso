@@ -50,7 +50,10 @@ thread_local! {
     /// the two streams — so this engine and the native binary agree byte for
     /// byte on a program that writes to both.
     static ERRS: RefCell<String> = const { RefCell::new(String::new()) };
-    static INTERP: RefCell<Option<Interp<'static>>> = const { RefCell::new(None) };
+    /// Held by reference, not by value: `with_interp` hands the reference out
+    /// and the cell's borrow ends immediately, so evaluation — which reaches
+    /// arbitrary guest code and can abort — never runs inside it.
+    static INTERP: RefCell<Option<&'static Interp<'static>>> = const { RefCell::new(None) };
 }
 
 const SPAN0: Span = Span { line: 0, col: 0 };
@@ -62,7 +65,8 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
         .filter_map(|t| t.parent.clone().map(|p| (t.name.clone(), p)))
         .collect();
     let leaked: &'static Program = Box::leak(Box::new(program));
-    INTERP.with(|i| *i.borrow_mut() = Some(Interp::new(leaked)));
+    let interp: &'static Interp<'static> = Box::leak(Box::new(Interp::new(leaked)));
+    INTERP.with(|i| *i.borrow_mut() = Some(interp));
     eval::set_foreign_call(call_from_interp);
     eval::set_deferral_resolver(settled);
     TYPES.with(|t| *t.borrow_mut() = types);
@@ -228,7 +232,11 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
 }
 
 fn with_interp<T>(f: impl FnOnce(&Interp<'static>) -> T) -> T {
-    INTERP.with(|i| f(i.borrow().as_ref().expect("program loaded")))
+    // the reference is copied out and the borrow released before `f` runs; a
+    // borrow held across evaluation is left set forever by an abort, and the
+    // next program's `load` then cannot take it
+    let interp = INTERP.with(|i| *i.borrow()).expect("program loaded");
+    f(interp)
 }
 
 /* ---------- rt_* imports ---------- */
