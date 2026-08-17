@@ -573,7 +573,16 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Err(Diagnostic::new("syntax", format!("function `{name}` has no body"), span));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new(), canon: String::new(), synthetic: false })
+    Ok(FnDecl {
+        name,
+        is_pub,
+        span,
+        params,
+        body: stmts,
+        file: String::new(),
+        canon: String::new(),
+        synthetic: false,
+    })
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
