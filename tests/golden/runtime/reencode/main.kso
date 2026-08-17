@@ -1,1 +1,4 @@
-reencode (decode doc) { "a":[4.5 6.7] "b":[8.9] } 2 0
+import "loop"
+import "std/json"
+
+loop/reencode (json/decode loop/doc) { "a":[4.5 6.7] "b":[8.9] } 2 0
