@@ -69,14 +69,21 @@ around it.
   bubble up to the caller, and it did. if the caller wants to pass it
   back to you, so be it." The rule constrains your arms, not
   downstream dataflow.
-- **ch08 pedagogy**: positions.kso dispatches on its own parse_failure —
-  unfixable within one program since local modules share a universe. The
-  chapter restructures around std/json as the foreign library, or the
-  book narrows its failure story to the package boundary.
-- **Migration**: the arm-based advisory and the fleet's two violations
-  (std/json's failure_position/failure_reason, retired by 1b, plus kq's
-  vendored copies) move onto the combinator surface;
-  design/err-migration.md updates to this shape.
+- **ch08 pedagogy — RESOLVED 2026-08-17**: the chapter restructures
+  around std/json as the foreign library, with "your own failures only
+  bubble" as its thesis — the licensed case taught through a concrete
+  dependency, which is the same lesson the narrowing option would have
+  stated abstractly. The ch08 suite moves with the projection
+  migration.
+- **Migration** (unblocked 2026-08-17, mechanical): the arm-based
+  advisory restructures to gavel 24's arm-site check, and the fleet's
+  violations retire — std/json's failure_position/failure_reason plus
+  kq's vendored copies, deletable because **1b is GAVELED (Clay,
+  2026-08-14**, per-field pub; named reads and keyed patterns cross
+  hakos — see the compiler log's "a sitting of gavels" entry): foreign
+  clients destructure `(err (parse_failure p _))` themselves. Scope:
+  the projections, examples/json_failure_door.kso, and the ch08 suite
+  in the restructured-around-std/json shape.
 - **Smaller spellings** carried from the July entry: the dot-prefix
   canon for local imports, the subtype declaration spelling, the
   into-subtype spelling.
@@ -374,8 +381,15 @@ welfare and the veins gate the cost.
   survivor-ratio guard: the multiplier is a judgment call; the principle
   (the dance's transient must stay at threshold scale) is recorded in
   the log.
-- **An `os` package** (Clay): what moves out of `io` — `MkdirAll` was
-  the example. A surface question, cheap once the shape is agreed.
+- **An `os` package — RULED 2026-08-17**: mirror Go's split exactly
+  (`os` takes filesystem/env/args/process; `io` keeps the abstract
+  read/write surface; MkdirAll → os); any boundary case Go does not
+  answer goes to the language committee, never back to Clay.
+- **An assert hako** (future design pass, queued 2026-08-17): a real
+  assertion library in the rspec direction Clay sketched —
+  `(expect 1) . to (equal x)` — as its own small surface design, never
+  improvised inside a test fix. Its arms are foreign to every tested
+  hako, so the err license needs nothing special.
 - **Dot chains route around accessor privacy** (Demeter): a chain can
   reach a field the owning module would not expose directly. Low
   priority, and a real hole in the privacy story.
