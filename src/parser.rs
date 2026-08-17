@@ -112,7 +112,6 @@ pub fn parse_play(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         span,
         is_pub: false,
         file: String::new(),
-        canon: String::new(),
         synthetic: false,
     });
     Ok(program)
@@ -214,7 +213,6 @@ pub fn parse_entry(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         span,
         is_pub: false,
         file: String::new(),
-        canon: String::new(),
         synthetic: false,
     };
     Ok(Program { fns: vec![main], types: Vec::new(), imports, reexports: Vec::new() })
@@ -573,16 +571,7 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         return Err(Diagnostic::new("syntax", format!("function `{name}` has no body"), span));
     }
     let stmts = parse_body(body)?;
-    Ok(FnDecl {
-        name,
-        is_pub,
-        span,
-        params,
-        body: stmts,
-        file: String::new(),
-        canon: String::new(),
-        synthetic: false,
-    })
+    Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new(), synthetic: false })
 }
 
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
@@ -616,7 +605,6 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             params: Vec::new(),
             body: stmts,
             file: String::new(),
-            canon: String::new(),
             synthetic: false,
         });
     }
@@ -637,7 +625,6 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         params: Vec::new(),
         body: vec![Stmt::Expr(expr)],
         file: String::new(),
-        canon: String::new(),
         synthetic: false,
     })
 }

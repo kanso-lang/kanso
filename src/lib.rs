@@ -443,13 +443,40 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
 /// because two routes to one module spell it differently. An embedded module
 /// has no filesystem path to canonicalise and keeps its import path, which is
 /// already the same by every route.
+thread_local! {
+    /// Canonical paths seen this compile, so a declaration carries an id
+    /// rather than a path. Ids start at 1; 0 is the unstamped default a
+    /// synthesised declaration keeps.
+    static CANON_IDS: std::cell::RefCell<std::collections::HashMap<String, u32>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The identity `file` cannot carry. Two import routes to one module spell
+/// the display path differently — `mid/../shape/shape.kso` against
+/// `shape/shape.kso` — and err origins print the spelling the reader typed,
+/// so the display path stays as it is and the identity is derived when it is
+/// needed. Derived rather than stored, because a field on every declaration
+/// makes what compiling costs depend on how many declarations are loaded when
+/// the peak falls, which tests/import_order exists to forbid.
+fn canon_id(file: &str) -> u32 {
+    CANON_IDS.with(|ids| {
+        let mut ids = ids.borrow_mut();
+        if let Some(id) = ids.get(file) {
+            return *id;
+        }
+        let canon = std::fs::canonicalize(file)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| file.to_string());
+        let next = ids.len() as u32 + 1;
+        let id = *ids.entry(canon).or_insert(next);
+        ids.insert(file.to_string(), id);
+        id
+    })
+}
+
 fn stamp_file(program: &mut ast::Program, file: &str) {
-    let canon = std::fs::canonicalize(file)
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| file.to_string());
     for decl in &mut program.fns {
         decl.file = file.to_string();
-        decl.canon = canon.clone();
     }
 }
 
@@ -599,7 +626,6 @@ fn synthesize_getters(program: &mut ast::Program) {
                     *span,
                 ))],
                 file: String::new(),
-                canon: String::new(),
                 synthetic: false,
             });
         }
@@ -1542,13 +1568,13 @@ fn qualify(
     qual: &str,
     exports: &mut std::collections::HashMap<String, bool>,
     // GAVEL 51: which DECLARATION claimed each qualified spelling, by
-    // canonical path. `exports` records only whether a name is pub, and under
+    // interned canonical path. `exports` records only whether a name is pub, and under
     // one module a dependency arrives by every route that reaches it — sealed
     // through a middle module that does not re-export it, open through the
     // importer's own import. Without identity those two are indistinguishable
     // from a genuine shadow, where this module declares a name one of its
     // imports also exports.
-    claims: &mut std::collections::HashMap<String, String>,
+    claims: &mut std::collections::HashMap<String, u32>,
     shadowed: &mut std::collections::HashSet<String>,
 ) {
     // A getter's declaration is left bare below, because one group answers a
@@ -1634,7 +1660,7 @@ fn qualify(
                 false => format!("{qual}/{}", f.name),
             };
             let taken = exports.get(&key).copied();
-            let same_decl = claims.get(&key).is_some_and(|c| *c == f.canon);
+            let same_decl = claims.get(&key).is_some_and(|c| *c == canon_id(&f.file));
             // GAVEL 51: the two-claims rule is about THIS module declaring a
             // name one of its imports also exports. An already-qualified name
             // is not this module's declaration — it is a dependency arriving,
@@ -1657,7 +1683,7 @@ fn qualify(
                 (Some(_), _) => {}
                 (None, _) => {
                     exports.insert(key.clone(), f.is_pub);
-                    claims.insert(key.clone(), f.canon.clone());
+                    claims.insert(key.clone(), canon_id(&f.file));
                 }
             }
             // GAVEL 51: a name that already carries a qualification came
@@ -2077,7 +2103,7 @@ fn collapse_diamonds(program: &mut ast::Program) {
     let mut fns = std::collections::HashSet::new();
     program.fns.retain(|f| {
         fns.insert((
-            f.canon.clone(),
+            canon_id(&f.file),
             f.name.clone(),
             f.params.len(),
             f.span.line,
@@ -2102,7 +2128,7 @@ fn load_dependencies(
         reexports: Vec::new(),
     };
     let mut exports = std::collections::HashMap::new();
-    let mut claims: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut claims: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
     let mut shadowed = std::collections::HashSet::new();
     for import in imports {
         let path = &import.path;

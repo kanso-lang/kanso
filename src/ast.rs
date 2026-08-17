@@ -210,11 +210,6 @@ pub struct FnDecl {
     pub body: Vec<Stmt>,
     /// Source file, stamped after parsing; err origins are "{name} at {file}:{line}".
     pub file: String,
-    /// The same file's CANONICAL path — the identity `file` cannot carry,
-    /// because two import routes to one module spell the display path
-    /// differently (`mid/../shape/shape.kso` against `shape/shape.kso`) and
-    /// err origins print the spelling the reader typed. GAVEL 51.
-    pub canon: String,
     /// True for bare-enrollment clones of imported decls (the import
     /// incarnation): real for dispatch, invisible to provenance analyses.
     pub synthetic: bool,

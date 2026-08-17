@@ -203,7 +203,6 @@ pub fn rewrite(program: &mut Program) {
                 params,
                 body,
                 file: decl.file.clone(),
-                canon: String::new(),
                 synthetic: true,
             });
         }
@@ -235,7 +234,6 @@ pub fn rewrite(program: &mut Program) {
                 piped: false,
             })],
             file: decls[0].file.clone(),
-            canon: String::new(),
             synthetic: true,
         });
     }
