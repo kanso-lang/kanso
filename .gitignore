@@ -54,4 +54,5 @@ bench/history_series.jsonl
 /tests/golden/cohort/escapes.json
 /widebench
 /escapebench
+/deepbench
 /counters_escape.txt
