@@ -54,13 +54,13 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2913614173
-encodebench 9725271017
-oneshot 49322015
-basket 57564331
-widebench 88147541
-deepbench 833453373
-escapebench 258541105
+jsonbench 2913614187
+encodebench 9725270999
+oneshot 49321997
+basket 57564369
+widebench 88147523
+deepbench 833453387
+escapebench 258541119
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -187,3 +187,14 @@ escapebench 258541105
 # nowhere else, so the one row that holds still renders none. The row that
 # collects is not here — it is the map knot that used to segfault, which no
 # benchmark runs.
+# 2026-08-17 (later): the signs DISAGREE and the magnitudes are tens against
+# billions — jsonbench, deepbench and escapebench +14, basket +38,
+# encodebench, oneshot and widebench -18. Rendering forces and puts a
+# container on the path, so the work per rendered container is a scan and two
+# stores; none of these benchmarks renders a cell that has not run, so what
+# each row collects is mostly the layout around code the linker now places
+# differently. Recorded rather than waved at, which is what this file is for.
+#
+# Both veins here are read from the runner whose head is 7faae0f5. The commit
+# they pin adds a test file's call site and rustfmt's preferred spacing in two
+# source files — neither reaches emitted code, so the numbers hold.
