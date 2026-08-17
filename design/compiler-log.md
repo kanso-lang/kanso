@@ -2822,3 +2822,46 @@ are untouched.
 (pure as record / io lifting — now reshaped by the three-combinator
 gavel and this one), the err riders, 9b is closed (spread), and the
 also-open list.
+
+## 2026-08-16 — the effects surface: no lifting, pure as data, dot is application, `.>` is the chain
+
+Entries 18 and 19 closed together, and the dialog corrected one of my
+own proposals on the way.
+
+19 first: operators do not lift over descriptions. Clay's own words
+closed it — "now that i finally figured out the reason to use that
+triad of functions, like bind, to access the internal object with a
+lambda, i can see how we don't need auto lifting." Running a
+description is observable, so an expression that hides when it runs
+has no legal reading; the bind lambda is the door.
+
+18: `pure x` is the trivial description as an ordinary record,
+executor arms per engine. Clay gaveled the wrapping contract in his
+own phrasing — "a combinator owns its output channel, and wraps
+whatever its callback answers into it" — which makes the old
+arm-boundary lift the success-channel instance of the triad's own
+rule rather than legacy sugar, and confines `pure` to non-callback
+positions.
+
+The correction: I proposed the pipe as carrier-dispatched bind
+(left-identity making plain pipelines application), and Clay caught
+the inconsistency — an effect could never pipe AS A VALUE, and `x .
+f`'s meaning would depend on x's inferred carrier, the same
+unreadability that killed lifting an hour earlier. Retracted. Dot is
+application, always; effects pipe as values; bind is a named function
+reached by the pipe's normal first-argument insertion. That also
+settles the long-pending binding-as-bind-vs-dot question.
+
+The verbosity of repeated `bind` then earned its do-notation analog:
+`.>`, the effect-chain operator, pure routing sugar — value arm to
+bind, foreign-reason err arm to rescue (provenance-checked), bare err
+arm to annotate, unmatched failures pass. `?` was rejected as a glyph
+because the suffix gavel already gave it a checked meaning. The
+family reads: dot = the value flows, `>` = effects sequence; and `>>`
+keeps its glyph — Clay, on learning Haskell's `>>` is the same
+operator: "steal from the best." Retiring the wall as derivable
+(`a .> (_ -> b)`) was recorded and declined.
+
+Still open: 6 (tail-call promise wording, recommendation on the
+table), 16 (block-born as dataflow), the remaining err riders (the
+`.>` ruling absorbs the chain-spelling rider), and the also-open list.

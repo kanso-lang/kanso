@@ -164,19 +164,50 @@ Build note: prefer streaming emission (elements print as they force,
 Haskell-style), so an accidental `print naturals` is visibly growing
 and interruptible rather than a silent hang.
 
-## 18. `pure` as a record type (Clay's proposal)
+## 18 + 19. The effects surface — GAVELED 2026-08-16
 
-Clay proposed `type answer / value` plus one executor arm per engine.
-Recorded when it was raised and never taken further. It touches how a
-pure value and a description relate, which is the same seam as 19
-below, so the two probably want deciding together.
+Closed together, with the spelling questions they dragged in. The
+rulings, in dependency order:
 
-## 19. Should io infect — auto-lifting operators over descriptions
-
-Whether an operator applied to a description should lift automatically,
-so a description behaves like the value it will produce. The pull is
-ergonomic; the cost is that the type of an expression stops being
-readable from the expression. Raised, not argued.
+- **19: operators do not lift over descriptions.** Running a
+  description is observable — unlike forcing a thunk, which is pure and
+  silent — so `r + 1` on a description has no legal reading: the
+  expression cannot say when or how many times the effect runs. The
+  bind lambda is the access path to the produced value, and the purity
+  boundary holds because narrowing has no other spelling.
+- **18: `pure x` is the trivial description** — executes as nothing,
+  answers x — spelled as an ordinary record with one executor arm per
+  engine. The carrier is data, not compiler magic.
+- **A combinator owns its output channel and wraps whatever its
+  callback answers into it** (Clay's phrasing): bind wraps plain
+  answers into the effect, annotate into err, rescue into success. So
+  `pure` is only ever written in non-callback positions (holding a
+  trivial effect, seeding a fold, handing a known answer to an
+  effect-shaped interface).
+- **Dot is application, always.** `x . f args` = `f x args` for every
+  x — a description pipes as a value like anything else (`fetch url .
+  retry 3` hands retry the effect). The carrier-dispatched pipe was
+  considered and rejected: it makes `x . f`'s meaning depend on x's
+  inferred type, the same unreadability that killed lifting.
+  Left-identity (`bind (pure v) f = f v`) is a law of the bind
+  function, not a behavior of the pipe. This also settles the
+  long-pending "binding-as-bind vs dot" question: dot is not bind.
+- **The effect-chain operator is `.>`** — sugar routing an arm bundle
+  to the triad: a value arm is bind's callback; an err arm naming a
+  foreign reason type is rescue (provenance-checked at this site); a
+  bare err arm is annotate; an unmatched failure passes through to the
+  next link. One operator, three combinators underneath, no new
+  semantics. Glyph family: dot means the value flows, `>` means
+  effects sequence — `.` (value, pure), `.>` (value + effects), `>>`
+  (effects, no value). `?` was rejected as a glyph: the suffix gavel
+  gave `?` a checker-enforced meaning (answers bool).
+- **`>>` keeps its glyph, now knowingly.** Haskell's sequencing pair
+  is `>>=` (value passed) and `>>` (value dropped, `m >> k = m >>= \_
+  -> k`); kanso independently chose the same glyph for the same half.
+  With `.>` in the language `a >> b` is derivable as `a .> (_ -> b)`;
+  retiring the wall under fewest-elements was recorded and declined —
+  value-free sequencing is common enough for a dedicated glyph, and
+  the wall's laws are gaveled, taught, and fuzzed under this spelling.
 
 ## Also open, not blocking any current work
 
