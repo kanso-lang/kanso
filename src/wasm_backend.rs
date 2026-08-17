@@ -70,6 +70,8 @@ const RT_ROUTES_TO_ARMS: u32 = 33;
 const RT_JOIN: u32 = 34;
 const RT_NO_FIELD: u32 = 35;
 const RT_DEFER: u32 = 36;
+const RT_CONST: u32 = 37;
+const RT_FORCE: u32 = 38;
 
 fn imports() -> Vec<Import> {
     vec![
@@ -110,6 +112,8 @@ fn imports() -> Vec<Import> {
         Import { name: "rt_join", params: 2, returns: true },
         Import { name: "rt_no_field", params: 2, returns: true },
         Import { name: "rt_defer", params: 1, returns: true },
+        Import { name: "rt_const", params: 1, returns: true },
+        Import { name: "rt_force", params: 1, returns: true },
     ]
 }
 
@@ -134,6 +138,9 @@ pub struct WasmBackend<'a> {
     wrappers: HashMap<String, u32>,
     /// Zero-arity names that reach themselves through other constants.
     knotted: std::collections::HashSet<String>,
+    /// One table entry per knotted constant, so every mention of the name
+    /// reaches the same cell and the cycle has somewhere to stop.
+    const_tidx: HashMap<String, u32>,
     tailcalls: bool,
 }
 
@@ -207,6 +214,7 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         dispatchers: HashMap::new(),
         wrappers: HashMap::new(),
         knotted: crate::codegen::knotted_constants(program),
+        const_tidx: HashMap::new(),
         tailcalls,
     };
     backend.run()
@@ -325,6 +333,22 @@ impl<'a> WasmBackend<'a> {
     fn origin_lit(&mut self, prefix: &str, span: crate::diag::Span) -> u32 {
         let origin = format!("{prefix}:{}", span.line);
         self.str_lit(&origin)
+    }
+
+    /// The table entry a knotted constant is reached through. Native seeds
+    /// such a cell before main and freezes it once; a wasm module has no start
+    /// section, so the cell is minted on the first mention and the runtime
+    /// memoises it from there.
+    fn const_cell(&mut self, name: &str) -> Option<u32> {
+        if !self.knotted.contains(name) {
+            return None;
+        }
+        if let Some(tidx) = self.const_tidx.get(name).copied() {
+            return Some(tidx);
+        }
+        let tidx = self.fn_wrapper(name).ok()?;
+        self.const_tidx.insert(name.to_string(), tidx);
+        Some(tidx)
     }
 
     fn emit_dispatcher(
@@ -857,6 +881,16 @@ impl<'a> WasmBackend<'a> {
             ctx.body.call(RT_MKREC);
             return Ok(());
         }
+        if let Some(tidx) = self.const_cell(name) {
+            ctx.body.i32_const(tidx as i64);
+            ctx.body.call(RT_CONST);
+            // a mention from inside the cycle is what the cell is for; one
+            // from outside it wants the value the cell settled on
+            if !self.knotted.contains(&ctx.group) {
+                ctx.body.call(RT_FORCE);
+            }
+            return Ok(());
+        }
         if let Some(idx) = self.dispatchers.get(&(name.to_string(), 0)).copied() {
             match tail && self.tailcalls {
                 true => ctx.body.return_call(idx),
@@ -1273,7 +1307,16 @@ impl<'a> WasmBackend<'a> {
                 self.emit_expr(ctx, arg, false)?;
                 ctx.body.call(RT_ARG);
             }
-            ctx.body.call(idx);
+            match self.const_cell(&name) {
+                Some(tidx) => {
+                    ctx.body.i32_const(tidx as i64);
+                    ctx.body.call(RT_CONST);
+                    if !self.knotted.contains(&ctx.group) {
+                        ctx.body.call(RT_FORCE);
+                    }
+                }
+                None => ctx.body.call(idx),
+            }
             ctx.body.i32_const(args.len() as i64);
             ctx.body.call(RT_CALL);
             return Ok(());

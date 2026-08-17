@@ -39,6 +39,9 @@ enum Slot {
 
 thread_local! {
     static REG: RefCell<Vec<Slot>> = const { RefCell::new(Vec::new()) };
+    /// Table index to the one cell that constant is reached through.
+    static CONSTS: RefCell<std::collections::HashMap<u32, u32>> =
+        RefCell::new(std::collections::HashMap::new());
     static ARGS: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
     static TYPES: RefCell<Vec<(String, Vec<String>)>> = const { RefCell::new(Vec::new()) };
     static ERROR: RefCell<String> = const { RefCell::new(String::new()) };
@@ -79,6 +82,7 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
         }
     });
     ARGS.with(|a| a.borrow_mut().clear());
+    CONSTS.with(|c| c.borrow_mut().clear());
 }
 
 pub fn take_error() -> String {
@@ -829,6 +833,27 @@ pub extern "C" fn rt_maybe_bind(piped: u32, closure: u32) -> u32 {
 pub extern "C" fn rt_defer(tidx: u32) -> u32 {
     let env = push(Slot::E(Rc::new(Vec::new())));
     push(Slot::C { tidx, env, arity: DEFERRED })
+}
+
+/// Demands a cell. The answer is written back over the handle, so a constant
+/// read twice costs one call.
+#[no_mangle]
+pub extern "C" fn rt_force(h: u32) -> u32 {
+    forced(val(h));
+    h
+}
+
+/// The cell a knotted constant is reached through. Every mention answers the
+/// same handle, so the body runs once and a mention arriving while it is still
+/// running finds the cell rather than starting the body again.
+#[no_mangle]
+pub extern "C" fn rt_const(tidx: u32) -> u32 {
+    if let Some(h) = CONSTS.with(|c| c.borrow().get(&tidx).copied()) {
+        return h;
+    }
+    let h = rt_defer(tidx);
+    CONSTS.with(|c| c.borrow_mut().insert(tidx, h));
+    h
 }
 
 #[no_mangle]
