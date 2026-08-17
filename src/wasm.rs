@@ -352,8 +352,8 @@ fn finish_run(program: &crate::ast::Program) -> i32 {
             text.push_str(&executor.stderr);
             text.push_str(&format!(
                 "error[endpoint]: unhandled err reached {reached}: {}\n{}",
-                render(&info.reason, true),
-                crate::eval::trace_lines(&info)
+                render(&interp, &info.reason, true),
+                crate::eval::trace_lines(&interp, &info)
             ));
             set_out(&text);
             1

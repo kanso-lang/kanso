@@ -264,7 +264,7 @@ impl Session {
         self.counter += 1;
         match value {
             Value::Desc(desc) => execute(&interp, &desc, executor),
-            other => Ok(Outcome::Value(render(&other, true))),
+            other => Ok(Outcome::Value(render(&interp, &other, true))),
         }
     }
 }
@@ -273,11 +273,11 @@ fn execute(interp: &Interp, desc: &Desc, executor: &mut dyn Executor) -> Result<
     match interp.execute(desc, executor) {
         Ok(Value::ErrV(info)) => Err(format!(
             "error[endpoint]: unhandled err reached the executor: {}\n{}",
-            render(&info.reason, true),
-            crate::eval::trace_lines(&info)
+            render(interp, &info.reason, true),
+            crate::eval::trace_lines(interp, &info)
         )),
         Ok(Value::NoneV) => Ok(Outcome::Executed(String::new())),
-        Ok(other) => Ok(Outcome::Executed(render(&other, true))),
+        Ok(other) => Ok(Outcome::Executed(render(interp, &other, true))),
         Err(runtime) => Err(format!("error[runtime]: {}\n", runtime.message)),
     }
 }

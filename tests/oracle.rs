@@ -181,8 +181,8 @@ fn evaluate_on_stack(program: &kanso::ast::Program, program_args: Vec<String>) -
             status: 1,
             stderr: format!(
                 "{wrote}error[endpoint]: unhandled err reached {reached}: {}\n{}",
-                render(&info.reason, true),
-                trace_lines(&info)
+                render(&interp, &info.reason, true),
+                trace_lines(&interp, &info)
             ),
             stdout: executor.stdout,
             thunk_stats,

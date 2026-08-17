@@ -49,13 +49,13 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=80098
-encodebench text=97618
-oneshot text=97298
-basket text=89634
-widebench text=98882
-deepbench text=61346
-escapebench text=48370
+jsonbench text=80114
+encodebench text=97698
+oneshot text=97378
+basket text=89714
+widebench text=98962
+deepbench text=61426
+escapebench text=48482
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -142,3 +142,9 @@ escapebench text=48370
 # a PR merge commit one push behind — so they measured the emitter change
 # without the runtime one. Read the run whose head sha IS the commit being
 # pinned; a green-looking older run for the same branch is not that.
+# 2026-08-17 (later): +80 on five rows, +16 on jsonbench, +112 on
+# escapebench. Rendering forces what it prints, and a list or a map now goes
+# on the render path the way a record already did — the scan, the push and
+# the pop, linked into every program because every program links the
+# renderer. jsonbench moves least because it renders no container the guard
+# has to walk twice.

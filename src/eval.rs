@@ -136,7 +136,7 @@ pub fn hop(failure: Value, name: &str) -> Value {
 
 /// The endpoint report's trace lines, newest pass-through first, pointing
 /// back toward the birth site. Byte-identical across all three engines.
-pub fn trace_lines(info: &ErrInfo) -> String {
+pub fn trace_lines(interp: &Interp, info: &ErrInfo) -> String {
     let mut out = String::new();
     if let Some(origin) = &info.origin {
         out.push_str("  born in ");
@@ -151,9 +151,9 @@ pub fn trace_lines(info: &ErrInfo) -> String {
     }
     if let Some(cause) = &info.cause {
         out.push_str("  caused by: ");
-        out.push_str(&render(&cause.reason, true));
+        out.push_str(&render(interp, &cause.reason, true));
         out.push('\n');
-        out.push_str(&trace_lines(cause));
+        out.push_str(&trace_lines(interp, cause));
     }
     out
 }
@@ -991,7 +991,7 @@ impl<'a> Interp<'a> {
                 other => Err(RuntimeError {
                     message: format!(
                         "an if condition is true or false, got {}",
-                        render(&other, false)
+                        render(self, &other, false)
                     ),
                     span: *span,
                 }),
@@ -1065,7 +1065,7 @@ impl<'a> Interp<'a> {
                         return Err(RuntimeError {
                             message: format!(
                                 "`set` writes a record field, not {}",
-                                render(&current, true)
+                                render(self, &current, true)
                             ),
                             span: *span,
                         });
@@ -1152,7 +1152,7 @@ impl<'a> Interp<'a> {
                         message: format!(
                             "cannot destructure {} as `{ty}`; bindings are irrefutable, so \
                              handle other types by dispatch first",
-                            render(&value, true)
+                            render(self, &value, true)
                         ),
                         span,
                     }),
@@ -1163,7 +1163,7 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError {
                         message: format!(
                             "cannot read fields of {}; keyed reads take a record",
-                            render(&value, true)
+                            render(self, &value, true)
                         ),
                         span,
                     });
@@ -1266,7 +1266,7 @@ impl<'a> Interp<'a> {
                     return Err(RuntimeError {
                         message: format!(
                             "`.` reads a field of a record, not {}",
-                            render(&value, true)
+                            render(self, &value, true)
                         ),
                         span: *span,
                     });
@@ -1286,7 +1286,7 @@ impl<'a> Interp<'a> {
                 let key = self.force_thunk(self.eval(index, env, frame)?)?;
                 match index_value(container, key.clone(), *span)? {
                     Value::NoneV if *strict => Ok(err_value(
-                        Value::Str(format!("missing index {}", render(&key, true))),
+                        Value::Str(format!("missing index {}", render(self, &key, true))),
                         origin_at(frame, *span),
                     )),
                     found => Ok(found),
@@ -1407,7 +1407,7 @@ impl<'a> Interp<'a> {
                     other => Err(RuntimeError {
                         message: format!(
                             "a return condition is true or false, got {}",
-                            render(&other, false)
+                            render(self, &other, false)
                         ),
                         span: *span,
                     }),
@@ -1520,7 +1520,7 @@ impl<'a> Interp<'a> {
             }
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
-                message: format!("`{}` is not callable", render(&other, false)),
+                message: format!("`{}` is not callable", render(self, &other, false)),
                 span,
             }),
         }
@@ -1608,7 +1608,7 @@ impl<'a> Interp<'a> {
                 message: format!(
                     "no {}-argument arm of `{}` (arms take {})",
                     args.len(),
-                    render(&callee, false),
+                    render(self, &callee, false),
                     names.join(" or ")
                 ),
                 span,
@@ -1823,7 +1823,7 @@ impl<'a> Interp<'a> {
                                 }
                                 (Some(_), Some(value)) => format!(
                                     "`.` reads a field of a record, not {}",
-                                    render(&value, true)
+                                    render(self, &value, true)
                                 ),
                                 _ => format!("no overload of `{name}` matches these arguments"),
                             },
@@ -2062,7 +2062,7 @@ impl<'a> Interp<'a> {
                     other => Err(RuntimeError {
                         message: format!(
                             "sleep takes milliseconds (an int), got {}",
-                            render(&other, false)
+                            render(self, &other, false)
                         ),
                         span,
                     }),
@@ -2079,7 +2079,7 @@ impl<'a> Interp<'a> {
                     other => Err(RuntimeError {
                         message: format!(
                             "random takes a bound (an int), got {}",
-                            render(&other, false)
+                            render(self, &other, false)
                         ),
                         span,
                     }),
@@ -2452,7 +2452,10 @@ impl<'a> Interp<'a> {
                     Value::Int(n) => Ok(Value::Float(int_f(&n).sqrt())),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
-                        message: format!("sqrt takes a number, got {}", render(&other, false)),
+                        message: format!(
+                            "sqrt takes a number, got {}",
+                            render(self, &other, false)
+                        ),
                         span,
                     }),
                 }
@@ -2464,7 +2467,10 @@ impl<'a> Interp<'a> {
                     Value::Float(v) => Ok(Value::Int(BigInt::from(v.round() as i64))),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
-                        message: format!("round takes a number, got {}", render(&other, false)),
+                        message: format!(
+                            "round takes a number, got {}",
+                            render(self, &other, false)
+                        ),
                         span,
                     }),
                 }
@@ -2540,7 +2546,7 @@ impl<'a> Interp<'a> {
             }
             "render_value" => {
                 let [v] = arity(args, name, span)?;
-                Ok(Value::Str(render(&v, false)))
+                Ok(Value::Str(render(self, &v, false)))
             }
             "length" => {
                 let [list] = arity(args, name, span)?;
@@ -2551,7 +2557,7 @@ impl<'a> Interp<'a> {
                     other => Err(RuntimeError {
                         message: format!(
                             "length takes a list, string, or map, not {}{}",
-                            render(&other, true),
+                            render(self, &other, true),
                             lazy_hint(&other)
                         ),
                         span,
@@ -2583,7 +2589,7 @@ impl<'a> Interp<'a> {
                             return Err(RuntimeError {
                                 message: format!(
                                     "a filter predicate returns true or false, got {}",
-                                    render(&other, false)
+                                    render(self, &other, false)
                                 ),
                                 span,
                             })
@@ -2646,7 +2652,10 @@ impl<'a> Interp<'a> {
             Value::False => self.force(else_branch),
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
-                message: format!("an if condition is true or false, got {}", render(&other, false)),
+                message: format!(
+                    "an if condition is true or false, got {}",
+                    render(self, &other, false)
+                ),
                 span,
             }),
         }
@@ -2678,10 +2687,10 @@ impl<'a> Interp<'a> {
                 }
                 match result {
                     Value::Str(s) => s,
-                    other => render(&other, false),
+                    other => render(self, &other, false),
                 }
             }
-            _ => render(&value, false),
+            _ => render(self, &value, false),
         };
         Ok(Ok(rendered))
     }
@@ -2817,7 +2826,7 @@ fn whole(v: Value, name: &str, span: Span) -> Result<Result<i64, Value>, Runtime
             }),
         },
         other => Err(RuntimeError {
-            message: format!("{said} takes whole numbers, got {}", render(other, false)),
+            message: format!("{said} takes whole numbers, got {}", render_demanded(other, false)),
             span,
         }),
     }
@@ -3008,7 +3017,7 @@ fn map_key(value: Value, span: Span) -> Result<MapKey, RuntimeError> {
         Value::Int(n) => Ok(MapKey::Int(n)),
         Value::Str(s) => Ok(MapKey::Str(s)),
         other => Err(RuntimeError {
-            message: format!("{} is not usable as a map key", render(&other, true)),
+            message: format!("{} is not usable as a map key", render_demanded(&other, true)),
             span,
         }),
     }
@@ -3293,7 +3302,7 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult
             message: format!(
                 "{} takes whole numbers, got {}",
                 spelled_op(op),
-                render(other, false)
+                render_demanded(other, false)
             ),
             span,
         }),
@@ -3301,7 +3310,7 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult
             message: format!(
                 "{} takes whole numbers, got {}",
                 spelled_op(op),
-                render(other, false)
+                render_demanded(other, false)
             ),
             span,
         }),
@@ -3462,33 +3471,56 @@ pub fn sub_base(value: Value) -> Value {
     }
 }
 
-pub fn render(value: &Value, quote_strings: bool) -> String {
-    render_seen(value, quote_strings, &mut std::collections::HashSet::new())
+pub fn render(interp: &Interp, value: &Value, quote_strings: bool) -> String {
+    render_seen(Some(interp), value, quote_strings, &mut std::collections::HashSet::new())
+}
+
+/// Rendering for the three free functions that name an operand in a
+/// diagnostic — `whole`, `map_key`, `eval_binop`. They are reached from
+/// wasm_rt as well as from the interpreter, where the only handle is a
+/// thread-local already borrowed by the caller, so taking one here would
+/// nest a RefCell borrow and panic.
+///
+/// The operands cannot be pending: arithmetic forces what it adds, a map key
+/// is forced to be compared, and `whole` is asked about a value its caller
+/// already demanded. A cell reaching here would print `<thunk>`, which is the
+/// old word and a signal that this reasoning is wrong somewhere.
+pub fn render_demanded(value: &Value, quote_strings: bool) -> String {
+    render_seen(None, value, quote_strings, &mut std::collections::HashSet::new())
 }
 
 /// A cycle would render forever, so re-entering a cell on the current path
 /// prints `<cycle>` instead.
 fn render_seen(
+    interp: Option<&Interp>,
     value: &Value,
     quote_strings: bool,
     seen: &mut std::collections::HashSet<usize>,
 ) -> String {
     match value {
         // a subtype renders as its base until a user arm claims it
-        Value::Sub { inner, .. } => render_seen(inner, quote_strings, seen),
-        // A forced cell shows what it holds, and a cell already on the path
-        // holds the walk that is reading it — the knot a constructor tied
-        // closes here rather than through a record.
+        Value::Sub { inner, .. } => render_seen(interp, inner, quote_strings, seen),
+        // The wire is the demand: output forces what it prints, so a cell
+        // that has not run runs here. A cell already on the path holds the
+        // walk that is reading it, and that is where a knot terminates.
+        //
+        // A render cannot carry a failure out, so one falls back to the old
+        // word. The reachable failure is a cell demanding itself, and the
+        // path guard above answers that before the force is reached.
         Value::Thunk(cell) => {
             let key = Rc::as_ptr(cell) as usize;
             if !seen.insert(key) {
                 return "<cycle>".to_string();
             }
-            let rendered = match &*cell.borrow() {
-                ThunkState::Forced(v) => render_seen(v, quote_strings, seen),
-                // A pending thunk reaching render is a missed force point;
-                // make it loud so the differential corpus catches it.
-                _ => "<thunk>".to_string(),
+            let rendered = match interp {
+                Some(it) => match it.force_thunk(Value::Thunk(Rc::clone(cell))) {
+                    Ok(value) => render_seen(interp, &value, quote_strings, seen),
+                    Err(_) => "<thunk>".to_string(),
+                },
+                None => match &*cell.borrow() {
+                    ThunkState::Forced(value) => render_seen(interp, value, quote_strings, seen),
+                    _ => "<thunk>".to_string(),
+                },
             };
             seen.remove(&key);
             rendered
@@ -3498,6 +3530,10 @@ fn render_seen(
         Value::Map(entries) => match entries.is_empty() {
             true => "{}".to_string(),
             false => {
+                let ptr = Rc::as_ptr(entries) as usize;
+                if !seen.insert(ptr) {
+                    return "<cycle>".to_string();
+                }
                 let inner: Vec<String> = entries
                     .iter()
                     .map(|(key, value)| {
@@ -3505,9 +3541,10 @@ fn render_seen(
                             MapKey::Int(n) => n.to_string(),
                             MapKey::Str(s) => format!("\"{s}\""),
                         };
-                        format!("{key}:{}", render_seen(value, true, seen))
+                        format!("{key}:{}", render_seen(interp, value, true, seen))
                     })
                     .collect();
+                seen.remove(&ptr);
                 format!("{{ {} }}", inner.join(" "))
             }
         },
@@ -3518,9 +3555,18 @@ fn render_seen(
         Value::True => "true".to_string(),
         Value::False => "false".to_string(),
         Value::NoneV => "<none>".to_string(),
-        Value::ErrV(info) => format!("err {}", render_seen(&info.reason, true, seen)),
+        Value::ErrV(info) => format!("err {}", render_seen(interp, &info.reason, true, seen)),
+        // On the path like a record, so a knot that closes through a cell
+        // holding this very list prints the list once and says `<cycle>`
+        // where it comes round.
         Value::List(items) => {
-            let inner: Vec<String> = items.iter().map(|i| render_seen(i, true, seen)).collect();
+            let ptr = Rc::as_ptr(items) as usize;
+            if !seen.insert(ptr) {
+                return "<cycle>".to_string();
+            }
+            let inner: Vec<String> =
+                items.iter().map(|i| render_seen(interp, i, true, seen)).collect();
+            seen.remove(&ptr);
             format!("[{}]", inner.join(" "))
         }
         Value::Record { ty, fields } => match fields.borrow().is_empty() {
@@ -3531,7 +3577,7 @@ fn render_seen(
                     return "<cycle>".to_string();
                 }
                 let inner: Vec<String> =
-                    fields.borrow().iter().map(|f| render_seen(f, true, seen)).collect();
+                    fields.borrow().iter().map(|f| render_seen(interp, f, true, seen)).collect();
                 seen.remove(&ptr);
                 format!("{} {}", ty, inner.join(" "))
             }

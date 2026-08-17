@@ -7,8 +7,8 @@
 use crate::ast::Program;
 use crate::diag::Span;
 use crate::eval::{
-    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render, trace_lines,
-    Desc, ErrInfo, Executor, Interp, Value,
+    self, err_value, eval_binop, hop, index_value, is_failure, join_values, render,
+    render_demanded, trace_lines, Desc, ErrInfo, Executor, Interp, Value,
 };
 use crate::wasm_backend::Lit;
 use std::cell::RefCell;
@@ -195,7 +195,7 @@ fn call_closure(c_h: u32, arg_handles: Vec<u32>) -> u32 {
             if is_failure(&value) {
                 return c_h;
             }
-            die(format!("`{}` is not callable", render(&value, false)));
+            die(format!("`{}` is not callable", render_demanded(&value, false)));
         }
         die("this value is not callable".to_string());
     };
@@ -333,7 +333,10 @@ pub extern "C" fn rt_keyed_check(h: u32, entries: u32) -> u32 {
         die("cannot read fields of this value; keyed reads take a record".to_string());
     };
     let Value::Record { ty, .. } = &value else {
-        die(format!("cannot read fields of {}; keyed reads take a record", render(&value, true)));
+        die(format!(
+            "cannot read fields of {}; keyed reads take a record",
+            render_demanded(&value, true)
+        ));
     };
     let declared = TYPES.with(|t| {
         let types = t.borrow();
@@ -361,7 +364,7 @@ pub extern "C" fn rt_setfield(h: u32, name_lit: u32, value_h: u32) -> u32 {
     }
     let Slot::V(Value::Record { ty, fields }) = slot(h) else {
         // the oracle names what it was handed, so this does too
-        die(format!("`set` writes a record field, not {}", render(&val(h), true)));
+        die(format!("`set` writes a record field, not {}", render_demanded(&val(h), true)));
     };
     let position = TYPES.with(|t| {
         let types = t.borrow();
@@ -385,7 +388,9 @@ pub extern "C" fn rt_no_field(base: u32, name_lit: u32) -> u32 {
     };
     match val(base) {
         Value::Record { ty, .. } => die(format!("`{ty}` has no field `{name}`")),
-        other => die(format!("`.` reads a field of a record, not {}", render(&other, true))),
+        other => {
+            die(format!("`.` reads a field of a record, not {}", render_demanded(&other, true)))
+        }
     }
 }
 
@@ -414,7 +419,9 @@ pub extern "C" fn rt_field_by_name(base: u32, name_lit: u32) -> u32 {
                 None => die(format!("`{ty}` has no field `{name}`")),
             }
         }
-        other => die(format!("`.` reads a field of a record, not {}", render(&other, true))),
+        other => {
+            die(format!("`.` reads a field of a record, not {}", render_demanded(&other, true)))
+        }
     }
 }
 
@@ -512,7 +519,9 @@ pub extern "C" fn rt_mkmap(n: u32) -> u32 {
         let key = match &pair[0] {
             Value::Int(n) => eval::MapKey::Int(n.clone()),
             Value::Str(s) => eval::MapKey::Str(s.clone()),
-            other => die(format!("map keys are ints or strings, not {}", render(other, true))),
+            other => {
+                die(format!("map keys are ints or strings, not {}", render_demanded(other, true)))
+            }
         };
         map.insert(key, pair[1].clone());
     }
@@ -656,7 +665,7 @@ pub extern "C" fn rt_index(base: u32, index: u32) -> u32 {
     let idx = val(index);
     match index_value(val(base), idx.clone(), SPAN0) {
         Ok(Value::NoneV) => {
-            let msg = format!("missing index {}", render(&idx, true));
+            let msg = format!("missing index {}", render_demanded(&idx, true));
             push(Slot::V(err_value(Value::Str(msg), None)))
         }
         Ok(v) => push(Slot::V(forced(v))),
@@ -678,7 +687,7 @@ pub extern "C" fn rt_truthy(h: u32) -> u32 {
     match val(h) {
         Value::True => 1,
         Value::False => 0,
-        other => die(format!("if takes a bool condition (got {})", render(&other, true))),
+        other => die(format!("if takes a bool condition (got {})", render_demanded(&other, true))),
     }
 }
 
@@ -727,7 +736,9 @@ fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {
             _ => match r {
                 Value::True => out.push(item.clone()),
                 Value::False => {}
-                other => die(format!("filter needs a bool (got {})", render(&other, true))),
+                other => {
+                    die(format!("filter needs a bool (got {})", render_demanded(&other, true)))
+                }
             },
         }
     }
@@ -971,8 +982,8 @@ pub fn exec_main(h: u32) -> (i32, String) {
                     1,
                     format!(
                         "error[endpoint]: unhandled err reached the executor: {}\n{}",
-                        render(&info.reason, true),
-                        trace_lines(&info)
+                        with_interp(|i| render(i, &info.reason, true)),
+                        with_interp(|i| trace_lines(i, &info))
                     ),
                 )),
                 _ => Some((0, String::new())),
@@ -983,8 +994,8 @@ pub fn exec_main(h: u32) -> (i32, String) {
             1,
             format!(
                 "error[endpoint]: unhandled err reached the entry: {}\n{}",
-                render(&info.reason, true),
-                trace_lines(&info)
+                with_interp(|i| render(i, &info.reason, true)),
+                with_interp(|i| trace_lines(i, &info))
             ),
         )),
         Slot::V(Value::NoneV) => {

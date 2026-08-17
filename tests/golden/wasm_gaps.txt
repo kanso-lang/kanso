@@ -66,3 +66,13 @@ tests/golden/micro/a_knot_through_two_names.kso	2 1 a_knot_through_two_names/nod
 # side and the render side have to land together, and the render side is the
 # same work as the two entries above.
 tests/golden/micro/a_knot_through_a_map_value.kso	the program ran out of stack: recursion went deeper than the stack holds
+
+# An err whose reason holds a cell nobody demanded. Native and the oracle now
+# FORCE what they print, so the trace shows the ring and stops at `<cycle>`;
+# the browser holds its deferral as a closure and prints `<fn>`.
+#
+# The same difference as a_constant_that_holds_itself above, reached through
+# the trace rather than through print — which is the point of this fixture.
+# It closes when the browser's render forces, the work tracked beside the
+# blackhole.
+tests/golden/runtime/a_knot_inside_an_err_reason.kso	[<fn>]
