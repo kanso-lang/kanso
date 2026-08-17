@@ -410,7 +410,7 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
 /// unfrozen mention re-enters the builder, and the recursion has no floor.
 /// One name reaching itself and two names reaching each other are the same
 /// shape, so the question is cycle membership.
-fn knotted_constants(program: &Program) -> std::collections::HashSet<String> {
+pub(crate) fn knotted_constants(program: &Program) -> std::collections::HashSet<String> {
     fn names(expr: &Expr, out: &mut Vec<String>) {
         if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
             out.push(n.clone());

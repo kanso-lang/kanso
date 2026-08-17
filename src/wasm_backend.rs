@@ -132,6 +132,8 @@ pub struct WasmBackend<'a> {
     type_ids: HashMap<&'a str, i64>,
     dispatchers: HashMap<(String, usize), u32>,
     wrappers: HashMap<String, u32>,
+    /// Zero-arity names that reach themselves through other constants.
+    knotted: std::collections::HashSet<String>,
     tailcalls: bool,
 }
 
@@ -204,6 +206,7 @@ pub fn compile(program: &Program, tailcalls: bool) -> Result<Compiled, String> {
         type_ids,
         dispatchers: HashMap::new(),
         wrappers: HashMap::new(),
+        knotted: crate::codegen::knotted_constants(program),
         tailcalls,
     };
     backend.run()
@@ -1043,19 +1046,28 @@ impl<'a> WasmBackend<'a> {
         Ok(())
     }
 
-    /// Whether this expression names the constant being built. The only free
-    /// name such an element can carry is that constant, which the deferred
-    /// body loads for itself, so nothing is captured.
+    /// Whether this expression names a constant the cycle comes back through.
+    /// The free names such an element carries are constants, which the
+    /// deferred body loads for itself, so nothing is captured. Two constants
+    /// naming each other close a ring the same way one naming itself does, so
+    /// the question is which knot the group belongs to rather than whether
+    /// the element spells the group's own name.
     fn defers_self(&self, ctx: &Ctx, expr: &Expr) -> bool {
-        fn mentions(expr: &Expr, name: &str) -> bool {
+        fn mentions(expr: &Expr, of: &dyn Fn(&str) -> bool) -> bool {
             if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
-                if n == name {
+                if of(n) {
                     return true;
                 }
             }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
+            crate::expr_children(expr).into_iter().any(|c| mentions(c, of))
         }
-        !ctx.group.is_empty() && mentions(expr, &ctx.group)
+        if ctx.group.is_empty() {
+            return false;
+        }
+        match self.knotted.contains(&ctx.group) {
+            true => mentions(expr, &|n: &str| self.knotted.contains(n)),
+            false => mentions(expr, &|n: &str| n == ctx.group),
+        }
     }
 
     fn emit_lambda(&mut self, ctx: &mut Ctx, expr: &Expr) -> Result<(), String> {
