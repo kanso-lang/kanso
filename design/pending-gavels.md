@@ -209,6 +209,33 @@ rulings, in dependency order:
   value-free sequencing is common enough for a dedicated glyph, and
   the wall's laws are gaveled, taught, and fuzzed under this spelling.
 
+## 21. The effect block — GAVELED 2026-08-16 (keyword awaiting Clay)
+
+The do-notation analog, ruled the same hour the `.>` operator landed.
+Inside an explicitly-opened block (keyword candidate: `do`, stolen from
+the best; Clay confirms or replaces), statements sequence via bind and
+`=` means one uniform thing: **name the answer**. An effect RHS binds
+the produced value; a pure RHS binds the value itself — the same
+behavior, by left-identity, so pure lines don't notice the block.
+Left-to-right, no `<-`: Haskell's convention was rejected outright
+("it should go left to right... `body = fetch url` ... reads
+dramatically better"); the `fetch url -> body` variant was declined
+for colliding with the lambda arrow.
+
+- The block boundary is load-bearing: at the ambient statement level
+  `x = fetch url` stays a pure name for the description (the night-2
+  ruling, untouched). The keyword is the explicit signal that `=`
+  names answers.
+- Naming an unrun description inside a block: `d = pure (fetch url)` —
+  the bind unwraps one layer, Haskell-identical, rare and explicit.
+- Failure: a failed line skips the rest (infectiousness); per-line
+  rescue is the ordinary pipe (`body = fetch url . rescue (e ->
+  ...)`), provenance-checked at the site; whole-block rescue wraps the
+  block.
+- Desugar target: nested `.>` chains. Pure routing sugar, no
+  semantics. Closes the also-open "sequencing more than two binds
+  prettily" item (multiplyTwoRandoms).
+
 ## Also open, not blocking any current work
 
 - **TRMC v2**: license operands by inferred set (any provably-int
@@ -228,9 +255,6 @@ rulings, in dependency order:
   the log.
 - **An `os` package** (Clay): what moves out of `io` — `MkdirAll` was
   the example. A surface question, cheap once the shape is agreed.
-- **Sequencing more than two binds prettily** (Clay's
-  `multiplyTwoRandoms`): today the third bind nests. Wants a form, not
-  a mechanism.
 - **Dot chains route around accessor privacy** (Demeter): a chain can
   reach a field the owning module would not expose directly. Low
   priority, and a real hole in the privacy story.

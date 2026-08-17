@@ -2906,3 +2906,23 @@ That the completion semantics are already in-tree for one container is
 `a_constant_that_names_itself`: the map knot `graph = { "a":(node "a"
 [graph["b"]!]) … }` ties today and prints `b a`. Maps' lazy slots complete;
 records are the laggard gavel 20's build fixes.
+
+## 2026-08-16 — the effect block: do-notation, left to right
+
+Clay asked how Haskell's do block rescues (answer: it doesn't — every
+statement is an expression, catchError applies to whichever expression
+you wrap), then rejected the `<-` convention outright and ruled the
+kanso form: an explicitly-opened block in which `=` uniformly means
+"name the answer" — an effect RHS binds the produced value, a pure RHS
+binds the value itself, identical by left-identity. Zero new syntax
+inside the block; the boundary keyword (candidate `do`) is the one new
+surface and the explicit signal, so the ambient layer's
+bindings-stay-pure-names ruling is untouched. Naming an unrun
+description inside: `d = pure (fetch url)`. Per-line rescue is the
+ordinary pipe, provenance-checked; the block desugars to `.>` chains.
+This closes the multiplyTwoRandoms also-open item (the third bind no
+longer nests). F#'s let! and OCaml's let* are the same fix with more
+sigil; async/await is the same fix with more keyword.
+
+Remaining in the file: 6 (tail-call promise), 16 (block-born as
+dataflow), the block keyword confirmation, the err riders.
