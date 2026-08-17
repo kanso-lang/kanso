@@ -3459,3 +3459,30 @@ The finder's own diagnosis is the method lesson: "I was looking for a
 gap where there was a composition." With this many principles ruled,
 compositions now outnumber gaps — the first question about an apparent
 fork is which OTHER ruling supplies the missing premise.
+
+## 2026-08-17 — gavel 51: one module
+
+Clay ruled the question task #51 had held open since before 2026-08-03
+(mis-closed in the task index as "completed"; the log kept it open, and
+the log won): a module reached by two import paths is ONE module. Its
+identity is its canonical path, never the route an import took;
+every route resolves to the single instance; one emission, one set of
+type identities, one dispatch group per name.
+
+The double emission is therefore a bug, with the three-file proof in
+task #243: main imports shape directly and through mid, the .ll
+carries both shape/describe and mid/shape/describe plus two blank
+types, and cross-module dispatch dies at runtime on a program check
+calls ok. The doubly-qualified diagnostic name stops existing along
+with the second instance it honestly named.
+
+Grounds recorded with the ruling: the dispatch architecture anchors on
+singular type ownership; purity deletes forking's only benefit (no
+mutable module state to isolate); precedent is unanimous (Python, Go,
+Haskell instantiate once; npm's duplicated-package instanceof failures
+are the cautionary tale); qualified rendering already assumes one
+canonical name per type. Blast radius measured before the ruling:
+std/list is the only stdlib module both declaring pub types and being
+re-imported by lib modules (json, sha256) — narrow, under the
+most-used abstraction. Unblocks #241 and is the true cause behind the
+json/encode-of-null symptom. The loader/emission fix is build-lane.
