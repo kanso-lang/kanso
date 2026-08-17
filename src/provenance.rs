@@ -287,7 +287,7 @@ pub fn violations(
     let mut out = Vec::new();
     let mut seen = HashSet::new();
     for (i, decl) in program.fns.iter().enumerate() {
-        if decl.synthetic || decl.file.ends_with("_test.kso") {
+        if decl.synthetic {
             continue;
         }
         let Some(set) = returns.get(i) else { continue };
