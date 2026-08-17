@@ -2963,3 +2963,45 @@ the block's `=` names the answer, dot is application. Door left ajar,
 parked not proposed: an explicit lift MARK (Idris's `!`) is
 shape-predictable because the mark is the shape, and could arrive
 later as pure sugar over bind if chain verbosity bites in practice.
+
+## 2026-08-16 (later) — the decline reopened the same evening: Koka's corner, marked on the rare side
+
+An hour after the trilemma entry, Clay saw Koka's actual spelling —
+`retry { fetch(url) } 3` — and recognized it as what he had been
+reaching for: "i actually think most devs would find that more
+readable." That reframes the trilemma rather than breaking it: Koka's
+corner does not lose first-class effects, it puts them BEHIND A MARK,
+and the real question is which side wears the mark. The morning
+surface marks the common side (every lift spelled); Koka marks the
+rare side (as-value passing quoted, lifting ambient) — and it passes
+shape-predictability because the rule is unconditional: an effect in a
+value position always lifts; a quoted effect is a value. The quote IS
+the shape.
+
+The kanso-native design, drafted for a rested decision:
+
+- The suspension glyph cannot be braces (maps own them). The candidate
+  is `&`, which the nullary gavel already defined as "the thing
+  itself, don't invoke": `retry &(fetch url) 3`. And `&value` IS
+  `pure value` — the suspension mark generalizes return, so nobody
+  writes pure.
+- Elaboration rules: one effect in a strict position inserts bind;
+  independent effects insert the applicative form and run under the
+  adjacency laws (unordered, failures merge); the status propagates
+  outward to the statement layer and the wire runs what arrives.
+- Sharing: a name is a node — `x = fetch url` used thrice is one
+  fetch, three consumers. Execution count readable from naming.
+- The failure channel stays surface: rescue/annotate remain functions
+  on quoted plans; handling is a decision, never an elaboration; the
+  foreign-only license is untouched.
+- Pins still needed: the lambda-capture rule (an effect inside a
+  lambda lifts within the lambda), and the exact grammar of `&expr`.
+
+If sworn, this supersedes the same day's #19 decline, the `.>`
+operator, and the effect block (ordinary code composes by lifting;
+bind/pure sink to elaboration targets, written by the compiler).
+Surviving untouched: the triad's failure half, `>>` and adjacency,
+dot-as-application, the trilemma statement itself (now recording why
+the corner was chosen, if it is). Three reversals rode this axis in
+one day, all pre-build, so nothing but prose moves — but the decision
+is deliberately parked for morning eyes. PENDING CLAY.

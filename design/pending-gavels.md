@@ -236,6 +236,26 @@ for colliding with the lambda arrow.
   semantics. Closes the also-open "sequencing more than two binds
   prettily" item (multiplyTwoRandoms).
 
+## 22. The lifting fork — PENDING (parked overnight 2026-08-16, decide rested)
+
+Which side of the effect surface wears the mark. Two coherent corners,
+one gavel:
+
+- **Morning corner (currently gaveled):** plans are values everywhere;
+  lifting is spelled (`bind`, `.>`, the effect block). Mark on the
+  common side.
+- **Koka corner (evening draft, Clay leaning):** lifting is ambient
+  and unconditional — an effect in a value position always lifts; `&`
+  suspends (and `&value` IS pure). Mark on the rare side. Supersedes
+  `.>`, the effect block, and the #19 decline if sworn; failure triad,
+  `>>`/adjacency, dot-as-application survive. Pins: lambda capture,
+  `&expr` grammar, naming-as-sharing (one node, runs once).
+
+The log's two 2026-08-16 entries carry the full argument (trilemma,
+then its reframe). Also queued behind this: the block keyword (`do`?,
+moot under the Koka corner), gavel 6 (tail-call promise), gavel 16
+(block-born as dataflow).
+
 ## Also open, not blocking any current work
 
 - **TRMC v2**: license operands by inferred set (any provably-int
