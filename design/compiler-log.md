@@ -3092,3 +3092,40 @@ threaded through inference, the arm-based license check (provenance at
 err arms instead of rescue sites), the std restructure
 (number_ok/string_ok/must), and the book's failure chapter rewritten
 around the one sentence. Welfare and the veins gate the cost.
+
+## 2026-08-17 — a knot through two names ties on native
+
+Gavel 20's engine work (#931) left one shape failing on native: two
+constants naming each other segfaulted, where the oracle answered. The
+first thing established was that it was not the branch's doing — the same
+program exits 139 on main. A pre-existing defect that gavel 20 had newly
+made both reachable and required.
+
+The freeze rule asked whether a constant mentions ITSELF. A pair naming
+each other answers no to that question twice, so neither was frozen, and
+each dispatcher recomputed its body: `ring` called `mate` called `ring`
+with no floor. Cycle membership is what the rule meant to ask, and one
+name reaching itself is the degenerate case of it. The predicate now
+walks mentions among zero-arity names and asks whether a name reaches
+itself; `defers_self_reference` reads the same set rather than repeating
+the walk.
+
+Freezing them alone answered 0 rather than 2, which was the more
+interesting half. A knotted constant's cell holds a blackhole while the
+cycle is still building, and the call site was using the register-record
+convention on it — reading the thunk's payload as a record pointer, which
+is where the 0 came from. The emitted cell loader has always been defined
+as returning a value; `ret_ty` disagreed with the definition it was
+describing. It now agrees.
+
+Each half was disabled on its own and the fixture watched red for both,
+one at a time rather than as a batch.
+
+Native and the oracle now agree byte for byte, `<cycle>` render included.
+The browser is the third fixture waiting on the blackhole it does not
+have — with `a_constant_that_holds_itself` and
+`a_guarded_shape_that_is_not_a_knot` — and the count is the argument for
+building it rather than licensing a fourth.
+
+All eight gates byte-identical with the benchmarks rebuilt first, full
+suite green, welfare 84.51 against a floor of 84.51.
