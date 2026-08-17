@@ -3159,3 +3159,63 @@ The correction is worth stating plainly: the gap note said three fixtures
 waited on one mechanism. They did not. One was a bug wearing the gap's
 clothes, and licensing it would have written that mistake down as a
 property of the engine.
+
+## 2026-08-17 — render forces, and a container goes on the path
+
+Gavel 20b's second half (#932). Output demands what it prints, so a cell that
+has not run runs at the render, and the guard from #931 stops the walk.
+
+The ruling states that `a_constant_that_holds_itself` re-pins to `[<cycle>]`.
+Forcing alone gives `[[<cycle>]]`. The cell is the repeating identity, so the
+container prints once on the way in and again through the forced cell; records
+were already on the render path and lists and maps were not. With them on it
+both engines answer the ruling's string, and #931's map fixture re-pins the
+same way, from `{ "a":{ "a":<cycle> } }` to `{ "a":<cycle> }`.
+
+Native needed no handle — `k_force` takes only a value and `k_render` is in
+the same file. The oracle needed one threaded to every output site, and every
+caller had one, including main, repl and wasm where `interp` outlives the err
+printer. That was checked rather than assumed: had it not held, the design
+would have needed a second force point at the boundary.
+
+Three free functions keep a non-forcing render. `whole`, `map_key` and
+`eval_binop` name an operand in a diagnostic and are reached from wasm_rt,
+whose only handle is a thread-local. Their operands arrive forced —
+arithmetic forces what it adds, a map key is forced to be compared — and a
+cell reaching them prints the old word, which is the signal the reasoning is
+wrong. wasm_rt's own err printers DO force, through `with_interp`; the worry
+about nesting a RefCell borrow was unfounded, since nested immutable borrows
+are fine and only a `borrow_mut` would clash.
+
+A fixture covers the trace path rather than print, which is the one that would
+otherwise be forgotten: `err` forces the reason it is given, but forcing
+answers one cell rather than the value's interior, so a reason arrives as a
+forced list holding a pending element.
+
+THE BROWSER IS NOT DONE, and two designs for it are ruled out by measurement
+rather than by opinion. A deep-force walk before rendering cannot work:
+`List(Rc<Vec<Value>>)` and `Map(Rc<BTreeMap<..>>)` have no interior
+mutability, so a walk cannot hand the renderer a list that contains itself —
+records can be tied that way and lists cannot, and `x = [x]` is the failing
+case. Making the deferral a thunk cell AT THE RENDER BOUNDARY was built and
+measured: it compiles, the suite stays green, and the fixture still answers
+`[<fn>]`, because the deferral is inside the list and `rt_template` hands
+render the list. Whatever ties the ring has to be SHARED, and rebuilding never
+shares. What is left is that the cell must exist before the container is
+built, which is a question about a type three engines share.
+
+FOUND ON THE WAY: `k_eq` claimed "every cycle passes through a record", which
+`x = [x]` disproves — that cycle closes through a list and a cell. The comment
+is fixed. What it hid is that two structurally identical infinite lists now
+RENDER identically and still compare unequal, uniformly across both shapes and
+both engines, because equality has no K_THUNK case and does not follow a cell.
+A design question rather than a bug, and it is Clay's.
+
+COUNTERS: both linux veins moved and both were regenerated from the run whose
+head is the commit they pin. Machine code rises everywhere for the container
+path — +80 on five rows, +16 on jsonbench, +112 on escapebench. Instructions
+move BOTH WAYS by tens against billions, +14 on three rows, +38 on basket,
+-18 on three, which is layout around the new code rather than a cost with a
+direction. The siblings absorbed it: kq's four rows FELL by exactly 18, a flat
+per-run offset that refutes the prediction written into its own PR that a
+per-container cost would make them rise.
