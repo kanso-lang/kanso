@@ -463,6 +463,9 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
                 };
                 return ctx.returns[i] | deferred;
             }
+            if std::env::var("KANSO_VALUE_TRACE").is_ok() {
+                eprintln!("AS-VALUE {name}");
+            }
             let arities: Vec<usize> =
                 ctx.program.fns.iter().filter(|d| d.name == name).map(|d| d.params.len()).collect();
             for (i, decl) in ctx.program.fns.iter().enumerate() {
