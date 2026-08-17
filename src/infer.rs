@@ -479,6 +479,13 @@ fn ident_set<'a>(ctx: &mut Ctx<'a>, name: &'a str, env: &mut HashMap<&'a str, Se
 }
 
 fn widen_param(ctx: &mut Ctx<'_>, decl: usize, param: usize, set: Set) {
+    if std::env::var("KANSO_PARAM_TRACE").is_ok() {
+        let d = &ctx.program.fns[decl];
+        if set == 16351 && d.name.starts_with("probe/regexp/") && ctx.params[decl][param] | set != ctx.params[decl][param] {
+            eprintln!("WIDEN {}/{} param {} += {} (was {})",
+                d.name, d.params.len(), param, set, ctx.params[decl][param]);
+        }
+    }
     if ctx.params[decl][param] | set != ctx.params[decl][param] {
         ctx.params[decl][param] |= set;
         ctx.changed = true;
