@@ -437,9 +437,19 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
 
 /// Err origins name the function and the file it lives in; the file is
 /// per-declaration so it survives multi-file module merging.
+/// GAVEL 51, Clay 2026-08-17: "one module". `file` is what an err origin
+/// prints, so it keeps the spelling the reader typed; `canon` is what says
+/// whether two declarations are the same one, which the display path cannot,
+/// because two routes to one module spell it differently. An embedded module
+/// has no filesystem path to canonicalise and keeps its import path, which is
+/// already the same by every route.
 fn stamp_file(program: &mut ast::Program, file: &str) {
+    let canon = std::fs::canonicalize(file)
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| file.to_string());
     for decl in &mut program.fns {
         decl.file = file.to_string();
+        decl.canon = canon.clone();
     }
 }
 
@@ -589,6 +599,7 @@ fn synthesize_getters(program: &mut ast::Program) {
                     *span,
                 ))],
                 file: String::new(),
+                canon: String::new(),
                 synthetic: false,
             });
         }
@@ -1615,8 +1626,16 @@ fn qualify(
                 false => format!("{qual}/{}", f.name),
             };
             let taken = exports.get(&key).copied();
+            // GAVEL 51: the two-claims rule is about THIS module declaring a
+            // name one of its imports also exports. An already-qualified name
+            // is not this module's declaration — it is a dependency arriving,
+            // and a diamond makes it arrive twice under the identical
+            // spelling. Reading the second arrival as a rival claim turned
+            // `shape/describe` into an opacity refusal on the very program
+            // the ruling exists to make work.
+            let own_claim = !f.name.contains('/');
             match (taken, f.synthetic) {
-                (Some(false), false) if f.is_pub => {
+                (Some(false), false) if f.is_pub && own_claim => {
                     shadowed.insert(key.clone());
                 }
                 (Some(_), _) => {}
@@ -2027,10 +2046,12 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
 /// copies carry the same canonical name and the same source position — so
 /// they are one declaration, and the second is dropped.
 ///
-/// The key deliberately excludes `file`. That field is the display path an
-/// err origin prints, and the two routes spell it differently
-/// (`mid/../shape/shape.kso` against `shape/shape.kso`) — normalising it to
-/// make the keys agree would put a temporary directory in front of a user.
+/// The key uses `canon`, never `file`. `file` is the display path an err
+/// origin prints and the two routes spell it differently; `canon` is the same
+/// file by either route. Leaving the source out of the key altogether was
+/// tried and is UNSOUND: tests/golden/reexports/torn holds two modules that
+/// each declare `strength` on line 1 of their own file, and dropping one as a
+/// duplicate of the other turned a torn-call refusal into an answer.
 ///
 /// It includes `synthetic`, because a bare-enrollment clone carries the span
 /// of the declaration it was cloned from: dropping one as a duplicate of its
@@ -2038,7 +2059,14 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
 fn collapse_diamonds(program: &mut ast::Program) {
     let mut fns = std::collections::HashSet::new();
     program.fns.retain(|f| {
-        fns.insert((f.name.clone(), f.params.len(), f.span.line, f.span.col, f.synthetic))
+        fns.insert((
+            f.canon.clone(),
+            f.name.clone(),
+            f.params.len(),
+            f.span.line,
+            f.span.col,
+            f.synthetic,
+        ))
     });
     let mut types = std::collections::HashSet::new();
     program.types.retain(|t| types.insert((t.name.clone(), t.span.line, t.span.col)));
