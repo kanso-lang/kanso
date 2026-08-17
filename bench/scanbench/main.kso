@@ -1,0 +1,4 @@
+import "scanbench"
+import "std/io"
+
+total 1000 . (t -> io/write "{t}\n")

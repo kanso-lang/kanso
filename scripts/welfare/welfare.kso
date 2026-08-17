@@ -111,9 +111,18 @@ encode_memory = ["encode_peak_bytes" "encode_arena_blocks"]
 
 held_memory = ["oneshot_peak_bytes" "basket_peak_bytes"]
 
+# The only row bounded by the INPUT rather than by the program text. Every
+# other memory counter here measures a working set a change can shrink by a
+# constant; this one measures whether a scan gives its arena back per
+# position, which is a different question and the only one that gets worse as
+# a user's document gets longer.
+scan_memory = ["scan_arena_blocks" "scan_peak_bytes"]
+
 codec_memory = text/concat decode_memory encode_memory
 
-run_memory_counters = text/concat codec_memory held_memory
+held_and_scan = text/concat held_memory scan_memory
+
+run_memory_counters = text/concat codec_memory held_and_scan
 
 compile_speed_counters = ["front_end_rounds" "front_end_visits" "emitted_lines"]
 
@@ -197,7 +206,7 @@ fn compile_totals text
 fn peak_of m
   m["arena_peak_bytes"]! + m["held_peak_bytes"]! + m["perm_peak_bytes"]!
 
-fn measured decode encode oneshot basket comp held work
+fn measured decode encode oneshot basket comp held work scan
   d = [["decode_allocs" decode["allocs"]!]]
   db = [["decode_arena_blocks" decode["arena_blocks"]!]]
   dp = [["decode_peak_bytes" (peak_of decode)]]
@@ -211,8 +220,11 @@ fn measured decode encode oneshot basket comp held work
   v = [["front_end_visits" held["front_end_visits"]!]]
   l = [["emitted_lines" comp["lines"]!]]
   cm = [["compile_peak_bytes" held["compile_peak_bytes"]!]]
+  sb = [["scan_arena_blocks" scan["arena_blocks"]!]]
+  sp = [["scan_peak_bytes" (peak_of scan)]]
   ins = worked work
-  gathered d db dp e eb ep o b bp c v (text/concat (text/concat l cm) ins)
+  rows = text/concat (text/concat l cm) (text/concat sb sp)
+  gathered d db dp e eb ep o b bp c v (text/concat rows ins)
 
 fn worked work
   di = [["decode_instructions" work["jsonbench"]!]]
@@ -343,13 +355,14 @@ fn filled s width false
 fn asked path
   io/read_file path
 
-fn gauge d e o b c held w
+fn gauge d e o b c held w s
   comp = compile_totals c
   cm = counters held
   work = work_of w
   dc = counters d
   ec = counters e
-  now = measured dc ec (counters o) (counters b) comp cm work
+  scan = counters s
+  now = measured dc ec (counters o) (counters b) comp cm work scan
   io/read_file floor_path . (held -> against now (json/decode held))
 
 # A term new to the model enters where its dimension already stands, so its
@@ -605,6 +618,9 @@ fn with_compile d e o b c
   asked "bench/compile_memory_golden.txt" . (held -> with_held d e o b c held)
 
 fn with_held d e o b c held
-  asked "bench/instructions_golden.txt" . (w -> gauge d e o b c held w)
+  asked "bench/instructions_golden.txt" . (w -> with_work d e o b c held w)
+
+fn with_work d e o b c held w
+  asked "bench/cost_golden_scan.txt" . (s -> gauge d e o b c held w s)
 
 pub play = asked "bench/cost_golden.txt" . (d -> with_decode d)

@@ -1,0 +1,42 @@
+import "std/regexp"
+import "std/text"
+
+# A scan whose PEAK grows with the subject, which no other benchmark has.
+# escapebench measures storage the arena never held; this measures storage the
+# arena holds and never rewinds. From outside the process the two look the
+# same, and inside they have nothing in common.
+#
+# The shape is prose_check's, which is the real workload behind it: walk a
+# subject once, matching at every position, keeping nothing. Peak should be
+# flat in the subject length, because a position that matched nothing has no
+# result to hold. It is not flat. regexp's walk passes its position index
+# through a continuation that is both called and captured, inference cannot
+# say who calls that continuation, so the index is seeded at TOP, TOP carries
+# the BYTES bit, and the beat guard refuses to rewind a cluster whose
+# parameter might be bytes. Nothing sweeps per position, and every position's
+# scratch survives to the end.
+#
+# The pattern retains nothing on purpose. A pattern that matched would make
+# peak grow for an honest reason — the matches are real data — and the row
+# would then move whenever the generator changed rather than when the compiler
+# did. `zzq` never appears in the alphabet the subject is built from.
+pattern = "[a-z]+zzq"
+
+alphabet = "abcdefghijklm"
+
+# Doubling, so building an n-byte subject costs a logarithmic number of
+# allocations and about 2n bytes at peak. A per-character loop would hold n
+# pieces at once and put an honest O(n) term in the row this benchmark exists
+# to keep free of them.
+fn doubled s n
+  wider s n (length s < n)
+
+fn wider s _ false
+  s
+
+fn wider s n true
+  doubled (text/join [s s] "") n
+
+pub fn total n
+  subject = text/slice (doubled alphabet n) 1 n
+  length (regexp/find_all pattern subject)
