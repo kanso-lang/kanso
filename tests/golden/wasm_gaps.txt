@@ -33,7 +33,6 @@ tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
 # answer it and says `<fn>`. Both are honest about having no value yet; they
 # do not use the same word for it. Closing this means teaching the renderer to
 # ask a deferral what it is, which reaches into the interpreter's own render.
-tests/golden/micro/a_constant_that_holds_itself.kso	<fn>
 
 # Two constants naming each other. All three engines tie the knot and agree
 # on the values it holds — `2 1` here. They part on how a deferral RENDERS:
@@ -43,13 +42,11 @@ tests/golden/micro/a_constant_that_holds_itself.kso	<fn>
 # The same difference as a_constant_that_holds_itself above, and it closes
 # with gavel 20b's render-forcing rather than with a blackhole: the browser
 # has a deferral here, it just prints the wrapper instead of asking it.
-tests/golden/micro/a_knot_through_two_names.kso	2 1 a_knot_through_two_names/node 2 <fn>
 
 # A constant naming itself as a MAP value. The knot ties here now — every
 # mention reaches one cell, so the map builds once and holds itself — and what
 # is left is the same render difference as the entries above: the browser
 # prints the closure that would answer the value rather than asking it.
-tests/golden/micro/a_knot_through_a_map_value.kso	{ "a":<fn> }
 
 # An err whose reason holds a cell nobody demanded. Native and the oracle now
 # FORCE what they print, so the trace shows the ring and stops at `<cycle>`;
@@ -59,4 +56,3 @@ tests/golden/micro/a_knot_through_a_map_value.kso	{ "a":<fn> }
 # the trace rather than through print — which is the point of this fixture.
 # It closes when the browser's render forces, the work tracked beside the
 # blackhole.
-tests/golden/runtime/a_knot_inside_an_err_reason.kso	[<fn>]
