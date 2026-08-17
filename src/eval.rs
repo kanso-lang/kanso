@@ -2452,7 +2452,10 @@ impl<'a> Interp<'a> {
                     Value::Int(n) => Ok(Value::Float(int_f(&n).sqrt())),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
-                        message: format!("sqrt takes a number, got {}", render(self, &other, false)),
+                        message: format!(
+                            "sqrt takes a number, got {}",
+                            render(self, &other, false)
+                        ),
                         span,
                     }),
                 }
@@ -2464,7 +2467,10 @@ impl<'a> Interp<'a> {
                     Value::Float(v) => Ok(Value::Int(BigInt::from(v.round() as i64))),
                     other if is_failure(&other) => Ok(other),
                     other => Err(RuntimeError {
-                        message: format!("round takes a number, got {}", render(self, &other, false)),
+                        message: format!(
+                            "round takes a number, got {}",
+                            render(self, &other, false)
+                        ),
                         span,
                     }),
                 }
@@ -2646,7 +2652,10 @@ impl<'a> Interp<'a> {
             Value::False => self.force(else_branch),
             bad if is_failure(&bad) => Ok(bad),
             other => Err(RuntimeError {
-                message: format!("an if condition is true or false, got {}", render(self, &other, false)),
+                message: format!(
+                    "an if condition is true or false, got {}",
+                    render(self, &other, false)
+                ),
                 span,
             }),
         }
@@ -3509,9 +3518,7 @@ fn render_seen(
                     Err(_) => "<thunk>".to_string(),
                 },
                 None => match &*cell.borrow() {
-                    ThunkState::Forced(value) => {
-                        render_seen(interp, value, quote_strings, seen)
-                    }
+                    ThunkState::Forced(value) => render_seen(interp, value, quote_strings, seen),
                     _ => "<thunk>".to_string(),
                 },
             };
