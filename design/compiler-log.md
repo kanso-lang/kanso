@@ -3320,3 +3320,31 @@ thinks to cover, which is why it was written.
 
 COUNTERS: unmoved. `deferral_value` runs only where render reaches a function
 value, and every cost golden passed untouched, so no sibling pin needs a bump.
+
+## 2026-08-17 — mutual knots confirmed, and the test rider closes itself
+
+Two closures from one exchange with Clay.
+
+Mutual knots: confirmed in scope for gavel 20 — "yes we agreed on
+ring = node 1 mate... i thought we went over it very clearly." The
+other session re-pins a_knot_through_two_names_is_refused_like_a_knot
+_through_one to answer 2, and the native SIGSEGV on the mutual pair is
+an ordinary bug. The recorded gavel had spelled only the one-name
+example; the principle (guardedness, not cycle arity) and the
+a_constant_that_names_itself precedent decided it, and Clay ratified.
+
+The test surface: Clay dissolved the rider with one observation — the
+assert function belongs to another hako, so it can rescue the test
+file's err legitimately: the raiser is foreign to it. Assertions are
+ordinary foreign rescue under the rules as gaveled; the *_test.kso
+exemption retires; no toolchain assertion surface is needed. And the
+generalization (any hako round-tripping its own err through a foreign
+converter) gets NO advisory: "there's nothing wrong because you
+genuinely didn't rescue your own error in the direct sense. you
+ensured it would bubble up to the caller, and it did. if the caller
+wants to pass it back to you, so be it." The doctrine constrains your
+arms, not downstream dataflow. The advisory's exemption code retires
+with the exemption.
+
+Riders remaining: construction enforcement, ch08 pedagogy, the small
+July spellings, and the also-open list.
