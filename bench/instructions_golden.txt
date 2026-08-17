@@ -54,12 +54,12 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2913614187
-encodebench 9725270999
-oneshot 49321997
-basket 57564369
-widebench 88147523
-deepbench 833453387
+jsonbench 2860479957
+encodebench 9724874773
+oneshot 46591231
+basket 57404129
+widebench 85554129
+deepbench 833453153
 escapebench 258541119
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
@@ -198,3 +198,15 @@ escapebench 258541119
 # Both veins here are read from the runner whose head is 7faae0f5. The commit
 # they pin adds a test file's call site and rustfmt's preferred spacing in two
 # source files — neither reaches emitted code, so the numbers hold.
+# 2026-08-17 (last): oneshot -2,730,766 (5.54%), widebench -2,593,394
+# (2.94%), jsonbench -53,134,230 (1.82%), basket -160,240 (0.28%), encodebench
+# -396,226 (0.0041%), deepbench -234, escapebench unmoved. A module reached by
+# two import paths is one module, and a dependency of a dependency stops
+# carrying the entry module's prefix in its name. escapebench imports nothing
+# twice and is the row that holds.
+#
+# No allocation counter moves at all, so this is the same work with less of it
+# — but by what mechanism is open. The candidate is dispatch, which compares
+# type names, and the names got ten characters shorter; nothing here measured
+# that, and the emitted IR on the measuring host is otherwise identical to
+# main's. Stated as a candidate rather than a finding.

@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=80114
-encodebench text=97698
-oneshot text=97378
-basket text=89714
-widebench text=98962
+jsonbench text=77794
+encodebench text=95522
+oneshot text=95026
+basket text=87554
+widebench text=96610
 deepbench text=61426
 escapebench text=48482
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
@@ -148,3 +148,19 @@ escapebench text=48482
 # the pop, linked into every program because every program links the
 # renderer. jsonbench moves least because it renders no container the guard
 # has to walk twice.
+# 2026-08-17 (last): five rows fall — jsonbench -2,320, encodebench -2,176,
+# oneshot -2,352, basket -2,160, widebench -2,352. deepbench and escapebench
+# hold. A module reached by two import paths is one module now, and what that
+# changes in the emitted code is the name: a dependency of a dependency stops
+# compounding the entry module's prefix, so `jsonbench/list/bounded` is
+# `list/bounded`. escapebench is the one entry whose inner module imports
+# nothing, and it is the row that does not move by any measure.
+#
+# The mechanism behind the SIZE of these falls is not established. On the
+# measuring host the emitted IR for jsonbench is identical to main's but for
+# the shortened name constants and one dropped declare, and those constants
+# are .rodata, which this gate does not read. Their sizes do not track the
+# falls either: deepbench sheds 4,508 bytes of them and does not move here,
+# where basket sheds 1,519 and falls 2,160. So the direction is measured and
+# the cause is open, recorded that way rather than guessed — the last entry
+# in this file to guess had to be retracted.
