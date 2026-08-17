@@ -58,10 +58,17 @@ around it.
 - **Construction enforcement** (reason building module-private): no
   longer needed for soundness since provenance is computed, still stated
   by the doctrine, still unenforced.
-- **The test surface**: a package cannot produce a value about its own
-  failure, and an assertion is a value. Either the `*_test.kso`
-  file-scope exemption (shipped, crude) or a toolchain assertion surface
-  (cleaner, wants shaping — design/testing.md).
+- **The test surface — RESOLVED 2026-08-17 (Clay's foreign-assert
+  insight).** Assertions are ordinary foreign rescue: the assert hako's
+  arms receive the test file's err legitimately (the raiser is foreign
+  to them), convert it to a report, done — no exemption, no toolchain
+  surface, no new mechanism. The `*_test.kso` file-scope exemption
+  RETIRES. And no advisory on the general round-trip (a hako passing
+  its own err to a foreign converter and receiving a value back):
+  nothing was rescued in the direct sense — "you ensured it would
+  bubble up to the caller, and it did. if the caller wants to pass it
+  back to you, so be it." The rule constrains your arms, not
+  downstream dataflow.
 - **ch08 pedagogy**: positions.kso dispatches on its own parse_failure —
   unfixable within one program since local modules share a universe. The
   chapter restructures around std/json as the foreign library, or the
