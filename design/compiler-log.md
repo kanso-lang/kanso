@@ -2926,3 +2926,40 @@ sigil; async/await is the same fix with more keyword.
 
 Remaining in the file: 6 (tail-call promise), 16 (block-born as
 dataflow), the block keyword confirmation, the err riders.
+
+## 2026-08-16 — ambient lifting explored to bedrock, and declined
+
+The effect block's gavel immediately raised its natural successor:
+make lifting ambient — `my_effect * 3` elaborating to bind, "return
+automatic via effect tracking" (Clay). The exploration went three
+rounds and ended at a trilemma worth recording so the idea stays
+declined.
+
+Round one: I objected on laziness grounds (direct-style effects need
+evaluation order) and was wrong — Clay's proposal builds plans, it
+does not run them; fmap-elaboration composes descriptions and touches
+nothing about demand. Conceded.
+
+Round two: I objected that forgot-to-bind goes silent and was wrong
+again — unused values are compile errors, so a dropped plan cannot
+exist, and walls own ordering, so "ran later than intended" is not a
+bug class. Both structural facts stand.
+
+Round three found the bedrock: how does a function receive the effect
+AS A VALUE (`retry (fetch url) 3`)? The dispatch-fallback answer —
+value-match outranks lift, lift only when arms match the product type
+— is sound but not SHAPE-PREDICTABLE: the call's meaning depends on
+the callee's arms, invisible at the call site. Clay: "i don't like
+doing it conditionally. it should be predictable just looking at the
+shape." The trilemma: ambient lifting, first-class effect values,
+shape-predictable meaning — pick two. Koka picks the first and third
+(its brace-quoting `retry { fetch(url) } 3` reintroduces the mark at
+the pass-site, confirming the impasse rather than solving it).
+Haskell and kanso pick the second and third.
+
+DECLINED: ambient lifting, on the trilemma. The morning's gavels
+stand un-superseded: plans are values everywhere, `.>` is the chain,
+the block's `=` names the answer, dot is application. Door left ajar,
+parked not proposed: an explicit lift MARK (Idris's `!`) is
+shape-predictable because the mark is the shape, and could arrive
+later as pure sugar over bind if chain verbosity bites in practice.
