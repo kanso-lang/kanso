@@ -3219,3 +3219,69 @@ move BOTH WAYS by tens against billions, +14 on three rows, +38 on basket,
 direction. The siblings absorbed it: kq's four rows FELL by exactly 18, a flat
 per-run offset that refutes the prediction written into its own PR that a
 per-container cost would make them rise.
+
+## The browser reaches a knotted constant through one cell (#934)
+
+The browser was the one engine with no constant cache. A constant reference
+compiled to a direct call of its dispatcher, so every mention of a name re-ran
+its body, and in `x = [x]` the deferral placed in list elements and
+constructor slots was the only thing between the program and unbounded
+re-entry. That is why five earlier attempts to give the deferral identity or
+to force it all regressed: each removed the only floor an engine with no cache
+had. The cache is what the other two engines already have — native seeds a CAF
+cell in `k_caf_init` and freezes it with `k_caf_complete`, the oracle keeps a
+thunk cell — and `forced` already implemented the rest of the protocol,
+DEFERRED to RUNNING to the value written back, so stable identity was the only
+missing piece.
+
+A wasm module has no start section, so the cell cannot be pre-seeded the way
+`k_caf_init` does it. It is minted on the first mention and memoised by table
+index from there, and seeding before computing is what ties the knot. Which
+call site gets the cell and which gets the value is read off `ctx.group`, the
+constant a body computes: a mention from inside the cycle wants the cell, one
+from outside wants the value the cell settled on.
+
+TWO BUGS, AND THE FIRST WAS MINE. The constant's own dispatcher index went
+into the table first. Table entries are the 2-param `(env, args)` wrappers
+`fn_wrapper` builds, and a nullary dispatcher is a 0-param function, so every
+demand ran out of stack. The tell was that three successive revisions of the
+FORCING rule did not move the failure at all — a signature mismatch and a
+runaway recursion are the same symptom here, so a stack overflow that ignores
+changes to the rule is a question about the calling convention.
+
+The second was latent. `forced` handed the closure back unchanged once the
+slot was no longer a closure, so a deferral demanded twice answered a function
+value the second time. Nothing could reach it before: every mention re-ran the
+constant's body, so each mention built its own elements and no deferral was
+ever forced twice. Sharing one cell is what makes the second demand arrive,
+which is the shape of a whole class — a cache does not only make things
+faster, it makes second demands reachable that never were.
+
+TWO GAPS MOVED. `a_knot_through_a_map_value` stops running out of stack and
+answers its map, restated rather than closed, because the browser still prints
+the closure that would answer a field instead of asking it.
+`a_guarded_shape_that_is_not_a_knot` CLOSES: the browser reaches the blackhole
+now, and converging its wording on "a lazy binding demands its own value"
+leaves 292 agreeing and 0 disagreeing. That one was invisible to `cargo test`,
+because the program sits on the harness's `outruns_the_runners_stack` list and
+only the browser differential runs it — the embedded harness and the tab
+disagreeing about a program they share is worth more attention than either
+being green.
+
+WHAT IS LEFT is the render half of gavel 20b for the browser. All four
+remaining gaps are now the same single difference rather than three different
+failures including two crashes: `Value::TableFn` renders as `<fn>`, and
+resolving one means asking wasm_rt what the handle holds. The resolver hook
+tried earlier was structurally right and failed only because identity was
+unstable, which it no longer is.
+
+COUNTERS: unmoved. The change is confined to the browser backend and its
+runtime; every cost golden passed untouched, and no sibling pin needs a bump.
+
+OPEN, from Copilot's review: `forced` records its answer with `val`, which
+dies on a `Slot::Seq` or `Slot::Bind`, so a knotted constant that computes a
+description could abort. Sound on the types and not reproduced — the unguarded
+form is refused at compile time ("defined in terms of itself"), and the
+guarded forms `d = print "x" >> use (box d)` and `d = print "x" >> tail [d]`
+both run correctly. Recorded rather than closed, because four shapes failing
+to reproduce is not a proof that none can.
