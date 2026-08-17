@@ -3129,3 +3129,33 @@ building it rather than licensing a fourth.
 
 All eight gates byte-identical with the benchmarks rebuilt first, full
 suite green, welfare 84.51 against a floor of 84.51.
+
+## 2026-08-17 — the browser was making the same mistake
+
+The two-name knot was licensed as a wasm gap on the reasoning that the
+browser has no blackhole to seed. Building it showed that reasoning was
+wrong, and the gap was the wrong shape.
+
+`defers_self` in the wasm backend asked exactly the question native's
+freeze rule asked: does this element name the constant being built. For
+`ring = node 1 mate` the answer is no, so nothing waited and the browser
+followed the ring until the stack ended it. Two engines, two emitters,
+one confusion between self-mention and cycle membership — the second
+found within the hour of fixing the first, and only because a fixture
+existed to carry it across all three.
+
+Both now ask which knot the group belongs to, from one shared predicate.
+A program with no cycle takes the old path exactly, so the emitted code
+for everything else is unchanged; all eight gates are byte-identical.
+
+What remains is smaller and better understood than "the browser needs a
+blackhole". The browser answers the same values the other two answer and
+parts only on rendering a deferral: `<fn>` where they print the record
+behind it. That is gavel 20b's render-forcing, and it now closes TWO of
+the three gap entries. Only a_constant_that_names_itself_is_demanded
+still wants the blackhole keyed by name — one fixture, not three.
+
+The correction is worth stating plainly: the gap note said three fixtures
+waited on one mechanism. They did not. One was a bug wearing the gap's
+clothes, and licensing it would have written that mistake down as a
+property of the engine.
