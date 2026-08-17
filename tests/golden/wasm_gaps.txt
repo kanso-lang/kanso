@@ -47,3 +47,14 @@ tests/golden/micro/a_constant_that_holds_itself.kso	<fn>
 # semantic difference above, and closing it means giving the browser the
 # blackhole the interpreter keys by name.
 tests/golden/runtime/a_constant_that_names_itself_is_demanded.kso	`+` is not defined
+
+# The guarded shape that cannot be tied: `x = (cell x).v`. Native and the
+# oracle refuse with "a lazy binding demands its own value" — the demand for x
+# arrives while x's right-hand side is running, from a cell that has produced
+# nothing. The browser has no blackhole to reach, so it follows the deferral
+# round and round until the stack ends the program.
+#
+# Both engines say the program is wrong. Only one says why. This closes with
+# the same work as the entry above: give the browser the blackhole the
+# interpreter keys by name.
+tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso	the program ran out of stack: recursion went deeper than the stack holds
