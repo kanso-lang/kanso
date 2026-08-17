@@ -566,6 +566,16 @@ fn eligible_clusters(
             let names: Vec<String> = scc.iter().map(|&g| format!("{}/{}", groups[g].0, groups[g].1)).collect();
             eprintln!("CLUSTER {:?} entries={} head={:?}", names, entries.len(),
                 rewind_head(&members, &edges).map(|h| groups[h].0.clone()));
+            for (from, to) in &entries {
+                eprintln!("    ENTRY {}/{} -> {}/{}", groups[*from].0, groups[*from].1,
+                    groups[*to].0, groups[*to].1);
+            }
+            for &g in &scc {
+                let sets: Vec<String> = (0..groups[g].1)
+                    .map(|i| group_param_set(program, inference, &groups[g].0, groups[g].1, i).to_string())
+                    .collect();
+                eprintln!("    SLOTS {}/{} = {:?}", groups[g].0, groups[g].1, sets);
+            }
         }
         let whole =
             cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges, None);
