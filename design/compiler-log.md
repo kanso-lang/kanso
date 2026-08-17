@@ -2906,3 +2906,102 @@ That the completion semantics are already in-tree for one container is
 `a_constant_that_names_itself`: the map knot `graph = { "a":(node "a"
 [graph["b"]!]) … }` ties today and prints `b a`. Maps' lazy slots complete;
 records are the laggard gavel 20's build fixes.
+
+## 2026-08-16 — the effect block: do-notation, left to right
+
+Clay asked how Haskell's do block rescues (answer: it doesn't — every
+statement is an expression, catchError applies to whichever expression
+you wrap), then rejected the `<-` convention outright and ruled the
+kanso form: an explicitly-opened block in which `=` uniformly means
+"name the answer" — an effect RHS binds the produced value, a pure RHS
+binds the value itself, identical by left-identity. Zero new syntax
+inside the block; the boundary keyword (candidate `do`) is the one new
+surface and the explicit signal, so the ambient layer's
+bindings-stay-pure-names ruling is untouched. Naming an unrun
+description inside: `d = pure (fetch url)`. Per-line rescue is the
+ordinary pipe, provenance-checked; the block desugars to `.>` chains.
+This closes the multiplyTwoRandoms also-open item (the third bind no
+longer nests). F#'s let! and OCaml's let* are the same fix with more
+sigil; async/await is the same fix with more keyword.
+
+Remaining in the file: 6 (tail-call promise), 16 (block-born as
+dataflow), the block keyword confirmation, the err riders.
+
+## 2026-08-16 — ambient lifting explored to bedrock, and declined
+
+The effect block's gavel immediately raised its natural successor:
+make lifting ambient — `my_effect * 3` elaborating to bind, "return
+automatic via effect tracking" (Clay). The exploration went three
+rounds and ended at a trilemma worth recording so the idea stays
+declined.
+
+Round one: I objected on laziness grounds (direct-style effects need
+evaluation order) and was wrong — Clay's proposal builds plans, it
+does not run them; fmap-elaboration composes descriptions and touches
+nothing about demand. Conceded.
+
+Round two: I objected that forgot-to-bind goes silent and was wrong
+again — unused values are compile errors, so a dropped plan cannot
+exist, and walls own ordering, so "ran later than intended" is not a
+bug class. Both structural facts stand.
+
+Round three found the bedrock: how does a function receive the effect
+AS A VALUE (`retry (fetch url) 3`)? The dispatch-fallback answer —
+value-match outranks lift, lift only when arms match the product type
+— is sound but not SHAPE-PREDICTABLE: the call's meaning depends on
+the callee's arms, invisible at the call site. Clay: "i don't like
+doing it conditionally. it should be predictable just looking at the
+shape." The trilemma: ambient lifting, first-class effect values,
+shape-predictable meaning — pick two. Koka picks the first and third
+(its brace-quoting `retry { fetch(url) } 3` reintroduces the mark at
+the pass-site, confirming the impasse rather than solving it).
+Haskell and kanso pick the second and third.
+
+DECLINED: ambient lifting, on the trilemma. The morning's gavels
+stand un-superseded: plans are values everywhere, `.>` is the chain,
+the block's `=` names the answer, dot is application. Door left ajar,
+parked not proposed: an explicit lift MARK (Idris's `!`) is
+shape-predictable because the mark is the shape, and could arrive
+later as pure sugar over bind if chain verbosity bites in practice.
+
+## 2026-08-16 (later) — the decline reopened the same evening: Koka's corner, marked on the rare side
+
+An hour after the trilemma entry, Clay saw Koka's actual spelling —
+`retry { fetch(url) } 3` — and recognized it as what he had been
+reaching for: "i actually think most devs would find that more
+readable." That reframes the trilemma rather than breaking it: Koka's
+corner does not lose first-class effects, it puts them BEHIND A MARK,
+and the real question is which side wears the mark. The morning
+surface marks the common side (every lift spelled); Koka marks the
+rare side (as-value passing quoted, lifting ambient) — and it passes
+shape-predictability because the rule is unconditional: an effect in a
+value position always lifts; a quoted effect is a value. The quote IS
+the shape.
+
+The kanso-native design, drafted for a rested decision:
+
+- The suspension glyph cannot be braces (maps own them). The candidate
+  is `&`, which the nullary gavel already defined as "the thing
+  itself, don't invoke": `retry &(fetch url) 3`. And `&value` IS
+  `pure value` — the suspension mark generalizes return, so nobody
+  writes pure.
+- Elaboration rules: one effect in a strict position inserts bind;
+  independent effects insert the applicative form and run under the
+  adjacency laws (unordered, failures merge); the status propagates
+  outward to the statement layer and the wire runs what arrives.
+- Sharing: a name is a node — `x = fetch url` used thrice is one
+  fetch, three consumers. Execution count readable from naming.
+- The failure channel stays surface: rescue/annotate remain functions
+  on quoted plans; handling is a decision, never an elaboration; the
+  foreign-only license is untouched.
+- Pins still needed: the lambda-capture rule (an effect inside a
+  lambda lifts within the lambda), and the exact grammar of `&expr`.
+
+If sworn, this supersedes the same day's #19 decline, the `.>`
+operator, and the effect block (ordinary code composes by lifting;
+bind/pure sink to elaboration targets, written by the compiler).
+Surviving untouched: the triad's failure half, `>>` and adjacency,
+dot-as-application, the trilemma statement itself (now recording why
+the corner was chosen, if it is). Three reversals rode this axis in
+one day, all pre-build, so nothing but prose moves — but the decision
+is deliberately parked for morning eyes. PENDING CLAY.
