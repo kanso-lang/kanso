@@ -3245,7 +3245,7 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
 }
 
 #define K_RENDER_PATH_MAX 4096
-static const KRec* k_render_path[K_RENDER_PATH_MAX];
+static const void* k_render_path[K_RENDER_PATH_MAX];
 static int k_render_depth = 0;
 
 /* Which values can reach a user's `render/to_string` arm. A compiled call
@@ -3266,7 +3266,13 @@ KValue k_render(KValue v, long long quote) {
        cell that reaches here unforced is a missed force point either way. */
     if (v.tag == K_THUNK) {
         KThunk* cell = (KThunk*)(intptr_t)v.payload;
-        return cell->forced ? k_render(cell->result, quote) : k_str("<thunk>");
+        if (!cell->forced) return k_str("<thunk>");
+        for (int d = 0; d < k_render_depth; d++)
+            if (k_render_path[d] == cell) return k_str("<cycle>");
+        if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
+        KValue out = k_render(cell->result, quote);
+        if (k_render_depth > 0) k_render_depth--;
+        return out;
     }
     char buf[64];
     switch (v.tag) {

@@ -3476,12 +3476,23 @@ fn render_seen(
     match value {
         // a subtype renders as its base until a user arm claims it
         Value::Sub { inner, .. } => render_seen(inner, quote_strings, seen),
-        Value::Thunk(cell) => match &*cell.borrow() {
-            ThunkState::Forced(v) => render_seen(v, quote_strings, seen),
-            // A pending thunk reaching render is a missed force point; make
-            // it loud so the differential corpus catches it.
-            _ => "<thunk>".to_string(),
-        },
+        // A forced cell shows what it holds, and a cell already on the path
+        // holds the walk that is reading it — the knot a constructor tied
+        // closes here rather than through a record.
+        Value::Thunk(cell) => {
+            let key = Rc::as_ptr(cell) as usize;
+            if !seen.insert(key) {
+                return "<cycle>".to_string();
+            }
+            let rendered = match &*cell.borrow() {
+                ThunkState::Forced(v) => render_seen(v, quote_strings, seen),
+                // A pending thunk reaching render is a missed force point;
+                // make it loud so the differential corpus catches it.
+                _ => "<thunk>".to_string(),
+            };
+            seen.remove(&key);
+            rendered
+        }
         Value::Int(n) => n.to_string(),
         Value::Float(x) => render_float(*x),
         Value::Map(entries) => match entries.is_empty() {
