@@ -3348,3 +3348,46 @@ with the exemption.
 
 Riders remaining: construction enforcement, ch08 pedagogy, the small
 July spellings, and the also-open list.
+
+## The test-file exemption retires, and it was hiding one function (#939)
+
+Clay ruled the test surface on 2026-08-17: assertions are ordinary foreign
+rescue. The assert hako's arms receive the test file's err legitimately,
+because the raiser is foreign to them, so nothing needs excusing and the
+`*_test.kso` file-scope exemption in the err-license advisory has no work
+left. #938 recorded that in the log and in pending-gavels and changed no
+code; this is the code half, one line of `violations()` in provenance.rs.
+
+WHAT IT WAS HIDING, and the number is the whole argument. lib/json reported
+two advisories before the change and three after:
+
+    before   failure_position, failure_reason
+    after    failure_position, failure_reason, defect?
+
+The first two live in json.kso, were never exempt, and were already firing —
+worth stating because the obvious reading of a three-line diagnostic after a
+one-line diff is that the diff caused all three. Checking the baseline first
+is what separates them. So the exemption covered exactly one function across
+twelve `*_test.kso` files: `defect?` in json_test.kso, a test file's own arm
+rescuing an err its own program raised.
+
+That is a true positive rather than a gap. Widening the rule to cover "a test
+file's own helpers" would rebuild the file-scope exemption in narrower
+clothes, which is the thing that just retired. The direction is fix-the-test.
+
+WHAT THE FIX WAITS ON. `defect?` is the third instance of an idiom json ships
+publicly — `failure_position` and `failure_reason` make the same move, an arm
+destructuring an err its own program raised to answer a plain value. Those two
+are retired by gavel 1b, which is ruled, so the projection API is dead weight
+by ruling rather than by opinion. What is genuinely open is the ch08 leg: the
+chapter either restructures around std/json as the foreign library or narrows
+its failure story to the package boundary, and the suite plus
+examples/json_failure_door.kso move with whichever shape wins.
+
+A TRAP WORTH THE SENTENCE. Reading pending-gavels alone, 1b looks unruled: the
+file says "retired by 1b", `1b` appears nowhere else in it, and no section
+carries the marker. The marker had fallen out of the index during a rewrite
+while this log kept it, at "### 1b. Foreign structure access, gaveled —
+per-field pub". The index is maintained by hand and can lose a fact; the log
+is append-only and cannot. They disagree in one direction only, so when they
+do, the log wins.
