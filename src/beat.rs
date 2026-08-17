@@ -42,6 +42,10 @@ struct Cluster {
     members: Vec<Group>,
     carried: HashMap<Group, Vec<usize>>,
     entries: Vec<(Group, Group)>,
+    /// Set where the cluster passed only the narrower check: the rewind fires
+    /// on this group's incoming edges, and the argument rule was applied to
+    /// exactly those.
+    boundary: Option<Group>,
 }
 
 const SCALAR: Set = INT | FLOAT | BOOL;
@@ -104,6 +108,9 @@ pub struct Beats {
     /// Carry-beat groups: the self-tail argument positions evacuated through
     /// the carry buffers at each rewind.
     pub carried: HashMap<Group, Vec<usize>>,
+    /// Clusters that rewind on one group's incoming edges rather than on
+    /// every inner edge, keyed by cluster id.
+    pub boundary: HashMap<usize, Group>,
 }
 
 impl Beats {
@@ -113,12 +120,24 @@ impl Beats {
             _ => false,
         }
     }
+
+    /// Whether a tail edge into `callee` from `caller` is a rewind point.
+    pub fn rewinds_on(&self, callee: &Group, caller: &Group) -> bool {
+        if !self.same_cluster(callee, caller) {
+            return false;
+        }
+        match self.ids.get(callee).and_then(|id| self.boundary.get(id)) {
+            Some(entry) => callee == entry,
+            None => true,
+        }
+    }
 }
 
 pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &MutSites) -> Beats {
     let chains = chain_groups(program, mut_sites);
     let mut ids = HashMap::new();
     let mut carried = HashMap::new();
+    let mut boundary = HashMap::new();
     let mut next = 0;
     for (name, arity, v) in classify_all(program, inference, mut_sites, &chains) {
         if v == Verdict::Beat {
@@ -130,6 +149,9 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     for cluster in eligible_clusters(program, inference, mut_sites, &chains) {
         for member in cluster.members {
             ids.insert(member, next);
+        }
+        if let Some(group) = cluster.boundary {
+            boundary.insert(next, group);
         }
         next += 1;
         for (group, positions) in cluster.carried {
@@ -189,7 +211,7 @@ pub fn beat_loops(program: &Program, inference: &infer::Inference, mut_sites: &M
     // name with a clone still needs the entry demoted, or the loop's
     // rewinds run against a mark nobody pushed.
     demoted.retain(|(_, callee)| ids.contains_key(callee));
-    Beats { ids, demoted, carried }
+    Beats { ids, demoted, carried, boundary }
 }
 
 /// Self-loops whose only defect is a tail entry, where every entering group
@@ -540,9 +562,43 @@ fn eligible_clusters(
         if !scc.iter().any(|&g| allocating.contains(groups[g].0.as_str())) {
             continue;
         }
-        if let Some(carried) =
-            cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges)
-        {
+        if std::env::var("KANSO_CLUSTER_TRACE").is_ok() {
+            let names: Vec<String> = scc.iter().map(|&g| format!("{}/{}", groups[g].0, groups[g].1)).collect();
+            eprintln!("CLUSTER {:?} entries={} head={:?}", names, entries.len(),
+                rewind_head(&members, &edges).map(|h| groups[h].0.clone()));
+        }
+        let whole =
+            cluster_edges_ok(program, inference, mut_sites, chains, &groups, &members, &edges, None);
+        // Only when the whole cluster refuses is the narrower rule tried, so
+        // anything eligible today keeps today's verdict exactly. A rewind on
+        // fewer edges can only retain more, never free something live.
+        let narrowed = whole.is_none().then(|| {
+            let head = rewind_head(&members, &edges)?;
+            let carried = cluster_edges_ok(
+                program, inference, mut_sites, chains, &groups, &members, &edges, Some(head),
+            );
+            if std::env::var("KANSO_CLUSTER_TRACE").is_ok() {
+                eprintln!("  NARROW head={} edges_ok={} carried={:?}", groups[head].0,
+                    carried.is_some(),
+                    carried.as_ref().map(|c| c.iter().map(|(g, p)| format!("{}{:?}", g.0, p)).collect::<Vec<_>>()));
+            }
+            let carried = carried?;
+            // A carried slot is evacuated at every rewind, and the narrower
+            // rule has not been measured against that cost.
+            carried.is_empty().then_some((groups[head].clone(), carried))
+        });
+        if std::env::var("KANSO_CLUSTER_TRACE").is_ok() {
+            let names: Vec<String> = scc.iter().map(|&g| format!("{}/{}", groups[g].0, groups[g].1)).collect();
+            eprintln!("  VERDICT {:?} whole={} narrowed={}", names,
+                whole.is_some(),
+                match &narrowed { Some(Some(_)) => "yes", Some(None) => "refused", None => "not tried" });
+        }
+        let (boundary, edges_ok) = match (whole, narrowed.flatten()) {
+            (Some(carried), _) => (None, Some(carried)),
+            (None, Some((head, carried))) => (Some(head), Some(carried)),
+            (None, None) => (None, None),
+        };
+        if let Some(carried) = edges_ok {
             // A demoted entry buys a plain beat and nothing more. A carried
             // slot is evacuated at every rewind, and a cluster reached only
             // by a tail call is one whose cost nobody has measured — the
@@ -552,6 +608,7 @@ fn eligible_clusters(
             }
             out.push(Cluster {
                 members: scc.iter().map(|&g| groups[g].clone()).collect(),
+                boundary,
                 carried,
                 entries: entries
                     .into_iter()
@@ -561,6 +618,43 @@ fn eligible_clusters(
         }
     }
     out
+}
+
+/// The member whose incoming edges every cycle passes through, so rewinding
+/// there alone still bounds the arena. Lowest index of the candidates, for a
+/// verdict that does not depend on iteration order; `None` when no single
+/// group cuts every cycle and the narrower rule buys nothing.
+fn rewind_head(
+    members: &HashSet<usize>,
+    edges: &[(usize, usize, usize, &Vec<Expr>)],
+) -> Option<usize> {
+    let mut sorted: Vec<usize> = members.iter().copied().collect();
+    sorted.sort_unstable();
+    sorted.into_iter().find(|&head| {
+        let kept: Vec<(usize, usize)> = edges
+            .iter()
+            .filter(|(from, to, _, _)| members.contains(from) && members.contains(to))
+            .filter(|(_, to, _, _)| *to != head)
+            .map(|(from, to, _, _)| (*from, *to))
+            .collect();
+        !has_cycle(members, &kept)
+    })
+}
+
+/// Whether the edge set holds a cycle, by walking each node's descendants.
+fn has_cycle(members: &HashSet<usize>, edges: &[(usize, usize)]) -> bool {
+    members.iter().any(|&start| {
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut stack = vec![start];
+        while let Some(n) = stack.pop() {
+            for &(from, to) in edges {
+                if from == n && seen.insert(to) {
+                    stack.push(to);
+                }
+            }
+        }
+        seen.contains(&start)
+    })
 }
 
 /// The threaded-slot fixpoint plus the per-edge argument check. Crossing
@@ -573,10 +667,17 @@ fn cluster_edges_ok(
     groups: &[(String, usize)],
     members: &HashSet<usize>,
     edges: &[(usize, usize, usize, &Vec<Expr>)],
+    boundary: Option<usize>,
 ) -> Option<HashMap<Group, Vec<usize>>> {
+    // An edge must satisfy the argument rule exactly when a rewind is emitted
+    // on it: purity means the only thing crossing an edge is its arguments, so
+    // whatever an unchecked edge allocated simply lives until the next checked
+    // one. `boundary` names the group the rewind fires on, or every inner edge
+    // when the cluster passed the whole check.
     let inner: Vec<&(usize, usize, usize, &Vec<Expr>)> = edges
         .iter()
         .filter(|(from, to, _, _)| members.contains(from) && members.contains(to))
+        .filter(|(_, to, _, _)| boundary.is_none_or(|b| *to == b))
         .collect();
     let slot_set = |g: usize, i: usize| {
         let (name, arity) = &groups[g];

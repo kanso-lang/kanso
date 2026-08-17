@@ -3232,7 +3232,7 @@ impl<'a> Backend<'a> {
                     let callee_ret = self.ret_ty(name, n);
                     let same_ret = callee_ret == f.ret_ty;
                     if same_ret
-                        && self.beat.same_cluster(&(name.clone(), n), &(f.group.clone(), f.arity))
+                        && self.beat.rewinds_on(&(name.clone(), n), &(f.group.clone(), f.arity))
                     {
                         match self.beat.carried.get(&(name.clone(), n)) {
                             Some(positions) => {
