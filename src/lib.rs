@@ -1541,6 +1541,14 @@ fn qualify(
     dep: &mut ast::Program,
     qual: &str,
     exports: &mut std::collections::HashMap<String, bool>,
+    // GAVEL 51: which DECLARATION claimed each qualified spelling, by
+    // canonical path. `exports` records only whether a name is pub, and under
+    // one module a dependency arrives by every route that reaches it — sealed
+    // through a middle module that does not re-export it, open through the
+    // importer's own import. Without identity those two are indistinguishable
+    // from a genuine shadow, where this module declares a name one of its
+    // imports also exports.
+    claims: &mut std::collections::HashMap<String, String>,
     shadowed: &mut std::collections::HashSet<String>,
 ) {
     // A getter's declaration is left bare below, because one group answers a
@@ -1626,6 +1634,7 @@ fn qualify(
                 false => format!("{qual}/{}", f.name),
             };
             let taken = exports.get(&key).copied();
+            let same_decl = claims.get(&key).is_some_and(|c| *c == f.canon);
             // GAVEL 51: the two-claims rule is about THIS module declaring a
             // name one of its imports also exports. An already-qualified name
             // is not this module's declaration — it is a dependency arriving,
@@ -1635,12 +1644,20 @@ fn qualify(
             // the ruling exists to make work.
             let own_claim = !f.name.contains('/');
             match (taken, f.synthetic) {
-                (Some(false), false) if f.is_pub && own_claim => {
+                // The same declaration arriving by a second route. One
+                // module, so its visibility is what the importer's routes
+                // grant between them: an open route is not vetoed by a sealed
+                // one that happened to load first.
+                (Some(false), _) if same_decl && f.is_pub => {
+                    exports.insert(key.clone(), true);
+                }
+                (Some(false), false) if f.is_pub && own_claim && !same_decl => {
                     shadowed.insert(key.clone());
                 }
                 (Some(_), _) => {}
                 (None, _) => {
                     exports.insert(key.clone(), f.is_pub);
+                    claims.insert(key.clone(), f.canon.clone());
                 }
             }
             // GAVEL 51: a name that already carries a qualification came
@@ -2085,6 +2102,7 @@ fn load_dependencies(
         reexports: Vec::new(),
     };
     let mut exports = std::collections::HashMap::new();
+    let mut claims: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut shadowed = std::collections::HashSet::new();
     for import in imports {
         let path = &import.path;
@@ -2146,7 +2164,7 @@ fn load_dependencies(
                 files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports, &mut shadowed);
+            qualify(&mut dep, qual, &mut exports, &mut claims, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -2170,7 +2188,7 @@ fn load_dependencies(
                 qualified.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports, &mut shadowed);
+            qualify(&mut dep, qual, &mut exports, &mut claims, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -2197,7 +2215,7 @@ fn load_dependencies(
             ));
         }
         let mut dep = compile_module_inner(&dep_dir, false, visited, None)?;
-        qualify(&mut dep, qual, &mut exports, &mut shadowed);
+        qualify(&mut dep, qual, &mut exports, &mut claims, &mut shadowed);
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
