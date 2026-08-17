@@ -3005,3 +3005,31 @@ dot-as-application, the trilemma statement itself (now recording why
 the corner was chosen, if it is). Three reversals rode this axis in
 one day, all pre-build, so nothing but prose moves — but the decision
 is deliberately parked for morning eyes. PENDING CLAY.
+
+## 2026-08-17 — the fork resolved, and the surface gets its words
+
+Clay slept on the lifting fork and closed it with an argument stronger
+than the trilemma: the failure channel forces explicitness no matter
+what — handling is a decision, never an elaboration — so the Koka
+corner would ship two visibility regimes in one surface, success
+invisible and failure explicit, and the user would meet the whole
+channel machinery on the worst possible day. Uniform explicitness is
+one mental model. The morning corner is ratified; ambient lifting is
+declined for good, with both arguments (the trilemma AND the
+two-regimes asymmetry) on the record. His summary of the monad
+problem, and kanso's actual answer to it: the confusion in Haskell is
+the abstraction — Monad-in-general, polymorphic over everything —
+and kanso simply does not have monads-in-general. One effect type,
+ordinary functions, a block. Nobody needs the word.
+
+The vocabulary gavel: bind, rescue, annotate, return, do, skip. The
+keyword is do. The unit is return — Haskell's own repentance (the
+pure migration) was put in front of Clay and overruled on
+audience-familiarity grounds, with `answer` offered and declined; the
+sting is drawn by the wrapping rule making return a rare word, and by
+skip (return none) owning the conditional-no-op case. The book
+teaches everything but return early, return late, monad never.
+
+Still open after this sitting: 6 (tail-call promise), 16 (block-born
+as dataflow), the err riders, and the also-open list. Twenty-five
+entries ruled across three days.
