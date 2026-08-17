@@ -1,0 +1,34 @@
+# Two arms of one group, each binding at statement 0. The recursive one is
+# conditionally demanded and deserves its thunk; the comparison is cheap and
+# does not. Demand keys a bind by (group, arity, statement) with no arm to
+# tell them apart, so the recursive arm's verdict once reached the cheap one
+# and thunked a `<=` — half a million times, in regexp's character-class arm.
+type heavy
+  n
+
+type light
+  n
+
+fn burn 0 acc
+  acc
+
+fn burn n acc
+  burn (n - 1) (acc + n)
+
+fn pick false _
+  0
+
+fn pick true chosen
+  chosen
+
+fn weigh (heavy n) want
+  costly = burn n 0
+  pick want costly
+
+fn weigh (light n) want
+  cheap = n <= 3
+  pick want cheap
+
+pub play =
+  print "heavy: {weigh (heavy 2000) false}"
+  print "light: {weigh (light 9) false}"
