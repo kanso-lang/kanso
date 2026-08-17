@@ -307,12 +307,18 @@ type EvalResult = Result<Value, RuntimeError>;
 /// Calling a closure that lives in another engine's table, by handle.
 pub type ForeignCall = fn(u32, Vec<Value>) -> EvalResult;
 
+/// What the browser answers when render reaches one of its cells. `None`
+/// where the handle names an ordinary function, which renders as one.
+pub type DeferralResolver = fn(u32) -> Option<Value>;
+
 thread_local! {
     /// The browser backend compiles closures into a wasm table the
     /// interpreter cannot reach on its own. It registers the way back in
     /// here, so a description carrying such a continuation runs on the same
     /// scheduler as every other description instead of needing a second one.
     static FOREIGN_CALL: std::cell::RefCell<Option<ForeignCall>> =
+        const { std::cell::RefCell::new(None) };
+    static DEFERRAL_RESOLVER: std::cell::RefCell<Option<DeferralResolver>> =
         const { std::cell::RefCell::new(None) };
 }
 
@@ -325,6 +331,23 @@ enum Flow {
 
 pub fn set_foreign_call(call: ForeignCall) {
     FOREIGN_CALL.with(|slot| *slot.borrow_mut() = Some(call));
+}
+
+pub fn set_deferral_resolver(resolve: DeferralResolver) {
+    DEFERRAL_RESOLVER.with(|slot| *slot.borrow_mut() = Some(resolve));
+}
+
+/// What a table handle has settled on, where it names a cell rather than a
+/// function. Nothing answers in the interpreter, whose own cells are thunks.
+fn deferral_value(handle: u32) -> Option<Value> {
+    let resolve = DEFERRAL_RESOLVER.with(|slot| *slot.borrow())?;
+    resolve(handle)
+}
+
+/// A handle stands in the render path beside the pointers, and a pointer is
+/// aligned, so the low bit tells the two apart.
+fn deferral_key(handle: u32) -> usize {
+    ((handle as usize) << 1) | 1
 }
 
 fn foreign_call(handle: u32, args: Vec<Value>, span: Span) -> EvalResult {
@@ -3585,9 +3608,21 @@ fn render_seen(
         // every engine renders a function the same way and none of them names
         // it: the name is the compiler's, and for a field getter it is one no
         // program could have written
-        Value::FnRef(_) | Value::Closure(_) | Value::TableFn(_) | Value::Partial(..) => {
-            "<fn>".to_string()
-        }
+        Value::FnRef(_) | Value::Closure(_) | Value::Partial(..) => "<fn>".to_string(),
+        // the wire is the demand, and a browser cell answers what it settled
+        // on rather than the closure that would have answered it
+        Value::TableFn(handle) => match deferral_value(*handle) {
+            Some(value) => {
+                let key = deferral_key(*handle);
+                if !seen.insert(key) {
+                    return "<cycle>".to_string();
+                }
+                let rendered = render_seen(interp, &value, quote_strings, seen);
+                seen.remove(&key);
+                rendered
+            }
+            None => "<fn>".to_string(),
+        },
         Value::Desc(_) => "<io>".to_string(),
     }
 }

@@ -64,6 +64,7 @@ pub fn load(program: Program, lits: &[Lit], types: Vec<(String, Vec<String>)>) {
     let leaked: &'static Program = Box::leak(Box::new(program));
     INTERP.with(|i| *i.borrow_mut() = Some(Interp::new(leaked)));
     eval::set_foreign_call(call_from_interp);
+    eval::set_deferral_resolver(settled);
     TYPES.with(|t| *t.borrow_mut() = types);
     SUB_PARENTS.with(|t| *t.borrow_mut() = parents);
     REG.with(|r| {
@@ -148,6 +149,17 @@ fn forced(v: Value) -> Value {
         // it now
         Slot::V(value) => value,
         _ => v,
+    }
+}
+
+/// What render reaches through a handle. A cell nobody has demanded is
+/// demanded here, one still building answers nothing rather than reporting a
+/// program error from inside a render, and an ordinary closure is a function.
+fn settled(h: u32) -> Option<Value> {
+    match slot(h) {
+        Slot::C { arity: DEFERRED, .. } => Some(forced(Value::TableFn(h))),
+        Slot::V(value) => Some(value),
+        _ => None,
     }
 }
 
