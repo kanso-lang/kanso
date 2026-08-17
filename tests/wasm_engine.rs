@@ -629,3 +629,23 @@ fn the_playground_prompt_can_start_over() {
     let (code, gone) = toolchain.prompt("doubled 4");
     assert_eq!(code, 1, "the declaration survived the reset: {gone}");
 }
+
+/// A program that dies leaves the module instance usable. `with_interp` used
+/// to hold the INTERP borrow across evaluation, so an abort inside it left the
+/// cell borrowed forever and the NEXT program's `load` could not take it — the
+/// failure surfaced as a compiler trap on a program that is fine by itself.
+/// Both mention the same knotted description, which is what reaches the abort.
+#[test]
+fn a_program_that_dies_leaves_the_engine_usable() {
+    let knot = "type box\n  v\n\nfn use b\n  print \"y {b}\"\n\nd = print \"x\" >> use (box d)\n\n";
+    let blackhole = "error[runtime]: a lazy binding demands its own value\n";
+    let mut toolchain = Toolchain::load();
+
+    toolchain.run("dies.kso", &format!("{knot}fn go x\n  x\n\npub play = go d\n"));
+    let after = toolchain.run("after.kso", &format!("{knot}pub play = d\n"));
+
+    assert!(
+        matches!(&after, Answer::Ran(1, text) if text == blackhole),
+        "a program run after one that died answered {after:?}"
+    );
+}
