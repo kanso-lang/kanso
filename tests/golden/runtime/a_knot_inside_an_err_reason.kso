@@ -1,0 +1,9 @@
+# An err whose reason holds a cell nobody has demanded. `err` forces the
+# reason it is given, but forcing answers one cell rather than the value's
+# interior, so the list arrives forced and its element does not.
+#
+# The trace is output like any other, so it forces what it prints and the
+# cycle guard stops the walk.
+x = [x]
+
+pub play = err x
