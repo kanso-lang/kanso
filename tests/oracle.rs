@@ -361,34 +361,3 @@ fn interpreter_runs_the_trace_demo_module_with_default_and_explicit_args() {
         assert_eq!(run.status, 0, "status for args {args:?}");
     }
 }
-
-/// A cycle through two names is still a cycle.
-///
-/// The knot detector installs a blackhole before it evaluates a constant, so
-/// re-entering the name finds it — but only constants that mentioned their own
-/// name went through it. `a` naming `b` and `b` naming `a` mention themselves
-/// nowhere, so both took the plain path and demanding either recursed until
-/// the interpreter's stack ran out and the process aborted: no diagnostic, no
-/// exit code worth reading, and the dispatch-depth guard cannot see it because
-/// this is not dispatch.
-#[test]
-fn a_knot_through_two_names_is_refused_like_a_knot_through_one() {
-    let dir = std::env::temp_dir().join("kanso_two_name_knot");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("the directory is made");
-    let source = dir.join("knot.kso");
-    // A cycle forward-references by construction, and only a module lets a
-    // constant name one declared below it.
-    std::fs::write(
-        &source,
-        "type node\n  id\n  peer\n\n\
-         pub ring = node 1 mate\n\n\
-         mate = node 2 ring\n\n\
-         pub play = print \"{ring.peer.id}\"\n",
-    )
-    .expect("the program writes");
-
-    let run = evaluate(&compile_case(&source), Vec::new());
-
-    assert_eq!(run.stderr, "error[runtime]: a lazy binding demands its own value\n");
-}

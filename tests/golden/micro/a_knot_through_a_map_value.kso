@@ -1,0 +1,11 @@
+# A constant naming itself as a map value. The cell completes and the map
+# holds itself, so rendering walks a ring, and the guard that stops the walk
+# keys on the cell rather than only on the records around it.
+#
+# The map appears twice because the cell is what repeats: the walk reaches
+# it, prints what it holds, and finds the same cell inside. A record knot
+# shows its type once for the same reason — there the record is the
+# repeating identity.
+ring = { "a":ring }
+
+pub play = print "{ring}"

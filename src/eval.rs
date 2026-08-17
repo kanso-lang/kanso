@@ -1627,8 +1627,18 @@ impl<'a> Interp<'a> {
             return Ok(err_value(reason, origin_at(frame, span)));
         }
         if let Some(ty) = self.type_decl(name) {
-            let args =
-                args.into_iter().map(|a| self.force_thunk(a)).collect::<Result<Vec<_>, _>>()?;
+            // A constructor slot is where a knot ties: an argument still
+            // being computed is stored rather than demanded, so the cell
+            // completes here and the field resolves against it afterwards.
+            // Demanding it instead is what made a guarded self-reference
+            // blackhole through its own construction.
+            let args = args
+                .into_iter()
+                .map(|a| match pending_knot(&a) {
+                    true => Ok(a),
+                    false => self.force_thunk(a),
+                })
+                .collect::<Result<Vec<_>, _>>()?;
             return self.construct(ty, args, span);
         }
         if let Some(overloads) = self.fns.get(name) {
@@ -2737,6 +2747,16 @@ impl<'a> Interp<'a> {
         let cell = Rc::new(RefCell::new(ThunkState::Blackhole));
         self.knots.borrow_mut().insert(name.to_string(), Rc::clone(&cell));
         let value = self.eval_body_of(constant, None)?;
+        // A body that answers this very cell has computed nothing: completing
+        // it would tie the knot to itself and every later demand would chase
+        // the loop instead of finding a value. The blackhole is the answer,
+        // and it is the one a guarded slot never reaches.
+        if matches!(&value, Value::Thunk(answered) if Rc::ptr_eq(answered, &cell)) {
+            return Err(RuntimeError {
+                message: "a lazy binding demands its own value".to_string(),
+                span: Span { line: 0, col: 0 },
+            });
+        }
         *cell.borrow_mut() = ThunkState::Forced(value.clone());
         Ok(value)
     }
@@ -2769,6 +2789,14 @@ impl<'a> Interp<'a> {
             }
         }
     }
+}
+
+/// A value that is a knot mid-construction: its cell is entered and has not
+/// answered yet. Only a constructor stores one — everywhere else demanding it
+/// is the blackhole, which is what the blackhole is for.
+fn pending_knot(value: &Value) -> bool {
+    let Value::Thunk(cell) = value else { return false };
+    matches!(&*cell.borrow(), ThunkState::Blackhole)
 }
 
 /// A bitwise operand. Failures travel through as themselves, the way every
@@ -3448,12 +3476,23 @@ fn render_seen(
     match value {
         // a subtype renders as its base until a user arm claims it
         Value::Sub { inner, .. } => render_seen(inner, quote_strings, seen),
-        Value::Thunk(cell) => match &*cell.borrow() {
-            ThunkState::Forced(v) => render_seen(v, quote_strings, seen),
-            // A pending thunk reaching render is a missed force point; make
-            // it loud so the differential corpus catches it.
-            _ => "<thunk>".to_string(),
-        },
+        // A forced cell shows what it holds, and a cell already on the path
+        // holds the walk that is reading it — the knot a constructor tied
+        // closes here rather than through a record.
+        Value::Thunk(cell) => {
+            let key = Rc::as_ptr(cell) as usize;
+            if !seen.insert(key) {
+                return "<cycle>".to_string();
+            }
+            let rendered = match &*cell.borrow() {
+                ThunkState::Forced(v) => render_seen(v, quote_strings, seen),
+                // A pending thunk reaching render is a missed force point;
+                // make it loud so the differential corpus catches it.
+                _ => "<thunk>".to_string(),
+            };
+            seen.remove(&key);
+            rendered
+        }
         Value::Int(n) => n.to_string(),
         Value::Float(x) => render_float(*x),
         Value::Map(entries) => match entries.is_empty() {

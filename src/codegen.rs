@@ -175,6 +175,7 @@ declare i64 @k_truthy_bad(%KValue)
 declare %KValue @k_caf_freeze(%KValue)
 declare void @k_math_ids(i64, i64)
 declare %KValue @k_caf_blackhole()
+declare %KValue @k_caf_complete(%KValue, %KValue)
 declare %KValue @k_str_n(ptr, i64)
 declare %KValue @k_str_lit(ptr, i64, ptr)
 declare %KValue @k_err(%KValue, ptr)
@@ -307,6 +308,7 @@ declare %KValue @k_thunk_new(i64, i32, ...)
 declare %KValue @k_thunk_release_unless(%KValue, %KValue)
 declare void @k_thunk_note_escape(%KValue)
 declare %KValue @k_force(%KValue)
+declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
@@ -403,7 +405,56 @@ fn forwarder_map(program: &Program) -> HashMap<(String, usize), String> {
     out
 }
 
+/// The constants a constant can reach from its own body, following mentions
+/// through other constants. A name that reaches itself must be frozen: an
+/// unfrozen mention re-enters the builder, and the recursion has no floor.
+/// One name reaching itself and two names reaching each other are the same
+/// shape, so the question is cycle membership.
+pub(crate) fn knotted_constants(program: &Program) -> std::collections::HashSet<String> {
+    fn names(expr: &Expr, out: &mut Vec<String>) {
+        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            out.push(n.clone());
+        }
+        for child in crate::expr_children(expr) {
+            names(child, out);
+        }
+    }
+    let mut mentions: HashMap<&str, Vec<String>> = HashMap::new();
+    for decl in program.fns.iter().filter(|d| d.params.is_empty()) {
+        let found = mentions.entry(decl.name.as_str()).or_default();
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => names(expr, found),
+                Stmt::Set { value, .. } => names(value, found),
+            }
+        }
+    }
+    mentions
+        .keys()
+        .copied()
+        .filter(|start| {
+            let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            let mut queue: Vec<&str> = vec![start];
+            while let Some(here) = queue.pop() {
+                for next in mentions.get(here).into_iter().flatten() {
+                    if next == start {
+                        return true;
+                    }
+                    if let Some((key, _)) = mentions.get_key_value(next.as_str()) {
+                        if seen.insert(key) {
+                            queue.push(key);
+                        }
+                    }
+                }
+            }
+            false
+        })
+        .map(str::to_string)
+        .collect()
+}
+
 pub fn emit_ir(program: &Program) -> Result<String, String> {
+    let knotted = knotted_constants(program);
     let inference = infer::infer(program);
     let mut type_ids = HashMap::new();
     type_ids.insert("entry", 0i64);
@@ -480,21 +531,8 @@ pub fn emit_ir(program: &Program) -> Result<String, String> {
         lift_counter: 0,
         fn_value_wrappers: Vec::new(),
         builtin_value_wrappers: Vec::new(),
-        defers_self_reference: program.fns.iter().any(|d| {
-            fn mentions(expr: &Expr, name: &str) -> bool {
-                if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
-                    if n == name {
-                        return true;
-                    }
-                }
-                crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
-            }
-            d.params.is_empty()
-                && d.body.iter().any(|stmt| match stmt {
-                    Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &d.name),
-                    Stmt::Set { value, .. } => mentions(value, &d.name),
-                })
-        }),
+        defers_self_reference: !knotted.is_empty(),
+        knotted,
         print_value_wrapper: false,
         caf_cells: Vec::new(),
         caf_fills: Vec::new(),
@@ -532,6 +570,8 @@ struct Backend<'a> {
     /// wrapper a dynamic call can reach.
     builtin_value_wrappers: Vec<(String, usize)>,
     defers_self_reference: bool,
+    /// Zero-arity names that reach themselves through other constants.
+    knotted: std::collections::HashSet<String>,
     print_value_wrapper: bool,
     /// One cache cell per frozen constant, emitted as globals at the end.
     caf_cells: Vec<String>,
@@ -1084,6 +1124,12 @@ impl<'a> Backend<'a> {
     /// The LLVM return type of a function group: `%parsed` when it hands back a
     /// register-returnable record by value, else `%KValue`.
     fn ret_ty(&self, name: &str, arity: usize) -> &'static str {
+        // A knotted constant's cell holds a blackhole while the cycle is still
+        // building, and a register-returned record has nowhere to put a thunk:
+        // the caller would read the thunk's payload as a record pointer.
+        if arity == 0 && self.knotted.contains(name) {
+            return "%KValue";
+        }
         if self.escape.returns_ty(name, arity).is_some() {
             "%parsed"
         } else {
@@ -1121,6 +1167,20 @@ impl<'a> Backend<'a> {
     /// analysis deferred nothing in can hold no thunk anywhere — every site
     /// vanishes, not just the set-proven ones (conservative TOP widenings
     /// carry the THUNK bit into code no thunk can reach).
+    /// Force unless the value is a cell still being computed. Only a
+    /// constructor's fields take this path; everywhere else a blackhole
+    /// reached is the error it exists to report.
+    fn force_unless_knot(&self, f: &mut FnEmit, value: String) -> String {
+        if f.set_of(&value) & crate::infer::THUNK == 0 {
+            return value;
+        }
+        let post = f.set_of(&value) & !crate::infer::THUNK;
+        let t = f.tmp();
+        f.line(&format!("{t} = call %KValue @k_force_unless_black(%KValue {value})"));
+        f.record(&t, if post == 0 { crate::infer::TOP } else { post | crate::infer::THUNK });
+        t
+    }
+
     fn maybe_force(&self, f: &mut FnEmit, value: String) -> String {
         // A deferred self-reference is a thunk that no lazy-bind count knows
         // about, so the cheap exit has to admit it too.
@@ -1410,7 +1470,10 @@ impl<'a> Backend<'a> {
         }
         for (i, (cell, build)) in self.caf_fills.iter().enumerate() {
             let _ = writeln!(fills, "  %v{i} = call tailcc %KValue @{build}()");
-            let _ = writeln!(fills, "  %f{i} = call %KValue @k_caf_freeze(%KValue %v{i})");
+            let _ = writeln!(
+                fills,
+                "  %f{i} = call %KValue @k_caf_complete(%KValue %v{i}, %KValue %b{i})"
+            );
             let _ = writeln!(fills, "  store %KValue %f{i}, ptr @{cell}");
         }
         // Division answers a declared type, so the runtime has to be told which
@@ -1839,7 +1902,7 @@ impl<'a> Backend<'a> {
         arity: usize,
         decls: &[&FnDecl],
     ) -> Result<(), String> {
-        if arity == 0 && decls.len() == 1 && Self::is_constant_body(decls[0]) {
+        if arity == 0 && decls.len() == 1 && self.is_constant_body(decls[0]) {
             return self.emit_frozen_constant(name, decls);
         }
         self.emit_dispatcher_as(&dsym(name, arity), name, arity, decls)
@@ -1848,32 +1911,13 @@ impl<'a> Backend<'a> {
     /// A zero-argument definition whose body is a literal is a constant, so it
     /// is worth building once. The body emits unchanged under a build symbol
     /// and the real symbol becomes a cache in front of it.
-    /// A constant that mentions itself must be frozen whether or not its body
-    /// is a literal: unfrozen, the real symbol recomputes its body, so the
-    /// mention inside that body calls it again and the recursion has no floor.
-    /// Frozen, the mention is a load from a cell that `k_caf_init` fills once
-    /// before main, which is what makes the cycle finite.
-    ///
-    /// Only self-referential constants get this, and none of them compiled
-    /// before the cycle rule learned to ask what a definition demands, so no
-    /// existing program changes when it runs.
-    fn mentions_itself(decl: &FnDecl) -> bool {
-        fn mentions(expr: &Expr, name: &str) -> bool {
-            if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
-                if n == name {
-                    return true;
-                }
-            }
-            crate::expr_children(expr).into_iter().any(|c| mentions(c, name))
-        }
-        decl.body.iter().any(|stmt| match stmt {
-            Stmt::Bind { expr, .. } | Stmt::Expr(expr) => mentions(expr, &decl.name),
-            Stmt::Set { value, .. } => mentions(value, &decl.name),
-        })
-    }
-
-    fn is_constant_body(decl: &FnDecl) -> bool {
-        if Self::mentions_itself(decl) {
+    /// A knotted constant must be frozen whether or not its body is a literal:
+    /// unfrozen, the real symbol recomputes its body, so a mention inside that
+    /// body re-enters the builder and the recursion has no floor. Frozen, the
+    /// mention is a load from a cell that `k_caf_init` fills once before main,
+    /// which is what makes the cycle finite.
+    fn is_constant_body(&self, decl: &FnDecl) -> bool {
+        if self.knotted.contains(&decl.name) {
             return true;
         }
         fn literal(expr: &Expr) -> bool {
@@ -4003,9 +4047,18 @@ impl<'a> Backend<'a> {
                 f.record(&t, crate::infer::TOP);
                 return Ok(t);
             }
-            // constructors store fields; records never hold thunks in v1
-            let emitted: Vec<String> =
-                emitted.into_iter().map(|e| self.maybe_force(f, e)).collect();
+            // A constructor slot is where a knot ties: a field still being
+            // computed is stored, so the cell completes here and the field
+            // resolves against it afterwards. Whether a cell is mid-flight is
+            // a runtime fact, so the emitter cannot decide it — the helper
+            // asks, and only programs that defer a self-reference pay for it.
+            let emitted: Vec<String> = emitted
+                .into_iter()
+                .map(|e| match self.defers_self_reference {
+                    true => self.force_unless_knot(f, e),
+                    false => self.maybe_force(f, e),
+                })
+                .collect();
             self.emit_typeset_checks(f, name, &emitted)?;
             let n = emitted.len();
             let arr = f.tmp();

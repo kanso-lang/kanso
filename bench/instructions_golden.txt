@@ -54,13 +54,13 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2913614152
-encodebench 9725270943
-oneshot 49321994
+jsonbench 2913614173
+encodebench 9725271017
+oneshot 49322015
 basket 57564331
-widebench 88147467
-deepbench 833453343
-escapebench 258541096
+widebench 88147541
+deepbench 833453373
+escapebench 258541105
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -180,3 +180,10 @@ escapebench 258541096
 # to a plain call so the cycle can bracket, and these two hold such a cycle.
 # escapebench pays most because its cycle runs 6,001 more rewinds, and it is
 # the row that collects: its perm_peak_bytes falls from 24,626,064 to 10,272.
+# 2026-08-17: +21 on jsonbench, +21 on oneshot, +74 on encodebench, +74 on
+# widebench, +30 on deepbench, +9 on escapebench; basket alone does not move.
+# Tens of instructions against billions: it is the path push and pop the
+# renderer now does per forced cell, paid where a program renders one and
+# nowhere else, so the one row that holds still renders none. The row that
+# collects is not here — it is the map knot that used to segfault, which no
+# benchmark runs.

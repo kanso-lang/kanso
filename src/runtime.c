@@ -233,6 +233,17 @@ KValue k_force(KValue v) {
     return t->result;
 }
 
+/* A constructor slot is where a knot ties, so a field still being computed is
+   stored rather than demanded. Every other site demands: reaching a blackhole
+   anywhere else is the error the blackhole exists to report. */
+KValue k_force_unless_black(KValue v) {
+    if (v.tag == K_THUNK) {
+        KThunk* t = (KThunk*)v.payload;
+        if (!t->forced && t->site == K_SITE_BLACKHOLE) return v;
+    }
+    return k_force(v);
+}
+
 typedef struct { long long len; KValue* items; } KList;
 /* A map is built by appending pairs to a frontier-shared buffer in O(1) (like
    lists), leaving them unsorted with possible duplicate keys. The canonical
@@ -1762,6 +1773,29 @@ KValue k_caf_freeze(KValue v) {
     return k_deep_copy(v, &cp);
 }
 
+/* A constant whose builder answered the very cell it was seeded with has
+   computed nothing: freezing it would tie the knot to itself and every later
+   demand would chase the loop rather than find a value. The blackhole is the
+   answer, and a name sitting in a constructor's slot never reaches here —
+   that one answers the record it helped build. */
+KValue k_caf_complete(KValue built, KValue seeded) {
+    if (built.tag == K_THUNK && seeded.tag == K_THUNK && built.payload == seeded.payload) {
+        k_die("a lazy binding demands its own value");
+    }
+    KValue frozen = k_caf_freeze(built);
+    /* A field that stored this cell mid-flight holds the SEED, and the frozen
+       value is a copy of what the builder made — so storing the copy in the
+       global is not enough, and the field would chase a blackhole nobody ever
+       answers. Answering the seed itself is what ties the knot: every holder
+       of the cell, copied or not, resolves through the same thunk. */
+    if (seeded.tag == K_THUNK) {
+        KThunk* t = (KThunk*)seeded.payload;
+        t->result = frozen;
+        t->forced = 1;
+    }
+    return frozen;
+}
+
 
 static int k_is_heap(long long tag) {
     switch (tag) {
@@ -3211,7 +3245,7 @@ KValue k_upcast(KValue v, long long want, const char* tyname) {
 }
 
 #define K_RENDER_PATH_MAX 4096
-static const KRec* k_render_path[K_RENDER_PATH_MAX];
+static const void* k_render_path[K_RENDER_PATH_MAX];
 static int k_render_depth = 0;
 
 /* Which values can reach a user's `render/to_string` arm. A compiled call
@@ -3232,7 +3266,13 @@ KValue k_render(KValue v, long long quote) {
        cell that reaches here unforced is a missed force point either way. */
     if (v.tag == K_THUNK) {
         KThunk* cell = (KThunk*)(intptr_t)v.payload;
-        return cell->forced ? k_render(cell->result, quote) : k_str("<thunk>");
+        if (!cell->forced) return k_str("<thunk>");
+        for (int d = 0; d < k_render_depth; d++)
+            if (k_render_path[d] == cell) return k_str("<cycle>");
+        if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
+        KValue out = k_render(cell->result, quote);
+        if (k_render_depth > 0) k_render_depth--;
+        return out;
     }
     char buf[64];
     switch (v.tag) {

@@ -49,13 +49,13 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=79634
-encodebench text=97090
-oneshot text=96834
-basket text=89314
-widebench text=98354
-deepbench text=60866
-escapebench text=47922
+jsonbench text=80098
+encodebench text=97618
+oneshot text=97298
+basket text=89634
+widebench text=98882
+deepbench text=61346
+escapebench text=48370
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -130,3 +130,15 @@ escapebench text=47922
 # call and bracketed, and these two are the benchmarks holding such a cycle —
 # the push and pop around the entry, and the rewind in the loop, are code
 # their binaries did not carry before.
+# 2026-08-17: every row rises — jsonbench +464, encodebench +528, oneshot
+# +464, basket +320, widebench +528, deepbench +480, escapebench +448. The
+# render path gains a thunk arm: a forced cell is pushed before the walk
+# descends and popped after, so a knot that closes through a cell prints
+# `<cycle>` rather than walking a ring forever. Every program links the
+# renderer, so every program carries the test.
+#
+# The first version of this entry was WRONG and said basket did not move at
+# all. Its numbers came from a run whose head predated the render guard —
+# a PR merge commit one push behind — so they measured the emitter change
+# without the runtime one. Read the run whose head sha IS the commit being
+# pinned; a green-looking older run for the same branch is not that.

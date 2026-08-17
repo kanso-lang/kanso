@@ -1,7 +1,11 @@
-# A constant naming itself hands its own cell over rather than a value, and
-# reading a field of what it built reaches that cell. Demanding it is the
-# failure both engines report, in the same words — before, native reached the
-# operator with the cell still pending and blamed `+` for not knowing it.
+# The knot ties: `ring` sits in a constructor's slot, so the cell completes at
+# the constructor and `ring.v` answers the record. What `plus` then reaches is
+# an operator with a record on its left, and that is what it says. Gavel 20
+# chose these semantics over the blackhole the two compiled engines used to
+# report — the browser had them right all along.
+#
+# Beside it, a_guarded_shape_that_is_not_a_knot keeps the blackhole: there the
+# name is demanded to BUILD the thing rather than stored in its slot.
 type cell
   v
 
