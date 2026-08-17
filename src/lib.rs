@@ -435,18 +435,10 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
     }
 }
 
-/// Err origins name the function and the file it lives in; the file is
-/// per-declaration so it survives multi-file module merging.
-/// GAVEL 51, Clay 2026-08-17: "one module". `file` is what an err origin
-/// prints, so it keeps the spelling the reader typed; `canon` is what says
-/// whether two declarations are the same one, which the display path cannot,
-/// because two routes to one module spell it differently. An embedded module
-/// has no filesystem path to canonicalise and keeps its import path, which is
-/// already the same by every route.
 thread_local! {
-    /// Canonical paths seen this compile, so a declaration carries an id
-    /// rather than a path. Ids start at 1; 0 is the unstamped default a
-    /// synthesised declaration keeps.
+    /// Display paths and the canonical paths they resolve to, both mapped to
+    /// one id per file. Two routes to a module reach it under two spellings
+    /// and both land on the id the canonical path was given.
     static CANON_IDS: std::cell::RefCell<std::collections::HashMap<String, u32>> =
         std::cell::RefCell::new(std::collections::HashMap::new());
 }
@@ -474,6 +466,8 @@ fn canon_id(file: &str) -> u32 {
     })
 }
 
+/// Err origins name the function and the file it lives in; the file is
+/// per-declaration so it survives multi-file module merging.
 fn stamp_file(program: &mut ast::Program, file: &str) {
     for decl in &mut program.fns {
         decl.file = file.to_string();
