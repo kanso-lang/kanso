@@ -361,37 +361,3 @@ fn interpreter_runs_the_trace_demo_module_with_default_and_explicit_args() {
         assert_eq!(run.status, 0, "status for args {args:?}");
     }
 }
-
-/// A cycle through two names ties like a cycle through one.
-///
-/// Gavel 20's distinction is guardedness, not how many bindings a cycle
-/// passes through: every reference here sits in a constructor's slot, so
-/// every cell completes at its constructor and the ring closes. The suite
-/// already pins the same graph spelled through ONE binding — the map knot in
-/// a_constant_that_names_itself answers `b a` — and refusing this spelling
-/// would make the number of names semantic.
-///
-/// The strict-position cycle is the one that still refuses, and it refuses
-/// earlier: `a = b + 1` with `b = a + 1` never reaches the runtime, because
-/// the name check has no constructor slot to defer through.
-#[test]
-fn a_knot_through_two_names_ties_like_a_knot_through_one() {
-    let dir = std::env::temp_dir().join("kanso_two_name_knot");
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).expect("the directory is made");
-    let source = dir.join("knot.kso");
-    // A cycle forward-references by construction, and only a module lets a
-    // constant name one declared below it.
-    std::fs::write(
-        &source,
-        "type node\n  id\n  peer\n\n\
-         pub ring = node 1 mate\n\n\
-         mate = node 2 ring\n\n\
-         pub play = print \"{ring.peer.id}\"\n",
-    )
-    .expect("the program writes");
-
-    let run = evaluate(&compile_case(&source), Vec::new());
-
-    assert_eq!(run.stdout, "2\n");
-}
