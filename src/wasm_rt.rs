@@ -132,18 +132,23 @@ fn forced(v: Value) -> Value {
     let Value::TableFn(h) = v else {
         return v;
     };
-    let Slot::C { tidx, env, arity } = slot(h) else {
-        return v;
-    };
-    match arity {
-        RUNNING => die("a constant that names itself has no value yet".to_string()),
-        DEFERRED => {}
-        _ => return v,
+    match slot(h) {
+        Slot::C { tidx, env, arity } => {
+            match arity {
+                RUNNING => die("a constant that names itself has no value yet".to_string()),
+                DEFERRED => {}
+                _ => return v,
+            }
+            REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
+            let answered = val(call_closure(h, Vec::new()));
+            REG.with(|r| r.borrow_mut()[h as usize] = Slot::V(answered.clone()));
+            answered
+        }
+        // the answer was written back over the closure, and the handle names
+        // it now
+        Slot::V(value) => value,
+        _ => v,
     }
-    REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
-    let answered = val(call_closure(h, Vec::new()));
-    REG.with(|r| r.borrow_mut()[h as usize] = Slot::V(answered.clone()));
-    answered
 }
 
 fn pop_args(n: u32) -> Vec<u32> {

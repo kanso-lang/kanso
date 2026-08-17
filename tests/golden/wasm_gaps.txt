@@ -56,16 +56,11 @@ tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso	the program ran out 
 # has a deferral here, it just prints the wrapper instead of asking it.
 tests/golden/micro/a_knot_through_two_names.kso	2 1 a_knot_through_two_names/node 2 <fn>
 
-# A constant naming itself as a MAP value. The browser defers a list element
-# and a constructor field but not a map value, so the mention is taken now
-# and the ring has no floor.
-#
-# Deferring it there was tried and is worse: the browser then builds the
-# cyclic map and renders it without a cycle guard, which overflows the HOST
-# rather than the guest — a clean diagnostic traded for an abort. The value
-# side and the render side have to land together, and the render side is the
-# same work as the two entries above.
-tests/golden/micro/a_knot_through_a_map_value.kso	the program ran out of stack: recursion went deeper than the stack holds
+# A constant naming itself as a MAP value. The knot ties here now — every
+# mention reaches one cell, so the map builds once and holds itself — and what
+# is left is the same render difference as the entries above: the browser
+# prints the closure that would answer the value rather than asking it.
+tests/golden/micro/a_knot_through_a_map_value.kso	{ "a":<fn> }
 
 # An err whose reason holds a cell nobody demanded. Native and the oracle now
 # FORCE what they print, so the trace shows the ring and stops at `<cycle>`;
