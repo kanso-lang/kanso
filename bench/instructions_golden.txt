@@ -205,8 +205,14 @@ escapebench 258541119
 # carrying the entry module's prefix in its name. escapebench imports nothing
 # twice and is the row that holds.
 #
-# No allocation counter moves at all, so this is the same work with less of it
-# — but by what mechanism is open. The candidate is dispatch, which compares
-# type names, and the names got ten characters shorter; nothing here measured
-# that, and the emitted IR on the measuring host is otherwise identical to
-# main's. Stated as a candidate rather than a finding.
+# No allocation counter moves at all, and the work removed is the cohort pop.
+# Calls to k_cohort_pop in the emitted IR go 2 to 0 on jsonbench, 3 to 0 on
+# encodebench, 4 to 0 on oneshot, 3 to 0 on basket and 3 to 0 on widebench;
+# deepbench had none and escapebench keeps its one. The rows that fall are
+# exactly the rows that lose them.
+#
+# A pop that frees nothing still walks, which is why oneshot pays 5.54% for
+# four of them and jsonbench 1.82% for two in its decode loop. That they were
+# freeing nothing is what the counters say: not one of them moves, the mem
+# goldens are unchanged, and the row whose storage actually escapes its beat
+# is the row that keeps its pop.

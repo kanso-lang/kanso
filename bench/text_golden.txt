@@ -156,11 +156,17 @@ escapebench text=48482
 # `list/bounded`. escapebench is the one entry whose inner module imports
 # nothing, and it is the row that does not move by any measure.
 #
-# The mechanism behind the SIZE of these falls is not established. On the
-# measuring host the emitted IR for jsonbench is identical to main's but for
-# the shortened name constants and one dropped declare, and those constants
-# are .rodata, which this gate does not read. Their sizes do not track the
-# falls either: deepbench sheds 4,508 bytes of them and does not move here,
-# where basket sheds 1,519 and falls 2,160. So the direction is measured and
-# the cause is open, recorded that way rather than guessed — the last entry
-# in this file to guess had to be retracted.
+# What produces the size of the falls is the cohort pop. Counting calls to
+# k_cohort_pop in the emitted IR against main, per row: jsonbench 2 to 0,
+# encodebench 3 to 0, oneshot 4 to 0, basket 3 to 0, widebench 3 to 0,
+# deepbench 0 to 0, escapebench 1 to 1. The five that lose every pop are the
+# five that fall, and the two that keep their count are the two that hold —
+# no exceptions across the corpus. With no call left, the linker drops
+# k_cohort_pop and what only it reaches, which is machine code this gate can
+# see and the emitted-line count cannot.
+#
+# Those pops were reclaiming nothing. Every allocation counter is
+# byte-identical across this change, the lazy tier's mem goldens pass
+# unchanged, and escapebench — the one row whose storage escapes its beat,
+# and whose perm_peak_bytes this file elsewhere records falling to 10,272 —
+# is the row that KEEPS its pop.
