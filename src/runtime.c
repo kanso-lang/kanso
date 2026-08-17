@@ -1782,7 +1782,18 @@ KValue k_caf_complete(KValue built, KValue seeded) {
     if (built.tag == K_THUNK && seeded.tag == K_THUNK && built.payload == seeded.payload) {
         k_die("a lazy binding demands its own value");
     }
-    return k_caf_freeze(built);
+    KValue frozen = k_caf_freeze(built);
+    /* A field that stored this cell mid-flight holds the SEED, and the frozen
+       value is a copy of what the builder made — so storing the copy in the
+       global is not enough, and the field would chase a blackhole nobody ever
+       answers. Answering the seed itself is what ties the knot: every holder
+       of the cell, copied or not, resolves through the same thunk. */
+    if (seeded.tag == K_THUNK) {
+        KThunk* t = (KThunk*)seeded.payload;
+        t->result = frozen;
+        t->forced = 1;
+    }
+    return frozen;
 }
 
 
