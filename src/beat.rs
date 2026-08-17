@@ -778,6 +778,10 @@ fn cluster_edges_ok(
             // whole buffer at every rewind: growth wearing a carry — and a
             // slot inference can't type may hide the same shape
             if s & BYTES != 0 || s == 0 {
+                if std::env::var("KANSO_CLUSTER_TRACE").is_ok() {
+                    eprintln!("    REFUSE {}/{} slot {} set={} (bytes={} unknown={})",
+                        groups[*to].0, groups[*to].1, i, s, s & BYTES != 0, s == 0);
+                }
                 return None;
             }
             if let Expr::App { head: ah, args: aargs, .. } = arg {
