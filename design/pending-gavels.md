@@ -6,6 +6,9 @@ unblocks. Nothing here is urgent in the sense of broken; everything here
 is a fork the project has deliberately not taken without a ruling.
 
 ## 1. The err rule — GAVELED 2026-08-15: the three-combinator model
+(SURFACE SUPERSEDED by 24, 2026-08-17: the triad sinks to elaboration
+internals; the license moves to dispatch arms; the semantics survives
+as the elaborator's spec.)
 
 The enforcement question dissolved into structure (Clay, 2026-08-15
 dialog). Failure handling is three combinators over the effect's two
@@ -171,7 +174,7 @@ Build note: prefer streaming emission (elements print as they force,
 Haskell-style), so an accidental `print naturals` is visibly growing
 and interruptible rather than a silent hang.
 
-## 18 + 19. The effects surface — GAVELED 2026-08-16
+## 18 + 19. The effects surface — GAVELED 2026-08-16 (SUPERSEDED by 24)
 
 Closed together, with the spelling questions they dragged in. The
 rulings, in dependency order:
@@ -216,7 +219,7 @@ rulings, in dependency order:
   value-free sequencing is common enough for a dedicated glyph, and
   the wall's laws are gaveled, taught, and fuzzed under this spelling.
 
-## 21. The effect block — GAVELED 2026-08-16; keyword `do` CONFIRMED 2026-08-17
+## 21. The effect block — GAVELED 2026-08-16 (SUPERSEDED by 24)
 
 The do-notation analog, ruled the same hour the `.>` operator landed.
 Inside an explicitly-opened block (keyword: `do`, confirmed), statements sequence via bind and
@@ -242,7 +245,7 @@ for colliding with the lambda arrow.
   semantics. Closes the also-open "sequencing more than two binds
   prettily" item (multiplyTwoRandoms).
 
-## 22. The lifting fork — RESOLVED 2026-08-16/17: uniform explicitness
+## 22. The lifting fork — RESOLVED 2026-08-16/17, then RE-RESOLVED by 24 (the no-pass rule dissolved the two-regimes argument)
 
 The morning corner is ratified; the Koka corner is declined, and the
 deciding argument outranks the trilemma: **the failure channel forces
@@ -256,7 +259,7 @@ explicitness is one mental model. (Clay: monads are confusing as
 hell, and the fix is that kanso has no monads-in-general — one effect
 type, a handful of ordinary functions, a block — not hidden ones.)
 
-## 23. The effects vocabulary — GAVELED 2026-08-17
+## 23. The effects vocabulary — GAVELED 2026-08-17 (SUPERSEDED by 24: the vocabulary sinks below the surface; `skip` survives)
 
 `bind`, `rescue`, `annotate`, `return`, `do`, `skip`.
 
@@ -276,6 +279,76 @@ type, a handful of ordinary functions, a block — not hidden ones.)
   residue case has a word that says what it means.
 - The book teaches bind/rescue/annotate/do/skip early and return
   late; the word "monad" appears nowhere.
+
+## 24. The boundary language — GAVELED 2026-08-17
+
+The effect system stops being a feature and becomes a property. The
+user's surface: functions, arms, `>>`, adjacency, and one doctrine
+sentence — **your own failures only bubble.** Gaveled as a whole
+document after the fourth reversal on this axis in a day; the arc and
+its corrections are in the log.
+
+### The five clauses
+
+1. **Own errs are unreceivable.** No arm may match an err whose origin
+   hako is the arm's own — a compile refusal via the provenance set
+   (same fixpoint, simpler check than the return-channel rule it
+   replaces). Own failures bubble to the boundary, always. Trapping is
+   naming and unstoppable = no pub ancestor, both unchanged.
+2. **Foreign errs are handled by ordinary dispatch arms.** An arm
+   naming a foreign reason type receives the failure and answers
+   whatever it wants — a value (conversion) or an err (annotation).
+   The arm is the explicit decision site; provenance checks the
+   license there. A bare `err e` arm can only ever hold a foreign err,
+   so it too may answer anything.
+3. **The success channel lifts ambiently, signature-directed.** An
+   effect in a position whose inferred type demands the product
+   elaborates to bind; plan-taking and unconstrained (parametric)
+   positions receive the plan — so `retry (fetch url) 3` needs no
+   mark, `id`/containers/list literals hold plans as data, and
+   `fetch_num url * 3` lifts. Independent effects combine
+   applicatively under the adjacency laws; a join with one plan branch
+   is a plan, value branches wrapping. A name is a shared node — used
+   thrice, runs once; execution count is readable from naming.
+4. **No suspension mark exists.** `&` retains only its nullary-call
+   gavel meaning. The unit dissolves (joins auto-wrap; `skip` is the
+   no-op constant). Order is walls and data: adjacency unordered, `>>`
+   sequences, dependence orders, the wire runs what arrives.
+5. **What sinks below the surface:** bind, rescue, annotate, return,
+   the do block, `.>` — elaboration vocabulary the compiler writes and
+   the book never teaches. The combinator laws become the elaborator's
+   spec, pinned by the differential machinery.
+
+### Sworn trades (Clay, with the record quoted)
+
+- Interior plan-ness is visible via tracking and the LSP, not
+  spelling. Affirmed repeatedly.
+- Shape-predictability is redefined as *predictable given signatures*:
+  the 2026-08-16 impasse verdict ("i don't like doing it
+  conditionally... it really is an impasse") is reversed knowingly —
+  the conditional is signature-directed and deterministic, and the
+  named hazard is sworn: **refactoring a callee's body can silently
+  re-elaborate its callers** (a retry whose parameter drifts to
+  product-typed retries nothing, well-typed). Mitigations: the
+  unused-value rule, goldens, LSP signature drift; not forced by the
+  language.
+- Own-annotation dies; std's `number_ok`/`string_ok`/`must` restructure
+  to raise the right reason initially, blunted by auto-carried origin
+  and hop traces.
+
+### What survives untouched
+
+The description carrier and executors, wire-is-the-demand (17/20b),
+provenance and the foreign-only license, the dispatch architecture
+(3+5), `>>`/adjacency laws, dot-as-application, the test-surface rider
+(the harness is a foreign party), gavel 20's knot semantics.
+
+### Pins ruled with the entry
+
+Lambda capture (effects in a lambda body lift within the lambda); the
+join rule as stated; sharing as stated; bare-foreign-err arms as
+stated. Build order and elaborator design are the compiler's lane;
+welfare and the veins gate the cost.
 
 ## Also open, not blocking any current work
 

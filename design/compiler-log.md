@@ -3056,3 +3056,39 @@ What remains in the file: the err riders (construction enforcement,
 the test surface, ch08 pedagogy, migration, the small July
 spellings) and the also-open list. Twenty-seven rulings across three
 days, every one recorded on main the day it was made.
+
+## 2026-08-17 — gavel 24: the boundary language
+
+The effects arc ended by consuming its own surface. Clay's three moves
+across the day assembled it: the monadic shape is just syntax (purity
+and laziness force the carrier, not the spelling — my "forced"
+claim corrected); own errs made unreceivable dissolves the two-regimes
+argument that had closed the lifting fork (no handling exists inside a
+hako, so there is nothing for ambient success-lifting to be
+inconsistent with); and with foreign errs handled by ordinary dispatch
+arms, the whole combinator vocabulary — bind, rescue, annotate,
+return, do, .> — sinks to elaboration internals. The final amendment
+came from Clay against his own impasse verdict, knowingly: `retry
+(fetch url)` needs no mark, elaboration is signature-directed, and the
+refactor-re-elaboration hazard is sworn with mitigations named.
+
+The surface a kanso programmer learns is now: functions, arms, `>>`,
+adjacency, `skip`, and one sentence — your own failures only bubble.
+Interior code reads like Ruby; boundaries read like dispatch; the
+wire runs everything; the laws live in the elaborator and the
+differential machinery pins them. Entries 1 (surface), 18+19, 21, 22,
+23 are marked superseded; the semantics under all of them survives.
+
+The gavel was taken after an explicit on-the-same-page check — every
+objection either corrected (laziness, forgot-to-run, two-regimes) or
+converted to a sworn trade (LSP-visible plan-ness, signature-directed
+elaboration). Five reversals on one axis in twenty-four hours, none
+built, all recorded: the process worked exactly as the append-only
+log intends.
+
+Build consequences, compiler's lane: the elaborator (bind/applicative
+insertion, join wrapping, sharing as node identity), effect tracking
+threaded through inference, the arm-based license check (provenance at
+err arms instead of rescue sites), the std restructure
+(number_ok/string_ok/must), and the book's failure chapter rewritten
+around the one sentence. Welfare and the veins gate the cost.
