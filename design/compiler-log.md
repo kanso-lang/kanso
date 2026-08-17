@@ -3426,3 +3426,36 @@ Also restored in the same commit: the visible "1b is GAVELED" marker
 in the migration rider — the #921 rewrite had left the ruling only in
 the log, and another session nearly blocked the migration on the
 pending file's silence. A ruling lives where the next reader greps.
+
+## 2026-08-17 — the description knot: a composition, not a gap
+
+Task #240 found three engines giving three answers to a knotted
+constant whose body is a description — `d = print "x" >> use (box d)`:
+oracle runs, native refuses, and the browser switched sides as a
+side effect of #934/#936. The finder read gavel 20 as ruling records
+and asked whether descriptions were a gap in it.
+
+They are not: gavel 15 supplies the missing premise. Gavel 20's
+principle was never about constructors — it is guardedness wherever
+laziness creates a lazy slot — and 15 ruled that `>>` defers its right
+side, which makes a `>>` right operand exactly such a slot. So the
+knotted description ties by the same argument as `ring = cell ring`;
+native is right under pre-15 semantics and wrong after; the browser's
+side-switch was transitional noise on unbuilt gavels. Ruled by
+derivation, veto window offered to Clay, verified independently by the
+finding session against both gavels' recorded text.
+
+Sequencing, so the corpus does not encode transitional behaviour: the
+fixture is pinned WITH the 15+20 builds, oracle-shaped but
+20b-rendered — the knot displays `<cycle>`, not today's `<thunk>`.
+
+One display boundary pinned alongside, because the oracle's current
+output brushes it: a plan embedded in a rendered value renders as its
+inert, cycle-guarded structural form. Render forces thunks (20b) but
+NEVER executes effects — execution belongs to the wire alone. Output
+demands everything it emits; it runs nothing it merely shows.
+
+The finder's own diagnosis is the method lesson: "I was looking for a
+gap where there was a composition." With this many principles ruled,
+compositions now outnumber gaps — the first question about an apparent
+fork is which OTHER ruling supplies the missing premise.
