@@ -58,3 +58,14 @@ tests/golden/runtime/a_constant_that_names_itself_is_demanded.kso	`+` is not def
 # the same work as the entry above: give the browser the blackhole the
 # interpreter keys by name.
 tests/golden/runtime/a_guarded_shape_that_is_not_a_knot.kso	the program ran out of stack: recursion went deeper than the stack holds
+
+# Two constants naming each other. Native and the oracle tie the knot: each
+# cell is seeded before any builder runs, so a mention mid-flight finds a
+# blackhole to store and the cycle closes. The browser has no cell to seed,
+# so following `ring` reaches `mate`, which reaches `ring`, until the stack
+# ends the program.
+#
+# This is the third fixture waiting on the same missing mechanism as the two
+# entries above, and the count is the argument for building it: the browser
+# needs the blackhole the interpreter keys by name.
+tests/golden/micro/a_knot_through_two_names.kso	the program ran out of stack: recursion went deeper than the stack holds

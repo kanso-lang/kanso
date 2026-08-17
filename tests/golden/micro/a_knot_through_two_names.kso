@@ -1,0 +1,18 @@
+# Two constants naming each other. Each sits in the other's constructor
+# slot, so both are guarded and both tie — the count of names a cycle runs
+# through is not what decides it. Beside this, a_constant_that_names_itself
+# ties the same two-node graph through one binding.
+#
+# Native reaches a knotted constant through its cell rather than its
+# builder, and answers that cell as a value rather than as a register-held
+# record: the cell carries a blackhole while the cycle is still building,
+# and a record read in registers has nowhere to put a thunk.
+type node
+  id
+  peer
+
+pub ring = node 1 mate
+
+mate = node 2 ring
+
+pub play = print "{ring.peer.id} {ring.peer.peer.id} {ring.peer}"
