@@ -49,13 +49,13 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=79634
-encodebench text=97090
-oneshot text=96834
+jsonbench text=79778
+encodebench text=97298
+oneshot text=96978
 basket text=89314
-widebench text=98354
-deepbench text=60866
-escapebench text=47922
+widebench text=98562
+deepbench text=61026
+escapebench text=48050
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -130,3 +130,14 @@ escapebench text=47922
 # call and bracketed, and these two are the benchmarks holding such a cycle —
 # the push and pop around the entry, and the rewind in the loop, are code
 # their binaries did not carry before.
+# 2026-08-17: +144 on jsonbench and oneshot, +208 on encodebench and
+# widebench, +160 on deepbench, +128 on escapebench, and basket does not move
+# at all. The render path gains a thunk arm: a forced cell is pushed before
+# the walk descends and popped after, so a knot that closes through a cell
+# prints `<cycle>` rather than walking a ring forever. Every program links the
+# renderer, so every program carries the test.
+#
+# basket holding still across BOTH linux veins is the row to explain, not to
+# wave at — the same change moves the other six in code size and in
+# instructions, and a benchmark that links the renderer should pay the test
+# whether or not it ever meets a cell.

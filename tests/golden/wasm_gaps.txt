@@ -35,19 +35,6 @@ tests/golden/micro/make_dir_is_idempotent.kso	the playground has no filesystem
 # ask a deferral what it is, which reaches into the interpreter's own render.
 tests/golden/micro/a_constant_that_holds_itself.kso	<fn>
 
-# A constant that names itself and is then demanded. Native and the oracle
-# refuse with "a lazy binding demands its own value"; the browser reads the
-# deferral through and finds the record, because `ring.v` IS a deferred `ring`
-# and resolving it once yields the whole value. So it answers about the record
-# it found rather than about the demand — coherent cyclic semantics, and not
-# the oracle's, which treats re-entry as the error.
-#
-# It used to run out of stack here. A record field is now deferred the way a
-# list element already was, so the recursion is gone; what remains is the
-# semantic difference above, and closing it means giving the browser the
-# blackhole the interpreter keys by name.
-tests/golden/runtime/a_constant_that_names_itself_is_demanded.kso	`+` is not defined
-
 # The guarded shape that cannot be tied: `x = (cell x).v`. Native and the
 # oracle refuse with "a lazy binding demands its own value" — the demand for x
 # arrives while x's right-hand side is running, from a cell that has produced
