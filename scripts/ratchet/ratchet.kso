@@ -101,6 +101,14 @@ escape_counters = row
   (breaking "escaped_storage_kept")
   benchmarks
 
+scan_counters = row
+  "a lazy verdict leaking from one arm of a group to another"
+  true
+  (gating "scan_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "lazy_verdict_leaks_between_arms")
+  benchmarks
+
 mem_shapes = row
   "a memory shape the fixture's counters no longer describe"
   true
@@ -167,7 +175,9 @@ itself = row
 
 rows_a = [formatting linting goldens mem_shapes release_profile]
 
-rows_b = [decode_counters escape_counters emitted_code machine_code]
+rows_b1 = [decode_counters escape_counters scan_counters]
+
+rows_b = text/concat rows_b1 [emitted_code machine_code]
 
 rows_c = [welfare_floor grammar book_outputs diagnostics itself]
 

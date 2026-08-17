@@ -366,7 +366,14 @@ pub fn analyze(program: &Program) -> DemandInfo {
     }
     let discard = discard_positions(program);
     let fn_names: HashSet<&str> = program.fns.iter().map(|f| f.name.as_str()).collect();
-    let mut lazy_binds = HashSet::new();
+    // A (group, arity, index) key names a statement in EVERY arm of the
+    // group, and codegen consults it with no arm to disambiguate. So the
+    // verdict has to hold for all of them: one arm whose bind at this index
+    // is a plain comparison would otherwise be thunked because a sibling arm
+    // binds a recursive call there. regexp's character-class arm paid
+    // 501,502 thunks for its lookahead sibling's laziness. The releasability
+    // fold below already works this way.
+    let mut lazy_votes: HashMap<(String, usize, usize), bool> = HashMap::new();
     for f in &program.fns {
         for (i, stmt) in f.body.iter().enumerate() {
             let Stmt::Bind { pattern: Pattern::Var(name, _), .. } = stmt else {
@@ -387,12 +394,17 @@ pub fn analyze(program: &Program) -> DemandInfo {
                 collect_uses(e, name, &discard, &mut uses);
             }
             let Stmt::Bind { expr, .. } = stmt else { unreachable!() };
-            if !rebound && uses.deferrable > 0 && uses.demanding == 0 && expensive(expr, &fn_names)
-            {
-                lazy_binds.insert((f.name.clone(), f.params.len(), i));
-            }
+            let qualifies = !rebound
+                && uses.deferrable > 0
+                && uses.demanding == 0
+                && expensive(expr, &fn_names);
+            let key = (f.name.clone(), f.params.len(), i);
+            let seen = lazy_votes.entry(key).or_insert(true);
+            *seen = *seen && qualifies;
         }
     }
+    let lazy_binds: HashSet<(String, usize, usize)> =
+        lazy_votes.into_iter().filter_map(|(key, ok)| ok.then_some(key)).collect();
     // A (group, arity, index) key can name a bind in more than one arm of
     // the group; the release verdict must hold for every arm it names.
     let mut verdicts: HashMap<(String, usize, usize), bool> = HashMap::new();
