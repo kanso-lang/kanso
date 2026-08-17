@@ -3261,16 +3261,16 @@ KValue k_render(KValue v, long long quote) {
     // value and renders its sentinel below
     if (v.tag == K_ERR) return v;
     if (v.tag == K_SUB) return k_render(k_sub_base(v), quote);
-    /* Rendering demands nothing: a cell already forced shows what it holds,
-       and one still pending says so. The oracle answers the same way, and a
-       cell that reaches here unforced is a missed force point either way. */
+    /* Output is the demand, so rendering forces what it prints. The oracle
+       answers the same way. */
     if (v.tag == K_THUNK) {
         KThunk* cell = (KThunk*)(intptr_t)v.payload;
-        if (!cell->forced) return k_str("<thunk>");
         for (int d = 0; d < k_render_depth; d++)
             if (k_render_path[d] == cell) return k_str("<cycle>");
         if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = cell;
-        KValue out = k_render(cell->result, quote);
+        /* the wire is the demand: output forces what it prints, and the path
+           above is what stops a knot walking round */
+        KValue out = k_render(k_force(v), quote);
         if (k_render_depth > 0) k_render_depth--;
         return out;
     }
@@ -3327,11 +3327,18 @@ KValue k_render(KValue v, long long quote) {
         case K_DESC: return k_str("<io>");
         case K_LIST: {
             KList* l = (KList*)(intptr_t)v.payload;
+            /* on the path like a record, so a cell holding this very list
+               says <cycle> where it comes round rather than printing the
+               list a second time */
+            for (int d = 0; d < k_render_depth; d++)
+                if (k_render_path[d] == l) return k_str("<cycle>");
+            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = l;
             KValue out = k_str("[");
             for (long long i = 0; i < l->len; i++) {
                 if (i) out = k_concat(out, k_str(" "));
                 out = k_concat(out, k_render(l->items[i], 1));
             }
+            if (k_render_depth > 0) k_render_depth--;
             return k_concat(out, k_str("]"));
         }
         case K_MAP: {
@@ -3339,6 +3346,9 @@ KValue k_render(KValue v, long long quote) {
             long long n;
             KValue* s = k_map_sorted(m, &n);
             if (n == 0) return k_str("{}");
+            for (int d = 0; d < k_render_depth; d++)
+                if (k_render_path[d] == m) return k_str("<cycle>");
+            if (k_render_depth < K_RENDER_PATH_MAX) k_render_path[k_render_depth++] = m;
             KValue out = k_str("{ ");
             for (long long i = 0; i < n; i++) {
                 if (i) out = k_concat(out, k_str(" "));
@@ -3346,6 +3356,7 @@ KValue k_render(KValue v, long long quote) {
                 out = k_concat(out, k_str(":"));
                 out = k_concat(out, k_render(s[i * 2 + 1], 1));
             }
+            if (k_render_depth > 0) k_render_depth--;
             return k_concat(out, k_str(" }"));
         }
         case K_BYTES: {

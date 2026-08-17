@@ -3523,6 +3523,10 @@ fn render_seen(
         Value::Map(entries) => match entries.is_empty() {
             true => "{}".to_string(),
             false => {
+                let ptr = Rc::as_ptr(entries) as usize;
+                if !seen.insert(ptr) {
+                    return "<cycle>".to_string();
+                }
                 let inner: Vec<String> = entries
                     .iter()
                     .map(|(key, value)| {
@@ -3533,6 +3537,7 @@ fn render_seen(
                         format!("{key}:{}", render_seen(interp, value, true, seen))
                     })
                     .collect();
+                seen.remove(&ptr);
                 format!("{{ {} }}", inner.join(" "))
             }
         },
@@ -3544,8 +3549,17 @@ fn render_seen(
         Value::False => "false".to_string(),
         Value::NoneV => "<none>".to_string(),
         Value::ErrV(info) => format!("err {}", render_seen(interp, &info.reason, true, seen)),
+        // On the path like a record, so a knot that closes through a cell
+        // holding this very list prints the list once and says `<cycle>`
+        // where it comes round.
         Value::List(items) => {
-            let inner: Vec<String> = items.iter().map(|i| render_seen(interp, i, true, seen)).collect();
+            let ptr = Rc::as_ptr(items) as usize;
+            if !seen.insert(ptr) {
+                return "<cycle>".to_string();
+            }
+            let inner: Vec<String> =
+                items.iter().map(|i| render_seen(interp, i, true, seen)).collect();
+            seen.remove(&ptr);
             format!("[{}]", inner.join(" "))
         }
         Value::Record { ty, fields } => match fields.borrow().is_empty() {
