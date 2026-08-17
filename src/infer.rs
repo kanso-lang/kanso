@@ -536,6 +536,9 @@ fn eval_call<'a>(
         return TOP | piped_bits;
     };
     if env.contains_key(name.as_str()) {
+        if std::env::var("KANSO_CLOSURE_TRACE").is_ok() {
+            eprintln!("LOCAL-CALL {name} args={arg_sets:?}");
+        }
         return TOP | piped_bits; // calling a local function value
     }
     if name == "if" {
