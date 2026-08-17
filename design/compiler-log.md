@@ -3391,3 +3391,38 @@ while this log kept it, at "### 1b. Foreign structure access, gaveled —
 per-field pub". The index is maintained by hand and can lose a fact; the log
 is append-only and cannot. They disagree in one direction only, so when they
 do, the log wins.
+
+## 2026-08-17 — ch08 restructures, kq goes gate-then-write, os apes Go
+
+Three rulings Clay delegated with "I think you already know the
+answer," recorded with their reasoning.
+
+ch08: the chapter restructures around std/json as the foreign library,
+thesis "your own failures only bubble" — the licensed case taught
+through a concrete dependency. This unblocks the projection migration
+(failure_position/failure_reason and kq's vendored copies retire; 1b's
+per-field-pub gavel of 2026-08-14 licenses clients to destructure the
+reason themselves), whose scope is the projections,
+json_failure_door.kso, and the ch08 suite. The other session takes the
+mechanical migration; #939's advisory gives it something to verify
+against.
+
+kq publish: gate-then-write, Clay's own design. The PR run computes
+the race and FAILS on decrease — it never writes, so PR heads always
+carry real checks and the zero-checks class (a bot commit as PR head
+suppresses the status rollup; measured on kq PR 61) dies at the root.
+The post-merge run on main recomputes and commits the ratcheted
+artifact via a branch-protection bypass for the Actions bot — safe
+because the write sits behind the gate, and it banks improvements
+automatically, which improves on hold-not-banked. Standing protocol
+rule recorded with it: a PR head with ZERO check runs is not green —
+dispatch CI and wait; kq's ci.yml already grew workflow_dispatch for
+exactly this.
+
+os: mirror Go's split exactly; committee handles residue; Clay never
+sees the boundary cases.
+
+Also restored in the same commit: the visible "1b is GAVELED" marker
+in the migration rider — the #921 rewrite had left the ruling only in
+the log, and another session nearly blocked the migration on the
+pending file's silence. A ruling lives where the next reader greps.
