@@ -67,3 +67,37 @@ fn a_re_exported_name_alone_keeps_its_import() {
     assert_eq!(String::from_utf8_lossy(&output.stdout), "[1 2 3]\n");
     assert!(output.status.success());
 }
+
+/// The qualified door. A re-exported name keeps the spelling its owner gave
+/// it — `order` is geo's rename of list's `sort`, declared `list/order` — so
+/// `geo/order` named nothing while bare `order` resolved, and every plain
+/// re-export was the same. A module's own pub has both doors and so does a
+/// re-exported one now.
+///
+/// `geo/areas` is in the fixture because it is geo's own function: the door
+/// is opened only where the qualified spelling is free, and this proves the
+/// pass leaves a real declaration alone.
+#[test]
+fn a_reexported_name_answers_to_the_module_that_surfaced_it() {
+    let output = run("door");
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "[3 1 2]\n[1]\n[1 2 3]\n");
+    assert!(output.status.success());
+}
+
+/// A facade: `mid` declares nothing and re-exports shape's type and its arm.
+///
+/// Three things had to hold for it, each watched red on its own. A module
+/// whose only reason for an import is re-exporting it read as unused, and no
+/// spelling would have satisfied the check. `mid/describe` named nothing from
+/// inside another module, where the entry already reached it. And `filled`
+/// arrived twice — open through `mid`, sealed through `teller`'s route — and
+/// the later arrival closed it, which is the visibility half of gavel 51 that
+/// types had never been given.
+#[test]
+fn a_module_that_only_re_exports_is_a_module() {
+    let output = run("facade/app");
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "tell filled 3\n");
+    assert!(output.status.success());
+}

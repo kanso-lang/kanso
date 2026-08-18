@@ -1,0 +1,4 @@
+import "../mid"
+
+pub fn tell f
+  "tell {mid/describe f}"

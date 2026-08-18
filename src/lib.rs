@@ -102,16 +102,21 @@ fn compile_parsed_entry(
     let mut visited = std::collections::HashSet::new();
     let (dep_program, exports, shadowed, surfaced) =
         load_dependencies(&base, &import_list, &mut visited)?;
-    let mut diags = Vec::new();
+    let mut quals = std::collections::HashSet::new();
+    used_quals(&program, &mut quals);
+    mark_bare_quals(&program, &surfaced, &mut quals);
+    mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
+    let mut diags = unused_imports(&program.imports, &quals);
+    // After the import is credited and before the surface is judged: the door
+    // resolves to the owner's spelling, so crediting that owner would leave
+    // the import the caller wrote reading as unused, and asking whether
+    // `geo/order` is pub would ask it of a name nothing declares.
+    open_qualified_doors(&mut program, &surfaced, &exports);
     for decl in &program.fns {
         for stmt in &decl.body {
             private_uses(stmt, &exports, &shadowed, &mut diags);
         }
     }
-    let mut quals = std::collections::HashSet::new();
-    used_quals(&program, &mut quals);
-    mark_bare_quals(&program, &surfaced, &mut quals);
-    diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
         diags.sort_by_key(|d| (d.span.line, d.span.col));
@@ -254,16 +259,21 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
             load_dependencies(&base, &import_list, &mut visited)
         })?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
-    let mut diags = Vec::new();
+    let mut quals = std::collections::HashSet::new();
+    used_quals(&program, &mut quals);
+    mark_bare_quals(&program, &surfaced, &mut quals);
+    mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
+    let mut diags = unused_imports(&program.imports, &quals);
+    // After the import is credited and before the surface is judged: the door
+    // resolves to the owner's spelling, so crediting that owner would leave
+    // the import the caller wrote reading as unused, and asking whether
+    // `geo/order` is pub would ask it of a name nothing declares.
+    open_qualified_doors(&mut program, &surfaced, &exports);
     for decl in &program.fns {
         for stmt in &decl.body {
             private_uses(stmt, &exports, &shadowed, &mut diags);
         }
     }
-    let mut quals = std::collections::HashSet::new();
-    used_quals(&program, &mut quals);
-    mark_bare_quals(&program, &surfaced, &mut quals);
-    diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if drop_unused {
         // An import at a prompt is used on the next line, not this one.
@@ -334,16 +344,21 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let (mut dep_program, exports, shadowed, surfaced) =
         load_dependencies(&base, &import_list, &mut visited)?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
-    let mut diags = Vec::new();
+    let mut quals = std::collections::HashSet::new();
+    used_quals(&program, &mut quals);
+    mark_bare_quals(&program, &surfaced, &mut quals);
+    mark_reexport_quals(&program, |name| exports.contains_key(name), &mut quals);
+    let mut diags = unused_imports(&program.imports, &quals);
+    // After the import is credited and before the surface is judged: the door
+    // resolves to the owner's spelling, so crediting that owner would leave
+    // the import the caller wrote reading as unused, and asking whether
+    // `geo/order` is pub would ask it of a name nothing declares.
+    open_qualified_doors(&mut program, &surfaced, &exports);
     for decl in &program.fns {
         for stmt in &decl.body {
             private_uses(stmt, &exports, &shadowed, &mut diags);
         }
     }
-    let mut quals = std::collections::HashSet::new();
-    used_quals(&program, &mut quals);
-    mark_bare_quals(&program, &surfaced, &mut quals);
-    diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
         diags.sort_by_key(|d| (d.span.line, d.span.col));
@@ -1540,10 +1555,18 @@ fn try_fuse(
 /// Everything a module's imports resolve to: the merged program, whether each
 /// qualified name is exported, and the names whose export flag an import took
 /// from the module's own declaration.
-/// What a bare spelling costs to resolve: which import qualifier surfaces it.
-/// A re-export puts a dependency's name on the surface without the route, so
-/// the name alone no longer says which import to credit for using it.
-type Surfaced = std::collections::HashMap<String, std::collections::HashSet<String>>;
+/// What each import puts within reach, by the bare spelling a caller may
+/// write: the qualifier to credit for using it, and — where the name came
+/// from somewhere else — who owns it. A re-export puts a dependency's name on
+/// the surface without the route, so the name alone says neither.
+///
+/// A name the import declares itself records no owner. That is the ordinary
+/// case, so the inner sets stay empty for a program with no re-exports, and
+/// what the front end holds does not grow with a module's own spellings.
+type Surfaced = std::collections::HashMap<
+    String,
+    std::collections::HashMap<String, std::collections::HashSet<String>>,
+>;
 
 type Loaded = (
     ast::Program,
@@ -1621,7 +1644,12 @@ fn qualify(
         dep.types.iter().map(|t| t.name.clone()).collect();
     for ty in &mut dep.types {
         if ty.name.contains('/') {
-            exports.insert(ty.name.clone(), ty.is_pub);
+            // GAVEL 51: one module, and a qualified name IS its identity, so
+            // a second arrival is the same declaration rather than a rival.
+            // Its visibility is what the routes grant between them — a sealed
+            // route that happens to load later does not close an open one.
+            let open = ty.is_pub || exports.get(&ty.name).copied().unwrap_or(false);
+            exports.insert(ty.name.clone(), open);
             continue;
         }
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
@@ -1718,13 +1746,22 @@ fn qualify(
     // one walk covers a declaration of this module and one it re-exports
     // alike — the second keeps its owner's qualifier and would otherwise
     // credit that owner for an import the caller never wrote.
-    for name in dep.fns.iter().filter(|f| f.is_pub).map(|f| &f.name) {
-        let bare = name.rsplit('/').next().unwrap_or(name);
-        surfaced.entry(bare.to_string()).or_default().insert(qual.to_string());
-    }
-    for name in dep.types.iter().filter(|t| t.is_pub).map(|t| &t.name) {
-        let bare = name.rsplit('/').next().unwrap_or(name);
-        surfaced.entry(bare.to_string()).or_default().insert(qual.to_string());
+    let pubs = dep
+        .fns
+        .iter()
+        .filter(|f| f.is_pub)
+        .map(|f| &f.name)
+        .chain(dep.types.iter().filter(|t| t.is_pub).map(|t| &t.name));
+    for name in pubs {
+        let (owner, bare) = match name.rsplit_once('/') {
+            Some((owner, bare)) => (owner, bare),
+            None => ("", name.as_str()),
+        };
+        let owners =
+            surfaced.entry(bare.to_string()).or_default().entry(qual.to_string()).or_default();
+        if !owner.is_empty() && owner != qual {
+            owners.insert(owner.to_string());
+        }
     }
 }
 
@@ -2325,6 +2362,75 @@ fn load_dependencies(
     Ok((dep_program, exports, shadowed, surfaced))
 }
 
+/// A re-export is a use of the import it names.
+///
+/// A module whose only reason for an import is putting its names back on the
+/// surface had that import read as unused, and no spelling would have
+/// satisfied the check — the re-export line is the use, and it names the
+/// export rather than the module.
+fn mark_reexport_quals(
+    program: &ast::Program,
+    surfaces: impl Fn(&str) -> bool,
+    quals: &mut std::collections::HashSet<String>,
+) {
+    for import in &program.imports {
+        let qual = import.alias.clone().unwrap_or_else(|| short_name(&import.path).to_string());
+        let named = program
+            .reexports
+            .iter()
+            .any(|re| re.name == qual || surfaces(&format!("{qual}/{}", re.name)));
+        if named {
+            quals.insert(qual);
+        }
+    }
+}
+
+/// The qualified door onto a re-exported name.
+///
+/// A re-export keeps the spelling its owner gave it — geo's rename of list's
+/// `sort` is `list/order` — so `order` resolves where `geo/order` names
+/// nothing, and a module's own pub gets both doors. The door is a second
+/// spelling for one declaration, resolved to the name its owner gave it. A
+/// clone would mint a second instance, which gavel 51 forbids.
+///
+/// Opened only where the qualified spelling is free and one declaration
+/// answers it. A module that declares its own `select` beside an import's
+/// already owns `mod/select`, and two re-exports landing on one bare name
+/// leave the caller nothing to choose between.
+fn open_qualified_doors(
+    program: &mut ast::Program,
+    surfaced: &Surfaced,
+    exports: &std::collections::HashMap<String, bool>,
+) {
+    let mut doors = std::collections::HashMap::new();
+    for (bare, by_qual) in surfaced {
+        for (qual, owners) in by_qual {
+            let door = format!("{qual}/{bare}");
+            // Only a name that answers blocks the door. A dependency's bare
+            // enrolment demotes when the module's own surface is drawn, so
+            // `mid/blank` exists and is private long before `mid` re-exports
+            // `blank` — and what the module published is what the caller
+            // asked for.
+            if exports.get(&door) == Some(&true) {
+                continue;
+            }
+            let mut answering = owners.iter();
+            let (Some(owner), None) = (answering.next(), answering.next()) else {
+                continue;
+            };
+            doors.insert(door, format!("{owner}/{bare}"));
+        }
+    }
+    if doors.is_empty() {
+        return;
+    }
+    for decl in &mut program.fns {
+        for stmt in &mut decl.body {
+            alias_stmt(stmt, &doors);
+        }
+    }
+}
+
 /// Bare uses count too: a bare `select` that any import exports marks that
 /// import used — the bare overload space makes spelling optional, not the
 /// dependency.
@@ -2359,7 +2465,7 @@ fn mark_bare_quals(
     // the caller wrote as `geo`, and the caller's import then reads as unused.
     for (name, quals_for) in surfaced {
         if bare.contains(name) {
-            quals.extend(quals_for.iter().cloned());
+            quals.extend(quals_for.keys().cloned());
         }
     }
     for import in &program.imports {
@@ -3032,6 +3138,7 @@ fn compile_module_loaded(
         );
         borrowed.sort();
         mark_bare_quals(program, &surfaced, &mut quals);
+        mark_reexport_quals(program, |name| was_pub.contains(name), &mut quals);
         let mut diags = unused_imports(&program.imports, &quals);
         for qual in &borrowed {
             diags.push(diag::Diagnostic::new(
@@ -3049,6 +3156,32 @@ fn compile_module_loaded(
     }
     if !import_diags.is_empty() {
         return Err(import_diags.join(""));
+    }
+    // pub bites at the boundary: a qualified reference to a non-pub name.
+    // Imports are module-scoped, so use is counted across every file before
+    // any one file's import block is called unused. Bare spellings count
+    // too — enrollment makes the qualifier optional, not the dependency.
+    let mut quals = std::collections::HashSet::new();
+    for (_, _, program) in &parsed {
+        used_quals(program, &mut quals);
+        mark_bare_quals(program, &surfaced, &mut quals);
+        for re in &program.reexports {
+            match import_quals.iter().find(|q| *q == &re.name) {
+                Some(q) => {
+                    quals.insert(q.clone());
+                }
+                None => {
+                    for q in &import_quals {
+                        if was_pub.contains(&format!("{q}/{}", re.name)) {
+                            quals.insert(q.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for (_, _, program) in &mut parsed {
+        open_qualified_doors(program, &surfaced, &exports);
     }
     let mut all_names = std::collections::HashSet::new();
     let mut all_markers = std::collections::HashSet::new();
@@ -3080,29 +3213,6 @@ fn compile_module_loaded(
         diags.sort_by_key(|d| (d.span.line, d.span.col));
         if !diags.is_empty() {
             return Err(diag::render(&diags, file, source));
-        }
-    }
-    // pub bites at the boundary: a qualified reference to a non-pub name.
-    // Imports are module-scoped, so use is counted across every file before
-    // any one file's import block is called unused. Bare spellings count
-    // too — enrollment makes the qualifier optional, not the dependency.
-    let mut quals = std::collections::HashSet::new();
-    for (_, _, program) in &parsed {
-        used_quals(program, &mut quals);
-        mark_bare_quals(program, &surfaced, &mut quals);
-        for re in &program.reexports {
-            match import_quals.iter().find(|q| *q == &re.name) {
-                Some(q) => {
-                    quals.insert(q.clone());
-                }
-                None => {
-                    for q in &import_quals {
-                        if was_pub.contains(&format!("{q}/{}", re.name)) {
-                            quals.insert(q.clone());
-                        }
-                    }
-                }
-            }
         }
     }
     for (file, source, program) in &parsed {

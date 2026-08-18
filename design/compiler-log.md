@@ -3608,3 +3608,42 @@ may suggest cargo run without Rust-the-language knowing either word.
 The shipped entry-file hint ("run its definitions beside their
 statements with `kanso play`") is ratified as-is; future diagnostics
 may hint verbs freely.
+## 2026-08-18 — the qualified door, and two more re-export gaps behind it
+
+`geo/order` named nothing where `order` resolved, and the axis was not
+the rename: `geo/select` and `geo/to_list` failed the same way, so a
+module's own pub had two doors and a re-exported name had one. A
+re-export keeps the spelling its owner gave it, and there is no second
+declaration to carry the importer's qualifier — nor should there be,
+which is what gavel 51 settled.
+
+The door is a spelling, not a declaration. `surfaced` already knew which
+import surfaces each bare name; it now also records who owns the name
+when that is somebody else, and a pass rewrites `qual/bare` to the
+owner's spelling in the importing program. A clone would have minted a
+second instance. It opens only where the qualified spelling is free and
+one declaration answers it, so a module that declares its own `select`
+beside an import's keeps what it had.
+
+Two more gaps came out of the fixture, each watched red on its own.
+
+A module whose only reason for an import is re-exporting it read as
+unused, and no spelling would have satisfied the check — the per-file
+import rule counted expressions and a re-export is not one. The
+module-wide pass already had that rule; the per-file pass never got it.
+
+And a type arriving by two routes took the visibility of whichever route
+loaded last. Gavel 51 gave functions the rule that an open route is not
+vetoed by a sealed one; types were left with an unconditional insert, so
+a facade's re-exported type read as private from an entry that reached
+it both ways. One line, and it is the same ruling.
+
+Ordering is the thing to keep straight in that function now: credit the
+imports, then open the doors, then judge the surface. Rewriting first
+credits the owner and the caller's import reads as unused, which is
+[[removing-a-spelling-needs-its-consumers]] from the other side.
+
+Every runtime counter is byte-identical and welfare holds at 84.56;
+front_end_visits did not move, because the pass walks bodies the front
+end already walks and the door map is empty for a program with no
+re-exports.

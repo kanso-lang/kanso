@@ -1,0 +1,5 @@
+import "../geo"
+
+print "{geo/areas [3 1 2]}"
+print "{geo/to_list (geo/select [1 2] (x -> x < 2))}"
+print "{geo/order [3 1 2]}"
