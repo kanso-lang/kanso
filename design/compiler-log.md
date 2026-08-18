@@ -3556,3 +3556,43 @@ description that the oracle runs. Gavel 20 swapped that divergence
 rather than closing it — before #931 native ran it and the oracle
 refused — so both readings are implemented, one per engine, and
 choosing is the work.
+
+## 2026-08-18 — the gavel 51 landing had two consumers it did not look for
+
+The entry above is wrong in one place and this corrects it rather than
+edits it. Both corrections are the same mistake made twice: the change
+stopped producing a name spelling, and nothing went looking for what
+READ that spelling.
+
+The first was found by review and is fixed. An import used only through
+names it re-exports read as unused, and the program was refused, where
+main answered on both engines. `mark_bare_quals` credited an import by
+splitting the qualified name and taking the first segment — its own
+comment said `geo/list/select` — and gavel 51 leaves a re-exported
+`sort` spelled `list/order`, so the segment read `list` and the app's
+`geo` was never credited. The qualifier is now recorded in qualify,
+where it is known, and a fixture uses a re-exported name and nothing
+else, which the old one could not.
+
+The second is not fixed and retracts a published claim. The falls in
+both cost veins were recorded as cohort pops that were reclaiming
+nothing. They are cohort ENTRY no longer being detected.
+`crosses_down` in src/codegen.rs asks whether the callee's module name
+extends the caller's by a segment, and that test is the compounded
+route spelling and nothing else. Instrumented on jsonbench, main takes
+the branch 13 times — twelve of them `jsonbench` into `jsonbench/text`
+— and this compiler takes it once.
+
+The evidence that made the first reading look solid holds up and says
+something else. Every allocation counter is byte-identical because no
+benchmark in the corpus depends on cohort freeing across a module
+boundary, which is the gap already recorded as #224. escapebench keeps
+its pop because its one hit has an empty caller and the test still
+admits that, not because it is the row that collects.
+
+So the predicate needs rebuilding before the veins mean anything.
+Module nesting by name is gone deliberately — identity is the canonical
+path — and the entry test has to ask the real relation instead: whether
+the caller's module imports the callee's. The banked numbers and the
+welfare floor that moved with them both describe a compiler with cohort
+entry switched off.
