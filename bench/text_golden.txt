@@ -170,3 +170,17 @@ escapebench text=48482
 # unchanged, and escapebench — the one row whose storage escapes its beat,
 # and whose perm_peak_bytes this file elsewhere records falling to 10,272 —
 # is the row that KEEPS its pop.
+#
+# 2026-08-18: the entry above is WRONG about the cause and is withdrawn. The
+# falls are real and the rows are right. What produced them is not pops that
+# were reclaiming nothing — it is cohort ENTRY no longer being detected.
+# src/codegen.rs decides one by asking whether the callee's module name
+# extends the caller's by a segment, which is the compounded route spelling
+# this change removes. Instrumented on jsonbench: main takes that branch 13
+# times, twelve of them `jsonbench` into `jsonbench/text`; this compiler takes
+# it once. escapebench keeps its pop because its one hit has an empty caller,
+# which the test still admits — not because it is the row that collects.
+#
+# These numbers therefore describe a compiler with cohort entry switched off.
+# They are not a baseline to keep, and they are pinned here only so the gate
+# has something to diff while the predicate is rebuilt.

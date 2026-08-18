@@ -216,3 +216,15 @@ escapebench 258541119
 # freeing nothing is what the counters say: not one of them moves, the mem
 # goldens are unchanged, and the row whose storage actually escapes its beat
 # is the row that keeps its pop.
+#
+# 2026-08-18: the entry above is WRONG about the cause and is withdrawn. The
+# work really did fall by these amounts. It fell because cohort entry stopped
+# being detected, not because the pops were free: src/codegen.rs reads module
+# nesting off the name, and gavel 51 removes the compounding it reads. A pop
+# that never happens is cheaper than one that does, which is what these rows
+# measure and why they looked like a win.
+#
+# Not one allocation counter moves, and that is the corpus being blind rather
+# than the change being free — no benchmark here depends on cohort freeing
+# across a module boundary. Re-measure against a compiler whose entry test
+# works before treating any of this as a floor.
