@@ -85,19 +85,24 @@ fn a_reexported_name_answers_to_the_module_that_surfaced_it() {
     assert!(output.status.success());
 }
 
-/// A facade: `mid` declares nothing and re-exports shape's type and its arm.
+/// A facade: `mid` declares nothing and re-exports shape's types and its arms.
 ///
-/// Three things had to hold for it, each watched red on its own. A module
-/// whose only reason for an import is re-exporting it read as unused, and no
+/// Four things had to hold for it, each watched red on its own. A module whose
+/// only reason for an import is re-exporting it read as unused, and no
 /// spelling would have satisfied the check. `mid/describe` named nothing from
-/// inside another module, where the entry already reached it. And `filled`
-/// arrived twice — open through `mid`, sealed through `teller`'s route — and
-/// the later arrival closed it, which is the visibility half of gavel 51 that
-/// types had never been given.
+/// inside another module, where the entry already reached it. `filled` arrived
+/// twice — open through `mid`, sealed through `teller`'s route — and the later
+/// arrival closed it, which is the visibility half of gavel 51 that types had
+/// never been given.
+///
+/// The fourth is the second line, and Copilot found it on the PR: a door has
+/// to answer in pattern position too. `pub fn tell mid/blank` died as
+/// `unknown type mid/shape/blank` on native while the oracle picked the wrong
+/// arm — a divergence, so the differential law had it either way.
 #[test]
 fn a_module_that_only_re_exports_is_a_module() {
     let output = run("facade/app");
 
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "tell filled 3\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "tell filled 3\ntell nothing\n");
     assert!(output.status.success());
 }

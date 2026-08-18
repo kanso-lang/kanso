@@ -3647,3 +3647,19 @@ Every runtime counter is byte-identical and welfare holds at 84.56;
 front_end_visits did not move, because the pass walks bodies the front
 end already walks and the door map is empty for a program with no
 re-exports.
+
+## 2026-08-18 — the door had to answer in pattern position too
+
+Copilot caught it on the PR, and the reproduction confirmed it with a
+divergence: `pub fn tell mid/blank` died on native as `unknown type
+mid/shape/blank` while the oracle silently picked the wrong arm. The
+door rewrote expressions and left patterns alone, so an arm matched a
+spelling its caller could not write.
+
+The variant that carries it is `Var`, not `Nullary`: the parser reserves
+`Nullary` for the built-in names, so a user's nullary type parses as a
+binding and is decided later by whether the name is a declared type.
+Isolated one at a time — with only `Nullary` the program still failed,
+with only `Var` it answers on both engines. A door key always carries a
+qualifier and a bound name never does, so rewriting a `Var` whose name
+is a door key cannot touch a binding.

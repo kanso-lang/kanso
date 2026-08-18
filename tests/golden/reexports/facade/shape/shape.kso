@@ -1,5 +1,10 @@
+pub type blank
+
 pub type filled
   n
+
+pub fn describe blank
+  "blank"
 
 pub fn describe (filled n)
   "filled {n}"

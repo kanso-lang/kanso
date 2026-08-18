@@ -2425,9 +2425,44 @@ fn open_qualified_doors(
         return;
     }
     for decl in &mut program.fns {
+        for p in &mut decl.params {
+            door_pattern(p, &doors);
+        }
         for stmt in &mut decl.body {
+            if let ast::Stmt::Bind { pattern, .. } = stmt {
+                door_pattern(pattern, &doors);
+            }
             alias_stmt(stmt, &doors);
         }
+    }
+}
+
+/// A type is named in patterns as well as in expressions, and the door has to
+/// answer in both or an arm matches a spelling its caller cannot write.
+fn door_pattern(p: &mut ast::Pattern, doors: &std::collections::HashMap<String, String>) {
+    match p {
+        // A user's nullary type parses as a binding — the parser reserves
+        // `Nullary` for the built-in names — and only a type can carry a
+        // qualifier, because a bound name is always bare.
+        ast::Pattern::Var(ty, _) => {
+            if let Some(owner) = doors.get(ty.as_str()) {
+                *ty = owner.clone();
+            }
+        }
+        ast::Pattern::Ctor { ty, fields, .. } => {
+            if let Some(owner) = doors.get(ty.as_str()) {
+                *ty = owner.clone();
+            }
+            for f in fields {
+                door_pattern(f, doors);
+            }
+        }
+        ast::Pattern::Annotated { ty, .. } => {
+            if let Some(owner) = doors.get(ty.as_str()) {
+                *ty = owner.clone();
+            }
+        }
+        _ => {}
     }
 }
 
