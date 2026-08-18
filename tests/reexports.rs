@@ -50,3 +50,20 @@ fn a_bare_call_two_imports_answer_alike_is_refused() {
     );
     assert!(!output.status.success());
 }
+
+/// The app fixture calls `geo/areas` beside its re-exported names, so the
+/// import is marked used by a name geo declares and the re-export lines ride
+/// along. This entry uses NOTHING but a re-exported one.
+///
+/// It went red the moment a re-exported name stopped carrying the route it
+/// arrived by: `order` is geo's rename of list's `sort`, so the declaration is
+/// spelled `list/order`, and the check that credits an import for a bare
+/// spelling used to read the qualifier off the front of that name. It read
+/// `list`, the app imports `geo`, and the import was called unused.
+#[test]
+fn a_re_exported_name_alone_keeps_its_import() {
+    let output = run("bare");
+
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "[1 2 3]\n");
+    assert!(output.status.success());
+}
