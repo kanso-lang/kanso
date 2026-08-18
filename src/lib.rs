@@ -2432,9 +2432,32 @@ fn open_qualified_doors(
             if let ast::Stmt::Bind { pattern, .. } = stmt {
                 door_pattern(pattern, &doors);
             }
+            door_stmt(stmt, &doors);
             alias_stmt(stmt, &doors);
         }
     }
+}
+
+fn door_type(ty: &mut String, doors: &std::collections::HashMap<String, String>) {
+    if let Some(owner) = doors.get(ty.as_str()) {
+        *ty = owner.clone();
+    }
+}
+
+/// `(v):ty` names a type where nothing else in an expression does.
+fn door_stmt(stmt: &mut ast::Stmt, doors: &std::collections::HashMap<String, String>) {
+    match stmt {
+        ast::Stmt::Bind { expr, .. }
+        | ast::Stmt::Expr(expr)
+        | ast::Stmt::Set { value: expr, .. } => door_expr(expr, doors),
+    }
+}
+
+fn door_expr(e: &mut ast::Expr, doors: &std::collections::HashMap<String, String>) {
+    if let ast::Expr::Upcast { ty, .. } = e {
+        door_type(ty, doors);
+    }
+    walk_children_mut(e, &mut |child| door_expr(child, doors));
 }
 
 /// A type is named in patterns as well as in expressions, and the door has to

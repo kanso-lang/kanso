@@ -976,7 +976,7 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>identity is the path a module lives at, and the route an importer took to reach it does not enter into the name. a name that already carries a qualification came from somebody's dependency and keeps the spelling its owner gave it. the diamond above now emits 429 lines of ir where it emitted 499, because the second copy was code nothing could call.</p>
 
-<p>that has a consequence at the surface. <code>geo</code> re-exports list's <code>sort</code> under the name <code>order</code>, and no declaration anywhere is spelled <code>geo/order</code> — the declaration is <code>list/order</code>, and geo put it on its surface. so the qualified spelling is resolved rather than declared: where a module surfaces a name it does not own, <code>geo/order</code> becomes the owner's spelling before anything looks it up. minting a declaration for it would put the two copies back.</p>
+<p>that has a consequence at the surface. <code>geo</code> re-exports list's <code>sort</code> under the name <code>order</code>, and no declaration anywhere is spelled <code>geo/order</code> — the declaration is <code>list/order</code>, and geo put it on its surface. so the qualified spelling is resolved where it is written: a module that surfaces a name it does not own has <code>geo/order</code> turned into the owner's spelling before anything looks it up. minting a declaration for it would put the two copies back.</p>
 
 <pre><code>import "../geo"
 

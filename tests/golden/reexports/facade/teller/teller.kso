@@ -4,4 +4,4 @@ pub fn tell mid/blank
   "tell nothing"
 
 pub fn tell f
-  "tell {mid/describe f}"
+  "tell {mid/describe (f):mid/filled}"

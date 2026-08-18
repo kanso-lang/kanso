@@ -3617,7 +3617,8 @@ re-export keeps the spelling its owner gave it, and there is no second
 declaration to carry the importer's qualifier — nor should there be,
 which is what gavel 51 settled.
 
-The door is a spelling, not a declaration. `surfaced` already knew which
+The door is a second spelling for a declaration that already exists.
+`surfaced` already knew which
 import surfaces each bare name; it now also records who owns the name
 when that is somebody else, and a pass rewrites `qual/bare` to the
 owner's spelling in the importing program. A clone would have minted a
@@ -3663,3 +3664,32 @@ Isolated one at a time — with only `Nullary` the program still failed,
 with only `Var` it answers on both engines. A door key always carries a
 qualifier and a bound name never does, so rewriting a `Var` whose name
 is a door key cannot touch a binding.
+
+## 2026-08-18 — one Copilot suggestion held and one dissolved under a control
+
+Two more places a type is named, both raised on the PR, and the pair is
+worth keeping because they came apart under the same test.
+
+`(v):mid/filled` needed the door and now has it. Watched red — `` `:mid/filled`
+widens; this value is not a mid/filled `` — and green with the upcast's
+type name rewritten alongside the pattern's.
+
+The other was type declarations: a subtype's parent, a typeset's
+members, a field's member list. Extending the rewrite to all three did
+not fix either program, and the reason showed up in the control. A
+subtype over a DIRECTLY imported parent fails identically, with no
+re-export anywhere:
+
+    type narrow shape/filled
+
+    pub fn label (narrow n)
+      "narrow {shape/describe n}"
+
+`no overload of sub/label matches these arguments`, on both engines, for
+a value that is a shape/filled. The typeset form does the same. So a
+type declaration naming an imported type matches nothing today, the
+door was never what was wrong, and the speculative rewrite came back out
+rather than shipping unproven. Filed on its own, where it belongs.
+
+The failure is silent until run time, which is the sharper half: nothing
+refuses the declaration, and the call that dies reads as well-typed.

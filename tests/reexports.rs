@@ -95,10 +95,11 @@ fn a_reexported_name_answers_to_the_module_that_surfaced_it() {
 /// arrival closed it, which is the visibility half of gavel 51 that types had
 /// never been given.
 ///
-/// The fourth is the second line, and Copilot found it on the PR: a door has
-/// to answer in pattern position too. `pub fn tell mid/blank` died as
-/// `unknown type mid/shape/blank` on native while the oracle picked the wrong
-/// arm — a divergence, so the differential law had it either way.
+/// The fourth and fifth came from Copilot on the PR, and a door has to answer
+/// wherever a type is named. `pub fn tell mid/blank` died as `unknown type
+/// mid/shape/blank` on native while the oracle picked the wrong arm — a
+/// divergence, so the differential law had it either way. `(f):mid/filled`
+/// answered `` `:mid/filled` widens; this value is not a mid/filled ``.
 #[test]
 fn a_module_that_only_re_exports_is_a_module() {
     let output = run("facade/app");
