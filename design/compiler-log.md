@@ -3693,3 +3693,34 @@ rather than shipping unproven. Filed on its own, where it belongs.
 
 The failure is silent until run time, which is the sharper half: nothing
 refuses the declaration, and the call that dies reads as well-typed.
+
+## 2026-08-18 — a typeset member kept picking up a second prefix
+
+The type-declaration door came back in, and the reason it looked
+unnecessary the first time is the interesting part.
+
+The control that dissolved it was malformed. A typeset is matched by an
+annotation — `(err e:lane_err)`, as tests/golden/micro/err_trap_order.kso
+has spelled it all along — and the fixture used a constructor pattern,
+which a typeset has no constructor for. So the refusal was correct and
+said nothing about doors. The subtype half was wrong twice over:
+`type narrow shape/filled` makes narrow a SUBTYPE, and a plain
+shape/filled is not one.
+
+Spelled correctly, the program failed for a different reason and named
+it: `native backend: unknown type sub/shape/blank`, against
+`no overload of sub/label matches` on the oracle. `own_types` in qualify
+was every name in the merged program, including types that arrived
+through this module from its own dependencies. `owned` has filtered
+qualified names since gavel 51 landed; `own_types` never got the same
+filter, so a member already spelled `shape/blank` took a second prefix
+and named a type nothing declares.
+
+With that fixed the door gap became visible, and the two isolate cleanly
+against one fixture: strip the filter and it says `teller/shape/blank`,
+strip the member door and it says `no overload`.
+
+The lesson is about evidence rather than types. A refusal is not evidence
+of a defect until the program is known to be well formed, and two of the
+three reproductions here were not. What separated them was checking how
+the corpus already spells the construct.

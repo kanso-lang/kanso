@@ -95,11 +95,20 @@ fn a_reexported_name_answers_to_the_module_that_surfaced_it() {
 /// arrival closed it, which is the visibility half of gavel 51 that types had
 /// never been given.
 ///
-/// The fourth and fifth came from Copilot on the PR, and a door has to answer
-/// wherever a type is named. `pub fn tell mid/blank` died as `unknown type
+/// The rest came from Copilot on the PR, and a door has to answer wherever a
+/// type is named. `pub fn tell mid/blank` died as `unknown type
 /// mid/shape/blank` on native while the oracle picked the wrong arm — a
 /// divergence, so the differential law had it either way. `(f):mid/filled`
-/// answered `` `:mid/filled` widens; this value is not a mid/filled ``.
+/// answered `` `:mid/filled` widens; this value is not a mid/filled ``. The
+/// typeset needed the door in its member list.
+///
+/// It also needed the other half of gavel 51, and the two were isolated
+/// against this one fixture. `own_types` in qualify was every name in the
+/// merged program, including types that arrived through this module from its
+/// own dependencies, where `owned` had filtered qualified names all along —
+/// so a member already spelled `shape/blank` picked up a second prefix and
+/// named `teller/shape/blank`, which nothing declares. Strip the filter and
+/// this fixture says that; strip the member door and it says `no overload`.
 #[test]
 fn a_module_that_only_re_exports_is_a_module() {
     let output = run("facade/app");

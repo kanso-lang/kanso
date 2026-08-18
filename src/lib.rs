@@ -1640,8 +1640,12 @@ fn qualify(
     // A subtype names its parent, and that name is a type this module owns —
     // so it moves with the rest of them. Gathered before the loop renames
     // anything, because after the first rename the set would not match.
+    // GAVEL 51: a name that already carries a qualification is a dependency
+    // arriving through this module, and its identity is the canonical path.
+    // Left in, a typeset member or a parent spelled `shape/blank` picks up a
+    // second prefix and names a type nothing declares.
     let own_types: std::collections::HashSet<String> =
-        dep.types.iter().map(|t| t.name.clone()).collect();
+        dep.types.iter().map(|t| t.name.clone()).filter(|n| !n.contains('/')).collect();
     for ty in &mut dep.types {
         if ty.name.contains('/') {
             // GAVEL 51: one module, and a qualified name IS its identity, so
@@ -2423,6 +2427,19 @@ fn open_qualified_doors(
     }
     if doors.is_empty() {
         return;
+    }
+    for ty in &mut program.types {
+        if let Some(parent) = &mut ty.parent {
+            door_type(parent, &doors);
+        }
+        for member in &mut ty.members {
+            door_type(member, &doors);
+        }
+        for (_, members, _) in &mut ty.fields {
+            for member in members {
+                door_type(member, &doors);
+            }
+        }
     }
     for decl in &mut program.fns {
         for p in &mut decl.params {
