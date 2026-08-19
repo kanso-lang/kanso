@@ -3871,3 +3871,24 @@ encodebench is the row with a comparison in its inner loop.
 
 No allocation counter moves, which is right: the refusal allocates nothing and
 the forcing it added only runs where a cell is actually met.
+
+## 2026-08-19 — the mixed comparison already worked, and my measurement of it did not
+
+Task #252 filed a bisimulation violation: a knot and the same cycle built in a
+block rendering identically, each self-comparing true, and comparing false
+against each other. It reproduced on main.
+
+The refusal branch already fixes it. `k == q` and `k.peers == q.peers` both
+answer TRUE there, on native and on the oracle, which is the answer structural
+equality owes — it is blind to provenance, and the two spellings are one value.
+The cell arms do it: the walk meets a cell against a record, forces, arrives at
+a pair of records it is already inside, and answers.
+
+I recorded the opposite earlier and it was wrong. The binary I measured had
+been built from main; the branch's own build says true. Same class as
+`stdlib-is-compiled-into-the-binary` — a stale binary and a real null result
+are indistinguishable from the output alone.
+
+Pinned by tests/golden/micro/a_knot_equals_the_same_cycle_built_in_a_block.kso,
+which is also why the refusal is scoped to a pair of CELLS: that is the only
+place the question is unanswerable.
