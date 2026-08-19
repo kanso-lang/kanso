@@ -3660,3 +3660,35 @@ oracle already keeps such a set for records (src/eval.rs:3402), so the shape
 exists. And the rule has a property worth naming: `x == [1]` forces, mismatches
 at once and answers false, never reaching the refusal — only two knots that
 would chase each other forever get it.
+
+## 2026-08-18 — the knot's cells are PENDING, so equality has to be able to force
+
+First attempt at the build, reverted, and the measurement is why.
+
+`values_equal_seen` is a free function. Wiring the refusal into it and running
+the fixture printed the cell states directly:
+
+    PROBE pair states: Pending { expr: Ident("knots/x"), env: None, frame: ... }
+
+Both cells of `pub x = [x]` / `pub y = [y]` arrive UNFORCED, holding the name
+as an expression. So the walk cannot answer them by reading a memo — evaluating
+`Ident("knots/x")` needs the interpreter, which a free function does not have.
+The arm that read only `ThunkState::Forced` therefore fell through to false and
+nothing changed: the refusal never fired, and the fixture still printed `false`
+on both sides.
+
+That fixes the shape of the build. Equality forces, per the ruling, so the
+comparison MOVES ONTO THE INTERPRETER — or takes a forcing callback — rather
+than staying a free walk over values. The C side has the same requirement and
+no seen-set at all yet.
+
+ONE HAZARD TO CHECK BEFORE TRUSTING RE-ENTRY DETECTION: the seen-set keys on
+Rc pointer pairs today. If forcing `Ident("knots/x")` hands back a fresh cell
+each time rather than the same one, pointer identity will not recognise the
+second arrival and the walk will not terminate. Whatever the seen-set keys on
+has to be stable across a force — verify with the two-knot fixture before
+building the rest.
+
+The Option<bool> plumbing this needed (every arm of the match propagating a
+refusal) works and is mechanical; it was reverted with the rest rather than
+landed as a behaviourless refactor.
