@@ -3725,13 +3725,23 @@ KValue k_desc_print(KValue text) {
     return k_mkdesc(0, text, k_none());
 }
 
+/* GAVEL 15: the wall defers its right side, so `b` arrives as a cell. It is
+   forced where the wall reaches it, which is also where its failure and its
+   type are checked — the wall is ordered, so what follows a failure never
+   speaks, and that includes never being built. */
+static KValue k_seq_right(KValue y) {
+    KValue v = k_force(y);
+    if (k_not_failure(v) && v.tag != K_DESC)
+        k_die("`>>` sequences two effect descriptions");
+    return v;
+}
+
 KValue k_seq(KValue a, KValue b) {
     /* The one pair that does not merge: the wall is ordered, so the first
-       failure is the answer and what follows it never speaks. Accumulation
-       belongs to the parallel group, where nothing is first. */
+       failure is the answer. Accumulation belongs to the parallel group,
+       where nothing is first. */
     if (!k_not_failure(a)) return a;
-    if (!k_not_failure(b)) return b;
-    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
+    if (a.tag != K_DESC) k_die("`>>` sequences two effect descriptions");
     return k_mkdesc(1, a, b);
 }
 
@@ -4066,7 +4076,9 @@ static KValue k_exec(KDesc* d) {
             KValue left = k_exec(k_as_desc(d->x));
             if (left.tag == K_ERR) return k_beat_pop(left);
             k_beat_pop(k_none());
-            return k_exec(k_as_desc(d->y));
+            KValue right = k_seq_right(d->y);
+            if (!k_not_failure(right)) return right;
+            return k_exec(k_as_desc(right));
         }
         case 2: {
             long long n = k_argc_global > 1 ? k_argc_global - 1 : 0;
@@ -4628,7 +4640,12 @@ static KStep k_step(KDesc* d) {
                 KStep s = {0, 0, k_none(), l.value};
                 return s;
             }
-            return k_step(k_as_desc(d->y));
+            KValue right = k_seq_right(d->y);
+            if (!k_not_failure(right)) {
+                KStep s = {0, 0, k_none(), right};
+                return s;
+            }
+            return k_step(k_as_desc(right));
         }
         case 6: {
             KStep in = k_step(k_as_desc(d->x));

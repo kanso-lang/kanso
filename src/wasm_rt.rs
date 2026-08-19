@@ -804,7 +804,7 @@ pub extern "C" fn rt_seq(a: u32, b: u32) -> u32 {
     }
     match (slot(a), slot(b)) {
         (Slot::V(Value::Desc(da)), Slot::V(Value::Desc(db))) => {
-            push(Slot::V(Value::Desc(Rc::new(Desc::Seq(da, db)))))
+            push(Slot::V(Value::Desc(Rc::new(Desc::Seq(da, Value::Desc(db), SPAN0)))))
         }
         (sa, sb) if descish(&sa) && descish(&sb) => push(Slot::Seq(a, b)),
         _ => die("`>>` sequences two effect descriptions".to_string()),
@@ -820,7 +820,7 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
         Slot::V(Value::Desc(d)) => Some(d),
         Slot::Seq(a, b) => {
             let (da, db) = (as_desc(a)?, as_desc(b)?);
-            Some(Rc::new(Desc::Seq(da, db)))
+            Some(Rc::new(Desc::Seq(da, Value::Desc(db), SPAN0)))
         }
         Slot::Bind(inner, closure) => {
             Some(Rc::new(Desc::Bind(as_desc(inner)?, Value::TableFn(closure))))

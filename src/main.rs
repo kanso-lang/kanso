@@ -881,7 +881,11 @@ fn run_plan(program: &ast::Program, file: &str, source: &str) -> ExitCode {
     match result {
         eval::Value::Desc(desc) => {
             let mut out = String::from("plan:\n");
-            eval::render_plan(&desc, &mut out);
+            let force = |v: &eval::Value| match interp.demand(v) {
+                Ok(eval::Value::Desc(d)) => Some(d),
+                _ => None,
+            };
+            eval::render_plan(&desc, &mut out, &force);
             print!("{out}");
             ExitCode::SUCCESS
         }

@@ -169,7 +169,9 @@ pub struct ClosureData {
 #[derive(Clone, Debug)]
 pub enum Desc {
     Print(String, Span),
-    Seq(Rc<Desc>, Rc<Desc>),
+    /// GAVEL 15: the wall defers its right side, so what follows is held as a
+    /// cell and forced where the executor reaches it.
+    Seq(Rc<Desc>, Value, Span),
     Join(Rc<Desc>, Rc<Desc>),
     Args,
     Stdin,
@@ -1380,7 +1382,6 @@ impl<'a> Interp<'a> {
             }
             Expr::Seq(lhs, rhs, span) => {
                 let left = self.force_thunk(self.eval(lhs, env, frame)?)?;
-                let right = self.force_thunk(self.eval(rhs, env, frame)?)?;
                 // The wall is ordered, so the first failure is the answer and
                 // what follows it never speaks. A parallel group accumulates
                 // because nothing there is first. Dependence decides, which is
@@ -1388,16 +1389,22 @@ impl<'a> Interp<'a> {
                 if is_failure(&left) {
                     return Ok(left);
                 }
-                if is_failure(&right) {
-                    return Ok(right);
-                }
-                match (left, right) {
-                    (Value::Desc(a), Value::Desc(b)) => Ok(Value::Desc(Rc::new(Desc::Seq(a, b)))),
-                    _ => Err(RuntimeError {
+                let Value::Desc(a) = left else {
+                    return Err(RuntimeError {
                         message: "`>>` sequences two effect descriptions".to_string(),
                         span: *span,
-                    }),
-                }
+                    });
+                };
+                // GAVEL 15: what follows the wall is held rather than built,
+                // and the executor builds it once the left side has run. A
+                // name mentioned there is stored rather than demanded, which
+                // is what lets a description name itself.
+                let b = Value::Thunk(Rc::new(RefCell::new(ThunkState::Pending {
+                    expr: (**rhs).clone(),
+                    env: env.clone(),
+                    frame: frame.clone(),
+                })));
+                Ok(Value::Desc(Rc::new(Desc::Seq(a, b, *span))))
             }
             Expr::Lambda { params, body, .. } => Ok(Value::Closure(Rc::new(ClosureData {
                 params: params.iter().map(|(n, _)| n.clone()).collect(),
@@ -2794,6 +2801,12 @@ impl<'a> Interp<'a> {
         Ok(value)
     }
 
+    /// Force from outside the evaluator — what `--plan` uses to build the
+    /// side of a wall the program has not reached yet.
+    pub fn demand(&self, value: &Value) -> EvalResult {
+        self.force_thunk(value.clone())
+    }
+
     fn force_thunk(&self, value: Value) -> EvalResult {
         let mut value = value;
         loop {
@@ -3840,17 +3853,34 @@ impl<'a> Interp<'a> {
     /// program that sequences a million effects holds one frame. Only the
     /// continuation is flattened: a link's own left side is a step to run
     /// before the chain advances, and nests as deep as it is written.
+    /// What follows the wall, built where the wall reaches it. This is also
+    /// where its failure and its type are checked: a failure to the right of a
+    /// wall that never ran is a failure nobody asked for.
+    fn seq_right(&self, b: &Value, span: Span) -> EvalResult {
+        let v = self.force_thunk(b.clone())?;
+        if is_failure(&v) || matches!(v, Value::Desc(_)) {
+            return Ok(v);
+        }
+        Err(RuntimeError {
+            message: "`>>` sequences two effect descriptions".to_string(),
+            span,
+        })
+    }
+
     fn execute_chain(&self, start: Rc<Desc>, executor: &mut dyn Executor) -> EvalResult {
         let origin = Span { line: 0, col: 0 };
         let mut current = start;
         loop {
             let next = match &*current {
-                Desc::Seq(a, b) => {
+                Desc::Seq(a, b, span) => {
                     let left = self.execute(a, executor)?;
                     if is_failure(&left) && matches!(left, Value::ErrV(_)) {
                         return Ok(left);
                     }
-                    b.clone()
+                    match self.seq_right(b, *span)? {
+                        Value::Desc(d) => d,
+                        failure => return Ok(failure),
+                    }
                 }
                 Desc::Bind(inner, callee) => {
                     let yielded = self.execute(inner, executor)?;
@@ -3941,12 +3971,15 @@ impl<'a> Interp<'a> {
                 Ok(None) => Ok(Step::Blocked(1, desc.clone())),
                 Err(reason) => Ok(Step::Done(err_value(Value::Str(reason), None))),
             },
-            Desc::Seq(a, b) => match self.step(a, executor)? {
+            Desc::Seq(a, b, span) => match self.step(a, executor)? {
                 Step::Blocked(ms, cont) => {
-                    Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone()))))
+                    Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone(), *span))))
                 }
                 Step::Done(left) if matches!(left, Value::ErrV(_)) => Ok(Step::Done(left)),
-                Step::Done(_) => self.step(b, executor),
+                Step::Done(_) => match self.seq_right(b, *span)? {
+                    Value::Desc(d) => self.step(&d, executor),
+                    failure => Ok(Step::Done(failure)),
+                },
             },
             Desc::Bind(inner, callee) => match self.step(inner, executor)? {
                 Step::Blocked(ms, cont) => {
@@ -3978,19 +4011,25 @@ fn flatten_join(desc: &Desc, out: &mut Vec<Rc<Desc>>) {
     }
 }
 
-pub fn render_plan(desc: &Desc, out: &mut String) {
+/// A plan describes without running, so it builds what the wall holds rather
+/// than executing it — `force` is how it reaches a cell. A plan that names
+/// itself has no end, and the caller stops it the way any demand stops.
+pub fn render_plan(desc: &Desc, out: &mut String, force: &dyn Fn(&Value) -> Option<Rc<Desc>>) {
     match desc {
         Desc::Print(text, span) => {
             out.push_str(&format!("  print {text:?}    # from line {}\n", span.line));
         }
-        Desc::Seq(a, b) => {
-            render_plan(a, out);
-            render_plan(b, out);
+        Desc::Seq(a, b, _) => {
+            render_plan(a, out, force);
+            match force(b) {
+                Some(d) => render_plan(&d, out, force),
+                None => out.push_str("  <not an io>\n"),
+            }
         }
         Desc::Join(a, b) => {
             out.push_str("  join {\n");
-            render_plan(a, out);
-            render_plan(b, out);
+            render_plan(a, out, force);
+            render_plan(b, out, force);
             out.push_str("  } # unordered; both run\n");
         }
         Desc::Args => out.push_str("  args\n"),
@@ -4016,7 +4055,7 @@ pub fn render_plan(desc: &Desc, out: &mut String) {
         Desc::Send(conn, _) => out.push_str(&format!("  send {conn}\n")),
         Desc::CloseSocket(handle) => out.push_str(&format!("  close_socket {handle}\n")),
         Desc::Bind(inner, _) => {
-            render_plan(inner, out);
+            render_plan(inner, out, force);
             out.push_str("  . <continuation>\n");
         }
         Desc::Sleep(ms) => out.push_str(&format!("  sleep {ms}\n")),
