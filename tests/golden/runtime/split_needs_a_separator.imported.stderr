@@ -1,2 +1,2 @@
 error[endpoint]: unhandled err reached the entry: "split needs a separator; text/chars answers the characters"
-  born in split_needs_a_separator/text/split at std/text/text.kso:35
+  born in text/split at std/text/text.kso:35

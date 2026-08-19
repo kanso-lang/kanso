@@ -1,0 +1,5 @@
+import "./a/shape"
+import "./b/shape"
+
+print "{shape/atag shape/blank}"
+print "{shape/btag shape/blank}"

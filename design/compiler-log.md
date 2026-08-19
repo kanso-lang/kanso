@@ -3486,3 +3486,113 @@ std/list is the only stdlib module both declaring pub types and being
 re-imported by lib modules (json, sha256) — narrow, under the
 most-used abstraction. Unblocks #241 and is the true cause behind the
 json/encode-of-null symptom. The loader/emission fix is build-lane.
+
+## 2026-08-17 — gavel 51 lands, and pays for itself
+
+The ruling above is built. The loader stops composing a prefix onto a
+name that already carries one, and a module reached twice contributes
+one copy of each declaration. Identity is the canonical path, derived
+where it is compared rather than stored on the declaration: a field on
+every FnDecl made compile cost depend on how the files were named,
+which tests/import_order forbids and which caught it.
+
+Two veins moved and both fell. Machine code: jsonbench -2,320,
+encodebench -2,176, oneshot -2,352, basket -2,160, widebench -2,352,
+with deepbench and escapebench flat. Work: oneshot -5.54%, widebench
+-2.94%, jsonbench -1.82%, basket -0.28%, encodebench -0.0041%.
+
+The cause took three attempts and the first two were wrong. It is not
+deleted functions — jsonbench emits the same 151 defines as main and
+its IR differs by five lines. It is not the shortened name constants,
+which live in .rodata where the machine-code gate does not read, and
+whose sizes do not track the falls at all: deepbench sheds 4,508 bytes
+of them and does not move. It is the cohort pop. Calls to
+k_cohort_pop go 2 to 0 on jsonbench, 3 to 0 on encodebench, 4 to 0 on
+oneshot, 3 to 0 on basket, 3 to 0 on widebench, and the two rows whose
+count is unchanged are the two rows that hold still. No exceptions
+across the corpus.
+
+Those pops were reclaiming nothing, which is what makes this a win and
+not a leak: every allocation counter is byte-identical, the lazy tier's
+mem goldens are unchanged, and escapebench — the one benchmark whose
+storage escapes its beat — keeps its pop. Welfare rose 84.51 to 84.56
+and was ratcheted in the same PR. What remains unexplained is why the
+count goes to zero rather than halving; the pops were emitted per
+duplicated instance and the answer is in the emitter's cohort
+condition. Left alone because the behaviour is right either way.
+
+A second crash came out of reviewing the branch's own diff. Two
+directories both named `shape` qualify under the same prefix, so both
+their `blank` types answer to `shape/blank`. Main gave each its own
+type id and wrote both into one switch, and clang refused the module
+with `duplicate case value in switch` — on a program with no
+overlapping function to blame. One name is one type, so the emitter
+writes one case. tests/golden/samename holds it.
+
+One spelling is deliberately gone. `geo/list/order` resolved on main
+and is refused now: it named a route through geo's private import of
+list, and it only worked because geo's copy of list was a second
+instance. The qualified door `geo/order` fails identically on main and
+here, so the missing door is not this change's regression — it is #246,
+and it is wider than that task said, because no re-export has a
+qualified door.
+
+Diagnostics improve as a side effect, and the goldens say so. A stdlib
+name stops carrying the entry module: `endpoint_trace/text/to_int` is
+`text/to_int`, `length_points_at_to_list/list/mapped` is `list/mapped`.
+A user's error message named their own program in the middle of a
+stdlib function's origin, which was the doubled instance being honest
+about itself.
+
+Siblings verified before merge rather than after. kq gates inside
+kanso's CI; kanso-json runs 18 tests green; vse is byte-identical to
+main's compiler under KANSO_SEED=12345. Unseeded it is not comparable
+at all — two runs on one compiler differ by as much as two compilers
+do, which nearly produced a false regression here. Grepping all four
+repos for route-shaped names found only path strings and fuzzer seeds.
+
+Found alongside and not fixed: #248, where native refuses a knotted
+description that the oracle runs. Gavel 20 swapped that divergence
+rather than closing it — before #931 native ran it and the oracle
+refused — so both readings are implemented, one per engine, and
+choosing is the work.
+
+## 2026-08-18 — the gavel 51 landing had two consumers it did not look for
+
+The entry above is wrong in one place and this corrects it rather than
+edits it. Both corrections are the same mistake made twice: the change
+stopped producing a name spelling, and nothing went looking for what
+READ that spelling.
+
+The first was found by review and is fixed. An import used only through
+names it re-exports read as unused, and the program was refused, where
+main answered on both engines. `mark_bare_quals` credited an import by
+splitting the qualified name and taking the first segment — its own
+comment said `geo/list/select` — and gavel 51 leaves a re-exported
+`sort` spelled `list/order`, so the segment read `list` and the app's
+`geo` was never credited. The qualifier is now recorded in qualify,
+where it is known, and a fixture uses a re-exported name and nothing
+else, which the old one could not.
+
+The second is not fixed and retracts a published claim. The falls in
+both cost veins were recorded as cohort pops that were reclaiming
+nothing. They are cohort ENTRY no longer being detected.
+`crosses_down` in src/codegen.rs asks whether the callee's module name
+extends the caller's by a segment, and that test is the compounded
+route spelling and nothing else. Instrumented on jsonbench, main takes
+the branch 13 times — twelve of them `jsonbench` into `jsonbench/text`
+— and this compiler takes it once.
+
+The evidence that made the first reading look solid holds up and says
+something else. Every allocation counter is byte-identical because no
+benchmark in the corpus depends on cohort freeing across a module
+boundary, which is the gap already recorded as #224. escapebench keeps
+its pop because its one hit has an empty caller and the test still
+admits that, not because it is the row that collects.
+
+So the predicate needs rebuilding before the veins mean anything.
+Module nesting by name is gone deliberately — identity is the canonical
+path — and the entry test has to ask the real relation instead: whether
+the caller's module imports the callee's. The banked numbers and the
+welfare floor that moved with them both describe a compiler with cohort
+entry switched off.

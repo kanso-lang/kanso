@@ -100,7 +100,8 @@ fn compile_parsed_entry(
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (dep_program, exports, shadowed) = load_dependencies(&base, &import_list, &mut visited)?;
+    let (dep_program, exports, shadowed, surfaced) =
+        load_dependencies(&base, &import_list, &mut visited)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
         for stmt in &decl.body {
@@ -109,7 +110,7 @@ fn compile_parsed_entry(
     }
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
-    mark_bare_quals(&program, &exports, &mut quals);
+    mark_bare_quals(&program, &surfaced, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
@@ -248,9 +249,10 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (mut dep_program, exports, shadowed) = phase::watched("load_dependencies", || {
-        load_dependencies(&base, &import_list, &mut visited)
-    })?;
+    let (mut dep_program, exports, shadowed, surfaced) =
+        phase::watched("load_dependencies", || {
+            load_dependencies(&base, &import_list, &mut visited)
+        })?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
     for decl in &program.fns {
@@ -260,7 +262,7 @@ fn compile_one(file: &str, source: &str, drop_unused: bool) -> Result<ast::Progr
     }
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
-    mark_bare_quals(&program, &exports, &mut quals);
+    mark_bare_quals(&program, &surfaced, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if drop_unused {
@@ -329,7 +331,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     let mut import_list: Vec<ast::Import> = program.imports.clone();
     ambient_imports(&mut import_list);
     let mut visited = std::collections::HashSet::new();
-    let (mut dep_program, exports, shadowed) =
+    let (mut dep_program, exports, shadowed, surfaced) =
         load_dependencies(&base, &import_list, &mut visited)?;
     check_reexports(&program, &mut dep_program, &import_list, file, source)?;
     let mut diags = Vec::new();
@@ -340,7 +342,7 @@ pub fn compile_library(file: &str, source: &str) -> Result<ast::Program, String>
     }
     let mut quals = std::collections::HashSet::new();
     used_quals(&program, &mut quals);
-    mark_bare_quals(&program, &exports, &mut quals);
+    mark_bare_quals(&program, &surfaced, &mut quals);
     diags.extend(unused_imports(&program.imports, &quals));
     foreign_destructures(&program, &mut diags);
     if !diags.is_empty() {
@@ -433,6 +435,37 @@ pub fn compile_source(command: &str, file: &str, source: &str) -> Result<ast::Pr
         _ if library_verb => compile_library(file, source),
         _ => compile_entry(file, source),
     }
+}
+
+thread_local! {
+    /// Display paths and the canonical paths they resolve to, both mapped to
+    /// one id per file. Two routes to a module reach it under two spellings
+    /// and both land on the id the canonical path was given.
+    static CANON_IDS: std::cell::RefCell<std::collections::HashMap<String, u32>> =
+        std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// The identity `file` cannot carry. Two import routes to one module spell
+/// the display path differently — `mid/../shape/shape.kso` against
+/// `shape/shape.kso` — and err origins print the spelling the reader typed,
+/// so the display path stays as it is and the identity is derived when it is
+/// needed. Derived rather than stored, because a field on every declaration
+/// makes what compiling costs depend on how many declarations are loaded when
+/// the peak falls, which tests/import_order exists to forbid.
+fn canon_id(file: &str) -> u32 {
+    CANON_IDS.with(|ids| {
+        let mut ids = ids.borrow_mut();
+        if let Some(id) = ids.get(file) {
+            return *id;
+        }
+        let canon = std::fs::canonicalize(file)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| file.to_string());
+        let next = ids.len() as u32 + 1;
+        let id = *ids.entry(canon).or_insert(next);
+        ids.insert(file.to_string(), id);
+        id
+    })
 }
 
 /// Err origins name the function and the file it lives in; the file is
@@ -1507,8 +1540,17 @@ fn try_fuse(
 /// Everything a module's imports resolve to: the merged program, whether each
 /// qualified name is exported, and the names whose export flag an import took
 /// from the module's own declaration.
-type Loaded =
-    (ast::Program, std::collections::HashMap<String, bool>, std::collections::HashSet<String>);
+/// What a bare spelling costs to resolve: which import qualifier surfaces it.
+/// A re-export puts a dependency's name on the surface without the route, so
+/// the name alone no longer says which import to credit for using it.
+type Surfaced = std::collections::HashMap<String, std::collections::HashSet<String>>;
+
+type Loaded = (
+    ast::Program,
+    std::collections::HashMap<String, bool>,
+    std::collections::HashSet<String>,
+    Surfaced,
+);
 
 /// The groups syntax names, spelled the same in every module. An arm carries
 /// this name because the compiler put it there, not because anybody wrote it,
@@ -1530,6 +1572,19 @@ fn qualify(
     dep: &mut ast::Program,
     qual: &str,
     exports: &mut std::collections::HashMap<String, bool>,
+    // GAVEL 51: which DECLARATION claimed each qualified spelling, by
+    // interned canonical path. `exports` records only whether a name is pub, and under
+    // one module a dependency arrives by every route that reaches it — sealed
+    // through a middle module that does not re-export it, open through the
+    // importer's own import. Without identity those two are indistinguishable
+    // from a genuine shadow, where this module declares a name one of its
+    // imports also exports.
+    claims: &mut std::collections::HashMap<String, u32>,
+    // GAVEL 51: a re-exported name arrives under the spelling its owner gave
+    // it, so `geo` re-exporting list's `sort` as `order` enrolls `list/order`
+    // and nothing in that name says the importer reached it through `geo`.
+    // The qualifier is recorded here because this is where it is known.
+    surfaced: &mut Surfaced,
     shadowed: &mut std::collections::HashSet<String>,
 ) {
     // A getter's declaration is left bare below, because one group answers a
@@ -1543,9 +1598,15 @@ fn qualify(
     // being qualified. Renaming them per module would leave every module with
     // its own `math_failure`, and the one division builds would match none of
     // them.
+    // GAVEL 51, Clay 2026-08-17: "one module". A name that already carries a
+    // qualification came from this module's own dependency and holds its
+    // canonical spelling. Prefixing it again mints a second `shape/blank`
+    // under every route that reaches it, and a value built by one matches no
+    // arm compiled against the other.
     let owned: std::collections::HashSet<String> = check::declared_names(dep)
         .into_iter()
         .filter(|n| !getters.contains(n))
+        .filter(|n| !n.contains('/'))
         .filter(|n| n != MATH_FAILURE && n != DIVIDE_BY_ZERO)
         .collect();
     // The prelude's own declarations go, rather than travelling under this
@@ -1559,6 +1620,10 @@ fn qualify(
     let own_types: std::collections::HashSet<String> =
         dep.types.iter().map(|t| t.name.clone()).collect();
     for ty in &mut dep.types {
+        if ty.name.contains('/') {
+            exports.insert(ty.name.clone(), ty.is_pub);
+            continue;
+        }
         exports.insert(format!("{qual}/{}", ty.name), ty.is_pub);
         ty.name = format!("{qual}/{}", ty.name);
         if let Some(o) = &mut ty.origin {
@@ -1597,18 +1662,47 @@ fn qualify(
             // which is the clone whenever the loader reached the import
             // first — so the module's own `pub` read as private from outside.
             // The claim is remembered so the refusal can say what happened.
-            let key = format!("{qual}/{}", f.name);
+            // GAVEL 51: an already-qualified name enrolls under the spelling
+            // it already has. Composing `{qual}/` onto it would register the
+            // route rather than the identity.
+            let key = match f.name.contains('/') {
+                true => f.name.clone(),
+                false => format!("{qual}/{}", f.name),
+            };
             let taken = exports.get(&key).copied();
+            let same_decl = claims.get(&key).is_some_and(|c| *c == canon_id(&f.file));
+            // GAVEL 51: the two-claims rule is about THIS module declaring a
+            // name one of its imports also exports. An already-qualified name
+            // is not this module's declaration — it is a dependency arriving,
+            // and a diamond makes it arrive twice under the identical
+            // spelling. Reading the second arrival as a rival claim turned
+            // `shape/describe` into an opacity refusal on the very program
+            // the ruling exists to make work.
+            let own_claim = !f.name.contains('/');
             match (taken, f.synthetic) {
-                (Some(false), false) if f.is_pub => {
+                // The same declaration arriving by a second route. One
+                // module, so its visibility is what the importer's routes
+                // grant between them: an open route is not vetoed by a sealed
+                // one that happened to load first.
+                (Some(false), _) if same_decl && f.is_pub => {
+                    exports.insert(key.clone(), true);
+                }
+                (Some(false), false) if f.is_pub && own_claim && !same_decl => {
                     shadowed.insert(key.clone());
                 }
                 (Some(_), _) => {}
                 (None, _) => {
                     exports.insert(key.clone(), f.is_pub);
+                    claims.insert(key.clone(), canon_id(&f.file));
                 }
             }
-            f.name = format!("{qual}/{}", f.name);
+            // GAVEL 51: a name that already carries a qualification came
+            // from this module's own dependency and keeps its canonical
+            // spelling — it still enrolls, it just does not get a second
+            // prefix.
+            if !f.name.contains('/') {
+                f.name = format!("{qual}/{}", f.name);
+            }
         }
         let mut bound = Vec::new();
         for p in &mut f.params {
@@ -1618,6 +1712,19 @@ fn qualify(
         for stmt in &mut f.body {
             rewrite_stmt(stmt, qual, &owned, &mut bound);
         }
+    }
+    // Every name this import puts within reach, by the spelling a caller may
+    // write bare. Recorded after the loops above have settled each name, so
+    // one walk covers a declaration of this module and one it re-exports
+    // alike — the second keeps its owner's qualifier and would otherwise
+    // credit that owner for an import the caller never wrote.
+    for name in dep.fns.iter().filter(|f| f.is_pub).map(|f| &f.name) {
+        let bare = name.rsplit('/').next().unwrap_or(name);
+        surfaced.entry(bare.to_string()).or_default().insert(qual.to_string());
+    }
+    for name in dep.types.iter().filter(|t| t.is_pub).map(|t| &t.name) {
+        let bare = name.rsplit('/').next().unwrap_or(name);
+        surfaced.entry(bare.to_string()).or_default().insert(qual.to_string());
     }
 }
 
@@ -2000,6 +2107,37 @@ fn ambient_imports(imports: &mut Vec<ast::Import>) {
     }
 }
 
+/// GAVEL 51, Clay 2026-08-17: "one module". A module reached by two import
+/// paths contributes its declarations twice, and after qualification both
+/// copies carry the same canonical name and the same source position — so
+/// they are one declaration, and the second is dropped.
+///
+/// The key uses `canon`, never `file`. `file` is the display path an err
+/// origin prints and the two routes spell it differently; `canon` is the same
+/// file by either route. Leaving the source out of the key altogether was
+/// tried and is UNSOUND: tests/golden/reexports/torn holds two modules that
+/// each declare `strength` on line 1 of their own file, and dropping one as a
+/// duplicate of the other turned a torn-call refusal into an answer.
+///
+/// It includes `synthetic`, because a bare-enrollment clone carries the span
+/// of the declaration it was cloned from: dropping one as a duplicate of its
+/// own original cost a million-frame accumulating recursion its loop.
+fn collapse_diamonds(program: &mut ast::Program) {
+    let mut fns = std::collections::HashSet::new();
+    program.fns.retain(|f| {
+        fns.insert((
+            canon_id(&f.file),
+            f.name.clone(),
+            f.params.len(),
+            f.span.line,
+            f.span.col,
+            f.synthetic,
+        ))
+    });
+    let mut types = std::collections::HashSet::new();
+    program.types.retain(|t| types.insert((t.name.clone(), t.span.line, t.span.col)));
+}
+
 /// Load and qualify every imported module, recursively.
 fn load_dependencies(
     base: &std::path::Path,
@@ -2013,6 +2151,8 @@ fn load_dependencies(
         reexports: Vec::new(),
     };
     let mut exports = std::collections::HashMap::new();
+    let mut claims: std::collections::HashMap<String, u32> = std::collections::HashMap::new();
+    let mut surfaced: Surfaced = std::collections::HashMap::new();
     let mut shadowed = std::collections::HashSet::new();
     for import in imports {
         let path = &import.path;
@@ -2074,7 +2214,7 @@ fn load_dependencies(
                 files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports, &mut shadowed);
+            qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -2098,7 +2238,7 @@ fn load_dependencies(
                 qualified.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
                 compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
-            qualify(&mut dep, qual, &mut exports, &mut shadowed);
+            qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
             continue;
@@ -2125,7 +2265,7 @@ fn load_dependencies(
             ));
         }
         let mut dep = compile_module_inner(&dep_dir, false, visited, None)?;
-        qualify(&mut dep, qual, &mut exports, &mut shadowed);
+        qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
         dep_program.types.extend(dep.types);
         dep_program.fns.extend(dep.fns);
     }
@@ -2181,7 +2321,8 @@ fn load_dependencies(
             }
         }
     }
-    Ok((dep_program, exports, shadowed))
+    collapse_diamonds(&mut dep_program);
+    Ok((dep_program, exports, shadowed, surfaced))
 }
 
 /// Bare uses count too: a bare `select` that any import exports marks that
@@ -2189,7 +2330,7 @@ fn load_dependencies(
 /// dependency.
 fn mark_bare_quals(
     program: &ast::Program,
-    exports: &std::collections::HashMap<String, bool>,
+    surfaced: &Surfaced,
     quals: &mut std::collections::HashSet<String>,
 ) {
     let mut bare = std::collections::HashSet::new();
@@ -2212,18 +2353,13 @@ fn mark_bare_quals(
             }
         }
     }
-    for (qualified, is_pub) in exports {
-        if !is_pub {
-            continue;
-        }
-        // a re-export surfaces as a nested qual (geo/list/select): the
-        // import that owns it is the first segment, the bare spelling the last
-        if let Some((first, _)) = qualified.split_once('/') {
-            if let Some((_, short)) = qualified.rsplit_once('/') {
-                if bare.contains(short) {
-                    quals.insert(first.to_string());
-                }
-            }
+    // The qualifier is asked for, never parsed out of the name. A re-export
+    // keeps the spelling its owner gave it — geo's rename of list's `sort` is
+    // `list/order` — so reading the first segment credits `list` for an import
+    // the caller wrote as `geo`, and the caller's import then reads as unused.
+    for (name, quals_for) in surfaced {
+        if bare.contains(name) {
+            quals.extend(quals_for.iter().cloned());
         }
     }
     for import in &program.imports {
@@ -2843,7 +2979,7 @@ fn compile_module_loaded(
             }
         }
     }
-    let (mut dep_program, exports, shadowed) =
+    let (mut dep_program, exports, shadowed, surfaced) =
         phase::watched("load_dependencies", || load_dependencies(dir, &import_list, visited))?;
     // A module's surface is its own. Dependency pubs demote at this
     // boundary — importers of this module see none of them — and only an
@@ -2895,7 +3031,7 @@ fn compile_module_loaded(
             quals.iter().filter(|q| !named.contains(*q) && **q != own && *q != "render").cloned(),
         );
         borrowed.sort();
-        mark_bare_quals(program, &exports, &mut quals);
+        mark_bare_quals(program, &surfaced, &mut quals);
         let mut diags = unused_imports(&program.imports, &quals);
         for qual in &borrowed {
             diags.push(diag::Diagnostic::new(
@@ -2953,7 +3089,7 @@ fn compile_module_loaded(
     let mut quals = std::collections::HashSet::new();
     for (_, _, program) in &parsed {
         used_quals(program, &mut quals);
-        mark_bare_quals(program, &exports, &mut quals);
+        mark_bare_quals(program, &surfaced, &mut quals);
         for re in &program.reexports {
             match import_quals.iter().find(|q| *q == &re.name) {
                 Some(q) => {

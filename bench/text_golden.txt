@@ -49,11 +49,11 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=80114
-encodebench text=97698
-oneshot text=97378
-basket text=89714
-widebench text=98962
+jsonbench text=77794
+encodebench text=95522
+oneshot text=95026
+basket text=87554
+widebench text=96610
 deepbench text=61426
 escapebench text=48482
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
@@ -148,3 +148,39 @@ escapebench text=48482
 # the pop, linked into every program because every program links the
 # renderer. jsonbench moves least because it renders no container the guard
 # has to walk twice.
+# 2026-08-17 (last): five rows fall — jsonbench -2,320, encodebench -2,176,
+# oneshot -2,352, basket -2,160, widebench -2,352. deepbench and escapebench
+# hold. A module reached by two import paths is one module now, and what that
+# changes in the emitted code is the name: a dependency of a dependency stops
+# compounding the entry module's prefix, so `jsonbench/list/bounded` is
+# `list/bounded`. escapebench is the one entry whose inner module imports
+# nothing, and it is the row that does not move by any measure.
+#
+# What produces the size of the falls is the cohort pop. Counting calls to
+# k_cohort_pop in the emitted IR against main, per row: jsonbench 2 to 0,
+# encodebench 3 to 0, oneshot 4 to 0, basket 3 to 0, widebench 3 to 0,
+# deepbench 0 to 0, escapebench 1 to 1. The five that lose every pop are the
+# five that fall, and the two that keep their count are the two that hold —
+# no exceptions across the corpus. With no call left, the linker drops
+# k_cohort_pop and what only it reaches, which is machine code this gate can
+# see and the emitted-line count cannot.
+#
+# Those pops were reclaiming nothing. Every allocation counter is
+# byte-identical across this change, the lazy tier's mem goldens pass
+# unchanged, and escapebench — the one row whose storage escapes its beat,
+# and whose perm_peak_bytes this file elsewhere records falling to 10,272 —
+# is the row that KEEPS its pop.
+#
+# 2026-08-18: the entry above is WRONG about the cause and is withdrawn. The
+# falls are real and the rows are right. What produced them is not pops that
+# were reclaiming nothing — it is cohort ENTRY no longer being detected.
+# src/codegen.rs decides one by asking whether the callee's module name
+# extends the caller's by a segment, which is the compounded route spelling
+# this change removes. Instrumented on jsonbench: main takes that branch 13
+# times, twelve of them `jsonbench` into `jsonbench/text`; this compiler takes
+# it once. escapebench keeps its pop because its one hit has an empty caller,
+# which the test still admits — not because it is the row that collects.
+#
+# These numbers therefore describe a compiler with cohort entry switched off.
+# They are not a baseline to keep, and they are pinned here only so the gate
+# has something to diff while the predicate is rebuilt.
