@@ -8,7 +8,7 @@ use crate::ast::Program;
 use crate::diag::Span;
 use crate::eval::{
     self, err_value, eval_binop, hop, index_value, is_failure, join_values, render,
-    render_demanded, trace_lines, Desc, ErrInfo, Executor, Interp, Value,
+    render_demanded, trace_lines, Cells, Desc, ErrInfo, Executor, Interp, Value,
 };
 use crate::wasm_backend::Lit;
 use std::cell::RefCell;
@@ -153,6 +153,22 @@ fn forced(v: Value) -> Value {
         // it now
         Slot::V(value) => value,
         _ => v,
+    }
+}
+
+/// Which handles are cells rather than functions. A deferred slot is one
+/// nobody has demanded, and a value slot is one a demand already wrote its
+/// answer over — both name the same binding, which is what lets a comparison
+/// tell a second arrival from a first.
+fn cell_handle(v: &Value) -> Option<usize> {
+    let Value::TableFn(h) = v else {
+        return None;
+    };
+    match slot(*h) {
+        Slot::C { arity: DEFERRED, .. } | Slot::C { arity: RUNNING, .. } | Slot::V(_) => {
+            Some(*h as usize)
+        }
+        _ => None,
     }
 }
 
@@ -682,7 +698,10 @@ pub extern "C" fn rt_binop(op: u32, a: u32, b: u32) -> u32 {
         22 => "^",
         other => die(format!("no operator for code {other}")),
     };
-    match eval_binop(op, val(a), val(b), SPAN0) {
+    // The browser forces through its own door; equality reaches a cell the
+    // same way any demand does.
+    let cells = Cells { id: &cell_handle, force: &|v| Ok(forced(v)) };
+    match eval_binop(op, val(a), val(b), SPAN0, &cells) {
         Ok(v) => push(Slot::V(v)),
         Err(rt) => die(rt.message),
     }

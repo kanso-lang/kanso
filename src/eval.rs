@@ -1419,7 +1419,8 @@ impl<'a> Interp<'a> {
                 {
                     return self.call_named(op, vec![left, right], *span, frame);
                 }
-                eval_binop(op, sub_base(left), sub_base(right), *span)
+                let cells = Cells { id: &thunk_identity, force: &|v| self.force_thunk(v) };
+                eval_binop(op, sub_base(left), sub_base(right), *span, &cells)
             }
             Expr::Guard { cond, early, rest, span } => {
                 let c = self.eval(cond, env, frame)?;
@@ -3269,7 +3270,19 @@ fn bitwise(op: &str, a: &BigInt, b: &BigInt, span: Span) -> EvalResult {
     Ok(Value::Int(bits.into()))
 }
 
-pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult {
+/// `force` is how the comparison reaches a cell. Equality does not evaluate
+/// at the site where it is written — under full laziness it builds a thunk
+/// like any operator, and only the wire demands. By the time this runs, that
+/// demand has arrived, so forcing here is the ordinary demand context every
+/// forced thunk already runs in; the parameter exists because the engines
+/// keep their forcing machinery in different places.
+pub fn eval_binop(
+    op: &str,
+    left: Value,
+    right: Value,
+    span: Span,
+    cells: &Cells<'_>,
+) -> EvalResult {
     // Two failures in one operation merge, exactly as two failures in a
     // parallel group do (Clay, 2026-08-05): neither side caused the other, so
     // neither deserves top billing, and the one that loses would otherwise be
@@ -3294,7 +3307,19 @@ pub fn eval_binop(op: &str, left: Value, right: Value, span: Span) -> EvalResult
                 span,
             });
         }
-        let equal = values_equal(&left, &right);
+        let Some(equal) = values_equal(&left, &right, cells)? else {
+            // GAVEL 2026-08-18: a value that names itself is a definition, and
+            // two definitions are not compared. This fires on RE-ENTRY alone —
+            // the walk arriving a second time at a pair of cells it is already
+            // inside, which is the cycle closing through a cell. An ordinary
+            // lazy operand forces and compares like anything else.
+            return Err(RuntimeError {
+                message: "equality is not defined on a value that names itself — \
+                          write an arm for the case you mean"
+                    .to_string(),
+                span,
+            });
+        };
         return Ok(bool_value(match op {
             "==" => equal,
             _ => !equal,
@@ -3385,6 +3410,15 @@ fn bool_value(b: bool) -> Value {
 /// is a question an arm answers, and answering it with a comparison is the
 /// shape kanso refuses everywhere else. A subtype is transparent, so the
 /// question is really about what it wraps.
+/// A cell survives its own forcing: `force_thunk` writes the answer into the
+/// same reference-counted state, so the pointer still names the binding.
+fn thunk_identity(v: &Value) -> Option<usize> {
+    match v {
+        Value::Thunk(cell) => Some(Rc::as_ptr(cell) as *const () as usize),
+        _ => None,
+    }
+}
+
 fn opaque_to_equality(v: &Value) -> bool {
     match v {
         Value::FnRef(_) | Value::Closure(_) | Value::Desc(_) => true,
@@ -3393,24 +3427,60 @@ fn opaque_to_equality(v: &Value) -> bool {
     }
 }
 
-fn values_equal(a: &Value, b: &Value) -> bool {
-    values_equal_seen(a, b, &mut std::collections::HashSet::new())
+/// `None` where the walk re-entered a pair of cells it was already inside.
+fn values_equal(a: &Value, b: &Value, cells: &Cells<'_>) -> Result<Option<bool>, RuntimeError> {
+    values_equal_seen(a, b, &mut std::collections::HashSet::new(), cells)
 }
 
 /// Two cyclic graphs would compare forever, so a pair of cells is assumed
 /// equal once seen and any contradiction still returns false.
+type Seen = std::collections::HashSet<(usize, usize)>;
+
+/// How a comparison reaches a cell. `id` names one — a stable identity that
+/// survives forcing, which is what makes arriving twice recognisable — and
+/// `force` demands it. Each engine keeps its cells somewhere different: the
+/// oracle in a reference counted state, the browser in a slot table.
+pub struct Cells<'a> {
+    pub id: &'a dyn Fn(&Value) -> Option<usize>,
+    pub force: &'a dyn Fn(Value) -> Result<Value, RuntimeError>,
+}
+
 fn values_equal_seen(
     a: &Value,
     b: &Value,
-    seen: &mut std::collections::HashSet<(usize, usize)>,
-) -> bool {
+    seen: &mut Seen,
+    cells: &Cells<'_>,
+) -> Result<Option<bool>, RuntimeError> {
     if let Value::Sub { inner, .. } = a {
-        return values_equal_seen(inner, b, seen);
+        return values_equal_seen(inner, b, seen, cells);
     }
     if let Value::Sub { inner, .. } = b {
-        return values_equal_seen(a, inner, seen);
+        return values_equal_seen(a, inner, seen, cells);
     }
-    match (a, b) {
+    // A cell is forced the way any demand forces it, so an ordinary lazy
+    // operand compares as its value. A cell keeps its identity across the
+    // force, so arriving a second time at one pair is the cycle closing
+    // through a cell, and the caller turns that into the refusal.
+    match ((cells.id)(a), (cells.id)(b)) {
+        (Some(x), Some(y)) => {
+            if !seen.insert((x, y)) {
+                return Ok(None);
+            }
+            let fa = (cells.force)(a.clone())?;
+            let fb = (cells.force)(b.clone())?;
+            return values_equal_seen(&fa, &fb, seen, cells);
+        }
+        (Some(_), None) => {
+            let fa = (cells.force)(a.clone())?;
+            return values_equal_seen(&fa, b, seen, cells);
+        }
+        (None, Some(_)) => {
+            let fb = (cells.force)(b.clone())?;
+            return values_equal_seen(a, &fb, seen, cells);
+        }
+        (None, None) => {}
+    }
+    let answer = match (a, b) {
         (Value::Int(x), Value::Int(y)) => x == y,
         (Value::Float(x), Value::Float(y)) => x.total_cmp(y).is_eq(),
         // One numeric domain, which `<=` and `>=` already assert: both answer
@@ -3421,37 +3491,65 @@ fn values_equal_seen(
             cmp_int_float(x, *y).is_eq()
         }
         (Value::Map(x), Value::Map(y)) => {
-            x.len() == y.len()
-                && x.iter()
-                    .zip(y.iter())
-                    .all(|((ka, va), (kb, vb))| ka == kb && values_equal_seen(va, vb, seen))
+            if x.len() != y.len() {
+                return Ok(Some(false));
+            }
+            for ((ka, va), (kb, vb)) in x.iter().zip(y.iter()) {
+                let Some(same) = values_equal_seen(va, vb, seen, cells)? else {
+                    return Ok(None);
+                };
+                if ka != kb || !same {
+                    return Ok(Some(false));
+                }
+            }
+            true
         }
         (Value::Str(x), Value::Str(y)) => x == y,
         (Value::True, Value::True) | (Value::False, Value::False) => true,
         (Value::NoneV, Value::NoneV) => true,
         (Value::List(x), Value::List(y)) => {
-            x.len() == y.len() && x.iter().zip(y.iter()).all(|(a, b)| values_equal_seen(a, b, seen))
+            if x.len() != y.len() {
+                return Ok(Some(false));
+            }
+            for (a, b) in x.iter().zip(y.iter()) {
+                let Some(same) = values_equal_seen(a, b, seen, cells)? else {
+                    return Ok(None);
+                };
+                if !same {
+                    return Ok(Some(false));
+                }
+            }
+            true
         }
         (Value::Record { ty: tx, fields: fx }, Value::Record { ty: ty_, fields: fy }) => {
             if tx != ty_ {
-                return false;
+                return Ok(Some(false));
             }
             if Rc::ptr_eq(fx, fy) {
-                return true;
+                return Ok(Some(true));
             }
             let key = (Rc::as_ptr(fx) as *const () as usize, Rc::as_ptr(fy) as *const () as usize);
             if !seen.insert(key) {
-                return true;
+                return Ok(Some(true));
             }
-            fx.borrow().len() == fy.borrow().len()
-                && fx
-                    .borrow()
-                    .iter()
-                    .zip(fy.borrow().iter())
-                    .all(|(a, b)| values_equal_seen(a, b, seen))
+            if fx.borrow().len() != fy.borrow().len() {
+                return Ok(Some(false));
+            }
+            let pairs: Vec<(Value, Value)> =
+                fx.borrow().iter().cloned().zip(fy.borrow().iter().cloned()).collect();
+            for (a, b) in &pairs {
+                let Some(same) = values_equal_seen(a, b, seen, cells)? else {
+                    return Ok(None);
+                };
+                if !same {
+                    return Ok(Some(false));
+                }
+            }
+            true
         }
         _ => false,
-    }
+    };
+    Ok(Some(answer))
 }
 
 fn render_float(x: f64) -> String {
