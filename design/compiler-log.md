@@ -3638,3 +3638,25 @@ generic container comparison wherever a knot can reach. That is the cost of the
 ruling and it is accepted: a refusal in an unexpected place beats a false
 answer, and a user who means something specific writes the arm — which is what
 the existing message already tells them to do.
+
+## 2026-08-18 — the knot refusal fires on RE-ENTRY, not on seeing a cell
+
+Clarifying the entry above before it was built wrong. Clay: "you don't refuse
+an actual lazy evaluation of a comparable value. the equality itself is lazy."
+
+Equality is a demand site, so it forces a cell the way any demand does. A lazy
+binding compared against a value forces and compares; nothing refuses. The
+survey had been about to take the simple rule — refuse on encountering any
+cell — and that rule would have refused `n == 3` for a merely lazy `n`, which
+the gavel does not say.
+
+The discriminator is re-entry. Comparing `x = [x]` against `y = [y]` forces
+both to `[cell-x]` and `[cell-y]`, whose elements are those same two cells: the
+walk arrives at a pair it is already inside. That is the cycle closing through
+a cell, and it is the definitional case the gavel refuses.
+
+So: force cells, carry a seen-set of cell pairs, refuse on re-entry. The
+oracle already keeps such a set for records (src/eval.rs:3402), so the shape
+exists. And the rule has a property worth naming: `x == [1]` forces, mismatches
+at once and answers false, never reaching the refusal — only two knots that
+would chase each other forever get it.
