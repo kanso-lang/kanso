@@ -3608,3 +3608,119 @@ may suggest cargo run without Rust-the-language knowing either word.
 The shipped entry-file hint ("run its definitions beside their
 statements with `kanso play`") is ratified as-is; future diagnostics
 may hint verbs freely.
+## 2026-08-18 — the qualified door, and two more re-export gaps behind it
+
+`geo/order` named nothing where `order` resolved, and the axis was not
+the rename: `geo/select` and `geo/to_list` failed the same way, so a
+module's own pub had two doors and a re-exported name had one. A
+re-export keeps the spelling its owner gave it, and there is no second
+declaration to carry the importer's qualifier — nor should there be,
+which is what gavel 51 settled.
+
+The door is a second spelling for a declaration that already exists.
+`surfaced` already knew which
+import surfaces each bare name; it now also records who owns the name
+when that is somebody else, and a pass rewrites `qual/bare` to the
+owner's spelling in the importing program. A clone would have minted a
+second instance. It opens only where the qualified spelling is free and
+one declaration answers it, so a module that declares its own `select`
+beside an import's keeps what it had.
+
+Two more gaps came out of the fixture, each watched red on its own.
+
+A module whose only reason for an import is re-exporting it read as
+unused, and no spelling would have satisfied the check — the per-file
+import rule counted expressions and a re-export is not one. The
+module-wide pass already had that rule; the per-file pass never got it.
+
+And a type arriving by two routes took the visibility of whichever route
+loaded last. Gavel 51 gave functions the rule that an open route is not
+vetoed by a sealed one; types were left with an unconditional insert, so
+a facade's re-exported type read as private from an entry that reached
+it both ways. One line, and it is the same ruling.
+
+Ordering is the thing to keep straight in that function now: credit the
+imports, then open the doors, then judge the surface. Rewriting first
+credits the owner and the caller's import reads as unused, which is
+[[removing-a-spelling-needs-its-consumers]] from the other side.
+
+Every runtime counter is byte-identical and welfare holds at 84.56;
+front_end_visits did not move, because the pass walks bodies the front
+end already walks and the door map is empty for a program with no
+re-exports.
+
+## 2026-08-18 — the door had to answer in pattern position too
+
+Copilot caught it on the PR, and the reproduction confirmed it with a
+divergence: `pub fn tell mid/blank` died on native as `unknown type
+mid/shape/blank` while the oracle silently picked the wrong arm. The
+door rewrote expressions and left patterns alone, so an arm matched a
+spelling its caller could not write.
+
+The variant that carries it is `Var`, not `Nullary`: the parser reserves
+`Nullary` for the built-in names, so a user's nullary type parses as a
+binding and is decided later by whether the name is a declared type.
+Isolated one at a time — with only `Nullary` the program still failed,
+with only `Var` it answers on both engines. A door key always carries a
+qualifier and a bound name never does, so rewriting a `Var` whose name
+is a door key cannot touch a binding.
+
+## 2026-08-18 — one Copilot suggestion held and one dissolved under a control
+
+Two more places a type is named, both raised on the PR, and the pair is
+worth keeping because they came apart under the same test.
+
+`(v):mid/filled` needed the door and now has it. Watched red — `` `:mid/filled`
+widens; this value is not a mid/filled `` — and green with the upcast's
+type name rewritten alongside the pattern's.
+
+The other was type declarations: a subtype's parent, a typeset's
+members, a field's member list. Extending the rewrite to all three did
+not fix either program, and the reason showed up in the control. A
+subtype over a DIRECTLY imported parent fails identically, with no
+re-export anywhere:
+
+    type narrow shape/filled
+
+    pub fn label (narrow n)
+      "narrow {shape/describe n}"
+
+`no overload of sub/label matches these arguments`, on both engines, for
+a value that is a shape/filled. The typeset form does the same. So a
+type declaration naming an imported type matches nothing today, the
+door was never what was wrong, and the speculative rewrite came back out
+rather than shipping unproven. Filed on its own, where it belongs.
+
+The failure is silent until run time, which is the sharper half: nothing
+refuses the declaration, and the call that dies reads as well-typed.
+
+## 2026-08-18 — a typeset member kept picking up a second prefix
+
+The type-declaration door came back in, and the reason it looked
+unnecessary the first time is the interesting part.
+
+The control that dissolved it was malformed. A typeset is matched by an
+annotation — `(err e:lane_err)`, as tests/golden/micro/err_trap_order.kso
+has spelled it all along — and the fixture used a constructor pattern,
+which a typeset has no constructor for. So the refusal was correct and
+said nothing about doors. The subtype half was wrong twice over:
+`type narrow shape/filled` makes narrow a SUBTYPE, and a plain
+shape/filled is not one.
+
+Spelled correctly, the program failed for a different reason and named
+it: `native backend: unknown type sub/shape/blank`, against
+`no overload of sub/label matches` on the oracle. `own_types` in qualify
+was every name in the merged program, including types that arrived
+through this module from its own dependencies. `owned` has filtered
+qualified names since gavel 51 landed; `own_types` never got the same
+filter, so a member already spelled `shape/blank` took a second prefix
+and named a type nothing declares.
+
+With that fixed the door gap became visible, and the two isolate cleanly
+against one fixture: strip the filter and it says `teller/shape/blank`,
+strip the member door and it says `no overload`.
+
+The lesson is about evidence rather than types. A refusal is not evidence
+of a defect until the program is known to be well formed, and two of the
+three reproductions here were not. What separated them was checking how
+the corpus already spells the construct.

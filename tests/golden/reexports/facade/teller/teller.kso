@@ -1,0 +1,9 @@
+import "../mid"
+
+type shapes mid/blank mid/filled
+
+pub fn tell mid/blank
+  "tell nothing"
+
+pub fn tell s:shapes
+  "tell {mid/describe (s):mid/filled}"

@@ -970,6 +970,21 @@ pub play = print "{graph["a"]!.peers[1]!.name}"</code></pre>
 
 <p>every counter this page names is recorded on every merged commit and drawn on <a href="/numbers.html">the long view</a>, one row each — what a run costs, what compiling costs, and the welfare score they roll up into.</p>
 
+<h2 id="onemodule"><span class="sec-num">18</span>a module reached two ways is one module</h2>
+
+<p>a program with a dependency is a diamond. the entry imports <code>shape</code> and imports <code>mid</code>, and <code>mid</code> imports <code>shape</code> too. kanso used to build one <code>shape</code> per route, so the emitted code carried <code>mid/shape/describe</code> beside <code>shape/describe</code> and a value the entry built matched no arm the middle module had compiled. the call from the entry answered; the identical call one module in died with <code>no overload of mid/shape/describe matches these arguments</code>.</p>
+
+<p>identity is the path a module lives at, and the route an importer took to reach it does not enter into the name. a name that already carries a qualification came from somebody's dependency and keeps the spelling its owner gave it. the diamond above now emits 429 lines of ir where it emitted 499, because the second copy was code nothing could call.</p>
+
+<p>that has a consequence at the surface. <code>geo</code> re-exports list's <code>sort</code> under the name <code>order</code>, and no declaration anywhere is spelled <code>geo/order</code> — the declaration is <code>list/order</code>, and geo put it on its surface. so the qualified spelling is resolved where it is written: a module that surfaces a name it does not own has <code>geo/order</code> turned into the owner's spelling before anything looks it up. minting a declaration for it would put the two copies back.</p>
+
+<pre><code>import "../geo"
+
+print "{order [3 1 2]}"        # the bare spelling
+print "{geo/order [3 1 2]}"    # and the qualified one</code></pre>
+
+<p>the door opens only where the qualified spelling is free and one declaration answers it. a module that declares its own <code>select</code> beside an import's already owns <code>geo/select</code>, and two re-exports landing on one bare name leave a caller nothing to choose between.</p>
+
 <h2 id="coda"><span class="sec-num">coda</span>the mushroom test</h2>
 
 <p>every proposal on this page passed the same two filters before it earned a section. the first is the house rule you've met everywhere else on this site: polymorphism over conditionals—if the design answer is "the user writes an if," the design is wrong, because dispatch makes the arms checkable and the conditional unwritable. the second is the mushroom test. a mushroom looks like a new organism; dig, and it's the fruiting body of a mycelium that was already there. that's the question every ruling faces: does this add a concept, or reveal that an existing one already covers it? zero-field types looked like a feature and turned out to be record types with nothing left to remove. enums looked like a feature and turned out to be typesets of markers. the integer tiers looked like machinery and turned out to be one case of speculation under purity. proposals that add a concept wait; proposals that reveal one land.</p>
