@@ -3474,6 +3474,18 @@ static long long k_eq_rec(KValue a, KValue b) {
               "for the case you mean");
     if (a.tag == K_SUB) a = k_sub_base(a);
     if (b.tag == K_SUB) b = k_sub_base(b);
+    /* A cell is forced the way any demand forces it, so an ordinary lazy
+       operand compares as its value. A cell's identity survives forcing, so
+       arriving twice at the same pair is the cycle closing through one — a
+       definition rather than a value, and the question is refused. */
+    if (a.tag == K_THUNK && b.tag == K_THUNK) {
+        if (k_eq_assume((void*)a.payload, (void*)b.payload))
+            k_die("equality is not defined on a value that names itself — write "
+                  "an arm for the case you mean");
+        return k_eq_rec(k_force(a), k_force(b));
+    }
+    if (a.tag == K_THUNK) return k_eq_rec(k_force(a), b);
+    if (b.tag == K_THUNK) return k_eq_rec(a, k_force(b));
     if (a.tag == K_BYTES && b.tag == K_LIST) return k_bytes_eq_list(k_as_bytes(a), k_as_list(b));
     if (a.tag == K_LIST && b.tag == K_BYTES) return k_bytes_eq_list(k_as_bytes(b), k_as_list(a));
     if (a.tag == K_BYTES && b.tag == K_BYTES) {
@@ -3501,11 +3513,11 @@ static long long k_eq_rec(KValue a, KValue b) {
             KRec* rb = k_as_rec(b);
             if (ra == rb) return 1;
             if (ra->type_id != rb->type_id) return 0;
-            /* A cycle passes through a record or through a CELL — `x = [x]`
-               closes through neither a record nor anything this switch
-               follows, since there is no K_THUNK case and a cell answers
-               unequal and stops. Assuming this pair equal is what makes the
-               walk terminate for the record half. */
+            /* A cycle that a build block closed by writing a record in place
+               is one object the program built, and it keeps the structural
+               comparison bisimulation gives it. Assuming this pair equal is
+               what makes that walk terminate. A cycle through a cell is a
+               different thing and is refused above. */
             if (k_eq_assume(ra, rb)) return 1;
             for (long long i = 0; i < ra->nfields; i++) {
                 if (!k_eq_rec(ra->fields[i], rb->fields[i])) return 0;

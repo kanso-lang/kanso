@@ -3820,3 +3820,37 @@ building the rest.
 The Option<bool> plumbing this needed (every arm of the match propagating a
 refusal) works and is mechanical; it was reverted with the rest rather than
 landed as a behaviourless refactor.
+
+## 2026-08-19 — gavel: `==` refuses a value that names itself, three engines
+
+Built. The hazard the last entry named is answered: forcing a cell rewrites
+the SAME cell rather than handing back a fresh one — `force_thunk` assigns
+`ThunkState::Forced` into the existing `Rc`, and `k_force` sets `forced`/
+`result` on the existing `KThunk*`. Pointer identity therefore survives the
+force, which is what makes a second arrival recognisable.
+
+The comparison did not have to move onto the interpreter. It takes a seam
+instead:
+
+    pub struct Cells<'a> {
+        pub id: &'a dyn Fn(&Value) -> Option<usize>,
+        pub force: &'a dyn Fn(Value) -> Result<Value, RuntimeError>,
+    }
+
+`id` says which values are cells and gives each a stable identity; `force`
+demands one. The oracle passes an `Rc` pointer and `force_thunk`. The browser
+passes a slot handle and `forced` — and it needed the widened seam, because a
+browser cell is a `TableFn` handle rather than a `Value::Thunk`, so a
+thunk-shaped test found nothing there and the corpus reported `false` against
+the other two engines. Native carries the same rule in `k_eq_rec` over the
+`k_eq_assume` table the record walk already uses.
+
+The rule fires on RE-ENTRY, per Clay: an ordinary lazy operand forces and
+compares as its value. Two goldens pin both halves, and the second is the one
+that stops the refusal widening unnoticed:
+
+    tests/golden/runtime/equality_refuses_a_value_that_names_itself.kso
+    tests/golden/micro/a_knot_compared_against_a_plain_list.kso   # false
+
+The first was watched red on native (`left: ""`, no diagnostic) and on wasm
+(`left: "false\n"`) before either arm existed.

@@ -1,0 +1,7 @@
+# The companion to equality_refuses_a_value_that_names_itself: the walk forces
+# its way into the knot and finds the element unequal before the cycle closes,
+# so it answers rather than refusing. Without this the refusal could widen to
+# every cell and nothing would say so.
+x = [x]
+
+pub play = print "{x == [1]}"
