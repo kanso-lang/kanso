@@ -1,0 +1,13 @@
+# GAVEL 15: the wall defers its right side, so a name mentioned there is
+# stored rather than demanded — and gavel 20's guardedness then treats it the
+# way it treats a constructor field. The description ties, and running it
+# prints both sides.
+type box
+  v
+
+pub fn show _
+  print "y"
+
+d = print "x" >> show (box d)
+
+pub play = d
