@@ -4072,13 +4072,23 @@ static KValue k_exec(KDesc* d) {
             /* a >> step is a beat: the left side's yield is discarded by
                contract, so everything it allocated dies here — unless it
                failed, in which case the err (and its region) survives. */
-            k_beat_push();
-            KValue left = k_exec(k_as_desc(d->x));
-            if (left.tag == K_ERR) return k_beat_pop(left);
-            k_beat_pop(k_none());
-            KValue right = k_seq_right(d->y);
-            if (!k_not_failure(right)) return right;
-            return k_exec(k_as_desc(right));
+            /* The right spine is walked rather than recursed into, so a loop
+               written with `>>` costs one C frame however many links it runs.
+               The oracle's execute_chain has always been a loop; this is the
+               same shape, and it is what deferral makes reachable — the chain
+               no longer exists all at once to be built. */
+            KDesc* cur = d;
+            for (;;) {
+                k_beat_push();
+                KValue left = k_exec(k_as_desc(cur->x));
+                if (left.tag == K_ERR) return k_beat_pop(left);
+                k_beat_pop(k_none());
+                KValue right = k_seq_right(cur->y);
+                if (!k_not_failure(right)) return right;
+                KDesc* next = k_as_desc(right);
+                if (next->dtag != 1) return k_exec(next);
+                cur = next;
+            }
         }
         case 2: {
             long long n = k_argc_global > 1 ? k_argc_global - 1 : 0;

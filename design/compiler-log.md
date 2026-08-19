@@ -3892,3 +3892,43 @@ are indistinguishable from the output alone.
 Pinned by tests/golden/micro/a_knot_equals_the_same_cycle_built_in_a_block.kso,
 which is also why the refusal is scoped to a pair of CELLS: that is the only
 place the question is unanswerable.
+## 2026-08-19 — gavel 15 built: the wall defers, and the loop runs
+
+A loop written with `>>` now runs to the end on both engines. Four hundred
+thousand links, and the fixture in tests/seq_chain_runs.rs (renamed from
+seq_chain_names_itself, whose whole subject was the diagnostic for the failure
+that no longer happens) prints `done` on native and on the oracle.
+
+It took two changes, and the second is the one a survey would have missed.
+
+**The wall holds its right side.** codegen emits it through `emit_cell` — the
+lazy-slot machinery factored out of the lazy-bind path, unchanged — and the
+oracle holds a Pending cell inside `Desc::Seq`, which now carries a `Value` and
+a span rather than a second `Desc`. `k_seq_right` and `Interp::seq_right` force
+it where the wall reaches it, which is also where its failure and its type are
+checked.
+
+**The executor walks the right spine instead of recursing into it.** With the
+chain no longer built all at once, native still died — at RUN time now, one C
+frame per link in `k_exec`. The oracle's `execute_chain` has always been a
+loop; `k_exec` case 1 is one now too. Deferral is what made that reachable and
+it is not sufficient by itself.
+
+Two consequences, both stated rather than absorbed:
+
+  - A failure in the right side now surfaces AFTER the left has run.
+    `print "a" >> print "{[1][5]!}"` printed nothing and errored; it prints `a`
+    and then errors. This is the wall's own law finally holding — "the first
+    failure is the answer and what follows it never speaks" was contradicted by
+    a failure in what follows speaking before the left ran at all.
+  - `--plan` builds what the wall holds rather than reading it, through a
+    forcing seam `run_plan` supplies. A plan that names itself has no end,
+    which is honest.
+
+`tests/golden/mem/build_cycle.imported.mem` gains one cell: thunk_allocs,
+forces, evals and live_exit all 0 to 1. That is the one wall in the fixture.
+
+The browser is not done. Its cell is a slot handle rather than a `Value::Thunk`
+and its `Seq` has a lazy shape of its own (`Slot::Seq`), so it still evaluates
+where it stands and would diverge on failure ordering. Nothing lands until it
+agrees.
