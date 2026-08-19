@@ -1406,6 +1406,7 @@ impl<'a> Interp<'a> {
                 // and the executor builds it once the left side has run. A
                 // name mentioned there is stored rather than demanded, which
                 // is what lets a description name itself.
+                self.thunk_stats.allocs.set(self.thunk_stats.allocs.get() + 1);
                 let b = Value::Thunk(Rc::new(RefCell::new(ThunkState::Pending {
                     expr: (**rhs).clone(),
                     env: env.clone(),
