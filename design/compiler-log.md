@@ -3596,3 +3596,15 @@ path — and the entry test has to ask the real relation instead: whether
 the caller's module imports the callee's. The banked numbers and the
 welfare floor that moved with them both describe a compiler with cohort
 entry switched off.
+
+## 2026-08-19 — the wrong-verb hint is licensed
+
+Clay ruled yes: "the compiler knows nothing about `play`" constrains
+language semantics — no identifier named play ever means anything to
+the grammar, checker, or runtime — and never CLI help text. A
+diagnostic naming `kanso play` as the verb that would have worked is
+the toolchain knowing its own subcommands, the same way cargo build
+may suggest cargo run without Rust-the-language knowing either word.
+The shipped entry-file hint ("run its definitions beside their
+statements with `kanso play`") is ratified as-is; future diagnostics
+may hint verbs freely.
