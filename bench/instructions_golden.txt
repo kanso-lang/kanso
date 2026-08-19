@@ -55,7 +55,7 @@
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
 jsonbench 2860479957
-encodebench 9724874773
+encodebench 9724924773
 oneshot 46591231
 basket 57404129
 widebench 85554129
@@ -228,3 +228,9 @@ escapebench 258541119
 # than the change being free — no benchmark here depends on cohort freeing
 # across a module boundary. Re-measure against a compiler whose entry test
 # works before treating any of this as a floor.
+# 2026-08-19: encodebench alone, 9,724,874,773 to 9,724,924,773 — 50,000
+# instructions and five ten-thousandths of a per cent. The other six do not
+# move at all. Equality now asks whether each side is a cell before comparing
+# it, and encodebench is the row that runs a comparison in its inner loop; the
+# rest either compare nothing or compare far less. Fifty thousand is that test,
+# paid where it is asked.
