@@ -3854,3 +3854,20 @@ that stops the refusal widening unnoticed:
 
 The first was watched red on native (`left: ""`, no diagnostic) and on wasm
 (`left: "false\n"`) before either arm existed.
+
+## 2026-08-19 — what the knot refusal cost, in the two veins that can see it
+
+CI on #952 moved exactly two rows, and both are legible.
+
+**Machine code: +208 bytes on every one of the six binaries.** The uniformity
+is the reading — what grew is `k_eq_rec` in the runtime object, which every
+binary links and which none of these benchmarks calls more or less often than
+before. Between 0.2% and 0.3% each.
+
+**Work: encodebench alone, 9,724,874,773 to 9,724,924,773.** Fifty thousand
+instructions, five ten-thousandths of a per cent, and the other six rows do not
+move at all. Equality now asks whether each side is a cell before comparing it;
+encodebench is the row with a comparison in its inner loop.
+
+No allocation counter moves, which is right: the refusal allocates nothing and
+the forcing it added only runs where a cell is actually met.
