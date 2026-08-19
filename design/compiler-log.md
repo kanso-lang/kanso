@@ -3724,3 +3724,45 @@ The lesson is about evidence rather than types. A refusal is not evidence
 of a defect until the program is known to be well formed, and two of the
 three reproductions here were not. What separated them was checking how
 the corpus already spells the construct.
+## 2026-08-18 — GAVEL: equality refuses a value that names itself
+
+Clay, ruling #235: "to me 'which object is this' makes more sense... how could
+you possibly compare two formulas for equality?" and then "yeah i think refuse
+is right."
+
+A knotted constant is a definition, and comparing two definitions is not a
+question equality answers. `x = [x]` and `y = [y]` are two formulas, and `==`
+refuses them the way it already refuses a function or an effect.
+
+WHAT THE RULING REPLACES. Today both engines answer `false`, and not by
+decision: `k_eq`'s switch has no arm for a cell, so a thunk drops off the end
+and reports unequal — and that same drop is what terminates the walk. A reader
+cannot tell it was never decided. The refusal makes the rule sayable.
+
+THE ARGUMENT THAT WAS PUT AND NOT TAKEN, recorded so it is not relitigated as
+though it were missed. A knot is finite in memory — two nodes and a back-edge —
+and takes no input, so comparing two of them is graph comparison rather than
+the function-equality problem, and bisimulation decides it for finitely
+generated cycles. Clay's answer is that being decidable is not the same as
+being a question worth asking of a formula, and the identity reading is the one
+that matches what a knot is. The ruling stands on that, not on tractability.
+
+THE BOUNDARY, which follows from the reasoning rather than from the sentence.
+A cycle that closes through a CELL is a definition naming itself, and refuses.
+A cycle a build block closes by writing a record in place is one object the
+program built, and keeps the structural comparison bisimulation already gives
+it (#190-#196). Two cyclic values, two rules, split by whether the cycle is
+definitional. Worth stating out loud because it will otherwise read as a bug.
+
+TWO CONSEQUENCES TO CARRY.
+
+Render and equality now answer different questions on purpose: `print "{x}"`
+gives `[<cycle>]` for both x and y, which is the SHAPE, where `==` asks which
+object and declines. The page owes that sentence, because showing two values
+identically while refusing to compare them is otherwise a seam.
+
+`==` is an ambient dispatch group (#98), so the refusal can now surface from a
+generic container comparison wherever a knot can reach. That is the cost of the
+ruling and it is accepted: a refusal in an unexpected place beats a false
+answer, and a user who means something specific writes the arm — which is what
+the existing message already tells them to do.
