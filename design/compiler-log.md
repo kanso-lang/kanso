@@ -3932,3 +3932,26 @@ The browser is not done. Its cell is a slot handle rather than a `Value::Thunk`
 and its `Seq` has a lazy shape of its own (`Slot::Seq`), so it still evaluates
 where it stands and would diverge on failure ordering. Nothing lands until it
 agrees.
+
+## 2026-08-19 — the browser's wall, and the two doors it needed
+
+Gavel 15 is built on all three engines. The browser was the last, and it was
+not a transcription of the other two.
+
+Its emitter builds the right operand as a capturing cell — the closure
+`emit_lambda` already builds, with no parameters and the arity that marks a
+cell rather than a function — and `rt_seq` stops asking what the right side is
+until the wall reaches it.
+
+Two forcing doors had to widen, for a reason particular to that engine.
+`forced` answers a `Value`, but the browser's `>>` and `.` build SLOT shapes
+that are not Values, and gavel 15 has just put such a cell to the right of
+every wall. So both `forced` and the executor's new `demand` hook materialize
+one through `as_desc` rather than reading it as data, and a handle-level
+`demanded` exists beside them because `exec_slot` walks handles.
+
+The mem vein caught a real differential on the first program with a wall in
+it: native counted the deferred cell as an allocation and the oracle did not.
+The oracle records it now.
+
+Full suite green, 60 binaries. wasm_engine 7/7.

@@ -3869,10 +3869,7 @@ impl<'a> Interp<'a> {
         if is_failure(&v) || matches!(v, Value::Desc(_)) {
             return Ok(v);
         }
-        Err(RuntimeError {
-            message: "`>>` sequences two effect descriptions".to_string(),
-            span,
-        })
+        Err(RuntimeError { message: "`>>` sequences two effect descriptions".to_string(), span })
     }
 
     fn execute_chain(&self, start: Rc<Desc>, executor: &mut dyn Executor) -> EvalResult {
