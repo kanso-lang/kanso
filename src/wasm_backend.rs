@@ -55,6 +55,9 @@ const RT_BUILTIN: u32 = 18;
 const RT_SEQ: u32 = 19;
 const RT_MAYBE_BIND: u32 = 20;
 const RT_MKCLOSURE: u32 = 21;
+/// The arity that marks a cell rather than a function. Paired with `DEFERRED`
+/// in wasm_rt, which is what reads it.
+const DEFERRED_ARITY: i64 = -2;
 const RT_CALL: u32 = 22;
 const RT_ENVGET: u32 = 23;
 const RT_DIE: u32 = 24;
@@ -708,7 +711,10 @@ impl<'a> WasmBackend<'a> {
             }
             Expr::Seq(l, r, _) => {
                 self.emit_expr(ctx, l, false)?;
-                self.emit_expr(ctx, r, false)?;
+                // GAVEL 15: the wall defers its right side, so what follows
+                // becomes a cell over the names it reads and the executor
+                // builds it once the left has run.
+                self.emit_cell(ctx, r)?;
                 ctx.body.call(RT_SEQ);
             }
             Expr::Lambda { .. } => self.emit_lambda(ctx, expr)?,
@@ -1093,6 +1099,46 @@ impl<'a> WasmBackend<'a> {
             true => mentions(expr, &|n: &str| self.knotted.contains(n)),
             false => mentions(expr, &|n: &str| n == ctx.group),
         }
+    }
+
+    /// A cell over the names it reads: the same closure `emit_lambda` builds,
+    /// with no parameters and an arity no call site can ask for, which is what
+    /// tells the runtime to demand it rather than call it.
+    fn emit_cell(&mut self, ctx: &mut Ctx, body: &Expr) -> Result<(), String> {
+        let mut captures: Vec<String> = Vec::new();
+        free_idents(body, &mut |name| {
+            if ctx.scope.contains_key(name) && !captures.iter().any(|c| c == name) {
+                captures.push(name.to_string());
+            }
+        });
+        let fn_idx = self.module.declare(2);
+        self.module.table.push(fn_idx);
+        let tidx = (self.module.table.len() - 1) as u32;
+        let mut inner = Ctx {
+            body: Body::new(2),
+            scope: HashMap::new(),
+            prefix: ctx.prefix.clone(),
+            group: ctx.group.clone(),
+        };
+        for (i, c) in captures.iter().enumerate() {
+            let local = inner.body.local();
+            inner.body.local_get(0);
+            inner.body.i32_const(i as i64);
+            inner.body.call(RT_ENVGET);
+            inner.body.local_set(local);
+            inner.scope.insert(c.clone(), local);
+        }
+        self.emit_expr(&mut inner, body, true)?;
+        self.module.define(fn_idx, inner.body);
+        for c in &captures {
+            ctx.body.local_get(ctx.scope[c]);
+            ctx.body.call(RT_ARG);
+        }
+        ctx.body.i32_const(tidx as i64);
+        ctx.body.i32_const(captures.len() as i64);
+        ctx.body.i32_const(DEFERRED_ARITY);
+        ctx.body.call(RT_MKCLOSURE);
+        Ok(())
     }
 
     fn emit_lambda(&mut self, ctx: &mut Ctx, expr: &Expr) -> Result<(), String> {

@@ -145,7 +145,17 @@ fn forced(v: Value) -> Value {
                 _ => return v,
             }
             REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
-            let answered = val(call_closure(h, Vec::new()));
+            let handle = call_closure(h, Vec::new());
+            // A cell whose body is a wall or a bind answers a slot shape
+            // rather than a value, so it is materialized rather than read as
+            // data — GAVEL 15 put such a cell to the right of every `>>`.
+            let answered = match slot(handle) {
+                Slot::V(value) => value,
+                _ => match as_desc(handle) {
+                    Some(d) => Value::Desc(d),
+                    None => val(handle),
+                },
+            };
             REG.with(|r| r.borrow_mut()[h as usize] = Slot::V(answered.clone()));
             answered
         }
@@ -795,19 +805,40 @@ fn map_or_filter(name: &str, list_h: u32, closure_h: u32) -> u32 {
 
 #[no_mangle]
 pub extern "C" fn rt_seq(a: u32, b: u32) -> u32 {
-    for h in [a, b] {
-        if let Slot::V(v) = slot(h) {
-            if is_failure(&v) {
-                return h;
-            }
+    // Only the left side is examined: what follows a wall is not built until
+    // the wall reaches it, and that includes not being asked whether it failed.
+    if let Slot::V(v) = slot(a) {
+        if is_failure(&v) {
+            return a;
         }
     }
     match (slot(a), slot(b)) {
         (Slot::V(Value::Desc(da)), Slot::V(Value::Desc(db))) => {
             push(Slot::V(Value::Desc(Rc::new(Desc::Seq(da, Value::Desc(db), SPAN0)))))
         }
+        // GAVEL 15: the wall defers its right side, so `b` arrives as a cell
+        // and is not asked what it is until the wall reaches it.
+        (sa, Slot::C { arity: DEFERRED, .. }) if descish(&sa) => push(Slot::Seq(a, b)),
         (sa, sb) if descish(&sa) && descish(&sb) => push(Slot::Seq(a, b)),
         _ => die("`>>` sequences two effect descriptions".to_string()),
+    }
+}
+
+/// Demands a cell at the HANDLE level. `forced` answers a Value, and the
+/// browser's `>>` and `.` build slot shapes that are not Values, so a cell
+/// whose body is a wall could not come back through it. The answer is written
+/// back over the handle, so a cell read twice costs one call.
+fn demanded(h: u32) -> u32 {
+    match slot(h) {
+        Slot::C { tidx, env, arity: DEFERRED } => {
+            REG.with(|r| r.borrow_mut()[h as usize] = Slot::C { tidx, env, arity: RUNNING });
+            let answered = call_closure(h, Vec::new());
+            let settled = slot(answered);
+            REG.with(|r| r.borrow_mut()[h as usize] = settled);
+            answered
+        }
+        Slot::C { arity: RUNNING, .. } => die("a lazy binding demands its own value".to_string()),
+        _ => h,
     }
 }
 
@@ -819,7 +850,7 @@ fn as_desc(h: u32) -> Option<Rc<Desc>> {
     match slot(h) {
         Slot::V(Value::Desc(d)) => Some(d),
         Slot::Seq(a, b) => {
-            let (da, db) = (as_desc(a)?, as_desc(b)?);
+            let (da, db) = (as_desc(a)?, as_desc(demanded(b))?);
             Some(Rc::new(Desc::Seq(da, Value::Desc(db), SPAN0)))
         }
         Slot::Bind(inner, closure) => {
@@ -944,6 +975,23 @@ pub extern "C" fn rt_list_len(h: u32) -> u32 {
 struct RtExecutor;
 
 impl Executor for RtExecutor {
+    fn demand(&mut self, value: Value) -> Value {
+        let Value::TableFn(h) = value else {
+            return value;
+        };
+        let settled = demanded(h);
+        match slot(settled) {
+            Slot::V(v) => v,
+            // A cell whose body is itself a wall or a bind answers a slot
+            // shape rather than a value, so it is materialized here the way
+            // the scheduler already materializes one.
+            _ => match as_desc(settled) {
+                Some(d) => Value::Desc(d),
+                None => Value::TableFn(settled),
+            },
+        }
+    }
+
     fn print(&mut self, text: &str) {
         PRINTS.with(|p| {
             let mut out = p.borrow_mut();
@@ -1025,7 +1073,13 @@ fn exec_slot(h: u32) -> Result<u32, String> {
             if matches!(slot(left), Slot::V(Value::ErrV(_))) {
                 return Ok(left);
             }
-            exec_slot(b)
+            let right = demanded(b);
+            if let Slot::V(v) = slot(right) {
+                if is_failure(&v) {
+                    return Ok(right);
+                }
+            }
+            exec_slot(right)
         }
         Slot::Bind(inner, closure) => {
             let yielded = exec_slot(inner)?;

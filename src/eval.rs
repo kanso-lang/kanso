@@ -363,6 +363,13 @@ fn foreign_call(handle: u32, args: Vec<Value>, span: Span) -> EvalResult {
 }
 
 pub trait Executor {
+    /// How this engine reaches a cell. The wall defers its right side, and the
+    /// engines keep their cells in different places: the oracle in a reference
+    /// counted state the interpreter forces, the browser in a slot table. An
+    /// engine whose cells the interpreter already forces needs nothing here.
+    fn demand(&mut self, value: Value) -> Value {
+        value
+    }
     fn print(&mut self, text: &str);
     fn args(&mut self) -> Vec<String>;
     fn stdin(&mut self) -> Result<String, String>;
@@ -3856,8 +3863,8 @@ impl<'a> Interp<'a> {
     /// What follows the wall, built where the wall reaches it. This is also
     /// where its failure and its type are checked: a failure to the right of a
     /// wall that never ran is a failure nobody asked for.
-    fn seq_right(&self, b: &Value, span: Span) -> EvalResult {
-        let v = self.force_thunk(b.clone())?;
+    fn seq_right(&self, b: &Value, span: Span, executor: &mut dyn Executor) -> EvalResult {
+        let v = self.force_thunk(executor.demand(b.clone()))?;
         if is_failure(&v) || matches!(v, Value::Desc(_)) {
             return Ok(v);
         }
@@ -3877,7 +3884,7 @@ impl<'a> Interp<'a> {
                     if is_failure(&left) && matches!(left, Value::ErrV(_)) {
                         return Ok(left);
                     }
-                    match self.seq_right(b, *span)? {
+                    match self.seq_right(b, *span, executor)? {
                         Value::Desc(d) => d,
                         failure => return Ok(failure),
                     }
@@ -3976,7 +3983,7 @@ impl<'a> Interp<'a> {
                     Ok(Step::Blocked(ms, Rc::new(Desc::Seq(cont, b.clone(), *span))))
                 }
                 Step::Done(left) if matches!(left, Value::ErrV(_)) => Ok(Step::Done(left)),
-                Step::Done(_) => match self.seq_right(b, *span)? {
+                Step::Done(_) => match self.seq_right(b, *span, executor)? {
                     Value::Desc(d) => self.step(&d, executor),
                     failure => Ok(Step::Done(failure)),
                 },
