@@ -1,3 +1,5 @@
+import "std/testing"
+
 test_basename_is_the_last_segment = basename "a/b/c.html" == "c.html"
 
 test_basename_of_a_bare_name = basename "c.html" == "c.html"
@@ -23,4 +25,4 @@ test_stem_of_a_dotfile = stem ".gitignore" == ".gitignore"
 # The harness may read a failure; a package may not. This is the only place
 # in the shipped library that needs it, and it is here to keep the surface
 # exercised rather than only asserted about.
-test_a_plain_value_has_not_failed = not failed? "a/b"
+test_a_plain_value_has_not_failed = not testing/failed? "a/b"

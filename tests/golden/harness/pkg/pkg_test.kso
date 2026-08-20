@@ -1,3 +1,5 @@
-test_parse_rejects_junk = failed? (parse "junk")
+import "std/testing"
 
-test_a_plain_value_has_not_failed = not failed? "fine"
+test_parse_rejects_junk = testing/failed? (parse "junk")
+
+test_a_plain_value_has_not_failed = not testing/failed? "fine"
