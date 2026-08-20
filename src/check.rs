@@ -1997,6 +1997,14 @@ fn demanded_refs<'a>(
     if matches!(expr, Expr::List(..) | Expr::MapLit(..)) {
         return;
     }
+    // gavel 15 gives the wall a lazy right side, which is a storing position
+    // like a constructor field: `loop = print "tick" >> loop` ties rather than
+    // asking for the answer it is meant to produce. The left side runs, so it
+    // stays a demand.
+    if let Expr::Seq(left, _, _) = expr {
+        demanded_refs(left, known, types, out);
+        return;
+    }
     if let Expr::App { head, args, .. } = expr {
         if let Expr::Ident(name, _) = head.as_ref() {
             if types.contains(name.as_str()) {
