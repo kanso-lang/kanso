@@ -318,7 +318,7 @@ fn a_served_report_reaches_the_program_on_both_engines() {
 #[test]
 fn a_listener_answers_the_port_it_was_given_on_both_engines() {
     const ANNOUNCE: &str = "import \"std/io\"\nimport \"std/net\"\nimport \"std/time\"\n\npub fn announced l p\n  io/write_file \"port.txt\" \"{p}\"\n    . (_ -> time/sleep 3000)\n    . (_ -> net/close_listener l)\n";
-    const ENTRY: &str = "import \"announce\"\nimport \"std/net\"\n\nnet/listen 0 . (l -> net/port l . (p -> announce/announced l p))\n";
+    const ENTRY: &str = "import \"./announce\"\nimport \"std/net\"\n\nnet/listen 0 . (l -> net/port l . (p -> announce/announced l p))\n";
 
     for (tag, engine) in [("native", &[][..]), ("interp", &["--interp"][..])] {
         let dir = std::env::temp_dir().join(format!("kanso-netport-{}-{tag}", std::process::id()));

@@ -45,7 +45,7 @@ fn run_kanso_as_library(program: &Path, extra: &[&str], envs: &[(&str, &str)]) -
     let _ = std::fs::remove_dir_all(&stage);
     stage_tree(source, &stage);
     let entry = stage.join(format!("run_{name}.kso"));
-    std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+    std::fs::write(&entry, format!("import \"./{name}\"\n\n{name}/play\n"))
         .expect("the entry file writes");
 
     let out = run_kanso_env(&entry, extra, envs);
@@ -421,7 +421,7 @@ fn micro_corpus_survives_a_release_build() {
         let entry = format!("run_{name}");
         std::fs::write(
             stage.join(format!("{entry}.kso")),
-            format!("import \"{name}\"\n\n{name}/play\n"),
+            format!("import \"./{name}\"\n\n{name}/play\n"),
         )
         .expect("the entry file writes");
 

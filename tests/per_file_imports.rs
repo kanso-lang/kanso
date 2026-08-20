@@ -32,7 +32,7 @@ fn a_qualified_name_needs_this_files_import() {
         &[
             ("mod/a.kso", "import \"std/text\"\n\npub fn helper s\n  text/chars s\n"),
             ("mod/b.kso", "pub fn shout s\n  text/join (text/chars s) \"-\"\n"),
-            ("main.kso", "import \"mod\"\n\nprint (mod/shout \"hi\")\n"),
+            ("main.kso", "import \"./mod\"\n\nprint (mod/shout \"hi\")\n"),
         ],
     );
 
@@ -53,7 +53,7 @@ fn the_same_module_passes_once_each_file_says_so() {
                 "mod/b.kso",
                 "import \"std/text\"\n\npub fn shout s\n  text/join (text/chars s) \"-\"\n",
             ),
-            ("main.kso", "import \"mod\"\n\nprint (mod/shout \"hi\")\n"),
+            ("main.kso", "import \"./mod\"\n\nprint (mod/shout \"hi\")\n"),
         ],
     );
 
@@ -72,7 +72,7 @@ fn an_unused_import_is_per_file() {
         &[
             ("mod/a.kso", "import \"std/text\"\n\npub fn helper s\n  text/chars s\n"),
             ("mod/b.kso", "import \"std/text\"\n\npub fn plain _\n  1\n"),
-            ("main.kso", "import \"mod\"\n\nprint (mod/plain 0)\n"),
+            ("main.kso", "import \"./mod\"\n\nprint (mod/plain 0)\n"),
         ],
     );
 

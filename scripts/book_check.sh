@@ -71,7 +71,7 @@ for out in docs/book/samples/*/*.out; do
       cp -R "$dir/." "$stage/"
       stem="${name%.kso}"
       rm -rf "$stage/$stem"
-      printf 'import "%s"\n\n%s/play\n' "$stem" "$stem" > "$stage/run_$stem.kso"
+      printf 'import "./%s"\n\n%s/play\n' "$stem" "$stem" > "$stage/run_$stem.kso"
       target="run_$stem.kso"
       where="$stage"
     fi

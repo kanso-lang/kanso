@@ -1,4 +1,4 @@
-import "pendbench"
+import "./pendbench"
 import "std/io"
 
 total 200 . (t -> io/write "{t}\n")
