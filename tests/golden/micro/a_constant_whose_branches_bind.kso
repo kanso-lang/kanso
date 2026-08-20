@@ -1,0 +1,7 @@
+pub two = if (1 < 2)
+  base = 700
+  base - 150
+else
+  1
+
+pub play = print "{two}"

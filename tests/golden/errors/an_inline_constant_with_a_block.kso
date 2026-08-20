@@ -1,9 +1,7 @@
-# The unpinned list carried this message as unreachable — "the lexer folds an
-# indented line into its head unless that head opens one" — but `two = if`
-# opens a block, the lexer keeps the branch lines, and the checker refuses
-# the shape with these words. Whether the refusal or its wording is the
-# right one for a block-if constant is a filed question; this pins what the
-# compiler says today so any change is deliberate.
+# A branch that binds names takes the block form; branches that only answer an
+# expression stay in the expression form, and the compiler holds that boundary
+# in both directions. This is the second half, and it reads the same whether or
+# not the file around it holds declarations.
 two = if (1 < 2)
   "a"
 else
