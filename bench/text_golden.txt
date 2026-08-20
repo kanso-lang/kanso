@@ -49,13 +49,13 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=78594
-encodebench text=96322
-oneshot text=95826
-basket text=88354
-widebench text=97410
+jsonbench text=78626
+encodebench text=96354
+oneshot text=95858
+basket text=88386
+widebench text=97442
 deepbench text=62226
-escapebench text=49090
+escapebench text=49122
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
@@ -197,3 +197,9 @@ escapebench text=49090
 # than before. Between 0.6% and 1.3% each, most of it on the smallest binary.
 # What it buys is a loop written with `>>` that runs at all — four hundred
 # thousand links, where before the chain was built before any of it ran.
+# 2026-08-20 (later): +32 bytes on six rows and deepbench unmoved. Three
+# counter sites in the runtime object every binary links: the malloc counted
+# where a permanent buffer is taken, and the free counted at the two places one
+# is released. Each is an increment behind the stats branch that was already
+# there, which is why the figure is the same everywhere and small. deepbench
+# links least of the runtime and its section's alignment absorbs it.

@@ -54,13 +54,13 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2860479896
-encodebench 9724924777
-oneshot 46591234
-basket 57404130
-widebench 85554089
+jsonbench 2860480046
+encodebench 9724924778
+oneshot 46591235
+basket 57404154
+widebench 85554090
 deepbench 833609159
-escapebench 258541119
+escapebench 258568121
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around
@@ -247,3 +247,18 @@ escapebench 258541119
 # The trade this vein cannot show: the same change takes a 400,000-link `>>`
 # loop from a stack exhaustion to a program that finishes. There is no
 # benchmark of a chain that long, because until now there could not be one.
+# 2026-08-20 (later): escapebench alone moves meaningfully — 258,541,119 to
+# 258,568,121, a rise of 27,002 and 0.010%. It is the row that allocates a
+# permanent buffer per round, so it is the row that pays the three counter
+# increments now that the malloc and both frees are counted. Twenty-seven
+# thousand for twelve thousand buffers is about two instructions each, which is
+# what an increment behind a branch that was already taken costs.
+#
+# The other six are noise and the signs agree only by accident: jsonbench +150,
+# basket +24, widebench +1, oneshot +1, encodebench +1, deepbench unmoved. Ones
+# and tens against billions, which is the layout moving around code the linker
+# now places differently.
+#
+# What it buys is an honest vein. escapebench pinned bytes_malloc=0 against
+# bytes_freed=3000 — three thousand frees of buffers the counters said were
+# never allocated — and reads 12,000 against 12,000 now.

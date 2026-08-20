@@ -4301,3 +4301,46 @@ demand self-stability; check mergeable before theorizing). The
 block machinery that produced every crash now withstands a directed
 assault on exactly itself, which is what hardened means when it is
 earned rather than asserted.
+
+## 2026-08-20 — permanent buffers are counted where they are allocated and freed
+
+`k_buf_perm` mallocs a buffer for a list that outlives its beat. It counted
+`allocs` and `alloc_bytes` and never `bytes_malloc`, while the permreg flush
+counted `bytes_freed` for the same buffers. The escape vein pinned the
+contradiction plainly — `bytes_malloc=0` against `bytes_freed=3000`, three
+thousand frees of buffers the counters said were never allocated.
+
+The grow path carried the larger share. When a list outgrows a perm buffer the
+old one is released outright, adjusting `perm_live` and freeing the storage
+without counting the free at all. With both counted, escape reads 12,000
+against 12,000: nine thousand frees had been invisible, three times the
+undercount the defect was filed with.
+
+A third one sits beside them and no vein can witness it. `perm_live`'s decrement
+sat inside the `k_stats_on` guard where its increment sat outside, so with
+counters off the figure only ever grew and `perm_peak` reported everything a
+program had allocated rather than its high-water mark. Every vein runs with
+counters on, which is why nothing caught it and why it is written down here.
+
+**Every counter that rose, and why it rose.** These are corrections, not more
+work: the allocations always happened and the programs are byte-for-byte
+unchanged. `basket_bytes_malloc` 16 to 30. `escape` 0 to 12,000. In the lazy
+tier, `a_pushed_call_keeps_the_sweep_bytes_malloc` 0 to 2,400,
+`an_escaped_list_gives_its_buffer_back_bytes_malloc` 0 to 400, and one small
+buffer count each for `early_exit_bytes_malloc`, `fold_push_shape_bytes_malloc`,
+`fused_map_shape_bytes_malloc`, `fused_reducer_bytes_malloc`,
+`fused_select_shape_bytes_malloc`, `fused_tally_bytes_malloc`,
+`piped_reducer_bytes_malloc`, `skip_shape_bytes_malloc`,
+`sort_shape_bytes_malloc`, `take_shape_bytes_malloc` and
+`tally_shape_bytes_malloc`. Each of those reads one above its `bytes_freed`,
+because the last buffer a program holds outlives its exit and no flush runs
+there.
+
+Decode, encode, oneshot, scan and wide are byte-identical. Welfare reads 84.56
+against a floor of 84.56 — it reads neither counter, so an accounting fix buys
+no points and costs none. `instructions` and `machine_code` fail on this host
+before the change as well as after, checked with the diff stashed; they are the
+host-divergent pair.
+
+The direction gate is right to ask about a rising counter and cannot tell a
+correction from a regression, which is what this entry is for.
