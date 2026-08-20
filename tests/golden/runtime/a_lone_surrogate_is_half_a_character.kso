@@ -1,0 +1,6 @@
+# either surrogate half alone is a parse failure with a position, not a
+# bare string err leaked from from_code — the decoder answers before the
+# character machinery is ever asked
+import "std/json"
+
+pub play = print "{json/decode "\"\\ud83c\""}"

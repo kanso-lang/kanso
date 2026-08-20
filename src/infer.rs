@@ -157,6 +157,13 @@ pub fn infer(program: &Program) -> Inference {
     // change can reach. Four fifths of the visits in a settled fixpoint find
     // nothing, and a visit costs a walk of the whole body.
     let mut dirty = vec![true; fns.len()];
+    // A round reads whatever earlier visits in the same round already wrote,
+    // and the two flows want opposite orders: returns travel callee-to-caller,
+    // params caller-to-callee. The first sweep runs callee-first so leaf
+    // returns land before any caller asks; after that the direction
+    // alternates, and each sweep carries one flow the whole way instead of
+    // one hop per round.
+    let order = callee_first(program);
     while ctx.changed && rounds < 200 {
         ctx.changed = false;
         rounds += 1;
@@ -164,7 +171,12 @@ pub fn infer(program: &Program) -> Inference {
         let mut moved = 0usize;
         ctx.dirty_next = vec![false; fns.len()];
         ctx.all_dirty = false;
-        for (i, decl) in fns.iter().enumerate() {
+        let walk: Box<dyn Iterator<Item = &usize>> = match rounds % 2 == 1 {
+            true => Box::new(order.iter()),
+            false => Box::new(order.iter().rev()),
+        };
+        for &i in walk {
+            let decl = &fns[i];
             if !dirty[i] {
                 continue;
             }
@@ -198,6 +210,67 @@ pub fn infer(program: &Program) -> Inference {
         };
     }
     Inference { params: ctx.params, returns: ctx.returns, type_fields: ctx.type_fields }
+}
+
+/// Post-order over the call graph: every function lands after the functions
+/// it mentions, so within a round the shared params and returns are already
+/// fresh where the graph is acyclic, and a cycle costs rounds only for its
+/// own knot.
+fn callee_first(program: &Program) -> Vec<usize> {
+    let mut by_name: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (i, decl) in program.fns.iter().enumerate() {
+        by_name.entry(decl.name.as_str()).or_default().push(i);
+    }
+    fn gather<'a>(expr: &'a Expr, names: &mut Vec<&'a str>) {
+        if let Expr::Ident(n, _) | Expr::Partial(n, _) = expr {
+            names.push(n.as_str());
+        }
+        for child in crate::expr_children(expr) {
+            gather(child, names);
+        }
+    }
+    let mut calls: Vec<Vec<usize>> = vec![Vec::new(); program.fns.len()];
+    for (i, decl) in program.fns.iter().enumerate() {
+        let mut names: Vec<&str> = Vec::new();
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => gather(expr, &mut names),
+                Stmt::Set { value, .. } => gather(value, &mut names),
+            }
+        }
+        names.sort_unstable();
+        names.dedup();
+        for name in names {
+            if let Some(targets) = by_name.get(name) {
+                calls[i].extend(targets);
+            }
+        }
+    }
+    let mut order = Vec::with_capacity(calls.len());
+    let mut state = vec![0u8; calls.len()];
+    for root in 0..calls.len() {
+        if state[root] != 0 {
+            continue;
+        }
+        state[root] = 1;
+        let mut stack = vec![(root, 0usize)];
+        while let Some(frame) = stack.last_mut() {
+            let (node, next) = *frame;
+            if next < calls[node].len() {
+                frame.1 += 1;
+                let child = calls[node][next];
+                if state[child] == 0 {
+                    state[child] = 1;
+                    stack.push((child, 0));
+                }
+            } else {
+                state[node] = 2;
+                order.push(node);
+                stack.pop();
+            }
+        }
+    }
+    order
 }
 
 fn bind_pattern<'a>(

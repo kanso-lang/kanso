@@ -49,9 +49,15 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=78626
+# 2026-08-20 (last): jsonbench 78,626 to 79,922 and oneshot 95,858 to
+# 97,154 — 1,296 bytes each, the only two rows that link the JSON decoder.
+# It is the surrogate-pair machinery: five functions joining `\u` halves
+# where one function refused them. 1.6% on jsonbench, bought outright — a
+# decoder that rejects every ensure_ascii astral character is not smaller,
+# it is wrong.
+jsonbench text=79922
 encodebench text=96354
-oneshot text=95858
+oneshot text=97154
 basket text=88386
 widebench text=97442
 deepbench text=62226

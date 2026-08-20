@@ -119,13 +119,38 @@ fn str_escape _ none p _
 fn str_escape _ c p _
   fail p "invalid escape `\\{text/utf8 [c]}`"
 
+fn str_hex4 cs p
+  h1 = hex_digit cs[p]
+  h2 = hex_digit (cs[p + 1])
+  h3 = hex_digit (cs[p + 2])
+  h4 = hex_digit (cs[p + 3])
+  h1 * 4096 + h2 * 256 + h3 * 16 + h4
+
+fn str_low cs p acc high low
+  scalar = 65536 + (high - 55296) * 1024 + (low - 56320)
+  if (56319 < low and low < 57344)
+    str_chars cs (p + 12) (text/append acc (text/from_code scalar))
+    fail p "a high surrogate needs a low surrogate beside it"
+
+# the low half is only read once `\u` is seen: past the string's end there
+# are no hex digits to force
+fn str_pair cs p acc high
+  if (cs[p + 6] == 92 and cs[p + 7] == 117)
+    str_low cs p acc high (str_hex4 cs (p + 8))
+    fail p "a high surrogate needs a low surrogate beside it"
+
+# a surrogate is half a character: the high half joins the `\u` low half
+# written beside it, and either half alone is a failure
+fn str_surrogate cs p acc high
+  if (56319 < high)
+    fail p "a low surrogate arrived without its high half"
+    str_pair cs p acc high
+
 fn str_unicode cs p acc
-  h1 = hex_digit (cs[p + 2])
-  h2 = hex_digit (cs[p + 3])
-  h3 = hex_digit (cs[p + 4])
-  h4 = hex_digit (cs[p + 5])
-  code = h1 * 4096 + h2 * 256 + h3 * 16 + h4
-  str_chars cs (p + 6) (text/append acc (text/from_code code))
+  code = str_hex4 cs (p + 2)
+  if (code < 55296 or 57343 < code)
+    str_chars cs (p + 6) (text/append acc (text/from_code code))
+    str_surrogate cs p acc code
 
 fn string_at cs 34 start p
   parsed (p + 1) (string_ok p (text/utf8 (text/slice cs start (p - 1))))

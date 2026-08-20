@@ -1,0 +1,3 @@
+error[endpoint]: unhandled err reached the entry: json/parse_failure 2 "a high surrogate needs a low surrogate beside it"
+  born in json/fail at std/json/scan.kso:13
+  passed through json/finish

@@ -22,6 +22,8 @@ test_decode_object = decode "\{\"a\": 1, \"b\": 2}" == { "a":1 "b":2 }
 
 test_decode_string = decode "\"hello\"" == "hello"
 
+test_decode_surrogate_pair = decode "\"\\ud83c\\udf8c\"" == "🎌"
+
 test_decode_unicode = decode "\"\\u00e9\"" == "é"
 
 test_decode_whitespace = decode "  [ 1 , 2 ]  " == [1 2]

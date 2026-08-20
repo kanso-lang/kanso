@@ -39,11 +39,15 @@ lower_d = ["sh_map" "sh_bytes" "lines" "calls" "branches" "defines"]
 
 lower_e = ["rounds" "visits"]
 
+lower_f = ["front_end_rounds" "front_end_visits" "compile_peak_bytes"]
+
 lower_ab = text/concat lower_a lower_b
 
 lower_cd = text/concat lower_c lower_d
 
-lower = text/concat lower_ab (text/concat lower_cd lower_e)
+lower_ef = text/concat lower_e lower_f
+
+lower = text/concat lower_ab (text/concat lower_cd lower_ef)
 
 higher_a = ["el_parses" "ryu_renders" "append_fast" "utf8_zerocopy"]
 
@@ -61,9 +65,15 @@ bench_c = [["bench/cost_golden_basket.txt" "basket_"]]
 
 bench_compile = [["bench/compile_golden.txt" ""]]
 
+bench_modules = [["bench/compile_golden_modules.txt" "module_"]]
+
+bench_memory = [["bench/compile_memory_golden.txt" ""]]
+
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
-bench_goldens = text/concat bench_ab (text/concat bench_c bench_compile)
+bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
+
+bench_goldens = text/concat bench_ab (text/concat bench_cd bench_memory)
 
 mem_dir = "tests/golden/mem"
 
