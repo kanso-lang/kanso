@@ -243,6 +243,19 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         while body_end < lexed.lines.len() && lexed.lines[body_end].indent >= 2 {
             body_end += 1;
         }
+        // A block head's `else` sits at the head's own indent, which at the top
+        // level is zero, so the run of indented lines stops short of it.
+        if is_block_head(&line.tokens)
+            && lexed
+                .lines
+                .get(body_end)
+                .is_some_and(|l| l.indent == 0 && is_else_line(l))
+        {
+            body_end += 1;
+            while body_end < lexed.lines.len() && lexed.lines[body_end].indent >= 2 {
+                body_end += 1;
+            }
+        }
         let body = &lexed.lines[body_start..body_end];
         if !matches!(line.tokens.first(), Some((Tok::KwImport, _))) {
             past_imports = true;
@@ -574,6 +587,19 @@ fn parse_fn(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     Ok(FnDecl { name, is_pub, span, params, body: stmts, file: String::new(), synthetic: false })
 }
 
+fn is_else_line(line: &Line) -> bool {
+    matches!(line.tokens.as_slice(), [(Tok::Ident(w), _)] if w == "else")
+}
+
+/// `name = if cond` / `pub name = build`, the constant forms that open a block.
+fn is_block_head(tokens: &[(Tok, Span)]) -> bool {
+    let off = usize::from(matches!(tokens.first(), Some((Tok::KwPub, _))));
+    matches!(
+        tokens.get(off..off + 3),
+        Some([(Tok::Ident(_), _), (Tok::Bind, _), (Tok::Ident(w), _)]) if w == "if" || w == "build"
+    )
+}
+
 fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
     let is_pub = matches!(header.tokens.first(), Some((Tok::KwPub, _)));
     let off = usize::from(is_pub);
@@ -604,6 +630,36 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
             span,
             params: Vec::new(),
             body: stmts,
+            file: String::new(),
+            synthetic: false,
+        });
+    }
+    if is_block_head(&header.tokens) {
+        let split = body.iter().position(|l| l.indent == 0 && is_else_line(l));
+        let (children, else_children) = match split {
+            Some(at) => (&body[..at], Some(&body[at + 1..])),
+            None => (body, None),
+        };
+        let bare = Line {
+            number: header.number,
+            indent: header.indent,
+            tokens: header.tokens[off..].to_vec(),
+            end_cols: header.end_cols[off..].to_vec(),
+        };
+        let stmt = parse_block_construct(&bare, children, else_children)?;
+        let Stmt::Bind { expr, .. } = stmt else {
+            return Err(Diagnostic::new(
+                "syntax",
+                format!("constant `{name}` has no value"),
+                span,
+            ));
+        };
+        return Ok(FnDecl {
+            name,
+            is_pub,
+            span,
+            params: Vec::new(),
+            body: vec![Stmt::Expr(expr)],
             file: String::new(),
             synthetic: false,
         });
