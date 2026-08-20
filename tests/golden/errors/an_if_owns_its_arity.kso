@@ -1,0 +1,15 @@
+# An `if` is a condition and two branches. Inference indexes all three, so a
+# shorter spelling panicked the compiler and a longer one slipped through to
+# a runtime the engines answered differently — one rule refuses every wrong
+# width before inference runs. Found by crossover fuzzing, reduced to the
+# two-line shapes below.
+fn judge n
+  if n
+
+fn weigh n
+  if (n < 10) "light"
+
+fn stretch n
+  if (n < 10) "light" "heavy" "extra"
+
+pub play = print "{judge 1} {weigh 1} {stretch 1}"

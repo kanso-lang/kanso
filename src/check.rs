@@ -120,6 +120,41 @@ pub fn check(program: &mut Program, require_entry: bool) -> Vec<Diagnostic> {
 /// `flag == false` is `not flag` written the long way. Neither can be anything
 /// but noise, and kanso has no linter layer for noise to live in, so what a
 /// linter elsewhere would warn about is refused here.
+/// An `if` is a condition and two branches, and inference indexes all three,
+/// so the shape is refused before inference ever runs.
+fn check_if_arity(program: &Program, diags: &mut Vec<Diagnostic>) {
+    for decl in &program.fns {
+        if decl.synthetic {
+            continue;
+        }
+        for stmt in &decl.body {
+            let expr = match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) => expr,
+                Stmt::Set { value, .. } => value,
+            };
+            if_arity_walk(expr, diags);
+        }
+    }
+}
+
+fn if_arity_walk(expr: &Expr, diags: &mut Vec<Diagnostic>) {
+    if let Expr::App { head, args, span, .. } = expr {
+        if matches!(head.as_ref(), Expr::Ident(name, _) if name == "if") && args.len() != 3 {
+            diags.push(Diagnostic::new(
+                "arity",
+                format!(
+                    "an `if` takes a condition and two branches, got {} argument(s)",
+                    args.len()
+                ),
+                *span,
+            ));
+        }
+    }
+    for child in crate::expr_children(expr) {
+        if_arity_walk(child, diags);
+    }
+}
+
 fn check_boolean_equality(program: &Program, diags: &mut Vec<Diagnostic>) {
     for decl in &program.fns {
         if decl.synthetic {
@@ -1260,6 +1295,13 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     // Three checks read what inference knows, and inference over a whole
     // program is the most expensive thing the front end does. One pass,
     // handed round.
+    check_if_arity(program, &mut diags);
+    if !diags.is_empty() {
+        // inference indexes an if's branches, so it never runs over a shape
+        // the walk above refused
+        diags.sort_by_key(|d| (d.span.line, d.span.col));
+        return diags;
+    }
     let inference = crate::phase::watched("infer", || crate::infer::infer(program));
     check_constants(program, &mut diags);
     check_constant_cycles(program, &mut diags);
