@@ -63,17 +63,23 @@
 # the dead hex trio leaving the linker's output — while the two new
 # escape arms ride inside the existing jump table for less than the
 # deletion returns. The other six rows are untouched.
-jsonbench text=79762
-encodebench text=96898
-oneshot text=97042
-basket text=88930
-widebench text=97986
-deepbench text=62754
+# 2026-08-20 (bisimulation): every row rises by exactly 48 bytes — the
+# thunk-pair arm of k_eq_rec answering equal where it used to die, in the
+# runtime object every binary links — escapebench alone unmoved, and
+# pendbench FALLS 448:
+# its tail-position ifs now force through the shared maybe_force path
+# instead of each carrying its own cold-call plumbing.
+jsonbench text=79810
+encodebench text=96946
+oneshot text=97090
+basket text=88978
+widebench text=98034
+deepbench text=62802
 escapebench text=49650
 # 2026-08-20 (pendbench): the corpus gains its lazy row at 73,906 bytes —
 # a new binary, not a change to any existing one; the seven old rows are
 # untouched.
-pendbench text=73906
+pendbench text=73458
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.

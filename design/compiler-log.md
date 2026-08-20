@@ -4533,3 +4533,63 @@ CAFs every decode paid for. Deleting the trio moves perm_allocs from
 6 to 4 in the decode counters, takes front-end visits on lib/json to
 23,224 — below where they stood before the feature — and lands
 welfare at 84.85, floor set there. The suite panel reads 20 tests.
+
+## 2026-08-20 — GAVELED: two definitions with one unfolding are one value
+
+Clay ruled the equality collision: cycles compare by bisimulation no
+matter which door built them, and the equality value itself is lazy —
+his words were that everything cascades like the collapse of a wave
+function, equality is lazy, the next thing that uses it is lazy, and
+so forth until IO makes everything collapse. This supersedes the
+2026-08-18 knot-equality refusal: a knot's cycle now joins the same
+assumed-equal walk that build-block cycles have had since the cyclic-==
+work, because a reader holding two rings cannot tell which construct
+tied them, and == should not be able to either. The one refusal that
+survives is a cell demanded mid-construction — the blackhole — which
+is not yet a value at all.
+
+The implementation is two sites and a subtraction. In the native
+engine the thunk-pair revisit returns equal instead of dying, the
+same assumption the record case makes a few lines below. In the
+interpreter — which the wasm engine routes through — the revisit
+returns true and the whole Option plumbing that carried "refused"
+from the walk to the caller deletes, along with the caller's error.
+`equality_refuses_a_value_that_names_itself` retires from the runtime
+corpus and `a_knot_compares_by_its_unfolding` replaces it in the
+micro corpus, byte-identical across the three engines: `[x]`-x equals
+`[y]`-y, the one-ring equals the two-ring, and a ring differing in a
+field does not.
+
+The cascade half of the ruling found a real gap the moment it was
+pinned. The demand analyser only defers a binding whose right side is
+"expensive", and a bare comparison was not, so `verdict = x == y`
+compiled strict and the walk ran with nobody asking — the mem fixture
+written to pin zero evaluations read two on its first run, which is
+the failing spec doing its job. Comparisons now count as expensive on
+their operator: their cost is their operands' shape, which no syntax
+shows — two knots bisimulate, two lazy sequences may never end — and
+the deferral gate still requires conditionally-demanded use, so the
+ordinary scrutinized comparison compiles as strict as ever. Nothing
+else moved: every counter gate is flat, the compile goldens are
+byte-identical, welfare holds at its floor, and the new pin
+`an_unasked_equality_stays_a_cell` reads one cell built, zero forces,
+zero evaluations.
+
+One finding filed rather than fixed: pinning the knot version of that
+fixture caught the interpreter and the native engine disagreeing on
+whether an undemanded knot CAF counts as a thunk allocation (native
+says yes at startup, the oracle never creates the cell). Semantic
+counters — forces and evals — agree at zero. The fixture pins the
+agreeing pair; the counting question is open.
+
+The browser differential then earned its keep before the PR merged:
+its own harness — a kanso program — died with "an if condition is
+true or false, got true", which is a cell rendered by the error
+message. The tail-position `if` lowering and the guard lowering both
+tested the raw condition where the ordinary path has always forced
+first; the gap predates this change, and lazy comparisons are simply
+the first cells to reach it, riding a pass-through arm into a
+consumer's tail `if`. Both sites force now — `maybe_force` still
+emits nothing where the set proves no thunk — and the shape is pinned
+as `a_deferred_condition_forces_at_the_tail`, red before the fix,
+byte-identical across the engines after.

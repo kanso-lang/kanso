@@ -1,0 +1,19 @@
+import "std/list"
+import "std/text"
+
+# A comparison the demand analysis defers rides through a pass-through arm
+# as a cell, and the first thing to ask it a question is an `if` in tail
+# position inside a consumer. The tail path forces the way the ordinary
+# path always has; before it did, this program refused its own answer.
+fn either? true _
+  true
+
+fn either? _ answer
+  answer
+
+fn declares? line
+  a_function = text/slice line 1 3 == "fn "
+  a_type = text/slice line 1 5 == "type "
+  either? a_function a_type
+
+pub play = print "{list/any? ["zz" "type x"] declares?}"

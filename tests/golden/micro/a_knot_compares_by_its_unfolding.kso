@@ -1,0 +1,16 @@
+# A knot's cycle joins the bisimulation every other cycle gets: two values
+# are equal when no walk of observations tells them apart, and a pair the
+# walk is already inside is settled rather than refused. x and y both
+# unfold to the same endless nesting, so they are one value with two
+# spellings; the ring that names itself equals the pair of rings that name
+# each other for the same reason. The one refusal left is a cell demanded
+# mid-construction, which is not yet a value at all.
+x = [x]
+
+y = [y]
+
+a = [1 a]
+
+b = [1 [1 b]]
+
+pub play = print "{x == y} {a == b} {a == [2 a]}"

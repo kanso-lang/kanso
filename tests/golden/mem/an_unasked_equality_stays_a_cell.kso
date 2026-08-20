@@ -1,0 +1,17 @@
+# An equality is a value like any other: binding it builds a cell, and the
+# comparison inside runs only when demand reaches it. Here the demand never
+# comes — the arm drops the cell unread — so the walk never starts, which
+# is what thunk_evals holding still says. Only IO collapses the cascade.
+fn pick false _
+  0
+
+fn pick true chosen
+  chosen
+
+x = [1 2 3]
+
+y = [1 2 3]
+
+pub play =
+  verdict = x == y
+  print "picked: {pick false verdict}"

@@ -3318,19 +3318,7 @@ pub fn eval_binop(
                 span,
             });
         }
-        let Some(equal) = values_equal(&left, &right, cells)? else {
-            // GAVEL 2026-08-18: a value that names itself is a definition, and
-            // two definitions are not compared. This fires on RE-ENTRY alone —
-            // the walk arriving a second time at a pair of cells it is already
-            // inside, which is the cycle closing through a cell. An ordinary
-            // lazy operand forces and compares like anything else.
-            return Err(RuntimeError {
-                message: "equality is not defined on a value that names itself — \
-                          write an arm for the case you mean"
-                    .to_string(),
-                span,
-            });
-        };
+        let equal = values_equal(&left, &right, cells)?;
         return Ok(bool_value(match op {
             "==" => equal,
             _ => !equal,
@@ -3438,8 +3426,7 @@ fn opaque_to_equality(v: &Value) -> bool {
     }
 }
 
-/// `None` where the walk re-entered a pair of cells it was already inside.
-fn values_equal(a: &Value, b: &Value, cells: &Cells<'_>) -> Result<Option<bool>, RuntimeError> {
+fn values_equal(a: &Value, b: &Value, cells: &Cells<'_>) -> Result<bool, RuntimeError> {
     values_equal_seen(a, b, &mut std::collections::HashSet::new(), cells)
 }
 
@@ -3461,7 +3448,7 @@ fn values_equal_seen(
     b: &Value,
     seen: &mut Seen,
     cells: &Cells<'_>,
-) -> Result<Option<bool>, RuntimeError> {
+) -> Result<bool, RuntimeError> {
     if let Value::Sub { inner, .. } = a {
         return values_equal_seen(inner, b, seen, cells);
     }
@@ -3471,11 +3458,14 @@ fn values_equal_seen(
     // A cell is forced the way any demand forces it, so an ordinary lazy
     // operand compares as its value. A cell keeps its identity across the
     // force, so arriving a second time at one pair is the cycle closing
-    // through a cell, and the caller turns that into the refusal.
+    // through a cell, and the pair is assumed equal — the assumption that
+    // makes bisimulation terminate, the same one records make below. A
+    // cell demanded mid-construction still fails in the force: that one
+    // is not a value yet.
     match ((cells.id)(a), (cells.id)(b)) {
         (Some(x), Some(y)) => {
             if !seen.insert((x, y)) {
-                return Ok(None);
+                return Ok(true);
             }
             let fa = (cells.force)(a.clone())?;
             let fb = (cells.force)(b.clone())?;
@@ -3503,14 +3493,11 @@ fn values_equal_seen(
         }
         (Value::Map(x), Value::Map(y)) => {
             if x.len() != y.len() {
-                return Ok(Some(false));
+                return Ok(false);
             }
             for ((ka, va), (kb, vb)) in x.iter().zip(y.iter()) {
-                let Some(same) = values_equal_seen(va, vb, seen, cells)? else {
-                    return Ok(None);
-                };
-                if ka != kb || !same {
-                    return Ok(Some(false));
+                if ka != kb || !values_equal_seen(va, vb, seen, cells)? {
+                    return Ok(false);
                 }
             }
             true
@@ -3520,47 +3507,41 @@ fn values_equal_seen(
         (Value::NoneV, Value::NoneV) => true,
         (Value::List(x), Value::List(y)) => {
             if x.len() != y.len() {
-                return Ok(Some(false));
+                return Ok(false);
             }
             for (a, b) in x.iter().zip(y.iter()) {
-                let Some(same) = values_equal_seen(a, b, seen, cells)? else {
-                    return Ok(None);
-                };
-                if !same {
-                    return Ok(Some(false));
+                if !values_equal_seen(a, b, seen, cells)? {
+                    return Ok(false);
                 }
             }
             true
         }
         (Value::Record { ty: tx, fields: fx }, Value::Record { ty: ty_, fields: fy }) => {
             if tx != ty_ {
-                return Ok(Some(false));
+                return Ok(false);
             }
             if Rc::ptr_eq(fx, fy) {
-                return Ok(Some(true));
+                return Ok(true);
             }
             let key = (Rc::as_ptr(fx) as *const () as usize, Rc::as_ptr(fy) as *const () as usize);
             if !seen.insert(key) {
-                return Ok(Some(true));
+                return Ok(true);
             }
             if fx.borrow().len() != fy.borrow().len() {
-                return Ok(Some(false));
+                return Ok(false);
             }
             let pairs: Vec<(Value, Value)> =
                 fx.borrow().iter().cloned().zip(fy.borrow().iter().cloned()).collect();
             for (a, b) in &pairs {
-                let Some(same) = values_equal_seen(a, b, seen, cells)? else {
-                    return Ok(None);
-                };
-                if !same {
-                    return Ok(Some(false));
+                if !values_equal_seen(a, b, seen, cells)? {
+                    return Ok(false);
                 }
             }
             true
         }
         _ => false,
     };
-    Ok(Some(answer))
+    Ok(answer)
 }
 
 fn render_float(x: f64) -> String {
