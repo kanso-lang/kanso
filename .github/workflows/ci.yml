@@ -4,6 +4,13 @@ on:
   pull_request:
   push:
     branches: [main]
+  # A pull request that produces no run at all reads exactly like one whose
+  # checks passed. Two different failures share that symptom: a CONFLICTING
+  # pull request gets no run because no merge ref exists — the first question
+  # for an empty board is `gh pr view --json mergeable`, and the fix is a
+  # rebase — and a genuine trigger failure, which is what this lever exists
+  # for: dispatch the run by hand and wait for real results.
+  workflow_dispatch:
 
 # One job per kind of check, so a red run names what broke on the PR page
 # instead of hiding it inside a single "test" job.
