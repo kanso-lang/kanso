@@ -35,6 +35,11 @@ pub fn text_page body
 pub fn html_page body
   response 200 "OK" ["content-type: text/html; charset=utf-8"] body
 
+# A 200 whose headers the caller chooses — serving an asset means saying what
+# kind of thing it is, and the three pages above each fix that for you.
+pub fn page headers body
+  response 200 "OK" headers body
+
 pub not_found = response 404 "Not Found" [] "not found\n"
 
 # What a handler answers: this response, and what to carry to the next

@@ -619,7 +619,7 @@ fn found none _
   http/not_found
 
 fn found body path
-  http/response 200 "OK" [(kind_of path)] body
+  http/page [(kind_of path)] body
 
 fn flags url
   where = "--user-data-dir=/tmp/kanso-differential-profile"

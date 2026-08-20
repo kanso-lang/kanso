@@ -361,7 +361,7 @@ fn found none _
   http/not_found
 
 fn found body path
-  http/response 200 "OK" [(kind path)] body
+  http/page [(kind path)] body
 
 # `tail` is appended after the rewrite above, because a chapter is served by a
 # layout and its scripts are absolute: rewriting them would point them at the
