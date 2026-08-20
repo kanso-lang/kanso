@@ -1,0 +1,12 @@
+error[arity]: an `if` takes a condition and two branches, got 1 argument(s)
+  --> an_if_owns_its_arity.kso:7:3
+   7 |   if n
+         ^
+error[arity]: an `if` takes a condition and two branches, got 2 argument(s)
+  --> an_if_owns_its_arity.kso:10:3
+  10 |   if (n < 10) "light"
+         ^
+error[arity]: an `if` takes a condition and two branches, got 4 argument(s)
+  --> an_if_owns_its_arity.kso:13:3
+  13 |   if (n < 10) "light" "heavy" "extra"
+         ^

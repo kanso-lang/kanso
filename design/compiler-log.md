@@ -4149,3 +4149,40 @@ two-universes settlement and gavel 24 superseded: a FOREIGN err is
 precisely the handleable case. Filed into the projection migration's
 book sweep so chapter 4 and chapter 8 teach one rule. The chapter's
 mechanics all survive as probed.
+
+## 2026-08-20 — the fuzz campaign pays: an `if` owns its arity
+
+The mutation campaigns' counts, recorded per the harness doctrine:
+800 byte-mutants of 60 fixtures through check — zero panics; 25
+survivors executed on both engines — zero panics, signals or
+divergences. 8,000 more at higher mutation depth — zero everything,
+243 survivors clean. Then the generator changed and the results did:
+12,000 CROSSOVER children (fixtures spliced at line granularity, the
+recombination class byte-flips cannot reach) found the campaign's one
+crash — a compiler panic in eval_expr, infer.rs:533.
+
+Reduced to two lines: `fn judge n` / `if n`. Inference treats `if` as
+a call and indexes its branches unconditionally, so one argument
+panicked at arg_sets[1], two panicked at arg_sets[2] — and FOUR
+arguments passed check entirely and then diverged at runtime, the
+interpreter refusing the arity while native evaluated the condition
+and failed differently: a differential violation on a program check
+called ok, hiding in stderr where the campaign's stdout comparison
+could not see it.
+
+One rule closes all three widths: check refuses an `if` whose
+argument count is not three, before inference runs — "an `if` takes a
+condition and two branches, got N argument(s)" — with an early return,
+so inference's indexing becomes safe by contract rather than by
+defense. Pinned as tests/golden/errors/an_if_owns_its_arity.kso (all
+three widths, direct and imported forms), watched red as a panic and
+a silent pass before the rule, green after. Golden suite 10/10;
+diagnostic coverage reports the new message pinned, nothing newly
+unpinned.
+
+The method note worth keeping: three generators, three outcomes.
+Byte mutation proved robustness; the seeded utf-8 sampler proved the
+validator; only recombination of VALID programs found the shape no
+human had written — a truncated `if` is not a typo anyone makes, it
+is two programs' halves meeting. The corpus is the mutation fuel, so
+every golden added makes the fuzzer smarter.
