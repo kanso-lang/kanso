@@ -3977,3 +3977,30 @@ isolated.
 What neither vein can show is the trade: a 400,000-link `>>` loop goes from a
 stack exhaustion to a program that prints `done`. There is no benchmark of a
 chain that long, because until now there could not be one.
+
+## 2026-08-19 — the July spellings, and the vse tie explained
+
+Clay cleared the last of the small stack ("i'll just follow your
+recommendations").
+
+The three spellings: local imports wear the dot prefix (`./util`,
+`../geo`; bare multi-segment = hako name) so every import's universe
+is readable from its spelling — the migration adds the prefix to bare
+local imports fleet-wide. Subtypes declare as `type post_body:string`,
+the ascription shape used everywhere else. Into-subtype is the ctor
+form `post_body ""`; the postfix sketch dies. Gavel Y is noted closed
+in passing — `>>` keeps its glyph, settled when Clay learned it was
+Haskell's own value-dropping sequencer ("steal from the best") — and
+the July labeled-patterns question (5a) is parked as
+needs-a-fresh-look against the post-24 language, not pending.
+
+The vse README call: publish the reproducible 40k numbers with the
+honest-model caveat. The score-vs-STAR tie was investigated on Clay's
+suspicion of a missing runoff and the suspicion was refuted by
+measurement: the runoff is present (methods.kso:80-86) and flips 393
+of 4,000 elections (9.8%); the tie is the honest-voter regime doing
+what the literature says it does, since STAR's differentiator is
+strategic robustness, which the sim does not model. The README gets
+the numbers, the caveat, and loses the unsupported Score > STAR
+ordering claim; the flip counter stays as a sim sanity gate (flips > 0
+pins that STAR is really STAR).
