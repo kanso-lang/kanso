@@ -50,11 +50,11 @@ fn which_file_names_a_dependency_does_not_change_what_checking_costs() {
     let second = peak(&named_second);
 
     // Not byte-equal: a module's declarations are merged in file order, so
-    // moving one between files still shifts the number, by ten bytes here.
-    // A dependency loaded in the wrong order shifted it by 36,983.
+    // moving one between files still shifts the number, by seventeen bytes
+    // here. A dependency loaded in the wrong order shifted it by 36,983.
     assert_eq!(
         second as i64 - first as i64,
-        10,
+        17,
         "which file names a dependency moved what the front end holds: {first} against {second}"
     );
 }

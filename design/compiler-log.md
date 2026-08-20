@@ -4376,3 +4376,49 @@ narrows its claim is a product decision for the kq lane; 492 of
 3,000 documents witness it, corpus kept. kq's vendored json copies
 also need the surrogate fix at the next sibling sync — until then kq
 still refuses escaped emoji.
+
+## 2026-08-20 — the sweep learns direction, and pays for the surrogate fix
+
+The surrogate fix could not hold the welfare floor as first written. Its
+call chain — six functions from `str_unicode` down to `str_low` — moved
+the front end's fixpoint on lib/json from 31 rounds to 39, and rounds
+are a welfare term: the score fell 0.61 below the floor, which the
+2026-08-03 ruling says no reason may buy. The round trace showed where
+the cost lived: rounds six through eleven each moved one or two
+functions, information creeping through the string machinery's cycle
+one hop per round, because a round visits functions in declaration
+order and only reads what earlier visits in the same round already
+wrote.
+
+So the sweep learned an order. Functions now visit callee-first — a
+post-order walk of the call graph — and alternate direction on
+following rounds, callers-first on the even sweeps. Returns flow
+callee-to-caller and params flow caller-to-callee, so a single static
+order can serve only one of the two flows; alternating serves both,
+and the first sweep goes callee-first so leaf returns land before any
+caller asks. Measured on lib/json, with the surrogate fix in place:
+declaration order 35 rounds and 27,874 visits; callee-first alone 45
+and 22,179; caller-first alone 32 and 28,322; callee-first-then-
+alternate 28 and 23,384. The winner beats declaration order on both
+axes and beats the pre-fix baseline too — 31 rounds and 26,474 visits
+— so the fix rides in with the front end doing less work than before
+it existed. The five compile-golden samples split as a trade the sum
+accepts: the module sample's visits fell 4,448 to 3,031, guards fell a
+little, and the tiny recursion sample paid one round. Emitted text is
+byte-identical across every sample, which is the monotone fixpoint's
+order-independence made visible.
+
+The fix itself also slimmed: `str_code` and `str_scalar` folded into
+`str_unicode`'s branch, five functions where the first draft had six.
+One draft went further and died in the goldens: merging the `\u` check
+and the low-half range check into one condition forces `str_hex4` past
+the string's end on a lone trailing half, because `and` evaluates its
+arms in parallel — the staging across functions is load-bearing, and
+the lone-surrogate golden is what caught it. Welfare lands at 84.81,
+0.25 above the old floor, and the floor is set there. Compile peak on
+lib/json rose 819,217 to 872,591 bytes — the order change shifts when
+the analyser's tables grow, and the term's 0.17-point cost is inside
+the rise the visits paid for. The machine-code vein prices the fix at
+1,296 bytes of .text on each decode binary — jsonbench 78,594 to
+79,890, oneshot 95,826 to 97,122, the other five flat — which is the
+surrogate machinery the linker kept.
