@@ -53,13 +53,21 @@ fn re_raising_ones_own_err_is_silent() {
 /// The case a reason-type proxy cannot see: the err was raised here, and
 /// only its reason was borrowed from elsewhere. Provenance is the raiser.
 #[test]
-fn laundering_an_own_err_through_a_foreign_reason_is_advised() {
+fn laundering_an_own_err_through_a_foreign_reason_is_refused() {
+    // GAVEL 1b subsumes the advisory this used to assert. Forging a foreign
+    // reason so your own err can be rescued under a borrowed name is no longer
+    // advised against — it does not compile, because only a reason's owner
+    // builds one. The advisory itself stays live where the reason is genuinely
+    // foreign, which own_err and doored cover; what retires is the forged
+    // variant, and this pins the refusal that replaced it.
+    let dir = std::path::Path::new("tests/golden/advisory/laundered");
+    let said = kanso::compile_module(dir, false).expect_err("the forged reason is refused");
+
     assert_eq!(
-        licenses("tests/golden/advisory/laundered"),
-        vec!["advisory[license]: `unwrap` rescues an err raised in this program \
-             — a failure is handled by a package that did not raise it; return an \
-             err, or let a caller elsewhere name the reason"
-            .to_string()]
+        said,
+        "error[opacity]: `json/parse_failure` is foreign — only `json` builds a \
+         `parse_failure`; ask it for one through a pub function (module \
+         tests/golden/advisory/laundered)\n"
     );
 }
 

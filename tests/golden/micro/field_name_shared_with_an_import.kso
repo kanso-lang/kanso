@@ -8,6 +8,6 @@ type here
   at
 
 pub play =
-  mine = here 1
-  theirs = list/cursor 5 [1 2 3]
+  mine = here 9
+  theirs = list/cycle [1 2 3]
   print "{mine.at} {theirs.at}"

@@ -37,6 +37,15 @@ pub fn html_page body
 
 pub not_found = response 404 "Not Found" [] "not found\n"
 
+# What a handler answers: this response, and what to carry to the next
+# request. `stop` in the carried slot ends the fold and what it holds is what
+# `serve_until` answers.
+pub fn reply answer carried
+  turn answer carried
+
+pub fn stop value
+  done value
+
 # Parsing stops at the head because that is all a request line and its headers
 # are; the body is whatever the read brought with it.
 pub fn parsed raw
