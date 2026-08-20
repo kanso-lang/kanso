@@ -282,6 +282,11 @@ jobs:
         if: always()
         continue-on-error: true
         run: sh scripts/gates/wide_counters.sh
+      - name: pending-cell counters
+        id: pend
+        if: always()
+        continue-on-error: true
+        run: sh scripts/gates/pend_counters.sh
       - name: every vein had its say
         if: always()
         run: |
@@ -295,7 +300,8 @@ jobs:
                       "basket counters:${{ steps.basket.outcome }}" \
                       "compile memory:${{ steps.compile_memory.outcome }}" \
                       "encode counters:${{ steps.encode.outcome }}" \
-                      "wide counters:${{ steps.wide.outcome }}"; do
+                      "wide counters:${{ steps.wide.outcome }}" \
+                      "pending-cell counters:${{ steps.pend.outcome }}"; do
             case "$vein" in
               *:failure)
                 echo "::error::${vein%:*} disagrees with its golden"

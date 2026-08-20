@@ -71,6 +71,10 @@ basket 57400154
 widebench 84816701
 deepbench 806938332
 escapebench 258568120
+# 2026-08-20 (pendbench): the lazy row arrives at 986,305,763 — the only
+# benchmark whose work includes allocating, forcing and carrying pending
+# cells; the seven old rows are untouched.
+pendbench 986305763
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around

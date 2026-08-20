@@ -69,11 +69,15 @@ bench_modules = [["bench/compile_golden_modules.txt" "module_"]]
 
 bench_memory = [["bench/compile_memory_golden.txt" ""]]
 
+bench_pend = [["bench/cost_golden_pend.txt" "pend_"]]
+
 bench_ab = text/concat bench_a (text/concat bench_encode bench_b)
 
 bench_cd = text/concat bench_c (text/concat bench_compile bench_modules)
 
-bench_goldens = text/concat bench_ab (text/concat bench_cd bench_memory)
+bench_de = text/concat bench_memory bench_pend
+
+bench_goldens = text/concat bench_ab (text/concat bench_cd bench_de)
 
 mem_dir = "tests/golden/mem"
 

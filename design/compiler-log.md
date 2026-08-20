@@ -4479,3 +4479,36 @@ this fix repairs is priced at zero by construction — the same shape
 as the 95x and 998x memory fixes that scored nothing — and the
 memory-frontier lane owes a benchmark that holds an unforced thunk
 across a cohort close.
+
+## 2026-08-20 — the corpus learns the pending-cell shape
+
+Every benchmark read zero on all six thunk counters — not because
+nobody had tried a lazy benchmark, but because the strictness analyser
+is good: a record field read unconditionally anywhere downstream is
+proven demanded, the thunk is erased, and two honest drafts of this
+benchmark read zero and looked like broken fixtures. What defeats the
+analyser is dispatch on a runtime value — a binding passed to a
+two-clause consumer that stores it in one clause and drops it in the
+other — because demand through a runtime value is what no analysis
+can prove. That recipe, plus an io bind per iteration so there are
+beats to cross at all, is pendbench: 200 records built under a bind
+loop, each keeping a pending field, half forced by a value-dependent
+walk at the end, 200 thunks allocated and 200 alive at exit.
+
+Two ratchet rows land with it, split by what each pin can honestly
+hold. The pend counters pin the LAZY TIER'S PRESENCE: a mutation that
+makes the demand analyser claim everything is demanded zeroes all six
+thunk counters and turns the gate red — before this row that erasure
+would have moved nothing anywhere. The evacuation walk itself is
+pinned by the micro golden, not by these counters: isolating the four
+#972 sites one at a time against the fixture showed only the two
+walker cases load-bearing (the rewind fast paths and the sharing
+refusal never fire on it), and pendbench's counters are byte-identical
+with and without the whole fix — its accumulator rides the kept-carry
+path, which never rewinds under a live capture. So the second row
+mutates the k_copy_size thunk walk away and proves the GOLDEN goes
+red. A pin that claims more than it holds is the green that stops
+anybody looking; these two claim exactly what they were watched to
+hold. The machine-code and instructions veins gain a pendbench row,
+stamped from the runner in this PR, and the trend gate enrolls the
+pend counters with the thunk family in its direction tables.
