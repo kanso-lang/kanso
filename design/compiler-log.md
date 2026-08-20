@@ -3955,3 +3955,25 @@ it: native counted the deferred cell as an allocation and the oracle did not.
 The oracle records it now.
 
 Full suite green, 60 binaries. wasm_engine 7/7.
+
+## 2026-08-20 — what the deferred wall cost, in the two veins that can see it
+
+**Machine code: +592 bytes on six binaries, +608 on escapebench.** The
+uniformity is the reading — `k_seq_right` and the loop `k_exec`'s wall arm
+became both live in the runtime object every binary links, and none of these
+benchmarks reaches a wall more or less often than before. Between 0.6% and
+1.3% each, most of it on the smallest binary.
+
+**Work: deepbench alone, 833,453,153 to 833,609,159** — 156,006 instructions
+and 0.019%. It is the row whose loop is written with the wall, so it is the row
+that pays for a cell per link. The other six are noise with disagreeing signs:
+jsonbench -61, widebench -40, encodebench +4, oneshot +3, basket +1,
+escapebench unmoved.
+
+No allocation counter moves and no other vein does either — every counter gate
+was run locally and passed, which is how the two linux-only veins were
+isolated.
+
+What neither vein can show is the trade: a 400,000-link `>>` loop goes from a
+stack exhaustion to a program that prints `done`. There is no benchmark of a
+chain that long, because until now there could not be one.
