@@ -9,7 +9,6 @@
 # tests/golden/errors — scripts/diagnostic_coverage.py fails on any message
 # that is neither pinned nor listed here, and fails again when a listed one
 # becomes pinned, so the line gets deleted rather than left lying.
-an inline constant has no indented block
 expected a constant name
 expected a top-level declaration (`fn` or `type`)
 private type `
@@ -48,3 +47,11 @@ private type `
 # statements are folded into one `Seq`, so a body never holds a non-final
 # `Stmt::Expr` for the checker to complain about.
 unused expression: every non-final line binds a name (sequence
+
+# The inline-constant message left this list on 2026-08-20: the claim that
+# the lexer's folding made it unreachable missed heads that OPEN blocks —
+# `two = if` keeps its branch lines and the message fires. It is pinned at
+# tests/golden/errors/an_inline_constant_with_a_block. The empty-branch refusal that
+# replaced the panic beside it is reachable only through `kanso check` on a
+# library file, which the run/play corpus cannot express, so its pin lives
+# at tests/an_empty_branch_is_refused.rs rather than in the corpus.

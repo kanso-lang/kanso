@@ -1184,11 +1184,18 @@ fn parse_block_construct(
             let then_stmts = parse_body(children)?;
             let else_stmts = parse_body(else_lines)?;
             for (stmts, lines) in [(&then_stmts, children), (&else_stmts, else_lines)] {
+                let Some(last) = lines.last() else {
+                    return Err(Diagnostic::new(
+                        "syntax",
+                        "a branch needs a body: the expression it answers with".to_string(),
+                        head_span(head),
+                    ));
+                };
                 if !matches!(stmts.last(), Some(Stmt::Expr(_))) {
                     return Err(Diagnostic::new(
                         "syntax",
                         "a branch ends with its result expression, not a binding".to_string(),
-                        head_span(lines.last().expect("branches are non-empty")),
+                        head_span(last),
                     ));
                 }
             }
