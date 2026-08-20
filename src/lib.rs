@@ -2261,13 +2261,16 @@ fn load_dependencies(
         };
         // A handed-in module: the browser has no filesystem, so a program
         // that is a library plus the entry that runs it arrives as sources
-        // rather than as files.
-        let handed = HANDED_SOURCES.with(|c| c.borrow().get(path).cloned());
+        // rather than as files. The canon's `./` is how the entry SPELLS a
+        // local import; what it hands over is keyed by the module's name, so
+        // the prefix comes off before the lookup.
+        let local = path.strip_prefix("./").unwrap_or(path);
+        let handed = HANDED_SOURCES.with(|c| c.borrow().get(local).cloned());
         if let Some(files) = handed {
             let borrowed: Vec<(&str, &str)> =
                 files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
-                compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
+                compile_module_inner(std::path::Path::new(local), false, visited, Some(&borrowed))?;
             qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
