@@ -246,10 +246,7 @@ pub fn parse(lexed: &Lexed) -> Result<Program, Vec<Diagnostic>> {
         // A block head's `else` sits at the head's own indent, which at the top
         // level is zero, so the run of indented lines stops short of it.
         if is_block_head(&line.tokens)
-            && lexed
-                .lines
-                .get(body_end)
-                .is_some_and(|l| l.indent == 0 && is_else_line(l))
+            && lexed.lines.get(body_end).is_some_and(|l| l.indent == 0 && is_else_line(l))
         {
             body_end += 1;
             while body_end < lexed.lines.len() && lexed.lines[body_end].indent >= 2 {
@@ -648,11 +645,7 @@ fn parse_constant(header: &Line, body: &[Line]) -> Result<FnDecl, Diagnostic> {
         };
         let stmt = parse_block_construct(&bare, children, else_children)?;
         let Stmt::Bind { expr, .. } = stmt else {
-            return Err(Diagnostic::new(
-                "syntax",
-                format!("constant `{name}` has no value"),
-                span,
-            ));
+            return Err(Diagnostic::new("syntax", format!("constant `{name}` has no value"), span));
         };
         return Ok(FnDecl {
             name,
