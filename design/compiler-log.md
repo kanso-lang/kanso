@@ -4083,3 +4083,37 @@ and the appendix draws the line (the accumulator rewrite is an
 optimization that may move; the promise is tail position; the
 interpreter's ten-thousand-frame guard and the OS stack are the
 bounds on what is not promised).
+
+## 2026-08-20 — the accounting audit the welfare sitting was owed
+
+The corpus-blindness campaign flagged a future sitting on what
+`peak_of` sums. This is the measurement that arms it, taken on main
+with every benchmark rebuilt, real peak RSS beside the pool counters:
+
+    bench          rss          arena        perm_pk    held_pk   bytes_net  unaccounted
+    jsonbench      3,735,552    2,097,152    0          0         0          1,638,400
+    encodebench    6,094,848    4,194,304    0          719,516   0          1,181,028
+    oneshot        4,685,824    2,097,152    0          632,284   0          1,956,388
+    basket         5,357,568    2,097,152    2,752,560  71,136    16         436,720
+    widebench      3,522,560    2,097,152    0          0         0          1,425,408
+    deepbench      2,048,000    1,048,576    0          0         0          999,424
+    escapebench    1,687,552    1,048,576    10,272     0         -3,000     628,704
+    scanbench      202,260,480  198,180,864  0          0         30         4,079,616
+
+Three conclusions. First, the pools are honest today: the unaccounted
+residue is 0.4-2.0 MB per bench, which is the process floor (binary,
+runtime, stacks — deepbench's 999,424 IS the floor), two per cent on
+the largest row. Second, the thunk-malloc class that hid 92 MB from
+the objective last week is structurally EMPTY on this main
+(bytes_net ~ 0 everywhere, the per-arm laziness fix's doing) but
+UNGUARDED — nothing prevents a future thunk-heavy path from reopening
+it, invisibly, at any size. Third, the guard is already lying on the
+table: bytes_malloc and bytes_freed are counted on every run, and
+welfare reading their difference into peak_of is a one-line model
+change that would have priced last week's 92 MB the day it appeared.
+That one-liner, plus the growth-class question scanbench raised
+(the objective prices a quadratic at its fixture's n), is the whole
+agenda for the sitting.
+
+One quirk for whoever is next in the allocator: escapebench frees
+3,000 bytes more than it mallocs. Signed, small, and odd.
