@@ -1,59 +1,123 @@
-# Testing — where it is, and where Clay wants it
+# Testing — the settled design
 
-## Today
+Ruled by Clay 2026-08-19 ("simpler, like go test or test::unit"),
+shaped by the foreign-assert insight of 2026-08-17, drafted as the
+first artifact of the refinement phase. The whole design is three
+sentences: a test is a boolean constant. The runner is a foreign
+party. A failure's reason, once a licensed party separates it from
+its err, is ordinary data.
 
-A test is a constant whose name begins `test_`, evaluated by `kanso test`,
-and the whole ceremony is those five characters. It scales further than it
-looks: the json suite pins escapes, unicode, and error positions with
-nothing else. What it cannot express is shared setup, grouping, or a
-readable failure narrative — every test stands alone and repeats its own
-arrangement.
+## The mechanism, unchanged
 
-One thing it could not do at all, until 2026-07-29: assert about a
-failure the package itself raised. An assertion is a value, and the
-two-universe rule forbids a package producing a value from its own err
-(design/pending-gavels.md item 1). The second of the two recorded routes
-was taken, and it needed no exemption: `failed?` is a builtin, so the
-reading is done by the toolchain rather than by the package, and
-attribution proves it — an err is only ever rescued where a *pattern*
-names it, and a builtin has no pattern for a package to be blamed for.
+A test is a constant whose name begins `test_`, in a `_test.kso`
+file, evaluated by `kanso test`. True passes. False fails. An err
+propagates to the harness, which reports `FAILED (returned err …)` —
+the harness is not the package, so its reading of the failure is the
+licensed foreign rescue, needing no rule and no exemption.
 
-It is in scope in a `_test.kso` file and nowhere else, gated by the file
-that declares the caller, the way `builtin_` names are gated to std. A
-production file naming it is refused, so the rule stands undiminished
-rather than carrying a hole a program could reach for. Gating on the
-file rather than on the verb keeps `kanso check` honest, since check
-compiles test files too, and a name that existed under one verb and not
-another would be a worse thing to explain than where it lives.
+    test_decode_int = decode "42" == 42
 
-`failed?` is also the second hole in err's infectiousness, beside
-`wrap_err`: it exists to look at a failure, so it is asked before
-propagation answers for it.
+That is go test's shape with less ceremony than Go's, and it stays.
+There is no assertion DSL: `==` is the assertion, the boolean is the
+verdict, and the suite reads as a table of facts. Nothing below adds
+a second way to write any test that can already be written.
 
-What is still owed is the reason a test wants more than a boolean —
-asserting *which* failure, not merely that one happened. That wants a
-way to read a reason, and it is the natural next slice.
+## The testing hako
 
-## Where Clay wants it (2026-07-28, noted for the far queue)
+One small std hako, `testing`, owning the pieces a bare boolean
+cannot say. It is an ordinary hako — every tested package's errs are
+foreign to it, so its arms are licensed by the rules as they stand,
+with no builtin holes and no file gating.
 
-An rspec/ginkgo-shaped surface, deliberately constrained so it cannot grow
-the nesting those frameworks accumulate:
+    pub fn failed? (err _)          -> true
+    pub fn failed? _                -> false
 
-- **one outer `describe`** per file, not many;
-- **one level of `context` inside it**, and no deeper — contexts do not
-  nest within contexts;
-- **assertions at either level**: directly under the describe, or under a
-  context;
-- **no further nesting levels**, ever. The shape is two deep and stops.
-- something like ginkgo's `JustBeforeEach` — setup that runs after the
-  context's own arrangement, so a context refines what the describe set up
-  rather than repeating it;
-- possibly an equivalent of rspec's `let` with the same one-level
-  override, if it can be had without laziness surprises. Clay: "maybe
-  impossible, but it's something i want to keep in mind."
+    pub fn when_failed (err reason) k  -> k reason
+    pub fn when_failed _ _             -> false
 
-The constraint is the point. Deep nesting is what makes a large rspec file
-unreadable — a failing example three contexts down requires reconstructing
-its setup from four places. Two levels can be read from one screen.
+`failed?` answers whether a value is a failure. `when_failed` is the
+piece the old design said was owed — asserting WHICH failure: it
+rescues the err (licensed: the raiser is foreign to testing), hands
+the caller the bare REASON RECORD, and answers whatever the
+continuation answers; on a non-failure it answers false, so a test
+that expected a failure and got a value fails honestly.
 
-Not scheduled. Recorded so the shape survives the queue.
+The continuation is where the tested package reads its own failure,
+and it breaks no rule doing so: the rule bans arms MATCHING YOUR OWN
+ERR, and the continuation never sees an err — it receives a reason
+record that a licensed foreign party already separated from the
+failure. Clay ruled the round-trip explicitly: "you ensured it would
+bubble up to the caller, and it did. if the caller wants to pass it
+back to you, so be it." 1b's per-field pub covers the field reads.
+
+    test_error_position =
+      when_failed (decode "[1, nope]") (r -> r.position == 5)
+
+Dispatch on the reason's TYPE works the same way, because a reason
+record is a plain value — arms on reason types are not arms on errs:
+
+    fn defect_reason _:defect   -> true
+    fn defect_reason _          -> false
+
+    test_must_wraps_defect =
+      when_failed (must (decode "nope")) defect_reason
+
+## What this retires
+
+- **The `failed?` builtin and its `_test.kso` file gate.** The hako's
+  `failed?` is ordinary code with the same name and type; the builtin,
+  its gating machinery, and its infectiousness hole all delete. The
+  design sheds a special case rather than gaining one.
+- **json_test's endangered assertions survive the projection
+  migration.** `failure_position`/`failure_reason` (deleted by the
+  1b migration) are replaced at the two call sites by `when_failed`
+  reading `r.position` directly; `defect?`'s err arm becomes
+  `defect_reason`'s type arm, and the advisory goes quiet without
+  widening anything.
+
+## What this defers
+
+The 2026-07-28 far-queue sketch (one `describe`, one `context` level,
+JustBeforeEach-style refinement) is SUPERSEDED for now by the
+simpler ruling. Its one real content — shared setup without
+repetition — is carried by ordinary bindings in the test file until
+real suites demonstrate the need for more. If that day comes, the
+two-deep constraint recorded there remains the right cage for it.
+
+Effectful tests (a test that must run a plan) are out of scope for
+this slice: tests are values, the wire belongs to programs. When io
+testing is wanted it arrives as its own design against the boundary
+language, not as a widening of `test_`.
+
+## A collision the committee pass caught, and its resolution
+
+The July record seeds every PUB dispatch group's receivable-err set
+with its own hako ("anyone may hand a package its own failure back").
+Under gavel 24's clause 1 — no arm may match an own-origin err — that
+seeding would statically refuse EVERY pub bare-err arm, including
+`when_failed`'s, and with it every generic foreign rescuer Clay
+explicitly blessed. The seeding served the old return-channel rule;
+it cannot survive the new one.
+
+Resolution, derived from the ruling's own sentence ("your own
+failures only bubble"): clause 1 is DISPATCH SEMANTICS, not only a
+static check — **an arm cannot see an own-origin err**. At match
+time an err whose origin hako equals the arm's hako simply does not
+match; infectiousness then carries it onward, so it keeps bubbling,
+which is the doctrine executing itself. The static refusal remains
+for what the computed provenance set proves WITHOUT self-seeding
+(arms naming own reason types, provably-own flows); the pub seed
+retires. For `when_failed` this means: a testing-raised err reaching
+it skips both arms and propagates, so the harness reports the failure
+— exactly right. Veto window Clay's, as with every derivation.
+
+## Refinement-phase stitches, logged while drafting
+
+- A lambda cannot carry arms, so type-dispatching a reason inside
+  `when_failed` needs a named local group (`defect_reason`) — two
+  lines of ceremony the arm-bundle syntax would erase if lambdas ever
+  learn patterns. Noted, not proposed.
+- `when_failed` answering false on success conflates "did not fail"
+  with "failed the wrong way" in a suite's failure report. The
+  harness prints the test's value either way, so the distinction is
+  visible in the output, but a two-arm report would say it sooner.

@@ -4004,3 +4004,33 @@ strategic robustness, which the sim does not model. The README gets
 the numbers, the caveat, and loses the unsupported Score > STAR
 ordering claim; the flip counter stays as a sim sanity gate (flips > 0
 pins that STAR is really STAR).
+
+## 2026-08-19 — the testing hako designed, and a seeding rule retires
+
+The queued testing design pass ran as the first refinement-phase
+artifact (survey, draft, committee), and design/testing.md is now the
+settled design: a test stays a boolean `test_` constant (go test's
+shape with less ceremony, per Clay's ruling); one small std hako —
+`testing` — owns `failed?` and `when_failed`, ordinary foreign code
+licensed by the rules as they stand; the `failed?` BUILTIN and its
+_test.kso file gate retire; json_test's error-position and defect
+assertions survive the projection migration by reading REASON RECORDS
+(the licensed round-trip), with type-dispatch moving from err arms to
+reason-type arms; the 2026-07-28 describe/context sketch is recorded
+as superseded by the simpler ruling.
+
+The committee pass caught a real collision: July's rule seeding every
+pub group's receivable-err set with its own hako would, under gavel
+24's clause 1, statically refuse every pub bare-err arm — killing
+generic foreign rescue wholesale. Resolution, derived from "your own
+failures only bubble": clause 1 is dispatch semantics — an arm cannot
+SEE an own-origin err; at match time it skips, infectiousness carries
+the err onward. Static refusal keeps what provenance proves without
+self-seeding; the pub seed retires with the return-channel rule it
+served. Veto window Clay's.
+
+Two refinement stitches logged in the doc: lambdas cannot carry arms
+(type-dispatching a reason needs a named local group), and
+when_failed's false-on-success conflates two failure modes in a
+report. Build hand-off: the hako, the builtin retirement, and the
+json_test migration shapes are all in the doc.
