@@ -2222,6 +2222,9 @@ fn load_dependencies(
             "std/text" => Some(("text", &[("text.kso", include_str!("../lib/text/text.kso"))])),
             "std/math" => Some(("math", &[("math.kso", include_str!("../lib/math/math.kso"))])),
             "std/bits" => Some(("bits", &[("bits.kso", include_str!("../lib/bits/bits.kso"))])),
+            "std/testing" => {
+                Some(("testing", &[("testing.kso", include_str!("../lib/testing/testing.kso"))]))
+            }
             "std/net" => Some(("net", &[("net.kso", include_str!("../lib/net/net.kso"))])),
             "std/net/http" => {
                 Some(("http", &[("http.kso", include_str!("../lib/net/http/http.kso"))]))

@@ -1,5 +1,9 @@
+import "std/testing"
+
 pub type bad_input
   why
 
 pub fn parse s
   err (bad_input s)
+
+pub own_failure_is_visible? = testing/failed? (parse "junk")

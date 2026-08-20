@@ -312,7 +312,7 @@ declare %KValue @k_force_unless_black(%KValue)
 
 "#;
 
-pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
+pub(crate) const BUILTIN_CALLS: [(&str, usize); 51] = [
     ("net_port", 1),
     ("start", 2),
     ("kill", 1),
@@ -326,7 +326,6 @@ pub(crate) const BUILTIN_CALLS: [(&str, usize); 52] = [
     ("write", 1),
     ("write_err", 1),
     ("env", 1),
-    ("failed?", 1),
     ("exists", 1),
     ("is_dir", 1),
     ("list_dir", 1),
@@ -4243,9 +4242,6 @@ impl<'a> Backend<'a> {
                 "put_mut"
             } else if name == "append" && in_place {
                 "append_mut"
-            } else if name == "failed?" {
-                // `?` is not a C identifier; the runtime spells it plainly
-                "failed"
             } else if name == "length" {
                 // the list case is a header load; the twin inlines it
                 "length_fast"

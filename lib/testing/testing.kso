@@ -1,0 +1,25 @@
+# The pieces a bare boolean cannot say. A test is a constant whose name begins
+# `test_`, and `==` is the assertion — nothing here adds a second way to write
+# a test that can already be written.
+#
+# Every tested package's errs are foreign to this hako, so these arms are
+# licensed by the rules as they stand: no builtin, no file gating, no
+# exemption.
+pub fn failed? (err _)
+  true
+
+pub fn failed? _
+  false
+
+# Asserting WHICH failure. The err is rescued here, where the raiser is
+# foreign, and the caller receives the bare reason record — a value a licensed
+# party has already separated from the failure, so the tested package may read
+# its own reason without matching its own err.
+#
+# A non-failure answers false, so a test that expected a failure and got a
+# value fails rather than passing quietly.
+pub fn when_failed (err reason) k
+  k reason
+
+pub fn when_failed _ _
+  false
