@@ -12,9 +12,10 @@ test_decode_whitespace ... ok
 test_encode_empty_list ... ok
 test_encode_empty_map ... ok
 test_encode_escapes ... ok
+test_encode_shorthands ... ok
 test_encode_nested ... ok
 test_error_position ... ok
 test_error_trailing ... ok
 test_must_wraps_defect ... ok
 test_roundtrip ... ok
-19 passed, 0 failed
+20 passed, 0 failed

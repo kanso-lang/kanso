@@ -64,9 +64,13 @@
 # counters are unmoved on all rows; no benchmark allocates a thunk, so
 # the fixed path itself is priced at zero here, which is a corpus gap,
 # not a free fix.
-jsonbench 2860480011
+# 2026-08-20 (shorthands): jsonbench falls 1,217 — the frozen constants
+# it no longer builds at startup — and oneshot pays 255 for the two new
+# jump-table arms its encode path now compares against. The other rows
+# are untouched.
+jsonbench 2860478794
 encodebench 9727154374
-oneshot 46596713
+oneshot 46596968
 basket 57400154
 widebench 84816701
 deepbench 806938332

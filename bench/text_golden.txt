@@ -59,9 +59,13 @@
 # thunk-aware evacuation in the runtime object every binary links. What it
 # buys is correctness: an unforced thunk crossing a cohort close used to
 # read reused memory when finally walked.
-jsonbench text=80466
+# 2026-08-20 (shorthands): jsonbench falls 704 bytes and oneshot 656 —
+# the dead hex trio leaving the linker's output — while the two new
+# escape arms ride inside the existing jump table for less than the
+# deletion returns. The other six rows are untouched.
+jsonbench text=79762
 encodebench text=96898
-oneshot text=97698
+oneshot text=97042
 basket text=88930
 widebench text=97986
 deepbench text=62754
