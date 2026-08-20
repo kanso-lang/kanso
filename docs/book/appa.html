@@ -736,18 +736,18 @@ size <span class="o">=</span> <span class="n">9</span>
   </div>
 </div>
 
-<p>the same kind counts arguments across an import. a call to a name from another module is checked against that module's arms, so <code>list/range 1 5</code>—where <code>range</code> takes one—is refused before anything runs, with the count it wanted and the counts it has:</p>
+<p>the same kind counts arguments across an import. a call to a name from another module is checked against that module's arms, so <code>list/spread 1 5</code>—where <code>range</code> takes one—is refused before anything runs, with the count it wanted and the counts it has:</p>
 
 <div class="code-panel">
   <div class="code-panel-title">imported_arity.kso</div>
   <pre><code><span class="k">import</span> <span class="s">"std/list"</span>
 
-<span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/range 1 5)}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"<span class="i">{list/to_list (list/spread 1 5)}</span>"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play imported_arity.kso</div>
-    <pre><code><span class="k">error[arity]</span>: no 2-argument arm of `list/range` (arms take 1)
+    <pre><code><span class="k">error[arity]</span>: no 2-argument arm of `list/spread` (arms take 1)
 <span class="c">  --&gt; imported_arity.kso:3:23</span>
-   3 | print "{list/to_list (list/range 1 5)}"
+   3 | print "{list/to_list (list/spread 1 5)}"
                              <span class="k">^</span></code></pre>
   </div>
 </div>

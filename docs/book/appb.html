@@ -214,7 +214,7 @@ concat [1 2 3 4]</code></pre>
 
 <p><strong>generators</strong> — infinite sequences, bounded by whatever consumes them. <code>naturals</code> counts 1, 2, 3, …; <code>repeat value</code> yields the same value forever; <code>cycle coll</code> loops a list end over end; <code>iterate seed stretch</code> yields seed, stretch seed, stretch (stretch seed), …. an unbounded consumer on an unbounded generator runs forever, which in kanso is a legal program, not an error—cap with <code>take</code> when you want an end.</p>
 
-<p><strong>consumers</strong> — <code>fold coll init f</code> is the root the others are built on: it threads an accumulator through every element. <code>sum</code> adds numbers (empty list is <code>0</code>); <code>mean</code> averages as a float; <code>count coll pred</code> counts approvals; <code>range</code> is the statistical spread, <code>max</code> minus <code>min</code>. <code>all? coll pred</code> and <code>any? coll pred</code> answer a question about the whole—the <code>?</code> suffix marks every predicate in the language. <code>find coll pred</code> yields the first element the predicate approves, <code>first</code> and <code>last</code> take the ends, <code>max</code> and <code>min</code> the extremes, and <code>argmax coll key</code> / <code>argmin coll key</code> the element whose <em>key</em> is extreme. <code>sort</code> orders mutually comparable elements. <code>to_list</code> realizes an adapter chain into a plain list—the usual last step before printing. every empty-sequence extreme (<code>max</code>, <code>min</code>, <code>find</code>, <code>first</code>, <code>last</code>, <code>argmax</code>, <code>argmin</code>, <code>range</code>) answers <code>none</code>, a value you dispatch on.</p>
+<p><strong>consumers</strong> — <code>fold coll init f</code> is the root the others are built on: it threads an accumulator through every element. <code>sum</code> adds numbers (empty list is <code>0</code>); <code>mean</code> averages as a float; <code>count coll pred</code> counts approvals; <code>spread</code> is the statistical spread, <code>max</code> minus <code>min</code>. <code>all? coll pred</code> and <code>any? coll pred</code> answer a question about the whole—the <code>?</code> suffix marks every predicate in the language. <code>find coll pred</code> yields the first element the predicate approves, <code>first</code> and <code>last</code> take the ends, <code>max</code> and <code>min</code> the extremes, and <code>argmax coll key</code> / <code>argmin coll key</code> the element whose <em>key</em> is extreme. <code>sort</code> orders mutually comparable elements. <code>to_list</code> realizes an adapter chain into a plain list—the usual last step before printing. every empty-sequence extreme (<code>max</code>, <code>min</code>, <code>find</code>, <code>first</code>, <code>last</code>, <code>argmax</code>, <code>argmin</code>, <code>spread</code>) answers <code>none</code>, a value you dispatch on.</p>
 
 <p><strong>map builders</strong> — consumers whose result is a map. <code>tally coll</code> counts occurrences. <code>group_by coll key</code> files each element under its key, values in list buckets. <code>index_by coll key</code> keeps one element per key; <code>to_h pairs</code> builds a map from two-element pairs; <code>transform_keys m f</code> and <code>transform_values m f</code> rebuild a map through a function on each side of its entries. where two entries land on one key, the last write wins—the same rule <code>put</code> follows.</p>
 
@@ -235,7 +235,7 @@ xs <span class="o">=</span> [<span class="n">3</span> <span class="n">1</span> <
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"zip <span class="i">{list/to_list (list/zip xs [</span>"</span>a<span class="s">" "</span>b<span class="s">" "</span>c<span class="s">"])}"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"tally <span class="i">{list/tally [</span>"</span>oat<span class="s">" "</span>oat<span class="s">" "</span>soy<span class="s">"]}"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"group_by <span class="i">{list/group_by [1 2 3 4] (n -&gt; n - n / 2 * 2)}</span>"</span>
-  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"range <span class="i">{list/range xs}</span>"</span>
+  <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"spread <span class="i">{list/spread xs}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"push <span class="i">{push xs 4}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"at <span class="i">{xs[2]}</span>"</span>
   <span class="o">&gt;&gt;</span> <span class="f">print</span> <span class="s">"length <span class="i">{length xs}</span>"</span>
@@ -252,7 +252,7 @@ take [1 2 3 4]
 zip [[3 "a"] [1 "b"] [2 "c"]]
 tally { "oat":2 "soy":1 }
 group_by { 0:[2 4] 1:[1 3] }
-range 2
+spread 2
 push [3 1 2 4]
 at 1
 length 3

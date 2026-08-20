@@ -359,13 +359,13 @@ fn outrank_by m x key
   if (key m < key x) x m
 
 # the statistical spread; a bounded integer generator is naturals . take n
-pub fn range coll
-  spread (min coll) (max coll)
+pub fn spread coll
+  gap (min coll) (max coll)
 
-fn spread none _
+fn gap none _
   none
 
-fn spread lo hi
+fn gap lo hi
   hi - lo
 
 pub fn reject coll pred

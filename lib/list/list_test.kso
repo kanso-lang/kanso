@@ -39,9 +39,9 @@ test_index_by_last_wins =
   words = index_by ["ash" "oak" "elm"] (w -> length w)
   tags["a"]! == "ash" and words[3]! == "elm"
 
-test_range_empty = range [] == none
+test_spread_empty = spread [] == none
 
-test_range_spread = range [31 17 58 42] == 41
+test_spread = spread [31 17 58 42] == 41
 
 test_to_h_last_wins =
   built = to_h [["a" 1] ["b" 5] ["a" 9]]
