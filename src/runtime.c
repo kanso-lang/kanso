@@ -992,6 +992,9 @@ static size_t k_copy_size(KValue v, KMark* m);
    about, which keeps the walk pruning at everything that has not left. */
 static int k_slots_survive(const KValue* slots, long long n, KMark* m) {
     for (long long i = 0; i < n; i++) {
+        /* the cell survives, but what it captured may not — only the copy
+           walk can answer that, so a thunk slot is never shareable as-is */
+        if (slots[i].tag == K_THUNK) return 0;
         if (!k_is_heap(slots[i].tag)) continue;
         if (!k_survives_x((const void*)(intptr_t)slots[i].payload, m)) return 0;
     }
@@ -1081,6 +1084,18 @@ static size_t k_copy_size_ptr(const void* p, size_t n, KMark* m) {
 static size_t k_repair_size(KValue v, const void* p, KMark* m);
 
 static size_t k_copy_size(KValue v, KMark* m) {
+    /* A thunk cell is malloc'd and survives every rewind, but what it holds
+       — captured args, or a forced result — may live in the arena about to
+       go. The cell itself is never copied; its slots are sized like any
+       other survivor's interior. */
+    if (v.tag == K_THUNK) {
+        KThunk* t = (KThunk*)(intptr_t)v.payload;
+        if (k_copy_seen_check(t)) return 0;
+        size_t n = 0;
+        if (t->forced) n += k_copy_size(t->result, m);
+        for (int i = 0; i < t->argc; i++) n += k_copy_size(t->args[i], m);
+        return n;
+    }
     if (!k_is_heap(v.tag)) return 0;
     if (k_carry_holds((const void*)(intptr_t)v.payload)) k_size_in_ten = 1;
     if (k_copy_size_budget && k_copy_size_spent > k_copy_size_budget) return 0;
@@ -1265,6 +1280,17 @@ static void k_repaired_note(KValue v) {
    little storage and saves a save and a restore at every node of the hottest
    recursion in the runtime. Cleared where the evacuation starts. */
 static KValue k_deep_copy(KValue v, KCopy* cp) {
+    /* The malloc'd cell keeps its identity — every holder resolves through
+       the same thunk — and only its slots evacuate, written back in place. */
+    if (v.tag == K_THUNK) {
+        KThunk* t = (KThunk*)(intptr_t)v.payload;
+        KPtrSlot* slot = k_ptrmap_at(&k_copy_map, t, &k_copy_map_live);
+        if (slot->gen == k_copy_map.gen && slot->key == t) return v;
+        k_copy_map_put(t, t);
+        if (t->forced) t->result = k_deep_copy(t->result, cp);
+        for (int i = 0; i < t->argc; i++) t->args[i] = k_deep_copy(t->args[i], cp);
+        return v;
+    }
     if (!k_is_heap(v.tag)) return v;
     if (k_carry_holds((const void*)(intptr_t)v.payload)) cp->in_ten = 1;
     void* p = (void*)(intptr_t)v.payload;
@@ -1560,7 +1586,7 @@ KValue k_beat_pop(KValue r) {
         k_beat_depth--;
         if (k_beat_depth < K_BEAT_MAX) {
             KCarry* c = &k_carries[k_beat_depth];
-            if (!k_is_heap(r.tag)) {
+            if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
                 k_beat_rewind(&k_beat_stack[k_beat_depth]);
             } else {
                 if (c->used_flag) {
@@ -1608,7 +1634,7 @@ KValue k_cohort_pop(KValue r) {
         k_permreg_migrate(k_beat_depth);
         return r;
     }
-    if (!k_is_heap(r.tag)) {
+    if (!k_is_heap(r.tag) && r.tag != K_THUNK) {
         k_beat_depth--;
         k_beat_rewind(m);
         k_spare_release(2);
