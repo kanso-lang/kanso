@@ -84,9 +84,14 @@ around it.
   clients destructure `(err (parse_failure p _))` themselves. Scope:
   the projections, examples/json_failure_door.kso, and the ch08 suite
   in the restructured-around-std/json shape.
-- **Smaller spellings** carried from the July entry: the dot-prefix
-  canon for local imports, the subtype declaration spelling, the
-  into-subtype spelling.
+- **Smaller spellings — GAVELED 2026-08-19** (Clay, following the
+  recommendations): the dot-prefix canon is adopted — a local import
+  starts with `./` or `../`, and any bare path is a hako name, so an
+  import's universe is readable from its spelling (migration: bare
+  local imports gain the prefix). A subtype declares as
+  `type post_body:string`, the ascription shape the language already
+  uses. Into-subtype is the ctor form, `post_body ""`; the postfix
+  sketch dies.
 
 ## 3 + 5. Dispatch architecture — GAVELED 2026-08-15: groups are global objects, extension is licensed by type ownership
 
