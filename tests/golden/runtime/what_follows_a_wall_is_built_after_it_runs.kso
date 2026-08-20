@@ -1,0 +1,9 @@
+# The wall is ordered, and what follows a failure never speaks — which under
+# gavel 15 includes never being built. The left side runs and prints before
+# the right side is constructed at all, so the failure in it arrives second.
+#
+# Under the eager wall this program printed nothing: the right operand was
+# evaluated to build the description, and it died there.
+pub play =
+  print "a"
+  >> print "{[1][5]!}"

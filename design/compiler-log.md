@@ -3892,3 +3892,88 @@ are indistinguishable from the output alone.
 Pinned by tests/golden/micro/a_knot_equals_the_same_cycle_built_in_a_block.kso,
 which is also why the refusal is scoped to a pair of CELLS: that is the only
 place the question is unanswerable.
+## 2026-08-19 — gavel 15 built: the wall defers, and the loop runs
+
+A loop written with `>>` now runs to the end on both engines. Four hundred
+thousand links, and the fixture in tests/seq_chain_runs.rs (renamed from
+seq_chain_names_itself, whose whole subject was the diagnostic for the failure
+that no longer happens) prints `done` on native and on the oracle.
+
+It took two changes, and the second is the one a survey would have missed.
+
+**The wall holds its right side.** codegen emits it through `emit_cell` — the
+lazy-slot machinery factored out of the lazy-bind path, unchanged — and the
+oracle holds a Pending cell inside `Desc::Seq`, which now carries a `Value` and
+a span rather than a second `Desc`. `k_seq_right` and `Interp::seq_right` force
+it where the wall reaches it, which is also where its failure and its type are
+checked.
+
+**The executor walks the right spine instead of recursing into it.** With the
+chain no longer built all at once, native still died — at RUN time now, one C
+frame per link in `k_exec`. The oracle's `execute_chain` has always been a
+loop; `k_exec` case 1 is one now too. Deferral is what made that reachable and
+it is not sufficient by itself.
+
+Two consequences, both stated rather than absorbed:
+
+  - A failure in the right side now surfaces AFTER the left has run.
+    `print "a" >> print "{[1][5]!}"` printed nothing and errored; it prints `a`
+    and then errors. This is the wall's own law finally holding — "the first
+    failure is the answer and what follows it never speaks" was contradicted by
+    a failure in what follows speaking before the left ran at all.
+  - `--plan` builds what the wall holds rather than reading it, through a
+    forcing seam `run_plan` supplies. A plan that names itself has no end,
+    which is honest.
+
+`tests/golden/mem/build_cycle.imported.mem` gains one cell: thunk_allocs,
+forces, evals and live_exit all 0 to 1. That is the one wall in the fixture.
+
+The browser is not done. Its cell is a slot handle rather than a `Value::Thunk`
+and its `Seq` has a lazy shape of its own (`Slot::Seq`), so it still evaluates
+where it stands and would diverge on failure ordering. Nothing lands until it
+agrees.
+
+## 2026-08-19 — the browser's wall, and the two doors it needed
+
+Gavel 15 is built on all three engines. The browser was the last, and it was
+not a transcription of the other two.
+
+Its emitter builds the right operand as a capturing cell — the closure
+`emit_lambda` already builds, with no parameters and the arity that marks a
+cell rather than a function — and `rt_seq` stops asking what the right side is
+until the wall reaches it.
+
+Two forcing doors had to widen, for a reason particular to that engine.
+`forced` answers a `Value`, but the browser's `>>` and `.` build SLOT shapes
+that are not Values, and gavel 15 has just put such a cell to the right of
+every wall. So both `forced` and the executor's new `demand` hook materialize
+one through `as_desc` rather than reading it as data, and a handle-level
+`demanded` exists beside them because `exec_slot` walks handles.
+
+The mem vein caught a real differential on the first program with a wall in
+it: native counted the deferred cell as an allocation and the oracle did not.
+The oracle records it now.
+
+Full suite green, 60 binaries. wasm_engine 7/7.
+
+## 2026-08-20 — what the deferred wall cost, in the two veins that can see it
+
+**Machine code: +592 bytes on six binaries, +608 on escapebench.** The
+uniformity is the reading — `k_seq_right` and the loop `k_exec`'s wall arm
+became both live in the runtime object every binary links, and none of these
+benchmarks reaches a wall more or less often than before. Between 0.6% and
+1.3% each, most of it on the smallest binary.
+
+**Work: deepbench alone, 833,453,153 to 833,609,159** — 156,006 instructions
+and 0.019%. It is the row whose loop is written with the wall, so it is the row
+that pays for a cell per link. The other six are noise with disagreeing signs:
+jsonbench -61, widebench -40, encodebench +4, oneshot +3, basket +1,
+escapebench unmoved.
+
+No allocation counter moves and no other vein does either — every counter gate
+was run locally and passed, which is how the two linux-only veins were
+isolated.
+
+What neither vein can show is the trade: a 400,000-link `>>` loop goes from a
+stack exhaustion to a program that prints `done`. There is no benchmark of a
+chain that long, because until now there could not be one.

@@ -54,12 +54,12 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2860479957
-encodebench 9724924773
-oneshot 46591231
-basket 57404129
-widebench 85554129
-deepbench 833453153
+jsonbench 2860479896
+encodebench 9724924777
+oneshot 46591234
+basket 57404130
+widebench 85554089
+deepbench 833609159
 escapebench 258541119
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
@@ -234,3 +234,16 @@ escapebench 258541119
 # it, and encodebench is the row that runs a comparison in its inner loop; the
 # rest either compare nothing or compare far less. Fifty thousand is that test,
 # paid where it is asked.
+# 2026-08-20: deepbench alone moves meaningfully — 833,453,153 to
+# 833,609,159, a rise of 156,006 and 0.019%. It is the row whose loop is
+# written with the wall, so it is the row that pays for a cell per link now
+# that the wall holds its right side instead of evaluating it.
+#
+# The other six are noise and the signs disagree: jsonbench -61, widebench -40,
+# encodebench +4, oneshot +3, basket +1, escapebench unmoved. Tens of
+# instructions against billions, which is the layout moving around code the
+# linker now places differently. Recorded rather than waved at.
+#
+# The trade this vein cannot show: the same change takes a 400,000-link `>>`
+# loop from a stack exhaustion to a program that finishes. There is no
+# benchmark of a chain that long, because until now there could not be one.

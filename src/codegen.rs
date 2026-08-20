@@ -1162,6 +1162,39 @@ impl<'a> Backend<'a> {
         captures.len() <= 8
     }
 
+    /// Compile an expression into a cell: a site function over the names it
+    /// reads, plus a `k_thunk_new` that captures their current values. The
+    /// computation runs at first force.
+    fn emit_cell(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<String, String> {
+        let mut idents = Vec::new();
+        collect_idents(expr, &mut idents);
+        let mut captures: Vec<String> = Vec::new();
+        for id in idents {
+            if f.lookup(&id).is_some() && !captures.contains(&id) {
+                captures.push(id);
+            }
+        }
+        let site = self.thunk_sites.len();
+        let sym = format!("tsite{site}");
+        self.thunk_sites.push((sym.clone(), captures.len()));
+        self.emit_thunk_site(&sym, &captures, expr, f)?;
+        let mut args = String::new();
+        for cap in &captures {
+            let temp = f.lookup(cap).expect("capture is bound");
+            // A capture is stored as a %KValue, and a group that returns its
+            // record in registers holds a %parsed.
+            let temp = self.as_value(f, &temp);
+            args.push_str(&format!(", %KValue {temp}"));
+        }
+        let t = f.tmp();
+        f.line(&format!(
+            "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 {}{args})",
+            captures.len()
+        ));
+        f.record(&t, crate::infer::TOP);
+        Ok(t)
+    }
+
     /// Force a value that may be a thunk; no-op (no IR) when the set proves
     /// it can't be one, so strict code pays nothing. A program the demand
     /// analysis deferred nothing in can hold no thunk anywhere — every site
@@ -2475,32 +2508,7 @@ impl<'a> Backend<'a> {
                     if self.demand.is_lazy_bind(&f.group.clone(), f.arity, i)
                         && self.thunkable(f, expr) =>
                 {
-                    let mut idents = Vec::new();
-                    collect_idents(expr, &mut idents);
-                    let mut captures: Vec<String> = Vec::new();
-                    for id in idents {
-                        if f.lookup(&id).is_some() && !captures.contains(&id) {
-                            captures.push(id);
-                        }
-                    }
-                    let site = self.thunk_sites.len();
-                    let sym = format!("tsite{site}");
-                    self.thunk_sites.push((sym.clone(), captures.len()));
-                    self.emit_thunk_site(&sym, &captures, expr, f)?;
-                    let mut args = String::new();
-                    for cap in &captures {
-                        let temp = f.lookup(cap).expect("capture is bound");
-                        // A capture is stored as a %KValue, and a group that
-                        // returns its record in registers holds a %parsed.
-                        let temp = self.as_value(f, &temp);
-                        args.push_str(&format!(", %KValue {temp}"));
-                    }
-                    let t = f.tmp();
-                    f.line(&format!(
-                        "{t} = call %KValue (i64, i32, ...) @k_thunk_new(i64 {site}, i32 {}{args})",
-                        captures.len()
-                    ));
-                    f.record(&t, crate::infer::TOP);
+                    let t = self.emit_cell(f, expr)?;
                     let in_beat = self.beat.ids.contains_key(&(f.group.clone(), f.arity));
                     if !in_beat && self.demand.is_releasable(&f.group, f.arity, i) {
                         f.lazy_cells.push(t.clone());
@@ -2945,14 +2953,24 @@ impl<'a> Backend<'a> {
                 let key = self.maybe_force(f, key);
                 Ok(self.emit_at(f, &container, &key, *strict, *span))
             }
-            Expr::Seq(lhs, rhs, _) => {
+            Expr::Seq(lhs, rhs, span) => {
                 let a = self.emit_expr(f, lhs)?;
                 let a = self.maybe_force(f, a);
-                let b = self.emit_expr(f, rhs)?;
-                let b = self.maybe_force(f, b);
+                // GAVEL 15: the wall defers its right side, so the right
+                // operand is a cell the executor forces once the left has
+                // run. A name mentioned there is stored rather than demanded,
+                // which is what lets a description name itself.
+                if !self.thunkable(f, rhs) {
+                    let _ = span;
+                    return Err("native backend: `>>` defers its right side, and this one \
+                                reads more than eight names — bind some of them before the \
+                                wall"
+                        .to_string());
+                }
+                let b = self.emit_cell(f, rhs)?;
                 let t = f.tmp();
                 f.line(&format!("{t} = call %KValue @k_seq(%KValue {a}, %KValue {b})"));
-                f.record(&t, DESC | (f.set_of(&a) & FAIL) | (f.set_of(&b) & FAIL));
+                f.record(&t, DESC | (f.set_of(&a) & FAIL));
                 Ok(t)
             }
             Expr::Join { lhs, rhs, .. } => {
