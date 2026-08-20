@@ -1,0 +1,4 @@
+error[formatting]: an inline constant has no indented block
+  --> a_pub_constant_with_an_indented_block.kso:5:3
+   5 |   2
+         ^

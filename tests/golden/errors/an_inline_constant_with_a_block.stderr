@@ -1,8 +1,4 @@
-error[formatting]: an inline constant has no indented block
-  --> an_inline_constant_with_a_block.kso:8:3
-   8 |   "a"
-         ^
-error[syntax]: a file with declarations is a library, and a library has no statements to run — `kanso play` runs declarations beside statements in one file
-  --> an_inline_constant_with_a_block.kso:9:1
-   9 | else
+error[formatting]: branches without bindings use the expression form: `if cond a b`, or indented arguments
+  --> an_inline_constant_with_a_block.kso:5:1
+   5 | two = if (1 < 2)
        ^
