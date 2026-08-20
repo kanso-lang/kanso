@@ -3,6 +3,9 @@ pub type blank
 pub type filled
   n
 
+pub fn fill n
+  filled n
+
 pub fn describe blank
   "blank"
 

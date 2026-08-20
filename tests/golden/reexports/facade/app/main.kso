@@ -1,5 +1,5 @@
 import "../mid"
 import "../teller"
 
-print "{teller/tell (mid/filled 3)}"
+print "{teller/tell (mid/fill 3)}"
 print "{teller/tell mid/blank}"
