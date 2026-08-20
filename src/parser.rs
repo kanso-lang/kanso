@@ -1038,7 +1038,18 @@ fn parse_effect_tail(body: &[Line]) -> Result<Vec<Stmt>, Diagnostic> {
                         reject_never_effect(&e, is_final_unit)?;
                         segments.last_mut().expect("segment").push(e);
                     }
-                    Stmt::Set { .. } => unreachable!("`set` lifts only inside `build`"),
+                    // the same refusal check_merged's walk gives a set in a fn
+                    // body — this path reaches the statement first, and a panic
+                    // is not a diagnostic
+                    Stmt::Set { target, field, span, .. } => {
+                        return Err(Diagnostic::new(
+                            "build",
+                            format!(
+                                "`{target}.{field} = ...` writes a field, and only a `build` block may do that"
+                            ),
+                            span,
+                        ));
+                    }
                 }
                 continue;
             }

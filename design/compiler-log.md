@@ -4252,3 +4252,31 @@ licenses the shape, the checker refuses it, and the words describe a
 different construct. Campaign totals to date: 50,800 mutants and
 children, two compiler crashes found, both fixed same-day, zero
 engine divergences among 1,229 executed survivors.
+
+## 2026-08-20 (wave three) — the wider gene pool pays twice more
+
+The third crossover wave — 40,000 children spliced from all 752 kso
+files in the tree, the runtime goldens, book samples and hako
+fixtures joining the pool for the first time — ran against the
+compiler hardened by its own two previous findings. Raw yield: 16
+check panics and 59 divergences. Triage cut it honestly: all sixteen
+panics were ONE site (the statement grouper's set-arm was an
+unreachable! — a field write in a play constant's block parses fine
+and arrived there; the fix is the same refusal a fn body already
+gives, pinned as a rust test since staged runs resolve names first
+and hide the path). Of the 59 divergences, 44 were entropy — the
+replays ran unseeded and children that inherited math/random diverge
+run to run, a harness lesson now baked into the filter (seed it, and
+demand self-stability before blaming an engine) — 4 were the licensed
+int64 gap doing its documented job, 9 were the known cross-stream
+buffering interleave, and TWO were real: the engines refused a
+non-description in a group with different words, native's naming
+`&` — an operator the surface retired. Native now says what the
+oracle and the browser say: a group joins descriptions.
+
+Campaign ledger to date: 90,800 generated programs, three compiler
+crashes found and fixed same-day, one stale diagnostic unified, zero
+true engine divergences among 2,297 executed survivors. The
+fuzzer's finds have all been in the seams between features — an
+empty else, a set outside build, an if the wrong width — the shapes
+no fixture author writes because no intention produces them.
