@@ -3724,3 +3724,171 @@ The lesson is about evidence rather than types. A refusal is not evidence
 of a defect until the program is known to be well formed, and two of the
 three reproductions here were not. What separated them was checking how
 the corpus already spells the construct.
+## 2026-08-18 — GAVEL: equality refuses a value that names itself
+
+Clay, ruling #235: "to me 'which object is this' makes more sense... how could
+you possibly compare two formulas for equality?" and then "yeah i think refuse
+is right."
+
+A knotted constant is a definition, and comparing two definitions is not a
+question equality answers. `x = [x]` and `y = [y]` are two formulas, and `==`
+refuses them the way it already refuses a function or an effect.
+
+WHAT THE RULING REPLACES. Today both engines answer `false`, and not by
+decision: `k_eq`'s switch has no arm for a cell, so a thunk drops off the end
+and reports unequal — and that same drop is what terminates the walk. A reader
+cannot tell it was never decided. The refusal makes the rule sayable.
+
+THE ARGUMENT THAT WAS PUT AND NOT TAKEN, recorded so it is not relitigated as
+though it were missed. A knot is finite in memory — two nodes and a back-edge —
+and takes no input, so comparing two of them is graph comparison rather than
+the function-equality problem, and bisimulation decides it for finitely
+generated cycles. Clay's answer is that being decidable is not the same as
+being a question worth asking of a formula, and the identity reading is the one
+that matches what a knot is. The ruling stands on that, not on tractability.
+
+THE BOUNDARY, which follows from the reasoning rather than from the sentence.
+A cycle that closes through a CELL is a definition naming itself, and refuses.
+A cycle a build block closes by writing a record in place is one object the
+program built, and keeps the structural comparison bisimulation already gives
+it (#190-#196). Two cyclic values, two rules, split by whether the cycle is
+definitional. Worth stating out loud because it will otherwise read as a bug.
+
+TWO CONSEQUENCES TO CARRY.
+
+Render and equality now answer different questions on purpose: `print "{x}"`
+gives `[<cycle>]` for both x and y, which is the SHAPE, where `==` asks which
+object and declines. The page owes that sentence, because showing two values
+identically while refusing to compare them is otherwise a seam.
+
+`==` is an ambient dispatch group (#98), so the refusal can now surface from a
+generic container comparison wherever a knot can reach. That is the cost of the
+ruling and it is accepted: a refusal in an unexpected place beats a false
+answer, and a user who means something specific writes the arm — which is what
+the existing message already tells them to do.
+
+## 2026-08-18 — the knot refusal fires on RE-ENTRY, not on seeing a cell
+
+Clarifying the entry above before it was built wrong. Clay: "you don't refuse
+an actual lazy evaluation of a comparable value. the equality itself is lazy."
+
+Equality is a demand site, so it forces a cell the way any demand does. A lazy
+binding compared against a value forces and compares; nothing refuses. The
+survey had been about to take the simple rule — refuse on encountering any
+cell — and that rule would have refused `n == 3` for a merely lazy `n`, which
+the gavel does not say.
+
+The discriminator is re-entry. Comparing `x = [x]` against `y = [y]` forces
+both to `[cell-x]` and `[cell-y]`, whose elements are those same two cells: the
+walk arrives at a pair it is already inside. That is the cycle closing through
+a cell, and it is the definitional case the gavel refuses.
+
+So: force cells, carry a seen-set of cell pairs, refuse on re-entry. The
+oracle already keeps such a set for records (src/eval.rs:3402), so the shape
+exists. And the rule has a property worth naming: `x == [1]` forces, mismatches
+at once and answers false, never reaching the refusal — only two knots that
+would chase each other forever get it.
+
+## 2026-08-18 — the knot's cells are PENDING, so equality has to be able to force
+
+First attempt at the build, reverted, and the measurement is why.
+
+`values_equal_seen` is a free function. Wiring the refusal into it and running
+the fixture printed the cell states directly:
+
+    PROBE pair states: Pending { expr: Ident("knots/x"), env: None, frame: ... }
+
+Both cells of `pub x = [x]` / `pub y = [y]` arrive UNFORCED, holding the name
+as an expression. So the walk cannot answer them by reading a memo — evaluating
+`Ident("knots/x")` needs the interpreter, which a free function does not have.
+The arm that read only `ThunkState::Forced` therefore fell through to false and
+nothing changed: the refusal never fired, and the fixture still printed `false`
+on both sides.
+
+That fixes the shape of the build. Equality forces, per the ruling, so the
+comparison MOVES ONTO THE INTERPRETER — or takes a forcing callback — rather
+than staying a free walk over values. The C side has the same requirement and
+no seen-set at all yet.
+
+ONE HAZARD TO CHECK BEFORE TRUSTING RE-ENTRY DETECTION: the seen-set keys on
+Rc pointer pairs today. If forcing `Ident("knots/x")` hands back a fresh cell
+each time rather than the same one, pointer identity will not recognise the
+second arrival and the walk will not terminate. Whatever the seen-set keys on
+has to be stable across a force — verify with the two-knot fixture before
+building the rest.
+
+The Option<bool> plumbing this needed (every arm of the match propagating a
+refusal) works and is mechanical; it was reverted with the rest rather than
+landed as a behaviourless refactor.
+
+## 2026-08-19 — gavel: `==` refuses a value that names itself, three engines
+
+Built. The hazard the last entry named is answered: forcing a cell rewrites
+the SAME cell rather than handing back a fresh one — `force_thunk` assigns
+`ThunkState::Forced` into the existing `Rc`, and `k_force` sets `forced`/
+`result` on the existing `KThunk*`. Pointer identity therefore survives the
+force, which is what makes a second arrival recognisable.
+
+The comparison did not have to move onto the interpreter. It takes a seam
+instead:
+
+    pub struct Cells<'a> {
+        pub id: &'a dyn Fn(&Value) -> Option<usize>,
+        pub force: &'a dyn Fn(Value) -> Result<Value, RuntimeError>,
+    }
+
+`id` says which values are cells and gives each a stable identity; `force`
+demands one. The oracle passes an `Rc` pointer and `force_thunk`. The browser
+passes a slot handle and `forced` — and it needed the widened seam, because a
+browser cell is a `TableFn` handle rather than a `Value::Thunk`, so a
+thunk-shaped test found nothing there and the corpus reported `false` against
+the other two engines. Native carries the same rule in `k_eq_rec` over the
+`k_eq_assume` table the record walk already uses.
+
+The rule fires on RE-ENTRY, per Clay: an ordinary lazy operand forces and
+compares as its value. Two goldens pin both halves, and the second is the one
+that stops the refusal widening unnoticed:
+
+    tests/golden/runtime/equality_refuses_a_value_that_names_itself.kso
+    tests/golden/micro/a_knot_compared_against_a_plain_list.kso   # false
+
+The first was watched red on native (`left: ""`, no diagnostic) and on wasm
+(`left: "false\n"`) before either arm existed.
+
+## 2026-08-19 — what the knot refusal cost, in the two veins that can see it
+
+CI on #952 moved exactly two rows, and both are legible.
+
+**Machine code: +208 bytes on every one of the six binaries.** The uniformity
+is the reading — what grew is `k_eq_rec` in the runtime object, which every
+binary links and which none of these benchmarks calls more or less often than
+before. Between 0.2% and 0.3% each.
+
+**Work: encodebench alone, 9,724,874,773 to 9,724,924,773.** Fifty thousand
+instructions, five ten-thousandths of a per cent, and the other six rows do not
+move at all. Equality now asks whether each side is a cell before comparing it;
+encodebench is the row with a comparison in its inner loop.
+
+No allocation counter moves, which is right: the refusal allocates nothing and
+the forcing it added only runs where a cell is actually met.
+
+## 2026-08-19 — the mixed comparison already worked, and my measurement of it did not
+
+Task #252 filed a bisimulation violation: a knot and the same cycle built in a
+block rendering identically, each self-comparing true, and comparing false
+against each other. It reproduced on main.
+
+The refusal branch already fixes it. `k == q` and `k.peers == q.peers` both
+answer TRUE there, on native and on the oracle, which is the answer structural
+equality owes — it is blind to provenance, and the two spellings are one value.
+The cell arms do it: the walk meets a cell against a record, forces, arrives at
+a pair of records it is already inside, and answers.
+
+I recorded the opposite earlier and it was wrong. The binary I measured had
+been built from main; the branch's own build says true. Same class as
+`stdlib-is-compiled-into-the-binary` — a stale binary and a real null result
+are indistinguishable from the output alone.
+
+Pinned by tests/golden/micro/a_knot_equals_the_same_cycle_built_in_a_block.kso,
+which is also why the refusal is scoped to a pair of CELLS: that is the only
+place the question is unanswerable.

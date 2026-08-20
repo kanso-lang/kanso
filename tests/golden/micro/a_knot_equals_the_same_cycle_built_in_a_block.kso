@@ -1,0 +1,21 @@
+# Structural equality is blind to provenance: the same cyclic value reached
+# two ways is one value. A knot stores its self-mention as a cell where a
+# build block stores the record itself, so the walk meets a cell against a
+# record — it forces, arrives at a pair of records it is already inside, and
+# answers.
+#
+# The companion to equality_refuses_a_value_that_names_itself, and the reason
+# that refusal is scoped to a pair of CELLS: only there is the question
+# unanswerable.
+type node
+  id
+  peers
+
+k = node "a" [k]
+
+pub play =
+  build
+    q = node "a" []
+    q.peers = [q]
+  print "{k == q}"
+  >> print "{k.peers == q.peers}"

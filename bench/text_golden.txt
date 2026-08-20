@@ -49,12 +49,12 @@
 # made inline, and the call sequences it removes at forty-eight sites are larger
 # than the body they duplicate — a few stores, a branch on the stats flag, and
 # lengths the optimiser can fold once the body is in front of it.
-jsonbench text=77794
-encodebench text=95522
-oneshot text=95026
-basket text=87554
-widebench text=96610
-deepbench text=61426
+jsonbench text=78002
+encodebench text=95730
+oneshot text=95234
+basket text=87762
+widebench text=96818
+deepbench text=61634
 escapebench text=48482
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
@@ -184,3 +184,9 @@ escapebench text=48482
 # These numbers therefore describe a compiler with cohort entry switched off.
 # They are not a baseline to keep, and they are pinned here only so the gate
 # has something to diff while the predicate is rebuilt.
+# 2026-08-19: every row rises by exactly 208 bytes — jsonbench 77,794 to
+# 78,002 and the other five the same 208, between 0.2% and 0.3% each. That
+# uniformity is the whole reading: what grew is `k_eq_rec` in the runtime
+# object, which every binary links and none of these benchmarks calls more or
+# less often than before. The code is the cell arms equality gained when a
+# value that names itself became a refusal rather than a fall-through.
