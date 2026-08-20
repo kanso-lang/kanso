@@ -4280,3 +4280,24 @@ true engine divergences among 2,297 executed survivors. The
 fuzzer's finds have all been in the seams between features — an
 empty else, a set outside build, an if the wrong width — the shapes
 no fixture author writes because no intention produces them.
+
+## 2026-08-20 (wave four) — the seams hold
+
+The closing wave inverted the strategy: instead of splicing whole
+fixtures, 50,000 children were assembled FROM the seam fragments
+where all three crashes had lived — block headers, walls, sets,
+orphan elses, mixed indents — deliberately mis-nested, replays seeded
+from the start. Zero panics, zero signals, zero divergences; the
+generator was hostile enough that only three children compiled at
+all, and those three ran identically on both engines.
+
+That closes the campaign at 140,800 generated programs across four
+generator families — byte mutation, seeded sampling, corpus
+splicing, seam templating — plus 384 million utf-8 cases. Yield:
+three compiler crashes found and fixed same-day, one hidden
+differential violation closed, one stale diagnostic unified, four
+harness lessons banked (compare both streams; seed the replays;
+demand self-stability; check mergeable before theorizing). The
+block machinery that produced every crash now withstands a directed
+assault on exactly itself, which is what hardened means when it is
+earned rather than asserted.
