@@ -3992,7 +3992,7 @@ KValue k_desc_join(KValue a, KValue b) {
     if (lf && rf) return k_accumulate_failures(a, b);
     if (lf) return a;
     if (rf) return b;
-    if (a.tag != K_DESC || b.tag != K_DESC) k_die("`&` joins two descriptions");
+    if (a.tag != K_DESC || b.tag != K_DESC) k_die("a group joins descriptions");
     return k_mkdesc(7, a, b);
 }
 
