@@ -35,7 +35,7 @@
 # A library keeps everything, because its callers are outside the module.
 # The binary does not change — -flto already internalised and stripped these,
 # __TEXT is 114,688 either way. What is saved is writing them and reading them.
-defines=155
-calls=1776
+defines=154
+calls=1775
 branches=1175
-lines=11632
+lines=11603

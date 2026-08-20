@@ -1,3 +1,5 @@
+import "std/text"
+
 fn defect? (err (defect _))
   true
 
@@ -33,6 +35,10 @@ test_encode_empty_list = encode [] == "[]"
 test_encode_empty_map = encode {} == "\{}"
 
 test_encode_escapes = encode "a\"b\nc" == "\"a\\\"b\\nc\""
+
+test_encode_shorthands =
+  raw = text/utf8 [120 8 121 12 122]
+  encode raw == "\"x\\by\\fz\""
 
 test_encode_nested =
   value = { "a":true "b":[1 2] }

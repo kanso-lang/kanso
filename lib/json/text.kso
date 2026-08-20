@@ -3,11 +3,17 @@ import "std/text"
 
 # escape appends onto the byte builder: int arms compile to a jump
 # table and each byte lands in the accumulator once
+fn esc_byte acc 8
+  text/append (text/append acc 92) 98
+
 fn esc_byte acc 9
   text/append (text/append acc 92) 116
 
 fn esc_byte acc 10
   text/append (text/append acc 92) 110
+
+fn esc_byte acc 12
+  text/append (text/append acc 92) 102
 
 fn esc_byte acc 13
   text/append (text/append acc 92) 114
@@ -36,22 +42,10 @@ pub fn escape_onto acc s
 fn escape_str s
   text/utf8 (escape_onto (text/bytes "") s)
 
-fn hex4 n
-  d1 = n / 4096
-  r1 = n - d1 * 4096
-  d2 = r1 / 256
-  r2 = r1 - d2 * 256
-  d3 = r2 / 16
-  d4 = r2 - d3 * 16
-  text/join [(hex_char d1) (hex_char d2) (hex_char d3) (hex_char d4)] ""
-
 fn hex_alpha c
   if (96 < c and c < 103) (c - 87) (hex_upper c)
 
 hex_byte_table = text/bytes "0123456789abcdef"
-
-fn hex_char n
-  hex_digits[n + 1]
 
 fn hex_code n
   hex_byte_table[n + 1]
@@ -61,8 +55,6 @@ fn hex_digit none
 
 fn hex_digit c
   if (47 < c and c < 58) (c - 48) (hex_alpha c)
-
-hex_digits = "0123456789abcdef"
 
 fn hex_upper c
   if (64 < c and c < 71) (c - 55) (err "invalid hex digit")
