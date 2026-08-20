@@ -4512,3 +4512,24 @@ anybody looking; these two claim exactly what they were watched to
 hold. The machine-code and instructions veins gain a pendbench row,
 stamped from the runner in this PR, and the trend gate enrolls the
 pend counters with the thunk family in its direction tables.
+
+
+## 2026-08-20 — the shorthands JSON already has, paid for by dead code
+
+A second differential wave (2,000 fresh seeded documents, the durable
+generator at ~/dev/jqfuzz/generate.py) found zero refusals — the
+surrogate class is dead — and exactly two byte-divergence families
+against jq -S. One is the float-formatting policy already filed as the
+kq lane's product question. The other was new and free of any policy
+tension: the encoder wrote \u0008 and \u000c where jq, python and
+every other serializer write \b and \f. Two arms in esc_byte's
+jump table close it, pinned by test_encode_shorthands, red first.
+
+The arms cost 0.03 of welfare and the floor refuses any fall, which
+is how the deletion was found: hex4, hex_char and hex_digits had no
+caller anywhere in the library — the string-building duplicate of the
+byte-side hex machinery — and the two constants among them were frozen
+CAFs every decode paid for. Deleting the trio moves perm_allocs from
+6 to 4 in the decode counters, takes front-end visits on lib/json to
+23,224 — below where they stood before the feature — and lands
+welfare at 84.85, floor set there. The suite panel reads 20 tests.
