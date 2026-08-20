@@ -54,13 +54,23 @@
 # found this predicted about twenty million on the decoder against the twelve and
 # a half measured, so it pointed at the right function and oversold the size —
 # attribution counts what a function was charged, not what removing it returns.
-jsonbench 2860480046
-encodebench 9724924778
-oneshot 46591235
-basket 57404154
-widebench 85554090
-deepbench 833609159
-escapebench 258568121
+# 2026-08-20: the thunk-aware evacuation moves every row, most by noise
+# and two by real amounts in opposite directions: deepbench falls 26.7M
+# (-3.2%) and widebench 737K (-0.86%) — the two rows with meaningful
+# evacuation volume (8,723 and 272 evac_allocs), so the optimiser
+# re-rolled the edited walkers in their favour — while encodebench rises
+# 2.23M (+0.023%), the per-slot thunk check paid across a run that checks
+# billions of slots and evacuates nineteen times. Algorithm-level
+# counters are unmoved on all rows; no benchmark allocates a thunk, so
+# the fixed path itself is priced at zero here, which is a corpus gap,
+# not a free fix.
+jsonbench 2860480011
+encodebench 9727154374
+oneshot 46596713
+basket 57400154
+widebench 84816701
+deepbench 806938332
+escapebench 258568120
 # 2026-08-13 (last): jsonbench -815, encodebench +247, oneshot +247, basket
 # -690, all under a thousandth of a per cent. net/port adds a function to the
 # runtime object that none of these four call; what moves is the layout around

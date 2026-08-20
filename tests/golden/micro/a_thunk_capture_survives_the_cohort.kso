@@ -1,0 +1,165 @@
+import "std/io"
+import "std/list"
+import "std/text"
+
+# A thunk's cell is malloc'd, but what it captures lives in the arena. This
+# program builds records whose lazy fields and a never-forced reject both
+# capture parsed strings, grows the scope past the cohort threshold, and
+# reads the captures after the close. An evacuation that cannot see inside
+# thunks frees them with the rewind.
+type move
+  key
+  say
+  worse
+
+bench_memory = [["bench/compile_memory_golden.txt" ""]]
+
+advice = "movement is fine; silence is not. say why in design/compiler-log.md."
+
+fn field? f
+  length (text/split f "=") == 2
+
+fn numeric? _
+  true
+
+fn pair_of prefix f
+  parts = text/split f "="
+  ["{prefix}{parts[1]!}" parts[2]!]
+
+fn body? l
+  text/slice l 1 1 != "#" and length l > 0
+
+fn on_line prefix line
+  fields = list/select (text/split line " ") field?
+  list/to_list (list/map fields (f -> pair_of prefix f))
+
+fn joined acc more
+  text/concat acc more
+
+fn counted text prefix
+  lines = list/select (text/split text "\n") body?
+  all = list/to_list (list/map lines (l -> on_line prefix l))
+  flat = list/to_list (list/fold all [] joined)
+  list/to_list (list/select flat (p -> numeric? p[2]!))
+
+fn totals pairs
+  list/to_h (list/to_list (list/map pairs (p -> [p[1]! (text/to_int p[2]!)])))
+
+fn names_of pairs
+  sorted = list/to_list (list/sort (list/to_list (list/map pairs first_of)))
+  list/to_list (list/fold sorted [] once)
+
+fn first_of p
+  p[1]!
+
+fn once acc name
+  fresh acc name (length acc == 0 or acc[length acc]! != name)
+
+fn fresh acc name true
+  push acc name
+
+fn fresh acc _ false
+  acc
+
+fn or_zero none
+  0
+
+fn or_zero n
+  n
+
+fn worsened? _ before after
+  after > before
+
+held_a = "front_end_rounds=31\nfront_end_visits=26474\n"
+
+held = "{held_a}compile_peak_bytes=819217\n"
+
+ours_a = "front_end_rounds=28\nfront_end_visits=23384\n"
+
+ours_now = "{ours_a}compile_peak_bytes=872591\n"
+
+fn against golden base_text found
+  io/write "" . (_ -> weighed golden golden[2]! base_text ours_now found)
+
+fn weighed golden prefix base_text ours found
+  mine = counted ours prefix
+  theirs = counted base_text prefix
+  names = names_of (text/concat mine theirs)
+  mine_t = totals mine
+  theirs_t = totals theirs
+  moves = list/map names (n -> judged golden n mine_t theirs_t)
+  text/concat found (list/to_list (list/select moves real?))
+
+fn real? m
+  m.key != ""
+
+fn judged golden name mine theirs
+  before = or_zero theirs[name]
+  after = or_zero mine[name]
+  unchanged golden name before after (before == after)
+
+fn unchanged _ _ _ _ true
+  move "" "" false
+
+fn unchanged golden name before after false
+  bare = bare_name name golden[2]!
+  worse = worsened? bare before after
+  told golden name before after worse
+
+fn bare_name name ""
+  name
+
+fn bare_name name prefix
+  text/slice name (length prefix + 1) (length name)
+
+fn told golden name before after worse
+  arrow = arrow_of worse
+  line = "{arrow}: {name} {before} -> {after} ({golden[1]!})\n"
+  move name line worse
+
+fn arrow_of true
+  "worsened"
+
+fn arrow_of false
+  "improved"
+
+fn started _
+  g = bench_memory[1]!
+  against g held [] . (ms -> priced "" ms)
+
+fn priced _ ms
+  verdict ms ""
+
+fn verdict moves added
+  worse = list/to_list (list/select moves (m -> m.worse))
+  better = list/to_list (list/reject moves (m -> m.worse))
+  said moves . (_ -> weighed_up moves worse better added)
+
+fn weighed_up _ worse _ added
+  quiet = list/to_list (list/select worse (m -> silent? added m))
+  unpriced quiet
+
+fn said _
+  io/write ""
+
+fn silent? _ m
+  length m.key > 0
+
+fn unpriced quiet
+  listed quiet (length quiet == 0)
+
+fn listed _ true
+  io/write ""
+
+fn listed quiet false
+  keys = list/to_list (list/map quiet key_line)
+  io/write "\nUNPRICED n={length quiet} k={length keys}\n"
+  >> io/write (text/join keys "")
+  >> io/write "compiler-log delta of this branch:\n"
+  >> io/write (text/join (list/to_list (list/map quiet key_line)) "")
+  >> io/write "{advice}\n"
+
+fn key_line m
+  "  {m.key}\n"
+
+pub play = started "origin/main"

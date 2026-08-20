@@ -1,0 +1,6 @@
+
+UNPRICED n=1 k=1
+  compile_peak_bytes
+compiler-log delta of this branch:
+  compile_peak_bytes
+movement is fine; silence is not. say why in design/compiler-log.md.

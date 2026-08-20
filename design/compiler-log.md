@@ -4422,3 +4422,60 @@ the rise the visits paid for. The machine-code vein prices the fix at
 1,296 bytes of .text on each decode binary — jsonbench 78,594 to
 79,890, oneshot 95,826 to 97,122, the other five flat — which is the
 surrogate machinery the linker kept.
+
+## 2026-08-20 — the cell keeps what it holds
+
+The trend gate printed its UNPRICED header and swallowed the one
+counter name it existed to print. The interpreter printed the name.
+That is the differential law's tripwire, and pulling on it found
+memory corruption: adding a probe binding to the same function turned
+the silent empty string into a SIGSEGV in `k_b_at`, dereferencing a
+small integer where a list pointer belonged, on origin/main's compiler
+as much as any branch — a long-standing native bug that had been
+rendering as quietly wrong output.
+
+The reduction went from the 400-line gate to a 190-line program with
+no inputs at all, and the load-bearing pieces told the story before
+the debugger did: the crash needed a never-forced `list/reject`
+passed along and dropped, records whose lazy interpolated fields were
+never printed, and enough allocation in one scope to cross the cohort
+threshold. Every road pointed at unforced thunks crossing a beat
+close. The mechanism, in runtime.c: `k_is_heap` answers false for
+`K_THUNK`, so the evacuation that runs when a cohort closes — sized
+by `k_copy_size`, walked by `k_deep_copy`, gated by
+`k_slots_survive` — could not see inside a thunk. The malloc'd cell
+itself survives every rewind, which is exactly what hid it: the cell
+outlives the close while its captured args and forced result still
+point into the rewound arena, and the next force or walk reads reused
+memory. Whether that surfaces as a wrong empty string or a crash is
+only a question of who reused the block first.
+
+The fix teaches all four sites the same sentence: a thunk's cell is
+never copied — every holder resolves through the same thunk, so
+identity is the contract — and its slots evacuate like any other
+survivor's interior, written back in place. `k_copy_size` and
+`k_deep_copy` walk args and result with a cycle guard (knots tie
+back), the two rewind fast paths stop treating a thunk-valued result
+as nothing to save, and `k_slots_survive` declines to share a node
+holding a thunk slot, which routes it to the walk that can answer.
+Pinned as `a_thunk_capture_survives_the_cohort`, a micro golden
+distilled from the gate: red with a stack-banner crash on the old
+runtime, byte-identical across engines on this one. The lazy tier's
+mem corpus never caught it because its fixtures force what they
+build; the fixture that survives a close unforced is the one the
+corpus was missing.
+
+The veins price it, and two of them said something. Text: every row
+rises by exactly 544 bytes, the walk itself. Instructions: deepbench
+falls 26.7M (-3.2%) and widebench 737K (-0.86%) — the two rows with
+meaningful evacuation volume (8,723 and 272 evac_allocs; the peer
+session measured the correlation) — so the optimiser re-rolled the
+edited walkers in their favour, while encodebench pays 2.23M (+0.023%)
+for the per-slot thunk check across billions of slot checks and
+nineteen evacuations. Welfare lands at 84.84, 0.03 above the floor,
+and the floor is set there. The corpus gap stands with a number on
+it now: thunk_allocs is zero on all seven benchmarks, so the path
+this fix repairs is priced at zero by construction — the same shape
+as the 95x and 998x memory fixes that scored nothing — and the
+memory-frontier lane owes a benchmark that holds an unforced thunk
+across a cohort close.
