@@ -4842,6 +4842,7 @@ static KValue* k_buf_perm(long long cap) {
     if (__builtin_expect(k_stats_on > 0, 0)) {
         k_stat_allocs++;
         k_stat_alloc_bytes += (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)cap);
+        k_stat_bytes_malloc++;
     }
     b->cap = -cap;
     b->used = 0;
@@ -4885,10 +4886,8 @@ static void k_permreg_flush_held(int d) {
         if (!*slot) continue;
         KBuf* b = k_buf_of(*slot);
         if (b->cap >= 0) continue;
-        if (__builtin_expect(k_stats_on > 0, 0)) {
-            k_stat_bytes_freed++;
-            k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-b->cap));
-        }
+        if (__builtin_expect(k_stats_on > 0, 0)) k_stat_bytes_freed++;
+        k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-b->cap));
         free(b);
         *slot = NULL;
     }
@@ -5895,6 +5894,7 @@ static KValue k_b_push_into_proven(KValue lv, KValue item, int mutate, int prove
            collection, and one of ours is released outright. */
         if (k_buf_of(l->items)->cap < 0) {
             KBuf* ob = k_buf_of(l->items);
+            if (__builtin_expect(k_stats_on > 0, 0)) k_stat_bytes_freed++;
             k_perm_live -= (long long)(sizeof(KBuf) + sizeof(KValue) * (size_t)(-ob->cap));
             free(ob);
         } else
