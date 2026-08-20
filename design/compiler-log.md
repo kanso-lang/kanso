@@ -4344,3 +4344,35 @@ host-divergent pair.
 
 The direction gate is right to ask about a rising counter and cannot tell a
 correction from a regression, which is what this entry is for.
+
+## 2026-08-20 — the flagship's own claim under test: kq versus jq
+
+The fuzz campaign's closing act opened a product-level lane: kq's
+README claims byte-identity with jq -S, and a claim that strong is a
+differential harness waiting to be written. Three thousand adversarial
+JSON documents (deep nesting, unicode, subnormals, huge exponents,
+ensure_ascii escapes) ran through both binaries. Yield: two findings.
+
+The big one is fixed in this commit and it was std/json's, not kq's:
+the decoder handed each \u escape to from_code alone, so a VALID
+surrogate pair — the encoding every ensure_ascii writer emits for
+every character past the basic plane — was refused as "not a unicode
+scalar value", a bare string err leaked from the character machinery
+with no position. 1,579 of 3,000 documents died on it. str_unicode
+now joins pairs; either half alone is a typed json/parse_failure with
+a position and honest words. Pinned three ways: a json_test round
+trip, a micro golden both engines answer byte-identically, and a
+runtime golden for the lone half. The emitted vein moved and is
+regenerated with its sentence: surrogate support costs six defines,
+103 calls, 681 lines of decoder IR — correctness buying code size,
+stated not hidden. Allocation counters flat; welfare holds at its
+floor, 84.56.
+
+The second finding stays open in kq's lane: float exponent formatting
+diverges from jq (kanso renders 1e-07 where jq -S prints 1E-7 —
+case and zero-padding both), so the byte-identity claim is false in
+exponent form. Whether kq grows a jq-shaped formatter or the README
+narrows its claim is a product decision for the kq lane; 492 of
+3,000 documents witness it, corpus kept. kq's vendored json copies
+also need the surrogate fix at the next sibling sync — until then kq
+still refuses escaped emoji.

@@ -1,0 +1,6 @@
+# an escaped surrogate pair is one scalar: the decoder joins the halves
+# rather than asking from_code about each. ensure_ascii writers emit these
+# for every character past the basic plane, so the shape is everywhere.
+import "std/json"
+
+pub play = print "{json/decode "\"\\ud83c\\udf8c a\\ud800\\udc00b\""}"
