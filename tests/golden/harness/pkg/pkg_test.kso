@@ -3,3 +3,5 @@ import "std/testing"
 test_parse_rejects_junk = testing/failed? (parse "junk")
 
 test_a_plain_value_has_not_failed = not testing/failed? "fine"
+
+test_a_package_sees_its_own_failure_through_the_hako = own_failure_is_visible?

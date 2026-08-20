@@ -1302,7 +1302,6 @@ impl<'a> WasmBackend<'a> {
         // builtin_ names bypass group dispatch (the bare-clone recursion trap)
         if let Some(stripped) = name.strip_prefix("builtin_") {
             if crate::check::BUILTINS.contains(&stripped)
-                || crate::check::HARNESS.contains(&stripped)
             {
                 for arg in args {
                     self.emit_expr(ctx, arg, false)?;

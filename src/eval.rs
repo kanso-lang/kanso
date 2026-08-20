@@ -1498,7 +1498,6 @@ impl<'a> Interp<'a> {
                 || self.types.contains_key(name)
                 || name == "err"
                 || crate::check::BUILTINS.contains(&name)
-                || crate::check::HARNESS.contains(&name)
                 || name
                     .strip_prefix("builtin_")
                     .is_some_and(|n| crate::check::BUILTINS.contains(&n)) =>
@@ -1908,15 +1907,6 @@ impl<'a> Interp<'a> {
                 cause: Some(cause),
                 merged: false,
             })));
-        }
-        // `failed?` exists to look at a failure, so it is asked before a
-        // failing argument answers for the whole call.
-        if name == "failed?" {
-            let [value] = arity(args, name, span)?;
-            return Ok(match is_failure(&value) {
-                true => Value::True,
-                false => Value::False,
-            });
         }
         if args.iter().any(is_failure) {
             return Ok(merged_failures(&args));
