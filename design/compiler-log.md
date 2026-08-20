@@ -4034,3 +4034,52 @@ Two refinement stitches logged in the doc: lambdas cannot carry arms
 when_failed's false-on-success conflates two failure modes in a
 report. Build hand-off: the hako, the builtin retirement, and the
 json_test migration shapes are all in the doc.
+
+## 2026-08-19 — an adversarial sweep of the week's semantics, and the promise paragraph
+
+Under Clay's standing goal ("keep trying to do relevant helpful
+things... look for bugs"), a twenty-probe adversarial sweep ran over
+the freshly merged surfaces, interp against native, in a worktree at
+a283ce15. The engines agreed byte-for-byte on every probe — the
+differential law held throughout — and the sweep's findings were
+uniformity gaps and confirmations rather than divergences.
+
+Filed with the build lane (its #256/#257, both reproduced there):
+the equality refusal is carrier-split (list knots refuse per #953,
+record knots answer true through the bisimulation seen-set — the
+collision is Clay's to rule, both branches reverse a gavel of his);
+and the guardedness check does not treat a bare name as guarded by a
+`>>` right side (`loop = print "tick" >> loop` refused while the
+constructor-wrapped golden ties), contradicting the description-knot
+ruling's own sentence.
+
+Noted for whoever is next in the encoder: json/encode of a cyclic
+knot exhausts the stack on both engines, identically — lawful but
+unkind; it wants the cycle-aware refusal render just gained.
+
+Confirmed clean under fire: mutual knot fields, knot rendering
+(`[1 <cycle> 2]`), the description-knot golden, lazy-wall absorption
+with the endpoint trace, the ?-suffix checker teeth, the torn-import
+tie diagnostic, cross-hako group merging by specificity, three-deep
+diamond dispatch, subtype-plus-as-pattern composition (the as-binding
+keeps its subtype identity), float rendering, unicode lengths, and
+the int64 divergence (licensed: native refuses with the diagnostic
+that names the gap).
+
+One doctrine clarification the sweep forced, recorded here so the
+sentence stops being ambiguous: the adjacency law's "all members
+always run" is a RUN-PHASE fact. Build-phase failures (an err
+arriving while a line's description is being constructed) accumulate
+— two failures reach the endpoint as a list — and gate the whole
+group's execution; run-phase failures let siblings finish, and
+same-resource ordering holds. Measured on p24/p25/p26; a
+stderr-vs-stdout buffering difference in the merged stream was a
+harness artifact, not a divergence, since the streams are compared
+separately everywhere that matters.
+
+And the book paid gavel 6's debt: ch10 now states the contract (a
+call in tail position consumes no stack, in every engine, lean on it)
+and the appendix draws the line (the accumulator rewrite is an
+optimization that may move; the promise is tail position; the
+interpreter's ten-thousand-frame guard and the OS stack are the
+bounds on what is not promised).

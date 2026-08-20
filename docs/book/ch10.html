@@ -199,6 +199,8 @@ kanso run bench/jsonbench  0.26s user 0.00s system 99% cpu 0.267 total</code></p
 
 <p>that distinction is the whole point. a plain tail-call <em>hint</em> is advisory: the backend may honor it, and on a bad day for register allocation it may not, and your ten-million-deep recursion overflows the stack in production while passing every test on your laptop. <code>musttail</code> deletes the bad day from the space of outcomes. a loop that isn't really a loop is not a shape kanso can ship by accident.</p>
 
+<p>and now it can be said as a contract rather than a description: a call in tail position consumes no stack, in every engine, and a program may lean on that the way a scheme program does. the accumulator rewrite the appendix shows for simple counting shapes is a different thing — an optimization the compiler is free to widen or narrow between releases. the promise is tail position, and nothing wider.</p>
+
 <h2>the ratchet</h2>
 
 <p>every number so far has a shelf life. the profile was one afternoon on one machine; the gauntlet drifts with the temperature of the room. a benchmark you run once and quote forever isn't evidence of much. the part of this chapter that outlives any single run is the part that turned these numbers into <em>tests</em>—things ci checks on every commit, that fail a build the exact way a wrong answer fails a build. that's the ratchet: it lets a win go forward and won't let it slide back.</p>

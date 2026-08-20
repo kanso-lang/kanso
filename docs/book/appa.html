@@ -721,6 +721,8 @@ size <span class="o">=</span> <span class="n">9</span>
 
 <p>the same kind reports the one resource a recursive program can exhaust. recursion is kanso's loop, and a tail call costs no stack at all—but a call that still has work to do after the recursion returns keeps its frame, and a million kept frames is more than any stack holds. the simplest counting shapes never get there: when the leftover work is adding or multiplying an integer literal, the compiler rewrites the group to carry an accumulator and the recursion runs as a loop on every engine. an operand that varies per call, like the <code>n</code> below, keeps its frames, and the report is the same words on every engine. the fix is the rewrite the compiler does for the simple shapes: carry the running total down as an argument, so the call becomes a tail call:</p>
 
+<p>the line between the two is worth drawing once, plainly. tail position is a promise: every engine runs it in constant stack, forever. the accumulator rewrite is an optimization: it covers the literal shapes today and may cover more or fewer tomorrow, so a program that needs flat memory writes the tail call itself rather than hoping the rewrite reaches its shape. what the engines cannot promise they bound differently — the interpreter refuses unlicensed recursion at ten thousand frames, and native's ceiling is whatever stack the operating system handed the process.</p>
+
 <div class="code-panel">
   <div class="code-panel-title">deep_recursion.kso</div>
   <pre><code><span class="k">fn</span> <span class="f">weigh</span> <span class="n">0</span>
