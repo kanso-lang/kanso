@@ -32,7 +32,7 @@ extra_css: /book/book.css
 
 <div class="code-panel">
   <div class="code-panel-title">teahouse/main.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"teahouse"</span>
+  <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
 
 dango <span class="o">=</span> <span class="f">price</span> <span class="s">"dango"</span>
 pocky <span class="o">=</span> <span class="f">price</span> <span class="s">"pocky"</span>
@@ -165,9 +165,9 @@ test_double <span class="o">=</span> <span class="f">double</span> <span class="
 
 <div class="code-panel">
   <div class="code-panel-title">shop/main.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"teahouse"</span>
+  <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
 
-<span class="f">print</span> <span class="s">"dango costs <span class="i">{teahouse/price "dango"}</span>"</span></code></pre>
+<span class="f">print</span> <span class="s">"dango costs <span class="i">{teahouse/price </span>"</span>dango<span class="s">"}"</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run main.kso</div>
     <pre><code>dango costs 370</code></pre>
@@ -178,7 +178,7 @@ test_double <span class="o">=</span> <span class="f">double</span> <span class="
 
 <div class="code-panel">
   <div class="code-panel-title">shady/peek_check.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"teahouse"</span>
+  <pre><code><span class="k">import</span> <span class="s">"./teahouse"</span>
 
 <span class="f">print</span> <span class="s">"the wholesale number is <span class="i">{teahouse/base_price}</span>"</span></code></pre>
   <div class="code-output">

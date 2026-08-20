@@ -28,7 +28,7 @@ bench_text = """
 """
 
 main_text = """
-  import "jsonbench"
+  import "./jsonbench"
   import "std/io"
 
   io/read_file "bench/large.json" . go

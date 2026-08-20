@@ -1905,7 +1905,7 @@ mod tests {
         // imported module could ever beat. One spelling, one group, and the
         // chain license reaches it.
         let lib = "import \"std/text\"\n\npub fn stamp acc 0\n  acc\n\npub fn stamp acc n\n  stamp (text/append acc \"x{n}\") (n - 1)\n\npub fn start _\n  text/bytes \"\"\n\npub fn finish acc\n  length (text/utf8 acc)\n";
-        let entry = "import \"work\"\n\nprint \"{work/finish (work/stamp (work/start 0) 9)}\"\n";
+        let entry = "import \"./work\"\n\nprint \"{work/finish (work/stamp (work/start 0) 9)}\"\n";
         let program = module_fixture("canon", lib, entry);
         let inference = infer::infer(&program);
         let muts = crate::linear::in_place_pushes(&program);

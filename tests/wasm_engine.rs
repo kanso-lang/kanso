@@ -166,7 +166,7 @@ impl Toolchain {
         });
         let plays = !library && declares && states;
         let (compiled_name, compiled) = match library {
-            true => (format!("run_{stem}.kso"), format!("import \"{stem}\"\n\n{stem}/play\n")),
+            true => (format!("run_{stem}.kso"), format!("import \"./{stem}\"\n\n{stem}/play\n")),
             false => (name.to_string(), source.to_string()),
         };
         if library {
@@ -343,7 +343,7 @@ fn native_entry(path: &Path) -> (PathBuf, String, &'static str) {
     // first one forever.
     std::fs::copy(path, stage.join(&name)).expect("the program copies");
     let entry = format!("run_{stem}.kso");
-    std::fs::write(stage.join(&entry), format!("import \"{stem}\"\n\n{stem}/play\n"))
+    std::fs::write(stage.join(&entry), format!("import \"./{stem}\"\n\n{stem}/play\n"))
         .expect("the entry file writes");
     (stage, entry, "run")
 }

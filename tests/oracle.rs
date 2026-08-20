@@ -290,7 +290,7 @@ fn staged_entry(program: &Path) -> PathBuf {
     let _ = std::fs::remove_dir_all(&stage);
     stage_tree(source, &stage);
     let entry = stage.join(format!("run_{name}.kso"));
-    std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+    std::fs::write(&entry, format!("import \"./{name}\"\n\n{name}/play\n"))
         .expect("the entry file writes");
     entry
 }

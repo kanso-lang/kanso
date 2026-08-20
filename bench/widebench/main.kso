@@ -1,4 +1,4 @@
+import "./widebench"
 import "std/io"
-import "widebench"
 
 io/read_file "bench/wide.json" . (s -> stream_list (decode s))

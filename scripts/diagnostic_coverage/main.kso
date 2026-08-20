@@ -1,3 +1,3 @@
-import "diagnostic_coverage"
+import "./diagnostic_coverage"
 
 diagnostic_coverage/play

@@ -88,7 +88,7 @@ fn a_singly_owned_builder_is_still_written_through() {
     .expect("library writes");
     std::fs::write(
         dir.join("main.kso"),
-        "import \"grower\"\nimport \"std/text\"\n\nout = grower/grow (grower/grow (text/bytes \"\") \"A\") \"B\"\nprint \"{text/utf8 out}\"\n",
+        "import \"./grower\"\nimport \"std/text\"\n\nout = grower/grow (grower/grow (text/bytes \"\") \"A\") \"B\"\nprint \"{text/utf8 out}\"\n",
     )
     .expect("entry writes");
     // built from its own output directory: a program's binary takes the

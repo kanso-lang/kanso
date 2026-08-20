@@ -55,8 +55,8 @@ fn every_import_shape_names_its_own_rule() {
     let app = std::env::temp_dir().join("kanso-hako-shapes");
 
     for (import, phrase) in [
-        ("./nope", "a directory beside the importing module"),
-        ("sibling", "a bare name is a sibling module"),
+        ("./nope", "no such directory or `.kso` file"),
+        ("sibling", "a bare path names a hako"),
         ("corp.dev/team/thing", "names a hako by domain"),
         ("owner/missing", "names a hako, and it is not in the cache"),
     ] {

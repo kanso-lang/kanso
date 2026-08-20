@@ -138,7 +138,7 @@ fn the_ir_kanso_writes_passes_that_verifier() {
             };
             let entry = dir.join(format!("{built_stem}.kso"));
             if exports_play {
-                std::fs::write(&entry, format!("import \"{stem}\"\n\n{stem}/play\n"))
+                std::fs::write(&entry, format!("import \"./{stem}\"\n\n{stem}/play\n"))
                     .expect("the entry file writes");
             }
 
@@ -208,7 +208,7 @@ fn the_carried_samples_still_carry_in_registers() {
             assert!(sample.exists(), "{stem} is listed here but not in the corpus");
             std::fs::copy(&sample, dir.join(format!("{stem}.kso"))).expect("the sample copies");
             let entry = dir.join(format!("built_{stem}.kso"));
-            std::fs::write(&entry, format!("import \"{stem}\"\n\n{stem}/play\n"))
+            std::fs::write(&entry, format!("import \"./{stem}\"\n\n{stem}/play\n"))
                 .expect("the entry file writes");
 
             let built = Command::new(env!("CARGO_BIN_EXE_kanso"))

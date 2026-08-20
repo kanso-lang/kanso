@@ -29,7 +29,7 @@ fn staged_entry(manifest: &Path, work: &Path, name: &str) -> (PathBuf, String) {
     }
     let binary = format!("built_{name}");
     let entry = work.join(format!("{binary}.kso"));
-    std::fs::write(&entry, format!("import \"{name}\"\n\n{name}/play\n"))
+    std::fs::write(&entry, format!("import \"./{name}\"\n\n{name}/play\n"))
         .expect("the entry file writes");
     (entry, binary)
 }

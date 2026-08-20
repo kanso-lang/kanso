@@ -1,3 +1,3 @@
-import "quota"
+import "./quota"
 
 quota/play

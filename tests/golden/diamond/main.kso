@@ -1,5 +1,5 @@
-import "mid"
-import "shape"
+import "./mid"
+import "./shape"
 
 b = shape/blank
 f = shape/fill 3

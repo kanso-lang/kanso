@@ -405,7 +405,7 @@ fn staged path
   stem = stem_of path
   stage = "/tmp/kanso-browser-native/{stem}"
   door = "{stage}/run_{stem}.kso"
-  body = "import \"{stem}\"\n\n{stem}/play\n"
+  body = "import \"./{stem}\"\n\n{stem}/play\n"
   setup = "rm -rf {stage} && mkdir -p {stage} && cp -r {here}/. {stage}/"
   wrote = "cat > {door} <<'KSOEOF'\n{body}KSOEOF"
   named = "run_{stem}.kso"

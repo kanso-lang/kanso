@@ -1,3 +1,3 @@
-import "site_smoke"
+import "./site_smoke"
 
 site_smoke/play

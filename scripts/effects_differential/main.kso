@@ -1,3 +1,3 @@
-import "effects_differential"
+import "./effects_differential"
 
 effects_differential/play

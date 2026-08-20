@@ -646,9 +646,10 @@ fn synthesize_getters(program: &mut ast::Program) {
 
 /// Resolve one import path to a directory, per the gaveled table. Each shape
 /// answers in exactly one way, and a shape never falls through to another —
-/// that is what makes an import's universe readable in its spelling. A bare
-/// multi-segment path is a hako name and is never tried as a local directory,
-/// so a subtree that happens to be called `owner/repo` cannot shadow one.
+/// that is what makes an import's universe readable in its spelling. A local
+/// import wears `./` or `../`; ANY bare path is a hako name and is never tried
+/// as a local directory, whatever its shape, so neither a sibling nor a
+/// subtree called `owner/repo` can shadow one.
 fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathBuf, String> {
     if let Some(rest) = path.strip_prefix("std/") {
         let toolchain =
@@ -670,36 +671,45 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         return Err(format!("error: `std/{rest}` is not in the shipped library\n"));
     }
     if path.starts_with("./") || path.starts_with("../") {
-        let relative = base.join(path);
-        if relative.is_dir() {
-            return Ok(relative);
-        }
-        return Err(format!(
-            "error: cannot resolve import \"{path}\" — a dot-prefixed path names \
-             a directory beside the importing module, and there is none there\n"
-        ));
-    }
-    if !path.contains('/') {
-        let sibling = base.join(path);
-        let file = base.join(format!("{path}.kso"));
+        // `./` is import syntax rather than part of the name — carrying it into
+        // the resolved path would put it in every diagnostic the module raises.
+        let bare = path.strip_prefix("./").unwrap_or(path);
+        let relative = base.join(bare);
+        let file = base.join(format!("{bare}.kso"));
         // one name, two spellings on disk, and both at once is a question the
         // spelling cannot answer
-        if sibling.is_dir() && file.is_file() {
+        if relative.is_dir() && file.is_file() {
             return Err(format!(
-                "error: import \"{path}\" names both `{path}/` and `{path}.kso` \
+                "error: import \"{path}\" names both a directory and a `.kso` file \
                  beside this module — rename one\n"
             ));
         }
-        if sibling.is_dir() {
-            return Ok(sibling);
+        if relative.is_dir() {
+            return Ok(relative);
         }
         if file.is_file() {
             return Ok(file);
         }
         return Err(format!(
-            "error: cannot resolve import \"{path}\" — a bare name is a sibling \
-             module, and this module has no `{path}` directory or `{path}.kso` \
-             file\n"
+            "error: cannot resolve import \"{path}\" — a dot-prefixed path names a \
+             module beside the importing one, and there is no such directory or \
+             `.kso` file there\n"
+        ));
+    }
+    // A bare path names a hako, whatever its shape. It is NOT read as a
+    // sibling: the canon is that a local import wears `./` or `../`, so a name
+    // beside this module and a name from the cache can never be confused, and
+    // a reader knows which they are looking at without leaving the line.
+    if !path.contains('/') && base.join(format!("{path}.kso")).is_file() {
+        return Err(format!(
+            "error: cannot resolve import \"{path}\" — a bare path names a hako, \
+             and `{path}.kso` sits beside this module: write \"./{path}\"\n"
+        ));
+    }
+    if !path.contains('/') && base.join(path).is_dir() {
+        return Err(format!(
+            "error: cannot resolve import \"{path}\" — a bare path names a hako, \
+             and `{path}/` sits beside this module: write \"./{path}\"\n"
         ));
     }
     let first = path.split('/').next().unwrap_or_default();
@@ -728,8 +738,8 @@ fn resolve_import(base: &std::path::Path, path: &str) -> Result<std::path::PathB
         return Ok(plain);
     }
     Err(format!(
-        "error: cannot resolve import \"{path}\" — a bare multi-segment path names \
-         a hako, and it is not in the cache (run `kanso install`)\n"
+        "error: cannot resolve import \"{path}\" — a bare path names a hako, and \
+         it is not in the cache (run `kanso install`)\n"
     ))
 }
 
@@ -2246,18 +2256,21 @@ fn load_dependencies(
                     ("value.kso", include_str!("../lib/json/value.kso")),
                 ],
             )),
-            "hako" if HAKO_EMBEDDED.with(|c| c.get()) => Some(("hako", HAKO_FILES)),
+            "./hako" if HAKO_EMBEDDED.with(|c| c.get()) => Some(("hako", HAKO_FILES)),
             _ => None,
         };
         // A handed-in module: the browser has no filesystem, so a program
         // that is a library plus the entry that runs it arrives as sources
-        // rather than as files.
-        let handed = HANDED_SOURCES.with(|c| c.borrow().get(path).cloned());
+        // rather than as files. The canon's `./` is how the entry SPELLS a
+        // local import; what it hands over is keyed by the module's name, so
+        // the prefix comes off before the lookup.
+        let local = path.strip_prefix("./").unwrap_or(path);
+        let handed = HANDED_SOURCES.with(|c| c.borrow().get(local).cloned());
         if let Some(files) = handed {
             let borrowed: Vec<(&str, &str)> =
                 files.iter().map(|(n, s)| (n.as_str(), s.as_str())).collect();
             let mut dep =
-                compile_module_inner(std::path::Path::new(path), false, visited, Some(&borrowed))?;
+                compile_module_inner(std::path::Path::new(local), false, visited, Some(&borrowed))?;
             qualify(&mut dep, qual, &mut exports, &mut claims, &mut surfaced, &mut shadowed);
             dep_program.types.extend(dep.types);
             dep_program.fns.extend(dep.fns);
@@ -2853,7 +2866,7 @@ pub fn compile_hako() -> Result<ast::Program, String> {
 
 thread_local! {
     /// An installed `kanso` has no hako/ checkout beside it, so while the
-    /// hako entry compiles, `import "hako"` resolves to the embedded module
+    /// hako entry compiles, `import "./hako"` resolves to the embedded module
     /// files instead of the filesystem.
     static HAKO_EMBEDDED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     /// Whether the current root compile is an entry file, whose imports may
@@ -3076,7 +3089,7 @@ fn compile_module_loaded(
     let mut sources: Vec<(String, String)> = match embedded {
         Some(files) => files.iter().map(|(n, s)| (n.to_string(), s.to_string())).collect(),
         // A module is a directory of files sharing one namespace, and one file
-        // is the smallest of those. `import "core"` beside `core.kso` reads
+        // is the smallest of those. `import "./core"` beside `core.kso` reads
         // it the way it reads `core/`, so a runner can sit next to what it
         // runs without either of them becoming a directory first.
         None if dir.is_file() => {
