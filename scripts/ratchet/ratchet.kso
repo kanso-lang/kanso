@@ -101,6 +101,22 @@ escape_counters = row
   (breaking "escaped_storage_kept")
   benchmarks
 
+thunk_walk = row
+  "a thunk's captures unsized by the walk that evacuates survivors"
+  true
+  "cargo test --release --test golden micro_corpus_agrees_across_engines"
+  "specs (unit, golden, differential)"
+  (breaking "thunk_capture_shared")
+  release
+
+pend_counters = row
+  "the pending-cell shape erased from the corpus by a strictness change"
+  true
+  (gating "pend_counters")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "pending_cells_proven_strict")
+  benchmarks
+
 scan_counters = row
   "a lazy verdict leaking from one arm of a group to another"
   true
@@ -175,7 +191,9 @@ itself = row
 
 rows_a = [formatting linting goldens mem_shapes release_profile]
 
-rows_b1 = [decode_counters escape_counters scan_counters]
+rows_b1a = [decode_counters escape_counters pend_counters]
+
+rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
 rows_b = text/concat rows_b1 [emitted_code machine_code]
 

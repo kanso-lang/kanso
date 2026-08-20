@@ -66,6 +66,10 @@ basket text=88930
 widebench text=97986
 deepbench text=62754
 escapebench text=49650
+# 2026-08-20 (pendbench): the corpus gains its lazy row at 73,906 bytes —
+# a new binary, not a change to any existing one; the seven old rows are
+# untouched.
+pendbench text=73906
 # 2026-08-13 (last): +16 bytes on every binary. net/port adds k_b_net_port to
 # the runtime object, and every program links the runtime whether or not it
 # opens a socket.
