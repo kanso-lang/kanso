@@ -3502,12 +3502,12 @@ static long long k_eq_rec(KValue a, KValue b) {
     if (b.tag == K_SUB) b = k_sub_base(b);
     /* A cell is forced the way any demand forces it, so an ordinary lazy
        operand compares as its value. A cell's identity survives forcing, so
-       arriving twice at the same pair is the cycle closing through one — a
-       definition rather than a value, and the question is refused. */
+       arriving twice at the same pair is the cycle closing through one, and
+       the pair is assumed equal — the assumption that makes bisimulation
+       terminate, the same one the record case below makes. A cell demanded
+       mid-construction still dies in the force: that one is not a value yet. */
     if (a.tag == K_THUNK && b.tag == K_THUNK) {
-        if (k_eq_assume((void*)a.payload, (void*)b.payload))
-            k_die("equality is not defined on a value that names itself — write "
-                  "an arm for the case you mean");
+        if (k_eq_assume((void*)a.payload, (void*)b.payload)) return 1;
         return k_eq_rec(k_force(a), k_force(b));
     }
     if (a.tag == K_THUNK) return k_eq_rec(k_force(a), b);
@@ -3539,11 +3539,10 @@ static long long k_eq_rec(KValue a, KValue b) {
             KRec* rb = k_as_rec(b);
             if (ra == rb) return 1;
             if (ra->type_id != rb->type_id) return 0;
-            /* A cycle that a build block closed by writing a record in place
-               is one object the program built, and it keeps the structural
-               comparison bisimulation gives it. Assuming this pair equal is
-               what makes that walk terminate. A cycle through a cell is a
-               different thing and is refused above. */
+            /* A cycle is one object however the program closed it, and it
+               keeps the structural comparison bisimulation gives it.
+               Assuming this pair equal is what makes the walk terminate;
+               cycles through cells make the same assumption above. */
             if (k_eq_assume(ra, rb)) return 1;
             for (long long i = 0; i < ra->nfields; i++) {
                 if (!k_eq_rec(ra->fields[i], rb->fields[i])) return 0;

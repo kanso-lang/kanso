@@ -1,1 +1,0 @@
-error[runtime]: equality is not defined on a value that names itself — write an arm for the case you mean

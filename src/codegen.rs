@@ -3087,6 +3087,7 @@ impl<'a> Backend<'a> {
     fn emit_tail(&mut self, f: &mut FnEmit, expr: &Expr) -> Result<(), String> {
         if let Expr::Guard { cond, early, rest, .. } = expr {
             let c = self.emit_expr(f, cond)?;
+            let c = self.maybe_force(f, c);
             let ok = inline_not_failure(f, &c);
             let check = f.label();
             let bail = f.label();
@@ -3166,7 +3167,12 @@ impl<'a> Backend<'a> {
             }
             if let Expr::Ident(name, _) = &**head {
                 if name == "if" && f.lookup(name).is_none() {
+                    // A condition the demand analysis deferred arrives as a
+                    // thunk here just as it does off the tail path; force
+                    // before testing, and `maybe_force` still emits nothing
+                    // where the set proves there is no thunk.
                     let cond = self.emit_expr(f, &args[0])?;
+                    let cond = self.maybe_force(f, cond);
                     let ok = inline_not_failure(f, &cond);
                     let check = f.label();
                     let bail = f.label();

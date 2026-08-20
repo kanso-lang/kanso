@@ -339,7 +339,14 @@ fn expensive(expr: &Expr, fns: &HashSet<&str>) -> bool {
             }
             args.iter().any(|a| expensive(a, fns))
         }
-        Expr::BinOp { lhs, rhs, .. } | Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
+        // A comparison's cost is its operands' shape, which no syntax shows:
+        // two knots bisimulate, two lazy sequences may never end. Treating
+        // it as expensive keeps an undemanded verdict a cell — the cascade
+        // collapses at IO, not at the binding.
+        Expr::BinOp { op, lhs, rhs, .. } => {
+            *op == "==" || *op == "!=" || expensive(lhs, fns) || expensive(rhs, fns)
+        }
+        Expr::Seq(lhs, rhs, _) | Expr::Join { lhs, rhs, .. } => {
             expensive(lhs, fns) || expensive(rhs, fns)
         }
         Expr::List(items, _) => items.iter().any(|a| expensive(a, fns)),
