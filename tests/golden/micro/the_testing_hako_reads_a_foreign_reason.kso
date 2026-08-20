@@ -1,0 +1,18 @@
+# The testing hako's two functions. `when_failed` is the piece a bare boolean
+# cannot say: it rescues the err where the raiser is foreign to it, and hands
+# the caller the bare reason record.
+#
+# The continuation below reads `r.position` — a field of json's OWN reason —
+# from outside json, and breaks no rule doing it. The ban is on arms matching
+# your own err, and a reason a licensed party has already separated from its
+# failure is ordinary data.
+import "std/json"
+import "std/testing"
+
+bad = json/decode "[1, nope]"
+
+pub play =
+  print "{testing/failed? 42}"
+  >> print "{testing/failed? bad}"
+  >> print "{testing/when_failed bad (r -> r.position)}"
+  >> print "{testing/when_failed 42 (_ -> true)}"
