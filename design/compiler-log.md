@@ -4186,3 +4186,40 @@ validator; only recombination of VALID programs found the shape no
 human had written — a truncated `if` is not a typo anyone makes, it
 is two programs' halves meeting. The corpus is the mutation fuel, so
 every golden added makes the fuzzer smarter.
+## 2026-08-20 — gavel 1b enforced: only a type's owner constructs one
+
+Ruled by Clay ("yes 251 is mine"), so this is 1b implemented rather than a
+second decision. The doctrine had been recorded as stated-but-unenforced since
+provenance made it unnecessary for SOUNDNESS; what it buys now is honesty — a
+value wearing a type's name was built by its owner.
+
+The check sits in check.rs beside `check_call_arities`. The first attempt sat
+beside `foreign_destructures` in lib.rs and silently did nothing, which is the
+useful part: `program.types` is EMPTY there, because that pass runs per-file
+before dependencies merge. The destructure check works in that position only
+because it reads the qualified name the AUTHOR WROTE in a pattern rather than
+consulting type knowledge. A construction site has no such tell.
+
+**Every violation in the tree was one shape.** Four types, all protocol types a
+library expects its CALLER to build: `http/turn`, `http/done`, `shape/filled`,
+`list/cursor`. So the migration was not the mechanical one predicted — it
+changes a public API. http gains `reply` and `stop`.
+
+The naming went through a correction worth keeping. `keep`/`stop` was proposed
+and cleared, and reading the call sites killed it: `turn` WRAPS `done`, so
+`keep(response, stop(v))` reads self-contradictory. `reply`/`stop` respects the
+nesting. A naming that survives the type declarations can still fail at the
+call site, which is where it should have been tested first.
+
+**A hazard the migration nearly shipped.**
+tests/golden/micro/field_name_shared_with_an_import built a cursor directly
+only to get a foreign type with an `at` field; its subject is the getter-group
+collision. Routed through `list/cycle` it printed "1 1" — the same value the
+LOCAL type held — so the fixture could no longer tell the two reads apart, and
+it still passed. The local moved to `here 9` so it prints "9 1". A migration
+that quietly weakens a fixture does not announce itself.
+
+**An advisory the gavel subsumes.** The laundered fixture forges a foreign
+reason so its own err can be rescued under a borrowed name. That no longer
+compiles, so the advisory cannot fire. Its test pins the refusal instead of
+being deleted; the advisory stays live where the reason is genuinely foreign.

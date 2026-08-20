@@ -1312,6 +1312,7 @@ pub fn check_merged(program: &Program, require_entry: bool) -> Vec<Diagnostic> {
     check_none_in_collections(program, &mut diags);
     check_bare_ambiguity(program, &mut diags);
     check_call_arities(program, &mut diags);
+    foreign_constructions(program, &mut diags);
     check_binding_patterns(program, &mut diags);
     check_overlapping_arms(program, &mut diags);
     check_field_exists(program, &mut diags);
@@ -1373,6 +1374,57 @@ fn check_binding_patterns(program: &Program, diags: &mut Vec<Diagnostic>) {
                 format!("`{ty}` is not a type, so a binding cannot destructure with it{instead}"),
                 other_span(&fields[0]),
             ));
+        }
+    }
+}
+
+/// GAVEL 1b: the owner's pub functions are the only door, so a value wearing a
+/// type's name was built by its owner. Reading one is free — naming it,
+/// annotating with it, destructuring it by name — and so is building your own.
+/// What this refuses is reaching across an import to construct.
+///
+/// A qualified name can never be a local binding, so unlike the arity walk
+/// beside it this needs no shadowing set: the slash IS the foreignness.
+fn foreign_constructions(program: &Program, diags: &mut Vec<Diagnostic>) {
+    let foreign: HashSet<&str> = program
+        .types
+        .iter()
+        .filter(|ty| ty.name.contains('/') && (!ty.fields.is_empty() || ty.parent.is_some()))
+        .map(|ty| ty.name.as_str())
+        .collect();
+    if foreign.is_empty() {
+        return;
+    }
+    fn walk(e: &Expr, foreign: &HashSet<&str>, diags: &mut Vec<Diagnostic>) {
+        if let Expr::App { head, .. } = e {
+            if let Expr::Ident(name, span) = &**head {
+                if foreign.contains(name.as_str()) {
+                    let (owner, base) = name.rsplit_once('/').unwrap_or(("", name));
+                    diags.push(Diagnostic::new(
+                        "opacity",
+                        format!(
+                            "`{name}` is foreign — only `{owner}` builds a `{base}`; \
+                             ask it for one through a pub function"
+                        ),
+                        *span,
+                    ));
+                }
+            }
+        }
+        for child in crate::expr_children(e) {
+            walk(child, foreign, diags);
+        }
+    }
+    for decl in &program.fns {
+        if decl.synthetic || decl.name.contains('/') {
+            continue;
+        }
+        for stmt in &decl.body {
+            match stmt {
+                Stmt::Bind { expr, .. } | Stmt::Expr(expr) | Stmt::Set { value: expr, .. } => {
+                    walk(expr, &foreign, diags)
+                }
+            }
         }
     }
 }

@@ -63,10 +63,10 @@ fn handled req carried
   answered req.path req carried
 
 fn answered "/report" req _
-  http/turn (http/ok "thanks") (http/done req.body)
+  http/reply (http/ok "thanks") (http/stop req.body)
 
 fn answered _ _ carried
-  http/turn (http/ok "the page") carried
+  http/reply (http/ok "the page") carried
 
 fn serving_at l p
   io/write_file "port.txt" "{p}"
@@ -98,10 +98,10 @@ fn handled req carried
   answered req.path req carried
 
 fn answered "/report" req _
-  http/turn (http/ok "thanks") (http/done req.body)
+  http/reply (http/ok "thanks") (http/stop req.body)
 
 fn answered _ _ carried
-  http/turn (http/ok "the page") carried
+  http/reply (http/ok "the page") carried
 
 fn serving_at l p
   io/write_file "port.txt" "{p}"

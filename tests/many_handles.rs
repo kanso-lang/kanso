@@ -20,10 +20,10 @@ fn handled _ n
   stepped n (n > 40)
 
 fn stepped n true
-  http/turn (http/ok "bye") (http/done n)
+  http/reply (http/ok "bye") (http/stop n)
 
 fn stepped n false
-  http/turn (http/ok "ok") (n + 1)
+  http/reply (http/ok "ok") (n + 1)
 
 fn asked at
   more at (at > 41)

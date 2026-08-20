@@ -609,17 +609,17 @@ fn handled req set
   answered req.path req set
 
 fn answered "/report" req _
-  http/turn (http/ok "thanks") (http/done req.body)
+  http/reply (http/ok "thanks") (http/stop req.body)
 
 fn answered path _ set
   body = body_for path set
-  http/turn (found body path) set
+  http/reply (found body path) set
 
 fn found none _
   http/not_found
 
 fn found body path
-  http/response 200 "OK" [(kind_of path)] body
+  http/page [(kind_of path)] body
 
 fn flags url
   where = "--user-data-dir=/tmp/kanso-differential-profile"
