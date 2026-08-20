@@ -89,6 +89,28 @@ this slice: tests are values, the wire belongs to programs. When io
 testing is wanted it arrives as its own design against the boundary
 language, not as a widening of `test_`.
 
+## A collision the committee pass caught, and its resolution
+
+The July record seeds every PUB dispatch group's receivable-err set
+with its own hako ("anyone may hand a package its own failure back").
+Under gavel 24's clause 1 — no arm may match an own-origin err — that
+seeding would statically refuse EVERY pub bare-err arm, including
+`when_failed`'s, and with it every generic foreign rescuer Clay
+explicitly blessed. The seeding served the old return-channel rule;
+it cannot survive the new one.
+
+Resolution, derived from the ruling's own sentence ("your own
+failures only bubble"): clause 1 is DISPATCH SEMANTICS, not only a
+static check — **an arm cannot see an own-origin err**. At match
+time an err whose origin hako equals the arm's hako simply does not
+match; infectiousness then carries it onward, so it keeps bubbling,
+which is the doctrine executing itself. The static refusal remains
+for what the computed provenance set proves WITHOUT self-seeding
+(arms naming own reason types, provably-own flows); the pub seed
+retires. For `when_failed` this means: a testing-raised err reaching
+it skips both arms and propagates, so the harness reports the failure
+— exactly right. Veto window Clay's, as with every derivation.
+
 ## Refinement-phase stitches, logged while drafting
 
 - A lambda cannot carry arms, so type-dispatching a reason inside
