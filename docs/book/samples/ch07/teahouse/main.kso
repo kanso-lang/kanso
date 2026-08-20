@@ -1,4 +1,4 @@
-import "teahouse"
+import "./teahouse"
 
 dango = price "dango"
 pocky = price "pocky"

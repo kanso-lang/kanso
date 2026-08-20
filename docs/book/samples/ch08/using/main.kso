@@ -1,4 +1,4 @@
-import "using"
+import "./using"
 
 ok = decode "\{\"name\": \"kanso\", \"tags\": [\"fast\", \"simple\"]}"
 bad = decode "\{\"name\": nope}"

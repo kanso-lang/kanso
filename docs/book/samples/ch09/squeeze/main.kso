@@ -1,4 +1,4 @@
-import "squeeze"
+import "./squeeze"
 
 print "plurality: {label (plurality_winner electorate)}"
 >> print "irv:       {label (irv_winner electorate)}"

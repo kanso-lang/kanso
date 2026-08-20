@@ -1,3 +1,3 @@
-import "render_differential"
+import "./render_differential"
 
 render_differential/play

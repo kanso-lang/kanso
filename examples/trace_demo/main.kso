@@ -1,4 +1,4 @@
 import "std/io"
-import "version"
+import "./version"
 
 io/args . version/announce

@@ -1,4 +1,4 @@
-import "escapebench"
+import "./escapebench"
 import "std/io"
 
 total 3000 . (t -> io/write "{t}\n")
