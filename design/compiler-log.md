@@ -4415,8 +4415,8 @@ and the low-half range check into one condition forces `str_hex4` past
 the string's end on a lone trailing half, because `and` evaluates its
 arms in parallel — the staging across functions is load-bearing, and
 the lone-surrogate golden is what caught it. Welfare lands at 84.81,
-0.25 above the old floor, and the floor is set there. Compile peak on
-lib/json rose 819,217 to 872,591 bytes — the order change shifts when
+0.25 above the old floor, and the floor is set there. `compile_peak_bytes` on
+lib/json rose 819,217 to 872,591 — the order change shifts when
 the analyser's tables grow, and the term's 0.17-point cost is inside
 the rise the visits paid for. The machine-code vein prices the fix at
 1,296 bytes of .text on each decode binary — jsonbench 78,594 to
