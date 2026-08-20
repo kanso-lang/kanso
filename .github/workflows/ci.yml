@@ -4,6 +4,11 @@ on:
   pull_request:
   push:
     branches: [main]
+  # A pull request that produces no run at all reads exactly like one whose
+  # checks passed — kq and vse both hit it, and PR #959 sat at zero checks
+  # here. This is the lever the zero-checks rule reaches for: dispatch the
+  # run by hand and wait for real results.
+  workflow_dispatch:
 
 # One job per kind of check, so a red run names what broke on the PR page
 # instead of hiding it inside a single "test" job.
