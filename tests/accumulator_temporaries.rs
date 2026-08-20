@@ -21,11 +21,24 @@
 
 use std::process::Command;
 
+/// Where one measurement stages its program. Both tests below measure the same
+/// two hundred thousand elements with a temporary, so a directory named after
+/// the arguments is the same directory for both, and cargo runs them at once:
+/// one finishes, removes the tree, and the other's compiler loses the working
+/// directory it was handed. The process id and a per-call count are what make
+/// two stagings two places.
+fn staging_dir(name: &str, n: u64) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let pid = std::process::id();
+    std::env::temp_dir().join(format!("kanso-acc-temp-{name}-{n}-{pid}-{seq}"))
+}
+
 /// Peak arena bytes for a loop building `n` elements, with or without a
 /// per-iteration temporary that is used and then dropped.
 fn peak_bytes(n: u64, temporary: bool) -> u64 {
     let name = if temporary { "temp" } else { "bare" };
-    let dir = std::env::temp_dir().join(format!("kanso-acc-temp-{name}-{n}"));
+    let dir = staging_dir(name, n);
     std::fs::create_dir_all(&dir).expect("a directory to run in");
 
     // Both loops push exactly the same values, so the list they build is
@@ -91,4 +104,12 @@ fn the_accumulator_costs_what_it_holds() {
          {small} bytes at 20k against {large} at 200k, a factor of {:.1}",
         large as f64 / small as f64
     );
+}
+
+/// Two measurements of the same shape are two places on disk. Before the
+/// directory carried a process id and a count, these were one path, and the
+/// tests above raced for it.
+#[test]
+fn two_stagings_of_one_shape_do_not_share_a_directory() {
+    assert_ne!(staging_dir("temp", 200_000), staging_dir("temp", 200_000));
 }
