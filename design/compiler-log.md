@@ -4117,3 +4117,35 @@ agenda for the sitting.
 
 One quirk for whoever is next in the allocator: escapebench frees
 3,000 bytes more than it mallocs. Signed, small, and odd.
+
+## 2026-08-20 — the soak, the counter asymmetry, and ch04's absolutism
+
+Three results from the goal loop's afternoon, recorded so none of them
+lives only in a conversation.
+
+The utf-8 soak: the validator's differential harness re-run at ten
+times CI volume with five fresh xorshift seeds — 384,215,045 cases in
+all, zero mismatches. The harness doctrine asks for the count in the
+record; this is the count. The other differentials are deliberately
+bounded rather than sampled, so the soak lane starts and ends with
+utf-8.
+
+The escapebench bytes_net quirk from the accounting audit is
+diagnosed to the line and handed to the perf lane: k_buf_perm counts
+allocs and alloc_bytes but not bytes_malloc, while the permreg flush
+counts bytes_freed when freeing exactly those buffers — one
+uncounted-malloc/counted-free pair per registry slot, times
+escapebench's 3,000 rounds, equals the −3,000. The fix is one line
+and moves five pinned cost goldens, so it rides the counter law in
+the lane that owns the veins. It is also a prerequisite for the
+peak_of guard the accounting audit proposed, which would otherwise
+read a counter with a known skew. Worth knowing while reading:
+bytes_malloc and bytes_freed are EVENT counts despite the names.
+
+And ch04 teaches the pre-July absolutism — "no function gets to turn
+one back into a value... there is no rescue block to write and none
+to import", plus the personified "nobody catches me" — which the
+two-universes settlement and gavel 24 superseded: a FOREIGN err is
+precisely the handleable case. Filed into the projection migration's
+book sweep so chapter 4 and chapter 8 teach one rule. The chapter's
+mechanics all survive as probed.
