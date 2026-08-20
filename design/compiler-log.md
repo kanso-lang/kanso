@@ -4223,3 +4223,32 @@ that quietly weakens a fixture does not announce itself.
 reason so its own err can be rescued under a borrowed name. That no longer
 compiles, so the advisory cannot fire. Its test pins the refusal instead of
 being deleted; the advisory stays live where the reason is genuinely foreign.
+
+
+## 2026-08-20 (later) — the fuzzer's second find, and a list line falsified
+
+The 30,000-child crossover campaign with both output streams compared
+found one more crash: src/parser.rs:1191, "branches are non-empty" —
+a block-if constant whose else opens a block and holds nothing
+reaches the branch-shape check with zero lines, and building the
+diagnostic's SPAN panicked before the diagnostic could speak. Reduced
+to four lines. The fix gives the empty branch its own refusal ("a
+branch needs a body: the expression it answers with") before the span
+assumption. The shape is reachable only through kanso check on a
+library file — play and run both preempt it with earlier rules — so
+its red-green pin lives as a rust test beside the corpus, and the
+unpinned list carries the mechanism.
+
+Writing that fixture falsified a documented impossibility: the
+unpinned list held the inline-constant message as unreachable ("the
+lexer folds an indented line into its head unless that head opens
+one") — but a constant head that OPENS a block (`two = if`) keeps its
+branch lines, and the message fires, including under the corpus's own
+staged-run mode. It is pinned now and its list line deleted; the list
+shrank from five residents to four. Filed alongside, not ruled here:
+whether refusing a block-if constant in a library is the intended
+semantics or an accident wearing a confusing message — the lexer
+licenses the shape, the checker refuses it, and the words describe a
+different construct. Campaign totals to date: 50,800 mutants and
+children, two compiler crashes found, both fixed same-day, zero
+engine divergences among 1,229 executed survivors.
