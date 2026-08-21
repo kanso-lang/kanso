@@ -62,7 +62,8 @@ const USAGE: &str = "usage: kanso <verb> [arguments]
                                      statements in one file, stdlib imports only
   check <file|dir>                   report what run would refuse, and stop
   test <file|dir>                    evaluate every `test_*` constant
-  build <file|dir> [--release]       write a native binary beside the source
+  build <file|dir> [--release]       write a native binary here, named for
+                                     the program
   repl                               evaluate expressions as you type them
 
   install <dir> [--from owner/repo@branch]
@@ -150,8 +151,14 @@ fn driven() -> ExitCode {
         matches!(command.as_str(), "run" | "check" | "build") && entry_inside.is_file();
     // A build rerouted through a directory keeps the directory's name: the
     // program is `bench/jsonbench`, and `main` names nothing.
+    // `.` and `..` address a directory without naming it, so the name comes
+    // from where the path lands rather than from how it was spelled.
     let built_as = match rerouted_dir {
-        true => std::path::Path::new(&file).file_name().map(|n| n.to_string_lossy().into_owned()),
+        true => std::fs::canonicalize(&file)
+            .ok()
+            .as_deref()
+            .and_then(std::path::Path::file_name)
+            .map(|n| n.to_string_lossy().into_owned()),
         false => None,
     };
     let file = match rerouted_dir {
