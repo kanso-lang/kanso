@@ -55,6 +55,7 @@ bench/history_series.jsonl
 /widebench
 /escapebench
 /scanbench
+/pendbench
 /deepbench
 /counters_escape.txt
 /counters_scan.txt

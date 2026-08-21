@@ -4608,3 +4608,58 @@ list-naming-adjacent should be built until the word comes. The word
 came within the hour, in the parallel session: "list seems like the
 name. you've convinced me." Ruled, recorded, never re-asked — the
 book owes one sentence saying contiguous, constant-time index.
+## 2026-08-21 — what render's cycle guard costs, measured
+
+Task #258 carries Clay's condition on the in-walk cycle guard — "if it's
+more efficient" — and until now that was an assertion nobody had priced.
+Render is the one walk in the language that already knows when it has met
+a node before, so it is also the only place the price can be read off
+directly.
+
+The instrument holds total work constant and varies only shape: a value
+nested `d` deep, rendered `r` times, with `d * r` fixed at two million
+nodes and the rendered text the same total length in every row. Anything
+that moves is a function of depth alone. The guard was then isolated the
+way the log's own rule asks — one element, one state: the four scan loops
+in `k_render_path` were made to iterate zero times, leaving the push and
+the pop in place, so the number below is the scan and not the
+bookkeeping. The disabled build proves it is live by failing to detect a
+knot at all, running out of stack where it used to answer `<cycle>`.
+
+    depth   guarded   scan off   the guard   share of render
+       10     0.29       0.28        ~0.01        at noise
+       30     0.29       0.29         0.00        at noise
+      100     0.33       0.29         0.04            12%
+      250     0.39       0.29         0.10            26%
+      500     0.48       0.31         0.17            35%
+     1000     0.64       0.34         0.30            47%
+     2000     0.94       0.39         0.55            59%
+
+Seconds, best of three, this box, two million nodes per row. The guard
+column doubles as depth doubles — 0.10, 0.17, 0.30, 0.55 — which is the
+linear scan showing its cost per node as O(depth). The first two rows sit
+inside the layout noise the log already records at about three per cent
+and are reported as noise rather than as zero.
+
+Two conclusions follow, and they point different ways.
+
+For JSON the condition is met with room to spare. Documents nest tens
+deep, not thousands, and at that shape the guard is unmeasurable against
+a no-op build. Nothing about lib/json's use of a guarded walk needs to be
+argued on cost.
+
+As a general capability it is not met. A pre-pass that checks for cycles
+before walking costs one extra traversal — the scan-off column — where
+the in-walk linear scan costs the guard column, and the two cross at
+roughly depth 1,400. Past that the two-pass shape a general capability
+was meant to beat is simply faster. What that asks for is a different
+structure under the same shape: `k_copy_seen`'s generation-stamped
+pointer map already probes in constant time and is proven in the copy
+pass, and a
+path guard built on a set with real removal rather than a linear array
+is O(1) per node and beats the pre-pass at every depth. That is what the
+capability should be built on if it is built.
+
+Nothing shipped from this. It is a measurement against a condition, and
+it says the condition holds for the case that motivated the ruling and
+fails for the case the ruling widened to.
