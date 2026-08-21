@@ -4593,3 +4593,18 @@ consumer's tail `if`. Both sites force now — `maybe_force` still
 emits nothing where the set proves no thunk — and the shape is pinned
 as `a_deferred_condition_forces_at_the_tail`, red before the fix,
 byte-identical across the engines after.
+
+## 2026-08-21 — the herd is not a type
+
+Clay declined fixed-length list types, arguing it himself: positions
+that mean something are pets and pets get names — records; a herd's
+count is a fact about the herd, not the type; integer-position
+insisters want an integer-keyed map. Recorded in pending-gavels
+beside the no-positional-products clause it composes with, with the
+numerics counter-case noted so nobody reopens it sideways. Opened in
+the same dialog and NOT yet ruled: whether `[]T` keeps the name
+"list" — the fork and its stakes are in pending-gavels, and nothing
+list-naming-adjacent should be built until the word comes. The word
+came within the hour, in the parallel session: "list seems like the
+name. you've convinced me." Ruled, recorded, never re-asked — the
+book owes one sentence saying contiguous, constant-time index.
