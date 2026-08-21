@@ -26,9 +26,10 @@ bench/naive_json/Cargo.lock
 # enough starts looking like a file somebody meant to commit.
 bench/history_series.jsonl
 
-# Built programs land beside their source when `kanso build` runs from the
-# repo root. They are Mach-O or ELF, they are large, and thirteen of them once
-# rode into a commit on `git add -A`.
+# `kanso build` writes into the working directory, the way `go build` does, so
+# building a benchmark from the repo root leaves its binary beside .git. They
+# are Mach-O or ELF, they are large, and thirteen of them once rode into a
+# commit on `git add -A`.
 /aswritten
 /bytacc
 /cohort_growth
