@@ -90,6 +90,18 @@ d_compile_speed = dimension compile_speed_counters "compile speed" 0.5 0.28
 
 d_compile_memory = dimension compile_memory_counters "compile memory" 0.5 0.12
 
+# Retired instructions, which is what a run costs. Laziness is priced here and
+# nowhere else: a thunk is an implementation detail, so no thunk counter carries
+# a weight and pendbench earns its place by what its work costs, like every
+# other row.
+#
+# What this row cannot see, stated rather than left implicit: a thunk is a cell
+# allocated now and chased later, so much of its cost is locality, and an
+# instruction count is close to blind to that. The memory terms do not cover it
+# either — they price RETENTION, and a thunk allocated and freed inside a beat
+# moves neither while costing real traffic. Whether simulated cache misses close
+# that gap is a measurement nobody has taken.
+#
 # Retired instructions, which is what a run costs. Allocation counts sat here
 # until a decode regression of eight and a half per cent scored zero: the
 # allocator was called exactly as often and the work rose anyway, because a
@@ -99,7 +111,7 @@ decode_work = ["decode_instructions" "encode_instructions"]
 
 held_small = ["oneshot_instructions" "basket_instructions"]
 
-held_shapes = ["wide_instructions" "deep_instructions"]
+held_shapes = ["wide_instructions" "deep_instructions" "pending_instructions"]
 
 held_work = text/concat held_small held_shapes
 
@@ -233,7 +245,8 @@ fn worked work
   bi = [["basket_instructions" work["basket"]!]]
   wi = [["wide_instructions" work["widebench"]!]]
   pi = [["deep_instructions" work["deepbench"]!]]
-  rest = text/concat oi (text/concat bi (text/concat wi pi))
+  ni = [["pending_instructions" work["pendbench"]!]]
+  rest = text/concat oi (text/concat bi (text/concat wi (text/concat pi ni)))
   text/concat (text/concat di ei) rest
 
 fn gathered d db dp e eb ep o b bp c v l
