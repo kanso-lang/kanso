@@ -413,3 +413,29 @@ function with no interpreter handle and needs restructuring to force —
 whoever builds it starts there (eval.rs:3491, runtime.c:3185, the
 runtime.c:3363 comment's every-cycle-passes-through-a-record claim is
 the thing being corrected).
+
+## Fixed-length list types — GAVELED 2026-08-21: declined
+
+Clay supplied the argument himself: a position that means something is
+a pet, and pets get names — a record. Cattle's count is a fact about
+the herd, not about the type, and anyone insisting on integer
+positions has discovered they want a map with integer keys. Composes
+with the no-positional-products clause of the type-syntax gavel: a
+fixed-length list IS a positional product with a uniform field type.
+One counter-case recorded so it is not re-litigated sideways: numeric
+vec3/mat4 shapes argue for dedicated types in a future numerics
+story, never for general length-in-the-type, which would cost a
+type-level number grammar the language deliberately does not have.
+
+## The name of `[]T` — GAVELED 2026-08-21: "list" stays
+
+Clay's words: "list seems like the name. you've convinced me." The
+fork that was weighed: "list" carries the Python precedent (their
+contiguous growable O(1)-index sequence bears this exact name) and is
+the friendliest word in the room; against it, Lisp and Haskell
+trained systems readers to hear linked-list-with-O(n)-index. "array"
+is mechanism-honest but Ruby/JS-flavored; "slice" is Go's word for
+the `[]T` spelling kanso borrowed, but names the mechanism; "vector"
+collides with the numerics future and intimidates. The book owes one
+sentence — contiguous, constant-time index — and nothing else moves:
+no sweep of std, diagnostics, book, or siblings. Never re-ask.
