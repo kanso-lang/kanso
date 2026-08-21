@@ -3215,3 +3215,51 @@ reach, and so is the 6.2% where some other record happens to hold the confused
 pair. What it changes is the price of the 142: a walk of each body against the
 type table, rather than a second value threaded through every arm of
 `eval_expr`.
+
+## 2026-08-25 — json stops reading its own failure (written 2026-08-21, landed today)
+
+The work below was done on 2026-08-21 and sat in a draft pull request until
+today. It is filed at the tail rather than at its own date, because this log
+is append-only and the entries between were written first.
+
+Gavel 1b said only a type's owner constructs one; gavel 24 said your own
+failures only bubble. Between them, `json/failure_position` and
+`json/failure_reason` were arms inside lib/json matching an err lib/json
+had raised, which is the thing the second rule forbids. They are gone.
+
+The suite reaches the same facts from where the rule allows. `std/testing`
+is foreign to json, so `when_failed` may hold json's err, and it hands the
+bare reason record to a continuation:
+
+    test_error_position =
+      decoded = decode "[1, nope]"
+      testing/when_failed decoded (r -> r.position == 5)
+
+Watched red twice before it was believed, because one direction is not
+enough here. With the position wrong the example fails, which is the
+ordinary case. With the input CHANGED TO PARSE it also fails — `when_failed`
+answers false on a value, so a test that expected a failure and got an
+answer cannot pass quietly. That second failure is the one the old
+projection could not produce: `failure_position` answered 0 for a
+non-failure, and `0 == 5` is a perfectly good false that says nothing about
+why.
+
+`test_must_wraps_defect` needed the same door and a named local group, since
+a lambda carries no arms — `a_defect?` rather than the `defect_reason` the
+design note guessed at, because the naming rule wants the question mark on
+anything answering only true or false. The note now says what shipped.
+
+The example that demonstrated the old door demonstrates the new one, and it
+is a better example for having two branches instead of one: a consumer
+outside json writes an ordinary arm on `err r` and reads `r.position`,
+because json's failure is foreign there. Destructuring the reason in the
+pattern is refused — opacity, and rightly, since the record's shape does not
+cross an import — so the arm names the err and the field read does the rest.
+
+The book taught the rule this change contradicts. Chapter 04 said "no
+function gets to turn one back into a value. not a helper, not a library,
+not `main`", and its personified err said "nobody catches me". Both are
+about who raised the err rather than about nobody, and both now say so.
+Chapter 08's api panel showed the projection that no longer exists, its
+suite panel showed sixteen tests where there are twenty, and both used
+parentheses the grammar has since refused. Three surfaces, all moved.
