@@ -1635,3 +1635,27 @@ run of the gate found that boundary by falling over it.
 than the python heredoc its neighbours use — a line inserted after a matched
 line is one awk expression, and the six python mutations stay python for the
 bootstrapping reason recorded in STATUS.md rather than for the editing.
+
+## 2026-08-23 — the differential guards the license, not just the rewrite
+
+The gate from the entry above compares shapes the license accepts. Three more
+were added that it must keep refusing: a float operand over an integer base,
+`0.1`, `n * 0.1` and `n / 2`. Today neither copy is rewritten and they agree
+trivially, which is the point — the guard is against a future widening.
+
+Watched biting. With `int_arithmetic` widened by one line to accept a float
+literal, the gate goes red and names the line:
+
+    1.5000000000000002 1.5
+
+Five terms of `n * 0.1` summed one way and the other. That is the license's
+entire argument in one line of output, and it is now checked rather than
+asserted.
+
+The first attempt at these guards proved nothing, and the reason is worth
+keeping. Their base arms answered `0.0`, and `classify` requires an integer
+literal base before it looks at anything else — so the groups were refused for
+their base rather than their operand, and widening the operand rule left them
+refused. A guard that cannot fail is the failure this repo already has a rule
+about; the bases are integers now, and the widening was run again to watch the
+gate go red for the reason intended.

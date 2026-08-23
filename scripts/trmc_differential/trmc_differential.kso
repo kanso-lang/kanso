@@ -45,6 +45,13 @@ operands = ["2" "n" "n * 2" "n + 1" "n * n"]
 
 bases = ["0" "1"]
 
+# Shapes the license must keep REFUSING. Neither form is rewritten today, so
+# they agree trivially — which is the point. The day a widening reaches them,
+# `f` starts reassociating where `g` does not, and floating-point addition
+# answers differently in a different order. Each is an operator, an operand
+# and a base, written out rather than crossed.
+guards = [["+" "0.1" "0"] ["+" "n * 0.1" "0"] ["+" "n / 2" "0"]]
+
 # Depth is per operator, and the reason is native's own limit rather than the
 # rewrite's: an int is arbitrary precision in the spec and an int64 in a native
 # build, so a product thirty-seven deep overflows there while the interpreter
@@ -76,7 +83,12 @@ fn with_operand op acc operand
 fn with_op acc op
   joined acc (list/fold operands [] (a o -> with_operand op a o))
 
-unnumbered = list/fold ops [] (acc op -> with_op acc op)
+crossed = list/fold ops [] (acc op -> with_op acc op)
+
+fn guarding acc g
+  push acc (shape 0 g[1]! g[2]! g[3]!)
+
+unnumbered = list/fold guards crossed guarding
 
 fn numbered acc s
   push acc (shape (length acc + 1) s.op s.operand s.base)
@@ -171,7 +183,8 @@ fn alive? live
 
 fn told _ _ _ _ true
   said = "rewritten and not, agree on both engines"
-  io/write "PASS  {length shapes} shapes at four depths each, {said}\n"
+  kept = "{length shapes} shapes ({length guards} the license refuses)"
+  io/write "PASS  {kept} at four depths each, {said}\n"
 
 fn told n i bad live false
   io/write_err "trmc differential: the rewrite changed an answer\n"
