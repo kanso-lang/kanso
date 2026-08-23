@@ -1,0 +1,4 @@
+error[name]: unknown name `io/read_file` — it moved to `os/read_file`, and `std/io` keeps the reading and writing
+  --> a_name_that_moved_to_os.kso:6:1
+   6 | io/read_file "flavors.txt" . print
+       ^

@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Put a chapter out of date in the way that exercises the write path.
@@ -17,48 +18,49 @@ import "std/text"
 # book does not own.
 marker = "<pre><code>"
 
-source_title = "code-panel-title\">railway.kso"
+named = "code-panel-title\">"
 
-output_title = "code-panel-title\">kanso play railway.kso"
+titles = ["{named}railway.kso" "{named}kanso play railway.kso"]
 
-titles = [source_title output_title]
+# The word the write path has to remove again. Anything the highlighter would
+# never emit does, and this one is legible in a failure report.
+stale = "STALE"
+
+# The first `<pre><code>` after `title`, with the marker word planted inside
+# it. Splitting on a string that occurs once answers two pieces, and the first
+# marker in the second piece is the first one after the title.
+fn staled src title
+  parts = text/split src title
+  bits = text/split parts[2]! marker
+  rest = text/slice bits 2 (length bits)
+  "{parts[1]!}{title}{bits[1]!}{marker}{stale}{text/join rest marker}"
+
+fn once? src title
+  length (text/split src title) == 2
+
+# Every title is checked before any is planted, because the walk that plants
+# them threads the chapter as a string and has nowhere to put a complaint.
+fn onto chapter src
+  gone = list/to_list (list/select titles (t -> not once? src t))
+  planted chapter src gone (length gone == 0)
+
+fn planted chapter src _ true
+  os/write_file chapter (list/fold titles src staled)
+
+# A title the chapter does not carry once is a mistake in this program rather
+# than a finding about the book, so it says which one and stops.
+fn planted _ _ gone false
+  io/write_err "stale_a_panel: not in the chapter exactly once: {gone}\n"
+    . (_ -> os/exit 1)
 
 fn with_args given
   usage (length given != 1) given
 
 fn usage true _
-  io/write_err "usage: stale_a_panel <chapter.html>\n" . (_ -> io/exit 2)
+  io/write_err "usage: stale_a_panel <chapter.html>\n" . (_ -> os/exit 2)
 
 fn usage false given
   chapter = given[1]!
-  io/read_file chapter . (source -> staling chapter source 1)
+  os/read_file chapter . (src -> onto chapter src)
 
-fn staling chapter source at
-  staled chapter source at (at > length titles)
-
-fn staled chapter source _ true
-  io/write_file chapter source
-
-# The first <pre><code> after the title's first occurrence gains a STALE.
-fn staled chapter source at false
-  title = titles[at]!
-  p = text/split source title
-  titled chapter source at title p (length p >= 2)
-
-fn titled _ _ _ title _ false
-  io/write_err "missing panel title: {title}\n" . (_ -> io/exit 1)
-
-fn titled chapter _ at title p true
-  rest = text/join (list/to_list (list/drop p 1)) title
-  q = text/split rest marker
-  marked chapter at title p[1]! q (length q >= 2)
-
-fn marked _ _ title _ _ false
-  io/write_err "no {marker} after {title}\n" . (_ -> io/exit 1)
-
-fn marked chapter at title before q true
-  head = q[1]!
-  tail = text/join (list/to_list (list/drop q 1)) marker
-  staling chapter "{before}{title}{head}{marker}STALE{tail}" (at + 1)
-
-pub play = io/args . (given -> with_args given)
+pub play = os/args . with_args

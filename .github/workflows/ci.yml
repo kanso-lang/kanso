@@ -242,7 +242,12 @@ jobs:
       - name: nothing worsens unless something improves
         if: always()
         run: |
-          git fetch origin main --depth 1
+          # NOT --depth 1: this job checks out with fetch-depth 0, and a
+          # shallow fetch here TRUNCATES that history for every step after
+          # it. The page-drift check below then reads zero whatever the log
+          # did, which is how the page fell twenty-two entries behind while
+          # this job stayed green.
+          git fetch origin main
           set +e
           ./target/release/kanso run scripts/trend_gate -- origin/main >/tmp/trend.txt 2>&1
           verdict=$?
@@ -262,7 +267,7 @@ jobs:
       - name: the page keeps up with the log
         if: always()
         run: |
-          git fetch origin main --depth 1 || true
+          git fetch origin main || true
           ./target/release/kanso run scripts/page_drift
       - name: one-shot counters
         id: oneshot
@@ -398,6 +403,10 @@ jobs:
       # asks every exported std function for the wrong thing, in every
       # argument position, and requires the two engines to answer identically
       - run: ./target/release/kanso run scripts/diagnostic_differential
+      # the accumulator rewrite against the same arithmetic it refuses to
+      # rewrite. no counter and no golden can see that pass disappear: it
+      # changes the shape a recursion runs in and not one answer
+      - run: ./target/release/kanso run scripts/trmc_differential
       # rendering is written twice — `render` in the interpreter and
       # `k_render` in the C runtime — and every print goes through it
       - run: ./target/release/kanso run scripts/render_differential

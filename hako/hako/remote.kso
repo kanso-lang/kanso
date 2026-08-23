@@ -1,5 +1,5 @@
-import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # Where a name is fetched from. The tests point this at a directory of
@@ -16,7 +16,7 @@ pub fn url set name
 # remote that cannot be reached and one that publishes no release both answer
 # none: neither says anything about whether the pin in the lock is behind.
 pub fn newest set name
-  io/run "git" ["ls-remote" "--tags" (url set name)] . picked
+  os/run "git" ["ls-remote" "--tags" (url set name)] . picked
 
 fn picked p
   rows = text/split p.stdout "\n"
@@ -71,7 +71,7 @@ fn version tag
 # it in the lock is what makes the build reproducible.
 pub fn head_of set name branch
   argv = ["ls-remote" "--heads" (url set name) branch]
-  io/run "git" argv . only_head
+  os/run "git" argv . only_head
 
 fn only_head p
   rows = list/to_list (list/reject (text/split p.stdout "\n") blank?)

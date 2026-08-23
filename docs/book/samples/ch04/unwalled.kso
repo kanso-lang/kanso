@@ -1,8 +1,8 @@
-import "std/io"
+import "std/os"
 
 fn show p
   print "read: [{p.stdout}]"
 
 pub play =
-  io/run "sh" ["-c" "sleep 1; printf written > slow.txt"]
-  io/run "cat" ["slow.txt"] . show
+  os/run "sh" ["-c" "sleep 1; printf written > slow.txt"]
+  os/run "cat" ["slow.txt"] . show

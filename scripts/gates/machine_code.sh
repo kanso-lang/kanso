@@ -6,6 +6,11 @@
 # byte-identical the whole way. Padding an old build up to that size with
 # functions it never calls costs 1.6% of decode time by itself.
 set -e
+
+# Whose bytes these are. .text is what the toolchain made of the source, so a
+# different clang answers a different number for code nobody touched.
+sh scripts/gates/measured_on.sh bench/text_golden.txt
+
 # Apple's size takes no --format, and the awk downstream then reads an empty
 # section size for every benchmark, so the diff goes red on four blank values
 # and says the machine code moved. A gate that cannot measure has to say that

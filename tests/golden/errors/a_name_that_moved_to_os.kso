@@ -1,0 +1,6 @@
+# A program written before the library took Go's split says `io/read_file`,
+# and "unknown name" is true and useless: the name is right and the module
+# moved. The refusal says where it went and what `std/io` kept.
+import "std/io"
+
+io/read_file "flavors.txt" . print

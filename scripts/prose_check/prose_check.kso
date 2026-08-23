@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import { matches:hits } "std/regexp"
 import "std/text"
 
@@ -86,7 +87,7 @@ t4 = "(?i)<p>\\s*of course,\\b"
 throat = [t1 t2 t3 t4]
 
 fn with_book top
-  io/list_dir "docs/book" . (inner -> over_pages top inner)
+  os/list_dir "docs/book" . (inner -> over_pages top inner)
 
 fn over_pages top inner
   both = text/concat (under "docs" top) (under "docs/book" inner)
@@ -108,7 +109,7 @@ fn reading _ _ acc after true
 
 fn reading pages at acc after false
   page = pages[at]!
-  io/read_file page . (raw -> scanned_page pages at acc after page raw)
+  os/read_file page . (raw -> scanned_page pages at acc after page raw)
 
 fn scanned_page pages at acc after page raw
   text = prose raw
@@ -185,6 +186,6 @@ fn ending true
   io/write ""
 
 fn ending false
-  io/exit 1
+  os/exit 1
 
-pub play = io/list_dir "docs" . (top -> with_book top)
+pub play = os/list_dir "docs" . (top -> with_book top)

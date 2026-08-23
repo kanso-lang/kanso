@@ -254,7 +254,7 @@ not a flag</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">version.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">announce</span> text
@@ -263,7 +263,7 @@ not a flag</code></pre>
 <span class="k">fn</span> <span class="f">major_of</span> text
   <span class="f">text/to_int</span> text
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"version.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"version.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">output</div>
     <pre><code>major version 7</code></pre>
@@ -274,7 +274,7 @@ not a flag</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">garbage.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">announce</span> text
@@ -283,7 +283,7 @@ not a flag</code></pre>
 <span class="k">fn</span> <span class="f">major_of</span> text
   <span class="f">text/to_int</span> text
 
-<span class="f">io/read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
+<span class="f">os/read_file</span> <span class="s">"garbage.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso play garbage.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: ""seven point four" is not an integer"
@@ -295,7 +295,7 @@ not a flag</code></pre>
 
 <div class="code-panel">
   <div class="code-panel-title">missing.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 <span class="k">import</span> <span class="s">"std/text"</span>
 
 <span class="k">fn</span> <span class="f">announce</span> text
@@ -304,7 +304,7 @@ not a flag</code></pre>
 <span class="k">fn</span> <span class="f">major_of</span> text
   <span class="f">text/to_int</span> text
 
-<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">io/read_file</span> <span class="s">"no-such-file.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
+<span class="k">pub</span> <span class="f">play</span> <span class="o">=</span> <span class="f">os/read_file</span> <span class="s">"no-such-file.txt"</span> <span class="o">.</span> <span class="f">announce</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run missing.kso</div>
     <pre><code><span class="k">error[endpoint]</span>: unhandled err reached the executor: "cannot read no-such-file.txt: no such file or unreadable"</code></pre>
@@ -359,14 +359,14 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
 
 <div class="code-panel">
   <div class="code-panel-title">unwalled.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">show</span> p
   <span class="f">print</span> <span class="s">"read: [<span class="i">{p.stdout}</span>]"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">io/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
-  <span class="f">io/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.</span> <span class="f">show</span></code></pre>
+  <span class="f">os/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
+  <span class="f">os/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.</span> <span class="f">show</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run unwalled.kso</div>
     <pre><code>read: []</code></pre>
@@ -379,14 +379,14 @@ word <span class="o">=</span> <span class="f">text/trim</span> <span class="s">"
 
 <div class="code-panel">
   <div class="code-panel-title">walled.kso</div>
-  <pre><code><span class="k">import</span> <span class="s">"std/io"</span>
+  <pre><code><span class="k">import</span> <span class="s">"std/os"</span>
 
 <span class="k">fn</span> <span class="f">show</span> p
   <span class="f">print</span> <span class="s">"read: [<span class="i">{p.stdout}</span>]"</span>
 
 <span class="k">pub</span> <span class="f">play</span> <span class="o">=</span>
-  <span class="f">io/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
-  <span class="o">&gt;&gt;</span> <span class="f">io/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.</span> <span class="f">show</span></code></pre>
+  <span class="f">os/run</span> <span class="s">"sh"</span> [<span class="s">"-c"</span> <span class="s">"sleep 1; printf written &gt; slow.txt"</span>]
+  <span class="o">&gt;&gt;</span> <span class="f">os/run</span> <span class="s">"cat"</span> [<span class="s">"slow.txt"</span>] <span class="o">.</span> <span class="f">show</span></code></pre>
   <div class="code-output">
     <div class="code-panel-title">kanso run walled.kso</div>
     <pre><code>read: [written]</code></pre>

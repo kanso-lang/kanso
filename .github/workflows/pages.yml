@@ -27,6 +27,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/configure-pages@v5
+      # The playground runs docs/kanso.wasm, and this job used to ship
+      # whatever copy was committed — so a merge that changed the compiler
+      # without a hand-rebuild published an engine older than the page
+      # describing it, and nothing anywhere caught that: the specs rebuild the
+      # artifact before they test it, which proves the SOURCE has a third
+      # engine and says nothing about the file. Built here, the site always
+      # serves the compiler it was built from.
+      - name: rebuild the engine the playground runs
+        run: |
+          rustup target add wasm32-unknown-unknown
+          sh scripts/build_wasm.sh
       - uses: actions/jekyll-build-pages@v1
         with:
           source: ./docs

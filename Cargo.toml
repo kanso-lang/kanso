@@ -36,3 +36,10 @@ opt-level = 3
 
 [profile.dev.package.wasmi_collections]
 opt-level = 3
+
+# The chain-depth spec reads a child's peak resident size. time(1) supplied it
+# until a container without /usr/bin/time turned a missing tool into a spec
+# failure that named the interpreter; wait4 asks the kernel, which is always
+# there. Test-only, and already in the lock file under rustyline.
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"

@@ -371,10 +371,47 @@ welfare and the veins gate the cost.
 
 ## Also open, not blocking any current work
 
-- **TRMC v2**: license operands by inferred set (any provably-int
-  expression, not just literals — covers `n * fact (n - 1)`). Needs
-  `Inference` threaded out of `check::check` rather than recomputed, or
-  the compile-cost golden pays a phantom infer run.
+- **Is a bare list of small ints bytes?** The engines answer differently,
+  which the differential law forbids outright, and nothing on a live
+  list said so — it was measured on 2026-08-02, recorded in the archive,
+  and re-found by a sweep on 2026-08-23. `text/to_float ["a"]` dies on
+  native with `to_float takes a string, bytes, or number, not ["a"]` and
+  answers an err on the oracle, `"bytes are not a number"`, because the
+  interpreter has no distinct bytes value and runs any list through
+  `bytes_to_str` where native has a `K_BYTES` tag. Genuine bytes agree
+  on both. Widening native says a list and bytes are interchangeable,
+  which is what the native representation exists to deny; giving the
+  interpreter a real bytes value removes the ambiguity and touches every
+  place it builds or reads them. Either answer settles `append`,
+  `find2`, `find2_below` and `utf8` at the same time, since all four
+  name bytes in refusals nothing pins. No golden can pin the shape until
+  it is decided, and the diagnostic differential cannot see it: its one
+  wrong value is a record, and a record is refused identically.
+
+  The archive predicted the other four would settle with it. They are
+  measured now, on 2026-08-23, and four of the six are worse than a
+  wording difference — the oracle ANSWERS where native refuses, so a
+  program written against the oracle compiles and then dies:
+
+      text/append ["a"] "x"           native refuses    oracle: ["a" 120]
+      text/append [65 66] "x"         native refuses    oracle: [65 66 120]
+      text/find2 [65 66] 1 65 66      native refuses    oracle: 1
+      text/find2_below [65 66] …      native refuses    oracle: 1
+      text/utf8 ["a"]                 native: an err    oracle: a refusal
+      text/to_float ["a"]             native refuses    oracle: an err
+
+  `text/utf8 [65 66]` agrees, answering "AB" on both, because a list of
+  small ints is bytes to each of them. The disagreement is everything a
+  list can be that bytes cannot.
+
+- ~~**TRMC v2**~~ — SHIPPED 2026-08-23. The operand may be any arithmetic
+  over integer literals and the group's own counters, which covers
+  `n * fact (n - 1)`. Inference was never threaded out of
+  `check::check`: the wrapper already ascribes every counter `int`, so
+  requiring each recursive call to hand those positions arithmetic over
+  counters carries the integer property down by induction, and the pass
+  reads it off the syntax it already has. The compile-cost golden pays
+  no phantom infer run because there is no infer run.
 - **`--explain-copies`**: the *where* half of the observability item —
   a diagnostic naming the source site of each evacuation copy. Needs
   span plumbing through the carry machinery; the CLI surface deserves a
@@ -386,10 +423,16 @@ welfare and the veins gate the cost.
   survivor-ratio guard: the multiplier is a judgment call; the principle
   (the dance's transient must stay at threshold scale) is recorded in
   the log.
-- **An `os` package — RULED 2026-08-17**: mirror Go's split exactly
-  (`os` takes filesystem/env/args/process; `io` keeps the abstract
-  read/write surface; MkdirAll → os); any boundary case Go does not
-  answer goes to the language committee, never back to Clay.
+- ~~**An `os` package — RULED 2026-08-17**~~ — BUILT 2026-08-23.
+  `std/os` holds `exit_status`, `process`, `args`, `env`, `exit`,
+  `exists`, `is_dir`, `list_dir`, `make_dir`, `read_file`, `run`,
+  `start`, `kill` and `write_file`; `std/io` keeps `stdin`, `write` and
+  `write_err`. The one boundary case Go does not answer — its standard
+  streams are files in `os` and the writing is done from `fmt`, and
+  kanso has neither — was answered by the committee rather than by
+  Clay, per the gavel: the three verbs stay in `io`, because what the
+  gavel asks `io` to keep is a read and write surface, and a module
+  named for one with nothing behind it is not that.
 - **An assert hako** (future design pass, queued 2026-08-17): a real
   assertion library in the rspec direction Clay sketched —
   `(expect 1) . to (equal x)` — as its own small surface design, never
@@ -397,7 +440,20 @@ welfare and the veins gate the cost.
   hako, so the err license needs nothing special.
 - **Dot chains route around accessor privacy** (Demeter): a chain can
   reach a field the owning module would not expose directly. Low
-  priority, and a real hole in the privacy story.
+  priority, and a real hole in the privacy story. It is the unbuilt
+  half of gavel 1b — per-field `pub` — and probing it on 2026-08-23
+  found what the build needs first: **the checker has no record type at
+  a field read**. `pub x` inside a type is a syntax error today, and
+  `has no field` is raised in `eval.rs` at run time rather than by
+  `check.rs`, so there is no place to ask whether the field crosses.
+  The parser and the AST are the cheap half — `TypeDecl` has five
+  construction sites and its `fields` is a plain tuple — and the fence
+  is the expensive one: a field read's base has to be resolved to a
+  declaring module before privacy can be checked before the program
+  runs, which is record-type inference the value sets do not do. A
+  run-time refusal was considered and declined: this language refuses
+  before anything runs, and privacy that waits for the read is not the
+  same promise.
 
 ## 20b. Pending cells at output — GAVELED 2026-08-15: render forces
 

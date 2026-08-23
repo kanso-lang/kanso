@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # A gate nobody has watched fail has no evidence it works. Five checks went
@@ -52,6 +53,11 @@ fn breaking name
 
 fn gating name
   "sh scripts/gates/{name}.sh"
+
+# The host check is one script over two goldens, so its rows name the vein
+# rather than a script of their own.
+fn whose vein
+  "sh scripts/gates/measured_on.sh bench/{vein}_golden.txt"
 
 formatting = row
   "a file rustfmt would rewrite"
@@ -157,6 +163,22 @@ machine_code = row
   (breaking "machine_code_moved")
   benchmarks
 
+instructions_host = row
+  "the instructions vein read on a host that did not measure it"
+  false
+  (whose "instructions")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "instructions_host_unpinned")
+  no_setup
+
+text_host = row
+  "the machine-code vein read under a toolchain that did not emit it"
+  false
+  (whose "text")
+  "cost goldens (deterministic ratchet, no clocks)"
+  (breaking "text_host_unpinned")
+  no_setup
+
 welfare_floor = row
   "a run-speed term falling below the ratcheted floor"
   true
@@ -189,6 +211,14 @@ diagnostics = row
   (breaking "one_engine_reworded")
   release
 
+accumulator = row
+  "the accumulator rewrite deleted, which no counter and no golden can see"
+  true
+  "./target/release/kanso run scripts/trmc_differential"
+  "diagnostics differential (both engines say the same thing)"
+  (breaking "accumulator_rewrite_deleted")
+  release
+
 itself = row
   "a gating job nobody said how to prove"
   true
@@ -203,9 +233,13 @@ rows_b1a = [decode_counters escape_counters pend_counters]
 
 rows_b1 = text/concat rows_b1a [thunk_walk scan_counters]
 
-rows_b = text/concat rows_b1 [emitted_code machine_code]
+rows_b1b = text/concat rows_b1 [emitted_code machine_code]
 
-rows_c = [welfare_floor grammar book_outputs diagnostics itself]
+rows_b = text/concat rows_b1b [instructions_host text_host]
+
+rows_c1 = [welfare_floor grammar book_outputs]
+
+rows_c = text/concat rows_c1 [diagnostics accumulator itself]
 
 rows = text/concat rows_a (text/concat rows_b rows_c)
 
@@ -293,7 +327,7 @@ fn stale declared
   both = text/concat claimed excused
   list/to_list (list/select both (n -> not known? declared n))
 
-cover = io/read_file workflow . (text -> against (jobs_in text))
+cover = os/read_file workflow . (text -> against (jobs_in text))
 
 fn against declared
   gaps = missing declared
@@ -308,12 +342,12 @@ fn verdict gaps ghosts false
   gone = list/to_list (list/map ghosts (n -> "  no such ci job: {n}\n"))
   body = text/join (text/concat said gone) ""
   saying = "ratchet: the table and ci.yml disagree\n{body}"
-  io/write_err saying . (_ -> io/exit 1)
+  io/write_err saying . (_ -> os/exit 1)
 
 # Each row runs in a worktree of HEAD, so a mutation cannot reach the tree the
 # author is working in and two rows cannot see each other's damage.
 fn shell dir cmd
-  io/run "sh" ["-c" "cd {dir} && {cmd}"]
+  os/run "sh" ["-c" "cd {dir} && {cmd}"]
 
 fn prove_all scope
   picked = list/to_list (list/select rows (r -> asked? scope r.dear))
@@ -335,7 +369,7 @@ fn proven list at acc false
   r = list[at]!
   dir = "/tmp/kanso-ratchet-{at}"
   made = ["worktree" "add" "--detach" "--force" dir "HEAD"]
-  io/run "git" made . (_ -> after_worktree list at acc r dir)
+  os/run "git" made . (_ -> after_worktree list at acc r dir)
 
 # Every row's build lands in one directory, so the first is cold and the rest
 # are incremental. A dozen rows each paying a full release build is an hour
@@ -365,7 +399,7 @@ fn after_gate list at acc r dir _
   cleaned dir . (_ -> proving list (at + 1) (push acc (red r)))
 
 fn cleaned dir
-  io/run "git" ["worktree" "remove" "--force" dir]
+  os/run "git" ["worktree" "remove" "--force" dir]
 
 fn red r
   finding "  red   {r.job} — {r.claim}\n" true
@@ -389,7 +423,7 @@ fn told _ true
   io/write "ratchet: every row turned its gate red\n"
 
 fn told bad false
-  io/write_err "ratchet: {length bad} rows proved nothing\n" . (_ -> io/exit 1)
+  io/write_err "ratchet: {length bad} rows proved nothing\n" . (_ -> os/exit 1)
 
 fn asked given
   verb given (length given > 0)
@@ -415,4 +449,4 @@ fn narrowed given true
 fn narrowed _ false
   "all"
 
-pub play = io/args . (given -> asked given)
+pub play = os/args . (given -> asked given)

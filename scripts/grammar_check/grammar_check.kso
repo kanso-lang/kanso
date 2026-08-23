@@ -1,6 +1,7 @@
 import "std/io"
 import "std/json"
 import { find:list_find } "std/list"
+import "std/os"
 import "std/regexp"
 import "std/text"
 
@@ -65,7 +66,7 @@ fn read_grammar raw
   checked (json/decode raw)
 
 fn checked (err reason)
-  io/write "the grammar does not parse: {reason}\n" . (_ -> io/exit 1)
+  io/write "the grammar does not parse: {reason}\n" . (_ -> os/exit 1)
 
 fn checked grammar
   rules = rules_of grammar
@@ -287,7 +288,7 @@ fn clean _ true
   io/write "PASS  {length expectations} lines paint the way a reader expects\n"
 
 fn clean faults false
-  io/write (spelled faults 1 "") . (_ -> io/exit 1)
+  io/write (spelled faults 1 "") . (_ -> os/exit 1)
 
 fn spelled faults at acc
   telling faults at acc (at > length faults)
@@ -298,4 +299,4 @@ fn telling _ _ acc true
 fn telling faults at acc false
   spelled faults (at + 1) "{acc}FAIL  {faults[at]!}\n"
 
-pub play = io/read_file grammar_path . (raw -> read_grammar raw)
+pub play = os/read_file grammar_path . (raw -> read_grammar raw)

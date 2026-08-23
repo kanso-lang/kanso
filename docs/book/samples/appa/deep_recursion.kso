@@ -1,7 +1,7 @@
 fn weigh 0
-  0
+  0.0
 
 fn weigh n
-  n + weigh (n - 1)
+  n * 1.5 + weigh (n - 1)
 
 print "sum {weigh 1000000}"

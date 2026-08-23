@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # `diagnostic_differential` asks std functions for the wrong thing and compares
@@ -186,7 +187,7 @@ fn shaped module expr
   """
 
 fn asked argv
-  io/run "timeout" (text/concat [limit kanso] argv)
+  os/run "timeout" (text/concat [limit kanso] argv)
 
 fn hung? 124
   true
@@ -197,7 +198,7 @@ fn hung? _
 # The probe is written once and read by both engines, so a difference is the
 # engines and never two different files.
 fn ran source
-  io/write_file probe source . (_ -> both)
+  os/write_file probe source . (_ -> both)
 
 both = asked ["play" probe] . against
 
@@ -286,13 +287,13 @@ fn running true
   counted 0 . answered
 
 fn running false
-  io/write_err mute . (_ -> io/exit 2)
+  io/write_err mute . (_ -> os/exit 2)
 
 fn begun false
-  io/write_err complaint . (_ -> io/exit 2)
+  io/write_err complaint . (_ -> os/exit 2)
 
 fn begun true
-  io/write_file probe sample . (_ -> asked ["play" probe]) . ready
+  os/write_file probe sample . (_ -> asked ["play" probe]) . ready
 
 fn counted _
   io/write banner . (_ -> swept "text" text_probes 0)
@@ -304,6 +305,6 @@ fn finished 0
   io/write "0 disagree\n"
 
 fn finished n
-  io/write "{n} disagree\n" . (_ -> io/exit 1)
+  io/write "{n} disagree\n" . (_ -> os/exit 1)
 
 pub play = begun (shaped "text" "text/trim \" 1 \"" == sample)

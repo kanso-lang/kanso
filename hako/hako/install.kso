@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/path"
 import "std/text"
 
@@ -16,7 +17,7 @@ fn gathered todo found
 fn visiting todo found
   here = todo[1]!
   rest = list/to_list (list/drop todo 1)
-  io/list_dir here . (names -> divided here rest found names [] [])
+  os/list_dir here . (names -> divided here rest found names [] [])
 
 fn divided here rest found names dirs files
   done = gathered (text/concat rest dirs) (text/concat found files)
@@ -27,7 +28,7 @@ fn weighed here rest found names dirs files
   full = path/join here names[1]!
   left = list/to_list (list/drop names 1)
   onward = (d -> placed here rest found left dirs files full d)
-  io/is_dir full . onward
+  os/is_dir full . onward
 
 fn placed here rest found left dirs files full d
   divided here rest found left (added d dirs full) (kept d files full)
@@ -55,7 +56,7 @@ fn read_all files names
 fn reading files names
   rest = list/to_list (list/drop files 1)
   onward = (text -> read_all rest (merged names (imported text)))
-  io/read_file files[1]! . onward
+  os/read_file files[1]! . onward
 
 fn merged names found
   list/fold found names one_of
@@ -102,23 +103,23 @@ fn unimported unknown
   refused "nothing imports `{unknown[1]!}`, {why}"
 
 fn locked_at dir wanted names
-  io/exists "{dir}/hako.lock" . (there -> held_by dir wanted names there)
+  os/exists "{dir}/hako.lock" . (there -> held_by dir wanted names there)
 
 fn held_by dir wanted names there
   if there (reading_lock dir wanted names) (settled_for dir wanted names [])
 
 fn reading_lock dir wanted names
-  io/read_file "{dir}/hako.lock" . (t -> settled_for dir wanted names (parse t))
+  os/read_file "{dir}/hako.lock" . (t -> settled_for dir wanted names (parse t))
 
 fn settled_for dir wanted names held
-  io/env "KANSO_HAKO" . (set -> at_home dir wanted names held set)
+  os/env "KANSO_HAKO" . (set -> at_home dir wanted names held set)
 
 fn at_home dir wanted names held set
-  io/env "HOME" . (h -> from_where dir wanted names held (cache_root set h))
+  os/env "HOME" . (h -> from_where dir wanted names held (cache_root set h))
 
 fn from_where dir wanted names held root
   start = (o -> each_hako dir wanted names held root o "" "")
-  io/env "KANSO_HAKO_REMOTE" . start
+  os/env "KANSO_HAKO_REMOTE" . start
 
 fn each_hako dir wanted names held root origin lines report
   done = recorded dir lines report (length names)
@@ -178,4 +179,4 @@ fn fetched_as n tag sha root origin
 
 fn recorded dir lines report count
   said = io/write "installed {count} hako(s):\n{report}"
-  io/write_file "{dir}/hako.lock" lines . (_ -> said)
+  os/write_file "{dir}/hako.lock" lines . (_ -> said)

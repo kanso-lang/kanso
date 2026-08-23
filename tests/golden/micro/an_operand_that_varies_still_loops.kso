@@ -1,0 +1,14 @@
+# The accumulator rewrite asked for an integer literal as the work left over
+# after the recursive call, so `n + weigh (n - 1)` kept a frame per call and
+# died past the interpreter's ten-thousand-frame guard. The operand here is a
+# parameter the wrapper has already ascribed `int`, and every recursive call
+# hands that position another integer, so the sum reassociates exactly and the
+# group runs as a loop on every engine. A hundred thousand frames is ten times
+# what the guard allows and a depth no engine's stack would hold.
+fn weigh 0
+  0
+
+fn weigh n
+  n + weigh (n - 1)
+
+pub play = print "sum {weigh 100000}"

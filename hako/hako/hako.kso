@@ -1,12 +1,13 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # hako's first verb, in the language hako manages. Reading the lock needs no
 # network; saying whether a pin has fallen behind does, so the remote is
 # asked once per pin and a remote that does not answer says so.
 pub fn listing dir
-  io/read_file "{dir}/hako.lock" . shown
+  os/read_file "{dir}/hako.lock" . shown
 
 fn shown text
   described (parse text)
@@ -16,7 +17,7 @@ fn described pins
   if (length pins == 0) empty (against_remotes pins)
 
 fn against_remotes pins
-  io/env "KANSO_HAKO_REMOTE" . (set -> walked pins set "")
+  os/env "KANSO_HAKO_REMOTE" . (set -> walked pins set "")
 
 fn walked pins set acc
   rest = list/to_list (list/drop pins 1)
@@ -69,4 +70,4 @@ fn split_at spec
   halves = text/split spec "@"
   [halves[1]! halves[2]!]
 
-pub play = io/args . ran
+pub play = os/args . ran

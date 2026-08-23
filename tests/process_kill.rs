@@ -1,6 +1,6 @@
 //! A started process can be ended.
 //!
-//! `io/run` waits, which is what a script wants for `git rev-parse` and what
+//! `os/run` waits, which is what a script wants for `git rev-parse` and what
 //! it cannot want for a browser: headless chrome ignores its own exit budget
 //! and runs until something outside kills it. So a program needs the handle
 //! and a way to end what it holds — Go's `cmd.Start()` and `Process.Kill()`.
@@ -11,14 +11,14 @@
 
 use std::process::Command;
 
-const START_AND_KILL: &str = r#"import "std/io"
+const START_AND_KILL: &str = r#"import "std/os"
 import "std/time"
 
 fn asked _
-  io/exists "late" . (there -> print "the late file arrived: {there}")
+  os/exists "late" . (there -> print "the late file arrived: {there}")
 
-io/start "sh" ["-c" "sleep 2 && echo late > late"]
-  . io/kill
+os/start "sh" ["-c" "sleep 2 && echo late > late"]
+  . os/kill
   . (_ -> time/sleep 3000)
   . asked
 "#;

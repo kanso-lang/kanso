@@ -1,5 +1,6 @@
 import "std/io"
 import "std/list"
+import "std/os"
 import "std/text"
 
 # What a module lets through, what it refuses, and whether the engines agree.
@@ -318,8 +319,8 @@ fn up parts false
   "{slash}{text/join dirs slash}"
 
 fn made root f after
-  io/run "mkdir" ["-p" "{root}{holding f.name}"]
-    . (_ -> io/write_file "{root}/{f.name}" f.text)
+  os/run "mkdir" ["-p" "{root}{holding f.name}"]
+    . (_ -> os/write_file "{root}/{f.name}" f.text)
     . (_ -> after)
 
 fn laid root files at after
@@ -332,7 +333,7 @@ fn laying root files at after false
   made root files[at]! (laid root files (at + 1) after)
 
 fn asked argv
-  io/run kanso argv
+  os/run kanso argv
 
 # The engine flag follows the path — `kanso run <dir> --interp`. Putting it
 # first makes the CLI print its usage, which is a different exit code on a
@@ -344,7 +345,7 @@ fn asked argv
 fn judged k after
   root = "{work}/m"
   target = aimed root k.entry
-  io/run "rm" ["-rf" work]
+  os/run "rm" ["-rf" work]
     . (_ -> laid root k.files 1 (asked ["check" target]))
     . (c -> ruled k.verdict target k c after)
 
@@ -448,7 +449,7 @@ fn reported wrong healed
   count = "{length cases} modules, {length wrong} wrong; "
   seen = "{length known_wrong} known defects, {length healed}"
   tail = "{seen} no longer as recorded\n"
-  io/run "rm" ["-rf" work]
+  os/run "rm" ["-rf" work]
     . (_ -> io/write "{count}{tail}")
     . (_ -> io/write "{spelled wrong}{spelled healed}")
     . (_ -> closed wrong healed)
@@ -479,6 +480,6 @@ fn ending true
   io/write ""
 
 fn ending false
-  io/exit 1
+  os/exit 1
 
 pub play = swept cases 1 [] (wrong -> then_known wrong)
