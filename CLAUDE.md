@@ -226,7 +226,7 @@ Only Clay arms, disarms or retimes it.
   rounds, expression visits and emitted lines into a single score. **It is an
   index, not a percentage** — the ceiling is a hundred, where every term costs
   nothing, and the origin is arbitrary. Only its direction and the size of its
-  moves mean anything. It currently reads about 46. Every
+  moves mean anything. It currently reads about 85. Every
   term is deterministic, so the number moves only when somebody changes the
   compiler. CI fails when it drops.
 - **The sum is the objective; the terms are diagnostics.** A term getting worse
