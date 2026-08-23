@@ -39,6 +39,13 @@ linux and invisible on macOS), and a program could only ever open sixty-three
 sockets and processes because the guard counted takes rather than asking
 whether a slot was free (#825).
 
+Python then crept back within days of that port — #854's mutation heredocs,
+#862's panel staler — and a dead bench/kq_race.sh predated it, racing an
+apps/kq this repo no longer holds. All three are gone: the staler is kanso,
+the heredocs are awk, the racer is deleted. `scripts/gates/python_free.sh`
+now fails CI on any tracked .py file or python3 call, with a ratchet row
+proving it turns red.
+
 ## Recently ruled by Clay
 
 - **2026-08-05** — two errs in one operation merge, both engines. Shipped.

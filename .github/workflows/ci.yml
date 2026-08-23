@@ -26,6 +26,13 @@ jobs:
           components: rustfmt
       - run: cargo fmt --check
 
+  python-free:
+    name: python-free (the harnesses stay kanso)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh scripts/gates/python_free.sh
+
   lint:
     name: lint (clippy, all targets)
     runs-on: ubuntu-latest

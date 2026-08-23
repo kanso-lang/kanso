@@ -4663,3 +4663,37 @@ capability should be built on if it is built.
 Nothing shipped from this. It is a measurement against a condition, and
 it says the condition holds for the case that motivated the ruling and
 fails for the case the ruling widened to.
+
+## 2026-08-23 — the python that crept back is out, and a gate watches now
+
+The 2026-08-09 entry declared the repo python-free. Within three days it was
+not: #854's ratchet mutations carried six `python3` heredocs and #862's write-
+path gate added `scripts/stale_a_panel.py`, and a `bench/kq_race.sh` racing an
+apps/kq this repo no longer holds had survived the original sweep entirely.
+Nothing watched the claim, so nothing went red.
+
+Three moves, each verified differentially against the python it replaces.
+
+The panel staler is kanso (`scripts/stale_a_panel/`), byte-identical on ch04
+against the python, loud on a missing title or marker, and watched both ways
+through book_check: misname its panel and the check dies on `missing panel
+title`; restore it and the write path rewrites both staled panels back.
+
+The six mutation heredocs are POSIX awk in the same .sh files. Anchors travel
+through ENVIRON so no byte is reinterpreted, replacement is first-occurrence
+like the python's `replace(..., 1)`, and a missing anchor dies with the same
+"moved; this mutation needs rewriting" message. awk rather than kanso because
+a mutation runs in a fresh worktree before any build — a helper needing
+target/release/kanso would make the harness depend on the binary it is about
+to mutate. All six produce byte-identical mutated sources and identical exits
+against the heredocs they replace.
+
+kq_race.sh is deleted, not ported: the archive records apps/kq removed with
+kanso-lang/kq as its sole home, and the script builds a path that is not
+there.
+
+The gate is `scripts/gates/python_free.sh`, a python-free CI job, and a
+ratchet row: no tracked .py file, no python3 call outside design/'s history
+and the one mutation whose job is to introduce one. Watched red three ways —
+the stale racer before its deletion, a python3 line appended to book_check
+(the row's mutation), a tracked creep.py — and green on the clean tree.
