@@ -110,7 +110,7 @@ scoops <span class="o">=</span> <span class="n">3</span>
 
 <h2>lists</h2>
 
-<p>a list is an ordered sequence, written with brackets and—like everything in kanso—no commas between the elements. the workhorse verbs live one import away in <code>std/list</code>: <code>list/map</code> transforms every element, <code>list/select</code> keeps the ones a predicate approves, <code>list/sort</code> orders them, and <code>list/sum</code> reduces them to a number. <code>length</code> is ambient—no import. indexing is a tight <code>[i]</code>, and it is <strong>1-based</strong>: <code>xs[1]</code> is the first element.</p>
+<p>a list is an ordered sequence, written with brackets and—like everything in kanso—no commas between the elements. the workhorse verbs live one import away in <code>std/list</code>: <code>list/map</code> transforms every element, <code>list/select</code> keeps the ones a predicate approves, <code>list/sort</code> orders them, and <code>list/sum</code> reduces them to a number. <code>length</code> is ambient—no import. indexing is a tight <code>[i]</code>, and it is <strong>1-based</strong>: <code>xs[1]</code> is the first element. the elements sit next to one another in memory, so <code>xs[i]</code> costs the same whether <code>i</code> is 1 or a million.</p>
 
 <div class="code-panel">
   <div class="code-panel-title">lists.kso</div>
