@@ -1568,3 +1568,32 @@ The machine-code gate priced it: rendering the refused value costs 48 bytes of
 linker had already dropped the path. `bench/text_golden.txt` is regenerated on
 that reading. Every allocation counter is flat, both compile goldens are
 byte-identical, and welfare holds at 84.85.
+
+## 2026-08-23 — the bytes fork is six functions, and four of them answer
+
+The entry above records `text/to_float ["a"]` diverging and cites the archive's
+prediction that a ruling would settle `append`, `find2`, `find2_below` and
+`utf8` at the same time. Those four are measured now, driven with a list on
+both engines, and the prediction was right and understated.
+
+    text/append ["a"] "x"           native refuses    oracle: ["a" 120]
+    text/append [65 66] "x"         native refuses    oracle: [65 66 120]
+    text/find2 [65 66] 1 65 66      native refuses    oracle: 1
+    text/find2_below [65 66] ...    native refuses    oracle: 1
+    text/utf8 ["a"]                 native: an err    oracle: a refusal
+    text/to_float ["a"]             native refuses    oracle: an err
+
+Four of the six are worse than a wording difference. The oracle ANSWERS where
+native refuses, so a program written against the oracle runs and the same
+program compiled dies — which is the differential law's hardest case, and it
+points the wrong way: the oracle is meant to be the engine that can express
+whatever native runs, and here it is the one that accepts more.
+
+`text/utf8 [65 66]` agrees, answering `AB` on both, because a list of small
+ints is bytes to each of them. What the two disagree about is everything a
+list can be that bytes cannot.
+
+Nothing is fixed here, and nothing can be until the fork is ruled: either a
+bare list of small ints IS bytes, and native widens, or the interpreter gains a
+real bytes value. The table is in pending-gavels with both costs, and it is on
+the task list as Clay's.

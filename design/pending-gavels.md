@@ -388,6 +388,22 @@ welfare and the veins gate the cost.
   it is decided, and the diagnostic differential cannot see it: its one
   wrong value is a record, and a record is refused identically.
 
+  The archive predicted the other four would settle with it. They are
+  measured now, on 2026-08-23, and four of the six are worse than a
+  wording difference — the oracle ANSWERS where native refuses, so a
+  program written against the oracle compiles and then dies:
+
+      text/append ["a"] "x"           native refuses    oracle: ["a" 120]
+      text/append [65 66] "x"         native refuses    oracle: [65 66 120]
+      text/find2 [65 66] 1 65 66      native refuses    oracle: 1
+      text/find2_below [65 66] …      native refuses    oracle: 1
+      text/utf8 ["a"]                 native: an err    oracle: a refusal
+      text/to_float ["a"]             native refuses    oracle: an err
+
+  `text/utf8 [65 66]` agrees, answering "AB" on both, because a list of
+  small ints is bytes to each of them. The disagreement is everything a
+  list can be that bytes cannot.
+
 - ~~**TRMC v2**~~ — SHIPPED 2026-08-23. The operand may be any arithmetic
   over integer literals and the group's own counters, which covers
   `n * fact (n - 1)`. Inference was never threaded out of
